@@ -6,6 +6,8 @@ namespace CandyCore\Gloss\Tests;
 
 use CandyCore\Core\Util\Color;
 use CandyCore\Core\Util\ColorProfile;
+use CandyCore\Gloss\Align;
+use CandyCore\Gloss\Border;
 use CandyCore\Gloss\Style;
 use PHPUnit\Framework\TestCase;
 
@@ -133,5 +135,149 @@ final class StyleTest extends TestCase
         $out = Style::new()->padding(1, 1)->render('');
         $expected = "  \n  \n  ";
         $this->assertSame($expected, $out);
+    }
+
+    // ---- width / alignment ------------------------------------------------
+
+    public function testWidthRightPadsLine(): void
+    {
+        $this->assertSame('hi   ', Style::new()->width(5)->render('hi'));
+    }
+
+    public function testWidthTruncatesOverflow(): void
+    {
+        $this->assertSame('hel', Style::new()->width(3)->render('hello'));
+    }
+
+    public function testAlignRight(): void
+    {
+        $this->assertSame('   hi', Style::new()->width(5)->align(Align::Right)->render('hi'));
+    }
+
+    public function testAlignCenterEvenExtra(): void
+    {
+        $this->assertSame(' hi ', Style::new()->width(4)->align(Align::Center)->render('hi'));
+    }
+
+    public function testAlignCenterOddExtra(): void
+    {
+        $this->assertSame(' hi  ', Style::new()->width(5)->align(Align::Center)->render('hi'));
+    }
+
+    public function testWidthZeroEmpties(): void
+    {
+        $this->assertSame('', Style::new()->width(0)->render('hello'));
+    }
+
+    public function testWidthRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Style::new()->width(-1);
+    }
+
+    // ---- height -----------------------------------------------------------
+
+    public function testHeightPadsBelow(): void
+    {
+        $this->assertSame("hi\n  \n  ", Style::new()->height(3)->render('hi'));
+    }
+
+    public function testHeightTruncatesExtraLines(): void
+    {
+        $this->assertSame("a\nb", Style::new()->height(2)->render("a\nb\nc\nd"));
+    }
+
+    // ---- margin -----------------------------------------------------------
+
+    public function testMarginAroundContent(): void
+    {
+        $expected = "      \n  hi  \n      ";
+        $this->assertSame($expected, Style::new()->margin(1, 2)->render('hi'));
+    }
+
+    public function testMarginIsUnstyled(): void
+    {
+        $out = Style::new()
+            ->background(Color::hex('#ff0000'))
+            ->margin(0, 2)
+            ->render('hi');
+        $this->assertSame("  \x1b[48;2;255;0;0mhi\x1b[0m  ", $out);
+    }
+
+    // ---- borders ----------------------------------------------------------
+
+    public function testNormalBorderAroundContent(): void
+    {
+        $expected = "┌──┐\n│hi│\n└──┘";
+        $this->assertSame($expected, Style::new()->border(Border::normal())->render('hi'));
+    }
+
+    public function testRoundedBorderWithPadding(): void
+    {
+        $expected = "╭────╮\n│ hi │\n╰────╯";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::rounded())->padding(0, 1)->render('hi'),
+        );
+    }
+
+    public function testBorderTopOnly(): void
+    {
+        $expected = "──\nhi";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::normal(), true, false, false, false)->render('hi'),
+        );
+    }
+
+    public function testBorderTwoArgShorthand(): void
+    {
+        // border(b, vertical=true, horizontal=false) → top+bottom only
+        $expected = "──\nhi\n──";
+        $this->assertSame(
+            $expected,
+            Style::new()->border(Border::normal(), true, false)->render('hi'),
+        );
+    }
+
+    public function testBorderColored(): void
+    {
+        $out = Style::new()
+            ->border(Border::normal())
+            ->borderForeground(Color::hex('#ff0000'))
+            ->render('x');
+        $expected =
+            "\x1b[38;2;255;0;0m┌─┐\x1b[0m\n"
+          . "\x1b[38;2;255;0;0m│\x1b[0mx\x1b[38;2;255;0;0m│\x1b[0m\n"
+          . "\x1b[38;2;255;0;0m└─┘\x1b[0m";
+        $this->assertSame($expected, $out);
+    }
+
+    public function testBorderWithMargin(): void
+    {
+        $expected =
+            "      \n"
+          . " ┌──┐ \n"
+          . " │hi│ \n"
+          . " └──┘ \n"
+          . "      ";
+        $out = Style::new()
+            ->border(Border::normal())
+            ->margin(1, 1)
+            ->render('hi');
+        $this->assertSame($expected, $out);
+    }
+
+    public function testBorderRemoval(): void
+    {
+        $a = Style::new()->border(Border::normal());
+        $b = $a->border(null);
+        $this->assertSame('hi', $b->render('hi'));
+    }
+
+    public function testAsciiBorder(): void
+    {
+        $expected = "+-+\n|x|\n+-+";
+        $this->assertSame($expected, Style::new()->border(Border::ascii())->render('x'));
     }
 }
