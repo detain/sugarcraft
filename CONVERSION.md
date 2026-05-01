@@ -237,8 +237,8 @@ Update this table as work proceeds. Status legend:
 
 | Phase | Library | Status | % | Notes |
 |------:|---|:---:|---:|---|
-| 0 | Foundation utilities (ansi / color / width / tty) | 🔴 | 0% | Lives under `candy-core/src/Util` until split |
-| 1 | CandyGloss | 🔴 | 0% | |
+| 0 | Foundation utilities (ansi / color / width / tty) | 🟡 | 70% | `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty` landed under `candy-core/src/Util` with 43 passing tests. Input parser + signal helpers TBD with Phase 3. |
+| 1 | CandyGloss | 🟡 | 20% | `Style` (attrs, fg/bg, padding, profile-aware downsampling) with 17 passing tests. Borders, margins, alignment, width/height, table/list/tree TBD. |
 | 2 | HoneyBounce | 🔴 | 0% | |
 | 3 | CandyCore (runtime) | 🔴 | 0% | ReactPHP/Amp pick TBD in Phase 3 kickoff |
 | 4 | CandyZone | 🔴 | 0% | |
