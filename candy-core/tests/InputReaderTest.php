@@ -12,6 +12,7 @@ use CandyCore\Core\Msg\BlurMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Msg\MouseMsg;
+use CandyCore\Core\Msg\PasteMsg;
 use PHPUnit\Framework\TestCase;
 
 final class InputReaderTest extends TestCase
@@ -226,5 +227,95 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
         $this->assertSame(5,  $msgs[0]->x);
         $this->assertSame(10, $msgs[0]->y);
+    }
+
+    // ---- function keys ----------------------------------------------------
+
+    public function testFunctionKeysViaSs3(): void
+    {
+        $msgs = (new InputReader())->parse("\x1bOP\x1bOQ\x1bOR\x1bOS");
+        $this->assertCount(4, $msgs);
+        $this->assertSame(KeyType::F1, $msgs[0]->type);
+        $this->assertSame(KeyType::F2, $msgs[1]->type);
+        $this->assertSame(KeyType::F3, $msgs[2]->type);
+        $this->assertSame(KeyType::F4, $msgs[3]->type);
+    }
+
+    public function testFunctionKeysViaCsiTilde(): void
+    {
+        $msgs = (new InputReader())->parse(
+            "\x1b[15~\x1b[17~\x1b[18~\x1b[19~\x1b[20~\x1b[21~\x1b[23~\x1b[24~",
+        );
+        $expected = [
+            KeyType::F5, KeyType::F6, KeyType::F7, KeyType::F8,
+            KeyType::F9, KeyType::F10, KeyType::F11, KeyType::F12,
+        ];
+        $this->assertCount(count($expected), $msgs);
+        foreach ($expected as $i => $type) {
+            $this->assertSame($type, $msgs[$i]->type, "F-key #$i");
+        }
+    }
+
+    public function testF1ThroughF4ViaCsiTildeAlsoWork(): void
+    {
+        // Some terminals send "ESC[11~" instead of "ESC OP".
+        $msgs = (new InputReader())->parse("\x1b[11~\x1b[12~\x1b[13~\x1b[14~");
+        $this->assertSame(KeyType::F1, $msgs[0]->type);
+        $this->assertSame(KeyType::F4, $msgs[3]->type);
+    }
+
+    public function testSs3SplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bO"));
+        $msgs = $r->parse('P');
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::F1, $msgs[0]->type);
+    }
+
+    // ---- bracketed paste -------------------------------------------------
+
+    public function testBracketedPasteSingleFrame(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[200~hello world\x1b[201~");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[0]);
+        $this->assertSame('hello world', $msgs[0]->content);
+    }
+
+    public function testBracketedPastePreservesNewlinesAndControl(): void
+    {
+        // Pasted content with embedded newline + CSI sequence should NOT
+        // be parsed as keys — the whole envelope is one PasteMsg.
+        $payload = "line1\nline2\x1b[31mred\x1b[0m";
+        $msgs    = (new InputReader())->parse("\x1b[200~" . $payload . "\x1b[201~");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[0]);
+        $this->assertSame($payload, $msgs[0]->content);
+    }
+
+    public function testBracketedPasteSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b[200~hel"));
+        $this->assertSame([], $r->parse('lo'));
+        $msgs = $r->parse(" world\x1b[201~");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('hello world', $msgs[0]->content);
+    }
+
+    public function testBracketedPasteFollowedByKey(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[200~paste\x1b[201~q");
+        $this->assertCount(2, $msgs);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[0]);
+        $this->assertSame('paste', $msgs[0]->content);
+        $this->assertSame('q', $msgs[1]->rune);
+    }
+
+    public function testKeyMsgStringForFunctionKeys(): void
+    {
+        $this->assertSame('f1',  (new KeyMsg(KeyType::F1))->string());
+        $this->assertSame('f12', (new KeyMsg(KeyType::F12))->string());
     }
 }
