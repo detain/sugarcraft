@@ -311,3 +311,113 @@ and the dependencies on phases 0–8.
 - `glamour` → `CandyShine` reads like a styling library; alternatives
   worth considering: `CandyMarkup`, `SugarPress`, `CandyGloss` (already
   taken historically by CandyGloss → CandySprinkles, so probably skip).
+
+---
+
+## Phase 10 — Polish & public launch (SugarBuzz)
+
+Runs **after** every functional phase (0–9 + Phase 9+ ports) is at v1.
+This phase is presentation and distribution: turn the library set
+into a real product.
+
+### Brand + home
+
+- **Org name:** **SugarBuzz** — every library moves under
+  `github.com/sugarbuzz/<lib>` (current `detain/CandyCore` monorepo is
+  the dev incubator; production repos split out at v1.0 per the
+  existing "Repo split" architecture decision).
+- **Website:** `sugarbuzz.dev` (or similar — TBD). Visual inspiration:
+  [charm.land](https://charm.land/#enterprise) — big, bubbly, colourful,
+  rounded corners, cheerful gradients. Powerful but playful.
+- **Tone:** every library README opens with a one-line tagline + a
+  prominent VHS-recorded GIF demo. Emojis used freely (🍬 🌟 ✨ 🎨 🍭
+  🎀 🧁 🍰 🌈 🎈) but never to the point of clutter.
+
+### Per-library polish checklist
+
+Each shipped library gets the same treatment:
+
+- [ ] **README.md** rewritten to mirror the original Go counterpart's
+      structure, with PHP-specific install + usage:
+      `composer require sugarbuzz/<package>` ➜ minimal example ➜
+      feature list ➜ links to advanced docs.
+- [ ] **VHS demo** at the top of the README (animated GIF). Recorded
+      with [charmbracelet/vhs](https://github.com/charmbracelet/vhs)
+      via [charmbracelet/vhs-action](https://github.com/charmbracelet/vhs-action)
+      so it regenerates automatically on PR. One demo per major
+      feature (e.g. SugarBits ships 14 mini-demos, one per component;
+      CandyShell ships 13, one per subcommand).
+- [ ] **`composer.json`** filled out with:
+      - `description` — playful, descriptive sentence.
+      - `keywords` — generous tag list (`tui`, `cli`, `terminal`,
+        `bubble-tea`, `php8`, plus library-specific tags).
+      - `homepage` — sugarbuzz.dev/<lib>.
+      - `support` (issues, source, docs URLs).
+      - `funding` block (if applicable).
+      - `authors` — Joe Huss + contributors.
+- [ ] **`examples/`** directory with runnable scripts that map 1:1 to
+      the original repo's examples folder.
+- [ ] **`docs/`** directory: usage guide, API reference (phpDocumentor
+      generated), upgrade notes.
+- [ ] **GitHub repo polish:**
+      - Description matches the composer.json description.
+      - Topics tagged generously.
+      - Social preview image (CandyCore-themed).
+      - Issue + PR templates.
+      - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
+      - Releases tagged with semver from v1.0.0 onward.
+      - Discussions enabled.
+- [ ] **Packagist publish** (after split-out from monorepo): all libs
+      under the `sugarbuzz/` vendor namespace once available, otherwise
+      `candycore/` until then.
+
+### Website — sugarbuzz.dev
+
+- [ ] **Hero**: big animated banner showing CandyShell + SugarBits +
+      SugarPrompt running side-by-side via VHS recordings.
+- [ ] **Library grid**: one tile per library (CandyCore, CandySprinkles,
+      SugarBits, etc.) with the package's signature glyph, one-line
+      description, and "view on GitHub" / "view docs" / "view demo"
+      links. Hover effect: rounded card lifts and glows.
+- [ ] **Quickstart panel**: copy-pasteable `composer require` lines
+      that drop into a working `Counter` model in 10 lines.
+- [ ] **Showcase**: example apps using the stack — SugarCrush demo,
+      CandyTetris playable embed, SuperCandy file manager screenshot.
+- [ ] **Why CandyCore?**: feature/comparison page (vs. plain
+      Symfony Console, vs. raw `readline`, vs. Go bubbletea — for
+      the curious).
+- [ ] **Docs portal**: a single search-friendly site stitching every
+      library's `docs/` together. CandyShine itself can render the
+      Markdown sources, dogfooding the stack.
+- [ ] **Style**: Tailwind-ish, rounded everything, candy palette
+      (the same `#ff5f87` accent used throughout the libs, plus
+      pastels). CSS-only animations on hero glyphs (subtle bobbing,
+      sparkles).
+
+### VHS demo workflow
+
+- [ ] Each library repo gets a `.vhs/` directory with one `.tape`
+      script per demo (pure-text recordings).
+- [ ] GitHub Actions workflow uses
+      [`charmbracelet/vhs-action`](https://github.com/charmbracelet/vhs-action)
+      to render `.tape` → `.gif`/`.webm` on every push that touches
+      the demo or its underlying source.
+- [ ] Demos are published into the repo's `docs/demos/` folder so
+      relative links in the README stay stable.
+- [ ] The website pulls the same GIFs by URL so a single regeneration
+      updates docs + site.
+
+### Sequencing inside Phase 10
+
+1. Pick the visual palette + a SugarBuzz logo (one-shot design pass).
+2. Build the website skeleton (static, deployable to any CDN — GitHub
+   Pages, Netlify, Vercel; whichever needs least ops).
+3. Wire up the VHS workflow on **CandyCore** first (most-watched repo;
+   sets the precedent for the rest).
+4. Roll the polish checklist library-by-library, easiest first
+   (CandySprinkles, HoneyBounce — both pure-PHP, no I/O).
+5. Move the production repos under the SugarBuzz org once at least
+   half the libs are polished. Detain remains the dev / incubator
+   namespace.
+6. Announce: blog post, charm community Discord/Slack, /r/PHP,
+   Reddit /r/programming, HN.
