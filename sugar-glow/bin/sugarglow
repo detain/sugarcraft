@@ -1,0 +1,20 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use CandyCore\Glow\Application;
+
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',     // dev: standalone
+    __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
+    __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+(new Application())->run();
