@@ -421,3 +421,186 @@ Each shipped library gets the same treatment:
    namespace.
 6. Announce: blog post, charm community Discord/Slack, /r/PHP,
    Reddit /r/programming, HN.
+
+---
+
+## Phase 11 — v2 parity sweep (Bubble Tea / Lipgloss / Bubbles)
+
+Charmbracelet shipped a coordinated v2 of Bubble Tea + Lipgloss + Bubbles
+in February 2026. The headline pitch (per the [v2 blog post](https://charm.land/blog/v2.md)):
+
+> The heart of v2 is the **Cursed Renderer**. Modeled on the ncurses
+> rendering algorithm, it improves rendering speed and efficiency by
+> orders of magnitude — meaningful locally and **monetarily
+> quantifiable for applications running over SSH**.
+>
+> v2 also reaches deeper into what emerging terminals can actually do:
+> richer keyboard support, **inline images**, **synchronized
+> rendering**, **clipboard transfer over SSH**, and many more small,
+> meticulous details. There's a reason Bubble Tea supports
+> **inline mode as a first-class use case**.
+>
+> The v2 branch has been powering [Crush][crush] (the AI coding agent
+> we're tracking as Phase 9+ entry #17 → SugarCrush) in production
+> from the start.
+
+Source-of-truth references:
+
+- [Bubble Tea v2 — What's New](https://github.com/charmbracelet/bubbletea/discussions/1374)
+  · [Upgrade Guide](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md)
+- [Lip Gloss v2 — What's New](https://github.com/charmbracelet/lipgloss/discussions/506)
+  · [Upgrade Guide](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md)
+- [Bubbles v2 — Upgrade Guide](https://github.com/charmbracelet/bubbles/blob/main/UPGRADE_GUIDE_V2.md)
+- [Blog post: v2](https://charm.land/blog/v2.md)
+
+[crush]: https://github.com/charmbracelet/crush
+
+Most of the v2 surface was about *splitting* and *clarifying* APIs;
+this phase pulls the same moves into our libs so we don't drift.
+
+Status legend per feature:
+- ✅ **already have** (or close enough)
+- 🟡 **partial / needs upgrade**
+- 🔴 **missing — port**
+- ⚪ **N/A or skip** (with reason)
+
+### CandyCore (← Bubble Tea v2)
+
+#### Runtime + IO
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| Synchronized updates (DEC mode 2026) — wraps each frame in `CSI ? 2026 h … l` | 🔴 | Add to `Renderer`. Eliminates flicker on slow terminals. **High value, small change.** |
+| Unicode mode (DEC mode 2027) — proper wide-char width queries | 🔴 | Toggle on by default in `Program::setupTerminal()`. |
+| "Cursed" ncurses-style renderer — diff scoped to changed cells, not lines | 🟡 | We have a line-diff renderer (`candy-core/src/Renderer.php`); cell-diff is a v1.1 enhancement. Would meaningfully cut SSH bandwidth for CandyWish. |
+| `WithInput` / `WithOutput` / `WithEnvironment` / `WithWindowSize` / `WithColorProfile` Program options | 🟡 | We have `input` / `output` / `loop` already. Add `environment` (test injection), `windowSize` (force), `colorProfile` (override auto-detect). |
+| `OpenTTY()` — open `/dev/tty` directly when stdin is piped | 🔴 | Useful for `candyshell choose < some.txt`-style usage where stdin is data, not the TTY. |
+| `tea.Println` / `tea.Printf` — write text *above* the program's region | 🔴 | Adds a `Cmd::println(string)` returning a sentinel the runtime intercepts to write to the output stream without breaking the alt-screen layout. |
+| `tea.Raw(escape)` — send raw escape sequences | 🔴 | Cheap escape hatch for niche terminal features we don't wrap. |
+| **Inline mode** as a first-class use case (no alt screen, no full takeover) | 🟡 | Our `useAltScreen=false` already runs inline-ish, but v2 formalises it: cursor stays in the user's prompt, output flows above the program region. Pair with `tea.Println` and a smaller `Renderer` that only owns the rows below the prompt. **Important for `candyshell input` / `confirm` / `spin` ergonomics.** |
+| **Advanced compositing** — layered rendering / pop-overs / floating panes | 🔴 | Stacks multiple "layers" so a modal can render above the main view without the model rebuilding the world. Schedule with the View struct rework — they're paired in v2. |
+| **Inline image protocols** (Sixel / Kitty / iTerm2) | 🔴 | Detect the active protocol via terminal-version query; encode an image (PNG / GIF / SVG via librsvg fallback) into the appropriate escape stream. Lives next to `Charts\Picture` once that ships in Phase 6. |
+
+#### View shape
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| `View()` returns `tea.View` struct (not `string`) | 🔴 | **Architectural shift.** Move per-frame terminal config (alt screen / mouse mode / focus / cursor / window title / progress bar / colour profile) out of `ProgressOptions` and into a `View` value-object the model returns each tick. Bigger BC break — schedule for a 2.0 of CandyCore. |
+| `Cursor` struct (position, shape, blink, colour, nullable to hide) | 🔴 | Pairs with the new View shape. Today we just expose `hideCursor` boolean. |
+| `WindowTitle` field — set via OSC 0/2 each frame | 🔴 | Terminals that support it; OSC 0/2 emission already in `Ansi`. |
+| Declarative `BackgroundColor` / `ForegroundColor` per frame | 🔴 | Use OSC 10/11. |
+| `MouseMode` declared on the View instead of one-shot setup flag | 🟡 | We toggle in setup/teardown. Move into per-View when we adopt the View struct. |
+| `ProgressBar` field — terminal native progress (OSC 9;4) | 🔴 | iTerm2 / WezTerm taskbar progress. Light-touch addition. |
+
+#### Keys
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| Split `KeyMsg` into `KeyPressMsg` / `KeyReleaseMsg` (both still match `KeyMsg` interface) | 🟡 | Add `KeyPressMsg` + `KeyReleaseMsg` extending the existing `KeyMsg`. Default behaviour unchanged unless the runtime is in Kitty mode. |
+| `Key::Code` (logical key) + `Key::Text` (typed text) — replaces `rune` | 🟡 | Our `KeyMsg` has `type` + `rune`; align field names to `code` + `text` for clarity. Add `BaseCode` (modifier-stripped logical key). |
+| `Key::Mod` unified bitfield instead of separate `alt` / `ctrl` booleans | 🟡 | Convenience: keep the booleans but expose a `Modifiers` enum / int. |
+| `IsRepeat` flag | 🔴 | Auto-repeat detection — needs the Kitty keyboard protocol to surface reliably. |
+| `Key::Keystroke()` — string like `"ctrl+shift+a"` | ✅ | We already ship `KeyMsg::string()`. |
+| Space returns `"space"` (not `" "`) from `Keystroke()` | ✅ | Already does. |
+| Kitty progressive keyboard protocol — disambiguates `ctrl+m` vs Enter, etc. | 🔴 | Niche but increasingly common. New `KeyboardEnhancementsMsg` + `View.KeyboardEnhancements` field gates it. Gates `IsRepeat` and `KeyReleaseMsg`. |
+
+#### Mouse + paste
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| Split `MouseMsg` into `MouseClickMsg` / `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` | 🟡 | Our `MouseMsg` carries an `action` enum. Add four marker subclasses extending `MouseMsg` so callers can `instanceof`. |
+| `PasteMsg::content` (we already match) | ✅ | Done. |
+| `PasteStartMsg` / `PasteEndMsg` for *streaming* paste rendering | 🔴 | Useful for very large pastes where you want a progress indicator. |
+
+#### Terminal queries
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| `RequestCursorPosition` + `CursorPositionMsg` | 🔴 | CSI 6n DSR. |
+| `RequestTerminalVersion` + `TerminalVersionMsg` | 🔴 | CSI > 0 q DA2 + DA3. |
+| `RequestCapability(name)` + `ModeReportMsg` | 🔴 | DECRQM. |
+| `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | 🔴 | OSC 10/11/12 ?. Pair with `ForegroundColorMsg` / `BackgroundColorMsg` / `CursorColorMsg`. |
+| Auto `EnvMsg` on startup, with `Getenv()` helper for SSH contexts | 🔴 | Send a `EnvMsg` from `Program::run()` so models can react to the originating environment without poking `getenv()` themselves. |
+| Auto `ColorProfileMsg` on startup | 🟡 | We already detect via `ColorProfile::detect()`; emit it as a Msg too so models can react. |
+
+#### Clipboard
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| `SetClipboard(text)` / `ReadClipboard()` (OSC 52) | 🔴 | Add `Cmd::setClipboard`/`readClipboard`; pair with `ClipboardMsg`. Already partially present in CandyShell hints (clipboard description in OSC inspector). |
+| `SetPrimaryClipboard(text)` (X11/Wayland primary selection) | 🔴 | OSC 52 with selection char `p`. |
+
+#### Import path
+
+- ⚪ Vanity domain (`charm.land/bubbletea/v2`) — not applicable to PHP / Composer.
+
+---
+
+### CandySprinkles (← Lipgloss v2)
+
+| v2 feature | Status | Notes |
+|---|---|---|
+| Lipgloss is now pure (no I/O) — Bubble Tea owns all I/O | ✅ | We always made `Style::render()` pure; no I/O at all. |
+| `lipgloss.Color()` returns `color.Color` interface | ⚪ | We use `Color` value object directly; no migration. |
+| `lipgloss.Println` / `Printf` / `Sprint` / `Fprint` writers | 🟡 | Could add `Sprinkles\Style::println($content)` writing to `STDOUT` for non-TUI scripts. Optional. |
+| `HasDarkBackground(stdin, stdout)` | 🔴 | OSC 11 ? query — pair with the new CandyCore terminal-query infra. |
+| `LightDark(isDark)` helper returning the right colour | 🔴 | Tiny convenience. |
+| `Complete(profile)` colour completion | 🔴 | Profile-aware colour filling — useful for theme builders. |
+| `compat.AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor` | 🟡 | Add an `AdaptiveColor` value object that picks light vs dark based on detected background. |
+| `EnableLegacyWindowsANSI()` | ⚪ | PHP doesn't ship a Windows console wrapper; fall through to Win10+ VT mode (which our `Tty` already assumes). |
+| Determinism: same input → same output, regardless of detected terminal capabilities | ✅ | We already pass profile explicitly. |
+
+---
+
+### Bubbles v2 (← SugarBits)
+
+The Bubbles v2 changes mostly tracked Bubble Tea's split. We get most
+of it for free once the runtime adopts the v2 message types. Specific
+items to revisit per component once the runtime upgrade lands:
+
+- `TextInput` / `TextArea` — react to `KeyPressMsg` (with `IsRepeat`)
+  to support held-down arrow keys correctly.
+- `List` / `ItemList` — surface `MouseClickMsg` to enable click-to-pick.
+- `Spinner` — unaffected.
+- `Cursor` — adopt the new View `Cursor` field for native cursor shape
+  / colour / blink instead of our reverse-video glyph.
+
+### Sequencing
+
+The v2 parity work is **medium-term**, not urgent. Recommended order:
+
+1. **Cheap wins first** (no architectural changes): synchronized updates,
+   unicode mode, `Println` / `Printf` Cmds, mouse subtype markers,
+   terminal queries (cursor pos, fg/bg colour, version), `AdaptiveColor`,
+   `LightDark`, `Raw` escape hatch.
+2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
+   programs only own their own rows, leaving everything above
+   intact. Pair with `Cmd::println` so messages can flow above the
+   program region. **Direct ergonomic win for CandyShell's
+   `input` / `confirm` / `spin` subcommands.**
+3. **Modifier alignment**: rename `KeyMsg::rune`/`type` to `text`/`code`
+   and add `BaseCode` + `Modifiers`. Keep the old field names as
+   readonly aliases to avoid a hard BC break.
+4. **Mouse subtype split**: introduce concrete `MouseClickMsg` /
+   `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` extending
+   `MouseMsg`. Existing `instanceof MouseMsg` keeps working.
+5. **Cursed renderer** (cell-diff): meaningful only once we have
+   real-world SSH usage — defer until CandyWish ships. The blog post
+   explicitly calls out the SSH cost savings.
+6. **Inline image protocols**: schedule with the `Charts\Picture`
+   slot in Phase 6. Sixel first (widest support), Kitty + iTerm2 as
+   capability detection improves.
+7. **View struct + advanced compositing (the big one)**: schedule for
+   a CandyCore 2.0. Coordinate with a v2 of every consumer (SugarBits
+   / SugarPrompt / CandyShell / SugarGlow / SugarCharts) since the
+   `Model::view()` return type changes. Until then, keep the v1
+   `string` shape.
+8. **Kitty keyboard protocol**: nice-to-have. Ship after the View
+   struct so `KeyboardEnhancements` lives on the View where v2 puts
+   it.
+
+This phase is itself a candidate for incremental PRs — most of the
+"cheap wins" are independent and can land one by one. **SugarCrush
+(Phase 9+ #17) is a natural milestone**: targeting v2-equivalent parity
+makes the AI-coding-agent port land on top of an already-modern
+runtime.
