@@ -7,6 +7,7 @@
         "tui", "terminal", "cli", "console",
         "bubbletea", "lipgloss", "bubbles", "huh", "gum",
         "glamour", "glow", "freeze", "harmonica", "ntcharts",
+        "wish", "ssh",
         "candycore"
     ],
     "homepage": "https://github.com/detain/CandyCore",
@@ -26,6 +27,7 @@
         "candycore/candy-shell":     "@dev",
         "candycore/candy-shine":     "@dev",
         "candycore/candy-sprinkles": "@dev",
+        "candycore/candy-wish":      "@dev",
         "candycore/candy-zone":      "@dev",
         "candycore/honey-bounce":    "@dev",
         "candycore/sugar-bits":      "@dev",
@@ -41,6 +43,7 @@
         { "type": "path", "url": "candy-shell",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-shine",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "candy-wish",      "options": { "symlink": true } },
         { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
         { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
         { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } },

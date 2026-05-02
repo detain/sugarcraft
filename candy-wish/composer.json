@@ -1,0 +1,61 @@
+{
+    "name": "candycore/candy-wish",
+    "description": "SSH server middleware framework — port of charmbracelet/wish. Build TUIs that anyone can `ssh user@host` to run, with composable middleware (auth, logging, rate-limiting, ext-ssh2 client wrappers, mount a CandyCore Program).",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "candycore",
+        "wish",
+        "ssh",
+        "server",
+        "middleware",
+        "tui",
+        "charm",
+        "remote",
+        "openssh"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore/tree/master/candy-wish",
+        "docs": "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
+    "require": {
+        "php": ">=8.1",
+        "candycore/candy-core": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "suggest": {
+        "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Wish\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\Wish\\Tests\\": "tests/"
+        }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
