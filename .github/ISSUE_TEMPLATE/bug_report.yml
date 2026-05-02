@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a bug in any CandyCore library.
+title: "[bug] "
+labels: ["bug"]
+
+body:
+  - type: dropdown
+    id: library
+    attributes:
+      label: Library
+      description: Which library is affected?
+      options:
+        - candy-core (runtime / Util)
+        - candy-sprinkles (styling / layout)
+        - honey-bounce (spring physics)
+        - candy-zone (mouse zones)
+        - sugar-bits (components)
+        - sugar-charts (charts)
+        - sugar-prompt (forms)
+        - candy-shell (CLI)
+        - candy-shine (Markdown)
+        - candy-kit (CLI helpers)
+        - candy-freeze (SVG screenshots)
+        - sugar-glow (Markdown viewer)
+        - sugar-spark (ANSI inspector)
+        - other / multiple
+    validations:
+      required: true
+
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+      description: '`php --version` output'
+      placeholder: '8.3.x'
+    validations:
+      required: true
+
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      description: 'Which terminal emulator (iTerm2, Alacritty, Windows Terminal, etc.)?'
+      placeholder: 'iTerm2 3.5'
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: |
+        Minimum code that reproduces the issue. PHP snippet preferred —
+        we should be able to copy/paste it and run it.
+      render: php
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: 'Stack traces, screenshots, related issues, ...'

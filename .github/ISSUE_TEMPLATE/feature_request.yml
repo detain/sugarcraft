@@ -1,0 +1,54 @@
+name: Feature request
+description: Suggest a feature or enhancement.
+title: "[feature] "
+labels: ["enhancement"]
+
+body:
+  - type: dropdown
+    id: library
+    attributes:
+      label: Library
+      description: Which library would the feature live in?
+      options:
+        - candy-core (runtime / Util)
+        - candy-sprinkles (styling / layout)
+        - honey-bounce (spring physics)
+        - candy-zone (mouse zones)
+        - sugar-bits (components)
+        - sugar-charts (charts)
+        - sugar-prompt (forms)
+        - candy-shell (CLI)
+        - candy-shine (Markdown)
+        - candy-kit (CLI helpers)
+        - candy-freeze (SVG screenshots)
+        - sugar-glow (Markdown viewer)
+        - sugar-spark (ANSI inspector)
+        - new library
+        - other / multiple
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: Pseudocode, signatures, or a rough outline.
+      render: php
+
+  - type: textarea
+    id: upstream
+    attributes:
+      label: Upstream parallel?
+      description: If this maps to an existing Charmbracelet feature, link it here.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
