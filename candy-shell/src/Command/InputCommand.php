@@ -29,7 +29,11 @@ final class InputCommand extends Command
             ->addOption('value',       null, InputOption::VALUE_REQUIRED, 'Pre-filled value.', '')
             ->addOption('char-limit',  null, InputOption::VALUE_REQUIRED, 'Max input length (0 = unlimited).', 0)
             ->addOption('width',       null, InputOption::VALUE_REQUIRED, 'Visible width (0 = full line).', 0)
-            ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header text rendered above the prompt.', '');
+            ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header text rendered above the prompt.', '')
+            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                "Per-element style: '<elem>.<prop>=<value>'. Elements: cursor, prompt, header, placeholder.",
+                []
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

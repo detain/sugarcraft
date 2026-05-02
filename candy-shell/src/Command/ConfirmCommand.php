@@ -33,7 +33,11 @@ final class ConfirmCommand extends Command
             ->addOption('default',     null, InputOption::VALUE_REQUIRED, 'Default answer (yes|no).', '')
             ->addOption('affirmative', null, InputOption::VALUE_REQUIRED, 'Label for the yes option.',  'Yes')
             ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
-            ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.');
+            ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
+            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                "Per-element style: '<elem>.<prop>=<value>'. Elements: prompt, selected, unselected.",
+                []
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

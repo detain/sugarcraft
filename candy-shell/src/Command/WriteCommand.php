@@ -31,7 +31,11 @@ final class WriteCommand extends Command
             ->addOption('max-lines',          null, InputOption::VALUE_REQUIRED, 'Max line count (0 = unlimited).', 0)
             ->addOption('prompt',             null, InputOption::VALUE_REQUIRED, 'Static prefix on every line.', '')
             ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,    'Show 1-based line numbers in a left gutter.')
-            ->addOption('header',             null, InputOption::VALUE_REQUIRED, 'Header text rendered above the editor.', '');
+            ->addOption('header',             null, InputOption::VALUE_REQUIRED, 'Header text rendered above the editor.', '')
+            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                "Per-element style: '<elem>.<prop>=<value>'. Elements: cursor, prompt, header, placeholder, lineNumber.",
+                []
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

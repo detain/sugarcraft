@@ -32,7 +32,13 @@ final class ChooseCommand extends Command
             ->addOption('header',   null, InputOption::VALUE_REQUIRED, 'Header text rendered above the list.', '')
             ->addOption('selected', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option(s) (multi mode).', [])
             ->addOption('select-if-one', null, InputOption::VALUE_NONE, 'Auto-pick when exactly one option is supplied.')
-            ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n");
+            ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
+            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                "Per-element style: '<elem>.<prop>=<value>' (gum-compat).\n"
+              . "Elements: cursor, header, selected, unselected.\n"
+              . "Props: foreground, background, bold, italic, underline, strikethrough, faint, blink, reverse.",
+                []
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

@@ -36,7 +36,11 @@ final class FilterCommand extends Command
             ->addOption('selected',         null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option (multi mode).', [])
             ->addOption('reverse',          null, InputOption::VALUE_NONE,    'Reverse the multi-select output order.')
             ->addOption('select-if-one',    null, InputOption::VALUE_NONE,    'Auto-pick when the input has exactly one line.')
-            ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n");
+            ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n")
+            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
+                "Per-element style: '<elem>.<prop>=<value>'. Elements: cursor, header, prompt, indicator, match, selected, unselected.",
+                []
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
