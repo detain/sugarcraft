@@ -1,6 +1,6 @@
 # VHS tape — short Tetris play session: a few drops and rotations.
 # Render with: `vhs candy-tetris/.vhs/play.tape`
-Output candy-tetris/.vhs/play.gif
+Output .vhs/play.gif
 
 Set FontSize 14
 Set Width 720

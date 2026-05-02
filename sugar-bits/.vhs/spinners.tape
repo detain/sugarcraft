@@ -1,5 +1,5 @@
 # All 12 sugar-bits spinner styles in sequence.
-Output sugar-bits/.vhs/spinners.gif
+Output .vhs/spinners.gif
 
 Set FontSize 16
 Set Width 600

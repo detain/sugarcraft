@@ -1,5 +1,5 @@
 # Render the Sprinkles dashboard example.
-Output candy-sprinkles/.vhs/dashboard.gif
+Output .vhs/dashboard.gif
 
 Set FontSize 14
 Set Width 900

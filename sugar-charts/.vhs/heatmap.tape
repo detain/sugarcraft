@@ -1,5 +1,5 @@
 # Render a coloured heatmap with legend strip.
-Output sugar-charts/.vhs/heatmap.gif
+Output .vhs/heatmap.gif
 
 Set FontSize 14
 Set Width 900

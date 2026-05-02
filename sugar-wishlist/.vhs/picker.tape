@@ -2,7 +2,7 @@
 # tape is reproducible without network access; we override the ssh
 # binary to /bin/true so Enter doesn't actually try to connect.
 # Render with: `vhs sugar-wishlist/.vhs/picker.tape`
-Output sugar-wishlist/.vhs/picker.gif
+Output .vhs/picker.gif
 
 Set FontSize 14
 Set Width 800

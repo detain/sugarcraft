@@ -1,5 +1,5 @@
 # Run through the multi-page form, picking sample answers.
-Output sugar-prompt/.vhs/form.gif
+Output .vhs/form.gif
 
 Set FontSize 16
 Set Width 800

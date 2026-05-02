@@ -1,5 +1,5 @@
 # Run the screenshot example, then `cat` the dracula output.
-Output candy-freeze/.vhs/screenshot.gif
+Output .vhs/screenshot.gif
 
 Set FontSize 14
 Set Width 900

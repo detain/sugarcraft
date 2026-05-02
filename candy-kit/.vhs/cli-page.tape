@@ -1,5 +1,5 @@
 # Demo the full CandyKit fang-style CLI page.
-Output candy-kit/.vhs/cli-page.gif
+Output .vhs/cli-page.gif
 
 Set FontSize 14
 Set Width 800

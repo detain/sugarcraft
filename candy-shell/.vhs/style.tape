@@ -1,5 +1,5 @@
 # Demo of `candyshell style` — the simplest of the 13 commands.
-Output candy-shell/.vhs/style.gif
+Output .vhs/style.gif
 
 Set FontSize 16
 Set Width 800

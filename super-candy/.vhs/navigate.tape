@@ -1,7 +1,7 @@
 # VHS tape — dual-pane navigation. Uses the source tree itself as the
 # left pane so there's content to browse.
 # Render with: `vhs super-candy/.vhs/navigate.tape`
-Output super-candy/.vhs/navigate.gif
+Output .vhs/navigate.gif
 
 Set FontSize 14
 Set Width 1100

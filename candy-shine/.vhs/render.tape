@@ -1,5 +1,5 @@
 # Render the same Markdown sample through 4 themes.
-Output candy-shine/.vhs/render.gif
+Output .vhs/render.gif
 
 Set FontSize 14
 Set Width 900

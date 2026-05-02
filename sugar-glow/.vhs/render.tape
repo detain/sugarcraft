@@ -1,5 +1,5 @@
 # Render the project README in pager mode.
-Output sugar-glow/.vhs/render.gif
+Output .vhs/render.gif
 
 Set FontSize 14
 Set Width 900

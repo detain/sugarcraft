@@ -1,7 +1,7 @@
 # VHS tape — chat shell with the offline EchoBackend (the binary's
 # default when SUGARCRUSH_BACKEND_CMD isn't set).
 # Render with: `vhs sugar-crush/.vhs/chat.tape`
-Output sugar-crush/.vhs/chat.gif
+Output .vhs/chat.gif
 
 Set FontSize 14
 Set Width 900

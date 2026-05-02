@@ -2,7 +2,7 @@
 # Render with: `vhs candy-core/.vhs/counter.tape`
 # Output: candy-core/.vhs/counter.gif
 
-Output candy-core/.vhs/counter.gif
+Output .vhs/counter.gif
 
 Set FontSize 16
 Set Width 700

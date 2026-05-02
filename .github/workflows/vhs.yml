@@ -50,19 +50,37 @@ jobs:
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
-      # vhs-action's bundled ffmpeg install is flaky on the Ubuntu
-      # runner; install via apt up-front so the action skips its own.
-      - name: Install ffmpeg + ttyd
+      # vhs-action@v2's bundled ffmpeg install has been failing in
+      # CI ("Failed to install ffmpeg" — every job, every run). Skip
+      # the action and install vhs + ttyd + ffmpeg directly: ffmpeg
+      # via apt, vhs and ttyd from GitHub releases.
+      - name: Install vhs + ttyd + ffmpeg
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         run: |
+          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
 
+          curl -sSL "https://github.com/charmbracelet/vhs/releases/latest/download/vhs_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
+          sudo chmod +x /usr/local/bin/vhs
+
+          curl -sSL -o /tmp/ttyd "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64"
+          sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
+
+          vhs --version
+          ttyd --version
+          ffmpeg -version | head -1
+
       - name: Render every .tape in ${{ matrix.lib }}/.vhs/
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        uses: charmbracelet/vhs-action@v2
-        with:
-          path: ${{ matrix.lib }}/.vhs/
+        working-directory: ${{ matrix.lib }}
+        run: |
+          set -euo pipefail
+          for tape in .vhs/*.tape; do
+            echo "▶ rendering $tape"
+            vhs "$tape"
+          done
 
       - name: Commit rendered GIFs
         if: hashFiles(format('{0}/.vhs/*.gif', matrix.lib)) != ''
