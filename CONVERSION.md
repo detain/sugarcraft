@@ -252,13 +252,21 @@ Update this table as work proceeds. Status legend:
 
 ## Phase audit (2026-05-02)
 
-> **Status (2026-05-02 close-out):** every phase below has had its
-> "Top priorities" — and most of the secondary items — closed in the
-> following PRs: #50 (Phase 0), #51 (Phase 1), #52 (Phase 2), #53
-> (Phase 3), #54 (Phase 4), #56 (Phase 5), #57 (Phase 6), #58 (Phase
-> 7), #59 (Phase 8), #55 (Phase 9). The Progress tracker above
-> reflects the new state. The original audit text below is preserved
-> as a record of what the gaps were, not as a current backlog.
+> **Status (2026-05-02 close-out + follow-up wave):** every phase
+> below has had its "Top priorities" — and every deferred item
+> from the original audit — closed in the following PRs:
+> #50 (Phase 0), #51 (Phase 1), #52 (Phase 2), #53 (Phase 3),
+> #54 (Phase 4), #56 (Phase 5), #57 (Phase 6), #58 (Phase 7),
+> #59 (Phase 8), #55 (Phase 9). Plus the deferred-item follow-ups:
+> #61 (SugarCharts Streamline / Waveline / OHLC), #62
+> (AnimatedProgress spring-physics), #63 (CandyShell `--style`
+> sub-flag parser), #64 (NEW CandyFreeze code→SVG library), #65
+> (CandyKit Section / Stage / HelpText + 4 themes), #66
+> (SugarSpark DCS / APC + 14 new sequence labellers), #67
+> (SugarGlow full theme set + word-wrap + OSC-8 toggle).
+> The Progress tracker above reflects the new state. The
+> original audit text below is preserved as a record of what
+> the gaps were, not as a current backlog.
 
 A line-by-line comparison of every PHP port against its Go counterpart. Each
 phase that was previously listed as 🟢 100% turned out to have material gaps
@@ -770,10 +778,10 @@ and the dependencies on phases 0–8.
 | # | Source (Go) | Proposed PHP port | Subdir / Composer pkg | PSR-4 namespace | Role | Depends on |
 |---|---|---|---|---|---|---|
 |  9 | [charmbracelet/glamour](https://github.com/charmbracelet/glamour) | **CandyShine** | `candy-shine/` → `candycore/candy-shine` | `CandyCore\Shine` | Markdown → ANSI renderer (table-driven styles, syntax highlighting). Unblocks Phase 8's `format` subcommand. | 0, 1 |
-| 10 | [charmbracelet/glow](https://github.com/charmbracelet/glow) | **SugarGlow** ✅ | `sugar-glow/` → `candycore/sugar-glow` | `CandyCore\Glow` | Markdown CLI viewer / pager. Library + `bin/sugarglow` CLI shipped — single Symfony Console default command renders Markdown via CandyShine and either prints to stdout (default) or opens a fullscreen `Viewport` pager (`-p` / `--pager`) sized to the terminal. `--theme ansi\|plain` selects the CandyShine theme. Reads from a file argument or stdin. | 1, 3, 5, 9 |
+| 10 | [charmbracelet/glow](https://github.com/charmbracelet/glow) | **SugarGlow** ✅ | `sugar-glow/` → `candycore/sugar-glow` | `CandyCore\Glow` | Markdown CLI viewer / pager. Library + `bin/sugarglow` CLI shipped — single Symfony Console default command renders Markdown via CandyShine and either prints to stdout (default) or opens a fullscreen `Viewport` pager (`-p` / `--pager`) sized to the terminal. `--theme ansi\|plain\|dark\|light\|notty\|dracula\|tokyo-night\|pink` (full CandyShine theme set), `--style/-s` alias, `--theme-config` for custom JSON themes, `--width/-w` word-wrap, `--no-hyperlinks` to disable OSC 8. Reads from a file argument or stdin. | 1, 3, 5, 9 |
 | 11 | [charmbracelet/freeze](https://github.com/charmbracelet/freeze) | **CandyFreeze** ✅ | `candy-freeze/` → `candycore/candy-freeze` | `CandyCore\Freeze` | Code → SVG screenshot. SVG-only first cut (no `ext-gd`/Imagick required); supports macOS-style traffic-light window controls, drop shadow, rounded-corner frame, optional gutter line numbers, and inline ANSI SGR colour parsing (16-color / 256-color / 24-bit truecolor + bold/italic/underline). 5 stock themes (`dark`/`light`/`dracula`/`tokyoNight`/`nord`). Library + `bin/candyfreeze` CLI shipped. | 1 |
-| 12 | [charmbracelet/sequin](https://github.com/charmbracelet/sequin) | **SugarSpark** ✅ | `sugar-spark/` → `candycore/sugar-spark` | `CandyCore\Spark` | Inspect / pretty-print ANSI escape sequences. Library + `bin/sugarspark` CLI shipped — labels SGR (foreground / background / 256-color / truecolor / attributes), CSI cursor moves, erase, DEC private mode toggles (mouse, focus, alt screen, bracketed paste), CSI ~ keys (Home/End/Delete/PgUp/PgDn/F1-F12), SS3, OSC (window title, hyperlink, OSC 52), and 2-byte ESC. Unrecognised sequences fall back to a generic descriptor so nothing is silently swallowed. | 0 |
-| 13 | [charmbracelet/fang](https://github.com/charmbracelet/fang) | **CandyKit** ✅ | `candy-kit/` → `candycore/candy-kit` | `CandyCore\Kit` | Opinionated CLI presentation helpers shipped: `Theme` (success/error/warn/info/prompt/accent/muted Style palette, ansi + plain factories), `StatusLine` (✓/✗/⚠/ℹ/? glyph + message), `Banner::title($title, $subtitle)` (rounded-bordered title block with optional subtitle, custom Border supported). Library-only — no Symfony Console requirement so any Composer project can drop it in. | 1 |
+| 12 | [charmbracelet/sequin](https://github.com/charmbracelet/sequin) | **SugarSpark** ✅ | `sugar-spark/` → `candycore/sugar-spark` | `CandyCore\Spark` | Inspect / pretty-print ANSI escape sequences. Library + `bin/sugarspark` CLI shipped — labels SGR (foreground / background / 256-color / truecolor / attributes), CSI cursor moves, erase, DEC private mode toggles (mouse, focus, alt screen, bracketed paste, **synchronized output 2026, unicode mode 2027**), CSI ~ keys (Home/End/Delete/PgUp/PgDn/F1-F12), **scroll region (DECSTBM), scroll up/down, tab forward/backward, insert chars, DECSCUSR cursor shape, DECRQM/DECRPM mode query/reply, kitty keyboard query/push/pop, XTVERSION request, cursor position request**, SS3, OSC (title / icon / cwd / hyperlink / OSC 52 / **palette / progress / colour set + reset**), 2-byte ESC, **DCS** (XTVERSION reply, DECRPSS, sixel), **APC** (CandyZone markers, kitty graphics). Unrecognised sequences fall back to a generic descriptor so nothing is silently swallowed. | 0 |
+| 13 | [charmbracelet/fang](https://github.com/charmbracelet/fang) | **CandyKit** ✅ | `candy-kit/` → `candycore/candy-kit` | `CandyCore\Kit` | Opinionated CLI presentation helpers shipped: `Theme` (success/error/warn/info/prompt/accent/muted Style palette, **ansi / plain / charm / dracula / nord / catppuccin** factories), `StatusLine` (✓/✗/⚠/ℹ/? glyph + message), `Banner::title($title, $subtitle)` (rounded-bordered title block, custom Border supported), **`Section::header / rule`** (`── LABEL ────`), **`Stage::step / subStep`** (numbered build-script lines + tree-style sub-steps), **`HelpText::render`** (fang-style `--help` page from a `usage + sections` map). Library-only — no Symfony Console requirement so any Composer project can drop it in. | 1 |
 | 14 | [charmbracelet/wish](https://github.com/charmbracelet/wish) (via this entry) | **CandyWish** | `candy-wish/` → `candycore/candy-wish` | `CandyCore\Wish` | SSH-server framework that pipes a `Program` onto an SSH session. | 3 + ext-ssh2 / pure-PHP SSH |
 | 15 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** | `sugar-wishlist/` → `candycore/sugar-wishlist` | `CandyCore\Wishlist` | SSH directory / launcher. Composes **CandyWish** + Phase 5 selection list. | 5, 14 |
 | 16 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` → `candycore/candy-metrics` | `CandyCore\Metrics` | Prometheus metrics middleware for **CandyWish** sessions. | 14 |
