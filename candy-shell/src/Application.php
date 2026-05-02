@@ -12,6 +12,7 @@ use CandyCore\Shell\Command\InputCommand;
 use CandyCore\Shell\Command\JoinCommand;
 use CandyCore\Shell\Command\LogCommand;
 use CandyCore\Shell\Command\PagerCommand;
+use CandyCore\Shell\Command\SpinCommand;
 use CandyCore\Shell\Command\StyleCommand;
 use CandyCore\Shell\Command\TableCommand;
 use CandyCore\Shell\Command\WriteCommand;
@@ -24,7 +25,7 @@ final class Application extends SymfonyApplication
 {
     public function __construct()
     {
-        parent::__construct('candyshell', '0.2.0');
+        parent::__construct('candyshell', '0.3.0');
         $this->addCommands([
             new StyleCommand(),
             new ChooseCommand(),
@@ -37,6 +38,7 @@ final class Application extends SymfonyApplication
             new WriteCommand(),
             new FileCommand(),
             new PagerCommand(),
+            new SpinCommand(),
         ]);
     }
 }
