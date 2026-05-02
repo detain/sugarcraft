@@ -221,6 +221,14 @@ final class ItemList implements Model
                 => $this->clearFilter(),
             $msg->type === KeyType::Enter
                 => $this->mutate(filtering: false),
+            $msg->type === KeyType::Up
+                => $this->moveCursor($this->cursor - 1),
+            $msg->type === KeyType::Down
+                => $this->moveCursor($this->cursor + 1),
+            $msg->type === KeyType::PageUp
+                => $this->moveCursor($this->cursor - max(1, $this->height)),
+            $msg->type === KeyType::PageDown
+                => $this->moveCursor($this->cursor + max(1, $this->height)),
             $msg->type === KeyType::Backspace
                 => $this->mutate(
                     filterText: mb_substr($this->filterText, 0, -1, 'UTF-8'),
