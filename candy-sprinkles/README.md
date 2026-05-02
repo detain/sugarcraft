@@ -110,3 +110,34 @@ echo Tree::new()
 ```sh
 cd candy-sprinkles && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### Border styles
+
+![border](.vhs/border.gif)
+
+### Canvas (multi-layer compositor)
+
+![canvas](.vhs/canvas.gif)
+
+### Layout dashboard
+
+![dashboard](.vhs/dashboard.gif)
+
+### List
+
+![list](.vhs/list.gif)
+
+### Style
+
+![style](.vhs/style.gif)
+
+### Table
+
+![table](.vhs/table.gif)
+
+### Tree
+
+![tree](.vhs/tree.gif)
+

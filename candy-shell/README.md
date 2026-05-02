@@ -44,3 +44,58 @@ candyshell confirm "Really delete $file?" && rm "$file"
 ```sh
 cd candy-shell && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### choose
+
+![choose](.vhs/choose.gif)
+
+### Confirm
+
+![confirm](.vhs/confirm.gif)
+
+### file
+
+![file](.vhs/file.gif)
+
+### filter
+
+![filter](.vhs/filter.gif)
+
+### format
+
+![format](.vhs/format.gif)
+
+### Input
+
+![input](.vhs/input.gif)
+
+### join
+
+![join](.vhs/join.gif)
+
+### log
+
+![log](.vhs/log.gif)
+
+### pager
+
+![pager](.vhs/pager.gif)
+
+### spin
+
+![spin](.vhs/spin.gif)
+
+### Style
+
+![style](.vhs/style.gif)
+
+### Table
+
+![table](.vhs/table.gif)
+
+### write
+
+![write](.vhs/write.gif)
+

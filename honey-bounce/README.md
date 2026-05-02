@@ -75,3 +75,14 @@ Gravity constants: `Projectile::GRAVITY` (9.81) and
 ```sh
 cd honey-bounce && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### Projectile motion
+
+![projectile](.vhs/projectile.gif)
+
+### Spring physics
+
+![spring](.vhs/spring.gif)
+

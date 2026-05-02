@@ -50,6 +50,17 @@ final class Counter implements Model
 - **`Renderer`** — minimal cursor-home + erase + write. Diff-based renderer is a follow-up.
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty` foundation utilities, shared with CandySprinkles.
 
+## Demos
+
+### Counter Model
+
+![counter](.vhs/counter.gif)
+
+### Timer
+
+![timer](.vhs/timer.gif)
+
+
 ## Status
 
 - **Phase 0** (foundation utilities): 🟢 complete.

@@ -36,6 +36,41 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 - **`Charts\LineChart\LineChart`** — single-series ASCII plot drawn onto a
   Canvas with configurable axes.
 
+## Demos
+
+### Bar chart
+
+![bar](.vhs/bar.gif)
+
+### Heatmap
+
+![heatmap](.vhs/heatmap.gif)
+
+### Line chart
+
+![line](.vhs/line.gif)
+
+### OHLC (candlestick)
+
+![ohlc](.vhs/ohlc.gif)
+
+### Picture (Sixel)
+
+![picture](.vhs/picture.gif)
+
+### Scatter
+
+![scatter](.vhs/scatter.gif)
+
+### Sparkline
+
+![sparkline](.vhs/sparkline.gif)
+
+### Time series
+
+![timeseries](.vhs/timeseries.gif)
+
+
 ## Status
 
 - v0 ships canvas + sparkline + bar + line.

@@ -36,3 +36,34 @@ submits; `Esc` / `Ctrl+C` aborts.
 ```sh
 cd sugar-prompt && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### Confirm
+
+![confirm](.vhs/confirm.gif)
+
+### Multi-page form
+
+![form](.vhs/form.gif)
+
+### Input
+
+![input](.vhs/input.gif)
+
+### Multi-select
+
+![multi-select](.vhs/multi-select.gif)
+
+### Select
+
+![select](.vhs/select.gif)
+
+### Text (multi-line)
+
+![text](.vhs/text.gif)
+
+### Themes
+
+![themes](.vhs/themes.gif)
+

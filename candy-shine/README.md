@@ -95,3 +95,14 @@ render real clickable links. Falls back to `text (url)` when off.
 ```sh
 cd candy-shine && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### Render
+
+![render](.vhs/render.gif)
+
+### Themes
+
+![themes](.vhs/themes.gif)
+

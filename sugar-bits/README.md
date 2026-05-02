@@ -93,3 +93,58 @@ $bar = AnimatedProgress::new()
 ```sh
 cd sugar-bits && composer install && vendor/bin/phpunit
 ```
+
+## Demos
+
+### Cursor
+
+![cursor](.vhs/cursor.gif)
+
+### File picker
+
+![file-picker](.vhs/file-picker.gif)
+
+### Help
+
+![help](.vhs/help.gif)
+
+### Item list
+
+![item-list](.vhs/item-list.gif)
+
+### Paginator
+
+![paginator](.vhs/paginator.gif)
+
+### Progress
+
+![progress](.vhs/progress.gif)
+
+### Spinners
+
+![spinners](.vhs/spinners.gif)
+
+### Stopwatch
+
+![stopwatch](.vhs/stopwatch.gif)
+
+### Table
+
+![table](.vhs/table.gif)
+
+### Text area
+
+![text-area](.vhs/text-area.gif)
+
+### Text input
+
+![text-input](.vhs/text-input.gif)
+
+### Timer
+
+![timer](.vhs/timer.gif)
+
+### Viewport
+
+![viewport](.vhs/viewport.gif)
+
