@@ -28,26 +28,84 @@ final class Manager
 
     /** @var array<string, Zone> */
     private array $zones = [];
+    private bool $enabled = true;
+    private string $idPrefix = '';
+    /** Class-level counter that gives every prefix-bearing manager a unique tag. */
+    private static int $prefixCounter = 0;
 
     public static function newGlobal(): self
     {
         return new self();
     }
 
+    /**
+     * Build a manager that namespaces every id with a unique prefix.
+     *
+     * Useful when you compose multiple CandyZone-aware components into
+     * the same Program — each component grabs its own prefixed manager
+     * so two `ItemList`s using the literal id `"item-0"` don't collide.
+     *
+     * Mirrors bubblezone's `NewPrefix`. Pass an explicit `$prefix` to
+     * fix the namespace; omit (or pass empty) to auto-generate one
+     * from a monotonic counter.
+     */
+    public static function newPrefix(string $prefix = ''): self
+    {
+        $m = new self();
+        $m->idPrefix = $prefix !== ''
+            ? $prefix
+            : (string) (++self::$prefixCounter) . '-';
+        return $m;
+    }
+
+    /**
+     * Toggle marker emission and scanning. When `$enabled = false`,
+     * `mark()` returns `$content` verbatim (no markers wrapped) and
+     * `scan()` is a no-op pass-through. Useful for non-interactive
+     * output (CI logs, file dumps) where the markers add nothing.
+     *
+     * Mirrors bubblezone's `SetEnabled`.
+     */
+    public function setEnabled(bool $on): void
+    {
+        $this->enabled = $on;
+    }
+
+    public function isEnabled(): bool
+    {
+        return $this->enabled;
+    }
+
+    /** Read-only accessor for the prefix this manager prepends to ids. */
+    public function prefix(): string
+    {
+        return $this->idPrefix;
+    }
+
     /** Wrap $content with start/end markers for $id. */
     public function mark(string $id, string $content): string
     {
-        return self::APC_PREFIX . self::TAG_START . $id . self::APC_ST
+        if (!$this->enabled) {
+            return $content;
+        }
+        $fullId = $this->idPrefix . $id;
+        return self::APC_PREFIX . self::TAG_START . $fullId . self::APC_ST
              . $content
-             . self::APC_PREFIX . self::TAG_END . $id . self::APC_ST;
+             . self::APC_PREFIX . self::TAG_END . $fullId . self::APC_ST;
     }
 
     /**
      * Strip markers from $rendered, recording each zone's bounding box.
      * Returns the cleaned frame ready for the terminal.
+     *
+     * No-op when {@see setEnabled()} has flipped the manager off —
+     * the input passes through unchanged.
      */
     public function scan(string $rendered): string
     {
+        if (!$this->enabled) {
+            return $rendered;
+        }
         $clean = '';
         $row = 1;
         $col = 1;
@@ -154,7 +212,7 @@ final class Manager
 
     public function get(string $id): ?Zone
     {
-        return $this->zones[$id] ?? null;
+        return $this->zones[$this->idPrefix . $id] ?? null;
     }
 
     /** @return array<string, Zone> */

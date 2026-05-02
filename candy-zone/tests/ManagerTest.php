@@ -168,4 +168,65 @@ final class ManagerTest extends TestCase
         $this->assertSame('hi', $clean);
         $this->assertNull($m->get('ghost'));
     }
+
+    public function testSetEnabledFalseSkipsMarkers(): void
+    {
+        $m = Manager::newGlobal();
+        $m->setEnabled(false);
+        $this->assertFalse($m->isEnabled());
+        $marked = $m->mark('foo', 'hello');
+        $this->assertSame('hello', $marked);
+        $clean = $m->scan('hello');
+        $this->assertSame('hello', $clean);
+        $this->assertNull($m->get('foo'));
+    }
+
+    public function testSetEnabledTrueResumesMarking(): void
+    {
+        $m = Manager::newGlobal();
+        $m->setEnabled(false);
+        $m->mark('foo', 'hi'); // dropped
+        $m->setEnabled(true);
+        $this->assertTrue($m->isEnabled());
+        $marked = $m->mark('foo', 'hi');
+        $this->assertStringContainsString('candyzone:S:foo', $marked);
+    }
+
+    public function testNewPrefixGeneratesUniqueIds(): void
+    {
+        $a = Manager::newPrefix();
+        $b = Manager::newPrefix();
+        $this->assertNotSame($a->prefix(), $b->prefix());
+    }
+
+    public function testExplicitPrefixUsedAsIs(): void
+    {
+        $m = Manager::newPrefix('myWidget-');
+        $marked = $m->mark('item-0', 'X');
+        $this->assertStringContainsString('candyzone:S:myWidget-item-0', $marked);
+        $this->assertStringContainsString('candyzone:E:myWidget-item-0', $marked);
+    }
+
+    public function testGetUsesPrefix(): void
+    {
+        $m = Manager::newPrefix('list-');
+        $marked = $m->mark('row-1', 'hi');
+        $m->scan($marked);
+        $zone = $m->get('row-1');
+        $this->assertNotNull($zone);
+        $this->assertSame('list-row-1', $zone->id);
+    }
+
+    public function testTwoPrefixedManagersDoNotCollide(): void
+    {
+        $a = Manager::newPrefix('a-');
+        $b = Manager::newPrefix('b-');
+        // Each component owns its own marker stream.
+        $a->scan($a->mark('item-0', 'A'));
+        $b->scan($b->mark('item-0', 'B'));
+        $this->assertNotNull($a->get('item-0'));
+        $this->assertNotNull($b->get('item-0'));
+        $this->assertSame('a-item-0', $a->get('item-0')->id);
+        $this->assertSame('b-item-0', $b->get('item-0')->id);
+    }
 }
