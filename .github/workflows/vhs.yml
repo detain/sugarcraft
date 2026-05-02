@@ -170,6 +170,44 @@ jobs:
             cp -v "$d"/*.gif "$lib/.vhs/" || true
           done
 
+      # VHS encoding is non-deterministic — two runs with identical
+      # input produce GIFs that differ at the byte level (LZW state,
+      # frame timing rounding) but render identically. Without this
+      # dedup, every workflow run produces a 'vhs: regenerate demo
+      # GIFs' commit even when nothing visibly changed.
+      #
+      # Strategy: for each new GIF, decode it via ffmpeg into raw
+      # frames and MD5 those. Compare with the same MD5 for the
+      # HEAD version. If they match, the GIFs render identically →
+      # restore HEAD's version on disk so it doesn't get committed.
+      - name: Skip GIFs that are visually unchanged
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends ffmpeg \
+            || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
+
+          frame_md5() {
+            ffmpeg -loglevel error -i "$1" -f md5 - 2>/dev/null | head -1
+          }
+
+          shopt -s nullglob
+          for gif in */.vhs/*.gif; do
+            tmp_old=$(mktemp --suffix=.gif)
+            if git show "HEAD:$gif" > "$tmp_old" 2>/dev/null && [ -s "$tmp_old" ]; then
+              old=$(frame_md5 "$tmp_old")
+              new=$(frame_md5 "$gif")
+              if [ -n "$old" ] && [ "$old" = "$new" ]; then
+                echo "▽ unchanged: $gif (restoring HEAD's version)"
+                git checkout HEAD -- "$gif"
+              else
+                echo "△ changed:   $gif"
+              fi
+            else
+              echo "+ new:        $gif"
+            fi
+            rm -f "$tmp_old"
+          done
+
       - name: Commit + push
         run: |
           set -euo pipefail
