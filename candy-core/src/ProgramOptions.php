@@ -95,5 +95,17 @@ final class ProgramOptions
          * @var ?\Closure(Model, Msg): ?Msg
          */
         public readonly ?\Closure $filter = null,
+        /**
+         * Enable the cursed cell-diff renderer. Default `false` —
+         * the line-diff baseline is always correct. Flipping this
+         * on opts into the Bubble Tea v2 algorithm: per-row token-
+         * aware partial repaints that emit dramatically fewer bytes
+         * for slow-changing lines (progress bars, ticking counters).
+         *
+         * Worth turning on for SSH sessions (CandyWish) and any
+         * remote / latency-sensitive deployment. Local terminals
+         * notice no difference at typical frame sizes.
+         */
+        public readonly bool $cellDiffRenderer = false,
     ) {}
 }

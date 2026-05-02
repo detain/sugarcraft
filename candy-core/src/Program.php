@@ -76,7 +76,11 @@ final class Program
             }
         }
         $this->reader = new InputReader();
-        $this->renderer = new Renderer($this->output, inline: $options->inlineMode);
+        $this->renderer = new Renderer(
+            $this->output,
+            inline:   $options->inlineMode,
+            cellDiff: $options->cellDiffRenderer,
+        );
         $this->tty = new Tty($this->input);
     }
 

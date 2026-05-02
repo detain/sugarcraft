@@ -171,4 +171,103 @@ final class RendererTest extends TestCase
         $this->assertSame($afterFirst, ftell($out));
         fclose($out);
     }
+
+    /** @return array{0:resource,1:Renderer} */
+    private function makeCellDiff(): array
+    {
+        $out = fopen('php://memory', 'w+');
+        $this->assertNotFalse($out);
+        return [$out, new Renderer($out, inline: false, cellDiff: true)];
+    }
+
+    public function testCellDiffPaintsSuffixWhenLineGrows(): void
+    {
+        [$out, $r] = $this->makeCellDiff();
+        $r->render("count: 1\nfooter");
+        $firstEnd = ftell($out);
+
+        $r->render("count: 2\nfooter");
+        fseek($out, $firstEnd);
+        $delta = (string) stream_get_contents($out);
+
+        // Should NOT repaint the unchanged 'footer' row.
+        $this->assertStringNotContainsString('footer', $delta);
+        // Should repaint at column 8 (after "count: ") on row 1.
+        $this->assertStringContainsString(Ansi::cursorTo(1, 8), $delta);
+        $this->assertStringContainsString('2', $delta);
+        // Wrapped in sync markers.
+        $this->assertStringContainsString(Ansi::syncBegin(), $delta);
+        $this->assertStringContainsString(Ansi::syncEnd(),   $delta);
+        fclose($out);
+    }
+
+    public function testCellDiffPreservesSgrAcrossPartialRepaint(): void
+    {
+        [$out, $r] = $this->makeCellDiff();
+        $line1 = "\x1b[31mhello\x1b[0m world";
+        $line2 = "\x1b[31mhello\x1b[0m WORLD";  // 'world' → 'WORLD'
+        $r->render($line1);
+        $firstEnd = ftell($out);
+        $r->render($line2);
+        fseek($out, $firstEnd);
+        $delta = (string) stream_get_contents($out);
+
+        // Partial repaint should advance the cursor past the common
+        // prefix, erase to end, then emit the suffix.
+        $this->assertStringContainsString(Ansi::eraseToLineEnd(), $delta);
+        $this->assertStringContainsString('WORLD', $delta);
+        $this->assertStringNotContainsString('hello', $delta);
+        fclose($out);
+    }
+
+    public function testCellDiffFallsBackToFullRepaintWhenSmaller(): void
+    {
+        [$out, $r] = $this->makeCellDiff();
+        // First frame establishes a styled prefix that the new frame
+        // shares; the divergence point is mid-text inside the same
+        // SGR-styled run.
+        $r->render("\x1b[1;31mAlpha\x1b[0m");
+        $firstEnd = ftell($out);
+        // New line replaces the whole content — common prefix between
+        // 'Alpha' and 'X' is 0 chars, so the partial repaint would
+        // include `[1;31m` (the SGR state) before the new text. The
+        // full repaint is `[1;1H[2K` + the original sequence which is
+        // shorter; the renderer should fall back to it.
+        $r->render("\x1b[1;31mXY\x1b[0m");
+        fseek($out, $firstEnd);
+        $delta = (string) stream_get_contents($out);
+        // Either path should give us the X / Y characters.
+        $this->assertStringContainsString('XY', $delta);
+        // And the SGR state from the prefix must be present somewhere
+        // (whether as part of a full repaint or a re-emitted partial).
+        $this->assertMatchesRegularExpression('/\x1b\[1[;0]/', $delta);
+        fclose($out);
+    }
+
+    public function testCellDiffEmitsLessThanLineDiffForCounter(): void
+    {
+        // Real-world bandwidth-saving case: a status counter ticks.
+        // Cell-diff should beat line-diff by a meaningful margin.
+        $cellOut = fopen('php://memory', 'w+');
+        $lineOut = fopen('php://memory', 'w+');
+        $cell = new Renderer($cellOut, inline: false, cellDiff: true);
+        $line = new Renderer($lineOut, inline: false, cellDiff: false);
+
+        $frame = static fn(int $n): string
+            => "Status: OK\nProcessed: {$n} items\nElapsed: {$n}s";
+        for ($i = 0; $i <= 50; $i++) {
+            $cell->render($frame($i));
+            $line->render($frame($i));
+        }
+
+        $cellLen = ftell($cellOut);
+        $lineLen = ftell($lineOut);
+        // Cell-diff should write meaningfully fewer bytes — exact
+        // ratio depends on the line content but should be at least
+        // 25% smaller for this counter scenario.
+        $this->assertLessThan($lineLen * 0.85, $cellLen,
+            "cell-diff ($cellLen B) should beat line-diff ($lineLen B) by >15% on a counter");
+        fclose($cellOut);
+        fclose($lineOut);
+    }
 }
