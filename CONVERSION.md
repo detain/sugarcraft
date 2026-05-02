@@ -237,10 +237,10 @@ Update this table as work proceeds. Status legend:
 
 | Phase | Library | Status | % | Notes |
 |------:|---|:---:|---:|---|
-| 0 | Foundation utilities (ansi / color / width / tty) | 🟡 | 70% | `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty` landed under `candy-core/src/Util` with 43 passing tests. Input parser + signal helpers TBD with Phase 3. |
-| 1 | CandyGloss | 🟡 | 50% | `Style` (attrs, fg/bg, padding, margin, width/height, horizontal align, profile-aware downsampling) + `Border` (normal/rounded/thick/double/block/ascii/hidden + custom) with 42 passing tests. Inherit, vertical align, table/list/tree TBD. |
-| 2 | HoneyBounce | 🟢 | 100% | `Spring` (under-/critically-/over-damped) + `Spring::fps()` with 9 passing tests. Pure math, ready for downstream use. |
-| 3 | CandyCore (runtime) | 🔴 | 0% | ReactPHP/Amp pick TBD in Phase 3 kickoff |
+| 0 | Foundation utilities (ansi / color / width / tty) | 🟢 | 100% | `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty` under `candy-core/src/Util`. Stable. |
+| 1 | CandyGloss | 🟡 | 50% | `Style` (attrs, fg/bg, padding, margin, width/height, horizontal align, profile-aware downsampling) + `Border` (normal/rounded/thick/double/block/ascii/hidden + custom). Inherit, vertical align, table/list/tree TBD. |
+| 2 | HoneyBounce | 🟢 | 100% | `Spring` (under-/critically-/over-damped) + `Spring::fps()`. Pure math, ready for downstream use. |
+| 3 | CandyCore (runtime) | 🟡 | 40% | **ReactPHP/event-loop chosen.** `Model`, `Msg`, `Cmd` (helpers: quit/batch/send), `KeyType`, `Program`, `ProgramOptions`, `Renderer`, `InputReader`. Core messages: `KeyMsg`, `QuitMsg`, `WindowSizeMsg`. Input parsing covers printable ASCII, ctrl, alt-prefix, arrows, Home/End/Delete/PgUp/PgDn. TBD: mouse, focus/blur, bracketed paste, OSC, function keys, diff renderer. |
 | 4 | CandyZone | 🔴 | 0% | |
 | 5 | SugarBits | 🔴 | 0% | 14 components |
 | 6 | SugarCharts | 🔴 | 0% | MVP: canvas + bar + sparkline + line |
