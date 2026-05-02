@@ -7,6 +7,7 @@ namespace CandyCore\Core\Tests;
 use CandyCore\Core\InputReader;
 use CandyCore\Core\KeyType;
 use CandyCore\Core\ModeState;
+use CandyCore\Core\Modifiers;
 use CandyCore\Core\MouseAction;
 use CandyCore\Core\MouseButton;
 use CandyCore\Core\Msg\BackgroundColorMsg;
@@ -517,5 +518,91 @@ final class InputReaderTest extends TestCase
     {
         $msgs = (new InputReader())->parse("\x1b[?9999;0\$y");
         $this->assertSame(ModeState::NotRecognized, $msgs[0]->state);
+    }
+
+    // ---- modified key sequences (xterm `1;<mod>` form) -------------------
+
+    public function testCtrlUpArrow(): void
+    {
+        // CSI 1;5A → ctrl-Up.
+        $msgs = (new InputReader())->parse("\x1b[1;5A");
+        $this->assertCount(1, $msgs);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertFalse($msgs[0]->alt);
+        $this->assertFalse($msgs[0]->shift);
+    }
+
+    public function testShiftAltDownArrow(): void
+    {
+        // mod 4 = shift+alt.
+        $msgs = (new InputReader())->parse("\x1b[1;4B");
+        $this->assertSame(KeyType::Down, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertFalse($msgs[0]->ctrl);
+    }
+
+    public function testCtrlShiftAltLeft(): void
+    {
+        // mod 8 = shift+alt+ctrl.
+        $msgs = (new InputReader())->parse("\x1b[1;8D");
+        $this->assertSame(KeyType::Left, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->shift);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertTrue($msgs[0]->ctrl);
+    }
+
+    public function testModifiedTildeFormFunctionKey(): void
+    {
+        // CSI 15;3~ → alt-F5.
+        $msgs = (new InputReader())->parse("\x1b[15;3~");
+        $this->assertSame(KeyType::F5, $msgs[0]->type);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertFalse($msgs[0]->shift);
+    }
+
+    public function testKeyMsgTextAndCodeAliases(): void
+    {
+        $printable = (new InputReader())->parse('a')[0];
+        $this->assertSame('a',           $printable->text());
+        $this->assertSame(KeyType::Char, $printable->code());
+
+        $named = (new InputReader())->parse("\x1b[A")[0];
+        $this->assertSame('',          $named->text());
+        $this->assertSame(KeyType::Up, $named->code());
+    }
+
+    public function testKeyMsgModifiersAccessor(): void
+    {
+        $ctrlUp = (new InputReader())->parse("\x1b[1;5A")[0];
+        $mods = $ctrlUp->modifiers();
+        $this->assertInstanceOf(Modifiers::class, $mods);
+        $this->assertTrue($mods->ctrl);
+        $this->assertFalse($mods->alt);
+        $this->assertFalse($mods->shift);
+        $this->assertSame(Modifiers::CTRL, $mods->toBitfield());
+
+        $plain = (new InputReader())->parse('a')[0];
+        $this->assertTrue($plain->modifiers()->isEmpty());
+    }
+
+    public function testKeyMsgStringIncludesShiftPrefix(): void
+    {
+        // Direct construction: shift-Up renders as "shift+up".
+        $key = new KeyMsg(KeyType::Up, shift: true);
+        $this->assertSame('shift+up', $key->string());
+    }
+
+    public function testModifiersFromXtermMod(): void
+    {
+        $this->assertTrue(Modifiers::fromXtermMod(1)->isEmpty()); // 1 = no mods
+        $this->assertEquals(Modifiers::SHIFT, Modifiers::fromXtermMod(2)->toBitfield());
+        $this->assertEquals(Modifiers::ALT,   Modifiers::fromXtermMod(3)->toBitfield());
+        $this->assertEquals(Modifiers::CTRL,  Modifiers::fromXtermMod(5)->toBitfield());
+        $this->assertEquals(
+            Modifiers::SHIFT | Modifiers::ALT | Modifiers::CTRL,
+            Modifiers::fromXtermMod(8)->toBitfield(),
+        );
     }
 }

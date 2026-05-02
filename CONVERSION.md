@@ -497,8 +497,8 @@ Status legend per feature:
 | v2 feature | Status | Notes |
 |---|---|---|
 | Split `KeyMsg` into `KeyPressMsg` / `KeyReleaseMsg` (both still match `KeyMsg` interface) | 🟡 | Add `KeyPressMsg` + `KeyReleaseMsg` extending the existing `KeyMsg`. Default behaviour unchanged unless the runtime is in Kitty mode. |
-| `Key::Code` (logical key) + `Key::Text` (typed text) — replaces `rune` | 🟡 | Our `KeyMsg` has `type` + `rune`; align field names to `code` + `text` for clarity. Add `BaseCode` (modifier-stripped logical key). |
-| `Key::Mod` unified bitfield instead of separate `alt` / `ctrl` booleans | 🟡 | Convenience: keep the booleans but expose a `Modifiers` enum / int. |
+| `Key::Code` (logical key) + `Key::Text` (typed text) — replaces `rune` | ✅ | `KeyMsg::text()` aliases `$rune` (empty for named keys); `KeyMsg::code()` aliases `$type`. `BaseCode` is unnecessary in PHP since named keys already use the enum and printable text uses Char. |
+| `Key::Mod` unified bitfield instead of separate `alt` / `ctrl` booleans | ✅ | `KeyMsg::modifiers()` returns a `Modifiers` value object with `shift`/`alt`/`ctrl` plus `toBitfield()` (`SHIFT`/`ALT`/`CTRL` bit constants). The original `alt`/`ctrl` booleans remain for back-compat; `shift` is now also a constructor field. `Modifiers::fromXtermMod(int)` decodes the standard `1 + (1·shift + 2·alt + 4·ctrl)` byte. |
 | `IsRepeat` flag | 🔴 | Auto-repeat detection — needs the Kitty keyboard protocol to surface reliably. |
 | `Key::Keystroke()` — string like `"ctrl+shift+a"` | ✅ | We already ship `KeyMsg::string()`. |
 | Space returns `"space"` (not `" "`) from `Keystroke()` | ✅ | Already does. |
@@ -583,9 +583,13 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
    intact. Pair with `Cmd::println` so messages can flow above the
    program region. **Direct ergonomic win for CandyShell's
    `input` / `confirm` / `spin` subcommands.**
-3. **Modifier alignment**: rename `KeyMsg::rune`/`type` to `text`/`code`
-   and add `BaseCode` + `Modifiers`. Keep the old field names as
-   readonly aliases to avoid a hard BC break.
+3. ~~**Modifier alignment**: rename `KeyMsg::rune`/`type` to `text`/`code`
+   and add `BaseCode` + `Modifiers`.~~ ✅ Shipped — `KeyMsg::text()` /
+   `code()` aliases, `Modifiers` value object with bitfield constants,
+   `KeyMsg::modifiers()` accessor, plus a new `shift` constructor field.
+   Existing `alt` / `ctrl` booleans kept for back-compat. Modified-CSI
+   sequences (`CSI 1;<mod>X` and `CSI <num>;<mod>~`) now decode into
+   the new fields.
 4. ~~**Mouse subtype split**: introduce concrete `MouseClickMsg` /
    `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` extending
    `MouseMsg`.~~ ✅ Shipped — `MouseMsg` is non-final, four marker

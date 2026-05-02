@@ -241,7 +241,17 @@ final class InputReader
             }
         }
 
-        return match ($final) {
+        // Modified key sequences carry a `;<mod>` suffix on the params,
+        // e.g. `CSI 1;5A` (ctrl-Up) or `CSI 15;3~` (alt-F5). Strip the
+        // modifier off here so the key-lookup match below stays simple.
+        $mods = null;
+        $keyParams = $params;
+        if (preg_match('/^(\d*);(\d+)$/', $params, $mm) === 1) {
+            $mods = Modifiers::fromXtermMod((int) $mm[2]);
+            $keyParams = $mm[1]; // may be '' (for `;<mod>`) or a digit string
+        }
+
+        $key = match ($final) {
             'A' => new KeyMsg(KeyType::Up),
             'B' => new KeyMsg(KeyType::Down),
             'C' => new KeyMsg(KeyType::Right),
@@ -252,7 +262,7 @@ final class InputReader
             'Q' => new KeyMsg(KeyType::F2),
             'R' => new KeyMsg(KeyType::F3),
             'S' => new KeyMsg(KeyType::F4),
-            '~' => match ($params) {
+            '~' => match ($keyParams) {
                 '1', '7' => new KeyMsg(KeyType::Home),
                 '4', '8' => new KeyMsg(KeyType::End),
                 '3'      => new KeyMsg(KeyType::Delete),
@@ -274,6 +284,17 @@ final class InputReader
             },
             default => null,
         };
+
+        if ($key !== null && $mods !== null) {
+            $key = new KeyMsg(
+                $key->type,
+                $key->rune,
+                alt:   $mods->alt,
+                ctrl:  $mods->ctrl,
+                shift: $mods->shift,
+            );
+        }
+        return $key;
     }
 
     /**
