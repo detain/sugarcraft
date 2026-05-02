@@ -6,7 +6,7 @@ Set FontSize 16
 Set Width 700
 Set Height 240
 Set TypingSpeed 60ms
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "./bin/start"
 Enter

@@ -4,7 +4,7 @@ Output .vhs/style.gif
 Set FontSize 16
 Set Width 800
 Set Height 280
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type 'candyshell style --foreground 13 --bold --border rounded --padding "1 4" "Hello CandyShell!"'
 Enter

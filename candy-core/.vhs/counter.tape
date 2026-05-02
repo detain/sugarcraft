@@ -9,7 +9,7 @@ Set Width 700
 Set Height 220
 Set TypingSpeed 60ms
 Set PlaybackSpeed 1.0
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "php examples/counter.php"
 Enter

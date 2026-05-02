@@ -7,7 +7,7 @@ Set FontSize 14
 Set Width 900
 Set Height 460
 Set TypingSpeed 50ms
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "./bin/sugarcrush"
 Enter

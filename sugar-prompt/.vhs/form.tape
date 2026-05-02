@@ -4,7 +4,7 @@ Output .vhs/form.gif
 Set FontSize 16
 Set Width 800
 Set Height 480
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "php examples/multi-page-form.php"
 Enter

@@ -6,7 +6,7 @@ Set FontSize 14
 Set Width 720
 Set Height 560
 Set TypingSpeed 80ms
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "./bin/tetris"
 Enter

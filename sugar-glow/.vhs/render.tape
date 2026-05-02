@@ -4,7 +4,7 @@ Output .vhs/render.gif
 Set FontSize 14
 Set Width 900
 Set Height 600
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "sugarglow --theme dark ../README.md"
 Enter
