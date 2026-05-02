@@ -6,6 +6,7 @@
     "require": {
         "php": "^8.1",
         "candycore/candy-core":      "@dev",
+        "candycore/candy-shell":     "@dev",
         "candycore/candy-sprinkles": "@dev",
         "candycore/candy-zone":      "@dev",
         "candycore/honey-bounce":    "@dev",
@@ -15,6 +16,7 @@
     },
     "repositories": [
         { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "candy-shell",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
         { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
         { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },

@@ -1,0 +1,22 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use CandyCore\Shell\Application;
+
+// Walk up to find the right vendor/autoload.php whether the lib is the
+// top-level project or a Composer dependency.
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',     // dev: candy-shell standalone
+    __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
+    __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+(new Application())->run();
