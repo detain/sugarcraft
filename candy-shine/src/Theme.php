@@ -35,6 +35,23 @@ final class Theme
         public readonly ?Style $string  = null,
         public readonly ?Style $number  = null,
         public readonly ?Style $comment = null,
+        // ---- v2 element slots (lipgloss/glamour parity) ----
+        /** Strike-through text — `~~foo~~`. */
+        public readonly ?Style $strike = null,
+        /** Visible label of a link, separate from the URL. */
+        public readonly ?Style $linkText = null,
+        /** `![alt](src)` — the alt text. */
+        public readonly ?Style $image = null,
+        /** Inline HTML block / span — `<details>` / `<kbd>`. */
+        public readonly ?Style $htmlBlock = null,
+        public readonly ?Style $htmlSpan  = null,
+        /** Definition list term + body (when the markdown extension is loaded). */
+        public readonly ?Style $definitionTerm        = null,
+        public readonly ?Style $definitionDescription = null,
+        /** Plain text node — most themes leave null and fall through to paragraph. */
+        public readonly ?Style $text = null,
+        /** Auto-detected URLs (`https://x`) when not wrapped in `[...]`. */
+        public readonly ?Style $autolink = null,
     ) {}
 
     /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
@@ -82,6 +99,234 @@ final class Theme
             code: $s, codeBlock: $s, link: $s,
             blockquote: $s, listMarker: $s, rule: $s,
             keyword: $s, string: $s, number: $s, comment: $s,
+            strike: $s, linkText: $s, image: $s,
+            htmlBlock: $s, htmlSpan: $s,
+            definitionTerm: $s, definitionDescription: $s,
+            text: $s, autolink: $s,
+        );
+    }
+
+    /**
+     * Plain-text theme that auto-selects when stdout is not a TTY.
+     * Mirrors glamour's `Notty` style: indistinguishable from `plain()`
+     * but a separate factory so docs can refer to it by name. Use as
+     * the fallback in non-interactive scripts (CI logs, file dumps).
+     */
+    public static function notty(): self
+    {
+        return self::plain();
+    }
+
+    /**
+     * Dark-background optimized theme. Bright accents for headings,
+     * faint code backdrop, blue underlined links — matches glamour's
+     * `Dark` preset visually.
+     */
+    public static function dark(): self
+    {
+        $h = Color::hex('#ff5fd2');     // bright magenta
+        $cyan   = Color::ansi(14);
+        $yellow = Color::ansi(11);
+        $blue   = Color::ansi(12);
+        $green  = Color::ansi(10);
+        $grey   = Color::hex('#8a8a8a');
+
+        return new self(
+            heading1:   Style::new()->bold()->foreground($h),
+            heading2:   Style::new()->bold()->foreground($cyan),
+            heading3:   Style::new()->bold()->foreground($yellow),
+            heading4:   Style::new()->bold()->foreground($blue),
+            heading5:   Style::new()->bold()->foreground($green),
+            heading6:   Style::new()->bold()->foreground($grey),
+            paragraph:  Style::new(),
+            bold:       Style::new()->bold(),
+            italic:     Style::new()->italic(),
+            code:       Style::new()->foreground(Color::hex('#ffaf87'))->background(Color::hex('#262626')),
+            codeBlock:  Style::new()->foreground(Color::hex('#dadada'))->background(Color::hex('#262626')),
+            link:       Style::new()->underline()->foreground($blue),
+            blockquote: Style::new()->italic()->foreground($grey),
+            listMarker: Style::new()->foreground($h),
+            rule:       Style::new()->foreground($grey),
+            keyword:    Style::new()->bold()->foreground(Color::hex('#ff5fd2')),
+            string:     Style::new()->foreground($green),
+            number:     Style::new()->foreground($yellow),
+            comment:    Style::new()->italic()->foreground($grey),
+            strike:     Style::new()->strikethrough()->foreground($grey),
+            linkText:   Style::new()->underline()->foreground($cyan),
+            image:      Style::new()->italic()->foreground($cyan),
+            htmlBlock:  Style::new()->foreground($grey),
+            htmlSpan:   Style::new()->foreground($grey),
+            autolink:   Style::new()->underline()->foreground($blue),
+        );
+    }
+
+    /**
+     * Light-background optimized theme. Darker accents and a no-bg
+     * code style.
+     */
+    public static function light(): self
+    {
+        $h = Color::hex('#9c4dff');      // deep purple
+        $cyan   = Color::hex('#005f87');
+        $yellow = Color::hex('#875f00');
+        $blue   = Color::hex('#005faf');
+        $green  = Color::hex('#005f00');
+        $grey   = Color::hex('#5f5f5f');
+
+        return new self(
+            heading1:   Style::new()->bold()->foreground($h),
+            heading2:   Style::new()->bold()->foreground($cyan),
+            heading3:   Style::new()->bold()->foreground($yellow),
+            heading4:   Style::new()->bold()->foreground($blue),
+            heading5:   Style::new()->bold()->foreground($green),
+            heading6:   Style::new()->bold()->foreground($grey),
+            paragraph:  Style::new(),
+            bold:       Style::new()->bold(),
+            italic:     Style::new()->italic(),
+            code:       Style::new()->foreground(Color::hex('#af0000')),
+            codeBlock:  Style::new()->foreground(Color::hex('#262626')),
+            link:       Style::new()->underline()->foreground($blue),
+            blockquote: Style::new()->italic()->foreground($grey),
+            listMarker: Style::new()->foreground($h),
+            rule:       Style::new()->foreground($grey),
+            keyword:    Style::new()->bold()->foreground($h),
+            string:     Style::new()->foreground($green),
+            number:     Style::new()->foreground($yellow),
+            comment:    Style::new()->italic()->foreground($grey),
+            strike:     Style::new()->strikethrough()->foreground($grey),
+            linkText:   Style::new()->underline()->foreground($cyan),
+            image:      Style::new()->italic()->foreground($cyan),
+            htmlBlock:  Style::new()->foreground($grey),
+            htmlSpan:   Style::new()->foreground($grey),
+            autolink:   Style::new()->underline()->foreground($blue),
+        );
+    }
+
+    /**
+     * Dracula colour scheme — popular dark-purple palette.
+     */
+    public static function dracula(): self
+    {
+        $bg   = Color::hex('#282a36');
+        $fg   = Color::hex('#f8f8f2');
+        $pink = Color::hex('#ff79c6');
+        $purp = Color::hex('#bd93f9');
+        $cyan = Color::hex('#8be9fd');
+        $green= Color::hex('#50fa7b');
+        $org  = Color::hex('#ffb86c');
+        $yel  = Color::hex('#f1fa8c');
+        $com  = Color::hex('#6272a4');
+
+        return new self(
+            heading1:   Style::new()->bold()->foreground($pink),
+            heading2:   Style::new()->bold()->foreground($purp),
+            heading3:   Style::new()->bold()->foreground($cyan),
+            heading4:   Style::new()->bold()->foreground($green),
+            heading5:   Style::new()->bold()->foreground($org),
+            heading6:   Style::new()->bold()->foreground($yel),
+            paragraph:  Style::new()->foreground($fg),
+            bold:       Style::new()->bold(),
+            italic:     Style::new()->italic(),
+            code:       Style::new()->foreground($pink)->background($bg),
+            codeBlock:  Style::new()->foreground($fg)->background($bg),
+            link:       Style::new()->underline()->foreground($cyan),
+            blockquote: Style::new()->italic()->foreground($com),
+            listMarker: Style::new()->foreground($pink),
+            rule:       Style::new()->foreground($com),
+            keyword:    Style::new()->bold()->foreground($pink),
+            string:     Style::new()->foreground($yel),
+            number:     Style::new()->foreground($purp),
+            comment:    Style::new()->italic()->foreground($com),
+            strike:     Style::new()->strikethrough()->foreground($com),
+            linkText:   Style::new()->underline()->foreground($cyan),
+            image:      Style::new()->italic()->foreground($cyan),
+            htmlBlock:  Style::new()->foreground($com),
+            htmlSpan:   Style::new()->foreground($com),
+            autolink:   Style::new()->underline()->foreground($cyan),
+        );
+    }
+
+    /**
+     * Tokyo Night theme — dark blue/purple palette.
+     */
+    public static function tokyoNight(): self
+    {
+        $bg     = Color::hex('#1a1b26');
+        $fg     = Color::hex('#a9b1d6');
+        $blue   = Color::hex('#7aa2f7');
+        $cyan   = Color::hex('#7dcfff');
+        $green  = Color::hex('#9ece6a');
+        $org    = Color::hex('#ff9e64');
+        $purple = Color::hex('#bb9af7');
+        $red    = Color::hex('#f7768e');
+        $com    = Color::hex('#565f89');
+
+        return new self(
+            heading1:   Style::new()->bold()->foreground($red),
+            heading2:   Style::new()->bold()->foreground($org),
+            heading3:   Style::new()->bold()->foreground($green),
+            heading4:   Style::new()->bold()->foreground($blue),
+            heading5:   Style::new()->bold()->foreground($purple),
+            heading6:   Style::new()->bold()->foreground($cyan),
+            paragraph:  Style::new()->foreground($fg),
+            bold:       Style::new()->bold(),
+            italic:     Style::new()->italic(),
+            code:       Style::new()->foreground($cyan)->background($bg),
+            codeBlock:  Style::new()->foreground($fg)->background($bg),
+            link:       Style::new()->underline()->foreground($blue),
+            blockquote: Style::new()->italic()->foreground($com),
+            listMarker: Style::new()->foreground($org),
+            rule:       Style::new()->foreground($com),
+            keyword:    Style::new()->bold()->foreground($purple),
+            string:     Style::new()->foreground($green),
+            number:     Style::new()->foreground($org),
+            comment:    Style::new()->italic()->foreground($com),
+            strike:     Style::new()->strikethrough()->foreground($com),
+            linkText:   Style::new()->underline()->foreground($blue),
+            image:      Style::new()->italic()->foreground($cyan),
+            htmlBlock:  Style::new()->foreground($com),
+            htmlSpan:   Style::new()->foreground($com),
+            autolink:   Style::new()->underline()->foreground($blue),
+        );
+    }
+
+    /**
+     * Pink — playful sweet palette.
+     */
+    public static function pink(): self
+    {
+        $hot = Color::hex('#ff5fd2');
+        $rose = Color::hex('#ff87d7');
+        $lav  = Color::hex('#d7afff');
+        $cream= Color::hex('#ffd7af');
+        $green= Color::hex('#afff87');
+
+        return new self(
+            heading1:   Style::new()->bold()->foreground($hot),
+            heading2:   Style::new()->bold()->foreground($rose),
+            heading3:   Style::new()->bold()->foreground($lav),
+            heading4:   Style::new()->bold()->foreground($cream),
+            heading5:   Style::new()->bold()->foreground($green),
+            heading6:   Style::new()->bold()->foreground($hot),
+            paragraph:  Style::new(),
+            bold:       Style::new()->bold(),
+            italic:     Style::new()->italic(),
+            code:       Style::new()->foreground($hot),
+            codeBlock:  Style::new()->faint(),
+            link:       Style::new()->underline()->foreground($lav),
+            blockquote: Style::new()->italic()->foreground($rose),
+            listMarker: Style::new()->foreground($hot),
+            rule:       Style::new()->foreground($rose),
+            keyword:    Style::new()->bold()->foreground($hot),
+            string:     Style::new()->foreground($green),
+            number:     Style::new()->foreground($cream),
+            comment:    Style::new()->italic()->foreground($rose),
+            strike:     Style::new()->strikethrough()->foreground($rose),
+            linkText:   Style::new()->underline()->foreground($lav),
+            image:      Style::new()->italic()->foreground($lav),
+            htmlBlock:  Style::new()->foreground($rose),
+            htmlSpan:   Style::new()->foreground($rose),
+            autolink:   Style::new()->underline()->foreground($lav),
         );
     }
 
@@ -114,25 +359,34 @@ final class Theme
                 ? self::parseStyle($data[$k])
                 : Style::new();
         return new self(
-            heading1:   $pick('heading1'),
-            heading2:   $pick('heading2'),
-            heading3:   $pick('heading3'),
-            heading4:   $pick('heading4'),
-            heading5:   $pick('heading5'),
-            heading6:   $pick('heading6'),
-            paragraph:  $pick('paragraph'),
-            bold:       $pick('bold'),
-            italic:     $pick('italic'),
-            code:       $pick('code'),
-            codeBlock:  $pick('codeBlock'),
-            link:       $pick('link'),
-            blockquote: $pick('blockquote'),
-            listMarker: $pick('listMarker'),
-            rule:       $pick('rule'),
-            keyword:    $pick('keyword'),
-            string:     $pick('string'),
-            number:     $pick('number'),
-            comment:    $pick('comment'),
+            heading1:              $pick('heading1'),
+            heading2:              $pick('heading2'),
+            heading3:              $pick('heading3'),
+            heading4:              $pick('heading4'),
+            heading5:              $pick('heading5'),
+            heading6:              $pick('heading6'),
+            paragraph:             $pick('paragraph'),
+            bold:                  $pick('bold'),
+            italic:                $pick('italic'),
+            code:                  $pick('code'),
+            codeBlock:             $pick('codeBlock'),
+            link:                  $pick('link'),
+            blockquote:            $pick('blockquote'),
+            listMarker:            $pick('listMarker'),
+            rule:                  $pick('rule'),
+            keyword:               $pick('keyword'),
+            string:                $pick('string'),
+            number:                $pick('number'),
+            comment:               $pick('comment'),
+            strike:                $pick('strike'),
+            linkText:              $pick('linkText'),
+            image:                 $pick('image'),
+            htmlBlock:             $pick('htmlBlock'),
+            htmlSpan:              $pick('htmlSpan'),
+            definitionTerm:        $pick('definitionTerm'),
+            definitionDescription: $pick('definitionDescription'),
+            text:                  $pick('text'),
+            autolink:              $pick('autolink'),
         );
     }
 

@@ -70,10 +70,20 @@ final class RendererTest extends TestCase
 
     public function testLinkPlain(): void
     {
+        // Plain theme + hyperlinks disabled → byte-exact "text (url)".
         $this->assertSame(
             'site (https://example.com)',
-            $this->plain()->render('[site](https://example.com)'),
+            $this->plain()->withHyperlinks(false)->render('[site](https://example.com)'),
         );
+    }
+
+    public function testLinkOsc8WrapsClickable(): void
+    {
+        $out = $this->plain()->render('[site](https://example.com)');
+        // OSC 8 envelope plus a visible (url) fallback for terminals
+        // without OSC 8 support.
+        $this->assertStringContainsString("\x1b]8;;https://example.com\x1b\\site\x1b]8;;\x1b\\", $out);
+        $this->assertStringContainsString('(https://example.com)', $out);
     }
 
     public function testBlockquotePlain(): void
@@ -194,5 +204,101 @@ MD;
         $this->assertStringContainsString('☑ done',       $out);
         $this->assertStringContainsString('☐ todo',       $out);
         $this->assertStringContainsString('☑ also done',  $out);
+    }
+
+    public function testStrikethroughRenders(): void
+    {
+        $r = $this->plain()->withHyperlinks(false);
+        $out = $r->render('one ~~two~~ three');
+        // In plain mode the strike style is also a no-op (no SGR), so
+        // we just verify the inner text survives — it shouldn't be
+        // dropped on the floor like the pre-fix behaviour.
+        $this->assertStringContainsString('two', $out);
+        $this->assertStringContainsString('one ', $out);
+        $this->assertStringContainsString(' three', $out);
+    }
+
+    public function testStrikethroughEmitsSgrInAnsiTheme(): void
+    {
+        $r = (new \CandyCore\Shine\Renderer(\CandyCore\Shine\Theme::ansi()))
+            ->withHyperlinks(false);
+        $out = $r->render('a ~~b~~ c');
+        $this->assertStringContainsString("\x1b[9m", $out); // SGR 9 = strikethrough
+    }
+
+    public function testWordWrapBreaksLongParagraph(): void
+    {
+        $md = 'one two three four five six seven eight nine';
+        $out = $this->plain()->withWordWrap(15)->render($md);
+        // Each line should be <= 15 visible cells.
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(15, \CandyCore\Core\Util\Width::string($line));
+        }
+        $this->assertGreaterThan(1, substr_count($out, "\n"));
+    }
+
+    public function testWordWrapHonoursBlockquote(): void
+    {
+        $md = "> one two three four five six seven eight";
+        $out = $this->plain()->withWordWrap(15)->render($md);
+        // Blockquote prefix '▎ ' eats 2 cells; each rendered line should
+        // still respect the 15-cell budget overall.
+        foreach (explode("\n", $out) as $line) {
+            $this->assertLessThanOrEqual(15, \CandyCore\Core\Util\Width::string($line));
+        }
+    }
+
+    public function testThemeDarkPreset(): void
+    {
+        $t = \CandyCore\Shine\Theme::dark();
+        $this->assertNotNull($t->strike);
+        $this->assertNotNull($t->linkText);
+    }
+
+    public function testThemeLightPreset(): void
+    {
+        $t = \CandyCore\Shine\Theme::light();
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testThemeDraculaPreset(): void
+    {
+        $t = \CandyCore\Shine\Theme::dracula();
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testThemeTokyoNightPreset(): void
+    {
+        $t = \CandyCore\Shine\Theme::tokyoNight();
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testThemePinkPreset(): void
+    {
+        $t = \CandyCore\Shine\Theme::pink();
+        $this->assertNotNull($t->strike);
+    }
+
+    public function testThemeNottyIsPlain(): void
+    {
+        $r = (new \CandyCore\Shine\Renderer(\CandyCore\Shine\Theme::notty()))
+            ->withHyperlinks(false);
+        $out = $r->render('# Hello');
+        $this->assertSame('# Hello', $out);
+    }
+
+    public function testHtmlBlockRendersLiteral(): void
+    {
+        $md = "<div class=\"x\">hi</div>\n\nafter";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('<div class="x">hi</div>', $out);
+        $this->assertStringContainsString('after', $out);
+    }
+
+    public function testImageHasAltAndUrl(): void
+    {
+        $out = $this->plain()->render('![alt text](http://x/y.png)');
+        $this->assertStringContainsString('alt text', $out);
+        $this->assertStringContainsString('(http://x/y.png)', $out);
     }
 }
