@@ -137,6 +137,9 @@ jobs:
           name: gifs-${{ matrix.lib }}
           path: ${{ matrix.lib }}/.vhs/*.gif
           if-no-files-found: warn
+          # The .vhs/ directory is dot-prefixed; upload-artifact@v4
+          # ignores hidden paths by default. Override to include them.
+          include-hidden-files: true
           retention-days: 1
 
   # Single aggregate-commit job. Runs once after every render finishes.
