@@ -46,6 +46,9 @@ final class Program
     private ?string $lastWindowTitle = null;
     private ?Cursor $lastCursor = null;
     private bool $lastCursorHidden = false;
+    private ?Progress $lastProgress = null;
+    private ?Util\Color $lastForegroundColor = null;
+    private ?Util\Color $lastBackgroundColor = null;
 
     public function __construct(
         Model $initialModel,
@@ -322,6 +325,23 @@ final class Program
             $this->lastWindowTitle = $view->windowTitle;
         }
 
+        if ($view->progressBar !== null && !$this->progressEquals($view->progressBar, $this->lastProgress)) {
+            fwrite($this->output, Ansi::setProgressBar($view->progressBar->state, $view->progressBar->percent));
+            $this->lastProgress = $view->progressBar;
+        }
+
+        if ($view->foregroundColor !== null && !$this->colorEquals($view->foregroundColor, $this->lastForegroundColor)) {
+            $c = $view->foregroundColor;
+            fwrite($this->output, Ansi::setForegroundColor($c->r, $c->g, $c->b));
+            $this->lastForegroundColor = $c;
+        }
+
+        if ($view->backgroundColor !== null && !$this->colorEquals($view->backgroundColor, $this->lastBackgroundColor)) {
+            $c = $view->backgroundColor;
+            fwrite($this->output, Ansi::setBackgroundColor($c->r, $c->g, $c->b));
+            $this->lastBackgroundColor = $c;
+        }
+
         if ($view->cursor === null) {
             // null cursor → hide.
             if (!$this->lastCursorHidden) {
@@ -348,6 +368,19 @@ final class Program
             fwrite($this->output, Ansi::cursorTo($cur->row, $cur->col));
         }
         $this->lastCursor = $cur;
+    }
+
+    private function progressEquals(?Progress $a, ?Progress $b): bool
+    {
+        return $a !== null && $b !== null
+            && $a->state === $b->state
+            && $a->percent === $b->percent;
+    }
+
+    private function colorEquals(?Util\Color $a, ?Util\Color $b): bool
+    {
+        return $a !== null && $b !== null
+            && $a->r === $b->r && $a->g === $b->g && $a->b === $b->b;
     }
 
     /**

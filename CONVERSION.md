@@ -485,12 +485,12 @@ Status legend per feature:
 
 | v2 feature | Status | Notes |
 |---|---|---|
-| `View()` returns `tea.View` struct (not `string`) | 🟡 | `Model::view()` now returns `string\|View`. The new `View` value object carries `body` plus optional `cursor` and `windowTitle` fields. Existing models that return `string` keep working unchanged (covariance). The runtime emits side-effect escapes only when fields differ from the previously-emitted set. Remaining fields (alt screen / mouse mode / focus / progress bar / colour profile) still live on `ProgramOptions` and will migrate one-by-one in follow-ups. |
+| `View()` returns `tea.View` struct (not `string`) | 🟡 | `Model::view()` returns `string\|View`. The `View` value object now carries `body` + `cursor` + `windowTitle` + `progressBar` + `foregroundColor` + `backgroundColor`. Existing models that return `string` keep working unchanged (covariance). Remaining fields (alt screen / mouse mode / focus / colour profile) still live on `ProgramOptions` and will migrate one-by-one in follow-ups. |
 | `Cursor` struct (position, shape, blink, colour, nullable to hide) | ✅ | `Core\Cursor(row, col, shape, blink, color)` carried on the `View`. `Core\CursorShape` enum (`Block` / `Underline` / `Bar`); `Ansi::cursorShape()` emits DECSCUSR. A null `View::$cursor` hides the cursor; switching back from null re-shows it. |
 | `WindowTitle` field — set via OSC 0/2 each frame | ✅ | `View::$windowTitle` — emitted via OSC 2 only when it changes between frames. `Cmd::setWindowTitle()` is still available for the imperative path. |
-| Declarative `BackgroundColor` / `ForegroundColor` per frame | 🔴 | Use OSC 10/11. |
+| Declarative `BackgroundColor` / `ForegroundColor` per frame | ✅ | `View::$foregroundColor` / `View::$backgroundColor` (`Color`) — emitted as `OSC 10` / `OSC 11` only when the value differs from the previously-emitted one. |
 | `MouseMode` declared on the View instead of one-shot setup flag | 🟡 | We toggle in setup/teardown. Move into per-View when we adopt the View struct. |
-| `ProgressBar` field — terminal native progress (OSC 9;4) | 🟡 | `Cmd::setProgressBar(ProgressBarState, $percent)` ships now (`Remove` / `Normal` / `Error` / `Indeterminate` / `Warning` states; percent clamped to 0-100). Per-frame "ProgressBar" field semantics still pending — that lands with the View struct rework. |
+| `ProgressBar` field — terminal native progress (OSC 9;4) | ✅ | `View::$progressBar` (`Progress` value object with `state` + `percent`) — emitted only when state-or-percent change between frames. The imperative `Cmd::setProgressBar()` is still available for non-View flows. |
 
 #### Keys
 

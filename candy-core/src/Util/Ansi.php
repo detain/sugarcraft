@@ -174,6 +174,23 @@ final class Ansi
     public static function requestBackgroundColor(): string { return self::OSC . '11;?' . self::BEL; }
 
     /**
+     * Set the terminal's default foreground colour (OSC 10) using
+     * the standard `rgb:RR/GG/BB` form. Persists across the program
+     * — terminals don't auto-restore on exit, so callers should
+     * either capture the original via `Cmd::requestForegroundColor()`
+     * and reset it on teardown, or accept the persistence.
+     */
+    public static function setForegroundColor(int $r, int $g, int $b): string
+    {
+        return self::OSC . sprintf('10;rgb:%02x/%02x/%02x', $r, $g, $b) . self::BEL;
+    }
+
+    public static function setBackgroundColor(int $r, int $g, int $b): string
+    {
+        return self::OSC . sprintf('11;rgb:%02x/%02x/%02x', $r, $g, $b) . self::BEL;
+    }
+
+    /**
      * Ask the terminal for its current cursor colour. Reply arrives as
      * `OSC 12 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
      * {@see \CandyCore\Core\Msg\CursorColorMsg}.
