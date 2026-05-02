@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "sugarcrush: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Crush\Backend\CommandBackend;
+use CandyCore\Crush\Backend\EchoBackend;
+use CandyCore\Crush\Chat;
+
+/**
+ * Defaults to the offline EchoBackend so the binary is runnable
+ * without network. Set $SUGARCRUSH_BACKEND_CMD to a command that
+ * reads JSON history on stdin and writes the assistant reply to
+ * stdout — see CommandBackend's docblock for an Anthropic recipe.
+ */
+$cmd = getenv('SUGARCRUSH_BACKEND_CMD');
+$backend = ($cmd !== false && $cmd !== '')
+    ? new CommandBackend($cmd)
+    : new EchoBackend();
+
+(new Program(new Chat(backend: $backend), new ProgramOptions(useAltScreen: true)))->run();

@@ -1,0 +1,61 @@
+{
+    "name": "candycore/sugar-crush",
+    "description": "Chat-shell TUI for AI coding assistants — port of charmbracelet/crush. Pluggable Backend interface (ship your own Anthropic / OpenAI / Ollama / shell-out adapter). Markdown rendering of replies via CandyShine, scrollback viewport via SugarBits, input area via SugarBits TextArea.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "candycore",
+        "sugarcrush",
+        "crush",
+        "ai",
+        "llm",
+        "chat",
+        "tui",
+        "anthropic",
+        "openai",
+        "ollama"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore/tree/master/sugar-crush",
+        "docs": "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
+    "bin": ["bin/sugarcrush"],
+    "require": {
+        "php": ">=8.1",
+        "candycore/candy-core": "@dev",
+        "candycore/candy-sprinkles": "@dev",
+        "candycore/candy-shine": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "suggest": {
+        "ext-curl": "Required by HTTP-based backends you might write (Anthropic, OpenAI, Ollama)."
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Crush\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\Crush\\Tests\\": "tests/"
+        }
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-shine",     "options": { "symlink": true } }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
