@@ -9,6 +9,7 @@ use CandyCore\Core\Util\ColorProfile;
 use CandyCore\Gloss\Align;
 use CandyCore\Gloss\Border;
 use CandyCore\Gloss\Style;
+use CandyCore\Gloss\VAlign;
 use PHPUnit\Framework\TestCase;
 
 final class StyleTest extends TestCase
@@ -279,5 +280,80 @@ final class StyleTest extends TestCase
     {
         $expected = "+-+\n|x|\n+-+";
         $this->assertSame($expected, Style::new()->border(Border::ascii())->render('x'));
+    }
+
+    // ---- vertical alignment ----------------------------------------------
+
+    public function testHeightTopAlignDefault(): void
+    {
+        $this->assertSame("hi\n  \n  ", Style::new()->height(3)->render('hi'));
+    }
+
+    public function testHeightBottomAlign(): void
+    {
+        $out = Style::new()->height(3)->verticalAlign(VAlign::Bottom)->render('hi');
+        $this->assertSame("  \n  \nhi", $out);
+    }
+
+    public function testHeightMiddleAlignEvenExtra(): void
+    {
+        $out = Style::new()->height(4)->verticalAlign(VAlign::Middle)->render('hi');
+        // 2 lines of fill split evenly: 1 above, 1 below.
+        $this->assertSame("  \nhi\n  \n  ", $out);
+    }
+
+    public function testHeightMiddleAlignOddExtra(): void
+    {
+        $out = Style::new()->height(3)->verticalAlign(VAlign::Middle)->render('hi');
+        $this->assertSame("  \nhi\n  ", $out);
+    }
+
+    public function testHeightTruncatesFromBottomWhenTopAligned(): void
+    {
+        $out = Style::new()->height(2)->render("a\nb\nc\nd");
+        $this->assertSame("a\nb", $out);
+    }
+
+    public function testHeightTruncatesFromTopWhenBottomAligned(): void
+    {
+        $out = Style::new()->height(2)->verticalAlign(VAlign::Bottom)->render("a\nb\nc\nd");
+        $this->assertSame("c\nd", $out);
+    }
+
+    // ---- inherit ----------------------------------------------------------
+
+    public function testInheritCopiesParentForUnsetChildProps(): void
+    {
+        $parent = Style::new()->bold()->foreground(Color::hex('#ff0000'));
+        $child  = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame("\x1b[1m\x1b[38;2;255;0;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testInheritChildOverridesParent(): void
+    {
+        $parent = Style::new()->bold()->foreground(Color::hex('#ff0000'));
+        $child  = Style::new()->foreground(Color::hex('#00ff00'));
+        $merged = $child->inherit($parent);
+        // Parent's bold survives; child's green fg wins.
+        $this->assertSame("\x1b[1m\x1b[38;2;0;255;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    public function testInheritExplicitOffWinsOverParentOn(): void
+    {
+        $parent = Style::new()->bold(true);
+        $child  = Style::new()->bold(false);
+        $merged = $child->inherit($parent);
+        $this->assertSame('hi', $merged->render('hi'));
+    }
+
+    public function testInheritMergesPaddingAndBorder(): void
+    {
+        $parent = Style::new()->padding(1)->border(Border::normal());
+        $child  = Style::new()->padding(0, 1);
+        $merged = $child->inherit($parent);
+        // Child padding (0,1) wins; parent border survives.
+        $expected = "┌────┐\n│ hi │\n└────┘";
+        $this->assertSame($expected, $merged->render('hi'));
     }
 }
