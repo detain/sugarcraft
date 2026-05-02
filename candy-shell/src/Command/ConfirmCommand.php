@@ -29,14 +29,27 @@ final class ConfirmCommand extends Command
     {
         $this
             ->addArgument('question', InputArgument::OPTIONAL, 'Prompt text.', '')
-            ->addOption('default-yes', null, InputOption::VALUE_NONE, 'Default to yes.');
+            ->addOption('default-yes', null, InputOption::VALUE_NONE,     'Default to yes.')
+            ->addOption('default',     null, InputOption::VALUE_REQUIRED, 'Default answer (yes|no).', '')
+            ->addOption('affirmative', null, InputOption::VALUE_REQUIRED, 'Label for the yes option.',  'Yes')
+            ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
+            ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $defaultRaw = strtolower((string) $input->getOption('default'));
+        $defaultYes = (bool) $input->getOption('default-yes')
+            || $defaultRaw === 'yes' || $defaultRaw === 'y';
+
+        $affirm = (string) $input->getOption('affirmative');
+        $negate = (string) $input->getOption('negative');
+
         $model   = ConfirmModel::newPrompt(
-            (string) $input->getArgument('question'),
-            (bool)   $input->getOption('default-yes'),
+            title:       (string) $input->getArgument('question'),
+            default:     $defaultYes,
+            affirmative: $affirm,
+            negative:    $negate,
         );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    false,
@@ -48,6 +61,9 @@ final class ConfirmCommand extends Command
 
         if ($final->isAborted()) {
             return self::EXIT_ABORT;
+        }
+        if ($input->getOption('show-output')) {
+            $output->writeln($final->answer() ? $affirm : $negate);
         }
         return $final->answer() ? self::EXIT_YES : self::EXIT_NO;
     }

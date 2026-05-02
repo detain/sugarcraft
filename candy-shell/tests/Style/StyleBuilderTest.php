@@ -113,4 +113,30 @@ final class StyleBuilderTest extends TestCase
         ]);
         $this->assertStringContainsString("\x1b[", $s->render('x'));
     }
+
+    public function testBorderFlag(): void
+    {
+        $s = StyleBuilder::fromFlags(['border' => 'rounded']);
+        $out = $s->render('hi');
+        $this->assertStringContainsString('╭', $out);
+        $this->assertStringContainsString('╯', $out);
+    }
+
+    public function testBorderForegroundColor(): void
+    {
+        $s = StyleBuilder::fromFlags([
+            'border'             => 'normal',
+            'border-foreground'  => '4',
+        ]);
+        $out = $s->render('hi');
+        // ANSI 4 = 34
+        $this->assertStringContainsString("\x1b[34m", $out);
+    }
+
+    public function testHeightFlag(): void
+    {
+        $s = StyleBuilder::fromFlags(['height' => '3']);
+        $out = $s->render('x');
+        $this->assertCount(3, explode("\n", $out));
+    }
 }

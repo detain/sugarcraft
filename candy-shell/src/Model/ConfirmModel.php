@@ -21,9 +21,14 @@ use CandyCore\Prompt\Field\Confirm;
  */
 final class ConfirmModel implements Model
 {
-    public static function newPrompt(string $title = '', bool $default = false): self
-    {
-        $field = Confirm::new('confirm', $default);
+    public static function newPrompt(
+        string $title = '',
+        bool $default = false,
+        string $affirmative = 'Yes',
+        string $negative = 'No',
+    ): self {
+        $field = Confirm::new('confirm', $default)
+            ->withLabels($affirmative, $negative);
         if ($title !== '') {
             $field = $field->withTitle($title);
         }

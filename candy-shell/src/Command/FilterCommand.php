@@ -27,7 +27,16 @@ final class FilterCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('height', null, InputOption::VALUE_REQUIRED, 'Visible item count.', 10);
+            ->addOption('height',           null, InputOption::VALUE_REQUIRED, 'Visible item count.', 10)
+            ->addOption('limit',            null, InputOption::VALUE_REQUIRED, 'Maximum selections (>1 enables multi).', 1)
+            ->addOption('no-limit',         null, InputOption::VALUE_NONE,    'Allow unlimited multi-select.')
+            ->addOption('header',           null, InputOption::VALUE_REQUIRED, 'Header text rendered above the list.', '')
+            ->addOption('value',            null, InputOption::VALUE_REQUIRED, 'Pre-fill the filter buffer.', '')
+            ->addOption('placeholder',      null, InputOption::VALUE_REQUIRED, 'Placeholder text shown when filter is empty.', '')
+            ->addOption('selected',         null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Pre-selected option (multi mode).', [])
+            ->addOption('reverse',          null, InputOption::VALUE_NONE,    'Reverse the multi-select output order.')
+            ->addOption('select-if-one',    null, InputOption::VALUE_NONE,    'Auto-pick when the input has exactly one line.')
+            ->addOption('output-delimiter', null, InputOption::VALUE_REQUIRED, 'Separator for multi-select output.', "\n");
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -36,8 +45,21 @@ final class FilterCommand extends Command
         if ($lines === []) {
             return Command::FAILURE;
         }
+        if ($input->getOption('select-if-one') && count($lines) === 1) {
+            $output->writeln($lines[0]);
+            return Command::SUCCESS;
+        }
 
-        $model   = FilterModel::fromOptions($lines, (int) $input->getOption('height'));
+        $model   = FilterModel::fromOptions(
+            options:     $lines,
+            height:      (int)    $input->getOption('height'),
+            limit:       (int)    $input->getOption('limit'),
+            noLimit:     (bool)   $input->getOption('no-limit'),
+            header:      (string) $input->getOption('header'),
+            preselected: $input->getOption('selected'),
+            reverse:     (bool)   $input->getOption('reverse'),
+            value:       (string) $input->getOption('value'),
+        );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,
@@ -49,7 +71,11 @@ final class FilterCommand extends Command
         if ($final->isAborted() || !$final->isSubmitted()) {
             return Command::FAILURE;
         }
-        $output->writeln((string) $final->selected());
+        if ($final->isMulti()) {
+            $output->writeln(implode((string) $input->getOption('output-delimiter'), $final->selectedAll()));
+        } else {
+            $output->writeln((string) $final->selected());
+        }
         return Command::SUCCESS;
     }
 

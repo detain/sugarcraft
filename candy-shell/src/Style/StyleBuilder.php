@@ -70,6 +70,11 @@ final class StyleBuilder
             $s = $s->width((int) $width);
         }
 
+        $height = $flags['height'] ?? null;
+        if ($height !== null && $height !== '' && $height !== false) {
+            $s = $s->height((int) $height);
+        }
+
         $align = $flags['align'] ?? null;
         if (is_string($align) && $align !== '') {
             $aligned = match (strtolower($align)) {
@@ -80,6 +85,43 @@ final class StyleBuilder
             };
             if ($aligned !== null) {
                 $s = $s->align($aligned);
+            }
+        }
+
+        // Border. `--border <preset>` picks one of normal/rounded/thick/
+        // double/block/hidden. `--border-foreground` / `-background`
+        // accept the same colour syntax as the content colours.
+        $border = $flags['border'] ?? null;
+        if (is_string($border) && $border !== '') {
+            $b = match (strtolower($border)) {
+                'normal',  '1' => \CandyCore\Sprinkles\Border::normal(),
+                'rounded'      => \CandyCore\Sprinkles\Border::rounded(),
+                'thick'        => \CandyCore\Sprinkles\Border::thick(),
+                'double'       => \CandyCore\Sprinkles\Border::double(),
+                'block'        => \CandyCore\Sprinkles\Border::block(),
+                'hidden', '0', 'none' => null,
+                default        => null,
+            };
+            if ($b !== null) {
+                $s = $s->border($b);
+            }
+        }
+        $bf = $flags['border-foreground'] ?? null;
+        if (is_string($bf) && $bf !== '') {
+            [$color, $bp] = self::parseColorWithProfile($bf);
+            $s = $s->borderForeground($color);
+            if ($bp->value < $minProfile->value) {
+                $minProfile = $bp;
+                $s = $s->colorProfile($bp);
+            }
+        }
+        $bb = $flags['border-background'] ?? null;
+        if (is_string($bb) && $bb !== '') {
+            [$color, $bp] = self::parseColorWithProfile($bb);
+            $s = $s->borderBackground($color);
+            if ($bp->value < $minProfile->value) {
+                $minProfile = $bp;
+                $s = $s->colorProfile($bp);
             }
         }
 

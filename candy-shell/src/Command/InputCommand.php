@@ -24,14 +24,24 @@ final class InputCommand extends Command
     {
         $this
             ->addOption('placeholder', null, InputOption::VALUE_REQUIRED, 'Hint shown when empty.', '')
-            ->addOption('password',    null, InputOption::VALUE_NONE,     'Mask the entered text.');
+            ->addOption('password',    null, InputOption::VALUE_NONE,     'Mask the entered text.')
+            ->addOption('prompt',      null, InputOption::VALUE_REQUIRED, 'Prompt prefix.',   '> ')
+            ->addOption('value',       null, InputOption::VALUE_REQUIRED, 'Pre-filled value.', '')
+            ->addOption('char-limit',  null, InputOption::VALUE_REQUIRED, 'Max input length (0 = unlimited).', 0)
+            ->addOption('width',       null, InputOption::VALUE_REQUIRED, 'Visible width (0 = full line).', 0)
+            ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header text rendered above the prompt.', '');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $model   = InputModel::newPrompt(
-            (string) $input->getOption('placeholder'),
-            (bool)   $input->getOption('password'),
+            placeholder: (string) $input->getOption('placeholder'),
+            password:    (bool)   $input->getOption('password'),
+            prompt:      (string) $input->getOption('prompt'),
+            value:       (string) $input->getOption('value'),
+            charLimit:   (int)    $input->getOption('char-limit'),
+            width:       (int)    $input->getOption('width'),
+            header:      (string) $input->getOption('header'),
         );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    false,

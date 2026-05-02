@@ -18,19 +18,34 @@ use CandyCore\Core\Msg\KeyMsg;
  */
 final class WriteModel implements Model
 {
-    public static function newPrompt(string $placeholder = '', int $width = 0, int $height = 0): self
-    {
+    public static function newPrompt(
+        string $placeholder = '',
+        int $width = 0,
+        int $height = 0,
+        string $value = '',
+        int $charLimit = 0,
+        int $maxLines = 0,
+        string $prompt = '',
+        bool $showLineNumbers = false,
+        string $header = '',
+    ): self {
         $area = TextArea::new()->withPlaceholder($placeholder);
-        if ($width  > 0) { $area = $area->withWidth($width); }
-        if ($height > 0) { $area = $area->withHeight($height); }
+        if ($width  > 0)            { $area = $area->withWidth($width); }
+        if ($height > 0)            { $area = $area->withHeight($height); }
+        if ($charLimit > 0)         { $area = $area->withCharLimit($charLimit); }
+        if ($maxLines > 0)          { $area = $area->withMaxHeight($maxLines); }
+        if ($prompt !== '')         { $area = $area->withPrompt($prompt); }
+        if ($showLineNumbers)       { $area = $area->showLineNumbers(true); }
+        if ($value !== '')          { $area = $area->setValue($value); }
         [$area, ] = $area->focus();
-        return new self($area, false, false);
+        return new self($area, false, false, $header);
     }
 
     private function __construct(
         public readonly TextArea $area,
         public readonly bool $submitted,
         public readonly bool $aborted,
+        public readonly string $header = '',
     ) {}
 
     public function init(): ?\Closure
@@ -48,21 +63,24 @@ final class WriteModel implements Model
         }
         if ($msg instanceof KeyMsg) {
             if ($msg->type === KeyType::Escape) {
-                return [new self($this->area, false, true), Cmd::quit()];
+                return [new self($this->area, false, true, $this->header), Cmd::quit()];
             }
-            // Ctrl+D submits; Ctrl+C aborts.
             if ($msg->ctrl && $msg->rune === 'd') {
-                return [new self($this->area, true, false), Cmd::quit()];
+                return [new self($this->area, true, false, $this->header), Cmd::quit()];
             }
             if ($msg->ctrl && $msg->rune === 'c') {
-                return [new self($this->area, false, true), Cmd::quit()];
+                return [new self($this->area, false, true, $this->header), Cmd::quit()];
             }
         }
         [$next, $cmd] = $this->area->update($msg);
-        return [new self($next, false, false), $cmd];
+        return [new self($next, false, false, $this->header), $cmd];
     }
 
-    public function view(): string { return $this->area->view(); }
+    public function view(): string
+    {
+        $body = $this->area->view();
+        return $this->header === '' ? $body : $this->header . "\n" . $body;
+    }
     public function value(): string { return $this->area->value(); }
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }

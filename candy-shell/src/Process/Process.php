@@ -24,4 +24,13 @@ interface Process
 
     /** Close the process handle and return the final exit code. */
     public function close(): int;
+
+    /**
+     * Captured stdout when the process was spawned with `captureStdout`;
+     * empty otherwise. Available after {@see exitCode()} resolves.
+     */
+    public function stdout(): string;
+
+    /** Captured stderr; same semantics as {@see stdout()}. */
+    public function stderr(): string;
 }

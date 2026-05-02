@@ -34,9 +34,14 @@ final class SpinCommand extends Command
         $this
             ->addArgument('argv', InputArgument::IS_ARRAY | InputArgument::REQUIRED,
                 'The command to run. Use `--` to separate from spin\'s own flags.')
-            ->addOption('title', 't', InputOption::VALUE_REQUIRED, 'Status text shown next to the spinner.', '')
-            ->addOption('style', null, InputOption::VALUE_REQUIRED,
-                'Spinner style: line | dot | minidot | points | pulse | globe | meter.', 'dot');
+            ->addOption('title',       't', InputOption::VALUE_REQUIRED, 'Status text shown next to the spinner.', '')
+            ->addOption('style',       null, InputOption::VALUE_REQUIRED,
+                'Spinner style: line | dot | minidot | points | pulse | globe | meter | jump | moon | monkey | hamburger | ellipsis.', 'dot')
+            ->addOption('spinner',     's', InputOption::VALUE_REQUIRED, 'Alias for --style (gum compat).', null)
+            ->addOption('show-output', null, InputOption::VALUE_NONE,    'Print captured stdout after the command exits.')
+            ->addOption('show-error',  null, InputOption::VALUE_NONE,    'Print captured stderr after the command exits.')
+            ->addOption('show-stdout', null, InputOption::VALUE_NONE,    'Alias for --show-output.')
+            ->addOption('show-stderr', null, InputOption::VALUE_NONE,    'Alias for --show-error.');
     }
 
     public const EXIT_INTERRUPTED = 130; // 128 + SIGINT(2)
@@ -46,9 +51,15 @@ final class SpinCommand extends Command
         /** @var list<string> $argv */
         $argv  = $input->getArgument('argv');
         $title = (string) $input->getOption('title');
-        $style = self::pickStyle((string) $input->getOption('style'));
+        $styleName = $input->getOption('spinner') ?? $input->getOption('style');
+        $style = self::pickStyle((string) $styleName);
+        $showOutput = (bool) ($input->getOption('show-output') || $input->getOption('show-stdout'));
+        $showError  = (bool) ($input->getOption('show-error')  || $input->getOption('show-stderr'));
 
-        $process = RealProcess::spawn($argv);
+        // When the caller wants captured output, redirect stdout/stderr
+        // so they don't bleed onto the spinner — write the buffered
+        // content after the spinner stops.
+        $process = RealProcess::spawn($argv, captureStdout: $showOutput, captureStderr: $showError);
         $model   = SpinModel::spawn($process, $title, $style);
 
         $program = new Program($model, new ProgramOptions(
@@ -70,6 +81,12 @@ final class SpinCommand extends Command
             $process->terminate();
             $code = self::EXIT_INTERRUPTED;
         }
+        if ($showOutput) {
+            $output->write($process->stdout());
+        }
+        if ($showError) {
+            fwrite(STDERR, $process->stderr());
+        }
         $process->close();
         return $code;
     }
@@ -77,14 +94,19 @@ final class SpinCommand extends Command
     public static function pickStyle(string $name): SpinStyle
     {
         return match (strtolower($name)) {
-            'line'    => SpinStyle::line(),
-            'dot'     => SpinStyle::dot(),
-            'minidot' => SpinStyle::miniDot(),
-            'points'  => SpinStyle::points(),
-            'pulse'   => SpinStyle::pulse(),
-            'globe'   => SpinStyle::globe(),
-            'meter'   => SpinStyle::meter(),
-            default   => throw new \InvalidArgumentException("unknown spinner style: $name"),
+            'line'      => SpinStyle::line(),
+            'dot'       => SpinStyle::dot(),
+            'minidot'   => SpinStyle::miniDot(),
+            'points'    => SpinStyle::points(),
+            'pulse'     => SpinStyle::pulse(),
+            'globe'     => SpinStyle::globe(),
+            'meter'     => SpinStyle::meter(),
+            'jump'      => SpinStyle::jump(),
+            'moon'      => SpinStyle::moon(),
+            'monkey'    => SpinStyle::monkey(),
+            'hamburger' => SpinStyle::hamburger(),
+            'ellipsis'  => SpinStyle::ellipsis(),
+            default     => throw new \InvalidArgumentException("unknown spinner style: $name"),
         };
     }
 }

@@ -36,6 +36,21 @@ enum LogLevel: string
         return strtoupper($this->value);
     }
 
+    /**
+     * Numeric ordering used by the `--min-level` filter: Debug=0,
+     * Info=1, Warn=2, Error=3, Fatal=4.
+     */
+    public function order(): int
+    {
+        return match ($this) {
+            self::Debug => 0,
+            self::Info  => 1,
+            self::Warn  => 2,
+            self::Error => 3,
+            self::Fatal => 4,
+        };
+    }
+
     public function style(): Style
     {
         $color = match ($this) {
