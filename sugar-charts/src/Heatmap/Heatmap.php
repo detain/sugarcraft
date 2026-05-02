@@ -29,7 +29,12 @@ use CandyCore\Sprinkles\Style;
  */
 final class Heatmap
 {
-    /** @param list<list<int|float>> $grid */
+    /**
+     * @param list<list<int|float>> $grid
+     * @param list<Color>           $palette  multi-stop colour palette;
+     *                                        empty falls back to the
+     *                                        cold→hot two-stop blend.
+     */
     private function __construct(
         public readonly array $grid,
         public readonly int $width,
@@ -40,6 +45,8 @@ final class Heatmap
         public readonly Color $coldColor,
         public readonly Color $hotColor,
         public readonly ColorProfile $profile,
+        public readonly array $palette  = [],
+        public readonly bool $showLegend = false,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('heatmap width/height must be >= 0');
@@ -72,16 +79,42 @@ final class Heatmap
         return new self($this->grid, $w, $h, $this->min, $this->max, $this->rune, $this->coldColor, $this->hotColor, $this->profile);
     }
 
-    public function withMin(?float $m): self  { return new self($this->grid, $this->width, $this->height, $m, $this->max, $this->rune, $this->coldColor, $this->hotColor, $this->profile); }
-    public function withMax(?float $m): self  { return new self($this->grid, $this->width, $this->height, $this->min, $m, $this->rune, $this->coldColor, $this->hotColor, $this->profile); }
-    public function withRune(string $r): self { return new self($this->grid, $this->width, $this->height, $this->min, $this->max, $r, $this->coldColor, $this->hotColor, $this->profile); }
+    public function withMin(?float $m): self  { return $this->copy(min: $m, minSet: true); }
+    public function withMax(?float $m): self  { return $this->copy(max: $m, maxSet: true); }
+    public function withRune(string $r): self { return $this->copy(rune: $r); }
     public function withColors(Color $cold, Color $hot): self
     {
-        return new self($this->grid, $this->width, $this->height, $this->min, $this->max, $this->rune, $cold, $hot, $this->profile);
+        return $this->copy(coldColor: $cold, hotColor: $hot);
     }
     public function withColorProfile(ColorProfile $p): self
     {
-        return new self($this->grid, $this->width, $this->height, $this->min, $this->max, $this->rune, $this->coldColor, $this->hotColor, $p);
+        return $this->copy(profile: $p);
+    }
+
+    /**
+     * Multi-stop colour palette. The value range maps linearly across
+     * the supplied colours; first colour = `min`, last = `max`,
+     * intermediates evenly spaced. Pass `[]` to clear and revert to
+     * the cold↔hot two-stop blend. Mirrors ntcharts' `SetDefaultColorScale`.
+     *
+     * @param list<Color> $stops at least 2 colours
+     */
+    public function withPalette(array $stops): self
+    {
+        if ($stops !== [] && count($stops) < 2) {
+            throw new \InvalidArgumentException('palette needs at least 2 colours (or empty to disable)');
+        }
+        return $this->copy(palette: array_values($stops));
+    }
+
+    /**
+     * Append a one-row gradient legend below the grid showing the
+     * full cold→hot palette span. The legend renders as `width` cells
+     * with min/max labels at each end. Default off.
+     */
+    public function withLegend(bool $on = true): self
+    {
+        return $this->copy(showLegend: $on);
     }
 
     public function view(): string
@@ -126,11 +159,15 @@ final class Heatmap
                     break;
                 }
                 $v = (float) $row[$x];
-                $color = $this->lerp((float) $min, (float) $max, $v);
+                $color = $this->sample((float) $min, (float) $max, $v);
                 $canvas->setCell($x, $y, $this->rune, Style::new()->foreground($color)->colorProfile($this->profile));
             }
         }
-        return $canvas->view();
+        $body = $canvas->view();
+        if ($this->showLegend) {
+            $body .= "\n" . $this->renderLegend((float) $min, (float) $max);
+        }
+        return $body;
     }
 
     public function __toString(): string
@@ -138,13 +175,82 @@ final class Heatmap
         return $this->view();
     }
 
-    private function lerp(float $min, float $max, float $v): Color
+    /**
+     * Sample the palette at the normalised position of `$v` between
+     * `$min` and `$max`. Honors a multi-stop palette when supplied;
+     * otherwise blends cold↔hot linearly.
+     */
+    private function sample(float $min, float $max, float $v): Color
     {
         $t = ($v - $min) / ($max - $min);
         $t = max(0.0, min(1.0, $t));
-        $r = (int) round($this->coldColor->r + ($this->hotColor->r - $this->coldColor->r) * $t);
-        $g = (int) round($this->coldColor->g + ($this->hotColor->g - $this->coldColor->g) * $t);
-        $b = (int) round($this->coldColor->b + ($this->hotColor->b - $this->coldColor->b) * $t);
-        return Color::rgb($r, $g, $b);
+        if ($this->palette !== []) {
+            $count = count($this->palette);
+            $segments = $count - 1;
+            $pos = $t * $segments;
+            $idx = min((int) floor($pos), $segments - 1);
+            $local = $pos - $idx;
+            return $this->palette[$idx]->blend($this->palette[$idx + 1], $local);
+        }
+        return $this->coldColor->blend($this->hotColor, $t);
+    }
+
+    /**
+     * One-row gradient strip with min/max labels at each end, sized
+     * to {@see $width}.
+     */
+    private function renderLegend(float $min, float $max): string
+    {
+        $minLabel = self::formatLabel($min);
+        $maxLabel = self::formatLabel($max);
+        $minLen = mb_strlen($minLabel, 'UTF-8');
+        $maxLen = mb_strlen($maxLabel, 'UTF-8');
+        $stripWidth = max(0, $this->width - $minLen - $maxLen - 2);
+        $strip = '';
+        for ($i = 0; $i < $stripWidth; $i++) {
+            $t = $stripWidth <= 1 ? 0.0 : $i / ($stripWidth - 1);
+            $color = $this->sample(0.0, 1.0, $t);
+            $strip .= Style::new()
+                ->foreground($color)
+                ->colorProfile($this->profile)
+                ->render($this->rune);
+        }
+        return $minLabel . ' ' . $strip . ' ' . $maxLabel;
+    }
+
+    private static function formatLabel(float $v): string
+    {
+        return $v == (int) $v
+            ? (string) (int) $v
+            : rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+    }
+
+    /** Internal copy-with-overrides helper. */
+    private function copy(
+        ?array $grid = null,
+        ?int $width = null,
+        ?int $height = null,
+        ?float $min = null, bool $minSet = false,
+        ?float $max = null, bool $maxSet = false,
+        ?string $rune = null,
+        ?Color $coldColor = null,
+        ?Color $hotColor = null,
+        ?ColorProfile $profile = null,
+        ?array $palette = null,
+        ?bool $showLegend = null,
+    ): self {
+        return new self(
+            grid:       $grid       ?? $this->grid,
+            width:      $width      ?? $this->width,
+            height:     $height     ?? $this->height,
+            min:        $minSet     ? $min       : $this->min,
+            max:        $maxSet     ? $max       : $this->max,
+            rune:       $rune       ?? $this->rune,
+            coldColor:  $coldColor  ?? $this->coldColor,
+            hotColor:   $hotColor   ?? $this->hotColor,
+            profile:    $profile    ?? $this->profile,
+            palette:    $palette    ?? $this->palette,
+            showLegend: $showLegend ?? $this->showLegend,
+        );
     }
 }

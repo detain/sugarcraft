@@ -24,6 +24,8 @@ final class BarChart
         public readonly ?float $min,
         public readonly ?float $max,
         public readonly bool $showLabels,
+        public readonly bool $horizontal = false,
+        public readonly bool $showAxis   = false,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('bar chart width/height must be >= 0');
@@ -55,14 +57,37 @@ final class BarChart
         return new self($this->bars, $w, $h, $this->min, $this->max, $this->showLabels);
     }
 
-    public function withMin(?float $m): self        { return new self($this->bars, $this->width, $this->height, $m, $this->max, $this->showLabels); }
-    public function withMax(?float $m): self        { return new self($this->bars, $this->width, $this->height, $this->min, $m, $this->showLabels); }
-    public function withShowLabels(bool $on): self  { return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $on); }
+    public function withMin(?float $m): self        { return new self($this->bars, $this->width, $this->height, $m, $this->max, $this->showLabels, $this->horizontal, $this->showAxis); }
+    public function withMax(?float $m): self        { return new self($this->bars, $this->width, $this->height, $this->min, $m, $this->showLabels, $this->horizontal, $this->showAxis); }
+    public function withShowLabels(bool $on): self  { return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $on, $this->horizontal, $this->showAxis); }
+
+    /**
+     * Render bars left-to-right instead of bottom-to-top. Each bar
+     * occupies one row and grows horizontally; the label sits in the
+     * leftmost column. Mirrors ntcharts' `SetHorizontal`.
+     */
+    public function withHorizontal(bool $on = true): self
+    {
+        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $on, $this->showAxis);
+    }
+
+    /**
+     * Draw an axis line along the chart edge: vertical (┤) on the
+     * left in vertical mode, horizontal (┴) along the top in
+     * horizontal mode. Mirrors ntcharts' `SetShowAxis`.
+     */
+    public function withShowAxis(bool $on = true): self
+    {
+        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $on);
+    }
 
     public function view(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
             return '';
+        }
+        if ($this->horizontal) {
+            return $this->renderHorizontal();
         }
 
         // Drop trailing bars that don't fit the width budget. With
@@ -113,7 +138,7 @@ final class BarChart
 
         $rows = [];
         for ($row = $bodyHeight; $row >= 1; $row--) {
-            $line = '';
+            $line = $this->showAxis ? '┤' : '';
             foreach ($heights as $i => $h) {
                 $line .= str_repeat($h >= $row ? '█' : ' ', $colW);
                 if ($i !== $count - 1 && $gap > 0) {
@@ -121,6 +146,11 @@ final class BarChart
                 }
             }
             $rows[] = rtrim($line);
+        }
+        if ($this->showAxis) {
+            // X axis just below the bars (replaces the spacing row).
+            $axisLine = '└' . str_repeat('─', max(0, $this->width));
+            $rows[] = $axisLine;
         }
 
         if ($renderLabels) {
@@ -141,6 +171,57 @@ final class BarChart
     public function __toString(): string
     {
         return $this->view();
+    }
+
+    /**
+     * Bars run left-to-right; one row per bar. The label occupies the
+     * leftmost column (truncated to fit), then the filled portion of
+     * the bar fills the rest of the available width.
+     */
+    private function renderHorizontal(): string
+    {
+        $bars   = $this->bars;
+        $count  = min(count($bars), $this->height);
+        if ($count === 0) {
+            return '';
+        }
+        $bars   = array_slice($bars, 0, $count);
+        $values = array_map(static fn(Bar $b): float => $b->value, $bars);
+
+        $min = $this->min ?? min(min($values), 0.0);
+        $max = $this->max ?? max($values);
+        if ($max === $min) {
+            $max = $min + 1.0;
+        }
+
+        // Reserve label gutter when labels are on.
+        $labelGutter = 0;
+        if ($this->showLabels) {
+            foreach ($bars as $b) {
+                $labelGutter = max($labelGutter, mb_strlen($b->label, 'UTF-8'));
+            }
+            $labelGutter = min($labelGutter, max(1, intdiv($this->width, 3)));
+        }
+        $axisCol = $this->showAxis ? 1 : 0;
+        $barWidth = max(0, $this->width - $labelGutter - ($this->showLabels ? 1 : 0) - $axisCol);
+
+        $rows = [];
+        foreach ($bars as $i => $bar) {
+            $norm = ($bar->value - $min) / ($max - $min);
+            $norm = max(0.0, min(1.0, $norm));
+            $filled = (int) round($norm * $barWidth);
+            $row = '';
+            if ($this->showLabels) {
+                $label = self::truncate($bar->label, $labelGutter);
+                $row .= str_pad($label, $labelGutter, ' ', STR_PAD_RIGHT) . ' ';
+            }
+            if ($this->showAxis) {
+                $row .= '├';
+            }
+            $row .= str_repeat('█', $filled);
+            $rows[] = rtrim($row);
+        }
+        return implode("\n", $rows);
     }
 
     /**

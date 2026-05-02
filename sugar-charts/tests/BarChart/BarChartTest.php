@@ -94,4 +94,27 @@ final class BarChartTest extends TestCase
         $out = BarChart::new([['a', 1.0]], 3, 2)->view();
         $this->assertCount(2, explode("\n", $out));
     }
+
+    public function testHorizontalRendersOneRowPerBar(): void
+    {
+        $out = BarChart::new([['a', 5.0], ['bb', 10.0], ['ccc', 2.0]], 20, 5)
+            ->withHorizontal()
+            ->view();
+        $rows = explode("\n", $out);
+        $this->assertCount(3, $rows);
+        $this->assertStringContainsString('a',   $rows[0]);
+        $this->assertStringContainsString('bb',  $rows[1]);
+        $this->assertStringContainsString('ccc', $rows[2]);
+        $this->assertStringContainsString('█', $out);
+    }
+
+    public function testWithShowAxisDrawsAxisRunes(): void
+    {
+        $out = BarChart::new([['a', 0.7], ['b', 0.3]], 8, 4)
+            ->withShowAxis()
+            ->view();
+        $this->assertStringContainsString('┤', $out);
+        $this->assertStringContainsString('└', $out);
+        $this->assertStringContainsString('─', $out);
+    }
 }

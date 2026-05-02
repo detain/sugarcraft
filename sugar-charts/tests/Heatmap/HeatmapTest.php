@@ -75,4 +75,35 @@ final class HeatmapTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         Heatmap::new([])->withSize(-1, 1);
     }
+
+    public function testWithLegendAddsBottomRow(): void
+    {
+        $h = Heatmap::new([[0.0, 0.5, 1.0]], 6, 1)
+            ->withColors(Color::rgb(0, 0, 0), Color::rgb(255, 0, 0))
+            ->withLegend();
+        $out = $h->view();
+        $rows = explode("\n", $out);
+        $this->assertCount(2, $rows);
+        $this->assertStringContainsString('0', $rows[1]);
+        $this->assertStringContainsString('1', $rows[1]);
+    }
+
+    public function testWithPaletteUsesMultipleStops(): void
+    {
+        $palette = [
+            Color::rgb(0, 0, 0),
+            Color::rgb(0, 255, 0),   // mid: green
+            Color::rgb(255, 0, 0),
+        ];
+        $h = Heatmap::new([[0.0, 0.5, 1.0]], 3, 1)
+            ->withPalette($palette);
+        $out = $h->view();
+        $this->assertStringContainsString('38;2;0;255;0', $out);
+    }
+
+    public function testWithPaletteRejectsSingleStop(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Heatmap::new([])->withPalette([Color::rgb(0, 0, 0)]);
+    }
 }

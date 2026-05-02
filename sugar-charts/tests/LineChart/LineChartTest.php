@@ -56,4 +56,28 @@ final class LineChartTest extends TestCase
         $rows = explode("\n", $out);
         $this->assertSame('*-*-*-*', rtrim($rows[1]));
     }
+
+    public function testWithAxesEmitsAxisRunes(): void
+    {
+        $out = LineChart::new([1, 5, 3, 7, 4], 20, 8)
+            ->withAxes()
+            ->withYLabels(['10', '5', '0'])
+            ->withXLabels(['t0', 't4'])
+            ->view();
+        $this->assertStringContainsString('└', $out);
+        $this->assertStringContainsString('─', $out);
+        $this->assertStringContainsString('│', $out);
+        $this->assertStringContainsString('10', $out);
+    }
+
+    public function testWithDatasetRendersMultipleSeries(): void
+    {
+        $out = LineChart::new([1, 5, 3, 7, 4], 20, 6)
+            ->withDataset('compare', [4, 2, 6, 1, 8])
+            ->withDatasetPoint('compare', 'o')
+            ->view();
+        // Both default '*' and dataset 'o' appear somewhere in output.
+        $this->assertStringContainsString('*', $out);
+        $this->assertStringContainsString('o', $out);
+    }
 }

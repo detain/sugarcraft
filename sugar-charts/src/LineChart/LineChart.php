@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCore\Charts\LineChart;
 
 use CandyCore\Charts\Canvas\Canvas;
+use CandyCore\Charts\Canvas\Graph;
 
 /**
  * Single-series line plot drawn onto a {@see Canvas}. Each data point
@@ -19,7 +20,13 @@ use CandyCore\Charts\Canvas\Canvas;
  */
 final class LineChart
 {
-    /** @param list<int|float> $data */
+    /**
+     * @param list<int|float>            $data
+     * @param array<string,list<int|float>> $datasets  named multi-series
+     * @param array<string,string>       $datasetPoints  per-series rune override
+     * @param list<string>               $xLabels
+     * @param list<string>               $yLabels
+     */
     private function __construct(
         public readonly array $data,
         public readonly int $width,
@@ -27,6 +34,11 @@ final class LineChart
         public readonly ?float $min,
         public readonly ?float $max,
         public readonly string $point,
+        public readonly array $datasets    = [],
+        public readonly array $datasetPoints = [],
+        public readonly bool $showAxes     = false,
+        public readonly array $xLabels     = [],
+        public readonly array $yLabels     = [],
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('line chart width/height must be >= 0');
@@ -40,61 +52,180 @@ final class LineChart
     }
 
     /** @param list<int|float> $data */
-    public function withData(array $data): self     { return new self(array_values($data), $this->width, $this->height, $this->min, $this->max, $this->point); }
+    public function withData(array $data): self
+    {
+        return $this->copy(data: array_values($data));
+    }
+
     public function withSize(int $w, int $h): self
     {
         if ($w < 0 || $h < 0) {
             throw new \InvalidArgumentException('line chart width/height must be >= 0');
         }
-        return new self($this->data, $w, $h, $this->min, $this->max, $this->point);
+        return $this->copy(width: $w, height: $h);
     }
-    public function withMin(?float $m): self        { return new self($this->data, $this->width, $this->height, $m, $this->max, $this->point); }
-    public function withMax(?float $m): self        { return new self($this->data, $this->width, $this->height, $this->min, $m, $this->point); }
-    public function withPoint(string $rune): self   { return new self($this->data, $this->width, $this->height, $this->min, $this->max, $rune); }
+
+    public function withMin(?float $m): self        { return $this->copy(min: $m, minSet: true); }
+    public function withMax(?float $m): self        { return $this->copy(max: $m, maxSet: true); }
+    public function withPoint(string $rune): self   { return $this->copy(point: $rune); }
+
+    /**
+     * Add or replace a named series. Series share the same axes as the
+     * primary `data`. Use {@see withDatasetPoint()} to give each series
+     * a distinct rune.
+     *
+     * @param list<int|float> $values
+     */
+    public function withDataset(string $name, array $values): self
+    {
+        $sets = $this->datasets;
+        $sets[$name] = array_values($values);
+        return $this->copy(datasets: $sets);
+    }
+
+    /** Per-series rune override for {@see view()}. */
+    public function withDatasetPoint(string $name, string $rune): self
+    {
+        $points = $this->datasetPoints;
+        $points[$name] = $rune;
+        return $this->copy(datasetPoints: $points);
+    }
+
+    /** Render an X / Y axis frame around the plot area. Default off. */
+    public function withAxes(bool $on = true): self
+    {
+        return $this->copy(showAxes: $on);
+    }
+
+    /**
+     * X-axis labels (rendered under the axis when `withAxes(true)` is set).
+     * @param list<string> $labels
+     */
+    public function withXLabels(array $labels): self
+    {
+        return $this->copy(xLabels: array_values($labels));
+    }
+
+    /**
+     * Y-axis labels (rendered to the left of the axis, top-to-bottom
+     * for largest-to-smallest by convention).
+     * @param list<string> $labels
+     */
+    public function withYLabels(array $labels): self
+    {
+        return $this->copy(yLabels: array_values($labels));
+    }
 
     public function view(): string
     {
-        if ($this->width === 0 || $this->height === 0 || $this->data === []) {
+        if ($this->width === 0 || $this->height === 0 || ($this->data === [] && $this->datasets === [])) {
             return (new Canvas($this->width, $this->height))->view();
         }
 
         $canvas = new Canvas($this->width, $this->height);
 
-        // Map the (possibly oversized) series into [0, width-1] columns.
-        $count   = count($this->data);
-        $points  = $count > $this->width ? array_slice($this->data, -$this->width) : $this->data;
-        $count   = count($points);
-
-        $min = $this->min ?? min($points);
-        $max = $this->max ?? max($points);
+        // Compute a global axis range covering every series so each
+        // line stays comparable on the same scale.
+        $allValues = $this->data;
+        foreach ($this->datasets as $values) {
+            $allValues = array_merge($allValues, $values);
+        }
+        if ($allValues === []) {
+            return $canvas->view();
+        }
+        $min = $this->min ?? min($allValues);
+        $max = $this->max ?? max($allValues);
         if ($max == $min) {
             $max = $min + 1.0;
         }
 
-        // Compute one (col, row) per data point.
-        $coords = [];
-        foreach ($points as $i => $v) {
-            $col = $count <= 1
-                ? 0
-                : (int) round($i * ($this->width - 1) / ($count - 1));
-            $norm = ((float) $v - $min) / ($max - $min);
-            $norm = max(0.0, min(1.0, $norm));
-            // Higher value = smaller row index (top-aligned y).
-            $row = (int) round((1.0 - $norm) * ($this->height - 1));
-            $coords[] = [$col, $row];
+        // When axes are on, reserve a 2-cell left gutter (Y labels +
+        // axis line) and a 1-row bottom gutter (X axis + labels).
+        $gutterLeft = 0;
+        $gutterBottom = 0;
+        if ($this->showAxes) {
+            $maxYLabel = 0;
+            foreach ($this->yLabels as $lbl) {
+                $maxYLabel = max($maxYLabel, mb_strlen($lbl, 'UTF-8'));
+            }
+            $gutterLeft   = max(2, $maxYLabel + 1);
+            $gutterBottom = $this->xLabels !== [] ? 2 : 1;
         }
+        $plotW = max(1, $this->width  - $gutterLeft);
+        $plotH = max(1, $this->height - $gutterBottom);
 
-        // Draw points + connecting strokes.
-        for ($i = 0; $i < $count; $i++) {
-            [$x, $y] = $coords[$i];
-            $canvas->setCell($x, $y, $this->point);
+        // Plot primary + named series on the same axes.
+        $allSeries = ['_primary' => $this->data] + $this->datasets;
+        foreach ($allSeries as $name => $values) {
+            if ($values === []) {
+                continue;
+            }
+            $points  = count($values) > $plotW ? array_slice($values, -$plotW) : $values;
+            $count   = count($points);
+            $rune    = $name === '_primary'
+                ? $this->point
+                : ($this->datasetPoints[$name] ?? $this->point);
 
-            if ($i + 1 < $count) {
-                [$x2, $y2] = $coords[$i + 1];
-                self::drawConnector($canvas, $x, $y, $x2, $y2, $this->point);
+            $coords = [];
+            foreach ($points as $i => $v) {
+                $col = $gutterLeft + ($count <= 1
+                    ? 0
+                    : (int) round($i * ($plotW - 1) / ($count - 1)));
+                $norm = ((float) $v - $min) / ($max - $min);
+                $norm = max(0.0, min(1.0, $norm));
+                $row = (int) round((1.0 - $norm) * ($plotH - 1));
+                $coords[] = [$col, $row];
+            }
+            for ($i = 0; $i < $count; $i++) {
+                [$x, $y] = $coords[$i];
+                $canvas->setCell($x, $y, $rune);
+                if ($i + 1 < $count) {
+                    [$x2, $y2] = $coords[$i + 1];
+                    self::drawConnector($canvas, $x, $y, $x2, $y2, $rune);
+                }
             }
         }
+
+        if ($this->showAxes) {
+            // Origin = bottom-left of the plot region.
+            $xOrigin = $gutterLeft;
+            $yOrigin = $plotH; // axis row sits one row below the topmost data
+            Graph::drawXYAxis($canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1);
+            Graph::drawXYAxisLabel(
+                $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
+                $this->xLabels, $this->yLabels,
+            );
+        }
         return $canvas->view();
+    }
+
+    /** Internal copy-with-overrides helper. */
+    private function copy(
+        ?array $data = null,
+        ?int $width = null,
+        ?int $height = null,
+        ?float $min = null, bool $minSet = false,
+        ?float $max = null, bool $maxSet = false,
+        ?string $point = null,
+        ?array $datasets = null,
+        ?array $datasetPoints = null,
+        ?bool $showAxes = null,
+        ?array $xLabels = null,
+        ?array $yLabels = null,
+    ): self {
+        return new self(
+            data:           $data         ?? $this->data,
+            width:          $width        ?? $this->width,
+            height:         $height       ?? $this->height,
+            min:            $minSet ? $min : $this->min,
+            max:            $maxSet ? $max : $this->max,
+            point:          $point        ?? $this->point,
+            datasets:       $datasets     ?? $this->datasets,
+            datasetPoints:  $datasetPoints?? $this->datasetPoints,
+            showAxes:       $showAxes     ?? $this->showAxes,
+            xLabels:        $xLabels      ?? $this->xLabels,
+            yLabels:        $yLabels      ?? $this->yLabels,
+        );
     }
 
     public function __toString(): string
