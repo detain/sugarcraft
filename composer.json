@@ -7,7 +7,7 @@
         "tui", "terminal", "cli", "console",
         "bubbletea", "lipgloss", "bubbles", "huh", "gum",
         "glamour", "glow", "freeze", "harmonica", "ntcharts",
-        "wish", "wishlist", "ssh",
+        "wish", "wishlist", "ssh", "metrics", "telemetry",
         "candycore"
     ],
     "homepage": "https://github.com/detain/CandyCore",
@@ -23,6 +23,7 @@
         "php": "^8.1",
         "candycore/candy-core":      "@dev",
         "candycore/candy-freeze":    "@dev",
+        "candycore/candy-metrics":   "@dev",
         "candycore/candy-kit":       "@dev",
         "candycore/candy-shell":     "@dev",
         "candycore/candy-shine":     "@dev",
@@ -40,6 +41,7 @@
     "repositories": [
         { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
         { "type": "path", "url": "candy-freeze",    "options": { "symlink": true } },
+        { "type": "path", "url": "candy-metrics",   "options": { "symlink": true } },
         { "type": "path", "url": "candy-kit",       "options": { "symlink": true } },
         { "type": "path", "url": "candy-shell",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-shine",     "options": { "symlink": true } },

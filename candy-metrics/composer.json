@@ -1,0 +1,57 @@
+{
+    "name": "candycore/candy-metrics",
+    "description": "Telemetry primitives for CandyCore / CandyWish — counters, gauges, histograms with pluggable backends (in-memory, StatsD UDP, Prometheus textfile, JSON stream). Drop-in middleware for SSH session metrics.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "candycore",
+        "metrics",
+        "telemetry",
+        "observability",
+        "prometheus",
+        "statsd",
+        "counter",
+        "histogram",
+        "ssh",
+        "wish"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore/tree/master/candy-metrics",
+        "docs": "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
+    "require": {
+        "php": ">=8.1"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0",
+        "candycore/candy-wish": "@dev"
+    },
+    "suggest": {
+        "candycore/candy-wish": "Required to use the SessionMetrics middleware."
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Metrics\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\Metrics\\Tests\\": "tests/"
+        }
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",  "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-wish",  "options": { "symlink": true } }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
