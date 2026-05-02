@@ -239,12 +239,18 @@ final class Program
         if ($this->options->reportFocus) {
             fwrite($this->output, Ansi::focusReportingOn());
         }
+        if ($this->options->bracketedPaste) {
+            fwrite($this->output, Ansi::bracketedPasteOn());
+        }
         $this->tty->enableRawMode();
     }
 
     private function teardownTerminal(): void
     {
         $this->tty->restore();
+        if ($this->options->bracketedPaste) {
+            fwrite($this->output, Ansi::bracketedPasteOff());
+        }
         if ($this->options->reportFocus) {
             fwrite($this->output, Ansi::focusReportingOff());
         }

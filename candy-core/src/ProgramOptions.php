@@ -24,6 +24,7 @@ final class ProgramOptions
         public readonly float $framerate = 60.0,
         public readonly MouseMode $mouseMode = MouseMode::Off,
         public readonly bool $reportFocus = false,
+        public readonly bool $bracketedPaste = false,
         public readonly mixed $input = null,
         public readonly mixed $output = null,
         public readonly ?LoopInterface $loop = null,

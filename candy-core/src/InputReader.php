@@ -8,6 +8,7 @@ use CandyCore\Core\Msg\BlurMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Msg\MouseMsg;
+use CandyCore\Core\Msg\PasteMsg;
 
 /**
  * Stateful byte-stream parser. Feed it raw bytes via {@see parse()};
@@ -22,7 +23,12 @@ use CandyCore\Core\Msg\MouseMsg;
  */
 final class InputReader
 {
+    private const PASTE_START = "\x1b[200~";
+    private const PASTE_END   = "\x1b[201~";
+
     private string $buf = '';
+    private bool $pasting = false;
+    private string $pasteBuf = '';
 
     /**
      * @return list<Msg>
@@ -35,50 +41,82 @@ final class InputReader
         $len = strlen($this->buf);
 
         while ($i < $len) {
+            // Inside a bracketed-paste envelope: collect raw bytes until
+            // the CSI 201~ end marker is seen.
+            if ($this->pasting) {
+                $end = strpos($this->buf, self::PASTE_END, $i);
+                if ($end === false) {
+                    $this->pasteBuf .= substr($this->buf, $i);
+                    $i = $len;
+                    break;
+                }
+                $this->pasteBuf .= substr($this->buf, $i, $end - $i);
+                $msgs[]         = new PasteMsg($this->pasteBuf);
+                $this->pasteBuf = '';
+                $this->pasting  = false;
+                $i = $end + strlen(self::PASTE_END);
+                continue;
+            }
+
             $b = $this->buf[$i];
             $code = ord($b);
 
-            // ESC: maybe a CSI sequence, an alt-prefixed key, or a bare Escape.
+            // ESC: maybe a CSI sequence, an SS3 sequence, an alt-prefixed
+            // key, or a bare Escape.
             if ($code === 0x1b) {
                 $remain = $len - $i;
                 if ($remain === 1) {
-                    // Could be the start of a longer sequence still arriving.
-                    // Hold onto it for the next parse() call.
                     break;
                 }
                 $next = $this->buf[$i + 1];
                 if ($next === '[') {
-                    // CSI: ESC [ params final
                     if ($remain < 3) break;
                     $j = $i + 2;
                     while ($j < $len) {
                         $c = ord($this->buf[$j]);
                         $j++;
                         if ($c >= 0x40 && $c <= 0x7e) {
-                            // final byte
-                            $msg = $this->decodeCsi(substr($this->buf, $i + 2, $j - $i - 3), chr($c));
+                            $params = substr($this->buf, $i + 2, $j - $i - 3);
+                            $final  = chr($c);
+                            // Bracketed paste: switch into paste mode and
+                            // consume the start marker. Subsequent bytes
+                            // (including the eventual 201~) are handled
+                            // by the pasting branch above.
+                            if ($final === '~' && $params === '200') {
+                                $this->pasting  = true;
+                                $this->pasteBuf = '';
+                                $i = $j;
+                                continue 2;
+                            }
+                            $msg = $this->decodeCsi($params, $final);
                             if ($msg !== null) $msgs[] = $msg;
                             $i = $j;
                             continue 2;
                         }
                     }
-                    // Incomplete CSI; wait for more bytes.
                     break;
                 }
-                // Alt-prefixed key (ESC + printable byte).
+                if ($next === 'O') {
+                    // SS3: ESC O <single byte>. Used for F1-F4 on most
+                    // terminals (xterm sends "ESC O P" for F1, etc.).
+                    if ($remain < 3) break;
+                    $msg = $this->decodeSs3($this->buf[$i + 2]);
+                    if ($msg !== null) $msgs[] = $msg;
+                    $i += 3;
+                    continue;
+                }
+                // Alt-prefixed key.
                 $code2 = ord($next);
                 if ($code2 >= 0x20 && $code2 < 0x7f) {
                     $msgs[] = $this->decodeChar($code2, alt: true);
                     $i += 2;
                     continue;
                 }
-                // Bare Escape — consume just the one byte.
                 $msgs[] = new KeyMsg(KeyType::Escape);
                 $i += 1;
                 continue;
             }
 
-            // Plain control / printable byte.
             $msgs[] = $this->decodeChar($code);
             $i += 1;
         }
@@ -147,14 +185,51 @@ final class InputReader
             'D' => new KeyMsg(KeyType::Left),
             'H' => new KeyMsg(KeyType::Home),
             'F' => new KeyMsg(KeyType::End),
+            'P' => new KeyMsg(KeyType::F1),
+            'Q' => new KeyMsg(KeyType::F2),
+            'R' => new KeyMsg(KeyType::F3),
+            'S' => new KeyMsg(KeyType::F4),
             '~' => match ($params) {
                 '1', '7' => new KeyMsg(KeyType::Home),
                 '4', '8' => new KeyMsg(KeyType::End),
                 '3'      => new KeyMsg(KeyType::Delete),
                 '5'      => new KeyMsg(KeyType::PageUp),
                 '6'      => new KeyMsg(KeyType::PageDown),
+                '11'     => new KeyMsg(KeyType::F1),
+                '12'     => new KeyMsg(KeyType::F2),
+                '13'     => new KeyMsg(KeyType::F3),
+                '14'     => new KeyMsg(KeyType::F4),
+                '15'     => new KeyMsg(KeyType::F5),
+                '17'     => new KeyMsg(KeyType::F6),
+                '18'     => new KeyMsg(KeyType::F7),
+                '19'     => new KeyMsg(KeyType::F8),
+                '20'     => new KeyMsg(KeyType::F9),
+                '21'     => new KeyMsg(KeyType::F10),
+                '23'     => new KeyMsg(KeyType::F11),
+                '24'     => new KeyMsg(KeyType::F12),
                 default  => null,
             },
+            default => null,
+        };
+    }
+
+    /**
+     * Decode an SS3 final byte (the byte after `ESC O`). Most terminals
+     * use SS3 for F1-F4 — F5+ generally come back as CSI ~ sequences.
+     */
+    private function decodeSs3(string $final): ?Msg
+    {
+        return match ($final) {
+            'P' => new KeyMsg(KeyType::F1),
+            'Q' => new KeyMsg(KeyType::F2),
+            'R' => new KeyMsg(KeyType::F3),
+            'S' => new KeyMsg(KeyType::F4),
+            'A' => new KeyMsg(KeyType::Up),
+            'B' => new KeyMsg(KeyType::Down),
+            'C' => new KeyMsg(KeyType::Right),
+            'D' => new KeyMsg(KeyType::Left),
+            'H' => new KeyMsg(KeyType::Home),
+            'F' => new KeyMsg(KeyType::End),
             default => null,
         };
     }
