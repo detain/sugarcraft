@@ -27,6 +27,9 @@ jobs:
           - candy-freeze
           - sugar-glow
           - sugar-spark
+          - candy-wish
+          - sugar-wishlist
+          - candy-metrics
 
     steps:
       - uses: actions/checkout@v4

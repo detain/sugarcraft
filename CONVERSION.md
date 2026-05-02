@@ -252,8 +252,8 @@ Update this table as work proceeds. Status legend:
 
 ## Phase audit (2026-05-02)
 
-> **Status (2026-05-02 close-out + follow-up wave):** every phase
-> below has had its "Top priorities" — and every deferred item
+> **Status (2026-05-02 close-out + follow-up wave + Phase 9+ wave):** every
+> phase below has had its "Top priorities" — and every deferred item
 > from the original audit — closed in the following PRs:
 > #50 (Phase 0), #51 (Phase 1), #52 (Phase 2), #53 (Phase 3),
 > #54 (Phase 4), #56 (Phase 5), #57 (Phase 6), #58 (Phase 7),
@@ -263,7 +263,13 @@ Update this table as work proceeds. Status legend:
 > sub-flag parser), #64 (NEW CandyFreeze code→SVG library), #65
 > (CandyKit Section / Stage / HelpText + 4 themes), #66
 > (SugarSpark DCS / APC + 14 new sequence labellers), #67
-> (SugarGlow full theme set + word-wrap + OSC-8 toggle).
+> (SugarGlow full theme set + word-wrap + OSC-8 toggle). Phase 10
+> and 11 polish: #69-73 (composer metadata, READMEs, community
+> files, examples, VHS .tape recordings), #74 (Phase 11a — cursed
+> cell-diff renderer for SSH bandwidth), #75 (Phase 11b — Sixel /
+> Kitty / iTerm2 image rendering), #76 (Phase 11c — Canvas
+> multi-layer compositor for popovers). And the Phase 9+ port
+> wave: #77 (CandyWish), #78 (SugarWishlist), #79 (CandyMetrics).
 > The Progress tracker above reflects the new state. The
 > original audit text below is preserved as a record of what
 > the gaps were, not as a current backlog.
@@ -782,9 +788,9 @@ and the dependencies on phases 0–8.
 | 11 | [charmbracelet/freeze](https://github.com/charmbracelet/freeze) | **CandyFreeze** ✅ | `candy-freeze/` → `candycore/candy-freeze` | `CandyCore\Freeze` | Code → SVG screenshot. SVG-only first cut (no `ext-gd`/Imagick required); supports macOS-style traffic-light window controls, drop shadow, rounded-corner frame, optional gutter line numbers, and inline ANSI SGR colour parsing (16-color / 256-color / 24-bit truecolor + bold/italic/underline). 5 stock themes (`dark`/`light`/`dracula`/`tokyoNight`/`nord`). Library + `bin/candyfreeze` CLI shipped. | 1 |
 | 12 | [charmbracelet/sequin](https://github.com/charmbracelet/sequin) | **SugarSpark** ✅ | `sugar-spark/` → `candycore/sugar-spark` | `CandyCore\Spark` | Inspect / pretty-print ANSI escape sequences. Library + `bin/sugarspark` CLI shipped — labels SGR (foreground / background / 256-color / truecolor / attributes), CSI cursor moves, erase, DEC private mode toggles (mouse, focus, alt screen, bracketed paste, **synchronized output 2026, unicode mode 2027**), CSI ~ keys (Home/End/Delete/PgUp/PgDn/F1-F12), **scroll region (DECSTBM), scroll up/down, tab forward/backward, insert chars, DECSCUSR cursor shape, DECRQM/DECRPM mode query/reply, kitty keyboard query/push/pop, XTVERSION request, cursor position request**, SS3, OSC (title / icon / cwd / hyperlink / OSC 52 / **palette / progress / colour set + reset**), 2-byte ESC, **DCS** (XTVERSION reply, DECRPSS, sixel), **APC** (CandyZone markers, kitty graphics). Unrecognised sequences fall back to a generic descriptor so nothing is silently swallowed. | 0 |
 | 13 | [charmbracelet/fang](https://github.com/charmbracelet/fang) | **CandyKit** ✅ | `candy-kit/` → `candycore/candy-kit` | `CandyCore\Kit` | Opinionated CLI presentation helpers shipped: `Theme` (success/error/warn/info/prompt/accent/muted Style palette, **ansi / plain / charm / dracula / nord / catppuccin** factories), `StatusLine` (✓/✗/⚠/ℹ/? glyph + message), `Banner::title($title, $subtitle)` (rounded-bordered title block, custom Border supported), **`Section::header / rule`** (`── LABEL ────`), **`Stage::step / subStep`** (numbered build-script lines + tree-style sub-steps), **`HelpText::render`** (fang-style `--help` page from a `usage + sections` map). Library-only — no Symfony Console requirement so any Composer project can drop it in. | 1 |
-| 14 | [charmbracelet/wish](https://github.com/charmbracelet/wish) (via this entry) | **CandyWish** | `candy-wish/` → `candycore/candy-wish` | `CandyCore\Wish` | SSH-server framework that pipes a `Program` onto an SSH session. | 3 + ext-ssh2 / pure-PHP SSH |
-| 15 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** | `sugar-wishlist/` → `candycore/sugar-wishlist` | `CandyCore\Wishlist` | SSH directory / launcher. Composes **CandyWish** + Phase 5 selection list. | 5, 14 |
-| 16 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` → `candycore/candy-metrics` | `CandyCore\Metrics` | Prometheus metrics middleware for **CandyWish** sessions. | 14 |
+| 14 | [charmbracelet/wish](https://github.com/charmbracelet/wish) | **CandyWish** ✅ | `candy-wish/` → `candycore/candy-wish` | `CandyCore\Wish` | SSH-server middleware framework. Lean on host `sshd` via `ForceCommand`; PHP entry script runs the middleware chain (`Logger` / `Auth` / `RateLimit` / `BubbleTea`) per connection. Trade-off avoids re-implementing the SSH wire protocol — battle-tested cipher / host-key / fail2ban handling stays with OpenSSH. (PR #77) | 3 |
+| 15 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** ✅ | `sugar-wishlist/` → `candycore/sugar-wishlist` | `CandyCore\Wishlist` | SSH endpoint launcher. YAML / JSON directory of `ssh user@host` shortcuts, interactive picker (j/k or arrows, type-to-filter), then `pcntl_exec` into the chosen `ssh` so host-key prompts / agent forwarding / MOTD all flow through unchanged. Library + `bin/wishlist` CLI shipped. (PR #78) | — |
+| 16 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** ✅ | `candy-metrics/` → `candycore/candy-metrics` | `CandyCore\Metrics` | Telemetry primitives + CandyWish session middleware. `Registry` facade with `counter` / `gauge` / `histogram` / `time` / `withTags`; four backends (`InMemoryBackend`, `JsonStreamBackend`, `StatsdBackend` (etsy + DogStatsD), `PrometheusFileBackend` (atomic textfile-collector rewrite), `MultiBackend` for fanout). `SessionMetrics` middleware emits `wish.session.{connect,duration,error}` with user / term tags. (PR #79) | 14 |
 | 17 | [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` → `candycore/sugar-crush` | `CandyCore\Crush` | AI coding-assistant TUI app. Demonstrates CandyCore + every phase together. | 0–8 |
 | 18 | [charmbracelet/bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | **CandyTemplate** | `candy-template/` → `candycore/candy-template` (Composer create-project) | `CandyCore\Template` | Skeleton repo for users bootstrapping a CandyCore app. | 0, 3 |
 | 19 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` → `candycore/candy-tetris` | `CandyCore\Tetris` | Tetris clone. Pure example app for the runtime. Optional. | 1, 3, 5 |
@@ -795,10 +801,14 @@ and the dependencies on phases 0–8.
 - **CandyShine** is the highest-leverage entry: it fills the gap that's
   blocking CandyShell's `format` subcommand and underpins glow + the
   table-styled output in fang.
-- **CandyWish** is the only entry that needs a substantial new
-  dependency (PHP SSH stack) and may be worth holding until either
-  `ext-ssh2` or `phpseclib/phpseclib` is settled on. CandyMetrics and
-  SugarWishlist queue behind it.
+- **CandyWish** sidesteps the "PHP SSH stack" question entirely by
+  delegating SSH-protocol handling to OpenSSH (`ForceCommand`) and
+  shaping the middleware chain around per-connection PHP processes.
+  This unblocks both **SugarWishlist** (`pcntl_exec`s into the system
+  `ssh` client) and **CandyMetrics** (a pluggable `Backend` /
+  `SessionMetrics` middleware) without requiring `ext-ssh2`. ext-ssh2
+  is still a useful optional dependency for *outbound* SSH from inside
+  a session.
 - The three "app" entries (**SugarCrush**, **CandyTemplate**,
   **CandyTetris**, **SuperCandy**) live in their own repos from day 1
   rather than in the monorepo, since they consume the libraries rather
