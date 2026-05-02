@@ -155,4 +155,44 @@ final class RendererTest extends TestCase
         $out = $this->plain()->render($md);
         $this->assertSame("• first line\n  second line", $out);
     }
+
+    // ---- GFM tables -----------------------------------------------------
+
+    public function testRendersGfmTable(): void
+    {
+        $md = <<<MD
+| Name  | Age |
+| ----- | --- |
+| Alice | 30  |
+| Bob   | 25  |
+MD;
+        $out = $this->plain()->render($md);
+        // Sprinkles\Table\Table renders with a rounded border.
+        $this->assertStringContainsString('Name',  $out);
+        $this->assertStringContainsString('Alice', $out);
+        $this->assertStringContainsString('Bob',   $out);
+        $this->assertStringContainsString('╭', $out);
+        $this->assertStringContainsString('╯', $out);
+    }
+
+    public function testTableWithoutHeaderRendersBodyOnly(): void
+    {
+        // GFM requires a header row, so this is contrived. Verify we at
+        // least don't crash on a single-row table.
+        $md = "| a | b |\n|---|---|\n| 1 | 2 |";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('a', $out);
+        $this->assertStringContainsString('1', $out);
+    }
+
+    // ---- task lists ----------------------------------------------------
+
+    public function testTaskListRendersCheckGlyphs(): void
+    {
+        $md = "- [x] done\n- [ ] todo\n- [X] also done";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('☑ done',       $out);
+        $this->assertStringContainsString('☐ todo',       $out);
+        $this->assertStringContainsString('☑ also done',  $out);
+    }
 }
