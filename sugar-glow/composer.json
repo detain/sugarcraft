@@ -1,8 +1,22 @@
 {
     "name": "candycore/sugar-glow",
-    "description": "PHP port of charmbracelet/glow — Markdown CLI viewer composing CandyShine + Viewport.",
+    "description": "PHP port of charmbracelet/glow — Markdown CLI viewer / pager composing CandyShine + Viewport. 8 stock themes, word-wrap, OSC 8 hyperlinks.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "markdown", "viewer", "pager", "cli",
+        "glow", "ansi", "tui",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "bin": ["bin/sugarglow"],
     "require": {
         "php": "^8.1",

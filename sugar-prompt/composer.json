@@ -1,8 +1,23 @@
 {
     "name": "candycore/sugar-prompt",
-    "description": "PHP port of charmbracelet/huh — interactive form library for CandyCore.",
+    "description": "PHP port of charmbracelet/huh — interactive form library (Note, Input, Confirm, Select, MultiSelect, Text, FilePicker) with multi-page Group support and 6 stock themes.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "tui", "terminal", "cli",
+        "form", "prompt", "input", "select",
+        "multi-select", "confirm", "file-picker",
+        "huh", "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1",
         "candycore/candy-core":      "@dev",

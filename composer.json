@@ -1,8 +1,23 @@
 {
     "name": "candycore/candycore",
-    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo).",
+    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) — install all 13 libraries at once.",
     "type": "metapackage",
     "license": "MIT",
+    "keywords": [
+        "tui", "terminal", "cli", "console",
+        "bubbletea", "lipgloss", "bubbles", "huh", "gum",
+        "glamour", "glow", "freeze", "harmonica", "ntcharts",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1",
         "candycore/candy-core":      "@dev",

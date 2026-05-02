@@ -1,8 +1,22 @@
 {
     "name": "candycore/candy-kit",
-    "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers (status lines, banners, themed output) for CandyCore.",
+    "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers: StatusLine (✓/✗/⚠/ℹ), Banner, Section header, Stage step, HelpText page, and 6 stock themes (ansi/plain/charm/dracula/nord/catppuccin).",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "cli", "console", "presentation", "status-line",
+        "banner", "help", "fang",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1",
         "candycore/candy-core":      "@dev",
