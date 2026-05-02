@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "supercandy: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\SuperCandy\Manager;
+
+$cwd = getcwd() ?: '/';
+$home = getenv('HOME') ?: '/';
+$leftCwd  = $argv[1] ?? $cwd;
+$rightCwd = $argv[2] ?? $home;
+
+(new Program(Manager::start($leftCwd, $rightCwd), new ProgramOptions(useAltScreen: true)))->run();

@@ -1,0 +1,53 @@
+{
+    "name": "candycore/super-candy",
+    "description": "Dual-pane terminal file manager built on the SugarBuzz stack. Inspired by superfile and Midnight Commander. Navigate two directories side-by-side, sort by name / mtime / size, multi-select, delete with confirmation, swap focus with Tab.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": [
+        "candycore",
+        "supercandy",
+        "superfile",
+        "file-manager",
+        "tui",
+        "dual-pane",
+        "midnight-commander"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore/tree/master/super-candy",
+        "docs": "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
+    "bin": ["bin/supercandy"],
+    "require": {
+        "php": ">=8.1",
+        "candycore/candy-core": "@dev",
+        "candycore/candy-sprinkles": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\SuperCandy\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\SuperCandy\\Tests\\": "tests/"
+        }
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } }
+    ],
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
