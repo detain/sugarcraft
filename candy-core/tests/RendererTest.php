@@ -5,54 +5,91 @@ declare(strict_types=1);
 namespace CandyCore\Core\Tests;
 
 use CandyCore\Core\Renderer;
+use CandyCore\Core\Util\Ansi;
 use PHPUnit\Framework\TestCase;
 
 final class RendererTest extends TestCase
 {
-    public function testWritesFrameOnFirstRender(): void
+    /** @return array{0:resource,1:Renderer} */
+    private function make(): array
     {
         $out = fopen('php://memory', 'w+');
         $this->assertNotFalse($out);
+        return [$out, new Renderer($out)];
+    }
 
-        $r = new Renderer($out);
-        $r->render('hello');
-
+    private function read($out): string
+    {
         rewind($out);
-        $written = stream_get_contents($out);
-        $this->assertStringContainsString('hello', $written);
-        $this->assertStringContainsString("\x1b[", $written);
+        return (string) stream_get_contents($out);
+    }
+
+    public function testFirstFrameWritesEverything(): void
+    {
+        [$out, $r] = $this->make();
+        $r->render("a\nb\nc");
+
+        $written = $this->read($out);
+        $this->assertStringStartsWith(Ansi::cursorTo(1, 1), $written);
+        $this->assertStringContainsString("a\r\nb\r\nc", $written);
         fclose($out);
     }
 
-    public function testSkipsRedundantWrite(): void
+    public function testIdenticalFrameSkipped(): void
     {
-        $out = fopen('php://memory', 'w+');
-        $this->assertNotFalse($out);
-
-        $r = new Renderer($out);
+        [$out, $r] = $this->make();
         $r->render('hello');
         $afterFirst = ftell($out);
         $r->render('hello');
-        $afterSecond = ftell($out);
-
-        $this->assertSame($afterFirst, $afterSecond);
+        $this->assertSame($afterFirst, ftell($out));
         fclose($out);
     }
 
-    public function testWritesAgainAfterReset(): void
+    public function testOnlyChangedLineRewritten(): void
     {
-        $out = fopen('php://memory', 'w+');
-        $this->assertNotFalse($out);
-
-        $r = new Renderer($out);
-        $r->render('a');
-        $r->reset();
-        $r->render('a');
+        [$out, $r] = $this->make();
+        $r->render("alpha\nbeta\ngamma");
+        $beforeDiff = ftell($out);
+        $r->render("alpha\nBETA\ngamma");
 
         rewind($out);
-        $written = stream_get_contents($out);
-        // 'a' should appear twice (cursor-home + erase + 'a' twice).
-        $this->assertSame(2, substr_count($written, 'a'));
+        fseek($out, $beforeDiff);
+        $diff = (string) stream_get_contents($out);
+
+        // Should have repositioned to row 2 and written BETA (not the rest).
+        $this->assertStringContainsString(Ansi::cursorTo(2, 1), $diff);
+        $this->assertStringContainsString('BETA', $diff);
+        $this->assertStringNotContainsString('alpha', $diff);
+        $this->assertStringNotContainsString('gamma', $diff);
+        fclose($out);
+    }
+
+    public function testShorterFrameClearsExtraLines(): void
+    {
+        [$out, $r] = $this->make();
+        $r->render("a\nb\nc\nd");
+        $beforeDiff = ftell($out);
+        $r->render("a\nb");
+
+        rewind($out);
+        fseek($out, $beforeDiff);
+        $diff = (string) stream_get_contents($out);
+
+        // The third and fourth rows should be erased (cursorTo + eraseLine).
+        $this->assertStringContainsString(Ansi::cursorTo(3, 1) . Ansi::eraseLine(), $diff);
+        $this->assertStringContainsString(Ansi::cursorTo(4, 1) . Ansi::eraseLine(), $diff);
+        fclose($out);
+    }
+
+    public function testResetForcesFullRedraw(): void
+    {
+        [$out, $r] = $this->make();
+        $r->render('x');
+        $r->reset();
+        $r->render('x');
+        $written = $this->read($out);
+        // 'x' should appear twice (full redraw after reset).
+        $this->assertSame(2, substr_count($written, 'x'));
         fclose($out);
     }
 }

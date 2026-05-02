@@ -105,6 +105,17 @@ final class Ansi
     public static function mouseAllOn(): string   { return self::CSI . '?1000h' . self::CSI . '?1006h'; }
     public static function mouseAllOff(): string  { return self::CSI . '?1006l' . self::CSI . '?1000l'; }
 
+    /** Cell-motion tracking: report when a button is held and the mouse moves. */
+    public static function mouseCellMotionOn(): string  { return self::CSI . '?1002h' . self::CSI . '?1006h'; }
+    public static function mouseCellMotionOff(): string { return self::CSI . '?1006l' . self::CSI . '?1002l'; }
+
+    /** All-motion tracking: report every move regardless of button state. */
+    public static function mouseAllMotionOn(): string  { return self::CSI . '?1003h' . self::CSI . '?1006h'; }
+    public static function mouseAllMotionOff(): string { return self::CSI . '?1006l' . self::CSI . '?1003l'; }
+
+    public static function focusReportingOn(): string  { return self::CSI . '?1004h'; }
+    public static function focusReportingOff(): string { return self::CSI . '?1004l'; }
+
     /**
      * Strip every ANSI escape sequence from the input.
      *

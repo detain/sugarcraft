@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace CandyCore\Core;
 
+use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\MouseMsg;
 
 /**
  * Stateful byte-stream parser. Feed it raw bytes via {@see parse()};
@@ -116,6 +119,17 @@ final class InputReader
 
     private function decodeCsi(string $params, string $final): ?Msg
     {
+        // Focus reporting (CSI ?1004h): ESC[I → focus in, ESC[O → focus out.
+        if ($params === '') {
+            if ($final === 'I') return new FocusMsg();
+            if ($final === 'O') return new BlurMsg();
+        }
+
+        // SGR-encoded mouse (CSI ?1006h): ESC[< b ; x ; y M|m
+        if (($final === 'M' || $final === 'm') && isset($params[0]) && $params[0] === '<') {
+            return $this->decodeSgrMouse(substr($params, 1), $final === 'M');
+        }
+
         return match ($final) {
             'A' => new KeyMsg(KeyType::Up),
             'B' => new KeyMsg(KeyType::Down),
@@ -133,5 +147,45 @@ final class InputReader
             },
             default => null,
         };
+    }
+
+    private function decodeSgrMouse(string $params, bool $press): ?MouseMsg
+    {
+        $parts = explode(';', $params);
+        if (count($parts) !== 3) {
+            return null;
+        }
+        $b = (int) $parts[0];
+        $x = (int) $parts[1];
+        $y = (int) $parts[2];
+
+        $shift = ($b & 0x04) !== 0;
+        $alt   = ($b & 0x08) !== 0;
+        $ctrl  = ($b & 0x10) !== 0;
+
+        $isMotion = ($b & 0x20) !== 0;
+        $isWheel  = ($b & 0x40) !== 0;
+        $isExtra  = ($b & 0x80) !== 0;
+        $btnBits  = $b & 0x03;
+
+        if ($isWheel) {
+            $button = $btnBits === 0 ? MouseButton::WheelUp : MouseButton::WheelDown;
+            $action = MouseAction::Press;
+        } elseif ($isExtra) {
+            $button = $btnBits === 0 ? MouseButton::Backward : MouseButton::Forward;
+            $action = $isMotion ? MouseAction::Motion : ($press ? MouseAction::Press : MouseAction::Release);
+        } else {
+            $button = match ($btnBits) {
+                0       => MouseButton::Left,
+                1       => MouseButton::Middle,
+                2       => MouseButton::Right,
+                default => MouseButton::None,
+            };
+            $action = $isMotion
+                ? MouseAction::Motion
+                : ($press ? MouseAction::Press : MouseAction::Release);
+        }
+
+        return new MouseMsg($x, $y, $button, $action, $shift, $alt, $ctrl);
     }
 }

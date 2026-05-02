@@ -6,7 +6,12 @@ namespace CandyCore\Core\Tests;
 
 use CandyCore\Core\InputReader;
 use CandyCore\Core\KeyType;
+use CandyCore\Core\MouseAction;
+use CandyCore\Core\MouseButton;
+use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\MouseMsg;
 use PHPUnit\Framework\TestCase;
 
 final class InputReaderTest extends TestCase
@@ -115,5 +120,101 @@ final class InputReaderTest extends TestCase
         $this->assertSame('alt+a',    (new KeyMsg(KeyType::Char, 'a', alt: true))->string());
         $this->assertSame('up',       (new KeyMsg(KeyType::Up))->string());
         $this->assertSame('ctrl+alt+a', (new KeyMsg(KeyType::Char, 'a', alt: true, ctrl: true))->string());
+    }
+
+    // ---- focus ------------------------------------------------------------
+
+    public function testFocusIn(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[I");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(FocusMsg::class, $msgs[0]);
+    }
+
+    public function testFocusOut(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[O");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(BlurMsg::class, $msgs[0]);
+    }
+
+    // ---- mouse (SGR encoded) ---------------------------------------------
+
+    public function testMouseLeftPress(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<0;5;10M");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
+        $this->assertSame(5,  $msgs[0]->x);
+        $this->assertSame(10, $msgs[0]->y);
+        $this->assertSame(MouseButton::Left,    $msgs[0]->button);
+        $this->assertSame(MouseAction::Press,   $msgs[0]->action);
+        $this->assertFalse($msgs[0]->shift);
+        $this->assertFalse($msgs[0]->alt);
+        $this->assertFalse($msgs[0]->ctrl);
+    }
+
+    public function testMouseLeftRelease(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<0;5;10m");
+        $this->assertSame(MouseAction::Release, $msgs[0]->action);
+        $this->assertSame(MouseButton::Left,    $msgs[0]->button);
+    }
+
+    public function testMouseRightPress(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<2;1;1M");
+        $this->assertSame(MouseButton::Right, $msgs[0]->button);
+    }
+
+    public function testMouseModifiers(): void
+    {
+        // Button 0 (left) + shift(4) + alt(8) + ctrl(16) = 28
+        $msgs = (new InputReader())->parse("\x1b[<28;3;4M");
+        $this->assertTrue($msgs[0]->shift);
+        $this->assertTrue($msgs[0]->alt);
+        $this->assertTrue($msgs[0]->ctrl);
+        $this->assertSame(MouseButton::Left, $msgs[0]->button);
+    }
+
+    public function testMouseMotionWithButton(): void
+    {
+        // Left + motion(32) = 32
+        $msgs = (new InputReader())->parse("\x1b[<32;7;8M");
+        $this->assertSame(MouseAction::Motion, $msgs[0]->action);
+        $this->assertSame(MouseButton::Left,   $msgs[0]->button);
+    }
+
+    public function testMouseWheelUp(): void
+    {
+        // 64 = wheel up
+        $msgs = (new InputReader())->parse("\x1b[<64;1;1M");
+        $this->assertSame(MouseButton::WheelUp, $msgs[0]->button);
+        $this->assertSame(MouseAction::Press,   $msgs[0]->action);
+    }
+
+    public function testMouseWheelDown(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<65;1;1M");
+        $this->assertSame(MouseButton::WheelDown, $msgs[0]->button);
+    }
+
+    public function testMouseExtraBackward(): void
+    {
+        // 128 = extra btn 0 (backward)
+        $msgs = (new InputReader())->parse("\x1b[<128;1;1M");
+        $this->assertSame(MouseButton::Backward, $msgs[0]->button);
+        $this->assertSame(MouseAction::Press,    $msgs[0]->action);
+    }
+
+    public function testMouseSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b[<0;5"));
+        $msgs = $r->parse(";10M");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
+        $this->assertSame(5,  $msgs[0]->x);
+        $this->assertSame(10, $msgs[0]->y);
     }
 }

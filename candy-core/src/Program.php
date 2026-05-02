@@ -189,12 +189,28 @@ final class Program
         if ($this->options->hideCursor) {
             fwrite($this->output, Ansi::cursorHide());
         }
+        match ($this->options->mouseMode) {
+            MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOn()),
+            MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOn()),
+            MouseMode::Off        => null,
+        };
+        if ($this->options->reportFocus) {
+            fwrite($this->output, Ansi::focusReportingOn());
+        }
         $this->tty->enableRawMode();
     }
 
     private function teardownTerminal(): void
     {
         $this->tty->restore();
+        if ($this->options->reportFocus) {
+            fwrite($this->output, Ansi::focusReportingOff());
+        }
+        match ($this->options->mouseMode) {
+            MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOff()),
+            MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOff()),
+            MouseMode::Off        => null,
+        };
         if ($this->options->hideCursor) {
             fwrite($this->output, Ansi::cursorShow());
         }
