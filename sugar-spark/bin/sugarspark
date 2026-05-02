@@ -1,0 +1,32 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use CandyCore\Spark\Inspector;
+
+$autoloadCandidates = [
+    __DIR__ . '/../vendor/autoload.php',     // dev: standalone
+    __DIR__ . '/../../../autoload.php',      // installed under vendor/bin
+    __DIR__ . '/../../vendor/autoload.php',  // monorepo dev
+];
+foreach ($autoloadCandidates as $autoload) {
+    if (file_exists($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+$input = '';
+if (!empty($argv[1])) {
+    $input = (string) @file_get_contents($argv[1]);
+} elseif (!stream_isatty(STDIN)) {
+    $input = (string) stream_get_contents(STDIN);
+}
+
+if ($input === '') {
+    fwrite(STDERR, "usage: sugarspark [file]\n  or:  cmd | sugarspark\n");
+    exit(1);
+}
+
+echo Inspector::report($input), PHP_EOL;

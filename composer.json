@@ -13,7 +13,8 @@
         "candycore/honey-bounce":    "@dev",
         "candycore/sugar-bits":      "@dev",
         "candycore/sugar-charts":    "@dev",
-        "candycore/sugar-prompt":    "@dev"
+        "candycore/sugar-prompt":    "@dev",
+        "candycore/sugar-spark":     "@dev"
     },
     "repositories": [
         { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
@@ -24,7 +25,8 @@
         { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
         { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } },
         { "type": "path", "url": "sugar-charts",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-prompt",    "options": { "symlink": true } }
+        { "type": "path", "url": "sugar-prompt",    "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-spark",     "options": { "symlink": true } }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true
