@@ -10,6 +10,7 @@ use CandyCore\Core\KeyType;
 use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Single-choice picker. Wraps {@see ItemList}; the field's value is the
@@ -17,6 +18,8 @@ use CandyCore\Prompt\Field;
  */
 final class Select implements Field
 {
+    use HasHideFunc;
+
     private function __construct(
         public readonly string $key,
         public readonly ItemList $list,

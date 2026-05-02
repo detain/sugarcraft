@@ -7,6 +7,7 @@ namespace CandyCore\Prompt\Field;
 use CandyCore\Bits\FilePicker\FilePicker as PickerWidget;
 use CandyCore\Core\Msg;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * File-system picker field. Wraps {@see PickerWidget}; the field's value
@@ -18,6 +19,8 @@ use CandyCore\Prompt\Field;
  */
 final class FilePicker implements Field
 {
+    use HasHideFunc;
+
     private function __construct(
         public readonly string $key,
         public readonly PickerWidget $picker,

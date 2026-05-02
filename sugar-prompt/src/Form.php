@@ -23,37 +23,117 @@ use CandyCore\Core\Msg\KeyMsg;
  */
 final class Form implements Model
 {
-    /** @param list<Field> $fields */
+    /**
+     * @param list<Group>     $groups
+     * @param array<int,list<Field>> $fieldsByGroup  cached for re-render
+     */
     private function __construct(
-        public readonly array $fields,
+        public readonly array $groups,
+        public readonly int $groupIndex,
+        public readonly array $fieldsByGroup,
         public readonly int $focusedIndex,
         public readonly bool $submitted,
         public readonly bool $aborted,
+        public readonly Theme $theme,
+        public readonly bool $accessible,
         private readonly ?\Closure $initCmd = null,
     ) {}
 
+    /**
+     * Single-page form. Equivalent to `Form::groups(Group::new(...$fields))`
+     * — kept as the primary factory for backwards compatibility.
+     */
     public static function new(Field ...$fields): self
     {
-        $list    = array_values($fields);
-        $first   = self::firstNonSkippable($list, 0, +1);
+        return self::groups(Group::new(...$fields));
+    }
+
+    /**
+     * Multi-page form. Each {@see Group} renders on its own page; the
+     * user advances with Tab past the last field on the page and pops
+     * back with Shift-Tab. Mirrors huh's multi-group flow.
+     */
+    public static function groups(Group ...$groups): self
+    {
+        $list = array_values($groups);
+        if ($list === []) {
+            $list = [Group::new()];
+        }
+        $fieldsByGroup = [];
+        foreach ($list as $i => $group) {
+            $fieldsByGroup[$i] = $group->fields;
+        }
+        // Find first focusable in first non-hidden group.
+        $startGroup = self::firstVisibleGroup($list, [], 0, +1);
+        $startGroup = $startGroup ?? 0;
+        $startField = self::firstNonSkippable($fieldsByGroup[$startGroup], 0, +1);
         $initCmd = null;
-        if ($first !== null) {
-            [$focused, $cmd] = $list[$first]->focus();
-            $list[$first] = $focused;
-            $initCmd      = $cmd;
+        if ($startField !== null) {
+            [$focused, $cmd] = $fieldsByGroup[$startGroup][$startField]->focus();
+            $fieldsByGroup[$startGroup][$startField] = $focused;
+            $initCmd = $cmd;
         }
         return new self(
-            fields:       $list,
-            focusedIndex: $first ?? 0,
-            submitted:    false,
-            aborted:      false,
-            initCmd:      $initCmd,
+            groups:         $list,
+            groupIndex:     $startGroup,
+            fieldsByGroup:  $fieldsByGroup,
+            focusedIndex:   $startField ?? 0,
+            submitted:      false,
+            aborted:        false,
+            theme:          Theme::ansi(),
+            accessible:     false,
+            initCmd:        $initCmd,
         );
     }
 
     public function init(): ?\Closure
     {
         return $this->initCmd;
+    }
+
+    public function withTheme(Theme $theme): self
+    {
+        return $this->mutate(theme: $theme);
+    }
+
+    /**
+     * Toggle accessibility mode. When on, the Form's view() degrades
+     * to a single-line "label: value" plain-text rendering for the
+     * focused field — designed for screen readers / non-TUI contexts.
+     * Mirrors huh's `WithAccessible`.
+     */
+    public function withAccessible(bool $on = true): self
+    {
+        return $this->mutate(accessible: $on);
+    }
+
+    public function nextGroup(): self
+    {
+        [$next, ] = $this->advanceGroup(+1);
+        return $next;
+    }
+
+    public function prevGroup(): self
+    {
+        [$next, ] = $this->advanceGroup(-1);
+        return $next;
+    }
+
+    /** Index of the active group, 0-based. */
+    public function activeGroupIndex(): int { return $this->groupIndex; }
+
+    /** Total number of groups (including hidden ones). */
+    public function totalGroups(): int { return count($this->groups); }
+
+    public function activeGroup(): Group
+    {
+        return $this->groups[$this->groupIndex];
+    }
+
+    /** Field list for the active group. */
+    public function activeFields(): array
+    {
+        return $this->fieldsByGroup[$this->groupIndex];
     }
 
     /**
@@ -66,7 +146,8 @@ final class Form implements Model
         }
 
         $idx           = $this->focusedIndex;
-        $focusedField  = $this->fields[$idx] ?? null;
+        $fields        = $this->fieldsByGroup[$this->groupIndex];
+        $focusedField  = $fields[$idx] ?? null;
 
         // Let the focused field eat keys it claims to consume (e.g. Select
         // in filter mode wants Enter / Escape) before applying form-level
@@ -98,13 +179,20 @@ final class Form implements Model
                 return $this->advance(-1);
             }
 
-            // Submission: Enter on the last interactive field.
+            // Submission: Enter on the last interactive field of the
+            // last visible group.
             if ($msg->type === KeyType::Enter) {
-                $last = self::firstNonSkippable($this->fields, count($this->fields) - 1, -1);
+                $last = self::firstNonSkippable($fields, count($fields) - 1, -1);
                 if ($last !== null && $this->focusedIndex === $last) {
-                    return [$this->mutate(submitted: true), Cmd::quit()];
+                    $isLastGroup = self::firstVisibleGroup(
+                        $this->groups, $this->collectValues(),
+                        $this->groupIndex + 1, +1,
+                    ) === null;
+                    if ($isLastGroup) {
+                        return [$this->mutate(submitted: true), Cmd::quit()];
+                    }
+                    return $this->advanceGroup(+1);
                 }
-                // Otherwise advance.
                 return $this->advance(+1);
             }
         }
@@ -114,9 +202,24 @@ final class Form implements Model
 
     public function view(): string
     {
+        if ($this->accessible) {
+            return $this->accessibleView();
+        }
+        $group = $this->groups[$this->groupIndex];
         $blocks = [];
-        foreach ($this->fields as $f) {
+        if ($group->title !== '') {
+            $blocks[] = $this->theme->title->render($group->title);
+        }
+        if ($group->description !== '') {
+            $blocks[] = $this->theme->description->render($group->description);
+        }
+        foreach ($this->fieldsByGroup[$this->groupIndex] as $f) {
             $blocks[] = $f->view();
+        }
+        if (count($this->groups) > 1) {
+            $blocks[] = $this->theme->help->render(
+                sprintf('Step %d of %d', $this->groupIndex + 1, count($this->groups))
+            );
         }
         $body = implode("\n\n", $blocks);
         if ($this->submitted) {
@@ -128,15 +231,36 @@ final class Form implements Model
         return $body;
     }
 
+    /** Plain-text fallback for screen readers / non-TUI contexts. */
+    private function accessibleView(): string
+    {
+        $field = $this->focusedField();
+        if ($field === null) {
+            return '';
+        }
+        $title = $field->getTitle();
+        $value = (string) $field->value();
+        $err   = $field->getError();
+        $line  = $title === '' ? $value : ($title . ': ' . $value);
+        return $err !== null ? $line . "\n! " . $err : $line;
+    }
+
     /** @return array<string, mixed> */
     public function values(): array
     {
         $out = [];
-        foreach ($this->fields as $f) {
-            if ($f->skippable()) {
+        $accumulated = [];
+        foreach ($this->groups as $i => $group) {
+            if ($group->isHidden($accumulated)) {
                 continue;
             }
-            $out[$f->key()] = $f->value();
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if ($f->skippable()) {
+                    continue;
+                }
+                $out[$f->key()] = $f->value();
+                $accumulated[$f->key()] = $f->value();
+            }
         }
         return $out;
     }
@@ -145,7 +269,7 @@ final class Form implements Model
     public function isAborted(): bool   { return $this->aborted; }
     public function focusedField(): ?Field
     {
-        return $this->fields[$this->focusedIndex] ?? null;
+        return $this->fieldsByGroup[$this->groupIndex][$this->focusedIndex] ?? null;
     }
 
     /**
@@ -156,29 +280,115 @@ final class Form implements Model
     private function forward(Msg $msg): array
     {
         $idx = $this->focusedIndex;
-        if (!isset($this->fields[$idx])) {
+        $fields = $this->fieldsByGroup[$this->groupIndex];
+        if (!isset($fields[$idx])) {
             return [$this, null];
         }
-        [$updated, $cmd] = $this->fields[$idx]->update($msg);
-        $newFields = $this->fields;
+        [$updated, $cmd] = $fields[$idx]->update($msg);
+        $newFields = $fields;
         $newFields[$idx] = $updated;
-        return [$this->mutate(fields: $newFields), $cmd];
+        $newByGroup = $this->fieldsByGroup;
+        $newByGroup[$this->groupIndex] = $newFields;
+        return [$this->mutate(fieldsByGroup: $newByGroup), $cmd];
+    }
+
+    /**
+     * Advance focus within the current group; if we run off either end,
+     * jump to the previous / next visible group.
+     *
+     * @return array{0:self, 1:?\Closure}
+     */
+    private function advance(int $direction): array
+    {
+        $fields = $this->fieldsByGroup[$this->groupIndex];
+        $next = self::firstNonSkippable($fields, $this->focusedIndex + $direction, $direction);
+        if ($next === null) {
+            // Off the end of this group — try the next/prev group.
+            return $this->advanceGroup($direction);
+        }
+        if ($next === $this->focusedIndex) {
+            return [$this, null];
+        }
+        $newFields = $fields;
+        $newFields[$this->focusedIndex] = $newFields[$this->focusedIndex]->blur();
+        [$focused, $cmd] = $newFields[$next]->focus();
+        $newFields[$next] = $focused;
+        $newByGroup = $this->fieldsByGroup;
+        $newByGroup[$this->groupIndex] = $newFields;
+        return [$this->mutate(fieldsByGroup: $newByGroup, focusedIndex: $next), $cmd];
     }
 
     /**
      * @return array{0:self, 1:?\Closure}
      */
-    private function advance(int $direction): array
+    private function advanceGroup(int $direction): array
     {
-        $next = self::firstNonSkippable($this->fields, $this->focusedIndex + $direction, $direction);
-        if ($next === null || $next === $this->focusedIndex) {
+        $values = $this->collectValues();
+        $nextGroup = self::firstVisibleGroup(
+            $this->groups, $values,
+            $this->groupIndex + $direction, $direction,
+        );
+        if ($nextGroup === null) {
             return [$this, null];
         }
-        $newFields = $this->fields;
-        $newFields[$this->focusedIndex] = $newFields[$this->focusedIndex]->blur();
-        [$focused, $cmd] = $newFields[$next]->focus();
-        $newFields[$next] = $focused;
-        return [$this->mutate(fields: $newFields, focusedIndex: $next), $cmd];
+        // Blur current focused field.
+        $fieldsByGroup = $this->fieldsByGroup;
+        $curFields = $fieldsByGroup[$this->groupIndex];
+        if (isset($curFields[$this->focusedIndex])) {
+            $curFields[$this->focusedIndex] = $curFields[$this->focusedIndex]->blur();
+            $fieldsByGroup[$this->groupIndex] = $curFields;
+        }
+        // Focus the first non-skippable in the new group.
+        $newFields = $fieldsByGroup[$nextGroup];
+        $first = self::firstNonSkippable($newFields, 0, +1) ?? 0;
+        $cmd = null;
+        if (isset($newFields[$first])) {
+            [$focused, $cmd] = $newFields[$first]->focus();
+            $newFields[$first] = $focused;
+            $fieldsByGroup[$nextGroup] = $newFields;
+        }
+        return [$this->mutate(
+            fieldsByGroup: $fieldsByGroup,
+            groupIndex:    $nextGroup,
+            focusedIndex:  $first,
+        ), $cmd];
+    }
+
+    /**
+     * Snapshot of all values collected up to (but not including) the
+     * current group. Used as input for `Group::isHidden()` checks.
+     *
+     * @return array<string,mixed>
+     */
+    private function collectValues(): array
+    {
+        $out = [];
+        foreach ($this->groups as $i => $group) {
+            if ($i >= $this->groupIndex) {
+                break;
+            }
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if (!$f->skippable()) {
+                    $out[$f->key()] = $f->value();
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param list<Group>           $groups
+     * @param array<string,mixed>   $values  collected so far for hideFunc
+     */
+    private static function firstVisibleGroup(array $groups, array $values, int $start, int $step): ?int
+    {
+        $n = count($groups);
+        for ($i = $start; $i >= 0 && $i < $n; $i += $step) {
+            if (!$groups[$i]->isHidden($values)) {
+                return $i;
+            }
+        }
+        return null;
     }
 
     /**
@@ -197,21 +407,26 @@ final class Form implements Model
         return null;
     }
 
-    /** @param list<Field>|null $fields */
+    /** @param array<int,list<Field>>|null $fieldsByGroup */
     private function mutate(
-        ?array $fields = null,
+        ?array $fieldsByGroup = null,
+        ?int $groupIndex = null,
         ?int $focusedIndex = null,
         ?bool $submitted = null,
         ?bool $aborted = null,
+        ?Theme $theme = null,
+        ?bool $accessible = null,
     ): self {
-        // initCmd is one-shot — it only applies to the first init() call,
-        // so it does not propagate through subsequent mutations.
         return new self(
-            fields:       $fields       ?? $this->fields,
-            focusedIndex: $focusedIndex ?? $this->focusedIndex,
-            submitted:    $submitted    ?? $this->submitted,
-            aborted:      $aborted      ?? $this->aborted,
-            initCmd:      null,
+            groups:         $this->groups,
+            groupIndex:     $groupIndex     ?? $this->groupIndex,
+            fieldsByGroup:  $fieldsByGroup  ?? $this->fieldsByGroup,
+            focusedIndex:   $focusedIndex   ?? $this->focusedIndex,
+            submitted:      $submitted      ?? $this->submitted,
+            aborted:        $aborted        ?? $this->aborted,
+            theme:          $theme          ?? $this->theme,
+            accessible:     $accessible     ?? $this->accessible,
+            initCmd:        null,
         );
     }
 }

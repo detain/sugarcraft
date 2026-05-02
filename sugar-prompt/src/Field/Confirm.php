@@ -9,6 +9,7 @@ use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Util\Ansi;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Yes / No question. The user toggles the answer with `←/→`, `h/l`, or
@@ -16,6 +17,8 @@ use CandyCore\Prompt\Field;
  */
 final class Confirm implements Field
 {
+    use HasHideFunc;
+
     private function __construct(
         public readonly string $key,
         public readonly bool $value,

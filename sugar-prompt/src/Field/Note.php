@@ -6,6 +6,7 @@ namespace CandyCore\Prompt\Field;
 
 use CandyCore\Core\Msg;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Read-only paragraph. Renders title + description; tab navigation
@@ -13,6 +14,8 @@ use CandyCore\Prompt\Field;
  */
 final class Note implements Field
 {
+    use HasHideFunc;
+
     public function __construct(
         public readonly string $key,
         public readonly string $title = '',

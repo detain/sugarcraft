@@ -9,6 +9,7 @@ use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Util\Ansi;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Multi-checkbox picker. Cursor moves with `↑↓/jk`, `Space` toggles the
@@ -20,6 +21,8 @@ use CandyCore\Prompt\Field;
  */
 final class MultiSelect implements Field
 {
+    use HasHideFunc;
+
     /**
      * @param list<string>      $options
      * @param array<int,bool>   $selected map of option index => true

@@ -7,6 +7,7 @@ namespace CandyCore\Prompt\Field;
 use CandyCore\Bits\TextArea\TextArea;
 use CandyCore\Core\Msg;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Multi-line text field. Wraps a {@see TextArea}; Enter inserts a newline
@@ -15,6 +16,8 @@ use CandyCore\Prompt\Field;
  */
 final class Text implements Field
 {
+    use HasHideFunc;
+
     /** @var (\Closure(string):?string)|null */
     private $validator;
 

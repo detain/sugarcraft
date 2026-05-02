@@ -136,7 +136,7 @@ final class FormTest extends TestCase
         $form = Form::new(Input::new('a'), Input::new('b'), Input::new('c'));
         [$form, ] = $form->update(new KeyMsg(KeyType::Tab));
         $focusedCount = 0;
-        foreach ($form->fields as $f) {
+        foreach ($form->activeFields() as $f) {
             if ($f->isFocused()) $focusedCount++;
         }
         $this->assertSame(1, $focusedCount);
@@ -172,7 +172,7 @@ final class FormTest extends TestCase
         [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'g'));
 
         // Pre-condition: Select's wrapped ItemList is in filter mode.
-        $this->assertTrue($form->fields[0]->consumes(new KeyMsg(KeyType::Enter)));
+        $this->assertTrue($form->activeFields()[0]->consumes(new KeyMsg(KeyType::Enter)));
 
         // Enter should be consumed by Select (leaves filter mode), not by
         // the Form (which would otherwise advance focus).
@@ -205,7 +205,7 @@ final class FormTest extends TestCase
             Input::new('name'),
         );
         $this->assertSame(0, $form->focusedIndex);
-        $msField = $form->fields[0];
+        $msField = $form->activeFields()[0];
         $this->assertSame(0, $msField->cursor);
 
         [$form, ] = $form->update(new KeyMsg(KeyType::Down));
@@ -213,7 +213,7 @@ final class FormTest extends TestCase
         // Form focus stays on the MultiSelect.
         $this->assertSame(0, $form->focusedIndex);
         // The MultiSelect's internal cursor advanced.
-        $this->assertSame(1, $form->fields[0]->cursor);
+        $this->assertSame(1, $form->activeFields()[0]->cursor);
     }
 
     public function testArrowDownInsideSelectMovesListNotForm(): void
@@ -224,7 +224,7 @@ final class FormTest extends TestCase
         );
         [$form, ] = $form->update(new KeyMsg(KeyType::Down));
         $this->assertSame(0, $form->focusedIndex);
-        $this->assertSame('Go', $form->fields[0]->value());
+        $this->assertSame('Go', $form->activeFields()[0]->value());
     }
 
     public function testArrowDownInsideTextMovesLineCursorNotForm(): void
@@ -237,12 +237,12 @@ final class FormTest extends TestCase
         [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'a'));
         [$form, ] = $form->update(new KeyMsg(KeyType::Enter));
         [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
-        $this->assertSame("a\nb", $form->fields[0]->value());
+        $this->assertSame("a\nb", $form->activeFields()[0]->value());
 
         // Up moves between text lines, not between fields.
         [$form, ] = $form->update(new KeyMsg(KeyType::Up));
         $this->assertSame(0, $form->focusedIndex);
-        $this->assertSame(0, $form->fields[0]->area->row);
+        $this->assertSame(0, $form->activeFields()[0]->area->row);
     }
 
     public function testArrowDownStillNavigatesBetweenInputFields(): void
@@ -251,5 +251,71 @@ final class FormTest extends TestCase
         $form = Form::new(Input::new('a'), Input::new('b'));
         [$form, ] = $form->update(new KeyMsg(KeyType::Down));
         $this->assertSame(1, $form->focusedIndex);
+    }
+
+    public function testGroupsCreatesMultiPageForm(): void
+    {
+        $form = Form::groups(
+            \CandyCore\Prompt\Group::new(Input::new('a')),
+            \CandyCore\Prompt\Group::new(Input::new('b')),
+        );
+        $this->assertSame(2, $form->totalGroups());
+        $this->assertSame(0, $form->activeGroupIndex());
+        // Tab past end of first group → moves to second group.
+        [$form, ] = $form->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(1, $form->activeGroupIndex());
+    }
+
+    public function testGroupHideFuncSkipsGroup(): void
+    {
+        $form = Form::groups(
+            \CandyCore\Prompt\Group::new(Input::new('a')),
+            \CandyCore\Prompt\Group::new(Input::new('b'))
+                ->withHideFunc(static fn(array $values): bool => true),
+            \CandyCore\Prompt\Group::new(Input::new('c')),
+        );
+        // Tab from group 0 → should jump to group 2 (group 1 hidden).
+        [$form, ] = $form->update(new KeyMsg(KeyType::Tab));
+        $this->assertSame(2, $form->activeGroupIndex());
+    }
+
+    public function testWithThemeSwapsTheme(): void
+    {
+        $form = Form::new(Input::new('a'))
+            ->withTheme(\CandyCore\Prompt\Theme::dracula());
+        $this->assertSame(\CandyCore\Prompt\Theme::dracula()::class, $form->theme::class);
+    }
+
+    public function testWithAccessibleSwitchesViewToPlainText(): void
+    {
+        $form = Form::new(Input::new('a'))
+            ->withAccessible();
+        $out = $form->view();
+        // Accessible mode renders the focused field's title : value
+        // rather than the multi-line component view.
+        $this->assertStringNotContainsString("\n\n", $out);
+    }
+
+    public function testFieldHideFuncSkipsFieldInValues(): void
+    {
+        $form = Form::new(
+            Input::new('a'),
+            Input::new('b')->withHideFunc(static fn(array $v) => true),
+        );
+        $b = $form->activeFields()[1];
+        $this->assertTrue($b->isHidden([]));
+        $this->assertFalse($form->activeFields()[0]->isHidden([]));
+    }
+
+    public function testGroupViewIncludesTitleAndDescription(): void
+    {
+        $form = Form::groups(
+            \CandyCore\Prompt\Group::new(Input::new('a'))
+                ->withTitle('Step 1')
+                ->withDescription('First page'),
+        )->withTheme(\CandyCore\Prompt\Theme::plain());
+        $out = $form->view();
+        $this->assertStringContainsString('Step 1',     $out);
+        $this->assertStringContainsString('First page', $out);
     }
 }

@@ -52,4 +52,17 @@ interface Field
      * uses Enter to leave filter mode and Escape to clear it.
      */
     public function consumes(Msg $msg): bool;
+
+    /**
+     * Runtime visibility predicate. The form skips fields whose
+     * `isHidden(values)` returns true; both navigation and the values
+     * collector treat them as if they didn't exist.
+     *
+     * Default implementations return false; concrete fields opt in via
+     * `withHideFunc(\Closure(array $values): bool)`.
+     *
+     * @param array<string,mixed> $values  values collected so far,
+     *                                     keyed by field key
+     */
+    public function isHidden(array $values): bool;
 }

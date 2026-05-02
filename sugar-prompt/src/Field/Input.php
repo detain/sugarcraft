@@ -7,6 +7,7 @@ namespace CandyCore\Prompt\Field;
 use CandyCore\Bits\TextInput\TextInput;
 use CandyCore\Core\Msg;
 use CandyCore\Prompt\Field;
+use CandyCore\Prompt\HasHideFunc;
 
 /**
  * Single-line text field. Wraps a {@see TextInput} and exposes an
@@ -14,6 +15,8 @@ use CandyCore\Prompt\Field;
  */
 final class Input implements Field
 {
+    use HasHideFunc;
+
     /** @var (\Closure(string):?string)|null */
     private $validator;
 
