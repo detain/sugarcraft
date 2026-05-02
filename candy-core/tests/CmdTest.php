@@ -103,4 +103,18 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(RawMsg::class, $msg);
         $this->assertSame("\x1b[>0q", $msg->bytes);
     }
+
+    public function testRequestModePrivateBuildsDecrqm(): void
+    {
+        $msg = (Cmd::requestMode(1006))();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b[?1006\$p", $msg->bytes);
+    }
+
+    public function testRequestModeAnsiOmitsQuestionMark(): void
+    {
+        $msg = (Cmd::requestMode(4, private: false))();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b[4\$p", $msg->bytes);
+    }
 }

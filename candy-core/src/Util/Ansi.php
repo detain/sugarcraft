@@ -175,6 +175,20 @@ final class Ansi
     public static function requestTerminalVersion(): string { return self::CSI . '>0q'; }
 
     /**
+     * Ask the terminal whether a given mode is set (DECRQM). Reply
+     * arrives as `CSI [?] <mode> ; <state> $ y` (DECRPM) and is
+     * parsed into {@see \CandyCore\Core\Msg\ModeReportMsg}.
+     *
+     * @param bool $private true for DEC private modes (mouse 1006,
+     *                      sync 2026, unicode 2027, etc.); false for
+     *                      ANSI modes.
+     */
+    public static function requestMode(int $mode, bool $private = true): string
+    {
+        return self::CSI . ($private ? '?' : '') . $mode . '$p';
+    }
+
+    /**
      * Strip every ANSI escape sequence from the input.
      *
      * Handles CSI (ESC[...), OSC (ESC]...ST|BEL), single-char ESC sequences,

@@ -11,6 +11,7 @@ use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\ModeReportMsg;
 use CandyCore\Core\Msg\TerminalVersionMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
@@ -223,6 +224,21 @@ final class InputReader
         // tells the two apart.
         if ($final === 'R' && $params !== '' && preg_match('/^(\d+);(\d+)$/', $params, $m) === 1) {
             return new CursorPositionMsg((int) $m[1], (int) $m[2]);
+        }
+
+        // DECRPM mode report (reply to DECRQM): CSI [?] <mode> ; <state> $ y.
+        // The intermediate `$` is collected into params by the CSI loop,
+        // so params ends in `$` and final is `y`.
+        if ($final === 'y' && str_ends_with($params, '$')) {
+            $body    = substr($params, 0, -1);
+            $private = isset($body[0]) && $body[0] === '?';
+            $core    = $private ? substr($body, 1) : $body;
+            if (preg_match('/^(\d+);(\d+)$/', $core, $m) === 1) {
+                $state = ModeState::tryFrom((int) $m[2]);
+                if ($state !== null) {
+                    return new ModeReportMsg((int) $m[1], $private, $state);
+                }
+            }
         }
 
         return match ($final) {

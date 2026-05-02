@@ -6,6 +6,7 @@ namespace CandyCore\Core\Tests;
 
 use CandyCore\Core\InputReader;
 use CandyCore\Core\KeyType;
+use CandyCore\Core\ModeState;
 use CandyCore\Core\MouseAction;
 use CandyCore\Core\MouseButton;
 use CandyCore\Core\Msg\BackgroundColorMsg;
@@ -15,6 +16,7 @@ use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\ModeReportMsg;
 use CandyCore\Core\Msg\TerminalVersionMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
@@ -475,5 +477,45 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
         $this->assertSame('P', $msgs[0]->rune);
         $this->assertTrue($msgs[0]->alt);
+    }
+
+    // ---- DECRPM mode report (DECRQM reply) ------------------------------
+
+    public function testModeReportPrivateSet(): void
+    {
+        // CSI ? 1006 ; 1 $ y → mouse-SGR mode is set.
+        $msgs = (new InputReader())->parse("\x1b[?1006;1\$y");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(ModeReportMsg::class, $msgs[0]);
+        $this->assertSame(1006, $msgs[0]->mode);
+        $this->assertTrue($msgs[0]->private);
+        $this->assertSame(ModeState::Set, $msgs[0]->state);
+        $this->assertTrue($msgs[0]->state->isActive());
+    }
+
+    public function testModeReportAnsiReset(): void
+    {
+        // CSI 4 ; 2 $ y → ANSI mode 4 (insert/replace) is reset.
+        $msgs = (new InputReader())->parse("\x1b[4;2\$y");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(ModeReportMsg::class, $msgs[0]);
+        $this->assertSame(4, $msgs[0]->mode);
+        $this->assertFalse($msgs[0]->private);
+        $this->assertSame(ModeState::Reset, $msgs[0]->state);
+        $this->assertFalse($msgs[0]->state->isActive());
+    }
+
+    public function testModeReportPermanentlySet(): void
+    {
+        // CSI ? 2026 ; 3 $ y → sync mode is permanently set.
+        $msgs = (new InputReader())->parse("\x1b[?2026;3\$y");
+        $this->assertSame(ModeState::PermanentlySet, $msgs[0]->state);
+        $this->assertTrue($msgs[0]->state->isActive());
+    }
+
+    public function testModeReportNotRecognized(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[?9999;0\$y");
+        $this->assertSame(ModeState::NotRecognized, $msgs[0]->state);
     }
 }

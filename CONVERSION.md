@@ -518,7 +518,7 @@ Status legend per feature:
 |---|---|---|
 | `RequestCursorPosition` + `CursorPositionMsg` | ✅ | `Cmd::requestCursorPosition()` emits `CSI 6n` via a `RawMsg`; `InputReader` parses the `CSI <row>;<col>R` reply into `CursorPositionMsg`. |
 | `RequestTerminalVersion` + `TerminalVersionMsg` | ✅ | `Cmd::requestTerminalVersion()` emits `CSI > 0 q` (XTVERSION). The input reader parses the DCS reply (`ESC P > | <text> ESC \`) into `TerminalVersionMsg`; DCS detection is narrowly gated on the `>` marker so `Alt-P` keypresses are unaffected. |
-| `RequestCapability(name)` + `ModeReportMsg` | 🔴 | DECRQM. |
+| `RequestCapability(name)` + `ModeReportMsg` | ✅ | `Cmd::requestMode($mode, private: true)` emits DECRQM bytes (`CSI [?] <mode> $ p`); the input reader parses the DECRPM reply (`CSI [?] <mode> ; <state> $ y`) into `ModeReportMsg` carrying the `ModeState` enum (`Set` / `Reset` / `PermanentlySet` / `PermanentlyReset` / `NotRecognized`) plus an `isActive()` shortcut. |
 | `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | ✅ | All three shipped — `Cmd::requestForegroundColor()` / `requestBackgroundColor()` / `requestCursorColor()` emit OSC 10/11/12 `?` queries; input reader parses `rgb:RRRR/GGGG/BBBB` replies into `ForegroundColorMsg` / `BackgroundColorMsg` / `CursorColorMsg`. Each colour Msg exposes `hex()`; fg/bg additionally expose `isDark()` for theme picking. |
 | Auto `EnvMsg` on startup, with `Getenv()` helper for SSH contexts | ✅ | `Program::run()` snapshots `getenv()` and dispatches an `EnvMsg` to the model. `EnvMsg::get(key, default)` provides the convenience accessor. |
 | Auto `ColorProfileMsg` on startup | ✅ | `Program::run()` detects via `ColorProfile::detect()` and dispatches a `ColorProfileMsg` right after `EnvMsg`. |
@@ -572,10 +572,12 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
 1. **Cheap wins first** (no architectural changes): ✅ synchronized
    updates, ✅ unicode mode, ✅ `Println` / `Printf` Cmds, ✅ `Raw`
    escape hatch, ✅ mouse subtype markers, ✅ terminal queries (cursor
-   pos, fg/bg/cursor colour, terminal version), ✅ `AdaptiveColor` +
-   `LightDark`, ✅ `CompleteColor`, ✅ `EnvMsg` + `ColorProfileMsg`
-   on startup — all shipped. Only `RequestCapability` (DECRQM)
-   remains on the cheap-wins list.
+   pos, fg/bg/cursor colour, terminal version, mode report),
+   ✅ `AdaptiveColor` + `LightDark`, ✅ `CompleteColor`, ✅ `EnvMsg`
+   + `ColorProfileMsg` on startup — **all cheap wins shipped.** Next
+   up: inline-mode polish (step 2), modifier alignment (step 3), and
+   the larger pieces (Cursed renderer, View struct, Kitty keyboard
+   protocol).
 2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
    programs only own their own rows, leaving everything above
    intact. Pair with `Cmd::println` so messages can flow above the

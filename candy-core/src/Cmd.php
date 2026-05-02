@@ -131,5 +131,16 @@ final class Cmd
         return static fn(): Msg => new RawMsg(Ansi::requestTerminalVersion());
     }
 
+    /**
+     * Ask the terminal whether a given mode is currently set (DECRQM).
+     * The reply becomes a {@see \CandyCore\Core\Msg\ModeReportMsg}.
+     * Pass `private: true` (default) for DEC private modes, false for
+     * ANSI modes.
+     */
+    public static function requestMode(int $mode, bool $private = true): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestMode($mode, $private));
+    }
+
     private function __construct() {}
 }
