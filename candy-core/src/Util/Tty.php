@@ -26,6 +26,37 @@ final class Tty
         return is_resource($this->stream) && stream_isatty($this->stream);
     }
 
+    /**
+     * Open the controlling terminal directly (`/dev/tty`) so a program
+     * can read keys when stdin is piped from a file or another
+     * process. Mirrors Bubble Tea v2's `OpenTTY()`.
+     *
+     * Returns `[input, output]` — both are pointers at the same
+     * `/dev/tty` device, opened separately so each can be configured
+     * independently. Returns `null` on platforms without `/dev/tty`
+     * (Windows, some sandboxed envs) so callers can fall back to
+     * STDIN/STDOUT.
+     *
+     * @return array{0:resource,1:resource}|null
+     */
+    public static function openTty(): ?array
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return null;
+        }
+        if (!is_readable('/dev/tty') || !is_writable('/dev/tty')) {
+            return null;
+        }
+        $in  = @fopen('/dev/tty', 'rb');
+        $out = @fopen('/dev/tty', 'wb');
+        if ($in === false || $out === false) {
+            if (is_resource($in))  fclose($in);
+            if (is_resource($out)) fclose($out);
+            return null;
+        }
+        return [$in, $out];
+    }
+
     /** @return array{cols:int, rows:int} */
     public function size(): array
     {

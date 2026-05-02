@@ -61,6 +61,16 @@ final class Program
         $this->loop  = $options->loop ?? Loop::get();
         $this->input  = $options->input  ?? STDIN;
         $this->output = $options->output ?? STDOUT;
+        // openTty: if requested AND we'd otherwise be reading from a
+        // piped stdin, open /dev/tty directly so the program can still
+        // see keys. Caller-supplied resources always win — the flag
+        // only kicks in when no input/output were passed.
+        if ($options->openTty && $options->input === null && $options->output === null) {
+            $opened = Tty::openTty();
+            if ($opened !== null) {
+                [$this->input, $this->output] = $opened;
+            }
+        }
         $this->reader = new InputReader();
         $this->renderer = new Renderer($this->output, inline: $options->inlineMode);
         $this->tty = new Tty($this->input);

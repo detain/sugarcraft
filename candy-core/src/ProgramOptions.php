@@ -34,6 +34,15 @@ final class ProgramOptions
          * intact.
          */
         public readonly bool $inlineMode = false,
+        /**
+         * Open the controlling terminal directly (`/dev/tty`) for
+         * input/output instead of using STDIN/STDOUT. Useful when
+         * stdin is piped (`candyshell choose < some.txt`) and the
+         * program still needs to read keys. Falls back to
+         * STDIN/STDOUT when `/dev/tty` isn't available (Windows,
+         * sandboxed envs).
+         */
+        public readonly bool $openTty = false,
         public readonly mixed $input = null,
         public readonly mixed $output = null,
         public readonly ?LoopInterface $loop = null,

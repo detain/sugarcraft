@@ -72,4 +72,33 @@ final class TtyTest extends TestCase
         $this->assertFalse($tty->isTty());
         fclose($r);
     }
+
+    public function testOpenTtyReturnsNullOnWindows(): void
+    {
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $this->markTestSkipped('Windows-only branch');
+        }
+        $this->assertNull(Tty::openTty());
+    }
+
+    public function testOpenTtyReturnsPairOrNull(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('Posix-only test');
+        }
+        $result = Tty::openTty();
+        // CI sandboxes may not expose /dev/tty — accept either branch.
+        if ($result === null) {
+            $this->assertNull($result);
+            return;
+        }
+        $this->assertCount(2, $result);
+        [$in, $out] = $result;
+        $this->assertIsResource($in);
+        $this->assertIsResource($out);
+        // Each side is opened separately and is independent.
+        $this->assertNotSame($in, $out);
+        fclose($in);
+        fclose($out);
+    }
 }
