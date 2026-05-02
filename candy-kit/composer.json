@@ -1,0 +1,30 @@
+{
+    "name": "candycore/candy-kit",
+    "description": "PHP port of charmbracelet/fang — opinionated CLI presentation helpers (status lines, banners, themed output) for CandyCore.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "candycore/candy-core":      "@dev",
+        "candycore/candy-sprinkles": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } }
+    ],
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Kit\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\Kit\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
