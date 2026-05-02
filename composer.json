@@ -5,16 +5,18 @@
     "license": "MIT",
     "require": {
         "php": "^8.1",
-        "candycore/candy-core":   "@dev",
-        "candycore/candy-gloss":  "@dev",
-        "candycore/candy-zone":   "@dev",
-        "candycore/honey-bounce": "@dev"
+        "candycore/candy-core":      "@dev",
+        "candycore/candy-sprinkles": "@dev",
+        "candycore/candy-zone":      "@dev",
+        "candycore/honey-bounce":    "@dev",
+        "candycore/sugar-bits":      "@dev"
     },
     "repositories": [
-        { "type": "path", "url": "candy-core",   "options": { "symlink": true } },
-        { "type": "path", "url": "candy-gloss",  "options": { "symlink": true } },
-        { "type": "path", "url": "candy-zone",   "options": { "symlink": true } },
-        { "type": "path", "url": "honey-bounce", "options": { "symlink": true } }
+        { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
+        { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true

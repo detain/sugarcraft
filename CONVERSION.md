@@ -22,7 +22,7 @@ and styling, `Sugar*` for components / data / forms, `Honey*` for math/physics.
 
 | # | Source (Go) | PHP port | Subdir / Composer pkg | PSR-4 namespace | Role |
 |---|---|---|---|---|---|
-| 1 | [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | **CandyGloss** | `candy-gloss/` → `candycore/candy-gloss` | `CandyCore\Gloss` | Styling, layout, borders, tables/lists/trees |
+| 1 | [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | **CandySprinkles** | `candy-sprinkles/` → `candycore/candy-sprinkles` | `CandyCore\Sprinkles` | Styling, layout, borders, tables/lists/trees |
 | 2 | [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) | **HoneyBounce** | `honey-bounce/` → `candycore/honey-bounce` | `CandyCore\Bounce` | Spring-physics animation |
 | 3 | [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | **CandyCore** | `candy-core/` → `candycore/candy-core` | `CandyCore\Core` | Elm-architecture TUI runtime |
 | 4 | [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) | **CandyZone** | `candy-zone/` → `candycore/candy-zone` | `CandyCore\Zone` | Mouse-zone tracker |
@@ -47,7 +47,7 @@ and styling, `Sugar*` for components / data / forms, `Honey*` for math/physics.
 | **Repo split** | When a library hits **v1.0**, its subdir is extracted into its own repo with full git history (`git filter-repo`) and published on Packagist. Until then, all live here. |
 | **Strict types** | `declare(strict_types=1)` everywhere. |
 | **Style** | PSR-12 + readonly DTOs; immutable `Style`/`Model` objects with `with*()` returning a new instance (matches lipgloss/bubbletea idioms). |
-| **Testing** | PHPUnit 10. Snapshot ANSI rendering tests for CandyGloss; scripted-input event tests for CandyCore. |
+| **Testing** | PHPUnit 10. Snapshot ANSI rendering tests for CandySprinkles; scripted-input event tests for CandyCore. |
 | **TTY layer** | PHP FFI to libc termios where available; `stty` shell-out fallback for portability. Windows support via VT processing on Win10+ only. |
 | **Unicode width** | `symfony/string` grapheme handling + a small width table port from `clipperhouse/displaywidth`. |
 | **Color** | Port of `colorprofile` for capability detection; downsample TrueColor → 256 → 16 → mono as needed. |
@@ -58,7 +58,7 @@ and styling, `Sugar*` for components / data / forms, `Honey*` for math/physics.
 
 Bottom-up — never block on a missing dep. The user asked to start with
 `bubbletea`, but it depends on rendering primitives (color profile, width
-calc, ANSI builder); we therefore stand up Phase 0 + CandyGloss in parallel
+calc, ANSI builder); we therefore stand up Phase 0 + CandySprinkles in parallel
 with CandyCore so neither blocks the other.
 
 ```
@@ -68,7 +68,7 @@ Phase 0  Foundation utilities  (lives under candy-core/src/Util)
          · Unicode width / grapheme        (symfony/string + width table)
          · Termios / raw-mode wrapper      (PHP FFI or `stty` fallback)
 
-Phase 1  CandyGloss   (lipgloss)           — pure rendering, deps Phase 0
+Phase 1  CandySprinkles   (lipgloss)           — pure rendering, deps Phase 0
 Phase 2  HoneyBounce  (harmonica)          — pure math, no deps
 Phase 3  CandyCore    (bubbletea)          — Phase 0 + ReactPHP/Amp
 Phase 4  CandyZone    (bubblezone)         — Phase 1 + Phase 3
@@ -94,12 +94,12 @@ Each library tracks the same checklist:
 [ ] Split-out (own repo, Packagist publish)
 ```
 
-### 1. CandyGloss  ←  lipgloss
+### 1. CandySprinkles  ←  lipgloss
 
 - **Source:** https://github.com/charmbracelet/lipgloss
-- **Subdir:** `candy-gloss/`  ·  **Package:** `candycore/candy-gloss`  ·  **NS:** `CandyCore\Gloss`
+- **Subdir:** `candy-sprinkles/`  ·  **Package:** `candycore/candy-sprinkles`  ·  **NS:** `CandyCore\Sprinkles`
 - **Scope:** Declarative styled text, padding/margins/borders, alignment,
-  color, gradients, joins. Sub-namespaces `Gloss\List`, `Gloss\Table`, `Gloss\Tree`.
+  color, gradients, joins. Sub-namespaces `Sprinkles\Listing`, `Sprinkles\Table`, `Sprinkles\Tree`.
 - **Public surface to cover:**
   `Style` (immutable, ~40 `with*()` methods), `NewStyle()`, `Render(string)`,
   `Inherit(Style)`, `Copy()`; `Table`, `List`, `Tree` builders.
@@ -142,7 +142,7 @@ Each library tracks the same checklist:
   events can be mapped back to logical UI elements.
 - **Public surface:** `Manager::newGlobal()`, `mark(string $id, string $content)`,
   `scan(string $output)`, `get(string $id)->inBounds(MouseMsg): bool`, `pos(): array`.
-- **PHP risks:** Marker insertion must not break Lipgloss width math (CandyGloss
+- **PHP risks:** Marker insertion must not break Lipgloss width math (CandySprinkles
   needs to know about marker pass-through); multibyte-safe string scanning.
 - **Status:** `[ ] [ ] [ ] [ ] [ ] [ ] [ ]`
 
@@ -214,13 +214,13 @@ Each library tracks the same checklist:
   FFI-based termios with an `stty` shell-out fallback. Windows: require
   Win10+ VT processing.
 - **ANSI compatibility.** Centralize escape-sequence emission in
-  `CandyCore\Core\Ansi`. CandyGloss depends on it; never hand-roll escapes
+  `CandyCore\Core\Ansi`. CandySprinkles depends on it; never hand-roll escapes
   inside individual components.
 - **Input parsing.** A single ANSI/CSI parser (with bracketed-paste, mouse
   SGR, focus-in/out, Kitty keyboard protocol where available) lives in
   CandyCore and emits typed `Msg` objects.
 - **Testing.**
-  - CandyGloss: PHPUnit snapshot tests of `Render()` output (raw bytes).
+  - CandySprinkles: PHPUnit snapshot tests of `Render()` output (raw bytes).
   - CandyCore: scripted input feeder + assertion on emitted `view()` frames.
   - SugarBits/SugarCharts/SugarPrompt: integration tests built on the above.
 - **CI.** GitHub Actions matrix (PHP 8.1 / 8.2 / 8.3 / 8.4) running `phpstan`
@@ -238,11 +238,11 @@ Update this table as work proceeds. Status legend:
 | Phase | Library | Status | % | Notes |
 |------:|---|:---:|---:|---|
 | 0 | Foundation utilities (ansi / color / width / tty) | 🟢 | 100% | `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty` under `candy-core/src/Util`. Stable. |
-| 1 | CandyGloss | 🟢 | 100% | `Style` (attrs, fg/bg, padding, margin, width/height, horizontal + **vertical** align, **`inherit()` with propsSet tracking**, profile-aware downsampling) + `Border` (with middle runes for tables) + `Table` + `ItemList` + `Tree`. Public surface complete for v1. |
+| 1 | CandySprinkles | 🟢 | 100% | `Style` (attrs, fg/bg, padding, margin, width/height, horizontal + **vertical** align, **`inherit()` with propsSet tracking**, profile-aware downsampling) + `Border` (with middle runes for tables) + `Table` + `ItemList` + `Tree`. Public surface complete for v1. |
 | 2 | HoneyBounce | 🟢 | 100% | `Spring` (under-/critically-/over-damped) + `Spring::fps()`. Pure math, ready for downstream use. |
 | 3 | CandyCore (runtime) | 🟡 | 65% | **ReactPHP/event-loop chosen.** `Model`, `Msg`, `Cmd`, `KeyType`, `Program`, `ProgramOptions`, `Renderer` (line-diff), `InputReader`. Built-in messages: `KeyMsg`, `MouseMsg`, `FocusMsg`, `BlurMsg`, `WindowSizeMsg`, `QuitMsg`. Input parsing covers ASCII, ctrl, alt-prefix, arrows, Home/End/Delete/PgUp/PgDn, SGR mouse, focus in/out. TBD: bracketed paste, OSC, function keys F1‒F12, Kitty keyboard protocol. |
 | 4 | CandyZone | 🟢 | 100% | `Manager` (newGlobal/mark/scan/get/clear/all) + `Zone` (inBounds/pos/width/height). APC-based zero-width markers, ANSI/OSC pass-through, multi-byte + CJK width handling, multi-row spans. |
-| 5 | SugarBits | 🔴 | 0% | 14 components |
+| 5 | SugarBits | 🟡 | 25% | First slice landed: `Key\Binding`/`Help`/`KeyMap`, `Help\Help` (short + full views), `Spinner\Spinner` + 7 styles, `Progress\Progress`. Drives spinner animation through new `Cmd::tick` + `TickRequest` runtime hook. Remaining: `Timer`, `Stopwatch`, `Cursor`, `TextInput`, `TextArea`, `Viewport`, `Paginator`, `List`, `Table`, `FilePicker`. |
 | 6 | SugarCharts | 🔴 | 0% | MVP: canvas + bar + sparkline + line |
 | 7 | SugarPrompt | 🔴 | 0% | |
 | 8 | CandyShell | 🔴 | 0% | MVP: 6 of 13 subcommands |

@@ -145,6 +145,15 @@ final class Program
             }
             return;
         }
+        if ($msg instanceof TickRequest) {
+            $this->loop->addTimer($msg->seconds, function () use ($msg): void {
+                $produced = ($msg->produce)();
+                if ($produced !== null) {
+                    $this->dispatch($produced);
+                }
+            });
+            return;
+        }
         if ($msg instanceof QuitMsg) {
             $this->running = false;
             $this->loop->stop();

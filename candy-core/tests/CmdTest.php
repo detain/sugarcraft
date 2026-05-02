@@ -40,4 +40,14 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(BatchMsg::class, $result);
         $this->assertCount(2, $result->cmds);
     }
+
+    public function testTickReturnsTickRequest(): void
+    {
+        $msg = new class implements Msg {};
+        $cmd = Cmd::tick(0.5, static fn() => $msg);
+        $req = $cmd();
+        $this->assertInstanceOf(\CandyCore\Core\TickRequest::class, $req);
+        $this->assertSame(0.5, $req->seconds);
+        $this->assertSame($msg, ($req->produce)());
+    }
 }

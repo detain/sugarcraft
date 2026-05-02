@@ -44,5 +44,17 @@ final class Cmd
         return static fn(): Msg => $msg;
     }
 
+    /**
+     * Schedule $produce to run after $seconds elapses on the loop. Whatever
+     * Msg it returns is dispatched into update(); return null to skip the
+     * dispatch.
+     *
+     * @param \Closure():?Msg $produce
+     */
+    public static function tick(float $seconds, \Closure $produce): \Closure
+    {
+        return static fn(): Msg => new TickRequest($seconds, $produce);
+    }
+
     private function __construct() {}
 }

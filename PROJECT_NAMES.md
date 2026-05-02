@@ -30,7 +30,7 @@ You want names that:
 * **HoneyComb** → layout/grid
 * **CandyDrops** → small utilities/effects
 * **SugarPrompt** → forms (better than vague names)
-* **CandyGloss** → styling (keeps Lip Gloss vibe)
+* **CandySprinkles** → styling (keeps Lip Gloss vibe)
 * **CandyZone** → terminal/viewport
 * **SugarCharts** → charts
 
@@ -79,7 +79,7 @@ You want names that:
 
 ## 🎨 Styling
 
-* CandyGloss
+* CandySprinkles
 * SugarStyle
 * SweetSkin
 * HoneyTheme

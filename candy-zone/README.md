@@ -7,7 +7,7 @@ let CandyZone discover their bounding boxes, then ask zones whether a
 
 ```php
 use CandyCore\Zone\Manager;
-use CandyCore\Gloss\Style;
+use CandyCore\Sprinkles\Style;
 
 $z = Manager::newGlobal();
 
