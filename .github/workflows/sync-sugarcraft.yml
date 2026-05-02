@@ -28,10 +28,15 @@ jobs:
         with:
           fetch-depth: 0   # git subtree split needs full history
 
-      - name: Configure git identity
+      - name: Configure git identity + drop checkout's auth header
         run: |
           git config user.name  'Joe Huss'
           git config user.email 'detain@interserver.net'
+          # actions/checkout sets http.https://github.com/.extraheader
+          # to its own GITHUB_TOKEN, which overrides any token we
+          # embed in push URLs (results in github-actions[bot] auth →
+          # 403 to sugarcraft/* repos). Drop it so our PAT is used.
+          git config --local --unset-all http.https://github.com/.extraheader || true
 
       - name: Subtree-split + force-push each lib
         env:
