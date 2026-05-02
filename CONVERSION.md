@@ -792,7 +792,7 @@ and the dependencies on phases 0–8.
 | 15 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** ✅ | `sugar-wishlist/` → `candycore/sugar-wishlist` | `CandyCore\Wishlist` | SSH endpoint launcher. YAML / JSON directory of `ssh user@host` shortcuts, interactive picker (j/k or arrows, type-to-filter), then `pcntl_exec` into the chosen `ssh` so host-key prompts / agent forwarding / MOTD all flow through unchanged. Library + `bin/wishlist` CLI shipped. (PR #78) | — |
 | 16 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** ✅ | `candy-metrics/` → `candycore/candy-metrics` | `CandyCore\Metrics` | Telemetry primitives + CandyWish session middleware. `Registry` facade with `counter` / `gauge` / `histogram` / `time` / `withTags`; four backends (`InMemoryBackend`, `JsonStreamBackend`, `StatsdBackend` (etsy + DogStatsD), `PrometheusFileBackend` (atomic textfile-collector rewrite), `MultiBackend` for fanout). `SessionMetrics` middleware emits `wish.session.{connect,duration,error}` with user / term tags. (PR #79) | 14 |
 | 17 | [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` → `candycore/sugar-crush` | `CandyCore\Crush` | AI coding-assistant TUI app. Demonstrates CandyCore + every phase together. | 0–8 |
-| 18 | [charmbracelet/bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | **CandyTemplate** | `candy-template/` → `candycore/candy-template` (Composer create-project) | `CandyCore\Template` | Skeleton repo for users bootstrapping a CandyCore app. | 0, 3 |
+| 18 | [charmbracelet/bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | **CandyMold** ✅ | `candy-mold/` → `candycore/candy-mold` (Composer create-project) | `App\` (user-facing) | Skeleton repo for bootstrapping a CandyCore TUI app. `composer create-project candycore/candy-mold my-app` ships a working counter Model + bin/start + tests. (PR #82, renamed in #83) | 0, 3 |
 | 19 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` → `candycore/candy-tetris` | `CandyCore\Tetris` | Tetris clone. Pure example app for the runtime. Optional. | 1, 3, 5 |
 | 20 | [yorukot/superfile](https://github.com/yorukot/superfile) | **SuperCandy** | `super-candy/` → `candycore/super-candy` | `CandyCore\SuperFile` | Dual-pane file manager. Stress-test for `FilePicker`, `Viewport`, mouse zones. | 1, 3, 4, 5 |
 
@@ -809,7 +809,7 @@ and the dependencies on phases 0–8.
   `SessionMetrics` middleware) without requiring `ext-ssh2`. ext-ssh2
   is still a useful optional dependency for *outbound* SSH from inside
   a session.
-- The three "app" entries (**SugarCrush**, **CandyTemplate**,
+- The three "app" entries (**SugarCrush**, **CandyMold**,
   **CandyTetris**, **SuperCandy**) live in their own repos from day 1
   rather than in the monorepo, since they consume the libraries rather
   than extend them.

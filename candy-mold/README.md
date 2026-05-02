@@ -1,9 +1,9 @@
-# CandyTemplate
+# CandyMold
 
-Skeleton repo for bootstrapping a CandyCore TUI app. Run
+Skeleton repo for bootstrapping a CandyCore TUI app. Pour your model into the mold and you've got a working app.
 
 ```bash
-composer create-project candycore/candy-template my-app
+composer create-project candycore/candy-mold my-app
 cd my-app
 ./bin/start
 ```

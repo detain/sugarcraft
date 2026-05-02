@@ -1,10 +1,11 @@
 {
-    "name": "candycore/candy-template",
-    "description": "Skeleton repo for bootstrapping a CandyCore TUI app — `composer create-project candycore/candy-template my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
+    "name": "candycore/candy-mold",
+    "description": "Skeleton repo for bootstrapping a CandyCore TUI app — `composer create-project candycore/candy-mold my-app`. Ships a runnable counter Model wired through Program, plus a docs-as-code walkthrough that maps every file to the concept it demonstrates.",
     "type": "project",
     "license": "MIT",
     "keywords": [
         "candycore",
+        "mold",
         "template",
         "skeleton",
         "starter",
@@ -22,7 +23,7 @@
     ],
     "support": {
         "issues": "https://github.com/detain/CandyCore/issues",
-        "source": "https://github.com/detain/CandyCore/tree/master/candy-template",
+        "source": "https://github.com/detain/CandyCore/tree/master/candy-mold",
         "docs": "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
     },
     "bin": ["bin/start"],
