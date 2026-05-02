@@ -7,7 +7,7 @@ Set FontSize 14
 Set Width 1100
 Set Height 480
 Set TypingSpeed 60ms
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "./bin/supercandy src tests"
 Enter

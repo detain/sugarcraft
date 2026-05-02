@@ -8,7 +8,7 @@ Set FontSize 14
 Set Width 800
 Set Height 360
 Set TypingSpeed 60ms
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "./bin/wishlist --config examples/sample-wishlist.yml --ssh /bin/true"
 Enter

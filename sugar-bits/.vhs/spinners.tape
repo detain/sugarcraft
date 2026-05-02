@@ -4,7 +4,7 @@ Output .vhs/spinners.gif
 Set FontSize 16
 Set Width 600
 Set Height 180
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "php examples/spinner.php"
 Enter

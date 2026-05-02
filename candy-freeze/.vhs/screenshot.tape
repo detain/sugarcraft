@@ -4,7 +4,7 @@ Output .vhs/screenshot.gif
 Set FontSize 14
 Set Width 900
 Set Height 360
-Set Theme "Tokyo Night"
+Set Theme "TokyoNight"
 
 Type "php examples/screenshot.php"
 Enter
