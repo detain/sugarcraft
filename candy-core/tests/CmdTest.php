@@ -89,4 +89,18 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(RawMsg::class, $msg);
         $this->assertSame("\x1b]11;?\x07", $msg->bytes);
     }
+
+    public function testRequestCursorColorEmitsOsc12Query(): void
+    {
+        $msg = (Cmd::requestCursorColor())();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]12;?\x07", $msg->bytes);
+    }
+
+    public function testRequestTerminalVersionEmitsXtversionQuery(): void
+    {
+        $msg = (Cmd::requestTerminalVersion())();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b[>0q", $msg->bytes);
+    }
 }

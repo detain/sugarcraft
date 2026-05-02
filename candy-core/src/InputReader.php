@@ -6,10 +6,12 @@ namespace CandyCore\Core;
 
 use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\CursorColorMsg;
 use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\TerminalVersionMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
 use CandyCore\Core\Msg\MouseMsg;
@@ -114,8 +116,8 @@ final class InputReader
                 }
                 if ($next === ']') {
                     // OSC: ESC ] payload (ST | BEL). Used for terminal
-                    // queries (OSC 10/11 colour replies, OSC 52 clipboard,
-                    // OSC 0/2 title, etc.).
+                    // queries (OSC 10/11/12 colour replies, OSC 52
+                    // clipboard, OSC 0/2 title, etc.).
                     $end = $this->findOscEnd($i + 2, $len);
                     if ($end === null) {
                         // End marker not in the buffer yet — wait for
@@ -124,6 +126,21 @@ final class InputReader
                     }
                     [$payload, $next_i] = $end;
                     $msg = $this->decodeOsc($payload);
+                    if ($msg !== null) $msgs[] = $msg;
+                    $i = $next_i;
+                    continue;
+                }
+                // DCS: ESC P payload ESC \ . Narrowly triggered when
+                // the next byte is `>` (the XTVERSION reply marker)
+                // so we don't shadow Alt-P keypresses (`ESC P` from
+                // the user) for the general case.
+                if ($next === 'P' && $remain >= 3 && $this->buf[$i + 2] === '>') {
+                    $end = $this->findStTerminator($i + 2, $len);
+                    if ($end === null) {
+                        break;
+                    }
+                    [$payload, $next_i] = $end;
+                    $msg = $this->decodeDcs($payload);
                     if ($msg !== null) $msgs[] = $msg;
                     $i = $next_i;
                     continue;
@@ -265,18 +282,54 @@ final class InputReader
         return null;
     }
 
+    /**
+     * Locate a DCS / ST terminator (the two-byte `ESC \`) starting at
+     * byte $start. Returns `[payload, next_i]` or null if the
+     * terminator hasn't arrived yet. Also accepts `BEL` as a
+     * terminator since some terminals are sloppy about it for short
+     * replies.
+     *
+     * @return array{0:string,1:int}|null
+     */
+    private function findStTerminator(int $start, int $len): ?array
+    {
+        for ($k = $start; $k < $len; $k++) {
+            $c = $this->buf[$k];
+            if ($c === self::BEL) {
+                return [substr($this->buf, $start, $k - $start), $k + 1];
+            }
+            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
+                return [substr($this->buf, $start, $k - $start), $k + 2];
+            }
+        }
+        return null;
+    }
+
+    private function decodeDcs(string $payload): ?Msg
+    {
+        // XTVERSION reply: `> | <terminal name and version>`. The
+        // leading `>` is the request-marker (we filter on it before
+        // calling) and `|` is the response separator.
+        if (str_starts_with($payload, '>|')) {
+            return new TerminalVersionMsg(substr($payload, 2));
+        }
+        return null;
+    }
+
     private function decodeOsc(string $payload): ?Msg
     {
-        // OSC 10 / 11: foreground / background colour reports. Format
-        // is `<num>;rgb:RRRR/GGGG/BBBB` — each channel is 1-4 hex
-        // digits and we squash to 8-bit.
-        if (preg_match('/^(10|11);rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})$/', $payload, $m) === 1) {
+        // OSC 10 / 11 / 12: foreground / background / cursor colour
+        // reports. Format is `<num>;rgb:RRRR/GGGG/BBBB` — each channel
+        // is 1-4 hex digits and we squash to 8-bit.
+        if (preg_match('/^(10|11|12);rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})$/', $payload, $m) === 1) {
             $r = self::scaleHex($m[2]);
             $g = self::scaleHex($m[3]);
             $b = self::scaleHex($m[4]);
-            return $m[1] === '10'
-                ? new ForegroundColorMsg($r, $g, $b)
-                : new BackgroundColorMsg($r, $g, $b);
+            return match ($m[1]) {
+                '10'    => new ForegroundColorMsg($r, $g, $b),
+                '11'    => new BackgroundColorMsg($r, $g, $b),
+                default => new CursorColorMsg($r, $g, $b),
+            };
         }
         return null;
     }

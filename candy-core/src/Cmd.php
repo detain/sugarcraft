@@ -112,5 +112,24 @@ final class Cmd
         return static fn(): Msg => new RawMsg(Ansi::requestBackgroundColor());
     }
 
+    /**
+     * Ask the terminal for its current cursor colour. The reply
+     * (OSC 12) becomes a {@see \CandyCore\Core\Msg\CursorColorMsg}.
+     */
+    public static function requestCursorColor(): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestCursorColor());
+    }
+
+    /**
+     * Ask the terminal to identify itself (XTVERSION). The DCS reply
+     * becomes a {@see \CandyCore\Core\Msg\TerminalVersionMsg} carrying
+     * the human-readable terminal-name + version string.
+     */
+    public static function requestTerminalVersion(): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestTerminalVersion());
+    }
+
     private function __construct() {}
 }

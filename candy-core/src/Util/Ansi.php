@@ -158,6 +158,23 @@ final class Ansi
     public static function requestBackgroundColor(): string { return self::OSC . '11;?' . self::BEL; }
 
     /**
+     * Ask the terminal for its current cursor colour. Reply arrives as
+     * `OSC 12 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
+     * {@see \CandyCore\Core\Msg\CursorColorMsg}.
+     */
+    public static function requestCursorColor(): string { return self::OSC . '12;?' . self::BEL; }
+
+    /**
+     * Ask the terminal to identify itself (XTVERSION). Reply arrives
+     * as a DCS sequence: `ESC P > | <terminal name and version> ESC \`
+     * (e.g. `xterm(367)` or `iTerm2 3.4.16`) and is parsed into
+     * {@see \CandyCore\Core\Msg\TerminalVersionMsg}. Useful for
+     * gating capabilities (sixel, kitty keyboard, etc.) on the
+     * specific terminal.
+     */
+    public static function requestTerminalVersion(): string { return self::CSI . '>0q'; }
+
+    /**
      * Strip every ANSI escape sequence from the input.
      *
      * Handles CSI (ESC[...), OSC (ESC]...ST|BEL), single-char ESC sequences,

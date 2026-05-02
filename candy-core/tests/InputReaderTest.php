@@ -10,10 +10,12 @@ use CandyCore\Core\MouseAction;
 use CandyCore\Core\MouseButton;
 use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\CursorColorMsg;
 use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\TerminalVersionMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
 use CandyCore\Core\Msg\MouseMsg;
@@ -422,5 +424,56 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(CursorPositionMsg::class, $msgs[0]);
         $this->assertSame(5,  $msgs[0]->row);
         $this->assertSame(10, $msgs[0]->col);
+    }
+
+    public function testCursorColorReply(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b]12;rgb:8080/4040/2020\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(CursorColorMsg::class, $msgs[0]);
+        // 0x8080 / 0xffff * 255 ≈ 128.
+        $this->assertSame(128, $msgs[0]->r);
+        $this->assertSame(64,  $msgs[0]->g);
+        $this->assertSame(32,  $msgs[0]->b);
+        $this->assertSame('#804020', $msgs[0]->hex());
+    }
+
+    public function testTerminalVersionReply(): void
+    {
+        // ESC P > | <text> ESC \
+        $msgs = (new InputReader())->parse("\x1bP>|xterm(367)\x1b\\");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(TerminalVersionMsg::class, $msgs[0]);
+        $this->assertSame('xterm(367)', $msgs[0]->version);
+    }
+
+    public function testTerminalVersionWithBelTerminator(): void
+    {
+        // Some sloppy terminals use BEL — accept it.
+        $msgs = (new InputReader())->parse("\x1bP>|iTerm2 3.4.16\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(TerminalVersionMsg::class, $msgs[0]);
+        $this->assertSame('iTerm2 3.4.16', $msgs[0]->version);
+    }
+
+    public function testTerminalVersionSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1bP>|kitt"));
+        $this->assertSame([], $r->parse('y(0.31.0)'));
+        $msgs = $r->parse("\x1b\\");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(TerminalVersionMsg::class, $msgs[0]);
+        $this->assertSame('kitty(0.31.0)', $msgs[0]->version);
+    }
+
+    public function testEscPWithoutAngleBracketIsAltP(): void
+    {
+        // Plain ESC P (no XTVERSION marker) is Alt-P, not DCS.
+        $msgs = (new InputReader())->parse("\x1bP");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame('P', $msgs[0]->rune);
+        $this->assertTrue($msgs[0]->alt);
     }
 }

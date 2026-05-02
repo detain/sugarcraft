@@ -517,9 +517,9 @@ Status legend per feature:
 | v2 feature | Status | Notes |
 |---|---|---|
 | `RequestCursorPosition` + `CursorPositionMsg` | ✅ | `Cmd::requestCursorPosition()` emits `CSI 6n` via a `RawMsg`; `InputReader` parses the `CSI <row>;<col>R` reply into `CursorPositionMsg`. |
-| `RequestTerminalVersion` + `TerminalVersionMsg` | 🔴 | CSI > 0 q DA2 + DA3. |
+| `RequestTerminalVersion` + `TerminalVersionMsg` | ✅ | `Cmd::requestTerminalVersion()` emits `CSI > 0 q` (XTVERSION). The input reader parses the DCS reply (`ESC P > | <text> ESC \`) into `TerminalVersionMsg`; DCS detection is narrowly gated on the `>` marker so `Alt-P` keypresses are unaffected. |
 | `RequestCapability(name)` + `ModeReportMsg` | 🔴 | DECRQM. |
-| `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | 🟡 | `Cmd::requestForegroundColor()` / `requestBackgroundColor()` shipped — emit OSC 10/11 `?` queries and the input reader parses the `rgb:RRRR/GGGG/BBBB` replies into `ForegroundColorMsg` / `BackgroundColorMsg` (each with `isDark()` + `hex()`). Cursor colour (OSC 12) still pending. |
+| `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | ✅ | All three shipped — `Cmd::requestForegroundColor()` / `requestBackgroundColor()` / `requestCursorColor()` emit OSC 10/11/12 `?` queries; input reader parses `rgb:RRRR/GGGG/BBBB` replies into `ForegroundColorMsg` / `BackgroundColorMsg` / `CursorColorMsg`. Each colour Msg exposes `hex()`; fg/bg additionally expose `isDark()` for theme picking. |
 | Auto `EnvMsg` on startup, with `Getenv()` helper for SSH contexts | 🔴 | Send a `EnvMsg` from `Program::run()` so models can react to the originating environment without poking `getenv()` themselves. |
 | Auto `ColorProfileMsg` on startup | 🟡 | We already detect via `ColorProfile::detect()`; emit it as a Msg too so models can react. |
 
@@ -572,9 +572,10 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
 1. **Cheap wins first** (no architectural changes): ✅ synchronized
    updates, ✅ unicode mode, ✅ `Println` / `Printf` Cmds, ✅ `Raw`
    escape hatch, ✅ mouse subtype markers, ✅ terminal queries (cursor
-   pos + fg/bg colour), ✅ `AdaptiveColor` + `LightDark` — all shipped.
-   Still pending: terminal-version query (DA2/XTVERSION), cursor-colour
-   query (OSC 12), `Complete()` profile-aware colour fill.
+   pos, fg/bg/cursor colour, terminal version), ✅ `AdaptiveColor` +
+   `LightDark` — all shipped. Still pending: `Complete()` profile-aware
+   colour fill, `RequestCapability` (DECRQM), env / colour-profile
+   startup msgs.
 2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
    programs only own their own rows, leaving everything above
    intact. Pair with `Cmd::println` so messages can flow above the
