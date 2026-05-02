@@ -364,6 +364,52 @@ final class Style
         return $this->render($content);
     }
 
+    /**
+     * Alias for {@see render()} matching lipgloss v2's `Sprint`.
+     * Concatenates all arguments with single spaces between them
+     * before styling.
+     */
+    public function sprint(string ...$content): string
+    {
+        return $this->render(implode(' ', $content));
+    }
+
+    /**
+     * Render and `printf`-substitute. Mirrors lipgloss v2's `Printf`.
+     */
+    public function printfSprint(string $format, mixed ...$args): string
+    {
+        return $this->render(sprintf($format, ...$args));
+    }
+
+    /**
+     * Render to STDOUT followed by a newline. Mirrors lipgloss v2's
+     * `Println` for non-TUI scripts that just want styled console
+     * output.
+     */
+    public function println(string ...$content): void
+    {
+        fwrite(STDOUT, $this->sprint(...$content) . "\n");
+    }
+
+    /**
+     * Render to STDOUT (no trailing newline). Mirrors `Print`.
+     */
+    public function print(string ...$content): void
+    {
+        fwrite(STDOUT, $this->sprint(...$content));
+    }
+
+    /**
+     * Render to a caller-supplied stream resource. Mirrors `Fprint`.
+     *
+     * @param resource $stream
+     */
+    public function fprint($stream, string ...$content): void
+    {
+        fwrite($stream, $this->sprint(...$content));
+    }
+
     private function halign(string $line, int $innerWidth): string
     {
         $w = Width::string($line);

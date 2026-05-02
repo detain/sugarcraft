@@ -9,6 +9,7 @@ use CandyCore\Core\Util\ColorProfile;
 use CandyCore\Sprinkles\AdaptiveColor;
 use CandyCore\Sprinkles\Align;
 use CandyCore\Sprinkles\Border;
+use CandyCore\Sprinkles\CompleteAdaptiveColor;
 use CandyCore\Sprinkles\CompleteColor;
 use CandyCore\Sprinkles\LightDark;
 use CandyCore\Sprinkles\Style;
@@ -526,6 +527,50 @@ final class StyleTest extends TestCase
             )
             ->resolveProfile();
         $this->assertSame("\x1b[38;2;0;255;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testCompleteAdaptiveColorPicksByBgAndProfile(): void
+    {
+        $light = new CompleteColor(
+            Color::hex('#ff0000'), Color::ansi256(196), Color::ansi(1),
+        );
+        $dark = new CompleteColor(
+            Color::hex('#0000ff'), Color::ansi256(21), Color::ansi(4),
+        );
+        $cad = new CompleteAdaptiveColor($light, $dark);
+
+        // Dark bg + 256 tier → dark.ansi256.
+        $picked = $cad->pick(true, ColorProfile::Ansi256);
+        $this->assertSame(21, $picked->r === 0 && $picked->b === 255 ? 21 : -1);
+
+        // Light bg + truecolor → light.trueColor.
+        $picked = $cad->pick(false, ColorProfile::TrueColor);
+        $this->assertSame(255, $picked->r);
+        $this->assertSame(0,   $picked->g);
+        $this->assertSame(0,   $picked->b);
+    }
+
+    // ---- Style writers (lipgloss v2 Sprint/Fprint/...) -----------------
+
+    public function testSprintConcatenatesWithSpaces(): void
+    {
+        $bold = Style::new()->bold();
+        $this->assertSame("\x1b[1mhello world\x1b[0m", $bold->sprint('hello', 'world'));
+    }
+
+    public function testPrintfSprintFormatsFirst(): void
+    {
+        $bold = Style::new()->bold();
+        $this->assertSame("\x1b[1m42 things\x1b[0m", $bold->printfSprint('%d %s', 42, 'things'));
+    }
+
+    public function testFprintWritesToStream(): void
+    {
+        $stream = fopen('php://memory', 'w+');
+        Style::new()->bold()->fprint($stream, 'hi');
+        rewind($stream);
+        $this->assertSame("\x1b[1mhi\x1b[0m", stream_get_contents($stream));
+        fclose($stream);
     }
 
     public function testInheritPropagatesCompleteColor(): void

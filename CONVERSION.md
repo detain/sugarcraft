@@ -542,11 +542,11 @@ Status legend per feature:
 |---|---|---|
 | Lipgloss is now pure (no I/O) — Bubble Tea owns all I/O | ✅ | We always made `Style::render()` pure; no I/O at all. |
 | `lipgloss.Color()` returns `color.Color` interface | ⚪ | We use `Color` value object directly; no migration. |
-| `lipgloss.Println` / `Printf` / `Sprint` / `Fprint` writers | 🟡 | Could add `Sprinkles\Style::println($content)` writing to `STDOUT` for non-TUI scripts. Optional. |
+| `lipgloss.Println` / `Printf` / `Sprint` / `Fprint` writers | ✅ | All four shipped on `Sprinkles\Style`: `sprint(...)` (concatenates with spaces and renders), `printfSprint($fmt, ...)` (sprintf wrapper), `println(...)` / `print(...)` (write rendered output to STDOUT), `fprint($stream, ...)` (caller-supplied stream). |
 | `HasDarkBackground(stdin, stdout)` | ✅ | `BackgroundColorMsg::isDark()` (relative-luminance Y < 0.5) on the OSC 11 reply parsed by CandyCore. Models call `Cmd::requestBackgroundColor()` from `init()` and check the reply. |
 | `LightDark(isDark)` helper returning the right colour | ✅ | `Sprinkles\LightDark::pick(isDark, light, dark)` and `LightDark::picker(isDark)` (curried). Plus `Sprinkles\AdaptiveColor` value object and `Style::foregroundAdaptive()` / `backgroundAdaptive()` that resolve via `Style::resolveAdaptive(bool)` — explicit `foreground()` always wins, matching lipgloss precedence. |
 | `Complete(profile)` colour completion | ✅ | `Sprinkles\CompleteColor` value object holding a TrueColor / ANSI256 / ANSI triple with `pick(ColorProfile)`. `Style::foregroundComplete()` / `backgroundComplete()` setters store it; `Style::resolveProfile()` collapses to concrete fg/bg using the live `colorProfile()`. Explicit colours win, mirroring lipgloss precedence. |
-| `compat.AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor` | 🟡 | Add an `AdaptiveColor` value object that picks light vs dark based on detected background. |
+| `compat.AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor` | ✅ | All three value objects ship in `Sprinkles\`: `AdaptiveColor` (light/dark pair, picks by `isDark` bool), `CompleteColor` (TrueColor/ANSI256/ANSI triple, picks by `ColorProfile`), and `CompleteAdaptiveColor` (combines both — picks the dark-bg or light-bg triple, then the right tier within it). |
 | `EnableLegacyWindowsANSI()` | ⚪ | PHP doesn't ship a Windows console wrapper; fall through to Win10+ VT mode (which our `Tty` already assumes). |
 | Determinism: same input → same output, regardless of detected terminal capabilities | ✅ | We already pass profile explicitly. |
 
