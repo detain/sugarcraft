@@ -118,4 +118,57 @@ final class RendererTest extends TestCase
         $this->assertStringEndsWith(Ansi::syncEnd(), $diff);
         fclose($out);
     }
+
+    // ---- inline mode ----------------------------------------------------
+
+    /** @return array{0:resource,1:Renderer} */
+    private function makeInline(): array
+    {
+        $out = fopen('php://memory', 'w+');
+        $this->assertNotFalse($out);
+        return [$out, new Renderer($out, inline: true)];
+    }
+
+    public function testInlineFirstFrameSavesCursorAndDoesNotEraseScreen(): void
+    {
+        [$out, $r] = $this->makeInline();
+        $r->render("hi\nthere");
+        $written = $this->read($out);
+
+        // Wrapped in sync markers, starts with cursorSave, contains the
+        // body, and crucially does NOT include cursorTo(1,1) (which
+        // would clobber scrollback).
+        $this->assertStringStartsWith(Ansi::syncBegin() . Ansi::cursorSave(), $written);
+        $this->assertStringContainsString("hi\r\nthere", $written);
+        $this->assertStringNotContainsString(Ansi::cursorTo(1, 1), $written);
+        $this->assertStringNotContainsString(Ansi::eraseToEnd(), $written);
+        fclose($out);
+    }
+
+    public function testInlineSubsequentFrameRestoresCursorAndErasesToEnd(): void
+    {
+        [$out, $r] = $this->makeInline();
+        $r->render('a');
+        $beforeDiff = ftell($out);
+        $r->render("b\nc");
+
+        rewind($out);
+        fseek($out, $beforeDiff);
+        $diff = (string) stream_get_contents($out);
+
+        $this->assertStringStartsWith(Ansi::syncBegin() . Ansi::cursorRestore() . Ansi::eraseToEnd(), $diff);
+        $this->assertStringContainsString("b\r\nc", $diff);
+        $this->assertStringEndsWith(Ansi::syncEnd(), $diff);
+        fclose($out);
+    }
+
+    public function testInlineIdenticalFrameSkipped(): void
+    {
+        [$out, $r] = $this->makeInline();
+        $r->render('hello');
+        $afterFirst = ftell($out);
+        $r->render('hello');
+        $this->assertSame($afterFirst, ftell($out));
+        fclose($out);
+    }
 }

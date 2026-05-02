@@ -11,12 +11,17 @@ use CandyCore\Core\Util\Ansi;
  * frame and only rewrites lines that actually changed, sparing the
  * terminal a full repaint per tick.
  *
- * Strategy:
- *   1. First frame: home cursor, erase to end, write the whole frame.
- *   2. Subsequent frames: split both frames by "\n"; emit
- *      `cursor-to(row,1) + erase-line + new-line` only for rows where the
- *      content differs. If the new frame has fewer lines than the old one,
- *      erase the extra rows.
+ * Two modes:
+ *
+ *   - Full-screen (default): owns the entire viewport. First frame
+ *     homes the cursor to (1,1) + erases to end + paints; subsequent
+ *     frames cell-diff and emit `cursorTo(row, 1) + eraseLine` for
+ *     each changed row only.
+ *   - Inline: only owns its own rows. First frame saves the cursor
+ *     at the current position and paints from there; subsequent
+ *     frames restore the cursor + erase to end + repaint. Useful for
+ *     non-alt-screen programs (CandyShell `input` / `confirm` /
+ *     `spin`) so the user's prompt scrollback stays intact.
  *
  * Newlines between rendered lines are sent as `\r\n` so raw-mode ttys (where
  * `ONLCR` is disabled) still return to column 1.
@@ -28,24 +33,42 @@ final class Renderer
     /** @var list<string>|null */
     private ?array $lastLines = null;
 
-    /** @param resource $out */
-    public function __construct(private $out) {}
+    /**
+     * @param resource $out
+     */
+    public function __construct(
+        private $out,
+        private readonly bool $inline = false,
+    ) {}
 
     public function render(string $frame): void
     {
         $lines = $frame === '' ? [''] : explode("\n", $frame);
 
         if ($this->lastLines === null) {
-            // First render: home + erase to end + full frame, all wrapped
-            // in synchronized-update markers so the terminal commits the
-            // frame atomically.
-            $body = Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
+            // First render: paint from row 1 (full-screen) or at the
+            // current cursor (inline). Wrap in synchronized-update
+            // markers so the terminal commits the frame atomically.
+            $body = $this->inline
+                ? Ansi::cursorSave() . implode("\r\n", $lines)
+                : Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
             fwrite($this->out, Ansi::syncBegin() . $body . Ansi::syncEnd());
             $this->lastLines = $lines;
             return;
         }
 
         if ($this->lastLines === $lines) {
+            return;
+        }
+
+        if ($this->inline) {
+            // Inline mode: full repaint of the program's own region
+            // each frame. Cell-diffing inline is doable (track row
+            // count, step back N rows) but a full repaint is correct
+            // and stays well within typical inline-prompt frame sizes.
+            $body = Ansi::cursorRestore() . Ansi::eraseToEnd() . implode("\r\n", $lines);
+            fwrite($this->out, Ansi::syncBegin() . $body . Ansi::syncEnd());
+            $this->lastLines = $lines;
             return;
         }
 

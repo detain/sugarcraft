@@ -27,6 +27,13 @@ final class ProgramOptions
         public readonly bool $bracketedPaste = false,
         /** Enable DEC mode 2027 (grapheme cluster mode) — Bubble Tea v2 default. */
         public readonly bool $unicodeMode = true,
+        /**
+         * Inline mode — render only the program's own rows instead of
+         * taking over the viewport. Pairs with `useAltScreen=false`
+         * for CandyShell-style prompts that should leave scrollback
+         * intact.
+         */
+        public readonly bool $inlineMode = false,
         public readonly mixed $input = null,
         public readonly mixed $output = null,
         public readonly ?LoopInterface $loop = null,

@@ -53,7 +53,7 @@ final class Program
         $this->input  = $options->input  ?? STDIN;
         $this->output = $options->output ?? STDOUT;
         $this->reader = new InputReader();
-        $this->renderer = new Renderer($this->output);
+        $this->renderer = new Renderer($this->output, inline: $options->inlineMode);
         $this->tty = new Tty($this->input);
     }
 

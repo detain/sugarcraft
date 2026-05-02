@@ -477,7 +477,7 @@ Status legend per feature:
 | `OpenTTY()` — open `/dev/tty` directly when stdin is piped | 🔴 | Useful for `candyshell choose < some.txt`-style usage where stdin is data, not the TTY. |
 | `tea.Println` / `tea.Printf` — write text *above* the program's region | ✅ | `Cmd::println(string)` returns a `PrintMsg` sentinel; `Program::dispatch()` writes the line + a newline and resets the renderer so the next frame repaints cleanly. |
 | `tea.Raw(escape)` — send raw escape sequences | ✅ | `Cmd::raw(string)` returns a `RawMsg`; the Program writes the bytes verbatim without disturbing renderer diff state. |
-| **Inline mode** as a first-class use case (no alt screen, no full takeover) | 🟡 | Our `useAltScreen=false` already runs inline-ish, but v2 formalises it: cursor stays in the user's prompt, output flows above the program region. Pair with `tea.Println` and a smaller `Renderer` that only owns the rows below the prompt. **Important for `candyshell input` / `confirm` / `spin` ergonomics.** |
+| **Inline mode** as a first-class use case (no alt screen, no full takeover) | ✅ | `ProgramOptions::$inlineMode` (default false) flips `Renderer` into inline mode: first frame saves the cursor (`ESC 7`) at its current row instead of homing to (1, 1); subsequent frames restore + erase to end + repaint. Scrollback above the program region stays intact. Pair with `useAltScreen=false`. |
 | **Advanced compositing** — layered rendering / pop-overs / floating panes | 🔴 | Stacks multiple "layers" so a modal can render above the main view without the model rebuilding the world. Schedule with the View struct rework — they're paired in v2. |
 | **Inline image protocols** (Sixel / Kitty / iTerm2) | 🔴 | Detect the active protocol via terminal-version query; encode an image (PNG / GIF / SVG via librsvg fallback) into the appropriate escape stream. Lives next to `Charts\Picture` once that ships in Phase 6. |
 
@@ -578,11 +578,11 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
    up: inline-mode polish (step 2), modifier alignment (step 3), and
    the larger pieces (Cursed renderer, View struct, Kitty keyboard
    protocol).
-2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
-   programs only own their own rows, leaving everything above
-   intact. Pair with `Cmd::println` so messages can flow above the
-   program region. **Direct ergonomic win for CandyShell's
-   `input` / `confirm` / `spin` subcommands.**
+2. ~~**Inline mode polish**: shrink the `Renderer` so non-alt-screen
+   programs only own their own rows.~~ ✅ Shipped — `ProgramOptions::$inlineMode`
+   flips the Renderer into save-cursor / restore-cursor mode so the
+   user's scrollback stays intact. Pair with `useAltScreen=false`
+   plus `Cmd::println` for CandyShell-style prompts.
 3. ~~**Modifier alignment**: rename `KeyMsg::rune`/`type` to `text`/`code`
    and add `BaseCode` + `Modifiers`.~~ ✅ Shipped — `KeyMsg::text()` /
    `code()` aliases, `Modifiers` value object with bitfield constants,
