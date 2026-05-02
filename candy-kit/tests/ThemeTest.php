@@ -31,4 +31,24 @@ final class ThemeTest extends TestCase
             $this->assertSame('text', $t->{$field}->render('text'));
         }
     }
+
+    public function testCharmThemeEmitsColour(): void
+    {
+        $this->assertStringContainsString("\x1b[", Theme::charm()->prompt->render('x'));
+    }
+
+    public function testDraculaThemeEmitsColour(): void
+    {
+        $this->assertStringContainsString("\x1b[", Theme::dracula()->success->render('x'));
+    }
+
+    public function testNordThemeEmitsColour(): void
+    {
+        $this->assertStringContainsString("\x1b[", Theme::nord()->info->render('x'));
+    }
+
+    public function testCatppuccinThemeEmitsColour(): void
+    {
+        $this->assertStringContainsString("\x1b[", Theme::catppuccin()->accent->render('x'));
+    }
 }
