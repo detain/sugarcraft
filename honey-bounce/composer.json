@@ -1,8 +1,22 @@
 {
     "name": "candycore/honey-bounce",
-    "description": "PHP port of charmbracelet/harmonica — damped spring physics for animation.",
+    "description": "PHP port of charmbracelet/harmonica — damped spring physics + Newtonian projectile simulation for terminal animation.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "physics", "spring", "animation", "projectile",
+        "tui", "terminal", "harmonica", "ryan-juckett",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1"
     },

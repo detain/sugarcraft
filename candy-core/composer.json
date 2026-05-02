@@ -3,6 +3,20 @@
     "description": "PHP port of charmbracelet/bubbletea — Elm-architecture TUI runtime.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "tui", "terminal", "cli", "console",
+        "bubbletea", "bubble-tea", "elm", "elm-architecture",
+        "ansi", "react-php", "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1",
         "react/event-loop": "^1.6"

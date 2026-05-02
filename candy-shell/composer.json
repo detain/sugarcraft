@@ -1,8 +1,23 @@
 {
     "name": "candycore/candy-shell",
-    "description": "PHP port of charmbracelet/gum — composer-installable CLI of CandyCore TUI primitives.",
+    "description": "PHP port of charmbracelet/gum — composer-installable CLI of CandyCore TUI primitives. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "tui", "terminal", "cli", "shell",
+        "gum", "prompt", "select", "confirm",
+        "spinner", "filter", "style",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "bin": ["bin/candyshell"],
     "require": {
         "php": "^8.1",

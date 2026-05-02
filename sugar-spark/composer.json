@@ -1,8 +1,22 @@
 {
     "name": "candycore/sugar-spark",
-    "description": "PHP port of charmbracelet/sequin — ANSI escape-sequence inspector for CandyCore.",
+    "description": "PHP port of charmbracelet/sequin — ANSI escape-sequence inspector. Decodes SGR / CSI / OSC / DCS / APC / SS3 sequences into human-readable labels.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "ansi", "escape", "inspector", "debug",
+        "sequin", "tui", "terminal",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "bin": ["bin/sugarspark"],
     "require": {
         "php": "^8.1",

@@ -3,6 +3,21 @@
     "description": "PHP port of charmbracelet/lipgloss — declarative terminal styling and layout.",
     "type": "library",
     "license": "MIT",
+    "keywords": [
+        "tui", "terminal", "cli",
+        "lipgloss", "ansi", "styling", "layout",
+        "borders", "tables", "tree", "list",
+        "candycore"
+    ],
+    "homepage": "https://github.com/detain/CandyCore",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/detain/CandyCore/issues",
+        "source": "https://github.com/detain/CandyCore",
+        "docs":   "https://github.com/detain/CandyCore/blob/master/CONVERSION.md"
+    },
     "require": {
         "php": "^8.1",
         "candycore/candy-core": "@dev"
