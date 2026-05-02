@@ -35,6 +35,15 @@ Sixteen libraries grouped by layer:
 | **[SugarWishlist](sugar-wishlist/)** | [wishlist](https://github.com/charmbracelet/wishlist) | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh` |
 | **[CandyMetrics](candy-metrics/)** | [promwish](https://github.com/charmbracelet/promwish) | Telemetry primitives — counters, gauges, histograms with InMemory / JSON / StatsD / Prometheus textfile / Multi backends, plus a CandyWish session middleware |
 
+## Apps built on the stack
+
+| App | Source counterpart | Role |
+|---|---|---|
+| **[CandyMold](candy-mold/)** | [bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | `composer create-project candycore/candy-mold my-app` — bootstrap skeleton with a working counter Model |
+| **[CandyTetris](candy-tetris/)** | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) | Tetris clone — SRS rules, 7-bag, ghost piece, NES scoring, level-driven gravity |
+| **[SuperCandy](super-candy/)** | [superfile](https://github.com/yorukot/superfile) | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm |
+| **[SugarCrush](sugar-crush/)** | [crush](https://github.com/charmbracelet/crush) | AI coding-assistant chat shell — pluggable backend (EchoBackend offline; CommandBackend for Anthropic / OpenAI / Ollama via a wrapper script) |
+
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.
 
@@ -99,7 +108,8 @@ The umbrella package is a metapackage; each library has its own
 for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
          sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
-         candy-wish sugar-wishlist candy-metrics; do
+         candy-wish sugar-wishlist candy-metrics \
+         candy-mold candy-tetris super-candy sugar-crush; do
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
