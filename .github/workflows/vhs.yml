@@ -23,30 +23,72 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Decide which libs need re-rendering. VHS encoding is
+  # non-deterministic at both byte and frame levels (font cache
+  # state, cursor-blink phase, timing variation), so post-render
+  # content comparison doesn't reliably detect 'no real change'.
+  # Skip the render entirely if a lib's src/, examples/, bin/, or
+  # .vhs/*.tape didn't change in this push. workflow_dispatch
+  # (manual trigger) and the first commit on a branch render
+  # everything.
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      libs: ${{ steps.compute.outputs.libs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need HEAD~1 for the diff
+
+      - id: compute
+        run: |
+          set -euo pipefail
+          all=(
+            candy-core candy-sprinkles sugar-bits sugar-charts
+            sugar-prompt candy-shell candy-shine candy-kit
+            candy-freeze sugar-glow sugar-spark sugar-wishlist
+            candy-mold candy-tetris super-candy sugar-crush
+          )
+          # Render-all triggers: manual dispatch, or a workflow-file
+          # change (in which case we want to verify the new pipeline
+          # works for every lib).
+          force_all=false
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            force_all=true
+          elif git diff --name-only HEAD~1 HEAD -- .github/workflows/vhs.yml | grep -q .; then
+            force_all=true
+          fi
+
+          out="["
+          for lib in "${all[@]}"; do
+            keep=false
+            if $force_all; then
+              keep=true
+            elif git diff --name-only HEAD~1 HEAD 2>/dev/null \
+                 | grep -qE "^${lib}/(src|examples|bin|\.vhs)/"; then
+              keep=true
+            fi
+            if $keep; then
+              out+="\"$lib\","
+            fi
+          done
+          out="${out%,}]"
+          if [ "$out" = "]" ]; then
+            out="[]"
+          fi
+          echo "libs=$out"
+          echo "libs=$out" >> "$GITHUB_OUTPUT"
+
   render:
+    needs: changed
+    if: needs.changed.outputs.libs != '[]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        lib:
-          - candy-core
-          - candy-sprinkles
-          - sugar-bits
-          - sugar-charts
-          - sugar-prompt
-          - candy-shell
-          - candy-shine
-          - candy-kit
-          - candy-freeze
-          - sugar-glow
-          - sugar-spark
-          - sugar-wishlist
-          - candy-mold
-          - candy-tetris
-          - super-candy
-          - sugar-crush
+        lib: ${{ fromJSON(needs.changed.outputs.libs) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -168,44 +210,6 @@ jobs:
             lib="${d#/tmp/gifs/gifs-}"
             mkdir -p "$lib/.vhs"
             cp -v "$d"/*.gif "$lib/.vhs/" || true
-          done
-
-      # VHS encoding is non-deterministic — two runs with identical
-      # input produce GIFs that differ at the byte level (LZW state,
-      # frame timing rounding) but render identically. Without this
-      # dedup, every workflow run produces a 'vhs: regenerate demo
-      # GIFs' commit even when nothing visibly changed.
-      #
-      # Strategy: for each new GIF, decode it via ffmpeg into raw
-      # frames and MD5 those. Compare with the same MD5 for the
-      # HEAD version. If they match, the GIFs render identically →
-      # restore HEAD's version on disk so it doesn't get committed.
-      - name: Skip GIFs that are visually unchanged
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y --no-install-recommends ffmpeg \
-            || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
-
-          frame_md5() {
-            ffmpeg -loglevel error -i "$1" -f md5 - 2>/dev/null | head -1
-          }
-
-          shopt -s nullglob
-          for gif in */.vhs/*.gif; do
-            tmp_old=$(mktemp --suffix=.gif)
-            if git show "HEAD:$gif" > "$tmp_old" 2>/dev/null && [ -s "$tmp_old" ]; then
-              old=$(frame_md5 "$tmp_old")
-              new=$(frame_md5 "$gif")
-              if [ -n "$old" ] && [ "$old" = "$new" ]; then
-                echo "▽ unchanged: $gif (restoring HEAD's version)"
-                git checkout HEAD -- "$gif"
-              else
-                echo "△ changed:   $gif"
-              fi
-            else
-              echo "+ new:        $gif"
-            fi
-            rm -f "$tmp_old"
           done
 
       - name: Commit + push
