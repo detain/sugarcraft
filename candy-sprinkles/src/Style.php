@@ -29,6 +29,15 @@ final class Style
      * @param array{bool,bool,bool,bool} $borderSides top, right, bottom, left
      * @param array<string,bool>         $propsSet
      */
+    /**
+     * @param array{int,int,int,int}     $padding     top, right, bottom, left
+     * @param array{int,int,int,int}     $margin      top, right, bottom, left
+     * @param array{bool,bool,bool,bool} $borderSides top, right, bottom, left
+     * @param array{?Color,?Color,?Color,?Color} $borderSideFg per-side fg overrides
+     * @param array{?Color,?Color,?Color,?Color} $borderSideBg per-side bg overrides
+     * @param array<string,bool>         $propsSet
+     * @param ?\Closure(string):string   $transform
+     */
     private function __construct(
         private readonly ?Color $fg = null,
         private readonly ?Color $bg = null,
@@ -47,14 +56,23 @@ final class Style
         private readonly array $margin  = [0, 0, 0, 0],
         private readonly ?int $width = null,
         private readonly ?int $height = null,
+        private readonly ?int $maxWidth = null,
+        private readonly ?int $maxHeight = null,
         private readonly Align $alignH = Align::Left,
         private readonly VAlign $alignV = VAlign::Top,
         private readonly ?Border $border = null,
         private readonly array $borderSides = [true, true, true, true],
         private readonly ?Color $borderFg = null,
         private readonly ?Color $borderBg = null,
+        private readonly array $borderSideFg = [null, null, null, null],
+        private readonly array $borderSideBg = [null, null, null, null],
         private readonly ColorProfile $profile = ColorProfile::TrueColor,
         private readonly array $propsSet = [],
+        private readonly bool $inline = false,
+        private readonly ?Color $marginBg = null,
+        private readonly bool $colorWhitespace = true,
+        private readonly int $tabWidth = 4,
+        private readonly ?\Closure $transform = null,
     ) {}
 
     public static function new(): self
@@ -204,6 +222,84 @@ final class Style
         return $this->with(height: $h, heightSet: true, propsAdded: ['height']);
     }
 
+    /**
+     * Cap rendered width to `$w` cells (truncate longer lines). Unlike
+     * {@see width()}, doesn't pad shorter content. Mirrors lipgloss's
+     * `MaxWidth`. Pass `null` to remove the cap.
+     */
+    public function maxWidth(?int $w): self
+    {
+        if ($w !== null && $w < 0) {
+            throw new \InvalidArgumentException('maxWidth must be >= 0');
+        }
+        return $this->with(maxWidth: $w, maxWidthSet: true, propsAdded: ['maxWidth']);
+    }
+
+    /**
+     * Cap rendered height to `$h` rows (truncate excess). Unlike
+     * {@see height()}, doesn't pad shorter content. Mirrors `MaxHeight`.
+     */
+    public function maxHeight(?int $h): self
+    {
+        if ($h !== null && $h < 0) {
+            throw new \InvalidArgumentException('maxHeight must be >= 0');
+        }
+        return $this->with(maxHeight: $h, maxHeightSet: true, propsAdded: ['maxHeight']);
+    }
+
+    /**
+     * Force the rendered output onto a single line. Newlines in
+     * content are replaced with spaces; padding-top/bottom and
+     * margin-top/bottom collapse to zero. Mirrors lipgloss's
+     * `Inline()`.
+     */
+    public function inline(bool $on = true): self
+    {
+        return $this->with(inline: $on, propsAdded: ['inline']);
+    }
+
+    /**
+     * Set the colour painted into the margin area (outside the border).
+     * Defaults to no colour; useful for full-width status bars.
+     */
+    public function marginBackground(?Color $c): self
+    {
+        return $this->with(marginBg: $c, marginBgSet: true, propsAdded: ['marginBg']);
+    }
+
+    /**
+     * Toggle whether the background colour fills padding/whitespace
+     * cells. Mirrors lipgloss's `ColorWhitespace`. Defaults to true.
+     */
+    public function colorWhitespace(bool $on = true): self
+    {
+        return $this->with(colorWhitespace: $on, propsAdded: ['colorWhitespace']);
+    }
+
+    /**
+     * Width of a `\t` character when expanded inside content. Defaults
+     * to 4. Pass 0 to keep tabs as literal `\t` (no expansion).
+     */
+    public function tabWidth(int $w): self
+    {
+        if ($w < 0) {
+            throw new \InvalidArgumentException('tabWidth must be >= 0');
+        }
+        return $this->with(tabWidth: $w, propsAdded: ['tabWidth']);
+    }
+
+    /**
+     * Apply `$fn` to the rendered string just before its border /
+     * margin layer. Useful for last-mile rewrites (e.g. capitalise,
+     * mask sensitive values). Mirrors lipgloss's `Transform`.
+     *
+     * @param ?\Closure(string):string $fn pass null to clear.
+     */
+    public function transform(?\Closure $fn): self
+    {
+        return $this->with(transform: $fn, transformSet: true, propsAdded: ['transform']);
+    }
+
     public function align(Align $h): self          { return $this->with(alignH: $h, propsAdded: ['alignH']); }
     public function verticalAlign(VAlign $v): self { return $this->with(alignV: $v, propsAdded: ['alignV']); }
 
@@ -239,7 +335,122 @@ final class Style
     public function borderForeground(?Color $c): self { return $this->with(borderFg: $c, borderFgSet: true, propsAdded: ['borderFg']); }
     public function borderBackground(?Color $c): self { return $this->with(borderBg: $c, borderBgSet: true, propsAdded: ['borderBg']); }
 
+    /**
+     * Per-side border foreground colours. Each setter overrides the
+     * default `borderForeground()` for that one side; pass `null` to
+     * clear the override and fall back to the default.
+     */
+    public function borderTopForeground(?Color $c): self
+    {
+        $sides = $this->borderSideFg; $sides[0] = $c;
+        return $this->with(borderSideFg: $sides, propsAdded: ['borderSideFg']);
+    }
+
+    public function borderRightForeground(?Color $c): self
+    {
+        $sides = $this->borderSideFg; $sides[1] = $c;
+        return $this->with(borderSideFg: $sides, propsAdded: ['borderSideFg']);
+    }
+
+    public function borderBottomForeground(?Color $c): self
+    {
+        $sides = $this->borderSideFg; $sides[2] = $c;
+        return $this->with(borderSideFg: $sides, propsAdded: ['borderSideFg']);
+    }
+
+    public function borderLeftForeground(?Color $c): self
+    {
+        $sides = $this->borderSideFg; $sides[3] = $c;
+        return $this->with(borderSideFg: $sides, propsAdded: ['borderSideFg']);
+    }
+
+    public function borderTopBackground(?Color $c): self
+    {
+        $sides = $this->borderSideBg; $sides[0] = $c;
+        return $this->with(borderSideBg: $sides, propsAdded: ['borderSideBg']);
+    }
+
+    public function borderRightBackground(?Color $c): self
+    {
+        $sides = $this->borderSideBg; $sides[1] = $c;
+        return $this->with(borderSideBg: $sides, propsAdded: ['borderSideBg']);
+    }
+
+    public function borderBottomBackground(?Color $c): self
+    {
+        $sides = $this->borderSideBg; $sides[2] = $c;
+        return $this->with(borderSideBg: $sides, propsAdded: ['borderSideBg']);
+    }
+
+    public function borderLeftBackground(?Color $c): self
+    {
+        $sides = $this->borderSideBg; $sides[3] = $c;
+        return $this->with(borderSideBg: $sides, propsAdded: ['borderSideBg']);
+    }
+
     public function colorProfile(ColorProfile $p): self { return $this->with(profile: $p, propsAdded: ['profile']); }
+
+    // ─── Getters ───────────────────────────────────────────────────────
+
+    public function getForeground(): ?Color   { return $this->fg; }
+    public function getBackground(): ?Color   { return $this->bg; }
+    public function isBold(): bool             { return $this->bold; }
+    public function isItalic(): bool           { return $this->italic; }
+    public function isUnderline(): bool        { return $this->underline; }
+    public function isStrikethrough(): bool    { return $this->strike; }
+    public function isFaint(): bool            { return $this->faint; }
+    public function isBlink(): bool            { return $this->blink; }
+    public function isReverse(): bool          { return $this->reverse; }
+    public function getWidth(): ?int           { return $this->width; }
+    public function getHeight(): ?int          { return $this->height; }
+    public function getMaxWidth(): ?int        { return $this->maxWidth; }
+    public function getMaxHeight(): ?int       { return $this->maxHeight; }
+    public function getAlign(): Align          { return $this->alignH; }
+    public function getVerticalAlign(): VAlign { return $this->alignV; }
+    public function getBorder(): ?Border       { return $this->border; }
+    public function getBorderForeground(): ?Color { return $this->borderFg; }
+    public function getBorderBackground(): ?Color { return $this->borderBg; }
+    public function getColorProfile(): ColorProfile { return $this->profile; }
+    public function isInline(): bool           { return $this->inline; }
+    public function getTabWidth(): int         { return $this->tabWidth; }
+    public function getMarginBackground(): ?Color { return $this->marginBg; }
+
+    /** @return array{int,int,int,int} */
+    public function getPadding(): array { return $this->padding; }
+    /** @return array{int,int,int,int} */
+    public function getMargin(): array { return $this->margin; }
+    /** @return array{bool,bool,bool,bool} */
+    public function getBorderSides(): array { return $this->borderSides; }
+
+    public function isSet(string $prop): bool { return isset($this->propsSet[$prop]); }
+
+    // ─── Unset* resetters ──────────────────────────────────────────────
+
+    public function unsetForeground(): self    { return $this->withUnset('fg', fg: null); }
+    public function unsetBackground(): self    { return $this->withUnset('bg', bg: null); }
+    public function unsetBold(): self          { return $this->withUnset('bold', bold: false); }
+    public function unsetItalic(): self        { return $this->withUnset('italic', italic: false); }
+    public function unsetUnderline(): self     { return $this->withUnset('underline', underline: false); }
+    public function unsetStrikethrough(): self { return $this->withUnset('strike', strike: false); }
+    public function unsetFaint(): self         { return $this->withUnset('faint', faint: false); }
+    public function unsetBlink(): self         { return $this->withUnset('blink', blink: false); }
+    public function unsetReverse(): self       { return $this->withUnset('reverse', reverse: false); }
+    public function unsetWidth(): self         { return $this->withUnset('width', width: null); }
+    public function unsetHeight(): self        { return $this->withUnset('height', height: null); }
+    public function unsetMaxWidth(): self      { return $this->withUnset('maxWidth', maxWidth: null); }
+    public function unsetMaxHeight(): self     { return $this->withUnset('maxHeight', maxHeight: null); }
+    public function unsetBorder(): self        { return $this->withUnset('border', border: null); }
+    public function unsetTransform(): self     { return $this->withUnset('transform', transform: null); }
+
+    /**
+     * Duplicate this style. Returns an identical instance (the explicit
+     * propsSet is preserved). Mirrors lipgloss's deprecated `Copy()` —
+     * since Style is immutable, this is mostly a clarity helper.
+     */
+    public function copy(): self
+    {
+        return clone $this;
+    }
 
     /**
      * Merge {@see $parent} into this style. Any property the child
@@ -256,38 +467,61 @@ final class Style
     {
         $has = fn(string $p): bool => isset($this->propsSet[$p]);
         return new self(
-            fg:          $has('fg')          ? $this->fg          : $parent->fg,
-            bg:          $has('bg')          ? $this->bg          : $parent->bg,
-            fgAdaptive:  $has('fgAdaptive')  ? $this->fgAdaptive  : $parent->fgAdaptive,
-            bgAdaptive:  $has('bgAdaptive')  ? $this->bgAdaptive  : $parent->bgAdaptive,
-            fgComplete:  $has('fgComplete')  ? $this->fgComplete  : $parent->fgComplete,
-            bgComplete:  $has('bgComplete')  ? $this->bgComplete  : $parent->bgComplete,
-            bold:        $has('bold')        ? $this->bold        : $parent->bold,
-            italic:      $has('italic')      ? $this->italic      : $parent->italic,
-            underline:   $has('underline')   ? $this->underline   : $parent->underline,
-            strike:      $has('strike')      ? $this->strike      : $parent->strike,
-            faint:       $has('faint')       ? $this->faint       : $parent->faint,
-            blink:       $has('blink')       ? $this->blink       : $parent->blink,
-            reverse:     $has('reverse')     ? $this->reverse     : $parent->reverse,
-            padding:     $has('padding')     ? $this->padding     : $parent->padding,
-            margin:      $has('margin')      ? $this->margin      : $parent->margin,
-            width:       $has('width')       ? $this->width       : $parent->width,
-            height:      $has('height')      ? $this->height      : $parent->height,
-            alignH:      $has('alignH')      ? $this->alignH      : $parent->alignH,
-            alignV:      $has('alignV')      ? $this->alignV      : $parent->alignV,
-            border:      $has('border')      ? $this->border      : $parent->border,
-            borderSides: $has('borderSides') ? $this->borderSides : $parent->borderSides,
-            borderFg:    $has('borderFg')    ? $this->borderFg    : $parent->borderFg,
-            borderBg:    $has('borderBg')    ? $this->borderBg    : $parent->borderBg,
-            profile:     $has('profile')     ? $this->profile     : $parent->profile,
-            propsSet:    $this->propsSet,
+            fg:               $has('fg')               ? $this->fg               : $parent->fg,
+            bg:               $has('bg')               ? $this->bg               : $parent->bg,
+            fgAdaptive:       $has('fgAdaptive')       ? $this->fgAdaptive       : $parent->fgAdaptive,
+            bgAdaptive:       $has('bgAdaptive')       ? $this->bgAdaptive       : $parent->bgAdaptive,
+            fgComplete:       $has('fgComplete')       ? $this->fgComplete       : $parent->fgComplete,
+            bgComplete:       $has('bgComplete')       ? $this->bgComplete       : $parent->bgComplete,
+            bold:             $has('bold')             ? $this->bold             : $parent->bold,
+            italic:           $has('italic')           ? $this->italic           : $parent->italic,
+            underline:        $has('underline')        ? $this->underline        : $parent->underline,
+            strike:           $has('strike')           ? $this->strike           : $parent->strike,
+            faint:            $has('faint')            ? $this->faint            : $parent->faint,
+            blink:            $has('blink')            ? $this->blink            : $parent->blink,
+            reverse:          $has('reverse')          ? $this->reverse          : $parent->reverse,
+            padding:          $has('padding')          ? $this->padding          : $parent->padding,
+            margin:           $has('margin')           ? $this->margin           : $parent->margin,
+            width:            $has('width')            ? $this->width            : $parent->width,
+            height:           $has('height')           ? $this->height           : $parent->height,
+            maxWidth:         $has('maxWidth')         ? $this->maxWidth         : $parent->maxWidth,
+            maxHeight:        $has('maxHeight')        ? $this->maxHeight        : $parent->maxHeight,
+            alignH:           $has('alignH')           ? $this->alignH           : $parent->alignH,
+            alignV:           $has('alignV')           ? $this->alignV           : $parent->alignV,
+            border:           $has('border')           ? $this->border           : $parent->border,
+            borderSides:      $has('borderSides')      ? $this->borderSides      : $parent->borderSides,
+            borderFg:         $has('borderFg')         ? $this->borderFg         : $parent->borderFg,
+            borderBg:         $has('borderBg')         ? $this->borderBg         : $parent->borderBg,
+            borderSideFg:     $has('borderSideFg')     ? $this->borderSideFg     : $parent->borderSideFg,
+            borderSideBg:     $has('borderSideBg')     ? $this->borderSideBg     : $parent->borderSideBg,
+            profile:          $has('profile')          ? $this->profile          : $parent->profile,
+            propsSet:         $this->propsSet,
+            inline:           $has('inline')           ? $this->inline           : $parent->inline,
+            marginBg:         $has('marginBg')         ? $this->marginBg         : $parent->marginBg,
+            colorWhitespace:  $has('colorWhitespace')  ? $this->colorWhitespace  : $parent->colorWhitespace,
+            tabWidth:         $has('tabWidth')         ? $this->tabWidth         : $parent->tabWidth,
+            transform:        $has('transform')        ? $this->transform        : $parent->transform,
         );
     }
 
     public function render(string $content): string
     {
+        // Tab expansion (before any width measurements).
+        if ($this->tabWidth > 0 && str_contains($content, "\t")) {
+            $content = str_replace("\t", str_repeat(' ', $this->tabWidth), $content);
+        }
+        // Inline mode collapses newlines into spaces and zeroes vertical
+        // padding/margin so the result is one line.
+        if ($this->inline) {
+            $content = str_replace("\n", ' ', $content);
+        }
+
         [$pT, $pR, $pB, $pL] = $this->padding;
         [$mT, $mR, $mB, $mL] = $this->margin;
+        if ($this->inline) {
+            $pT = $pB = 0;
+            $mT = $mB = 0;
+        }
         $bSides = $this->border !== null ? $this->borderSides : [false, false, false, false];
 
         $sgr = $this->buildContentSgr();
@@ -308,22 +542,41 @@ final class Style
                 $innerWidth = max($innerWidth, Width::string($l));
             }
         }
+        // MaxWidth caps innerWidth without padding shorter lines.
+        if ($this->maxWidth !== null && $innerWidth > $this->maxWidth) {
+            $innerWidth = $this->maxWidth;
+            $lines = array_map(static fn(string $l) => Width::truncateAnsi($l, $innerWidth), $lines);
+        }
 
         // 3. Horizontal alignment within innerWidth.
         $lines = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
 
-        // 4. Padding (styled).
+        // 4. Padding (styled — only if colorWhitespace).
         $contentWidth = $pL + $innerWidth + $pR;
-        $padBlank = $sgr . str_repeat(' ', $contentWidth) . $reset;
-        $padLeftStr  = str_repeat(' ', $pL);
-        $padRightStr = str_repeat(' ', $pR);
+        if ($this->colorWhitespace) {
+            $padBlank = $sgr . str_repeat(' ', $contentWidth) . $reset;
+            $padLeftStr  = $sgr . str_repeat(' ', $pL);
+            $padRightStr = str_repeat(' ', $pR) . $reset;
+            $linePrefix = $sgr;
+            $lineSuffix = $reset;
+        } else {
+            $padBlank = str_repeat(' ', $contentWidth);
+            $padLeftStr  = str_repeat(' ', $pL);
+            $padRightStr = str_repeat(' ', $pR);
+            $linePrefix = $sgr;
+            $lineSuffix = $reset;
+        }
 
         $body = [];
         for ($i = 0; $i < $pT; $i++) {
             $body[] = $padBlank;
         }
         foreach ($lines as $l) {
-            $body[] = $sgr . $padLeftStr . $l . $padRightStr . $reset;
+            if ($this->colorWhitespace) {
+                $body[] = $sgr . str_repeat(' ', $pL) . $l . str_repeat(' ', $pR) . $reset;
+            } else {
+                $body[] = str_repeat(' ', $pL) . $linePrefix . $l . $lineSuffix . str_repeat(' ', $pR);
+            }
         }
         for ($i = 0; $i < $pB; $i++) {
             $body[] = $padBlank;
@@ -335,15 +588,33 @@ final class Style
         if ($this->height !== null) {
             $body = $this->vfit($body, $this->height, $padBlank);
         }
+        // MaxHeight caps without padding shorter content.
+        if ($this->maxHeight !== null && count($body) > $this->maxHeight) {
+            $body = array_slice($body, 0, $this->maxHeight);
+        }
 
         // 6. Border.
         $rows = $this->applyBorder($body, $contentWidth, $bSides);
         $borderedWidth = $contentWidth + ($bSides[1] ? 1 : 0) + ($bSides[3] ? 1 : 0);
 
-        // 7. Margin (unstyled).
-        $marginBlank = str_repeat(' ', $mL + $borderedWidth + $mR);
-        $mLstr = str_repeat(' ', $mL);
-        $mRstr = str_repeat(' ', $mR);
+        // 7. Transform: callback rewrite of the bordered+padded body.
+        if ($this->transform !== null) {
+            $rendered = ($this->transform)(implode("\n", $rows));
+            $rows = explode("\n", $rendered);
+        }
+
+        // 8. Margin (optionally backgrounded).
+        $marginSgr = '';
+        $marginReset = '';
+        if ($this->marginBg !== null) {
+            $marginSgr = $this->marginBg->toBg($this->profile);
+            $marginReset = $marginSgr === '' ? '' : Ansi::reset();
+        }
+        $marginBlank = $marginSgr . str_repeat(' ', $mL + $borderedWidth + $mR) . $marginReset;
+        $mLstr = $marginSgr . str_repeat(' ', $mL) . $marginReset;
+        $mRstr = $marginSgr . str_repeat(' ', $mR) . $marginReset;
+        if ($mL === 0) { $mLstr = ''; }
+        if ($mR === 0) { $mRstr = ''; }
 
         $out = [];
         for ($i = 0; $i < $mT; $i++) {
@@ -470,26 +741,40 @@ final class Style
         $b = $this->border;
         [$top, $right, $bottom, $left] = $sides;
 
-        $bSgr = $this->buildBorderSgr();
-        $bReset = $bSgr === '' ? '' : Ansi::reset();
+        // Resolve per-side colours, falling back to the default
+        // borderForeground / borderBackground.
+        $sideSgr = function (int $sideIdx): array {
+            $fg = $this->borderSideFg[$sideIdx] ?? $this->borderFg;
+            $bg = $this->borderSideBg[$sideIdx] ?? $this->borderBg;
+            $sgr = '';
+            if ($fg !== null) $sgr .= $fg->toFg($this->profile);
+            if ($bg !== null) $sgr .= $bg->toBg($this->profile);
+            $reset = $sgr === '' ? '' : Ansi::reset();
+            return [$sgr, $reset];
+        };
+
+        [$topSgr,    $topReset]    = $sideSgr(0);
+        [$rightSgr,  $rightReset]  = $sideSgr(1);
+        [$bottomSgr, $bottomReset] = $sideSgr(2);
+        [$leftSgr,   $leftReset]   = $sideSgr(3);
 
         $out = [];
         if ($top) {
-            $line = ($left ? $b->topLeft : '')
+            $line = ($left  ? $b->topLeft  : '')
                   . str_repeat($b->top, $contentWidth)
                   . ($right ? $b->topRight : '');
-            $out[] = $bSgr . $line . $bReset;
+            $out[] = $topSgr . $line . $topReset;
         }
-        $leftRune  = $left  ? ($bSgr . $b->left  . $bReset) : '';
-        $rightRune = $right ? ($bSgr . $b->right . $bReset) : '';
+        $leftRune  = $left  ? ($leftSgr  . $b->left  . $leftReset)  : '';
+        $rightRune = $right ? ($rightSgr . $b->right . $rightReset) : '';
         foreach ($body as $row) {
             $out[] = $leftRune . $row . $rightRune;
         }
         if ($bottom) {
-            $line = ($left ? $b->bottomLeft : '')
+            $line = ($left  ? $b->bottomLeft  : '')
                   . str_repeat($b->bottom, $contentWidth)
                   . ($right ? $b->bottomRight : '');
-            $out[] = $bSgr . $line . $bReset;
+            $out[] = $bottomSgr . $line . $bottomReset;
         }
         return $out;
     }
@@ -578,13 +863,22 @@ final class Style
         ?array $margin = null,
         ?int $width = null, bool $widthSet = false,
         ?int $height = null, bool $heightSet = false,
+        ?int $maxWidth = null, bool $maxWidthSet = false,
+        ?int $maxHeight = null, bool $maxHeightSet = false,
         ?Align $alignH = null,
         ?VAlign $alignV = null,
         ?Border $border = null, bool $borderSet = false,
         ?array $borderSides = null,
         ?Color $borderFg = null, bool $borderFgSet = false,
         ?Color $borderBg = null, bool $borderBgSet = false,
+        ?array $borderSideFg = null,
+        ?array $borderSideBg = null,
         ?ColorProfile $profile = null,
+        ?bool $inline = null,
+        ?Color $marginBg = null, bool $marginBgSet = false,
+        ?bool $colorWhitespace = null,
+        ?int $tabWidth = null,
+        ?\Closure $transform = null, bool $transformSet = false,
         array $propsAdded = [],
     ): self {
         $newProps = $this->propsSet;
@@ -592,31 +886,104 @@ final class Style
             $newProps[$p] = true;
         }
         return new self(
-            fg:          $fgSet         ? $fg          : $this->fg,
-            bg:          $bgSet         ? $bg          : $this->bg,
-            fgAdaptive:  $fgAdaptiveSet ? $fgAdaptive  : $this->fgAdaptive,
-            bgAdaptive:  $bgAdaptiveSet ? $bgAdaptive  : $this->bgAdaptive,
-            fgComplete:  $fgCompleteSet ? $fgComplete  : $this->fgComplete,
-            bgComplete:  $bgCompleteSet ? $bgComplete  : $this->bgComplete,
-            bold:        $bold          ?? $this->bold,
-            italic:      $italic        ?? $this->italic,
-            underline:   $underline     ?? $this->underline,
-            strike:      $strike        ?? $this->strike,
-            faint:       $faint         ?? $this->faint,
-            blink:       $blink         ?? $this->blink,
-            reverse:     $reverse       ?? $this->reverse,
-            padding:     $padding       ?? $this->padding,
-            margin:      $margin        ?? $this->margin,
-            width:       $widthSet      ? $width       : $this->width,
-            height:      $heightSet     ? $height      : $this->height,
-            alignH:      $alignH        ?? $this->alignH,
-            alignV:      $alignV        ?? $this->alignV,
-            border:      $borderSet     ? $border      : $this->border,
-            borderSides: $borderSides   ?? $this->borderSides,
-            borderFg:    $borderFgSet   ? $borderFg    : $this->borderFg,
-            borderBg:    $borderBgSet   ? $borderBg    : $this->borderBg,
-            profile:     $profile       ?? $this->profile,
-            propsSet:    $newProps,
+            fg:               $fgSet         ? $fg              : $this->fg,
+            bg:               $bgSet         ? $bg              : $this->bg,
+            fgAdaptive:       $fgAdaptiveSet ? $fgAdaptive      : $this->fgAdaptive,
+            bgAdaptive:       $bgAdaptiveSet ? $bgAdaptive      : $this->bgAdaptive,
+            fgComplete:       $fgCompleteSet ? $fgComplete      : $this->fgComplete,
+            bgComplete:       $bgCompleteSet ? $bgComplete      : $this->bgComplete,
+            bold:             $bold          ?? $this->bold,
+            italic:           $italic        ?? $this->italic,
+            underline:        $underline     ?? $this->underline,
+            strike:           $strike        ?? $this->strike,
+            faint:            $faint         ?? $this->faint,
+            blink:            $blink         ?? $this->blink,
+            reverse:          $reverse       ?? $this->reverse,
+            padding:          $padding       ?? $this->padding,
+            margin:           $margin        ?? $this->margin,
+            width:            $widthSet      ? $width           : $this->width,
+            height:           $heightSet     ? $height          : $this->height,
+            maxWidth:         $maxWidthSet   ? $maxWidth        : $this->maxWidth,
+            maxHeight:        $maxHeightSet  ? $maxHeight       : $this->maxHeight,
+            alignH:           $alignH        ?? $this->alignH,
+            alignV:           $alignV        ?? $this->alignV,
+            border:           $borderSet     ? $border          : $this->border,
+            borderSides:      $borderSides   ?? $this->borderSides,
+            borderFg:         $borderFgSet   ? $borderFg        : $this->borderFg,
+            borderBg:         $borderBgSet   ? $borderBg        : $this->borderBg,
+            borderSideFg:     $borderSideFg  ?? $this->borderSideFg,
+            borderSideBg:     $borderSideBg  ?? $this->borderSideBg,
+            profile:          $profile       ?? $this->profile,
+            propsSet:         $newProps,
+            inline:           $inline        ?? $this->inline,
+            marginBg:         $marginBgSet   ? $marginBg        : $this->marginBg,
+            colorWhitespace:  $colorWhitespace ?? $this->colorWhitespace,
+            tabWidth:         $tabWidth      ?? $this->tabWidth,
+            transform:        $transformSet  ? $transform       : $this->transform,
+        );
+    }
+
+    /**
+     * Reset a property to its zero value AND scrub it from $propsSet so
+     * future inherit() calls can re-apply the parent's value.
+     */
+    private function withUnset(
+        string $prop,
+        ?Color $fg = null, bool $fgSet = false,
+        ?Color $bg = null, bool $bgSet = false,
+        ?bool $bold = null,
+        ?bool $italic = null,
+        ?bool $underline = null,
+        ?bool $strike = null,
+        ?bool $faint = null,
+        ?bool $blink = null,
+        ?bool $reverse = null,
+        ?int $width = null, bool $widthSet = false,
+        ?int $height = null, bool $heightSet = false,
+        ?int $maxWidth = null, bool $maxWidthSet = false,
+        ?int $maxHeight = null, bool $maxHeightSet = false,
+        ?Border $border = null, bool $borderSet = false,
+        ?\Closure $transform = null, bool $transformSet = false,
+    ): self {
+        $next = $this;
+        $newProps = $this->propsSet;
+        unset($newProps[$prop]);
+        // Apply zero value on the relevant slot.
+        return new self(
+            fg:               $prop === 'fg'         ? null         : $next->fg,
+            bg:               $prop === 'bg'         ? null         : $next->bg,
+            fgAdaptive:       $next->fgAdaptive,
+            bgAdaptive:       $next->bgAdaptive,
+            fgComplete:       $next->fgComplete,
+            bgComplete:       $next->bgComplete,
+            bold:             $prop === 'bold'       ? false        : $next->bold,
+            italic:           $prop === 'italic'     ? false        : $next->italic,
+            underline:        $prop === 'underline'  ? false        : $next->underline,
+            strike:           $prop === 'strike'     ? false        : $next->strike,
+            faint:            $prop === 'faint'      ? false        : $next->faint,
+            blink:            $prop === 'blink'      ? false        : $next->blink,
+            reverse:          $prop === 'reverse'    ? false        : $next->reverse,
+            padding:          $next->padding,
+            margin:           $next->margin,
+            width:            $prop === 'width'      ? null         : $next->width,
+            height:           $prop === 'height'     ? null         : $next->height,
+            maxWidth:         $prop === 'maxWidth'   ? null         : $next->maxWidth,
+            maxHeight:        $prop === 'maxHeight'  ? null         : $next->maxHeight,
+            alignH:           $next->alignH,
+            alignV:           $next->alignV,
+            border:           $prop === 'border'     ? null         : $next->border,
+            borderSides:      $next->borderSides,
+            borderFg:         $next->borderFg,
+            borderBg:         $next->borderBg,
+            borderSideFg:     $next->borderSideFg,
+            borderSideBg:     $next->borderSideBg,
+            profile:          $next->profile,
+            propsSet:         $newProps,
+            inline:           $next->inline,
+            marginBg:         $next->marginBg,
+            colorWhitespace:  $next->colorWhitespace,
+            tabWidth:         $next->tabWidth,
+            transform:        $prop === 'transform'  ? null         : $next->transform,
         );
     }
 }

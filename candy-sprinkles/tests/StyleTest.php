@@ -586,4 +586,113 @@ final class StyleTest extends TestCase
             ->resolveProfile();
         $this->assertSame("\x1b[1m\x1b[38;2;0;0;255mhi\x1b[0m", $merged->render('hi'));
     }
+
+    public function testInlineCollapsesNewlines(): void
+    {
+        $out = Style::new()->inline()->render("a\nb\nc");
+        $this->assertSame('a b c', $out);
+    }
+
+    public function testInlineZeroesVerticalPadding(): void
+    {
+        $out = Style::new()->inline()->padding(2, 1)->render('hi');
+        // Vertical padding zeroed; horizontal still applies (1 space each side).
+        $this->assertSame(' hi ', $out);
+    }
+
+    public function testMaxWidthTruncates(): void
+    {
+        $out = Style::new()->maxWidth(3)->render('hello');
+        $this->assertSame('hel', $out);
+    }
+
+    public function testMaxWidthDoesNotPad(): void
+    {
+        $out = Style::new()->maxWidth(10)->render('hi');
+        $this->assertSame('hi', $out);
+    }
+
+    public function testMaxHeightTruncates(): void
+    {
+        $out = Style::new()->maxHeight(2)->render("a\nb\nc\nd");
+        $this->assertSame("a\nb", $out);
+    }
+
+    public function testTransformAppliesAfterRender(): void
+    {
+        $out = Style::new()->transform(static fn(string $s) => strtoupper($s))->render('hi');
+        $this->assertSame('HI', $out);
+    }
+
+    public function testTabWidthExpands(): void
+    {
+        $out = Style::new()->tabWidth(2)->render("a\tb");
+        $this->assertSame('a  b', $out);
+    }
+
+    public function testTabWidthZeroPreserves(): void
+    {
+        $out = Style::new()->tabWidth(0)->render("a\tb");
+        $this->assertSame("a\tb", $out);
+    }
+
+    public function testMarginBackgroundPaintsMargin(): void
+    {
+        $out = Style::new()
+            ->margin(0, 1)
+            ->marginBackground(Color::rgb(255, 0, 0))
+            ->colorProfile(ColorProfile::TrueColor)
+            ->render('x');
+        $this->assertStringContainsString("\x1b[48;2;255;0;0m", $out);
+    }
+
+    public function testCopyReturnsEqualInstance(): void
+    {
+        $a = Style::new()->bold();
+        $b = $a->copy();
+        $this->assertNotSame($a, $b);
+        $this->assertSame($a->render('x'), $b->render('x'));
+    }
+
+    public function testGetters(): void
+    {
+        $s = Style::new()
+            ->foreground(Color::ansi(1))
+            ->bold()
+            ->width(20)
+            ->maxHeight(5)
+            ->align(Align::Center)
+            ->tabWidth(2);
+        $this->assertSame(Color::ansi(1)->toHex(), $s->getForeground()->toHex());
+        $this->assertTrue($s->isBold());
+        $this->assertSame(20, $s->getWidth());
+        $this->assertSame(5,  $s->getMaxHeight());
+        $this->assertSame(Align::Center, $s->getAlign());
+        $this->assertSame(2,  $s->getTabWidth());
+        $this->assertTrue($s->isSet('bold'));
+        $this->assertFalse($s->isSet('italic'));
+    }
+
+    public function testUnsetClearsProp(): void
+    {
+        $s = Style::new()->bold()->italic();
+        $cleared = $s->unsetBold();
+        $this->assertFalse($cleared->isBold());
+        $this->assertTrue($cleared->isItalic());
+        $this->assertFalse($cleared->isSet('bold'));
+    }
+
+    public function testPerSideBorderForeground(): void
+    {
+        $s = Style::new()
+            ->border(Border::normal())
+            ->borderForeground(Color::ansi(1))      // default red
+            ->borderTopForeground(Color::ansi(2))    // top green
+            ->colorProfile(ColorProfile::Ansi);
+        $out = $s->render('hi');
+        $lines = explode("\n", $out);
+        // Top line uses green (32); side lines use red (31).
+        $this->assertStringContainsString("\x1b[32m", $lines[0]);
+        $this->assertStringContainsString("\x1b[31m", $lines[1]);
+    }
 }
