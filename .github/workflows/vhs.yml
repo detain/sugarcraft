@@ -61,7 +61,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
 
-          curl -sSL "https://github.com/charmbracelet/vhs/releases/latest/download/vhs_Linux_x86_64.tar.gz" \
+          # vhs release assets embed the version in the filename
+          # (vhs_<version>_Linux_x86_64.tar.gz), so resolve latest first.
+          vhs_url=$(curl -sSL "https://api.github.com/repos/charmbracelet/vhs/releases/latest" \
+            | jq -r '.assets[] | select(.name | endswith("Linux_x86_64.tar.gz")) | .browser_download_url' \
+            | head -1)
+          echo "vhs tarball: $vhs_url"
+          curl -sSL "$vhs_url" \
             | sudo tar -xz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
           sudo chmod +x /usr/local/bin/vhs
 
