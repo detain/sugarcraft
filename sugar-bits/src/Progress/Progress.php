@@ -36,6 +36,9 @@ final class Progress
         public readonly ?Color $fillColor  = null,
         public readonly ?Color $emptyColor = null,
         public readonly ColorProfile $profile = ColorProfile::TrueColor,
+        public readonly ?Color $gradientStart = null,
+        public readonly ?Color $gradientEnd   = null,
+        public readonly string $percentFormat = '%3d%%',
     ) {
         if ($width < 0) {
             throw new \InvalidArgumentException('progress width must be >= 0');
@@ -53,78 +56,113 @@ final class Progress
 
     public function withPercent(float $p): self
     {
-        $clamped = max(0.0, min(1.0, $p));
-        return new self(
-            $clamped, $this->width, $this->fullChar, $this->emptyChar,
-            $this->showPercent, $this->fillColor, $this->emptyColor, $this->profile,
-        );
+        return $this->mutate(percent: max(0.0, min(1.0, $p)));
     }
 
-    public function withWidth(int $w): self
+    /** Increase percent by delta. Mirrors Bubbles' `IncrPercent`. */
+    public function incrPercent(float $delta): self
     {
-        return new self(
-            $this->percent, $w, $this->fullChar, $this->emptyChar,
-            $this->showPercent, $this->fillColor, $this->emptyColor, $this->profile,
-        );
+        return $this->withPercent($this->percent + $delta);
     }
 
+    /** Decrease percent by delta. Mirrors Bubbles' `DecrPercent`. */
+    public function decrPercent(float $delta): self
+    {
+        return $this->withPercent($this->percent - $delta);
+    }
+
+    public function withWidth(int $w): self        { return $this->mutate(width: $w); }
     public function withRunes(string $full, string $empty): self
     {
-        return new self(
-            $this->percent, $this->width, $full, $empty,
-            $this->showPercent, $this->fillColor, $this->emptyColor, $this->profile,
+        return $this->mutate(fullChar: $full, emptyChar: $empty);
+    }
+    public function withShowPercent(bool $show): self { return $this->mutate(showPercent: $show); }
+    public function withFillColor(?Color $c): self    { return $this->mutate(fillColor: $c, fillColorSet: true); }
+    public function withEmptyColor(?Color $c): self   { return $this->mutate(emptyColor: $c, emptyColorSet: true); }
+    public function withColorProfile(ColorProfile $p): self { return $this->mutate(profile: $p); }
+
+    /**
+     * Render a smooth gradient across the filled cells from `$start`
+     * to `$end`. Mirrors Bubbles' `WithGradient`. Overrides any flat
+     * `fillColor` set previously. Pass either side as null to clear
+     * the gradient and revert to the flat fill colour.
+     */
+    public function withGradient(?Color $start, ?Color $end): self
+    {
+        return $this->mutate(
+            gradientStart: $start, gradientStartSet: true,
+            gradientEnd: $end, gradientEndSet: true,
         );
     }
 
-    public function withShowPercent(bool $show): self
+    /**
+     * Disable gradient rendering and fall back to a flat `$color`.
+     * Mirrors Bubbles' `WithSolidFill`.
+     */
+    public function withSolidFill(Color $color): self
     {
-        return new self(
-            $this->percent, $this->width, $this->fullChar, $this->emptyChar,
-            $show, $this->fillColor, $this->emptyColor, $this->profile,
+        return $this->mutate(
+            fillColor: $color, fillColorSet: true,
+            gradientStart: null, gradientStartSet: true,
+            gradientEnd: null, gradientEndSet: true,
         );
     }
 
-    public function withFillColor(?Color $c): self
+    /**
+     * Default rainbow gradient (cyan → magenta) — quick way to get a
+     * playful look without picking colours by hand.
+     */
+    public function withDefaultGradient(): self
     {
-        return new self(
-            $this->percent, $this->width, $this->fullChar, $this->emptyChar,
-            $this->showPercent, $c, $this->emptyColor, $this->profile,
-        );
+        return $this->withGradient(Color::hex('#5fafff'), Color::hex('#ff5fd2'));
     }
 
-    public function withEmptyColor(?Color $c): self
+    /**
+     * Custom format string for the percent suffix. Receives the
+     * 0-100 integer via printf, e.g. `'%3d%%'` (default), `'%5.1f%%'`,
+     * or `'(%d%%)'`. Mirrors Bubbles' `PercentFormat`.
+     */
+    public function withPercentFormat(string $fmt): self
     {
-        return new self(
-            $this->percent, $this->width, $this->fullChar, $this->emptyChar,
-            $this->showPercent, $this->fillColor, $c, $this->profile,
-        );
+        return $this->mutate(percentFormat: $fmt);
     }
 
-    public function withColorProfile(ColorProfile $p): self
+    /**
+     * Render the bar at an explicit percent without mutating state.
+     * Mirrors Bubbles' `ViewAs`.
+     */
+    public function viewAs(float $percent): string
     {
-        return new self(
-            $this->percent, $this->width, $this->fullChar, $this->emptyChar,
-            $this->showPercent, $this->fillColor, $this->emptyColor, $p,
-        );
+        return $this->withPercent($percent)->view();
     }
 
     public function view(): string
     {
-        // The percent suffix " 100%" needs 5 cells. If the configured
-        // width can't fit it, drop the suffix entirely so view() never
-        // exceeds the requested width.
-        $showSuffix = $this->showPercent && $this->width >= 5;
-        $barWidth   = $showSuffix ? $this->width - 5 : $this->width;
+        // The percent suffix " 100%" needs ~5 cells. Rather than guess
+        // the formatted suffix length, render it once and use its
+        // measured width.
+        $pctText = $this->showPercent
+            ? sprintf($this->percentFormat, (int) round($this->percent * 100))
+            : '';
+        $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
+
+        $showSuffix = $this->showPercent && $this->width > $suffixCells;
+        $barWidth   = $showSuffix ? $this->width - $suffixCells : $this->width;
 
         $filledCells = (int) round($this->percent * $barWidth);
         $emptyCells  = $barWidth - $filledCells;
 
-        $full  = str_repeat($this->fullChar,  $filledCells);
-        $empty = str_repeat($this->emptyChar, $emptyCells);
-
-        if ($this->fillColor !== null) {
-            $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+        // Gradient takes priority over flat fillColor.
+        if ($this->gradientStart !== null && $this->gradientEnd !== null && $filledCells > 0) {
+            $full = $this->renderGradient($filledCells);
+        } else {
+            $full = str_repeat($this->fullChar, $filledCells);
+            if ($this->fillColor !== null) {
+                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+            }
         }
+
+        $empty = str_repeat($this->emptyChar, $emptyCells);
         if ($this->emptyColor !== null) {
             $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
         }
@@ -133,8 +171,53 @@ final class Progress
         if (!$showSuffix) {
             return $bar;
         }
-        $pctText = sprintf('%3d%%', (int) round($this->percent * 100));
         return $bar . ' ' . $pctText;
+    }
+
+    /**
+     * Paint `$cells` filled glyphs with per-cell colour blended from
+     * `$gradientStart` (cell 0) to `$gradientEnd` (cell N-1).
+     */
+    private function renderGradient(int $cells): string
+    {
+        if ($cells <= 0 || $this->gradientStart === null || $this->gradientEnd === null) {
+            return '';
+        }
+        $out = '';
+        for ($i = 0; $i < $cells; $i++) {
+            $t = $cells === 1 ? 0.0 : $i / ($cells - 1);
+            $c = $this->gradientStart->blend($this->gradientEnd, $t);
+            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+        }
+        return $out;
+    }
+
+    private function mutate(
+        ?float $percent = null,
+        ?int $width = null,
+        ?string $fullChar = null,
+        ?string $emptyChar = null,
+        ?bool $showPercent = null,
+        ?Color $fillColor = null, bool $fillColorSet = false,
+        ?Color $emptyColor = null, bool $emptyColorSet = false,
+        ?ColorProfile $profile = null,
+        ?Color $gradientStart = null, bool $gradientStartSet = false,
+        ?Color $gradientEnd = null, bool $gradientEndSet = false,
+        ?string $percentFormat = null,
+    ): self {
+        return new self(
+            percent:        $percent       ?? $this->percent,
+            width:          $width         ?? $this->width,
+            fullChar:       $fullChar      ?? $this->fullChar,
+            emptyChar:      $emptyChar     ?? $this->emptyChar,
+            showPercent:    $showPercent   ?? $this->showPercent,
+            fillColor:      $fillColorSet  ? $fillColor      : $this->fillColor,
+            emptyColor:     $emptyColorSet ? $emptyColor     : $this->emptyColor,
+            profile:        $profile       ?? $this->profile,
+            gradientStart:  $gradientStartSet ? $gradientStart : $this->gradientStart,
+            gradientEnd:    $gradientEndSet   ? $gradientEnd   : $this->gradientEnd,
+            percentFormat:  $percentFormat ?? $this->percentFormat,
+        );
     }
 
     public function __toString(): string

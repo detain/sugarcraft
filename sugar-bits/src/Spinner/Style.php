@@ -33,6 +33,36 @@ final class Style
     public static function globe(): self   { return new self(['🌍','🌎','🌏'], 4.0); }
     public static function meter(): self   { return new self(['▱▱▱','▰▱▱','▰▰▱','▰▰▰','▰▰▱','▰▱▱'], 7.0); }
 
+    /** Bouncing dot: ⢄ ⢂ ⢁ ⡁ ⡈ ⡐ ⡠ — used by Bubbles' `Jump`. */
+    public static function jump(): self
+    {
+        return new self(['⢄','⢂','⢁','⡁','⡈','⡐','⡠'], 7.0);
+    }
+
+    /** Moon-phase rotation: 🌑 🌒 🌓 🌔 🌕 🌖 🌗 🌘 — Bubbles' `Moon`. */
+    public static function moon(): self
+    {
+        return new self(['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'], 8.0);
+    }
+
+    /** Walking monkey: 🙈 🙉 🙊 — Bubbles' `Monkey`. */
+    public static function monkey(): self
+    {
+        return new self(['🙈','🙉','🙊'], 3.0);
+    }
+
+    /** Sliding hamburger bars: ☱ ☲ ☴ ☲ — Bubbles' `Hamburger`. */
+    public static function hamburger(): self
+    {
+        return new self(['☱','☲','☴','☲'], 3.0);
+    }
+
+    /** Animated dots: ` `, `.`, `..`, `...` — Bubbles' `Ellipsis`. */
+    public static function ellipsis(): self
+    {
+        return new self(['','.','..','...'], 3.0);
+    }
+
     public function interval(): float
     {
         return 1.0 / $this->fps;

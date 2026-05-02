@@ -8,6 +8,8 @@ use CandyCore\Core\KeyType;
 use CandyCore\Core\Model;
 use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\MouseWheelMsg;
+use CandyCore\Core\MouseAction;
 
 /**
  * Scrollable text area. Holds a fixed-size window over arbitrarily long
@@ -25,6 +27,11 @@ final class Viewport implements Model
         /** @var list<string> */
         public readonly array $lines,
         public readonly int $yOffset,
+        public readonly bool $mouseWheelEnabled = true,
+        public readonly int $mouseWheelDelta = 3,
+        public readonly bool $showScrollbar = false,
+        public readonly string $scrollbarChar = '█',
+        public readonly string $scrollbarTrack = '│',
     ) {}
 
     public static function new(int $width = 80, int $height = 24): self
@@ -45,6 +52,14 @@ final class Viewport implements Model
      */
     public function update(Msg $msg): array
     {
+        if ($msg instanceof MouseWheelMsg && $this->mouseWheelEnabled) {
+            // SGR mouse: action carries WheelUp/WheelDown semantics.
+            return match ($msg->action) {
+                MouseAction::WheelUp   => [$this->lineUp($this->mouseWheelDelta),   null],
+                MouseAction::WheelDown => [$this->lineDown($this->mouseWheelDelta), null],
+                default                => [$this, null],
+            };
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -80,7 +95,10 @@ final class Viewport implements Model
     {
         $top    = max(0, $this->yOffset);
         $window = array_slice($this->lines, $top, $this->height);
-        return implode("\n", $window);
+        if (!$this->showScrollbar) {
+            return implode("\n", $window);
+        }
+        return $this->paintScrollbar($window);
     }
 
     // ---- content + dimensions ----------------------------------------
@@ -88,8 +106,7 @@ final class Viewport implements Model
     public function setContent(string $content): self
     {
         $lines = $content === '' ? [''] : explode("\n", $content);
-        $clone = new self($this->width, $this->height, $lines, $this->yOffset);
-        return $clone->clamp();
+        return $this->copy(lines: $lines)->clamp();
     }
 
     public function withSize(int $width, int $height): self
@@ -97,19 +114,49 @@ final class Viewport implements Model
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('viewport width/height must be >= 0');
         }
-        return (new self($width, $height, $this->lines, $this->yOffset))->clamp();
+        return $this->copy(width: $width, height: $height)->clamp();
+    }
+
+    /** Direct seek to `$offset`. Clamped to `[0, maxOffset]`. */
+    public function setYOffset(int $offset): self
+    {
+        return $this->copy(yOffset: $offset)->clamp();
+    }
+
+    public function yOffset(): int { return $this->yOffset; }
+
+    public function withMouseWheelEnabled(bool $on): self
+    {
+        return $this->copy(mouseWheelEnabled: $on);
+    }
+
+    /** Lines moved per wheel notch. Default 3. */
+    public function withMouseWheelDelta(int $delta): self
+    {
+        return $this->copy(mouseWheelDelta: max(1, $delta));
+    }
+
+    /** Render a vertical scrollbar in the rightmost column. Default off. */
+    public function withScrollbar(bool $on = true): self
+    {
+        return $this->copy(showScrollbar: $on);
+    }
+
+    public function withScrollbarRunes(string $thumb, string $track): self
+    {
+        return $this->copy(scrollbarChar: $thumb, scrollbarTrack: $track);
     }
 
     // ---- navigation --------------------------------------------------
 
     public function lineUp(int $n = 1): self
     {
-        return (new self($this->width, $this->height, $this->lines, $this->yOffset - max(0, $n)))->clamp();
+        return $this->copy(yOffset: $this->yOffset - max(0, $n))->clamp();
     }
 
     public function lineDown(int $n = 1): self
     {
-        return (new self($this->width, $this->height, $this->lines, $this->yOffset + max(0, $n)))->clamp();
+        return $this->copy(yOffset: $this->yOffset + max(0, $n))->clamp();
     }
 
     public function halfPageUp(): self   { return $this->lineUp((int) max(1, intdiv($this->height, 2))); }
@@ -120,14 +167,12 @@ final class Viewport implements Model
 
     public function gotoTop(): self
     {
-        return new self($this->width, $this->height, $this->lines, 0);
+        return $this->copy(yOffset: 0);
     }
 
     public function gotoBottom(): self
     {
-        return (new self(
-            $this->width, $this->height, $this->lines, $this->maxOffset(),
-        ))->clamp();
+        return $this->copy(yOffset: $this->maxOffset())->clamp();
     }
 
     // ---- queries -----------------------------------------------------
@@ -166,6 +211,66 @@ final class Viewport implements Model
         if ($offset === $this->yOffset) {
             return $this;
         }
-        return new self($this->width, $this->height, $this->lines, $offset);
+        return $this->copy(yOffset: $offset);
+    }
+
+    /**
+     * Append a single-column scrollbar to each visible line. The thumb
+     * occupies a vertical slot proportional to the visible/total
+     * ratio; the track fills the rest. Lines shorter than `$width-1`
+     * are padded with spaces so the scrollbar stays right-aligned.
+     *
+     * @param list<string> $window
+     */
+    private function paintScrollbar(array $window): string
+    {
+        $rendered = count($window);
+        $total    = $this->totalLineCount();
+        $thumbHeight = $total > 0
+            ? max(1, (int) round($rendered * ($rendered / $total)))
+            : $rendered;
+        $maxThumbStart = max(0, $rendered - $thumbHeight);
+        $thumbStart = $total > $rendered
+            ? (int) round($maxThumbStart * ($this->yOffset / max(1, $this->maxOffset())))
+            : 0;
+        $bodyWidth = max(0, $this->width - 1);
+        $out = [];
+        foreach ($window as $i => $line) {
+            $padded = $bodyWidth > 0
+                ? \CandyCore\Core\Util\Width::padRight($line, $bodyWidth)
+                : $line;
+            $sb = ($i >= $thumbStart && $i < $thumbStart + $thumbHeight)
+                ? $this->scrollbarChar
+                : $this->scrollbarTrack;
+            $out[] = $padded . $sb;
+        }
+        return implode("\n", $out);
+    }
+
+    /**
+     * @param list<string>|null $lines
+     */
+    private function copy(
+        ?int $width = null,
+        ?int $height = null,
+        ?array $lines = null,
+        ?int $yOffset = null,
+        ?bool $mouseWheelEnabled = null,
+        ?int $mouseWheelDelta = null,
+        ?bool $showScrollbar = null,
+        ?string $scrollbarChar = null,
+        ?string $scrollbarTrack = null,
+    ): self {
+        return new self(
+            width:              $width             ?? $this->width,
+            height:             $height            ?? $this->height,
+            lines:              $lines             ?? $this->lines,
+            yOffset:            $yOffset           ?? $this->yOffset,
+            mouseWheelEnabled:  $mouseWheelEnabled ?? $this->mouseWheelEnabled,
+            mouseWheelDelta:    $mouseWheelDelta   ?? $this->mouseWheelDelta,
+            showScrollbar:      $showScrollbar     ?? $this->showScrollbar,
+            scrollbarChar:      $scrollbarChar     ?? $this->scrollbarChar,
+            scrollbarTrack:     $scrollbarTrack    ?? $this->scrollbarTrack,
+        );
     }
 }

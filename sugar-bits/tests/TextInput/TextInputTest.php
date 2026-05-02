@@ -186,4 +186,71 @@ final class TextInputTest extends TestCase
         $this->assertSame('hel', $t->value);
         $this->assertSame(3,     $t->cursorPos);
     }
+
+    public function testSetSuggestionsAndMatch(): void
+    {
+        $t = TextInput::new()
+            ->setSuggestions(['apple', 'apricot', 'banana', 'blueberry'])
+            ->showSuggestions()
+            ->setValue('ap');
+        $matched = $t->matchedSuggestions();
+        $this->assertSame(['apple', 'apricot'], $matched);
+        $this->assertSame('apple', $t->currentSuggestion());
+    }
+
+    public function testNextAndPrevSuggestion(): void
+    {
+        $t = TextInput::new()
+            ->setSuggestions(['apple', 'apricot'])
+            ->setValue('ap');
+        $next = $t->nextSuggestion();
+        $this->assertSame('apricot', $next->currentSuggestion());
+        // Cycle forward wraps back to the start.
+        $this->assertSame('apple', $next->nextSuggestion()->currentSuggestion());
+        $prev = $t->prevSuggestion();
+        $this->assertSame('apricot', $prev->currentSuggestion());
+    }
+
+    public function testAcceptSuggestionReplacesValue(): void
+    {
+        $t = TextInput::new()
+            ->setSuggestions(['hello', 'world'])
+            ->setValue('he')
+            ->acceptSuggestion();
+        $this->assertSame('hello', $t->value);
+    }
+
+    public function testValidatorRunsOnSetValue(): void
+    {
+        $t = TextInput::new()
+            ->withValidator(static fn(string $s): ?string
+                => strlen($s) >= 3 ? null : 'too short')
+            ->setValue('hi');
+        $this->assertSame('too short', $t->err());
+        $t = $t->setValue('hello');
+        $this->assertNull($t->err());
+    }
+
+    public function testValidatorRunsImmediatelyWhenSet(): void
+    {
+        $t = TextInput::new()->setValue('hi');
+        $this->assertNull($t->err());
+        $t = $t->withValidator(static fn(string $s) => strlen($s) >= 3 ? null : 'short');
+        $this->assertSame('short', $t->err());
+    }
+
+    public function testSetCursorClamps(): void
+    {
+        $t = TextInput::new()->setValue('hello')->setCursor(100);
+        $this->assertSame(5, $t->cursorPos);
+        $this->assertSame(0, $t->cursorStart()->cursorPos);
+        $this->assertSame(5, $t->cursorEnd()->cursorPos);
+    }
+
+    public function testPasteStripsNewlines(): void
+    {
+        $t = TextInput::new()->setValue('a')->setCursor(1);
+        $t = $t->paste("b\nc\rd");
+        $this->assertSame('abcd', $t->value);
+    }
 }

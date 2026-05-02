@@ -27,7 +27,10 @@ use CandyCore\Core\Msg\KeyMsg;
  */
 final class TextArea implements Model
 {
-    /** @param list<string> $lines */
+    /**
+     * @param list<string>             $lines
+     * @param ?\Closure(string): ?string $validate
+     */
     private function __construct(
         public readonly array $lines,
         public readonly int $row,
@@ -39,6 +42,13 @@ final class TextArea implements Model
         public readonly bool $focused,
         public readonly Cursor $cursor,
         public readonly int $rowOffset,
+        public readonly bool $showLineNumbers = false,
+        public readonly int $maxWidth = 0,
+        public readonly int $maxHeight = 0,
+        public readonly string $endOfBufferCharacter = '~',
+        public readonly string $prompt = '',
+        public readonly ?\Closure $validate = null,
+        public readonly ?string $err = null,
     ) {}
 
     public static function new(): self
@@ -106,7 +116,7 @@ final class TextArea implements Model
     {
         // Empty + unfocused with placeholder.
         if ($this->totalLength() === 0 && !$this->focused && $this->placeholder !== '') {
-            return $this->placeholder;
+            return $this->prefixWithGutter([$this->placeholder], 0)[0];
         }
 
         // Slice rows by height (height = 0 means show all).
@@ -115,8 +125,17 @@ final class TextArea implements Model
             ? array_slice($this->lines, $start, $this->height)
             : $this->lines;
 
+        // End-of-buffer filler — vim-style `~` rows when the buffer
+        // doesn't fill the configured height.
+        if ($this->height > 0) {
+            $shown = count($rows);
+            for ($i = $shown; $i < $this->height; $i++) {
+                $rows[] = $this->endOfBufferCharacter;
+            }
+        }
+
         if (!$this->focused) {
-            return implode("\n", $rows);
+            return implode("\n", $this->prefixWithGutter($rows, $start));
         }
 
         // Render with the embedded cursor at (row, col).
@@ -129,7 +148,36 @@ final class TextArea implements Model
             }
             $out[] = $this->renderCursorLine($line);
         }
-        return implode("\n", $out);
+        return implode("\n", $this->prefixWithGutter($out, $start));
+    }
+
+    /**
+     * Apply line-number gutter + prompt to each visible line. `$startRow`
+     * is the offset of the first row in `$lines` within the full buffer
+     * (0-based) so line numbers stay correct under scroll.
+     *
+     * @param  list<string> $lines
+     * @return list<string>
+     */
+    private function prefixWithGutter(array $lines, int $startRow): array
+    {
+        if (!$this->showLineNumbers && $this->prompt === '') {
+            return $lines;
+        }
+        $totalLines = count($this->lines);
+        $gutterWidth = $this->showLineNumbers ? max(2, strlen((string) $totalLines) + 1) : 0;
+        $out = [];
+        foreach ($lines as $i => $line) {
+            $row = $startRow + $i;
+            $gutter = '';
+            if ($this->showLineNumbers) {
+                $isFiller = $line === $this->endOfBufferCharacter && $row >= $totalLines;
+                $label = $isFiller ? '' : (string) ($row + 1);
+                $gutter = str_pad($label, $gutterWidth, ' ', STR_PAD_LEFT) . ' ';
+            }
+            $out[] = $gutter . $this->prompt . $line;
+        }
+        return $out;
     }
 
     // ---- focus + setters --------------------------------------------
@@ -189,6 +237,92 @@ final class TextArea implements Model
     public function withCharLimit(int $n): self      { return $this->mutate(charLimit: max(0, $n)); }
     public function withWidth(int $w): self          { return $this->mutate(width: max(0, $w)); }
     public function withHeight(int $h): self         { return $this->mutate(height: max(0, $h)); }
+    public function withMaxWidth(int $w): self       { return $this->mutate(maxWidth: max(0, $w)); }
+    public function withMaxHeight(int $h): self      { return $this->mutate(maxHeight: max(0, $h)); }
+
+    /** Show 1-based line numbers in a left gutter. Default off. */
+    public function showLineNumbers(bool $on = true): self
+    {
+        return $this->mutate(showLineNumbers: $on);
+    }
+
+    /**
+     * Character drawn for empty rows beyond the last line of content
+     * (the "end of buffer" filler vim shows). Defaults to `~`.
+     */
+    public function withEndOfBufferCharacter(string $c): self
+    {
+        return $this->mutate(endOfBufferCharacter: $c);
+    }
+
+    /** Static prefix prepended to every line. Mirrors Bubbles' `Prompt`. */
+    public function withPrompt(string $p): self
+    {
+        return $this->mutate(prompt: $p);
+    }
+
+    /**
+     * Set a validator. Receives the joined value, returns an error
+     * message or null. Re-runs after every edit; result is exposed via
+     * {@see err()}.
+     *
+     * @param ?\Closure(string): ?string $fn  pass null to clear
+     */
+    public function withValidator(?\Closure $fn): self
+    {
+        return $this->mutate(
+            validate: $fn,
+            validateSet: true,
+            err: $fn !== null ? $fn($this->value()) : null,
+            errSet: true,
+        );
+    }
+
+    public function err(): ?string { return $this->err; }
+
+    /** Move the cursor to (`$row`, `$col`); both clamp to range. */
+    public function setCursor(int $row, int $col): self
+    {
+        return $this->moveCursor($row, $col);
+    }
+
+    /** Clamp the cursor's column on the current row. */
+    public function setCursorColumn(int $col): self
+    {
+        return $this->moveCursor($this->row, $col);
+    }
+
+    /**
+     * Insert a string at the cursor; embedded newlines split lines.
+     * Mirrors Bubbles' `InsertString` / `InsertRune`.
+     */
+    public function insertString(string $text): self
+    {
+        $next = $this;
+        $first = true;
+        foreach (explode("\n", $text) as $segment) {
+            if (!$first) {
+                $next = $next->insertNewline();
+            }
+            if ($segment !== '') {
+                $next = $next->insert($segment);
+            }
+            $first = false;
+        }
+        return $next;
+    }
+
+    /** Pixel/cell width of the current line up to the cursor. */
+    public function lineInfo(): array
+    {
+        return [
+            'row'        => $this->row,
+            'col'        => $this->col,
+            'lineWidth'  => $this->lineLen($this->row),
+            'totalLines' => count($this->lines),
+            'totalChars' => $this->totalLength(),
+        ];
+    }
 
     public function lineCount(): int { return count($this->lines); }
 
@@ -357,18 +491,41 @@ final class TextArea implements Model
         ?bool $focused = null,
         ?Cursor $cursor = null,
         ?int $rowOffset = null,
+        ?bool $showLineNumbers = null,
+        ?int $maxWidth = null,
+        ?int $maxHeight = null,
+        ?string $endOfBufferCharacter = null,
+        ?string $prompt = null,
+        ?\Closure $validate = null, bool $validateSet = false,
+        ?string $err = null, bool $errSet = false,
     ): self {
+        $newLines = $lines ?? $this->lines;
+        $resolvedValidate = $validateSet ? $validate : $this->validate;
+        if (!$errSet) {
+            if ($resolvedValidate !== null && $lines !== null) {
+                $err = $resolvedValidate(implode("\n", $newLines));
+            } else {
+                $err = $this->err;
+            }
+        }
         return new self(
-            lines:       $lines       ?? $this->lines,
-            row:         $row         ?? $this->row,
-            col:         $col         ?? $this->col,
-            placeholder: $placeholder ?? $this->placeholder,
-            charLimit:   $charLimit   ?? $this->charLimit,
-            width:       $width       ?? $this->width,
-            height:      $height      ?? $this->height,
-            focused:     $focused     ?? $this->focused,
-            cursor:      $cursor      ?? $this->cursor,
-            rowOffset:   $rowOffset   ?? $this->rowOffset,
+            lines:                 $newLines,
+            row:                   $row                  ?? $this->row,
+            col:                   $col                  ?? $this->col,
+            placeholder:           $placeholder          ?? $this->placeholder,
+            charLimit:             $charLimit            ?? $this->charLimit,
+            width:                 $width                ?? $this->width,
+            height:                $height               ?? $this->height,
+            focused:               $focused              ?? $this->focused,
+            cursor:                $cursor               ?? $this->cursor,
+            rowOffset:             $rowOffset            ?? $this->rowOffset,
+            showLineNumbers:       $showLineNumbers      ?? $this->showLineNumbers,
+            maxWidth:              $maxWidth             ?? $this->maxWidth,
+            maxHeight:             $maxHeight            ?? $this->maxHeight,
+            endOfBufferCharacter:  $endOfBufferCharacter ?? $this->endOfBufferCharacter,
+            prompt:                $prompt               ?? $this->prompt,
+            validate:              $resolvedValidate,
+            err:                   $err,
         );
     }
 }

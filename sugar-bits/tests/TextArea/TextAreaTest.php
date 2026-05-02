@@ -180,4 +180,73 @@ final class TextAreaTest extends TestCase
         $t = TextArea::new()->withCharLimit(5)->setValue("hello world");
         $this->assertSame('hello', $t->value());
     }
+
+    public function testShowLineNumbersAddsGutter(): void
+    {
+        $t = TextArea::new()
+            ->setValue("a\nb\nc")
+            ->showLineNumbers();
+        $out = $t->view();
+        $this->assertStringContainsString(' 1 a', $out);
+        $this->assertStringContainsString(' 2 b', $out);
+        $this->assertStringContainsString(' 3 c', $out);
+    }
+
+    public function testEndOfBufferFillerAppearsBelowContent(): void
+    {
+        $t = TextArea::new()
+            ->setValue('hi')
+            ->withHeight(4);
+        $out = $t->view();
+        $lines = explode("\n", $out);
+        $this->assertSame('hi', $lines[0]);
+        $this->assertSame('~',  $lines[1]);
+        $this->assertSame('~',  $lines[2]);
+        $this->assertSame('~',  $lines[3]);
+    }
+
+    public function testWithEndOfBufferCharacterReplacesFiller(): void
+    {
+        $t = TextArea::new()
+            ->setValue('x')
+            ->withHeight(2)
+            ->withEndOfBufferCharacter('*');
+        $out = $t->view();
+        $this->assertSame("x\n*", $out);
+    }
+
+    public function testWithPromptPrefixesEachLine(): void
+    {
+        $t = TextArea::new()
+            ->setValue("a\nb")
+            ->withPrompt('| ');
+        $this->assertSame("| a\n| b", $t->view());
+    }
+
+    public function testValidatorRunsOnEdit(): void
+    {
+        $t = TextArea::new()
+            ->withValidator(static fn(string $v): ?string
+                => str_contains($v, 'bad') ? 'no' : null)
+            ->setValue('good text');
+        $this->assertNull($t->err());
+        $t = $t->setValue('bad text');
+        $this->assertSame('no', $t->err());
+    }
+
+    public function testInsertStringSplitsOnNewlines(): void
+    {
+        $t = TextArea::new()->setValue('start')->setCursorColumn(5);
+        $t = $t->insertString("\nmiddle\nend");
+        $this->assertSame("start\nmiddle\nend", $t->value());
+    }
+
+    public function testLineInfo(): void
+    {
+        $t = TextArea::new()->setValue("abc\ndef");
+        $info = $t->lineInfo();
+        $this->assertSame(1, $info['row']);
+        $this->assertSame(3, $info['col']);
+        $this->assertSame(2, $info['totalLines']);
+    }
 }

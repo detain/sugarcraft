@@ -32,6 +32,8 @@ final class Table implements Model
         public readonly int $width,
         public readonly int $height,
         public readonly bool $focused,
+        /** @var list<int> per-column explicit widths (0 = auto). Aligned to $headers index. */
+        public readonly array $colWidths = [],
     ) {}
 
     /**
@@ -51,7 +53,39 @@ final class Table implements Model
             width:   $width,
             height:  $height,
             focused: false,
+            colWidths: [],
         );
+    }
+
+    /**
+     * Replace headers + per-column explicit widths in one call. Each
+     * `Column` carries a title and an optional fixed width; passing
+     * `width=0` lets the column auto-size. Mirrors Bubbles' `WithColumns`.
+     *
+     * @param list<Column> $columns
+     */
+    public function setColumns(array $columns): self
+    {
+        $titles = [];
+        $widths = [];
+        foreach ($columns as $col) {
+            if (!$col instanceof Column) {
+                throw new \InvalidArgumentException('setColumns expects Column instances');
+            }
+            $titles[] = $col->title;
+            $widths[] = $col->width;
+        }
+        return $this->mutate(headers: $titles, colWidths: $widths);
+    }
+
+    /** @return list<Column> */
+    public function columns(): array
+    {
+        $out = [];
+        foreach ($this->headers as $i => $title) {
+            $out[] = new Column($title, $this->colWidths[$i] ?? 0);
+        }
+        return $out;
     }
 
     public function init(): ?\Closure
@@ -157,6 +191,15 @@ final class Table implements Model
         return $this->mutate(width: $width, height: $height)->reclamp();
     }
 
+    /** Move the cursor to row 0. Mirrors Bubbles' `GotoTop`. */
+    public function gotoTop(): self    { return $this->moveCursor(0); }
+    /** Move the cursor to the last row. Mirrors `GotoBottom`. */
+    public function gotoBottom(): self { return $this->moveCursor(PHP_INT_MAX); }
+    /** Move cursor up `$n` rows. Default 1. */
+    public function moveUp(int $n = 1): self   { return $this->moveCursor($this->cursor - max(1, $n)); }
+    /** Move cursor down `$n` rows. */
+    public function moveDown(int $n = 1): self { return $this->moveCursor($this->cursor + max(1, $n)); }
+
     // ---- internals ---------------------------------------------------
 
     /** @return list<int> */
@@ -173,6 +216,12 @@ final class Table implements Model
         foreach (array_merge([$this->headers], $this->rows) as $row) {
             foreach ($row as $i => $cell) {
                 $widths[$i] = max($widths[$i], Width::string($cell));
+            }
+        }
+        // Per-column explicit width overrides auto-sizing.
+        foreach ($this->colWidths as $i => $w) {
+            if ($w > 0) {
+                $widths[$i] = $w;
             }
         }
         // If a total width is constrained, shrink columns round-robin
@@ -250,15 +299,17 @@ final class Table implements Model
         ?int $width = null,
         ?int $height = null,
         ?bool $focused = null,
+        ?array $colWidths = null,
     ): self {
         return new self(
-            headers: $headers ?? $this->headers,
-            rows:    $rows    ?? $this->rows,
-            cursor:  $cursor  ?? $this->cursor,
-            offset:  $offset  ?? $this->offset,
-            width:   $width   ?? $this->width,
-            height:  $height  ?? $this->height,
-            focused: $focused ?? $this->focused,
+            headers:   $headers   ?? $this->headers,
+            rows:      $rows      ?? $this->rows,
+            cursor:    $cursor    ?? $this->cursor,
+            offset:    $offset    ?? $this->offset,
+            width:     $width     ?? $this->width,
+            height:    $height    ?? $this->height,
+            focused:   $focused   ?? $this->focused,
+            colWidths: $colWidths ?? $this->colWidths,
         );
     }
 }

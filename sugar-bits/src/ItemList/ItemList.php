@@ -42,6 +42,13 @@ final class ItemList implements Model
         public readonly bool $filtering,
         public readonly string $filterText,
         public readonly bool $showDescription,
+        public readonly bool $showStatusBar = true,
+        public readonly bool $showHelp = true,
+        public readonly bool $showFilter = true,
+        public readonly bool $infiniteScrolling = false,
+        public readonly string $statusMessage = '',
+        public readonly float $statusMessageExpiresAt = 0.0,
+        public readonly float $statusMessageLifetime = 1.0,
     ) {}
 
     /**
@@ -116,12 +123,14 @@ final class ItemList implements Model
         if ($this->title !== '') {
             $lines[] = $this->title;
         }
-        if ($this->filtering || $this->filterText !== '') {
-            $marker  = $this->filtering ? '/' : '/';
-            $lines[] = $marker . $this->filterText;
+        if ($this->showFilter && ($this->filtering || $this->filterText !== '')) {
+            $lines[] = '/' . $this->filterText;
         }
         if ($count === 0) {
             $lines[] = $this->filterText !== '' ? 'No matches.' : 'No items.';
+            if ($this->showStatusBar && ($status = $this->status()) !== '') {
+                $lines[] = $status;
+            }
             return implode("\n", $lines);
         }
 
@@ -130,19 +139,19 @@ final class ItemList implements Model
         foreach ($window as $i => $item) {
             $idx = $top + $i;
             $sel = $idx === $this->cursor;
-            $title = $sel ? Ansi::sgr(Ansi::REVERSE) . $item->title() . Ansi::reset()
-                          : '  ' . $item->title();
-            // For selected, prefix '>'; for others, indent two spaces.
-            $prefix = $sel ? '> ' : '  ';
+            // For selected, prefix '> '; for others, indent two spaces.
             if ($sel) {
-                // Replace the leading two-space indent with marker; SGR
-                // wraps just the text.
-                $title = $prefix . Ansi::sgr(Ansi::REVERSE) . $item->title() . Ansi::reset();
+                $title = '> ' . Ansi::sgr(Ansi::REVERSE) . $item->title() . Ansi::reset();
+            } else {
+                $title = '  ' . $item->title();
             }
             $lines[] = $title;
             if ($this->showDescription && $item->description() !== '') {
                 $lines[] = '    ' . $item->description();
             }
+        }
+        if ($this->showStatusBar && ($status = $this->status()) !== '') {
+            $lines[] = $status;
         }
         return implode("\n", $lines);
     }
@@ -201,6 +210,54 @@ final class ItemList implements Model
 
     public function withTitle(string $t): self           { return $this->mutate(title: $t); }
     public function withShowDescription(bool $on): self  { return $this->mutate(showDescription: $on); }
+    public function withShowStatusBar(bool $on): self    { return $this->mutate(showStatusBar: $on); }
+    public function withShowHelp(bool $on): self         { return $this->mutate(showHelp: $on); }
+    public function withShowFilter(bool $on): self       { return $this->mutate(showFilter: $on); }
+    public function withInfiniteScrolling(bool $on): self { return $this->mutate(infiniteScrolling: $on); }
+
+    /**
+     * Default lifetime (in seconds) of a status message set via
+     * {@see newStatusMessage()}. Default 1.0s.
+     */
+    public function withStatusMessageLifetime(float $seconds): self
+    {
+        return $this->mutate(statusMessageLifetime: max(0.0, $seconds));
+    }
+
+    /**
+     * Set a transient status message rendered in the status bar.
+     * Expires `statusMessageLifetime` seconds later (the model expires
+     * it on its next view() / status accessor; callers driving via
+     * Cmds should pair this with `Cmd::tick()` for a hard refresh).
+     */
+    public function newStatusMessage(string $msg): self
+    {
+        return $this->mutate(
+            statusMessage: $msg,
+            statusMessageExpiresAt: microtime(true) + max(0.0, $this->statusMessageLifetime),
+        );
+    }
+
+    /**
+     * Status string rendered in the status bar — composes the cursor
+     * position, total count, filter state, and any active transient
+     * status message (only while it hasn't expired).
+     */
+    public function status(): string
+    {
+        $parts = [];
+        $count = count($this->visibleItems());
+        if ($count > 0) {
+            $parts[] = ($this->cursor + 1) . '/' . $count;
+        }
+        if ($this->filterText !== '') {
+            $parts[] = '"' . $this->filterText . '"';
+        }
+        if ($this->statusMessage !== '' && microtime(true) < $this->statusMessageExpiresAt) {
+            $parts[] = $this->statusMessage;
+        }
+        return implode(' • ', $parts);
+    }
 
     public function clearFilter(): self
     {
@@ -254,7 +311,12 @@ final class ItemList implements Model
         if ($count === 0) {
             return $this->mutate(cursor: 0, offset: 0);
         }
-        $cursor = max(0, min($count - 1, $idx));
+        if ($this->infiniteScrolling) {
+            // Wrap cursor instead of clamping.
+            $cursor = (($idx % $count) + $count) % $count;
+        } else {
+            $cursor = max(0, min($count - 1, $idx));
+        }
         $offset = $this->offset;
         if ($cursor < $offset) {
             $offset = $cursor;
@@ -282,18 +344,32 @@ final class ItemList implements Model
         ?bool $filtering = null,
         ?string $filterText = null,
         ?bool $showDescription = null,
+        ?bool $showStatusBar = null,
+        ?bool $showHelp = null,
+        ?bool $showFilter = null,
+        ?bool $infiniteScrolling = null,
+        ?string $statusMessage = null,
+        ?float $statusMessageExpiresAt = null,
+        ?float $statusMessageLifetime = null,
     ): self {
         return new self(
-            items:           $items           ?? $this->items,
-            cursor:          $cursor          ?? $this->cursor,
-            offset:          $offset          ?? $this->offset,
-            width:           $width           ?? $this->width,
-            height:          $height          ?? $this->height,
-            focused:         $focused         ?? $this->focused,
-            title:           $title           ?? $this->title,
-            filtering:       $filtering       ?? $this->filtering,
-            filterText:      $filterText      ?? $this->filterText,
-            showDescription: $showDescription ?? $this->showDescription,
+            items:                  $items                  ?? $this->items,
+            cursor:                 $cursor                 ?? $this->cursor,
+            offset:                 $offset                 ?? $this->offset,
+            width:                  $width                  ?? $this->width,
+            height:                 $height                 ?? $this->height,
+            focused:                $focused                ?? $this->focused,
+            title:                  $title                  ?? $this->title,
+            filtering:              $filtering              ?? $this->filtering,
+            filterText:             $filterText             ?? $this->filterText,
+            showDescription:        $showDescription        ?? $this->showDescription,
+            showStatusBar:          $showStatusBar          ?? $this->showStatusBar,
+            showHelp:               $showHelp               ?? $this->showHelp,
+            showFilter:             $showFilter             ?? $this->showFilter,
+            infiniteScrolling:      $infiniteScrolling      ?? $this->infiniteScrolling,
+            statusMessage:          $statusMessage          ?? $this->statusMessage,
+            statusMessageExpiresAt: $statusMessageExpiresAt ?? $this->statusMessageExpiresAt,
+            statusMessageLifetime:  $statusMessageLifetime  ?? $this->statusMessageLifetime,
         );
     }
 }

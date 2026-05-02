@@ -40,6 +40,11 @@ final class FilePicker implements Model
         public readonly bool $dirAllowed,
         public readonly bool $fileAllowed,
         public readonly ?string $selected,
+        public readonly bool $showIcons   = false,
+        public readonly bool $showSize    = false,
+        public readonly SortMode $sortBy  = SortMode::Name,
+        public readonly bool $reverseSort = false,
+        public readonly ?string $error    = null,
     ) {}
 
     public static function new(?string $cwd = null, int $height = 10): self
@@ -99,6 +104,9 @@ final class FilePicker implements Model
     public function view(): string
     {
         $lines = [$this->cwd];
+        if ($this->error !== null) {
+            $lines[] = '! ' . $this->error;
+        }
         if ($this->entries === []) {
             $lines[] = '(empty)';
             return implode("\n", $lines);
@@ -108,7 +116,10 @@ final class FilePicker implements Model
         $window = array_slice($this->entries, $top, $this->height);
         foreach ($window as $i => $entry) {
             $idx = $top + $i;
-            $line = ($idx === $this->cursor && $this->focused ? '> ' : '  ') . $entry->display();
+            $iconPart = $this->showIcons ? $entry->icon() . ' ' : '';
+            $sizePart = $this->showSize  ? '  ' . $entry->formatSize() : '';
+            $body     = $iconPart . $entry->display() . $sizePart;
+            $line = ($idx === $this->cursor && $this->focused ? '> ' : '  ') . $body;
             if ($idx === $this->cursor && $this->focused) {
                 $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
             }
@@ -184,6 +195,25 @@ final class FilePicker implements Model
     public function withFileAllowed(bool $on): self { return $this->mutate(fileAllowed: $on); }
     public function withHeight(int $h): self        { return $this->mutate(height: max(1, $h))->reclamp(); }
 
+    /** Render a per-entry icon glyph. Off by default. */
+    public function withShowIcons(bool $on = true): self { return $this->mutate(showIcons: $on); }
+
+    /** Append a right-aligned size column for files. Off by default. */
+    public function withShowSize(bool $on = true): self  { return $this->mutate(showSize: $on); }
+
+    /**
+     * Choose the secondary sort criterion (directories always group
+     * first, regardless). Pass `$reverse: true` to flip order. Mirrors
+     * Bubbles' sort options.
+     */
+    public function withSortMode(SortMode $mode, bool $reverse = false): self
+    {
+        return $this->mutate(sortBy: $mode, reverseSort: $reverse)->refresh();
+    }
+
+    /** Latest filesystem error (e.g. unreadable directory). */
+    public function error(): ?string { return $this->error; }
+
     // ---- internals ---------------------------------------------------
 
     private function activate(): self
@@ -244,14 +274,23 @@ final class FilePicker implements Model
                     continue;
                 }
             }
-            $entries[] = new Entry($name, $isDir, $hidden);
+            $size  = !$isDir ? (int) @filesize($full) : 0;
+            $mtime = (int) @filemtime($full);
+            $entries[] = new Entry($name, $isDir, $hidden, $size, $mtime);
         }
-        // Directories first, then alpha within each group.
-        usort($entries, static function (Entry $a, Entry $b): int {
+        // Directories always group first; secondary sort by configured mode.
+        $reverse = $this->reverseSort ? -1 : 1;
+        $mode = $this->sortBy;
+        usort($entries, static function (Entry $a, Entry $b) use ($mode, $reverse): int {
             if ($a->isDir !== $b->isDir) {
                 return $a->isDir ? -1 : 1;
             }
-            return strnatcasecmp($a->name, $b->name);
+            $cmp = match ($mode) {
+                SortMode::Size  => $a->size  <=> $b->size,
+                SortMode::MTime => $a->mtime <=> $b->mtime,
+                SortMode::Name  => strnatcasecmp($a->name, $b->name),
+            };
+            return $cmp * $reverse;
         });
         return $entries;
     }
@@ -292,6 +331,11 @@ final class FilePicker implements Model
         ?bool $fileAllowed = null,
         ?string $selected = null,
         bool $touchSelected = false,
+        ?bool $showIcons = null,
+        ?bool $showSize = null,
+        ?SortMode $sortBy = null,
+        ?bool $reverseSort = null,
+        ?string $error = null, bool $errorSet = false,
     ): self {
         return new self(
             cwd:               $cwd               ?? $this->cwd,
@@ -305,6 +349,11 @@ final class FilePicker implements Model
             dirAllowed:        $dirAllowed        ?? $this->dirAllowed,
             fileAllowed:       $fileAllowed       ?? $this->fileAllowed,
             selected:          $touchSelected ? $selected : $this->selected,
+            showIcons:         $showIcons         ?? $this->showIcons,
+            showSize:          $showSize          ?? $this->showSize,
+            sortBy:            $sortBy            ?? $this->sortBy,
+            reverseSort:       $reverseSort       ?? $this->reverseSort,
+            error:             $errorSet ? $error : $this->error,
         );
     }
 }

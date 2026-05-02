@@ -77,4 +77,17 @@ final class SpinnerTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new Style(['x'], 0.0);
     }
+
+    public function testNewStylePresets(): void
+    {
+        $this->assertNotEmpty(Style::jump()->frames);
+        $this->assertNotEmpty(Style::moon()->frames);
+        $this->assertNotEmpty(Style::monkey()->frames);
+        $this->assertNotEmpty(Style::hamburger()->frames);
+        $this->assertNotEmpty(Style::ellipsis()->frames);
+        // Moon has 8 phases.
+        $this->assertCount(8, Style::moon()->frames);
+        // Ellipsis cycles through 4 frames including the empty one.
+        $this->assertCount(4, Style::ellipsis()->frames);
+    }
 }

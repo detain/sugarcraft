@@ -27,6 +27,10 @@ use CandyCore\Core\Msg\KeyMsg;
  */
 final class TextInput implements Model
 {
+    /**
+     * @param list<string>            $suggestions     full set of completion candidates
+     * @param ?\Closure(string): ?string $validate    null = valid; non-null = error message
+     */
     private function __construct(
         public readonly string $value,
         public readonly int $cursorPos,
@@ -39,6 +43,11 @@ final class TextInput implements Model
         public readonly EchoMode $echoMode,
         public readonly string $echoChar,
         public readonly int $offset,
+        public readonly array $suggestions = [],
+        public readonly bool $showSuggestions = false,
+        public readonly int $currentSuggestionIndex = 0,
+        public readonly ?\Closure $validate = null,
+        public readonly ?string $err = null,
     ) {}
 
     public static function new(): self
@@ -180,6 +189,137 @@ final class TextInput implements Model
     public function withEchoMode(EchoMode $m): self  { return $this->mutate(echoMode: $m); }
     public function withEchoChar(string $c): self    { return $this->mutate(echoChar: $c); }
 
+    /**
+     * Replace the suggestion pool. Call {@see showSuggestions()} to
+     * enable rendering of the matching subset.
+     *
+     * @param list<string> $candidates
+     */
+    public function setSuggestions(array $candidates): self
+    {
+        return $this->mutate(suggestions: array_values($candidates), currentSuggestionIndex: 0);
+    }
+
+    public function withSuggestions(array $candidates): self
+    {
+        return $this->setSuggestions($candidates);
+    }
+
+    /** Toggle whether suggestions render below the input. Default off. */
+    public function showSuggestions(bool $on = true): self
+    {
+        return $this->mutate(showSuggestions: $on);
+    }
+
+    /**
+     * Filter the suggestion pool by current prefix, case-insensitively.
+     *
+     * @return list<string>
+     */
+    public function matchedSuggestions(): array
+    {
+        if ($this->value === '' || $this->suggestions === []) {
+            return [];
+        }
+        $needle = mb_strtolower($this->value, 'UTF-8');
+        $out = [];
+        foreach ($this->suggestions as $candidate) {
+            if (str_starts_with(mb_strtolower($candidate, 'UTF-8'), $needle)) {
+                $out[] = $candidate;
+            }
+        }
+        return $out;
+    }
+
+    /** Currently-highlighted suggestion (or null when none match). */
+    public function currentSuggestion(): ?string
+    {
+        $matches = $this->matchedSuggestions();
+        if ($matches === []) {
+            return null;
+        }
+        $i = $this->currentSuggestionIndex % max(1, count($matches));
+        return $matches[$i];
+    }
+
+    /**
+     * Set a validator. Receives the current value, returns an error
+     * message (string) for invalid input or null for valid. The
+     * latest message is exposed via {@see err()} after every edit.
+     *
+     * @param ?\Closure(string): ?string $fn  pass null to clear
+     */
+    public function withValidator(?\Closure $fn): self
+    {
+        return $this->mutate(
+            validate: $fn,
+            validateSet: true,
+            err: $fn !== null ? $fn($this->value) : null,
+            errSet: true,
+        );
+    }
+
+    /** Latest validator error or null. */
+    public function err(): ?string
+    {
+        return $this->err;
+    }
+
+    /** Manually move the cursor (clamped to `[0, length()]`). */
+    public function setCursor(int $pos): self
+    {
+        return $this->moveCursor($pos);
+    }
+
+    public function cursorStart(): self
+    {
+        return $this->moveCursor(0);
+    }
+
+    public function cursorEnd(): self
+    {
+        return $this->moveCursor($this->length());
+    }
+
+    /**
+     * Insert `$text` at the cursor position. Newlines are stripped (a
+     * single-line input can't represent them). Honors `charLimit`.
+     */
+    public function paste(string $text): self
+    {
+        $text = str_replace(["\r\n", "\r", "\n"], '', $text);
+        return $this->insert($text);
+    }
+
+    /** Cycle to the next matching suggestion. No-op when none match. */
+    public function nextSuggestion(): self
+    {
+        $matches = $this->matchedSuggestions();
+        if ($matches === []) {
+            return $this;
+        }
+        $next = ($this->currentSuggestionIndex + 1) % count($matches);
+        return $this->mutate(currentSuggestionIndex: $next);
+    }
+
+    public function prevSuggestion(): self
+    {
+        $matches = $this->matchedSuggestions();
+        if ($matches === []) {
+            return $this;
+        }
+        $count = count($matches);
+        $next = ($this->currentSuggestionIndex - 1 + $count) % $count;
+        return $this->mutate(currentSuggestionIndex: $next);
+    }
+
+    /** Replace the current value with the highlighted suggestion. */
+    public function acceptSuggestion(): self
+    {
+        $s = $this->currentSuggestion();
+        return $s !== null ? $this->setValue($s) : $this;
+    }
+
     public function length(): int
     {
         return mb_strlen($this->value, 'UTF-8');
@@ -262,19 +402,38 @@ final class TextInput implements Model
         ?EchoMode $echoMode = null,
         ?string $echoChar = null,
         ?int $offset = null,
+        ?array $suggestions = null,
+        ?bool $showSuggestions = null,
+        ?int $currentSuggestionIndex = null,
+        ?\Closure $validate = null, bool $validateSet = false,
+        ?string $err = null, bool $errSet = false,
     ): self {
+        $newValue = $value ?? $this->value;
+        // Auto-revalidate when the value changes and a validator is set,
+        // unless the caller explicitly supplied an err override.
+        $resolvedValidate = $validateSet ? $validate : $this->validate;
+        if (!$errSet) {
+            $err = $resolvedValidate !== null && ($value !== null)
+                ? $resolvedValidate($newValue)
+                : ($value !== null ? null : $this->err);
+        }
         return new self(
-            value:       $value       ?? $this->value,
-            cursorPos:   $cursorPos   ?? $this->cursorPos,
-            placeholder: $placeholder ?? $this->placeholder,
-            prompt:      $prompt      ?? $this->prompt,
-            charLimit:   $charLimit   ?? $this->charLimit,
-            width:       $width       ?? $this->width,
-            focused:     $focused     ?? $this->focused,
-            cursor:      $cursor      ?? $this->cursor,
-            echoMode:    $echoMode    ?? $this->echoMode,
-            echoChar:    $echoChar    ?? $this->echoChar,
-            offset:      $offset      ?? $this->offset,
+            value:                  $newValue,
+            cursorPos:              $cursorPos              ?? $this->cursorPos,
+            placeholder:            $placeholder            ?? $this->placeholder,
+            prompt:                 $prompt                 ?? $this->prompt,
+            charLimit:              $charLimit              ?? $this->charLimit,
+            width:                  $width                  ?? $this->width,
+            focused:                $focused                ?? $this->focused,
+            cursor:                 $cursor                 ?? $this->cursor,
+            echoMode:               $echoMode               ?? $this->echoMode,
+            echoChar:               $echoChar               ?? $this->echoChar,
+            offset:                 $offset                 ?? $this->offset,
+            suggestions:            $suggestions            ?? $this->suggestions,
+            showSuggestions:        $showSuggestions        ?? $this->showSuggestions,
+            currentSuggestionIndex: $currentSuggestionIndex ?? $this->currentSuggestionIndex,
+            validate:               $resolvedValidate,
+            err:                    $err,
         );
     }
 }
