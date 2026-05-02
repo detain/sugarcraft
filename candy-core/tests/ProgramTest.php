@@ -10,8 +10,11 @@ use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Msg\QuitMsg;
 use CandyCore\Core\Msg\WindowSizeMsg;
+use CandyCore\Core\PrintMsg;
 use CandyCore\Core\Program;
 use CandyCore\Core\ProgramOptions;
+use CandyCore\Core\RawMsg;
+use CandyCore\Core\Util\Ansi;
 use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
 
@@ -140,6 +143,117 @@ final class ProgramTest extends TestCase
         $this->assertCount(2, $final->log);
         $this->assertInstanceOf(WindowSizeMsg::class, $final->log[0]);
         $this->assertSame($marker, $final->log[1]);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testUnicodeModeToggledAroundRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $program->quit();
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString(Ansi::unicodeOn(),  $written);
+        $this->assertStringContainsString(Ansi::unicodeOff(), $written);
+        // Enable must come before disable.
+        $this->assertLessThan(
+            strrpos($written, Ansi::unicodeOff()),
+            strpos($written, Ansi::unicodeOn()),
+        );
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testUnicodeModeCanBeDisabled(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            unicodeMode: false,
+        );
+        $program = new Program(new RecordingModel(quitAfter: PHP_INT_MAX), $opts);
+        $program->quit();
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringNotContainsString(Ansi::unicodeOn(),  $written);
+        $this->assertStringNotContainsString(Ansi::unicodeOff(), $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testRawMsgWritesBytesVerbatim(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $payload = "\x1b]0;hi\x07";
+        $model = new RecordingModel(
+            quitAfter: 2,
+            initCmd: Cmd::raw($payload),
+        );
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $final = $program->run();
+
+        // RawMsg must NOT reach the model — it's intercepted by Program.
+        foreach ($final->log as $msg) {
+            $this->assertNotInstanceOf(RawMsg::class, $msg);
+        }
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString($payload, $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testPrintMsgWritesLineAndDoesNotReachModel(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(
+            quitAfter: 2,
+            initCmd: Cmd::println('side-channel'),
+        );
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $final = $program->run();
+
+        foreach ($final->log as $msg) {
+            $this->assertNotInstanceOf(PrintMsg::class, $msg);
+        }
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString("side-channel\n", $written);
 
         fclose($writer);
         fclose($in);

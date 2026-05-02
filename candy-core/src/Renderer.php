@@ -36,9 +36,11 @@ final class Renderer
         $lines = $frame === '' ? [''] : explode("\n", $frame);
 
         if ($this->lastLines === null) {
-            // First render: home + erase to end + full frame.
-            $payload = Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
-            fwrite($this->out, $payload);
+            // First render: home + erase to end + full frame, all wrapped
+            // in synchronized-update markers so the terminal commits the
+            // frame atomically.
+            $body = Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
+            fwrite($this->out, Ansi::syncBegin() . $body . Ansi::syncEnd());
             $this->lastLines = $lines;
             return;
         }
@@ -66,7 +68,9 @@ final class Renderer
         }
 
         if ($payload !== '') {
-            fwrite($this->out, $payload);
+            // Wrap every diff payload in synchronized-update markers too —
+            // partial repaints are exactly when tearing is most visible.
+            fwrite($this->out, Ansi::syncBegin() . $payload . Ansi::syncEnd());
         }
         $this->lastLines = $lines;
     }

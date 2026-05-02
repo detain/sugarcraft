@@ -470,13 +470,13 @@ Status legend per feature:
 
 | v2 feature | Status | Notes |
 |---|---|---|
-| Synchronized updates (DEC mode 2026) — wraps each frame in `CSI ? 2026 h … l` | 🔴 | Add to `Renderer`. Eliminates flicker on slow terminals. **High value, small change.** |
-| Unicode mode (DEC mode 2027) — proper wide-char width queries | 🔴 | Toggle on by default in `Program::setupTerminal()`. |
+| Synchronized updates (DEC mode 2026) — wraps each frame in `CSI ? 2026 h … l` | ✅ | `Renderer` wraps both the first frame and every diff payload in `Ansi::syncBegin()` / `syncEnd()`. |
+| Unicode mode (DEC mode 2027) — proper wide-char width queries | ✅ | `ProgramOptions::$unicodeMode` defaults to true; `Program::setupTerminal()` emits `CSI ?2027h`, teardown emits `CSI ?2027l`. |
 | "Cursed" ncurses-style renderer — diff scoped to changed cells, not lines | 🟡 | We have a line-diff renderer (`candy-core/src/Renderer.php`); cell-diff is a v1.1 enhancement. Would meaningfully cut SSH bandwidth for CandyWish. |
 | `WithInput` / `WithOutput` / `WithEnvironment` / `WithWindowSize` / `WithColorProfile` Program options | 🟡 | We have `input` / `output` / `loop` already. Add `environment` (test injection), `windowSize` (force), `colorProfile` (override auto-detect). |
 | `OpenTTY()` — open `/dev/tty` directly when stdin is piped | 🔴 | Useful for `candyshell choose < some.txt`-style usage where stdin is data, not the TTY. |
-| `tea.Println` / `tea.Printf` — write text *above* the program's region | 🔴 | Adds a `Cmd::println(string)` returning a sentinel the runtime intercepts to write to the output stream without breaking the alt-screen layout. |
-| `tea.Raw(escape)` — send raw escape sequences | 🔴 | Cheap escape hatch for niche terminal features we don't wrap. |
+| `tea.Println` / `tea.Printf` — write text *above* the program's region | ✅ | `Cmd::println(string)` returns a `PrintMsg` sentinel; `Program::dispatch()` writes the line + a newline and resets the renderer so the next frame repaints cleanly. |
+| `tea.Raw(escape)` — send raw escape sequences | ✅ | `Cmd::raw(string)` returns a `RawMsg`; the Program writes the bytes verbatim without disturbing renderer diff state. |
 | **Inline mode** as a first-class use case (no alt screen, no full takeover) | 🟡 | Our `useAltScreen=false` already runs inline-ish, but v2 formalises it: cursor stays in the user's prompt, output flows above the program region. Pair with `tea.Println` and a smaller `Renderer` that only owns the rows below the prompt. **Important for `candyshell input` / `confirm` / `spin` ergonomics.** |
 | **Advanced compositing** — layered rendering / pop-overs / floating panes | 🔴 | Stacks multiple "layers" so a modal can render above the main view without the model rebuilding the world. Schedule with the View struct rework — they're paired in v2. |
 | **Inline image protocols** (Sixel / Kitty / iTerm2) | 🔴 | Detect the active protocol via terminal-version query; encode an image (PNG / GIF / SVG via librsvg fallback) into the appropriate escape stream. Lives next to `Charts\Picture` once that ships in Phase 6. |
@@ -508,7 +508,7 @@ Status legend per feature:
 
 | v2 feature | Status | Notes |
 |---|---|---|
-| Split `MouseMsg` into `MouseClickMsg` / `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` | 🟡 | Our `MouseMsg` carries an `action` enum. Add four marker subclasses extending `MouseMsg` so callers can `instanceof`. |
+| Split `MouseMsg` into `MouseClickMsg` / `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` | ✅ | `MouseMsg` is no longer `final`; four empty marker subclasses live under `Msg/`. `InputReader::decodeSgrMouse()` instantiates the right one from the SGR byte. The `action` enum stays for callers that prefer enum-based dispatch. |
 | `PasteMsg::content` (we already match) | ✅ | Done. |
 | `PasteStartMsg` / `PasteEndMsg` for *streaming* paste rendering | 🔴 | Useful for very large pastes where you want a progress indicator. |
 
@@ -569,10 +569,11 @@ items to revisit per component once the runtime upgrade lands:
 
 The v2 parity work is **medium-term**, not urgent. Recommended order:
 
-1. **Cheap wins first** (no architectural changes): synchronized updates,
-   unicode mode, `Println` / `Printf` Cmds, mouse subtype markers,
+1. **Cheap wins first** (no architectural changes): ✅ synchronized
+   updates, ✅ unicode mode, ✅ `Println` / `Printf` Cmds, ✅ `Raw`
+   escape hatch, ✅ mouse subtype markers — all shipped. Still pending:
    terminal queries (cursor pos, fg/bg colour, version), `AdaptiveColor`,
-   `LightDark`, `Raw` escape hatch.
+   `LightDark`.
 2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
    programs only own their own rows, leaving everything above
    intact. Pair with `Cmd::println` so messages can flow above the
@@ -581,9 +582,12 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
 3. **Modifier alignment**: rename `KeyMsg::rune`/`type` to `text`/`code`
    and add `BaseCode` + `Modifiers`. Keep the old field names as
    readonly aliases to avoid a hard BC break.
-4. **Mouse subtype split**: introduce concrete `MouseClickMsg` /
+4. ~~**Mouse subtype split**: introduce concrete `MouseClickMsg` /
    `MouseReleaseMsg` / `MouseWheelMsg` / `MouseMotionMsg` extending
-   `MouseMsg`. Existing `instanceof MouseMsg` keeps working.
+   `MouseMsg`.~~ ✅ Shipped — `MouseMsg` is non-final, four marker
+   subclasses live under `candy-core/src/Msg/`, and `InputReader`
+   instantiates the right subclass per SGR action. Existing
+   `instanceof MouseMsg` checks keep working unchanged.
 5. **Cursed renderer** (cell-diff): meaningful only once we have
    real-world SSH usage — defer until CandyWish ships. The blog post
    explicitly calls out the SSH cost savings.

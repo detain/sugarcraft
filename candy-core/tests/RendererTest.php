@@ -30,7 +30,7 @@ final class RendererTest extends TestCase
         $r->render("a\nb\nc");
 
         $written = $this->read($out);
-        $this->assertStringStartsWith(Ansi::cursorTo(1, 1), $written);
+        $this->assertStringStartsWith(Ansi::syncBegin() . Ansi::cursorTo(1, 1), $written);
         $this->assertStringContainsString("a\r\nb\r\nc", $written);
         fclose($out);
     }
@@ -90,6 +90,32 @@ final class RendererTest extends TestCase
         $written = $this->read($out);
         // 'x' should appear twice (full redraw after reset).
         $this->assertSame(2, substr_count($written, 'x'));
+        fclose($out);
+    }
+
+    public function testFirstFrameWrappedInSyncMarkers(): void
+    {
+        [$out, $r] = $this->make();
+        $r->render("hello");
+        $written = $this->read($out);
+        $this->assertStringStartsWith(Ansi::syncBegin(), $written);
+        $this->assertStringEndsWith(Ansi::syncEnd(), $written);
+        fclose($out);
+    }
+
+    public function testDiffPayloadWrappedInSyncMarkers(): void
+    {
+        [$out, $r] = $this->make();
+        $r->render("a\nb");
+        $beforeDiff = ftell($out);
+        $r->render("a\nB");
+
+        rewind($out);
+        fseek($out, $beforeDiff);
+        $diff = (string) stream_get_contents($out);
+
+        $this->assertStringStartsWith(Ansi::syncBegin(), $diff);
+        $this->assertStringEndsWith(Ansi::syncEnd(), $diff);
         fclose($out);
     }
 }

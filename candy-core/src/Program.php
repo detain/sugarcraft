@@ -166,6 +166,21 @@ final class Program
             });
             return;
         }
+        if ($msg instanceof RawMsg) {
+            // Side-channel: write bytes verbatim, no re-render, no model
+            // notification. Caller is responsible for cursor-area effects.
+            fwrite($this->output, $msg->bytes);
+            return;
+        }
+        if ($msg instanceof PrintMsg) {
+            // Print above the program region. The renderer's diff state
+            // is now stale, so reset it so the next render() repaints
+            // every visible row.
+            fwrite($this->output, $msg->text . "\n");
+            $this->renderer->reset();
+            $this->dirty = true;
+            return;
+        }
         if ($msg instanceof QuitMsg) {
             $this->running = false;
             $this->loop->stop();
@@ -231,6 +246,11 @@ final class Program
         if ($this->options->hideCursor) {
             fwrite($this->output, Ansi::cursorHide());
         }
+        // Bubble Tea v2 enables grapheme-cluster mode (DEC 2027) by
+        // default to fix long-standing emoji-width drift. We follow.
+        if ($this->options->unicodeMode) {
+            fwrite($this->output, Ansi::unicodeOn());
+        }
         match ($this->options->mouseMode) {
             MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOn()),
             MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOn()),
@@ -259,6 +279,9 @@ final class Program
             MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOff()),
             MouseMode::Off        => null,
         };
+        if ($this->options->unicodeMode) {
+            fwrite($this->output, Ansi::unicodeOff());
+        }
         if ($this->options->hideCursor) {
             fwrite($this->output, Ansi::cursorShow());
         }

@@ -25,6 +25,8 @@ final class ProgramOptions
         public readonly MouseMode $mouseMode = MouseMode::Off,
         public readonly bool $reportFocus = false,
         public readonly bool $bracketedPaste = false,
+        /** Enable DEC mode 2027 (grapheme cluster mode) — Bubble Tea v2 default. */
+        public readonly bool $unicodeMode = true,
         public readonly mixed $input = null,
         public readonly mixed $output = null,
         public readonly ?LoopInterface $loop = null,

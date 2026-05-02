@@ -99,6 +99,25 @@ final class Ansi
     public static function altScreenEnter(): string { return self::CSI . '?1049h'; }
     public static function altScreenLeave(): string { return self::CSI . '?1049l'; }
 
+    /**
+     * Synchronized output (DEC mode 2026). Wrap each rendered frame in
+     * `syncBegin` / `syncEnd` so the terminal buffers the whole frame
+     * before painting, eliminating tearing and partial-frame flashes
+     * on slow terminals. Bubble Tea v2 enables this by default; we
+     * follow.
+     */
+    public static function syncBegin(): string { return self::CSI . '?2026h'; }
+    public static function syncEnd(): string   { return self::CSI . '?2026l'; }
+
+    /**
+     * Grapheme cluster mode (DEC mode 2027). Tells the terminal to
+     * report widths / cursor advances per grapheme cluster instead of
+     * per code point — fixes the long-standing emoji-width drift.
+     * Toggle once at program startup; restore on teardown.
+     */
+    public static function unicodeOn(): string  { return self::CSI . '?2027h'; }
+    public static function unicodeOff(): string { return self::CSI . '?2027l'; }
+
     public static function bracketedPasteOn(): string  { return self::CSI . '?2004h'; }
     public static function bracketedPasteOff(): string { return self::CSI . '?2004l'; }
 

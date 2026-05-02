@@ -11,7 +11,11 @@ use CandyCore\Core\MouseButton;
 use CandyCore\Core\Msg\BlurMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\MouseClickMsg;
+use CandyCore\Core\Msg\MouseMotionMsg;
 use CandyCore\Core\Msg\MouseMsg;
+use CandyCore\Core\Msg\MouseReleaseMsg;
+use CandyCore\Core\Msg\MouseWheelMsg;
 use CandyCore\Core\Msg\PasteMsg;
 use PHPUnit\Framework\TestCase;
 
@@ -227,6 +231,32 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
         $this->assertSame(5,  $msgs[0]->x);
         $this->assertSame(10, $msgs[0]->y);
+    }
+
+    // ---- mouse subclass dispatch (Bubble Tea v2 parity) ------------------
+
+    public function testMousePressEmitsClickMsg(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<0;1;1M");
+        $this->assertInstanceOf(MouseClickMsg::class, $msgs[0]);
+    }
+
+    public function testMouseReleaseEmitsReleaseMsg(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<0;1;1m");
+        $this->assertInstanceOf(MouseReleaseMsg::class, $msgs[0]);
+    }
+
+    public function testMouseMotionEmitsMotionMsg(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<32;7;8M");
+        $this->assertInstanceOf(MouseMotionMsg::class, $msgs[0]);
+    }
+
+    public function testMouseWheelEmitsWheelMsg(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[<64;1;1M");
+        $this->assertInstanceOf(MouseWheelMsg::class, $msgs[0]);
     }
 
     // ---- function keys ----------------------------------------------------

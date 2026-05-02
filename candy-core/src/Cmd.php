@@ -56,5 +56,29 @@ final class Cmd
         return static fn(): Msg => new TickRequest($seconds, $produce);
     }
 
+    /**
+     * Write raw escape-sequence bytes to the Program's output stream.
+     * The renderer's diff state is *not* invalidated, so callers should
+     * use this for cursor-area-neutral effects (window title, OSC
+     * inline images, etc.) and call `Renderer::reset()` themselves if
+     * they intentionally clobber the painted region.
+     *
+     * Mirrors Bubble Tea v2's `tea.Raw`.
+     */
+    public static function raw(string $bytes): \Closure
+    {
+        return static fn(): Msg => new RawMsg($bytes);
+    }
+
+    /**
+     * Print a line above the Program's region. Convenient for non-
+     * alt-screen "inline" programs that want to log progress without
+     * disturbing their rendered view. Mirrors `tea.Println`.
+     */
+    public static function println(string $text): \Closure
+    {
+        return static fn(): Msg => new PrintMsg($text);
+    }
+
     private function __construct() {}
 }

@@ -8,6 +8,8 @@ use CandyCore\Core\BatchMsg;
 use CandyCore\Core\Cmd;
 use CandyCore\Core\Msg;
 use CandyCore\Core\Msg\QuitMsg;
+use CandyCore\Core\PrintMsg;
+use CandyCore\Core\RawMsg;
 use PHPUnit\Framework\TestCase;
 
 final class CmdTest extends TestCase
@@ -49,5 +51,21 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(\CandyCore\Core\TickRequest::class, $req);
         $this->assertSame(0.5, $req->seconds);
         $this->assertSame($msg, ($req->produce)());
+    }
+
+    public function testRawWrapsBytesInRawMsg(): void
+    {
+        $cmd = Cmd::raw("\x1b]7;file:///tmp\x07");
+        $msg = $cmd();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]7;file:///tmp\x07", $msg->bytes);
+    }
+
+    public function testPrintlnWrapsTextInPrintMsg(): void
+    {
+        $cmd = Cmd::println('hello world');
+        $msg = $cmd();
+        $this->assertInstanceOf(PrintMsg::class, $msg);
+        $this->assertSame('hello world', $msg->text);
     }
 }

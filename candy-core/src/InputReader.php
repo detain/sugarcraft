@@ -7,7 +7,11 @@ namespace CandyCore\Core;
 use CandyCore\Core\Msg\BlurMsg;
 use CandyCore\Core\Msg\FocusMsg;
 use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\Msg\MouseClickMsg;
+use CandyCore\Core\Msg\MouseMotionMsg;
 use CandyCore\Core\Msg\MouseMsg;
+use CandyCore\Core\Msg\MouseReleaseMsg;
+use CandyCore\Core\Msg\MouseWheelMsg;
 use CandyCore\Core\Msg\PasteMsg;
 
 /**
@@ -271,6 +275,16 @@ final class InputReader
                 : ($press ? MouseAction::Press : MouseAction::Release);
         }
 
-        return new MouseMsg($x, $y, $button, $action, $shift, $alt, $ctrl);
+        // Pick the v2-style concrete subclass so callers can pattern-
+        // match on event kind via instanceof. All four subclasses still
+        // satisfy `instanceof MouseMsg`, so existing handlers keep
+        // working unchanged.
+        $class = match (true) {
+            $isWheel                          => MouseWheelMsg::class,
+            $action === MouseAction::Motion   => MouseMotionMsg::class,
+            $action === MouseAction::Release  => MouseReleaseMsg::class,
+            default                           => MouseClickMsg::class,
+        };
+        return new $class($x, $y, $button, $action, $shift, $alt, $ctrl);
     }
 }
