@@ -32,6 +32,8 @@ final class Style
     private function __construct(
         private readonly ?Color $fg = null,
         private readonly ?Color $bg = null,
+        private readonly ?AdaptiveColor $fgAdaptive = null,
+        private readonly ?AdaptiveColor $bgAdaptive = null,
         private readonly bool $bold = false,
         private readonly bool $italic = false,
         private readonly bool $underline = false,
@@ -60,6 +62,55 @@ final class Style
 
     public function foreground(?Color $c): self          { return $this->with(fg: $c, fgSet: true, propsAdded: ['fg']); }
     public function background(?Color $c): self          { return $this->with(bg: $c, bgSet: true, propsAdded: ['bg']); }
+
+    /**
+     * Set a foreground that picks between $light (for terminals with a
+     * light background) and $dark (for terminals with a dark
+     * background) at render time. Resolve via {@see resolveAdaptive()}
+     * — until then the concrete `foreground` slot wins.
+     *
+     * Mirrors lipgloss v2's `AdaptiveColor` field.
+     */
+    public function foregroundAdaptive(Color $light, Color $dark): self
+    {
+        return $this->with(
+            fgAdaptive: new AdaptiveColor($light, $dark),
+            fgAdaptiveSet: true,
+            propsAdded: ['fgAdaptive'],
+        );
+    }
+
+    public function backgroundAdaptive(Color $light, Color $dark): self
+    {
+        return $this->with(
+            bgAdaptive: new AdaptiveColor($light, $dark),
+            bgAdaptiveSet: true,
+            propsAdded: ['bgAdaptive'],
+        );
+    }
+
+    /**
+     * Collapse any adaptive fg/bg slots into concrete `foreground` /
+     * `background` based on the supplied dark-background flag (typically
+     * the value of {@see \CandyCore\Core\Msg\BackgroundColorMsg::isDark()}).
+     *
+     * Adaptive slots only resolve when the matching concrete slot
+     * isn't explicitly set, so an explicit `foreground()` always wins
+     * over `foregroundAdaptive()` — same precedence as lipgloss.
+     */
+    public function resolveAdaptive(bool $isDark): self
+    {
+        $next = $this;
+        $hasFg = isset($this->propsSet['fg']);
+        $hasBg = isset($this->propsSet['bg']);
+        if ($this->fgAdaptive !== null && !$hasFg) {
+            $next = $next->foreground($this->fgAdaptive->pick($isDark));
+        }
+        if ($this->bgAdaptive !== null && !$hasBg) {
+            $next = $next->background($this->bgAdaptive->pick($isDark));
+        }
+        return $next;
+    }
     public function bold(bool $on = true): self          { return $this->with(bold: $on, propsAdded: ['bold']); }
     public function italic(bool $on = true): self        { return $this->with(italic: $on, propsAdded: ['italic']); }
     public function underline(bool $on = true): self     { return $this->with(underline: $on, propsAdded: ['underline']); }
@@ -158,6 +209,8 @@ final class Style
         return new self(
             fg:          $has('fg')          ? $this->fg          : $parent->fg,
             bg:          $has('bg')          ? $this->bg          : $parent->bg,
+            fgAdaptive:  $has('fgAdaptive')  ? $this->fgAdaptive  : $parent->fgAdaptive,
+            bgAdaptive:  $has('bgAdaptive')  ? $this->bgAdaptive  : $parent->bgAdaptive,
             bold:        $has('bold')        ? $this->bold        : $parent->bold,
             italic:      $has('italic')      ? $this->italic      : $parent->italic,
             underline:   $has('underline')   ? $this->underline   : $parent->underline,
@@ -413,6 +466,8 @@ final class Style
     private function with(
         ?Color $fg = null, bool $fgSet = false,
         ?Color $bg = null, bool $bgSet = false,
+        ?AdaptiveColor $fgAdaptive = null, bool $fgAdaptiveSet = false,
+        ?AdaptiveColor $bgAdaptive = null, bool $bgAdaptiveSet = false,
         ?bool $bold = null,
         ?bool $italic = null,
         ?bool $underline = null,
@@ -440,6 +495,8 @@ final class Style
         return new self(
             fg:          $fgSet         ? $fg          : $this->fg,
             bg:          $bgSet         ? $bg          : $this->bg,
+            fgAdaptive:  $fgAdaptiveSet ? $fgAdaptive  : $this->fgAdaptive,
+            bgAdaptive:  $bgAdaptiveSet ? $bgAdaptive  : $this->bgAdaptive,
             bold:        $bold          ?? $this->bold,
             italic:      $italic        ?? $this->italic,
             underline:   $underline     ?? $this->underline,

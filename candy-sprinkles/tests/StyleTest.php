@@ -6,8 +6,10 @@ namespace CandyCore\Sprinkles\Tests;
 
 use CandyCore\Core\Util\Color;
 use CandyCore\Core\Util\ColorProfile;
+use CandyCore\Sprinkles\AdaptiveColor;
 use CandyCore\Sprinkles\Align;
 use CandyCore\Sprinkles\Border;
+use CandyCore\Sprinkles\LightDark;
 use CandyCore\Sprinkles\Style;
 use CandyCore\Sprinkles\VAlign;
 use PHPUnit\Framework\TestCase;
@@ -385,5 +387,86 @@ final class StyleTest extends TestCase
         // codes — the user's red 'hello' should still be red, just clipped.
         $out = Style::new()->width(3)->render("\x1b[31mhello\x1b[0m");
         $this->assertSame("\x1b[31mhel\x1b[0m", $out);
+    }
+
+    // ---- adaptive colour ------------------------------------------------
+
+    public function testForegroundAdaptiveDoesNotRenderUntilResolved(): void
+    {
+        // Adaptive without a concrete `foreground()` shouldn't paint
+        // anything yet — the call is deferred until resolveAdaptive().
+        $s = Style::new()->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testResolveAdaptivePicksDarkForDarkBackground(): void
+    {
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000000'), Color::hex('#ffffff'))
+            ->resolveAdaptive(isDark: true);
+        // Dark mode → "dark" colour (white) → SGR 38;2;255;255;255.
+        $this->assertSame("\x1b[38;2;255;255;255mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testResolveAdaptivePicksLightForLightBackground(): void
+    {
+        $s = Style::new()
+            ->foregroundAdaptive(Color::hex('#000000'), Color::hex('#ffffff'))
+            ->resolveAdaptive(isDark: false);
+        $this->assertSame("\x1b[38;2;0;0;0mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testExplicitForegroundWinsOverAdaptive(): void
+    {
+        // Concrete `foreground()` always beats adaptive — same precedence
+        // as lipgloss.
+        $s = Style::new()
+            ->foreground(Color::hex('#ff00ff'))
+            ->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'))
+            ->resolveAdaptive(isDark: true);
+        $this->assertSame("\x1b[38;2;255;0;255mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testBackgroundAdaptiveResolves(): void
+    {
+        $s = Style::new()
+            ->backgroundAdaptive(Color::hex('#eeeeee'), Color::hex('#111111'))
+            ->resolveAdaptive(isDark: true);
+        $this->assertSame("\x1b[48;2;17;17;17mhi\x1b[0m", $s->render('hi'));
+    }
+
+    public function testInheritPropagatesAdaptive(): void
+    {
+        $parent = Style::new()->foregroundAdaptive(Color::hex('#000'), Color::hex('#fff'));
+        $child  = Style::new()->bold();
+        $merged = $child->inherit($parent)->resolveAdaptive(isDark: false);
+        $this->assertSame("\x1b[1m\x1b[38;2;0;0;0mhi\x1b[0m", $merged->render('hi'));
+    }
+
+    // ---- AdaptiveColor + LightDark helpers ------------------------------
+
+    public function testAdaptiveColorPick(): void
+    {
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $a = new AdaptiveColor($light, $dark);
+        $this->assertSame($light, $a->pick(false));
+        $this->assertSame($dark,  $a->pick(true));
+    }
+
+    public function testLightDarkPickStatic(): void
+    {
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $this->assertSame($light, LightDark::pick(false, $light, $dark));
+        $this->assertSame($dark,  LightDark::pick(true,  $light, $dark));
+    }
+
+    public function testLightDarkPickerClosure(): void
+    {
+        $pick = LightDark::picker(true);
+        $light = Color::hex('#aaaaaa');
+        $dark  = Color::hex('#222222');
+        $this->assertSame($dark, $pick($light, $dark));
     }
 }

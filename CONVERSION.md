@@ -543,8 +543,8 @@ Status legend per feature:
 | Lipgloss is now pure (no I/O) — Bubble Tea owns all I/O | ✅ | We always made `Style::render()` pure; no I/O at all. |
 | `lipgloss.Color()` returns `color.Color` interface | ⚪ | We use `Color` value object directly; no migration. |
 | `lipgloss.Println` / `Printf` / `Sprint` / `Fprint` writers | 🟡 | Could add `Sprinkles\Style::println($content)` writing to `STDOUT` for non-TUI scripts. Optional. |
-| `HasDarkBackground(stdin, stdout)` | 🔴 | OSC 11 ? query — pair with the new CandyCore terminal-query infra. |
-| `LightDark(isDark)` helper returning the right colour | 🔴 | Tiny convenience. |
+| `HasDarkBackground(stdin, stdout)` | ✅ | `BackgroundColorMsg::isDark()` (relative-luminance Y < 0.5) on the OSC 11 reply parsed by CandyCore. Models call `Cmd::requestBackgroundColor()` from `init()` and check the reply. |
+| `LightDark(isDark)` helper returning the right colour | ✅ | `Sprinkles\LightDark::pick(isDark, light, dark)` and `LightDark::picker(isDark)` (curried). Plus `Sprinkles\AdaptiveColor` value object and `Style::foregroundAdaptive()` / `backgroundAdaptive()` that resolve via `Style::resolveAdaptive(bool)` — explicit `foreground()` always wins, matching lipgloss precedence. |
 | `Complete(profile)` colour completion | 🔴 | Profile-aware colour filling — useful for theme builders. |
 | `compat.AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor` | 🟡 | Add an `AdaptiveColor` value object that picks light vs dark based on detected background. |
 | `EnableLegacyWindowsANSI()` | ⚪ | PHP doesn't ship a Windows console wrapper; fall through to Win10+ VT mode (which our `Tty` already assumes). |
@@ -572,8 +572,9 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
 1. **Cheap wins first** (no architectural changes): ✅ synchronized
    updates, ✅ unicode mode, ✅ `Println` / `Printf` Cmds, ✅ `Raw`
    escape hatch, ✅ mouse subtype markers, ✅ terminal queries (cursor
-   pos + fg/bg colour) — all shipped. Still pending: terminal-version
-   query, cursor-colour query (OSC 12), `AdaptiveColor`, `LightDark`.
+   pos + fg/bg colour), ✅ `AdaptiveColor` + `LightDark` — all shipped.
+   Still pending: terminal-version query (DA2/XTVERSION), cursor-colour
+   query (OSC 12), `Complete()` profile-aware colour fill.
 2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
    programs only own their own rows, leaving everything above
    intact. Pair with `Cmd::println` so messages can flow above the
