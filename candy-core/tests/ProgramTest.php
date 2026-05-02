@@ -478,6 +478,90 @@ final class ProgramTest extends TestCase
         fclose($out);
     }
 
+    public function testEnvironmentOverrideReplacesGetenv(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            environment: ['CANDYCORE_TEST_ONLY' => 'yes'],
+        );
+        $program = new Program(new RecordingModel(quitAfter: PHP_INT_MAX), $opts);
+        $program->quit();
+        $final = $program->run();
+
+        /** @var EnvMsg $env */
+        $env = $final->log[1];
+        $this->assertSame('yes', $env->get('CANDYCORE_TEST_ONLY'));
+        // The override REPLACES (doesn't merge with) the live env.
+        $this->assertNull($env->get('PATH'));
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testWindowSizeOverrideReplacesTtyQuery(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            windowSize: ['cols' => 132, 'rows' => 50],
+        );
+        $program = new Program(new RecordingModel(quitAfter: PHP_INT_MAX), $opts);
+        $program->quit();
+        $final = $program->run();
+
+        $size = $final->log[0];
+        $this->assertInstanceOf(WindowSizeMsg::class, $size);
+        $this->assertSame(132, $size->cols);
+        $this->assertSame(50,  $size->rows);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testColorProfileOverrideReplacesAutoDetect(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $opts = new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+            colorProfile: \CandyCore\Core\Util\ColorProfile::Ansi,
+        );
+        $program = new Program(new RecordingModel(quitAfter: PHP_INT_MAX), $opts);
+        $program->quit();
+        $final = $program->run();
+
+        $msg = $final->log[2];
+        $this->assertInstanceOf(ColorProfileMsg::class, $msg);
+        $this->assertSame(\CandyCore\Core\Util\ColorProfile::Ansi, $msg->profile);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     public function testViewWithNullCursorHides(): void
     {
         [$in, $out, $writer] = $this->pipes();

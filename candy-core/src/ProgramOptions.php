@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCore\Core;
 
+use CandyCore\Core\Util\ColorProfile;
 use React\EventLoop\LoopInterface;
 
 /**
@@ -46,5 +47,28 @@ final class ProgramOptions
         public readonly mixed $input = null,
         public readonly mixed $output = null,
         public readonly ?LoopInterface $loop = null,
+        /**
+         * Override the process environment that goes into the
+         * startup `EnvMsg`. Pass `null` (default) to use the live
+         * `getenv()` snapshot. Useful for tests and for re-parenting
+         * a program with synthetic env state.
+         *
+         * @var array<string,string>|null
+         */
+        public readonly ?array $environment = null,
+        /**
+         * Force the initial window size instead of querying the TTY.
+         * Pass `['cols' => N, 'rows' => N]`. Mostly useful for tests
+         * — production programs should let the runtime ask the TTY
+         * and react to SIGWINCH.
+         *
+         * @var array{cols:int,rows:int}|null
+         */
+        public readonly ?array $windowSize = null,
+        /**
+         * Override the auto-detected colour profile. Forces a
+         * specific tier instead of inferring from `TERM` / `COLORTERM`.
+         */
+        public readonly ?ColorProfile $colorProfile = null,
     ) {}
 }
