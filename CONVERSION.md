@@ -245,7 +245,7 @@ Update this table as work proceeds. Status legend:
 | 5 | SugarBits | 🟢 | 100% | All 14 components landed: `Key`, `Help`, `Spinner` (+ 7 styles), `Progress`, `Timer`, `Stopwatch`, `Cursor`, `TextInput`, `TextArea`, `Viewport`, `Paginator`, `ItemList` (filterable selection list with `Item` interface + `StringItem`), `Table` (interactive selectable, scrolling, header underline), `FilePicker` (cwd nav, hidden filter, allowed extensions, dir/file gates). |
 | 6 | SugarCharts | 🟡 | 50% | MVP landed: `Canvas\Canvas` (cell grid with optional Sprinkles styling), `Sparkline\Sparkline` (8-glyph Unicode bar chart, sliding window over data), `BarChart\BarChart` (labelled vertical bars with auto width distribution + label truncation), `LineChart\LineChart` (single-series plot with point + connector strokes). Remaining: heatmap, scatter, OHLC, streamline, time series, picture (Sixel/Kitty). |
 | 7 | SugarPrompt | 🟢 | 100% | All 7 field types landed: `Note` (skippable), `Input` (TextInput wrap + validator), `Confirm` (y/n with custom labels), `Select` (ItemList wrap, filter consumes Enter/Esc), `MultiSelect` (checkbox grid with min/max), `Text` (TextArea wrap, consumes Enter for newlines), `FilePicker` (wraps Bits FilePicker, consumes Enter/Backspace). `Form` container with Tab nav, Enter-submit, Esc/Ctrl-C abort, `Field::consumes(Msg)` for inner-key ownership, `init()` propagating first focused field's Cmd. Remaining (post-v1): `Group` for multi-page forms, theming. |
-| 8 | CandyShell | 🟡 | 85% | Bin script + Symfony Console application + 11 of 13 subcommands: `style`, `choose`, `input`, `confirm`, `join`, `log`, `table`, `filter`, `write`, `file`, `pager`. Remaining: `spin` (subprocess management) and `format` (markdown rendering). Filter sub-feature: ItemList now allows ↑/↓/PgUp/PgDn navigation while in filter mode (sugar-bits change). |
+| 8 | CandyShell | 🟡 | 92% | Bin script + Symfony Console application + 12 of 13 subcommands: `style`, `choose`, `input`, `confirm`, `join`, `log`, `table`, `filter`, `write`, `file`, `pager`, `spin` (proc_open with `Process` abstraction; spinner ticks while child runs; ↵ on exit forwards code; Esc/Ctrl-C terminates). Remaining: `format` (markdown rendering — needs CommonMark dependency). |
 
 ---
 
@@ -258,3 +258,55 @@ Update this table as work proceeds. Status legend:
   buried inside a single library.
 - Any architectural decision that overrides one in this file goes in a new
   "Amendments" section with a date stamp — don't silently rewrite history.
+
+---
+
+## Future libraries (Phase 9+)
+
+A second wave of Charmbracelet (and adjacent) projects to consider once
+phases 0–8 are at v1. Names follow the same `Candy*` / `Sugar*` /
+`Honey*` + technical-suffix convention from
+[`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
+
+These are **planning entries only** — no code yet. Each row captures
+the source URL, a one-line role, the proposed PHP package + namespace,
+and the dependencies on phases 0–8.
+
+| # | Source (Go) | Proposed PHP port | Subdir / Composer pkg | PSR-4 namespace | Role | Depends on |
+|---|---|---|---|---|---|---|
+|  9 | [charmbracelet/glamour](https://github.com/charmbracelet/glamour) | **CandyShine** | `candy-shine/` → `candycore/candy-shine` | `CandyCore\Shine` | Markdown → ANSI renderer (table-driven styles, syntax highlighting). Unblocks Phase 8's `format` subcommand. | 0, 1 |
+| 10 | [charmbracelet/glow](https://github.com/charmbracelet/glow) | **SugarGlow** | `sugar-glow/` → `candycore/sugar-glow` | `CandyCore\Glow` | Markdown CLI viewer / pager. Composes Phase 7's `Viewport` with **CandyShine**. | 1, 3, 5, 9 |
+| 11 | [charmbracelet/freeze](https://github.com/charmbracelet/freeze) | **CandyFreeze** | `candy-freeze/` → `candycore/candy-freeze` | `CandyCore\Freeze` | Code → SVG / PNG image generator (with optional terminal "screenshot"). | 1 + ext-gd or imagick |
+| 12 | [charmbracelet/sequin](https://github.com/charmbracelet/sequin) | **SugarSpark** | `sugar-spark/` → `candycore/sugar-spark` | `CandyCore\Spark` | Inspect / pretty-print ANSI escape sequences. Useful debugging tool. | 0 |
+| 13 | [charmbracelet/fang](https://github.com/charmbracelet/fang) | **CandyKit** | `candy-kit/` → `candycore/candy-kit` | `CandyCore\Kit` | Opinionated CLI starter (themes, help, completion). Composes Phase 1 + 5 + 8. | 1, 5, 8 |
+| 14 | [charmbracelet/wish](https://github.com/charmbracelet/wish) (via this entry) | **CandyWish** | `candy-wish/` → `candycore/candy-wish` | `CandyCore\Wish` | SSH-server framework that pipes a `Program` onto an SSH session. | 3 + ext-ssh2 / pure-PHP SSH |
+| 15 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** | `sugar-wishlist/` → `candycore/sugar-wishlist` | `CandyCore\Wishlist` | SSH directory / launcher. Composes **CandyWish** + Phase 5 selection list. | 5, 14 |
+| 16 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` → `candycore/candy-metrics` | `CandyCore\Metrics` | Prometheus metrics middleware for **CandyWish** sessions. | 14 |
+| 17 | [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` → `candycore/sugar-crush` | `CandyCore\Crush` | AI coding-assistant TUI app. Demonstrates CandyCore + every phase together. | 0–8 |
+| 18 | [charmbracelet/bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | **CandyTemplate** | `candy-template/` → `candycore/candy-template` (Composer create-project) | `CandyCore\Template` | Skeleton repo for users bootstrapping a CandyCore app. | 0, 3 |
+| 19 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` → `candycore/candy-tetris` | `CandyCore\Tetris` | Tetris clone. Pure example app for the runtime. Optional. | 1, 3, 5 |
+| 20 | [yorukot/superfile](https://github.com/yorukot/superfile) | **SuperCandy** | `super-candy/` → `candycore/super-candy` | `CandyCore\SuperFile` | Dual-pane file manager. Stress-test for `FilePicker`, `Viewport`, mouse zones. | 1, 3, 4, 5 |
+
+### Sequencing notes
+
+- **CandyShine** is the highest-leverage entry: it fills the gap that's
+  blocking CandyShell's `format` subcommand and underpins glow + the
+  table-styled output in fang.
+- **CandyWish** is the only entry that needs a substantial new
+  dependency (PHP SSH stack) and may be worth holding until either
+  `ext-ssh2` or `phpseclib/phpseclib` is settled on. CandyMetrics and
+  SugarWishlist queue behind it.
+- The three "app" entries (**SugarCrush**, **CandyTemplate**,
+  **CandyTetris**, **SuperCandy**) live in their own repos from day 1
+  rather than in the monorepo, since they consume the libraries rather
+  than extend them.
+
+### Open naming questions
+
+- `crush` / `glow` / `freeze` — should the PHP ports adopt the original
+  one-word brand or stay strictly inside the Candy/Sugar/Honey vocab?
+  Current proposal keeps the Candy/Sugar prefix; revisit before the
+  first port lands.
+- `glamour` → `CandyShine` reads like a styling library; alternatives
+  worth considering: `CandyMarkup`, `SugarPress`, `CandyGloss` (already
+  taken historically by CandyGloss → CandySprinkles, so probably skip).
