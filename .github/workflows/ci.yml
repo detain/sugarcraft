@@ -30,6 +30,10 @@ jobs:
           - candy-wish
           - sugar-wishlist
           - candy-metrics
+          - candy-mold
+          - candy-tetris
+          - super-candy
+          - sugar-crush
 
     steps:
       - uses: actions/checkout@v4
