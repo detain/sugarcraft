@@ -1,0 +1,32 @@
+{
+    "name": "candycore/sugar-prompt",
+    "description": "PHP port of charmbracelet/huh — interactive form library for CandyCore.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.1",
+        "candycore/candy-core":      "@dev",
+        "candycore/candy-sprinkles": "@dev",
+        "candycore/sugar-bits":      "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-bits",      "options": { "symlink": true } }
+    ],
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Prompt\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CandyCore\\Prompt\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}

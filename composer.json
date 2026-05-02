@@ -9,14 +9,16 @@
         "candycore/candy-sprinkles": "@dev",
         "candycore/candy-zone":      "@dev",
         "candycore/honey-bounce":    "@dev",
-        "candycore/sugar-bits":      "@dev"
+        "candycore/sugar-bits":      "@dev",
+        "candycore/sugar-prompt":    "@dev"
     },
     "repositories": [
         { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
         { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
         { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
         { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } }
+        { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-prompt",    "options": { "symlink": true } }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true
