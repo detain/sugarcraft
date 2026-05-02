@@ -68,4 +68,25 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(PrintMsg::class, $msg);
         $this->assertSame('hello world', $msg->text);
     }
+
+    public function testRequestCursorPositionEmitsDsrBytes(): void
+    {
+        $msg = (Cmd::requestCursorPosition())();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b[6n", $msg->bytes);
+    }
+
+    public function testRequestForegroundColorEmitsOsc10Query(): void
+    {
+        $msg = (Cmd::requestForegroundColor())();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]10;?\x07", $msg->bytes);
+    }
+
+    public function testRequestBackgroundColorEmitsOsc11Query(): void
+    {
+        $msg = (Cmd::requestBackgroundColor())();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]11;?\x07", $msg->bytes);
+    }
 }

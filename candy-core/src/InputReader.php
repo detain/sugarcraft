@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace CandyCore\Core;
 
+use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
+use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
@@ -109,6 +112,22 @@ final class InputReader
                     $i += 3;
                     continue;
                 }
+                if ($next === ']') {
+                    // OSC: ESC ] payload (ST | BEL). Used for terminal
+                    // queries (OSC 10/11 colour replies, OSC 52 clipboard,
+                    // OSC 0/2 title, etc.).
+                    $end = $this->findOscEnd($i + 2, $len);
+                    if ($end === null) {
+                        // End marker not in the buffer yet — wait for
+                        // more bytes.
+                        break;
+                    }
+                    [$payload, $next_i] = $end;
+                    $msg = $this->decodeOsc($payload);
+                    if ($msg !== null) $msgs[] = $msg;
+                    $i = $next_i;
+                    continue;
+                }
                 // Alt-prefixed key.
                 $code2 = ord($next);
                 if ($code2 >= 0x20 && $code2 < 0x7f) {
@@ -182,6 +201,13 @@ final class InputReader
             return $this->decodeSgrMouse(substr($params, 1), $final === 'M');
         }
 
+        // DSR cursor-position report (reply to CSI 6n): CSI <row> ; <col> R.
+        // F3 also sends `CSI R` but with no params, so the digit prefix
+        // tells the two apart.
+        if ($final === 'R' && $params !== '' && preg_match('/^(\d+);(\d+)$/', $params, $m) === 1) {
+            return new CursorPositionMsg((int) $m[1], (int) $m[2]);
+        }
+
         return match ($final) {
             'A' => new KeyMsg(KeyType::Up),
             'B' => new KeyMsg(KeyType::Down),
@@ -216,6 +242,59 @@ final class InputReader
             default => null,
         };
     }
+
+    /**
+     * Locate an OSC terminator starting at byte $start in the buffer.
+     * Returns `[payload, next_i]` or null if the terminator hasn't
+     * arrived yet. OSC strings end with either `\x07` (BEL) or the
+     * two-byte ST sequence `ESC \`.
+     *
+     * @return array{0:string,1:int}|null
+     */
+    private function findOscEnd(int $start, int $len): ?array
+    {
+        for ($k = $start; $k < $len; $k++) {
+            $c = $this->buf[$k];
+            if ($c === self::BEL) {
+                return [substr($this->buf, $start, $k - $start), $k + 1];
+            }
+            if ($c === "\x1b" && ($this->buf[$k + 1] ?? '') === '\\') {
+                return [substr($this->buf, $start, $k - $start), $k + 2];
+            }
+        }
+        return null;
+    }
+
+    private function decodeOsc(string $payload): ?Msg
+    {
+        // OSC 10 / 11: foreground / background colour reports. Format
+        // is `<num>;rgb:RRRR/GGGG/BBBB` — each channel is 1-4 hex
+        // digits and we squash to 8-bit.
+        if (preg_match('/^(10|11);rgb:([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})\/([0-9a-fA-F]{1,4})$/', $payload, $m) === 1) {
+            $r = self::scaleHex($m[2]);
+            $g = self::scaleHex($m[3]);
+            $b = self::scaleHex($m[4]);
+            return $m[1] === '10'
+                ? new ForegroundColorMsg($r, $g, $b)
+                : new BackgroundColorMsg($r, $g, $b);
+        }
+        return null;
+    }
+
+    /**
+     * Convert a 1-4 digit hex string into an 8-bit channel value. The
+     * terminal reports channels at the resolution it has available
+     * (xterm uses 4 hex digits = 16 bits per channel) so we scale down
+     * proportionally to the [0, 255] range we expose.
+     */
+    private static function scaleHex(string $hex): int
+    {
+        $maxFor = (1 << (4 * strlen($hex))) - 1;
+        $value = (int) hexdec($hex);
+        return (int) round(($value / $maxFor) * 255);
+    }
+
+    private const BEL = "\x07";
 
     /**
      * Decode an SS3 final byte (the byte after `ESC O`). Most terminals

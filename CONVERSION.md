@@ -516,10 +516,10 @@ Status legend per feature:
 
 | v2 feature | Status | Notes |
 |---|---|---|
-| `RequestCursorPosition` + `CursorPositionMsg` | 🔴 | CSI 6n DSR. |
+| `RequestCursorPosition` + `CursorPositionMsg` | ✅ | `Cmd::requestCursorPosition()` emits `CSI 6n` via a `RawMsg`; `InputReader` parses the `CSI <row>;<col>R` reply into `CursorPositionMsg`. |
 | `RequestTerminalVersion` + `TerminalVersionMsg` | 🔴 | CSI > 0 q DA2 + DA3. |
 | `RequestCapability(name)` + `ModeReportMsg` | 🔴 | DECRQM. |
-| `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | 🔴 | OSC 10/11/12 ?. Pair with `ForegroundColorMsg` / `BackgroundColorMsg` / `CursorColorMsg`. |
+| `RequestForegroundColor` / `RequestBackgroundColor` / `RequestCursorColor` | 🟡 | `Cmd::requestForegroundColor()` / `requestBackgroundColor()` shipped — emit OSC 10/11 `?` queries and the input reader parses the `rgb:RRRR/GGGG/BBBB` replies into `ForegroundColorMsg` / `BackgroundColorMsg` (each with `isDark()` + `hex()`). Cursor colour (OSC 12) still pending. |
 | Auto `EnvMsg` on startup, with `Getenv()` helper for SSH contexts | 🔴 | Send a `EnvMsg` from `Program::run()` so models can react to the originating environment without poking `getenv()` themselves. |
 | Auto `ColorProfileMsg` on startup | 🟡 | We already detect via `ColorProfile::detect()`; emit it as a Msg too so models can react. |
 
@@ -571,9 +571,9 @@ The v2 parity work is **medium-term**, not urgent. Recommended order:
 
 1. **Cheap wins first** (no architectural changes): ✅ synchronized
    updates, ✅ unicode mode, ✅ `Println` / `Printf` Cmds, ✅ `Raw`
-   escape hatch, ✅ mouse subtype markers — all shipped. Still pending:
-   terminal queries (cursor pos, fg/bg colour, version), `AdaptiveColor`,
-   `LightDark`.
+   escape hatch, ✅ mouse subtype markers, ✅ terminal queries (cursor
+   pos + fg/bg colour) — all shipped. Still pending: terminal-version
+   query, cursor-colour query (OSC 12), `AdaptiveColor`, `LightDark`.
 2. **Inline mode polish**: shrink the `Renderer` so non-alt-screen
    programs only own their own rows, leaving everything above
    intact. Pair with `Cmd::println` so messages can flow above the

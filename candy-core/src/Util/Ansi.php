@@ -136,6 +136,28 @@ final class Ansi
     public static function focusReportingOff(): string { return self::CSI . '?1004l'; }
 
     /**
+     * Ask the terminal where the cursor is. The reply comes back as a
+     * CSI sequence: `ESC [ <row> ; <col> R` (DSR-CPR), parsed into a
+     * {@see \CandyCore\Core\Msg\CursorPositionMsg}.
+     */
+    public static function requestCursorPosition(): string { return self::CSI . '6n'; }
+
+    /**
+     * Ask the terminal for its current default foreground colour. Reply
+     * arrives as `OSC 10 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
+     * {@see \CandyCore\Core\Msg\ForegroundColorMsg}.
+     */
+    public static function requestForegroundColor(): string { return self::OSC . '10;?' . self::BEL; }
+
+    /**
+     * Ask the terminal for its current default background colour. Reply
+     * arrives as `OSC 11 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
+     * {@see \CandyCore\Core\Msg\BackgroundColorMsg}. Useful for picking
+     * a theme that contrasts the user's background.
+     */
+    public static function requestBackgroundColor(): string { return self::OSC . '11;?' . self::BEL; }
+
+    /**
      * Strip every ANSI escape sequence from the input.
      *
      * Handles CSI (ESC[...), OSC (ESC]...ST|BEL), single-char ESC sequences,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCore\Core;
 
 use CandyCore\Core\Msg\QuitMsg;
+use CandyCore\Core\Util\Ansi;
 
 /**
  * Helper Cmd factories. A Cmd is `Closure(): ?Msg` — an asynchronously
@@ -78,6 +79,37 @@ final class Cmd
     public static function println(string $text): \Closure
     {
         return static fn(): Msg => new PrintMsg($text);
+    }
+
+    /**
+     * Ask the terminal where the cursor currently is. The reply will
+     * be parsed by the input reader and dispatched as a
+     * {@see \CandyCore\Core\Msg\CursorPositionMsg}. Mirrors
+     * `tea.RequestCursorPosition`.
+     */
+    public static function requestCursorPosition(): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestCursorPosition());
+    }
+
+    /**
+     * Ask the terminal for its current default foreground colour. The
+     * reply (OSC 10) becomes a {@see \CandyCore\Core\Msg\ForegroundColorMsg}.
+     */
+    public static function requestForegroundColor(): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestForegroundColor());
+    }
+
+    /**
+     * Ask the terminal for its current default background colour. The
+     * reply (OSC 11) becomes a {@see \CandyCore\Core\Msg\BackgroundColorMsg}.
+     * Pair with {@see \CandyCore\Core\Msg\BackgroundColorMsg::isDark()}
+     * to pick a contrasting theme.
+     */
+    public static function requestBackgroundColor(): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::requestBackgroundColor());
     }
 
     private function __construct() {}

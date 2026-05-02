@@ -8,8 +8,11 @@ use CandyCore\Core\InputReader;
 use CandyCore\Core\KeyType;
 use CandyCore\Core\MouseAction;
 use CandyCore\Core\MouseButton;
+use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
+use CandyCore\Core\Msg\ForegroundColorMsg;
 use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Msg\MouseClickMsg;
 use CandyCore\Core\Msg\MouseMotionMsg;
@@ -347,5 +350,77 @@ final class InputReaderTest extends TestCase
     {
         $this->assertSame('f1',  (new KeyMsg(KeyType::F1))->string());
         $this->assertSame('f12', (new KeyMsg(KeyType::F12))->string());
+    }
+
+    // ---- terminal-query replies ------------------------------------------
+
+    public function testCursorPositionReply(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b[12;34R");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(CursorPositionMsg::class, $msgs[0]);
+        $this->assertSame(12, $msgs[0]->row);
+        $this->assertSame(34, $msgs[0]->col);
+    }
+
+    public function testBareCsiRStillEmitsF3(): void
+    {
+        // No params → F3, not a cursor reply.
+        $msgs = (new InputReader())->parse("\x1b[R");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(KeyMsg::class, $msgs[0]);
+        $this->assertSame(KeyType::F3, $msgs[0]->type);
+    }
+
+    public function testForegroundColorReplyBel(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b]10;rgb:ffff/ffff/ffff\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(ForegroundColorMsg::class, $msgs[0]);
+        $this->assertSame(255, $msgs[0]->r);
+        $this->assertSame(255, $msgs[0]->g);
+        $this->assertSame(255, $msgs[0]->b);
+        $this->assertTrue($msgs[0]->isDark() === false);
+    }
+
+    public function testBackgroundColorReplyStTerminator(): void
+    {
+        // ESC \ instead of BEL.
+        $msgs = (new InputReader())->parse("\x1b]11;rgb:0000/0000/0000\x1b\\");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(BackgroundColorMsg::class, $msgs[0]);
+        $this->assertSame(0, $msgs[0]->r);
+        $this->assertTrue($msgs[0]->isDark());
+    }
+
+    public function testBackgroundColorReplyShortHex(): void
+    {
+        // 2-digit channels (no scaling needed since maxFor = 0xff).
+        $msgs = (new InputReader())->parse("\x1b]11;rgb:80/40/20\x07");
+        $this->assertSame(0x80, $msgs[0]->r);
+        $this->assertSame(0x40, $msgs[0]->g);
+        $this->assertSame(0x20, $msgs[0]->b);
+    }
+
+    public function testOscSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b]11;rgb:ff"));
+        $this->assertSame([], $r->parse("ff/0000/00"));
+        $msgs = $r->parse("00\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(BackgroundColorMsg::class, $msgs[0]);
+        $this->assertSame(255, $msgs[0]->r);
+    }
+
+    public function testCursorPositionSplitAcrossReads(): void
+    {
+        $r = new InputReader();
+        $this->assertSame([], $r->parse("\x1b[5;"));
+        $msgs = $r->parse("10R");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(CursorPositionMsg::class, $msgs[0]);
+        $this->assertSame(5,  $msgs[0]->row);
+        $this->assertSame(10, $msgs[0]->col);
     }
 }
