@@ -12,16 +12,16 @@ composer require candycore/candycore
 
 ## What's in the box
 
-Thirteen libraries grouped by layer:
+Sixteen libraries grouped by layer:
 
 | Library | Source counterpart | Role |
 |---|---|---|
-| **[CandyCore](candy-core/)** | [bubbletea](https://github.com/charmbracelet/bubbletea) | Elm-architecture TUI runtime — `Model` / `Msg` / `Cmd` / `Program` |
-| **[CandySprinkles](candy-sprinkles/)** | [lipgloss](https://github.com/charmbracelet/lipgloss) | Declarative styling + layout (`Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`) |
+| **[CandyCore](candy-core/)** | [bubbletea](https://github.com/charmbracelet/bubbletea) | Elm-architecture TUI runtime — `Model` / `Msg` / `Cmd` / `Program` (incl. cursed cell-diff renderer) |
+| **[CandySprinkles](candy-sprinkles/)** | [lipgloss](https://github.com/charmbracelet/lipgloss) | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor) |
 | **[HoneyBounce](honey-bounce/)** | [harmonica](https://github.com/charmbracelet/harmonica) | Damped spring physics + Newtonian projectile sim |
 | **[CandyZone](candy-zone/)** | [bubblezone](https://github.com/lrstanley/bubblezone) | Mouse-zone tracker — wrap rendered chunks, get back bounding boxes |
 | **[SugarBits](sugar-bits/)** | [bubbles](https://github.com/charmbracelet/bubbles) | 14 components: TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer |
-| **[SugarCharts](sugar-charts/)** | [ntcharts](https://github.com/NimbleMarkets/ntcharts) | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC |
+| **[SugarCharts](sugar-charts/)** | [ntcharts](https://github.com/NimbleMarkets/ntcharts) | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2) |
 | **[SugarPrompt](sugar-prompt/)** | [huh](https://github.com/charmbracelet/huh) | Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker; multi-page Groups; 6 themes |
 | **[CandyShell](candy-shell/)** | [gum](https://github.com/charmbracelet/gum) | Composer-installable CLI of all 13 subcommands (choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write) |
 | **[CandyShine](candy-shine/)** | [glamour](https://github.com/charmbracelet/glamour) | Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, 8 themes |
@@ -29,6 +29,9 @@ Thirteen libraries grouped by layer:
 | **[CandyFreeze](candy-freeze/)** | [freeze](https://github.com/charmbracelet/freeze) | Code → SVG screenshot generator (no `ext-gd` required) |
 | **[SugarGlow](sugar-glow/)** | [glow](https://github.com/charmbracelet/glow) | Markdown CLI viewer / pager |
 | **[SugarSpark](sugar-spark/)** | [sequin](https://github.com/charmbracelet/sequin) | ANSI escape-sequence inspector |
+| **[CandyWish](candy-wish/)** | [wish](https://github.com/charmbracelet/wish) | SSH server middleware — Logger, Auth, RateLimit, BubbleTea (mount a CandyCore Program over `ForceCommand`) |
+| **[SugarWishlist](sugar-wishlist/)** | [wishlist](https://github.com/charmbracelet/wishlist) | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh` |
+| **[CandyMetrics](candy-metrics/)** | [promwish](https://github.com/charmbracelet/promwish) | Telemetry primitives — counters, gauges, histograms with InMemory / JSON / StatsD / Prometheus textfile / Multi backends, plus a CandyWish session middleware |
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.
@@ -93,12 +96,11 @@ The umbrella package is a metapackage; each library has its own
 ```sh
 for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
          sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
-         candy-freeze sugar-glow sugar-spark; do
+         candy-freeze sugar-glow sugar-spark \
+         candy-wish sugar-wishlist candy-metrics; do
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
-
-Total at the time of this writing: **1,023 tests · 5,775 assertions** · all green.
 
 ## Contributing
 
