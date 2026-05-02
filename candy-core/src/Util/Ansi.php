@@ -189,6 +189,26 @@ final class Ansi
     }
 
     /**
+     * Set the system clipboard via OSC 52. The `$selection` byte
+     * picks the destination — `c` (clipboard, default), `p` (X11
+     * primary), `s` (secondary), `0`-`7` (cut buffers).
+     */
+    public static function setClipboard(string $text, string $selection = 'c'): string
+    {
+        return self::OSC . '52;' . $selection . ';' . base64_encode($text) . self::BEL;
+    }
+
+    /**
+     * Ask the terminal to send back the contents of the named
+     * selection. Reply arrives as `OSC 52 ; <selection> ; <base64>
+     * BEL|ST` and is parsed into {@see \CandyCore\Core\Msg\ClipboardMsg}.
+     */
+    public static function readClipboard(string $selection = 'c'): string
+    {
+        return self::OSC . '52;' . $selection . ';?' . self::BEL;
+    }
+
+    /**
      * Strip every ANSI escape sequence from the input.
      *
      * Handles CSI (ESC[...), OSC (ESC]...ST|BEL), single-char ESC sequences,

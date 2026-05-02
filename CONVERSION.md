@@ -527,8 +527,8 @@ Status legend per feature:
 
 | v2 feature | Status | Notes |
 |---|---|---|
-| `SetClipboard(text)` / `ReadClipboard()` (OSC 52) | 🔴 | Add `Cmd::setClipboard`/`readClipboard`; pair with `ClipboardMsg`. Already partially present in CandyShell hints (clipboard description in OSC inspector). |
-| `SetPrimaryClipboard(text)` (X11/Wayland primary selection) | 🔴 | OSC 52 with selection char `p`. |
+| `SetClipboard(text)` / `ReadClipboard()` (OSC 52) | ✅ | `Cmd::setClipboard($text, $selection = 'c')` base64-encodes and emits `OSC 52 ; <sel> ; <b64> BEL` via a `RawMsg`. `Cmd::readClipboard($selection = 'c')` emits the `?` query; the input reader parses the OSC 52 reply (decoding base64) into `ClipboardMsg`. |
+| `SetPrimaryClipboard(text)` (X11/Wayland primary selection) | ✅ | Same `Cmd::setClipboard` / `readClipboard` API — pass `'p'` for X11 primary, `'s'` for secondary, `0`–`7` for cut buffers. |
 
 #### Import path
 

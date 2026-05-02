@@ -12,6 +12,7 @@ use CandyCore\Core\MouseAction;
 use CandyCore\Core\MouseButton;
 use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\ClipboardMsg;
 use CandyCore\Core\Msg\CursorColorMsg;
 use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
@@ -604,5 +605,47 @@ final class InputReaderTest extends TestCase
             Modifiers::SHIFT | Modifiers::ALT | Modifiers::CTRL,
             Modifiers::fromXtermMod(8)->toBitfield(),
         );
+    }
+
+    // ---- OSC 52 clipboard reply ------------------------------------------
+
+    public function testClipboardReplyDecodesBase64(): void
+    {
+        $payload = base64_encode('hello world');
+        $msgs = (new InputReader())->parse("\x1b]52;c;{$payload}\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertInstanceOf(ClipboardMsg::class, $msgs[0]);
+        $this->assertSame('hello world', $msgs[0]->content);
+        $this->assertSame('c', $msgs[0]->selection);
+    }
+
+    public function testClipboardReplyPrimarySelection(): void
+    {
+        $payload = base64_encode('xclip text');
+        $msgs = (new InputReader())->parse("\x1b]52;p;{$payload}\x1b\\");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('xclip text', $msgs[0]->content);
+        $this->assertSame('p', $msgs[0]->selection);
+    }
+
+    public function testClipboardReplyEmptyContent(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b]52;c;\x07");
+        $this->assertCount(1, $msgs);
+        $this->assertSame('', $msgs[0]->content);
+    }
+
+    public function testClipboardReplyDefaultSelection(): void
+    {
+        // Empty selection field defaults to 'c'.
+        $payload = base64_encode('x');
+        $msgs = (new InputReader())->parse("\x1b]52;;{$payload}\x07");
+        $this->assertSame('c', $msgs[0]->selection);
+    }
+
+    public function testClipboardReplyInvalidBase64Ignored(): void
+    {
+        $msgs = (new InputReader())->parse("\x1b]52;c;!!!notbase64\x07");
+        $this->assertCount(0, $msgs);
     }
 }

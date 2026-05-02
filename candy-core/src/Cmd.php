@@ -142,5 +142,25 @@ final class Cmd
         return static fn(): Msg => new RawMsg(Ansi::requestMode($mode, $private));
     }
 
+    /**
+     * Copy `$text` to the terminal's clipboard via OSC 52. Default
+     * selection is the system clipboard (`c`); pass `p` for X11
+     * primary or `s` for secondary.
+     */
+    public static function setClipboard(string $text, string $selection = 'c'): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::setClipboard($text, $selection));
+    }
+
+    /**
+     * Ask the terminal for the contents of the named selection. The
+     * reply (OSC 52) becomes a {@see \CandyCore\Core\Msg\ClipboardMsg}
+     * with the decoded text.
+     */
+    public static function readClipboard(string $selection = 'c'): \Closure
+    {
+        return static fn(): Msg => new RawMsg(Ansi::readClipboard($selection));
+    }
+
     private function __construct() {}
 }

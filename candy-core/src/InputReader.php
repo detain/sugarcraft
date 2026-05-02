@@ -6,6 +6,7 @@ namespace CandyCore\Core;
 
 use CandyCore\Core\Msg\BackgroundColorMsg;
 use CandyCore\Core\Msg\BlurMsg;
+use CandyCore\Core\Msg\ClipboardMsg;
 use CandyCore\Core\Msg\CursorColorMsg;
 use CandyCore\Core\Msg\CursorPositionMsg;
 use CandyCore\Core\Msg\FocusMsg;
@@ -368,6 +369,19 @@ final class InputReader
                 default => new CursorColorMsg($r, $g, $b),
             };
         }
+
+        // OSC 52: clipboard reply. Format is `52;<selection-bytes>;<base64>`.
+        // The selection token is normally a single character (c/p/s/0-7)
+        // but spec allows multiple, so we accept anything non-`;`.
+        if (preg_match('/^52;([^;]*);([A-Za-z0-9+\/=]*)$/', $payload, $m) === 1) {
+            $selection = $m[1] === '' ? 'c' : $m[1][0];
+            $decoded = base64_decode($m[2], true);
+            if ($decoded === false) {
+                return null;
+            }
+            return new ClipboardMsg($decoded, $selection);
+        }
+
         return null;
     }
 

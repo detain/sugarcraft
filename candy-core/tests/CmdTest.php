@@ -117,4 +117,23 @@ final class CmdTest extends TestCase
         $this->assertInstanceOf(RawMsg::class, $msg);
         $this->assertSame("\x1b[4\$p", $msg->bytes);
     }
+
+    public function testSetClipboardEncodesBase64(): void
+    {
+        $msg = (Cmd::setClipboard('hi'))();
+        $this->assertInstanceOf(RawMsg::class, $msg);
+        $this->assertSame("\x1b]52;c;" . base64_encode('hi') . "\x07", $msg->bytes);
+    }
+
+    public function testSetClipboardPrimarySelection(): void
+    {
+        $msg = (Cmd::setClipboard('hi', 'p'))();
+        $this->assertSame("\x1b]52;p;" . base64_encode('hi') . "\x07", $msg->bytes);
+    }
+
+    public function testReadClipboardEmitsQueryWithDefaultSelection(): void
+    {
+        $msg = (Cmd::readClipboard())();
+        $this->assertSame("\x1b]52;c;?\x07", $msg->bytes);
+    }
 }
