@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCore\Sprinkles\Tests;
 
+use CandyCore\Core\Util\ColorProfile;
+use CandyCore\Sprinkles\Style;
+use CandyCore\Sprinkles\Tree\Enumerator as TreeEnumerator;
 use CandyCore\Sprinkles\Tree\Tree;
 use PHPUnit\Framework\TestCase;
 
@@ -103,5 +106,84 @@ final class TreeTest extends TestCase
             ->children('a', 'b')
             ->render();
         $this->assertSame("r\n├── a\n└── b", $out);
+    }
+
+    public function testRoundedEnumerator(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->child('b')
+            ->enumerator(TreeEnumerator::rounded())
+            ->render();
+        $this->assertSame("r\n├── a\n╰── b", $out);
+    }
+
+    public function testAsciiEnumerator(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->child('b')
+            ->enumerator(TreeEnumerator::ascii())
+            ->render();
+        $this->assertSame("r\n|-- a\n`-- b", $out);
+    }
+
+    public function testHideRoot(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->child('b')
+            ->hide()
+            ->render();
+        $this->assertSame("├── a\n└── b", $out);
+    }
+
+    public function testRootStyleApplies(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->rootStyle(Style::new()->bold()->colorProfile(ColorProfile::Ansi))
+            ->render();
+        $this->assertStringContainsString("\x1b[1mr\x1b[0m", $out);
+    }
+
+    public function testItemStyleApplies(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->child('b')
+            ->itemStyle(Style::new()->italic()->colorProfile(ColorProfile::Ansi))
+            ->render();
+        // Two items -> two italic SGRs.
+        $this->assertSame(2, substr_count($out, "\x1b[3m"));
+    }
+
+    public function testEnumeratorStyleApplies(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child('a')
+            ->child('b')
+            ->enumeratorStyle(Style::new()->bold()->colorProfile(ColorProfile::Ansi))
+            ->render();
+        $this->assertSame(2, substr_count($out, "\x1b[1m"));
+    }
+
+    public function testCustomIndenter(): void
+    {
+        $out = Tree::new()
+            ->root('r')
+            ->child(Tree::new()->root('p')->child('x'))
+            ->indenter(static fn(bool $isLast): string => '....')
+            ->render();
+        // Inner tree's continuation lines use '....' regardless of isLast (because
+        // the closure here ignores it).
+        $expected = "r\n└── p\n....└── x";
+        $this->assertSame($expected, $out);
     }
 }

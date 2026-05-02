@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace CandyCore\Sprinkles\Tests;
 
+use CandyCore\Core\Util\ColorProfile;
 use CandyCore\Sprinkles\Listing\Enumerator;
 use CandyCore\Sprinkles\Listing\ItemList;
+use CandyCore\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
 final class ItemListTest extends TestCase
@@ -94,5 +96,83 @@ final class ItemListTest extends TestCase
             ->item('Banana')
             ->render();
         $this->assertSame("- Apple\n  fresh\n- Banana", $out);
+    }
+
+    public function testRomanEnumerator(): void
+    {
+        $out = ItemList::new()
+            ->items(['x', 'y', 'z', 'a', 'b'])
+            ->enumerator(Enumerator::roman())
+            ->render();
+        $lines = explode("\n", $out);
+        $this->assertStringStartsWith('i.   ',   $lines[0]);
+        $this->assertStringStartsWith('ii.  ',   $lines[1]);
+        $this->assertStringStartsWith('iii. ',   $lines[2]);
+        $this->assertStringStartsWith('iv.  ',   $lines[3]);
+        $this->assertStringStartsWith('v.   ',   $lines[4]);
+    }
+
+    public function testRomanUpperEnumerator(): void
+    {
+        $out = ItemList::new()
+            ->items(['a', 'b', 'c'])
+            ->enumerator(Enumerator::romanUpper())
+            ->render();
+        $lines = explode("\n", $out);
+        $this->assertStringStartsWith('I.',   $lines[0]);
+        $this->assertStringStartsWith('II.',  $lines[1]);
+        $this->assertStringStartsWith('III.', $lines[2]);
+    }
+
+    public function testItemStyleAppliedToEachItem(): void
+    {
+        $out = ItemList::new()
+            ->items(['x', 'y'])
+            ->itemStyle(Style::new()->bold()->colorProfile(ColorProfile::Ansi))
+            ->render();
+        // Each rendered item should contain the bold SGR.
+        $this->assertSame(2, substr_count($out, "\x1b[1m"));
+    }
+
+    public function testItemStyleFuncOverrides(): void
+    {
+        $out = ItemList::new()
+            ->items(['a', 'b'])
+            ->itemStyleFunc(static fn(int $i): Style =>
+                $i === 0
+                    ? Style::new()->bold()->colorProfile(ColorProfile::Ansi)
+                    : Style::new()->italic()->colorProfile(ColorProfile::Ansi)
+            )
+            ->render();
+        $this->assertStringContainsString("\x1b[1m", $out);
+        $this->assertStringContainsString("\x1b[3m", $out);
+    }
+
+    public function testEnumeratorStyleAppliedToMarkers(): void
+    {
+        $out = ItemList::new()
+            ->items(['x', 'y'])
+            ->enumerator(Enumerator::arabic())
+            ->enumeratorStyle(Style::new()->bold()->colorProfile(ColorProfile::Ansi))
+            ->render();
+        // Both '1.' and '2.' should be wrapped in bold.
+        $this->assertSame(2, substr_count($out, "\x1b[1m"));
+    }
+
+    public function testNestedSublist(): void
+    {
+        $sub = ItemList::new()
+            ->items(['inner1', 'inner2']);
+        $out = ItemList::new()
+            ->item('outer')
+            ->item($sub)
+            ->item('after')
+            ->render();
+        // Sublist body is indented by the outer marker width + the
+        // configured indent (default '  ').
+        $this->assertStringContainsString('- outer', $out);
+        $this->assertStringContainsString('inner1', $out);
+        $this->assertStringContainsString('inner2', $out);
+        $this->assertStringContainsString('- after', $out);
     }
 }
