@@ -29,5 +29,7 @@ Up    Sleep 200ms
 Up    Sleep 200ms
 Space Sleep 600ms
 
-Sleep 800ms
-Type "q"
+# Linger on a frame of active gameplay rather than exiting back to
+# a bash prompt — looks better as the GIF's resting frame on the
+# website's demo grid.
+Sleep 2500ms

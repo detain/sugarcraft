@@ -8,11 +8,11 @@ Set Theme "TokyoNight"
 
 Type "php examples/multi-page-form.php"
 Enter
-Sleep 1s
+Sleep 1500ms
 
-# Page 1 — name input
-Tab                           # past the Note
-Sleep 400ms
+# Page 1 — Form's initial focus lands on the first non-skippable
+# field (the Note is skipped automatically), so we land directly
+# on the name Input.
 Type "Joe"
 Sleep 600ms
 Tab                           # to Confirm
@@ -33,4 +33,4 @@ Sleep 800ms
 
 # Page 3 — submit
 Enter
-Sleep 1.5s
+Sleep 1500ms

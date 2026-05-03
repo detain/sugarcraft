@@ -762,3 +762,77 @@ pre.code .num  { color: #fcd5b4; }
     .detail-header .detail-icon { margin: 0 auto; }
     .layer { grid-template-columns: 1fr; }
 }
+
+/* ── Lightbox ──────────────────────────────────────────────────── */
+.lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(15, 8, 28, 0.78);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    cursor: zoom-out;
+    animation: lightbox-fade .15s ease;
+}
+
+.lightbox.is-open { display: flex; }
+
+@keyframes lightbox-fade {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.lightbox-figure {
+    margin: 0;
+    max-width: min(1280px, 96vw);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    cursor: default;
+}
+
+.lightbox-figure img {
+    display: block;
+    max-width: 100%;
+    max-height: 84vh;
+    width: auto;
+    height: auto;
+    border-radius: var(--radius);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+    background: #1a1b26;   /* TokyoNight bg — same as the demo cards */
+    object-fit: contain;
+}
+
+.lightbox-figure figcaption {
+    color: #fbeefa;
+    font-size: 0.95rem;
+    text-align: center;
+    max-width: 70ch;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.lightbox-close {
+    position: absolute;
+    top: 18px;
+    right: 22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.10);
+    color: #fbeefa;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background .15s ease, transform .15s ease;
+}
+
+.lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.20);
+    transform: scale(1.05);
+}
