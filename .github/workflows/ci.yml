@@ -151,8 +151,19 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
+          # Explicit slug + a single named file → don't accidentally
+          # walk the whole tree looking for other coverage reports.
+          slug: detain/sugarcraft
           files: ${{ matrix.lib }}/coverage.xml
+          disable_search: true
           flags: ${{ matrix.lib }}
           name: ${{ matrix.lib }}
+          # Token MUST be set as a secret on detain/sugarcraft (repo or
+          # environment scope) — GitHub org secrets only flow into repos
+          # *inside* that org, so a sugarcraft-org-level secret won't be
+          # visible to this monorepo. For a public repo the action falls
+          # back to tokenless OIDC upload when the secret is empty, so
+          # this still works during initial bootstrap.
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+          verbose: true
