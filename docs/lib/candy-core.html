@@ -4,27 +4,90 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyCore — SugarCraft</title>
-<meta name="description" content="CandyCore: Elm-architecture TUI runtime. Port of bubbletea.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyCore: Elm-architecture TUI runtime. PHP port of bubbletea.">
+<meta property="og:title" content="CandyCore — SugarCraft">
+<meta property="og:description" content="Elm-architecture TUI runtime. Port of bubbletea.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-core.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-core.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🍬</div>
-      <div><h2 style="margin: 0;">CandyCore</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Elm-architecture TUI runtime</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-core.png" alt="CandyCore">
+      <div>
+        <h2>🍬 CandyCore</h2>
+        <p class="detail-sub">Elm-architecture TUI runtime</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/bubbletea" style="color: inherit;">bubbletea</a></span>
+          <span class="tag-chip">runtime</span>
+          <span class="tag-chip">elm-architecture</span>
+          <span class="tag-chip">react-php</span>
+          <span class="tag-chip">fibers</span>
+          <span class="tag-chip">ssh</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer ported from Bubble Tea v2 — meaningful SSH bandwidth savings for slow-changing UIs.</p>
+
+    <p class="lede" style="margin-top: 28px;">Model / Msg / Cmd / Program. The runtime everything else builds on. Includes the cursed cell-diff renderer ported from Bubble Tea v2 — meaningful SSH bandwidth savings for slow-changing UIs.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-core</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Core\{Cmd, KeyType, Model, Msg, Program};
+use CandyCore\Core\Msg\KeyMsg;
+
+final class Counter implements Model {
+    public function __construct(public readonly int $count = 0) {}
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array {
+        if ($msg instanceof KeyMsg) {
+            return match (true) {
+                $msg-&gt;rune === 'q'              =&gt; [$this, Cmd::quit()],
+                $msg-&gt;type === KeyType::Up      =&gt; [new self($this-&gt;count + 1), null],
+                $msg-&gt;type === KeyType::Down    =&gt; [new self($this-&gt;count - 1), null],
+                default                         =&gt; [$this, null],
+            };
+        }
+        return [$this, null];
+    }
+
+    public function view(): string {
+        return "count: $this-&gt;count\n(↑/↓ to change, q to quit)";
+    }
+}
+
+(new Program(new Counter()))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Model interface</strong><span>Three pure methods: <code>init()</code>, <code>update(Msg)</code>, <code>view()</code>.</span></div>
+      <div class="feature"><strong>Cmd helpers</strong><span><code>Cmd::quit()</code>, <code>Cmd::batch()</code>, <code>Cmd::send()</code> — async work scheduled, never inlined.</span></div>
+      <div class="feature"><strong>InputReader</strong><span>Stateful escape-sequence parser. Bracketed paste, mouse, function keys, OSC, DEC private modes.</span></div>
+      <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering ported from Bubble Tea v2. ≥15% bandwidth savings on a 50-tick test.</span></div>
+      <div class="feature"><strong>ReactPHP loop</strong><span>Mirrors goroutine semantics for input, signals, render tick, command execution.</span></div>
+      <div class="feature"><strong>Signal handling</strong><span>Ctrl+C, SIGTERM, SIGWINCH (resize) all surface as Msgs in your update().</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-core">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-core/blob/main/README.md">Full README</a></li>
@@ -36,23 +99,35 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-core/main/.vhs/counter.gif" alt="Counter Model">
                 <h3>Counter Model</h3>
+                <span class="demo-caption">↑ / ↓ to count, q to quit. Demonstrates the full Model / Msg / Cmd loop.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-core/main/.vhs/timer.gif" alt="Timer">
                 <h3>Timer</h3>
+                <span class="demo-caption">Ticking timer driven by a Cmd-scheduled tick message.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

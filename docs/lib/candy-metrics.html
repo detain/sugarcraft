@@ -4,27 +4,79 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyMetrics — SugarCraft</title>
-<meta name="description" content="CandyMetrics: Telemetry primitives. Port of promwish.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyMetrics: Telemetry primitives + CandyWish session middleware. PHP port of promwish.">
+<meta property="og:title" content="CandyMetrics — SugarCraft">
+<meta property="og:description" content="Telemetry primitives + CandyWish session middleware. Port of promwish.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-metrics.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-metrics.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">📈</div>
-      <div><h2 style="margin: 0;">CandyMetrics</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Telemetry primitives</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-metrics.png" alt="CandyMetrics">
+      <div>
+        <h2>📈 CandyMetrics</h2>
+        <p class="detail-sub">Telemetry primitives + CandyWish session middleware</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/promwish" style="color: inherit;">promwish</a></span>
+          <span class="tag-chip">metrics</span>
+          <span class="tag-chip">telemetry</span>
+          <span class="tag-chip">statsd</span>
+          <span class="tag-chip">prometheus</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Counter / Gauge / Histogram with pluggable backends — InMemory, JSON stream, StatsD UDP (etsy + DogStatsD), Prometheus textfile (atomic .prom rewrite), MultiBackend fanout. SessionMetrics middleware for CandyWish records connect / duration / error per session.</p>
+
+    <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics. Counter / Gauge / Histogram + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-metrics</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Metrics\Registry;
+use CandyCore\Metrics\Backend\StatsdBackend;
+
+$reg = new Registry(new StatsdBackend('127.0.0.1', 8125));
+
+$reg-&gt;counter('http.requests', 1, ['route' =&gt; '/api/foo', 'status' =&gt; '200']);
+$reg-&gt;gauge  ('queue.depth',  42);
+
+$stop = $reg-&gt;time('http.duration', ['route' =&gt; '/api/foo']);
+handleRequest();
+$stop();
+
+// Pre-tag every emit:
+$req = $reg-&gt;withTags(['request_id' =&gt; $rid, 'user' =&gt; $userId]);
+$req-&gt;counter('events');</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Counter</strong><span>Monotonic value that accumulates (connect counts, errors).</span></div>
+      <div class="feature"><strong>Gauge</strong><span>Instantaneous value that replaces on set (queue depth, RSS).</span></div>
+      <div class="feature"><strong>Histogram</strong><span>Distribution of samples (latency, payload size).</span></div>
+      <div class="feature"><strong>Tagged metrics</strong><span><code>->withTags(['user' => $u])</code> returns a registry that pre-tags every emit.</span></div>
+      <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
+      <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-metrics">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-metrics/blob/main/README.md">Full README</a></li>
@@ -36,7 +88,16 @@
   </div>
 </section>
 
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-metrics/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

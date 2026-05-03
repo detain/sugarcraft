@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-freeze" width="160" align="right">
+
 # CandyFreeze
 
 ![demo](.vhs/screenshot.gif)

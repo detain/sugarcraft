@@ -4,27 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyShine — SugarCraft</title>
-<meta name="description" content="CandyShine: Markdown → ANSI. Port of glamour.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyShine: Markdown → ANSI renderer. PHP port of glamour.">
+<meta property="og:title" content="CandyShine — SugarCraft">
+<meta property="og:description" content="Markdown → ANSI renderer. Port of glamour.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-shine.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-shine.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🌟</div>
-      <div><h2 style="margin: 0;">CandyShine</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Markdown → ANSI</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-shine.png" alt="CandyShine">
+      <div>
+        <h2>🌟 CandyShine</h2>
+        <p class="detail-sub">Markdown → ANSI renderer</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/glamour" style="color: inherit;">glamour</a></span>
+          <span class="tag-chip">markdown</span>
+          <span class="tag-chip">ansi</span>
+          <span class="tag-chip">renderer</span>
+          <span class="tag-chip">themes</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Word-wrap, OSC 8 hyperlinks, fenced-code syntax highlighting, eight stock themes (ansi / plain / dark / light / notty / dracula / tokyo-night / pink), custom themes via JSON loader.</p>
+
+    <p class="lede" style="margin-top: 28px;">Built on league/commonmark + CandySprinkles. Word-wrap, OSC 8 hyperlinks, syntax highlighting, eight built-in themes plus custom JSON themes.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-shine</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Shine\{Renderer, Theme};
+
+echo (new Renderer())-&gt;render(&lt;&lt;&lt;MD
+# Welcome
+
+A few **bold** and _italic_ words, with `inline code` and a
+[link](https://example.com).
+
+- one
+- two
+- three
+
+```php
+echo "hello world";
+```
+MD);
+
+// Custom theme
+$theme = Theme::fromJson('./themes/my-theme.json');
+echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>CommonMark parser</strong><span>Headings, paragraphs, lists, blockquotes, code blocks, tables, rules, links, images, HTML inline + block.</span></div>
+      <div class="feature"><strong>Eight themes</strong><span>ansi, plain, notty, dark, light, dracula, tokyo-night, pink.</span></div>
+      <div class="feature"><strong>Custom JSON</strong><span><code>Theme::fromJson('./my-theme.json')</code> — element-keyed style overrides.</span></div>
+      <div class="feature"><strong>Word-wrap</strong><span>Configurable column width; honours SGR + grapheme cluster widths.</span></div>
+      <div class="feature"><strong>OSC 8 hyperlinks</strong><span>Optional <code>--no-hyperlinks</code> toggle for terminals that don't support them.</span></div>
+      <div class="feature"><strong>Syntax highlighting</strong><span>Code blocks tokenised + coloured per language.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-shine">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-shine/blob/main/README.md">Full README</a></li>
@@ -36,23 +93,35 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shine/main/.vhs/render.gif" alt="Render">
                 <h3>Render</h3>
+                <span class="demo-caption">Markdown → ANSI with the default ansi theme.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shine/main/.vhs/themes.gif" alt="Themes">
                 <h3>Themes</h3>
+                <span class="demo-caption">Same document rendered through all eight themes.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-shine/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

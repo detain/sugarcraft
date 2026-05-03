@@ -4,27 +4,80 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyZone — SugarCraft</title>
-<meta name="description" content="CandyZone: Mouse-zone tracker. Port of bubblezone.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyZone: Mouse-zone tracker for clickable UIs. PHP port of bubblezone.">
+<meta property="og:title" content="CandyZone — SugarCraft">
+<meta property="og:description" content="Mouse-zone tracker for clickable UIs. Port of bubblezone.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-zone.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-zone.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🎯</div>
-      <div><h2 style="margin: 0;">CandyZone</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Mouse-zone tracker</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-zone.png" alt="CandyZone">
+      <div>
+        <h2>🎯 CandyZone</h2>
+        <p class="detail-sub">Mouse-zone tracker for clickable UIs</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/lrstanley/bubblezone" style="color: inherit;">bubblezone</a></span>
+          <span class="tag-chip">mouse</span>
+          <span class="tag-chip">hit-testing</span>
+          <span class="tag-chip">regions</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Wrap rendered chunks in zone markers, query the zone manager for bounding boxes by ID. Click a button without coordinate math.</p>
+
+    <p class="lede" style="margin-top: 28px;">Wrap rendered chunks with named markers, let CandyZone discover their bounding boxes, then ask zones whether a MouseMsg fell inside them. Markers are APC escape sequences — terminals ignore them, so they don't affect layout.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-zone</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Zone\Manager;
+use CandyCore\Sprinkles\Style;
+
+$z = Manager::newGlobal();
+
+$btnOk     = $z-&gt;mark('btn:ok',     Style::new()-&gt;padding(0, 2)-&gt;render('OK'));
+$btnCancel = $z-&gt;mark('btn:cancel', Style::new()-&gt;padding(0, 2)-&gt;render('Cancel'));
+$frame     = $btnOk . '   ' . $btnCancel;
+
+// Scan once before printing — Manager records marker positions and strips them.
+$displayable = $z-&gt;scan($frame);
+echo $displayable;
+
+// Later, when a MouseMsg arrives:
+if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
+    // ...
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Marker injection</strong><span><code>$z->mark('btn:ok', $rendered)</code> wraps the chunk in invisible APC delimiters.</span></div>
+      <div class="feature"><strong>Single-pass scan</strong><span><code>$z->scan($frame)</code> records every marker's 1-based cell bounding box and strips them in one pass.</span></div>
+      <div class="feature"><strong>Bounds query</strong><span><code>$z->get('btn:ok')?->inBounds($mouseMsg)</code> — clean predicate, no coordinate math.</span></div>
+      <div class="feature"><strong>ANSI-aware</strong><span>Width calculation honours SGR + Unicode grapheme widths; emojis, CJK, combining marks all account correctly.</span></div>
+      <div class="feature"><strong>Manager isolation</strong><span>Manager::newGlobal() for app-wide; or per-component managers for nested mouse handling.</span></div>
+      <div class="feature"><strong>Plays with CandyCore</strong><span>Drop into your Model — every <code>view()</code> call rescans, every MouseMsg routes.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-zone">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-zone/blob/main/README.md">Full README</a></li>
@@ -36,7 +89,16 @@
   </div>
 </section>
 
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-zone/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

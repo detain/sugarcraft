@@ -4,27 +4,69 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarGlow — SugarCraft</title>
-<meta name="description" content="SugarGlow: Markdown CLI viewer / pager. Port of glow.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="SugarGlow: Markdown CLI viewer + pager. PHP port of glow.">
+<meta property="og:title" content="SugarGlow — SugarCraft">
+<meta property="og:description" content="Markdown CLI viewer + pager. Port of glow.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-glow.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-glow.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">📖</div>
-      <div><h2 style="margin: 0;">SugarGlow</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Markdown CLI viewer / pager</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-glow.png" alt="SugarGlow">
+      <div>
+        <h2>📖 SugarGlow</h2>
+        <p class="detail-sub">Markdown CLI viewer + pager</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/glow" style="color: inherit;">glow</a></span>
+          <span class="tag-chip">markdown</span>
+          <span class="tag-chip">viewer</span>
+          <span class="tag-chip">pager</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Renders to stdout (default) or opens a fullscreen Viewport pager (-p / --pager). All eight CandyShine themes available, custom JSON themes via --theme-config, --no-hyperlinks toggle.</p>
+
+    <p class="lede" style="margin-top: 28px;">Composes CandyShine (rendering) and SugarBits Viewport (scrolling). Render to stdout or open in a fullscreen pager. All eight CandyShine themes plus custom JSON.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/sugar-glow</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>sugarglow README.md                   # render to stdout (default)
+sugarglow -p README.md                # open in a fullscreen pager
+git log -1 --pretty=%B | sugarglow -p # pipe stdin
+sugarglow --theme dracula README.md
+sugarglow --width 80 --no-hyperlinks README.md
+sugarglow --theme-config ./my-theme.json README.md</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Stdout mode</strong><span><code>sugarglow README.md</code> — pipe-friendly, exits clean.</span></div>
+      <div class="feature"><strong>Pager mode</strong><span><code>-p / --pager</code> — fullscreen scrollable Viewport. Esc / q to exit.</span></div>
+      <div class="feature"><strong>Theme picker</strong><span><code>--theme dracula</code>, <code>--theme-config ./my.json</code>, <code>-s</code> alias for glamour-compat.</span></div>
+      <div class="feature"><strong>Word-wrap</strong><span><code>-w 80</code> — column width control. <code>0</code> disables.</span></div>
+      <div class="feature"><strong>OSC 8 toggle</strong><span><code>--no-hyperlinks</code> falls back to <code>text (url)</code> rendering.</span></div>
+      <div class="feature"><strong>Stdin support</strong><span><code>git log -1 --pretty=%B | sugarglow -p</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-glow">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-glow/blob/main/README.md">Full README</a></li>
@@ -36,19 +78,30 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-glow/main/.vhs/render.gif" alt="Render">
                 <h3>Render</h3>
+                <span class="demo-caption">README rendered through four themes — ansi / dark / dracula / pink.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-glow/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

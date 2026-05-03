@@ -1,4 +1,8 @@
-# CandyCore
+# SugarCraft
+
+<p align="center">
+  <img src="media/social-preview.png" alt="SugarCraft — sweet to build, fun to use" width="720">
+</p>
 
 PHP ports of the [Charmbracelet](https://charm.sh) TUI ecosystem (plus
 [bubblezone](https://github.com/lrstanley/bubblezone),
@@ -16,33 +20,33 @@ composer require candycore/candycore
 
 Sixteen libraries grouped by layer:
 
-| Library | Source counterpart | Role |
-|---|---|---|
-| **[CandyCore](candy-core/)** | [bubbletea](https://github.com/charmbracelet/bubbletea) | Elm-architecture TUI runtime — `Model` / `Msg` / `Cmd` / `Program` (incl. cursed cell-diff renderer) |
-| **[CandySprinkles](candy-sprinkles/)** | [lipgloss](https://github.com/charmbracelet/lipgloss) | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor) |
-| **[HoneyBounce](honey-bounce/)** | [harmonica](https://github.com/charmbracelet/harmonica) | Damped spring physics + Newtonian projectile sim |
-| **[CandyZone](candy-zone/)** | [bubblezone](https://github.com/lrstanley/bubblezone) | Mouse-zone tracker — wrap rendered chunks, get back bounding boxes |
-| **[SugarBits](sugar-bits/)** | [bubbles](https://github.com/charmbracelet/bubbles) | 14 components: TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer |
-| **[SugarCharts](sugar-charts/)** | [ntcharts](https://github.com/NimbleMarkets/ntcharts) | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2) |
-| **[SugarPrompt](sugar-prompt/)** | [huh](https://github.com/charmbracelet/huh) | Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker; multi-page Groups; 6 themes |
-| **[CandyShell](candy-shell/)** | [gum](https://github.com/charmbracelet/gum) | Composer-installable CLI of all 13 subcommands (choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write) |
-| **[CandyShine](candy-shine/)** | [glamour](https://github.com/charmbracelet/glamour) | Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, 8 themes |
-| **[CandyKit](candy-kit/)** | [fang](https://github.com/charmbracelet/fang) | CLI presentation helpers — StatusLine, Banner, Section, Stage, HelpText |
-| **[CandyFreeze](candy-freeze/)** | [freeze](https://github.com/charmbracelet/freeze) | Code → SVG screenshot generator (no `ext-gd` required) |
-| **[SugarGlow](sugar-glow/)** | [glow](https://github.com/charmbracelet/glow) | Markdown CLI viewer / pager |
-| **[SugarSpark](sugar-spark/)** | [sequin](https://github.com/charmbracelet/sequin) | ANSI escape-sequence inspector |
-| **[CandyWish](candy-wish/)** | [wish](https://github.com/charmbracelet/wish) | SSH server middleware — Logger, Auth, RateLimit, BubbleTea (mount a CandyCore Program over `ForceCommand`) |
-| **[SugarWishlist](sugar-wishlist/)** | [wishlist](https://github.com/charmbracelet/wishlist) | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh` |
-| **[CandyMetrics](candy-metrics/)** | [promwish](https://github.com/charmbracelet/promwish) | Telemetry primitives — counters, gauges, histograms with InMemory / JSON / StatsD / Prometheus textfile / Multi backends, plus a CandyWish session middleware |
+| | Library | Source counterpart | Role |
+|---|---|---|---|
+| <img src="media/icons/candy-core.png" width="48" alt=""> | **[CandyCore](candy-core/)** | [bubbletea](https://github.com/charmbracelet/bubbletea) | Elm-architecture TUI runtime — `Model` / `Msg` / `Cmd` / `Program` (incl. cursed cell-diff renderer) |
+| <img src="media/icons/candy-sprinkles.png" width="48" alt=""> | **[CandySprinkles](candy-sprinkles/)** | [lipgloss](https://github.com/charmbracelet/lipgloss) | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor) |
+| <img src="media/icons/honey-bounce.png" width="48" alt=""> | **[HoneyBounce](honey-bounce/)** | [harmonica](https://github.com/charmbracelet/harmonica) | Damped spring physics + Newtonian projectile sim |
+| <img src="media/icons/candy-zone.png" width="48" alt=""> | **[CandyZone](candy-zone/)** | [bubblezone](https://github.com/lrstanley/bubblezone) | Mouse-zone tracker — wrap rendered chunks, get back bounding boxes |
+| <img src="media/icons/sugar-bits.png" width="48" alt=""> | **[SugarBits](sugar-bits/)** | [bubbles](https://github.com/charmbracelet/bubbles) | 14 components: TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer |
+| <img src="media/icons/sugar-charts.png" width="48" alt=""> | **[SugarCharts](sugar-charts/)** | [ntcharts](https://github.com/NimbleMarkets/ntcharts) | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2) |
+| <img src="media/icons/sugar-prompt.png" width="48" alt=""> | **[SugarPrompt](sugar-prompt/)** | [huh](https://github.com/charmbracelet/huh) | Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker; multi-page Groups; 6 themes |
+| <img src="media/icons/candy-shell.png" width="48" alt=""> | **[CandyShell](candy-shell/)** | [gum](https://github.com/charmbracelet/gum) | Composer-installable CLI of all 13 subcommands (choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write) |
+| <img src="media/icons/candy-shine.png" width="48" alt=""> | **[CandyShine](candy-shine/)** | [glamour](https://github.com/charmbracelet/glamour) | Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, 8 themes |
+| <img src="media/icons/candy-kit.png" width="48" alt=""> | **[CandyKit](candy-kit/)** | [fang](https://github.com/charmbracelet/fang) | CLI presentation helpers — StatusLine, Banner, Section, Stage, HelpText |
+| <img src="media/icons/candy-freeze.png" width="48" alt=""> | **[CandyFreeze](candy-freeze/)** | [freeze](https://github.com/charmbracelet/freeze) | Code → SVG screenshot generator (no `ext-gd` required) |
+| <img src="media/icons/sugar-glow.png" width="48" alt=""> | **[SugarGlow](sugar-glow/)** | [glow](https://github.com/charmbracelet/glow) | Markdown CLI viewer / pager |
+| <img src="media/icons/sugar-spark.png" width="48" alt=""> | **[SugarSpark](sugar-spark/)** | [sequin](https://github.com/charmbracelet/sequin) | ANSI escape-sequence inspector |
+| <img src="media/icons/candy-wish.png" width="48" alt=""> | **[CandyWish](candy-wish/)** | [wish](https://github.com/charmbracelet/wish) | SSH server middleware — Logger, Auth, RateLimit, BubbleTea (mount a CandyCore Program over `ForceCommand`) |
+| <img src="media/icons/sugar-wishlist.png" width="48" alt=""> | **[SugarWishlist](sugar-wishlist/)** | [wishlist](https://github.com/charmbracelet/wishlist) | TUI directory of SSH endpoints — YAML/JSON config + `pcntl_exec` into the chosen `ssh` |
+| <img src="media/icons/candy-metrics.png" width="48" alt=""> | **[CandyMetrics](candy-metrics/)** | [promwish](https://github.com/charmbracelet/promwish) | Telemetry primitives — counters, gauges, histograms with InMemory / JSON / StatsD / Prometheus textfile / Multi backends, plus a CandyWish session middleware |
 
 ## Apps built on the stack
 
-| App | Source counterpart | Role |
-|---|---|---|
-| **[CandyMold](candy-mold/)** | [bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | `composer create-project candycore/candy-mold my-app` — bootstrap skeleton with a working counter Model |
-| **[CandyTetris](candy-tetris/)** | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) | Tetris clone — SRS rules, 7-bag, ghost piece, NES scoring, level-driven gravity |
-| **[SuperCandy](super-candy/)** | [superfile](https://github.com/yorukot/superfile) | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm |
-| **[SugarCrush](sugar-crush/)** | [crush](https://github.com/charmbracelet/crush) | AI coding-assistant chat shell — pluggable backend (EchoBackend offline; CommandBackend for Anthropic / OpenAI / Ollama via a wrapper script) |
+| | App | Source counterpart | Role |
+|---|---|---|---|
+| <img src="media/icons/candy-mold.png" width="48" alt=""> | **[CandyMold](candy-mold/)** | [bubbletea-app-template](https://github.com/charmbracelet/bubbletea-app-template) | `composer create-project candycore/candy-mold my-app` — bootstrap skeleton with a working counter Model |
+| <img src="media/icons/candy-tetris.png" width="48" alt=""> | **[CandyTetris](candy-tetris/)** | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) | Tetris clone — SRS rules, 7-bag, ghost piece, NES scoring, level-driven gravity |
+| <img src="media/icons/super-candy.png" width="48" alt=""> | **[SuperCandy](super-candy/)** | [superfile](https://github.com/yorukot/superfile) | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm |
+| <img src="media/icons/sugar-crush.png" width="48" alt=""> | **[SugarCrush](sugar-crush/)** | [crush](https://github.com/charmbracelet/crush) | AI coding-assistant chat shell — pluggable backend (EchoBackend offline; CommandBackend for Anthropic / OpenAI / Ollama via a wrapper script) |
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.

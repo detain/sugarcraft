@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-core" width="160" align="right">
+
 # CandyCore
 
 ![demo](.vhs/counter.gif)

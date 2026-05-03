@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-metrics" width="160" align="right">
+
 # CandyMetrics
 
 Lightweight telemetry primitives for CandyCore / CandyWish servers. Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics.

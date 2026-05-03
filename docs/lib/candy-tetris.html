@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyTetris — SugarCraft</title>
+<meta name="description" content="CandyTetris: Tetris on the SugarCraft stack. PHP port of tetrigo.">
+<meta property="og:title" content="CandyTetris — SugarCraft">
+<meta property="og:description" content="Tetris on the SugarCraft stack. Port of tetrigo.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-tetris.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-tetris.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-tetris.png" alt="CandyTetris">
+      <div>
+        <h2>🎮 CandyTetris</h2>
+        <p class="detail-sub">Tetris on the SugarCraft stack</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/Broderick-Westrope/tetrigo" style="color: inherit;">tetrigo</a></span>
+          <span class="tag-chip">game</span>
+          <span class="tag-chip">tetris</span>
+          <span class="tag-chip">srs</span>
+          <span class="tag-chip">deterministic</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">CandyCore runtime, CandySprinkles for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-classic line-clear scoring. 41 tests / 1535 assertions.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/candy-tetris</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>composer install
+./bin/tetris
+
+# Controls
+# ← / →   Move left / right
+# ↑ / x   Rotate clockwise
+# z       Rotate counter-cw
+# ↓       Soft drop
+# Space   Hard drop
+# p       Pause / resume
+# q       Quit</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SRS rotation</strong><span>Standard Rotation System with simple ±2 wall-kicks. CW / CCW handled identically.</span></div>
+      <div class="feature"><strong>7-bag RNG</strong><span>Deterministic shuffle of the seven pieces; injectable RNG closure for reproducible tests.</span></div>
+      <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
+      <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines.</span></div>
+      <div class="feature"><strong>NES scoring</strong><span>1 → 40, 2 → 100, 3 → 300, 4 → 1200 — multiplied by (level + 1).</span></div>
+      <div class="feature"><strong>Six pure-state classes</strong><span>Tetromino, Piece, Board, Bag, Score, Game — each individually testable without booting the runtime.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-tetris">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-tetris/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-tetris/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/Broderick-Westrope/tetrigo">tetrigo</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-tetris/main/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Full game with ghost piece, hard drop, level-driven gravity.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-tetris/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

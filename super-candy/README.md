@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="super-candy" width="160" align="right">
+
 # SuperCandy
 
 ![demo](.vhs/navigate.gif)

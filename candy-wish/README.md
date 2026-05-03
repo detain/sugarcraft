@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-wish" width="160" align="right">
+
 # CandyWish
 
 PHP port of [`charmbracelet/wish`](https://github.com/charmbracelet/wish) — an SSH server middleware framework that lets you build TUIs anyone can `ssh user@host` to run.

@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-charts" width="160" align="right">
+
 # SugarCharts
 
 ![demo](.vhs/heatmap.gif)

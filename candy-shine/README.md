@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-shine" width="160" align="right">
+
 # CandyShine
 
 ![demo](.vhs/render.gif)

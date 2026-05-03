@@ -4,11 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SugarCraft — terminal UIs for PHP</title>
-    <meta name="description" content="SugarCraft is the PHP port of the Charmbracelet TUI ecosystem — sixteen libraries for building beautiful, fast, fiber-driven terminal user interfaces in PHP 8.1+.">
+    <meta name="description" content="SugarCraft is the PHP port of the Charmbracelet TUI ecosystem — twenty composer-installable libraries and apps for building beautiful, fast, fiber-driven terminal user interfaces in PHP 8.1+.">
     <meta property="og:title" content="SugarCraft — terminal UIs for PHP">
-    <meta property="og:description" content="Sixteen PHP libraries for building beautiful terminal user interfaces. Composer-installable. PHP 8.1+. Async on ReactPHP.">
+    <meta property="og:description" content="Twenty PHP libraries + apps for building beautiful terminal user interfaces. Composer-installable. PHP 8.1+. Async on ReactPHP.">
     <meta property="og:type" content="website">
-    <link rel="icon" type="image/svg+xml" href="img/favicon.svg">
+    <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://sugarcraft.github.io/img/social-preview.png">
+    <link rel="icon" type="image/png" href="img/profile.png">
+    <link rel="apple-touch-icon" href="img/profile.png">
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -20,6 +24,7 @@
             <a href="#libraries">Libraries</a>
             <a href="#apps">Apps</a>
             <a href="#demos">Demos</a>
+            <a href="#architecture">Architecture</a>
             <a href="#quickstart">Quickstart</a>
             <a href="compare.html">Compare</a>
             <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
@@ -29,17 +34,20 @@
 
 <header class="hero">
     <div class="container">
+        <img class="hero-banner" src="img/social-preview.png" alt="SugarCraft — sweet to build, fun to use">
         <h1>Terminal UIs that taste like candy.</h1>
         <p class="tag">
             SugarCraft is the PHP port of the
-            <a href="https://charm.sh">Charmbracelet</a> TUI ecosystem.
-            Sixteen composer-installable libraries. Elm-architecture runtime,
+            <a href="https://charm.sh">Charmbracelet</a> TUI ecosystem — sixteen
+            libraries and four reference apps. Elm-architecture runtime,
             declarative styling, animation, charts, forms, SSH-served apps,
-            telemetry. PHP 8.1+, fibers, ReactPHP.
+            telemetry, file managers, an AI chat shell. Composer-installable,
+            PHP 8.1+, fibers, async on ReactPHP.
         </p>
 
         <div class="cta-row">
             <a href="#quickstart" class="btn btn-primary">Quickstart →</a>
+            <a href="#libraries" class="btn btn-ghost">Browse the libraries</a>
             <a href="https://github.com/sugarcraft" class="btn btn-ghost">View on GitHub</a>
         </div>
 
@@ -50,23 +58,79 @@
             <span class="glyph">🎨</span>
             <span class="glyph">🍭</span>
         </div>
+
+        <div class="stats">
+            <div class="stat"><span class="num">16</span><span class="label">libraries</span></div>
+            <div class="stat"><span class="num">4</span><span class="label">reference apps</span></div>
+            <div class="stat"><span class="num">62</span><span class="label">VHS demos</span></div>
+            <div class="stat"><span class="num">PHP 8.1+</span><span class="label">fibers / ReactPHP</span></div>
+            <div class="stat"><span class="num">MIT</span><span class="label">licensed</span></div>
+        </div>
     </div>
 </header>
 
-<section class="section" id="libraries">
+<section class="section" id="overview">
+    <div class="container">
+        <h2>The whole Charm stack — in PHP.</h2>
+        <p class="lede">
+            Click an icon to jump to its detail page. Every package is published
+            independently, ships its own examples and PHPUnit suite, and shares
+            a single styling vocabulary so they compose without glue code.
+        </p>
+
+        <div class="logo-strip">
+            <a href="lib/candy-core.html"     title="CandyCore — TUI runtime"><img src="img/icons/candy-core.png" alt="CandyCore"></a>
+            <a href="lib/candy-sprinkles.html" title="CandySprinkles — styling"><img src="img/icons/candy-sprinkles.png" alt="CandySprinkles"></a>
+            <a href="lib/honey-bounce.html"   title="HoneyBounce — physics"><img src="img/icons/honey-bounce.png" alt="HoneyBounce"></a>
+            <a href="lib/candy-zone.html"     title="CandyZone — mouse zones"><img src="img/icons/candy-zone.png" alt="CandyZone"></a>
+            <a href="lib/sugar-bits.html"     title="SugarBits — components"><img src="img/icons/sugar-bits.png" alt="SugarBits"></a>
+            <a href="lib/sugar-charts.html"   title="SugarCharts — charts"><img src="img/icons/sugar-charts.png" alt="SugarCharts"></a>
+            <a href="lib/sugar-prompt.html"   title="SugarPrompt — forms"><img src="img/icons/sugar-prompt.png" alt="SugarPrompt"></a>
+            <a href="lib/candy-shell.html"    title="CandyShell — CLI"><img src="img/icons/candy-shell.png" alt="CandyShell"></a>
+            <a href="lib/candy-shine.html"    title="CandyShine — markdown"><img src="img/icons/candy-shine.png" alt="CandyShine"></a>
+            <a href="lib/candy-kit.html"      title="CandyKit — CLI helpers"><img src="img/icons/candy-kit.png" alt="CandyKit"></a>
+            <a href="lib/candy-freeze.html"   title="CandyFreeze — code → SVG"><img src="img/icons/candy-freeze.png" alt="CandyFreeze"></a>
+            <a href="lib/sugar-glow.html"     title="SugarGlow — markdown viewer"><img src="img/icons/sugar-glow.png" alt="SugarGlow"></a>
+            <a href="lib/sugar-spark.html"    title="SugarSpark — ANSI inspector"><img src="img/icons/sugar-spark.png" alt="SugarSpark"></a>
+            <a href="lib/candy-wish.html"     title="CandyWish — SSH framework"><img src="img/icons/candy-wish.png" alt="CandyWish"></a>
+            <a href="lib/sugar-wishlist.html" title="SugarWishlist — SSH picker"><img src="img/icons/sugar-wishlist.png" alt="SugarWishlist"></a>
+            <a href="lib/candy-metrics.html"  title="CandyMetrics — telemetry"><img src="img/icons/candy-metrics.png" alt="CandyMetrics"></a>
+            <a href="lib/candy-mold.html"     title="CandyMold — starter"><img src="img/icons/candy-mold.png" alt="CandyMold"></a>
+            <a href="lib/candy-tetris.html"   title="CandyTetris — game"><img src="img/icons/candy-tetris.png" alt="CandyTetris"></a>
+            <a href="lib/super-candy.html"    title="SuperCandy — file manager"><img src="img/icons/super-candy.png" alt="SuperCandy"></a>
+            <a href="lib/sugar-crush.html"    title="SugarCrush — AI chat"><img src="img/icons/sugar-crush.png" alt="SugarCrush"></a>
+        </div>
+
+        <div class="callout">
+            <h3>Built for the things Symfony Console can't do.</h3>
+            <p>
+                Persistent render loops, mouse + keyboard, alt-screen, async work
+                without blocking the UI, multi-tenant SSH-served TUIs, charts and
+                sparklines, animated spinners, multi-page forms, Markdown rendered
+                straight to ANSI. The boring parts of CLI tooling — argv parsing,
+                exit codes — pair perfectly with whatever Console framework you
+                already use.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="section" id="libraries" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Sixteen libraries, one ecosystem.</h2>
         <p class="lede">
-            Each library has its own composer package, README, examples,
-            and PHPUnit suite. Pull just the ones you need — or grab the
-            umbrella metapackage.
+            Each library has its own composer package, README, examples, and
+            PHPUnit suite. Pull just the ones you need — or grab the umbrella
+            metapackage and get the lot.
         </p>
 
         <div class="lib-grid">
 
             <a class="lib-card" href="lib/candy-core.html">
-                <div class="glyph-tag">🍬</div>
-                <h3>CandyCore</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-core.png" alt="">
+                    <h3>CandyCore</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/bubbletea">bubbletea</a></div>
                 <p class="summary">Elm-architecture runtime — Model / Msg / Cmd / Program. Cursed cell-diff renderer for SSH bandwidth.</p>
                 <div class="links">
@@ -76,8 +140,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-sprinkles.html">
-                <div class="glyph-tag">✨</div>
-                <h3>CandySprinkles</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-sprinkles.png" alt="">
+                    <h3>CandySprinkles</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/lipgloss">lipgloss</a></div>
                 <p class="summary">Declarative styling + layout. Style, Border, Table, List, Tree, Layout::join/Place, multi-layer Canvas.</p>
                 <div class="links">
@@ -87,8 +153,10 @@
             </a>
 
             <a class="lib-card" href="lib/honey-bounce.html">
-                <div class="glyph-tag">🐝</div>
-                <h3>HoneyBounce</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/honey-bounce.png" alt="">
+                    <h3>HoneyBounce</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/harmonica">harmonica</a></div>
                 <p class="summary">Damped spring physics + Newtonian projectile sim. The animation engine behind every smooth scroll in the stack.</p>
                 <div class="links">
@@ -98,8 +166,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-zone.html">
-                <div class="glyph-tag">🎯</div>
-                <h3>CandyZone</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-zone.png" alt="">
+                    <h3>CandyZone</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/lrstanley/bubblezone">bubblezone</a></div>
                 <p class="summary">Mouse-zone tracker. Wrap rendered chunks, get back bounding boxes — clickable regions without coordinate math.</p>
                 <div class="links">
@@ -109,8 +179,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-bits.html">
-                <div class="glyph-tag">🧁</div>
-                <h3>SugarBits</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-bits.png" alt="">
+                    <h3>SugarBits</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/bubbles">bubbles</a></div>
                 <p class="summary">Fourteen components: TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer.</p>
                 <div class="links">
@@ -120,8 +192,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-charts.html">
-                <div class="glyph-tag">📊</div>
-                <h3>SugarCharts</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-charts.png" alt="">
+                    <h3>SugarCharts</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/NimbleMarkets/ntcharts">ntcharts</a></div>
                 <p class="summary">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus Sixel / Kitty / iTerm2 image rendering.</p>
                 <div class="links">
@@ -131,8 +205,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-prompt.html">
-                <div class="glyph-tag">💬</div>
-                <h3>SugarPrompt</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-prompt.png" alt="">
+                    <h3>SugarPrompt</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/huh">huh</a></div>
                 <p class="summary">Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker, multi-page Groups, six themes.</p>
                 <div class="links">
@@ -142,8 +218,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-shell.html">
-                <div class="glyph-tag">🐚</div>
-                <h3>CandyShell</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-shell.png" alt="">
+                    <h3>CandyShell</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/gum">gum</a></div>
                 <p class="summary">Composer-installable CLI of thirteen subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.</p>
                 <div class="links">
@@ -153,8 +231,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-shine.html">
-                <div class="glyph-tag">🌟</div>
-                <h3>CandyShine</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-shine.png" alt="">
+                    <h3>CandyShine</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/glamour">glamour</a></div>
                 <p class="summary">Markdown → ANSI renderer. Word-wrap, OSC 8 hyperlinks, syntax highlighting, eight themes, custom themes via JSON.</p>
                 <div class="links">
@@ -164,8 +244,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-kit.html">
-                <div class="glyph-tag">🎁</div>
-                <h3>CandyKit</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-kit.png" alt="">
+                    <h3>CandyKit</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/fang">fang</a></div>
                 <p class="summary">CLI presentation helpers — StatusLine, Banner, Section, Stage, HelpText. Library-only, no Symfony Console requirement.</p>
                 <div class="links">
@@ -175,8 +257,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-freeze.html">
-                <div class="glyph-tag">📸</div>
-                <h3>CandyFreeze</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-freeze.png" alt="">
+                    <h3>CandyFreeze</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/freeze">freeze</a></div>
                 <p class="summary">Code → SVG screenshot. Traffic-light window controls, drop shadow, gutter line numbers, ANSI SGR parsing. No GD / Imagick.</p>
                 <div class="links">
@@ -186,8 +270,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-glow.html">
-                <div class="glyph-tag">📖</div>
-                <h3>SugarGlow</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-glow.png" alt="">
+                    <h3>SugarGlow</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/glow">glow</a></div>
                 <p class="summary">Markdown CLI viewer. Renders to stdout or opens a fullscreen pager. Eight themes, custom JSON themes, OSC 8 toggle.</p>
                 <div class="links">
@@ -197,8 +283,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-spark.html">
-                <div class="glyph-tag">🔍</div>
-                <h3>SugarSpark</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-spark.png" alt="">
+                    <h3>SugarSpark</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/sequin">sequin</a></div>
                 <p class="summary">ANSI escape-sequence inspector. Labels SGR / CSI / OSC / DCS / APC / SS3 — feed it stdin, get a human-readable annotation back.</p>
                 <div class="links">
@@ -208,8 +296,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-wish.html">
-                <div class="glyph-tag">🔐</div>
-                <h3>CandyWish</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-wish.png" alt="">
+                    <h3>CandyWish</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/wish">wish</a></div>
                 <p class="summary">SSH server middleware framework. Logger, Auth, RateLimit, BubbleTea — leans on OpenSSH ForceCommand for the wire protocol.</p>
                 <div class="links">
@@ -219,8 +309,10 @@
             </a>
 
             <a class="lib-card" href="lib/sugar-wishlist.html">
-                <div class="glyph-tag">🎫</div>
-                <h3>SugarWishlist</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-wishlist.png" alt="">
+                    <h3>SugarWishlist</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/wishlist">wishlist</a></div>
                 <p class="summary">SSH endpoint launcher. YAML / JSON directory of `ssh user@host` shortcuts, interactive picker, pcntl_exec into the chosen ssh.</p>
                 <div class="links">
@@ -230,8 +322,10 @@
             </a>
 
             <a class="lib-card" href="lib/candy-metrics.html">
-                <div class="glyph-tag">📈</div>
-                <h3>CandyMetrics</h3>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-metrics.png" alt="">
+                    <h3>CandyMetrics</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/promwish">promwish</a></div>
                 <p class="summary">Telemetry primitives. Counter / Gauge / Histogram, four backends (InMemory, JSON, StatsD, Prometheus textfile), CandyWish session middleware.</p>
                 <div class="links">
@@ -248,55 +342,159 @@
     <div class="container">
         <h2>Apps built on the stack.</h2>
         <p class="lede">
-            Real apps that exercise the libraries end-to-end —
-            install via Composer, runnable as a CLI binary.
+            Real apps that exercise the libraries end-to-end — install via
+            Composer, runnable as a CLI binary. Each one has a detail page
+            below with controls, architecture, and demo recordings.
         </p>
         <div class="lib-grid">
 
-            <a class="lib-card" href="https://github.com/sugarcraft/candy-mold">
-                <div class="glyph-tag">🧪</div>
-                <h3>CandyMold</h3>
+            <a class="lib-card" href="lib/candy-mold.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-mold.png" alt="">
+                    <h3>CandyMold</h3>
+                </div>
                 <div class="lib-source">starter skeleton</div>
                 <p class="summary"><code>composer create-project candycore/candy-mold my-app</code> — pour your model into the mold and you've got a working app.</p>
                 <div class="links">
                     <a href="https://github.com/sugarcraft/candy-mold">GitHub</a>
-                    <a href="https://github.com/sugarcraft/candy-mold/blob/main/README.md">Docs</a>
+                    <a href="lib/candy-mold.html">Details</a>
                 </div>
             </a>
 
-            <a class="lib-card" href="https://github.com/sugarcraft/candy-tetris">
-                <div class="glyph-tag">🎮</div>
-                <h3>CandyTetris</h3>
+            <a class="lib-card" href="lib/candy-tetris.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-tetris.png" alt="">
+                    <h3>CandyTetris</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/Broderick-Westrope/tetrigo">tetrigo</a></div>
                 <p class="summary">Tetris clone — SRS rules, 7-bag RNG, ghost piece, NES scoring, level-driven gravity. 41 tests / 1535 assertions.</p>
                 <div class="links">
                     <a href="https://github.com/sugarcraft/candy-tetris">GitHub</a>
-                    <a href="https://github.com/sugarcraft/candy-tetris/blob/main/README.md">Docs</a>
+                    <a href="lib/candy-tetris.html">Details</a>
                 </div>
             </a>
 
-            <a class="lib-card" href="https://github.com/sugarcraft/super-candy">
-                <div class="glyph-tag">📂</div>
-                <h3>SuperCandy</h3>
+            <a class="lib-card" href="lib/super-candy.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/super-candy.png" alt="">
+                    <h3>SuperCandy</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/yorukot/superfile">superfile</a></div>
                 <p class="summary">Dual-pane file manager. Tab-swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm.</p>
                 <div class="links">
                     <a href="https://github.com/sugarcraft/super-candy">GitHub</a>
-                    <a href="https://github.com/sugarcraft/super-candy/blob/main/README.md">Docs</a>
+                    <a href="lib/super-candy.html">Details</a>
                 </div>
             </a>
 
-            <a class="lib-card" href="https://github.com/sugarcraft/sugar-crush">
-                <div class="glyph-tag">🤖</div>
-                <h3>SugarCrush</h3>
+            <a class="lib-card" href="lib/sugar-crush.html">
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/sugar-crush.png" alt="">
+                    <h3>SugarCrush</h3>
+                </div>
                 <div class="lib-source">port of <a href="https://github.com/charmbracelet/crush">crush</a></div>
                 <p class="summary">AI coding-assistant chat shell. Pluggable Backend interface — wire to Anthropic / OpenAI / Ollama via a wrapper script.</p>
                 <div class="links">
                     <a href="https://github.com/sugarcraft/sugar-crush">GitHub</a>
-                    <a href="https://github.com/sugarcraft/sugar-crush/blob/main/README.md">Docs</a>
+                    <a href="lib/sugar-crush.html">Details</a>
                 </div>
             </a>
 
+        </div>
+    </div>
+</section>
+
+<section class="section" id="architecture" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Five layers, no surprises.</h2>
+        <p class="lede">
+            SugarCraft is the same layered architecture as the Charm stack,
+            translated package-by-package. The deps map cleanly so you can
+            grab as much or as little as you need.
+        </p>
+
+        <div class="layers">
+            <div class="layer l1">
+                <div class="layer-title">1. Foundation</div>
+                <div class="layer-bullets">
+                    <strong>CandyCore::Util</strong> — Ansi, Color, ColorProfile,
+                    Width, Tty. Depended on by everything below.
+                </div>
+            </div>
+            <div class="layer l2">
+                <div class="layer-title">2. Render + physics</div>
+                <div class="layer-bullets">
+                    <strong>CandySprinkles</strong> (lipgloss),
+                    <strong>HoneyBounce</strong> (harmonica). Pure rendering /
+                    pure math — no I/O.
+                </div>
+            </div>
+            <div class="layer l3">
+                <div class="layer-title">3. Runtime</div>
+                <div class="layer-bullets">
+                    <strong>CandyCore</strong> (bubbletea) — Model / Msg / Cmd /
+                    Program. Hooks Phase 1 + 2 onto a ReactPHP loop.
+                </div>
+            </div>
+            <div class="layer l4">
+                <div class="layer-title">4. Components</div>
+                <div class="layer-bullets">
+                    <strong>SugarBits</strong> (bubbles),
+                    <strong>SugarCharts</strong> (ntcharts),
+                    <strong>SugarPrompt</strong> (huh),
+                    <strong>CandyZone</strong> (bubblezone). Composable widgets
+                    that drop into your Model.
+                </div>
+            </div>
+            <div class="layer l5">
+                <div class="layer-title">5. Apps + tooling</div>
+                <div class="layer-bullets">
+                    <strong>CandyShell</strong> (gum),
+                    <strong>CandyShine</strong> (glamour),
+                    <strong>CandyKit</strong> (fang),
+                    <strong>CandyFreeze</strong> (freeze),
+                    <strong>SugarGlow</strong> (glow),
+                    <strong>SugarSpark</strong> (sequin),
+                    <strong>CandyWish</strong> (wish),
+                    <strong>SugarWishlist</strong> (wishlist),
+                    <strong>CandyMetrics</strong> (promwish), and the
+                    reference apps — CandyMold, CandyTetris, SuperCandy,
+                    SugarCrush.
+                </div>
+            </div>
+        </div>
+
+        <div class="pillars" style="margin-top: 48px;">
+            <div class="pillar">
+                <div class="icon">⚡</div>
+                <h3>Async-first</h3>
+                <p>ReactPHP event loop under the hood. Cmds run as fibers; the render thread never blocks on I/O.</p>
+            </div>
+            <div class="pillar">
+                <div class="icon">📐</div>
+                <h3>Immutable values</h3>
+                <p>Every Model, Style, Border, Theme is a readonly DTO. <code>with*()</code> returns a new instance — no hidden mutations.</p>
+            </div>
+            <div class="pillar">
+                <div class="icon">🧪</div>
+                <h3>Testable by design</h3>
+                <p>Pure update functions and snapshot ANSI tests. No tmp dirs, no mocks for the renderer — just assert against the frame.</p>
+            </div>
+            <div class="pillar">
+                <div class="icon">🎨</div>
+                <h3>One styling vocabulary</h3>
+                <p>Every package speaks <code>Sprinkles\Style</code>. Mix CandyShine output into a SugarBits Viewport, wrap that with a CandySprinkles Border — they all compose.</p>
+            </div>
+            <div class="pillar">
+                <div class="icon">🔐</div>
+                <h3>SSH the easy way</h3>
+                <p>CandyWish leans on <code>ForceCommand</code>. sshd handles auth, ciphers, fail2ban, audit logs — you get a clean middleware programming model.</p>
+            </div>
+            <div class="pillar">
+                <div class="icon">📦</div>
+                <h3>No native extensions</h3>
+                <p>Pure-PHP base flow. <code>ext-pcntl</code>, <code>ext-gd</code>, <code>ext-ssh2</code> are optional for niche features.</p>
+            </div>
         </div>
     </div>
 </section>
@@ -305,89 +503,96 @@
     <div class="container">
         <h2>See them run.</h2>
         <p class="lede">
-            VHS-recorded GIFs of every interactive demo, regenerated
-            on every push that touches the corresponding source.
+            VHS-recorded GIFs of every interactive demo, regenerated on every
+            push that touches the corresponding source. Sixty-plus demos in
+            total — these are the headliners; click into any library page for
+            its full set.
         </p>
         <div class="demo-grid">
             <a class="demo-card" href="lib/candy-core.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-core/main/.vhs/counter.gif" alt="CandyCore counter demo">
                 <h3>CandyCore</h3>
-                <p>↑ ↓ counter through the runtime</p>
+                <span class="demo-caption">↑ ↓ counter through the runtime</span>
             </a>
             <a class="demo-card" href="lib/candy-sprinkles.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/dashboard.gif" alt="CandySprinkles dashboard">
                 <h3>CandySprinkles</h3>
-                <p>Styled dashboard with borders + colours</p>
+                <span class="demo-caption">Styled dashboard with borders + colours</span>
             </a>
             <a class="demo-card" href="lib/sugar-bits.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/spinners.gif" alt="SugarBits spinner gallery">
                 <h3>SugarBits</h3>
-                <p>Spinner gallery — all 12 styles</p>
+                <span class="demo-caption">Spinner gallery — all 12 styles</span>
             </a>
             <a class="demo-card" href="lib/sugar-charts.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/heatmap.gif" alt="SugarCharts heatmap">
                 <h3>SugarCharts</h3>
-                <p>Heatmap rendered to ANSI</p>
+                <span class="demo-caption">Heatmap rendered to ANSI</span>
             </a>
             <a class="demo-card" href="lib/sugar-prompt.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/form.gif" alt="SugarPrompt multi-page form">
                 <h3>SugarPrompt</h3>
-                <p>Multi-page form wizard</p>
+                <span class="demo-caption">Multi-page form wizard</span>
             </a>
             <a class="demo-card" href="lib/candy-shell.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/style.gif" alt="CandyShell style subcommand">
                 <h3>CandyShell</h3>
-                <p>One-shot style subcommand</p>
+                <span class="demo-caption">One-shot style subcommand</span>
             </a>
             <a class="demo-card" href="lib/candy-shine.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shine/main/.vhs/render.gif" alt="CandyShine Markdown render">
                 <h3>CandyShine</h3>
-                <p>Markdown → ANSI render</p>
+                <span class="demo-caption">Markdown → ANSI render</span>
             </a>
             <a class="demo-card" href="lib/candy-kit.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-kit/main/.vhs/cli-page.gif" alt="CandyKit CLI helpers">
                 <h3>CandyKit</h3>
-                <p>StatusLine + Banner + Stage CLI page</p>
+                <span class="demo-caption">StatusLine + Banner + Stage CLI page</span>
             </a>
             <a class="demo-card" href="lib/candy-freeze.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-freeze/main/.vhs/screenshot.gif" alt="CandyFreeze code-to-SVG">
                 <h3>CandyFreeze</h3>
-                <p>Code → SVG screenshot generator</p>
+                <span class="demo-caption">Code → SVG screenshot generator</span>
             </a>
             <a class="demo-card" href="lib/sugar-glow.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-glow/main/.vhs/render.gif" alt="SugarGlow Markdown viewer">
                 <h3>SugarGlow</h3>
-                <p>README rendered through 4 themes</p>
+                <span class="demo-caption">README rendered through 4 themes</span>
             </a>
             <a class="demo-card" href="lib/sugar-spark.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-spark/main/.vhs/inspect.gif" alt="SugarSpark ANSI inspector">
                 <h3>SugarSpark</h3>
-                <p>Labelling SGR / OSC / DCS / APC</p>
+                <span class="demo-caption">Labelling SGR / OSC / DCS / APC</span>
             </a>
             <a class="demo-card" href="lib/sugar-wishlist.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-wishlist/main/.vhs/picker.gif" alt="SugarWishlist SSH picker">
                 <h3>SugarWishlist</h3>
-                <p>SSH endpoint picker with type-filter</p>
+                <span class="demo-caption">SSH endpoint picker with type-filter</span>
+            </a>
+            <a class="demo-card" href="lib/honey-bounce.html">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/honey-bounce/main/.vhs/spring.gif" alt="HoneyBounce spring animation">
+                <h3>HoneyBounce</h3>
+                <span class="demo-caption">Damped spring oscillator</span>
             </a>
             <a class="demo-card" href="lib/candy-mold.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-mold/main/.vhs/start.gif" alt="CandyMold counter skeleton">
                 <h3>CandyMold</h3>
-                <p>Bootstrap skeleton — counter app</p>
+                <span class="demo-caption">Bootstrap skeleton — counter app</span>
             </a>
             <a class="demo-card" href="lib/candy-tetris.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-tetris/main/.vhs/play.gif" alt="CandyTetris gameplay">
                 <h3>CandyTetris</h3>
-                <p>Tetris with ghost piece + hard drop</p>
+                <span class="demo-caption">Tetris with ghost piece + hard drop</span>
             </a>
             <a class="demo-card" href="lib/super-candy.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/super-candy/main/.vhs/navigate.gif" alt="SuperCandy file manager">
                 <h3>SuperCandy</h3>
-                <p>Dual-pane file manager</p>
+                <span class="demo-caption">Dual-pane file manager</span>
             </a>
             <a class="demo-card" href="lib/sugar-crush.html">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-crush/main/.vhs/chat.gif" alt="SugarCrush chat shell">
                 <h3>SugarCrush</h3>
-                <p>AI chat shell with EchoBackend</p>
+                <span class="demo-caption">AI chat shell with EchoBackend</span>
             </a>
         </div>
     </div>
@@ -434,6 +639,13 @@
             <div class="install">
 <pre class="code"><code>php counter.php</code></pre>
             </div>
+
+            <h3 style="margin-top: 32px;">Want a project skeleton instead?</h3>
+            <p style="color: var(--ink-2); margin-top: -4px;">
+                <code>composer create-project candycore/candy-mold my-app</code>
+                scaffolds a runnable counter app with PHPUnit wired up — see
+                <a href="lib/candy-mold.html">CandyMold</a>.
+            </p>
         </div>
     </div>
 </section>
@@ -443,7 +655,7 @@
         <h2>Why pick SugarCraft?</h2>
         <p class="lede">
             Three flavours of "build a TUI in PHP" — pick the row that matches
-            your project's needs.
+            your project's needs. (Full reasoning on the <a href="compare.html">comparison page</a>.)
         </p>
         <table class="compare">
             <thead>
@@ -506,6 +718,18 @@
                 <tr>
                     <td>Markdown → ANSI rendering</td>
                     <td class="yes">✓ (CandyShine)</td>
+                    <td class="no">—</td>
+                    <td class="no">—</td>
+                </tr>
+                <tr>
+                    <td>Code → SVG screenshots</td>
+                    <td class="yes">✓ (CandyFreeze)</td>
+                    <td class="no">—</td>
+                    <td class="no">—</td>
+                </tr>
+                <tr>
+                    <td>Telemetry primitives (StatsD / Prom)</td>
+                    <td class="yes">✓ (CandyMetrics)</td>
                     <td class="no">—</td>
                     <td class="no">—</td>
                 </tr>

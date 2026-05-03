@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-tetris" width="160" align="right">
+
 # CandyTetris
 
 ![demo](.vhs/play.gif)

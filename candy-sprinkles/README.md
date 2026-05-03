@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-sprinkles" width="160" align="right">
+
 # CandySprinkles
 
 ![demo](.vhs/dashboard.gif)

@@ -4,27 +4,77 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyFreeze — SugarCraft</title>
-<meta name="description" content="CandyFreeze: Code → SVG screenshot. Port of freeze.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyFreeze: Code → SVG screenshot generator. PHP port of freeze.">
+<meta property="og:title" content="CandyFreeze — SugarCraft">
+<meta property="og:description" content="Code → SVG screenshot generator. Port of freeze.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-freeze.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-freeze.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">📸</div>
-      <div><h2 style="margin: 0;">CandyFreeze</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Code → SVG screenshot</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-freeze.png" alt="CandyFreeze">
+      <div>
+        <h2>📸 CandyFreeze</h2>
+        <p class="detail-sub">Code → SVG screenshot generator</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/freeze" style="color: inherit;">freeze</a></span>
+          <span class="tag-chip">svg</span>
+          <span class="tag-chip">screenshots</span>
+          <span class="tag-chip">no-gd</span>
+          <span class="tag-chip">ansi</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Pure-PHP. macOS-style traffic-light window controls, drop shadow, rounded-corner frame, optional gutter line numbers. Inline ANSI SGR colour parsing (16-color / 256-color / 24-bit truecolor + bold / italic / underline). Five stock themes.</p>
+
+    <p class="lede" style="margin-top: 28px;">Turn code or terminal output into an SVG screenshot. No ext-gd / Imagick — output is plain text suitable for git diffs and CI artifacts. ANSI SGR (16 / 256 / 24-bit truecolor + bold / italic / underline) becomes <code>&lt;tspan&gt;</code> in the SVG.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-freeze</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Freeze\SvgRenderer;
+
+$svg = SvgRenderer::dracula()
+    -&gt;withLineNumbers(true)
+    -&gt;withWindow(true)
+    -&gt;withPadding(24)
+    -&gt;render($code);
+
+file_put_contents('out.svg', $svg);
+
+// ANSI input is honoured — SGR colours become &lt;tspan&gt; segments.
+$svg = SvgRenderer::dark()
+    -&gt;render("\x1b[31merror:\x1b[0m something broke");</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Pure-PHP SVG</strong><span>No raster pipeline. The output is a text file — diffable, grep-able.</span></div>
+      <div class="feature"><strong>Window chrome</strong><span>macOS-style traffic-light controls, optional drop shadow, configurable border radius.</span></div>
+      <div class="feature"><strong>Line numbers</strong><span>Optional left-gutter line counter.</span></div>
+      <div class="feature"><strong>Five themes</strong><span>dark, light, dracula, tokyo-night, nord.</span></div>
+      <div class="feature"><strong>ANSI honoured</strong><span>Pipe coloured terminal output through; SGR sequences become tspan colour spans.</span></div>
+      <div class="feature"><strong>CLI + library</strong><span><code>candyfreeze input.php -o out.svg</code>, or <code>SvgRenderer::dracula()->render($code)</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-freeze">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-freeze/blob/main/README.md">Full README</a></li>
@@ -36,19 +86,30 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-freeze/main/.vhs/screenshot.gif" alt="Code → SVG screenshot">
-                <h3>Code → SVG screenshot</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-freeze/main/.vhs/screenshot.gif" alt="Screenshot">
+                <h3>Screenshot</h3>
+                <span class="demo-caption">Code → SVG with traffic-light chrome + line numbers.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-freeze/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

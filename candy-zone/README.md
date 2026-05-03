@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-zone" width="160" align="right">
+
 # CandyZone
 
 PHP port of [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) —
