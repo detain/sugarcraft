@@ -43,6 +43,12 @@ jobs:
           - candy-tetris
           - super-candy
           - sugar-crush
+          - sugar-stash
+          - candy-query
+          - sugar-tick
+          - candy-mines
+          - candy-flip
+          - honey-flap
 
     steps:
       - uses: actions/checkout@v5

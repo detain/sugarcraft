@@ -47,6 +47,12 @@ Sixteen libraries grouped by layer:
 | <img src="media/icons/candy-tetris.png" width="48" alt=""> | **[CandyTetris](candy-tetris/)** | [tetrigo](https://github.com/Broderick-Westrope/tetrigo) | Tetris clone — SRS rules, 7-bag, ghost piece, NES scoring, level-driven gravity |
 | <img src="media/icons/super-candy.png" width="48" alt=""> | **[SuperCandy](super-candy/)** | [superfile](https://github.com/yorukot/superfile) | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm |
 | <img src="media/icons/sugar-crush.png" width="48" alt=""> | **[SugarCrush](sugar-crush/)** | [crush](https://github.com/charmbracelet/crush) | AI coding-assistant chat shell — pluggable backend (EchoBackend offline; CommandBackend for Anthropic / OpenAI / Ollama via a wrapper script) |
+| <img src="media/icons/sugar-stash.png" width="48" alt=""> | **[SugarStash](sugar-stash/)** | [lazygit](https://github.com/jesseduffield/lazygit) | Three-pane git TUI — status / branches / log, single-key stage / unstage; shells out to `git` for every mutation |
+| <img src="media/icons/candy-query.png" width="48" alt=""> | **[CandyQuery](candy-query/)** | [lazysql](https://github.com/jorgerojas26/lazysql) | Terminal SQLite browser — list tables, browse rows, run ad-hoc queries (PDO + `:memory:` test fixtures) |
+| <img src="media/icons/sugar-tick.png" width="48" alt=""> | **[SugarTick](sugar-tick/)** | [TakaTime](https://github.com/Rtarun3606k/TakaTime) | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard, no cloud / no MongoDB |
+| <img src="media/icons/candy-mines.png" width="48" alt=""> | **[CandyMines](candy-mines/)** | [go-sweep](https://github.com/maxpaulus43/go-sweep) | Minesweeper — first-click safety, recursive flood-fill, flag toggle, win/lose detection, deterministic-RNG injectable |
+| <img src="media/icons/candy-flip.png" width="48" alt=""> | **[CandyFlip](candy-flip/)** | [gifterm](https://github.com/namzug16/gifterm) | ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or a luminance-ramp |
+| <img src="media/icons/honey-flap.png" width="48" alt=""> | **[HoneyFlap](honey-flap/)** | [flapioca](https://github.com/kbrgl/flapioca) | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate |
 
 Each library has its own `README.md` with usage examples and a deep dive into
 its public API.
@@ -113,7 +119,8 @@ for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
          sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
-         candy-mold candy-tetris super-candy sugar-crush; do
+         candy-mold candy-tetris super-candy sugar-crush \
+         sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```

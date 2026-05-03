@@ -54,6 +54,8 @@ jobs:
             candy-shell candy-shine candy-kit candy-freeze
             sugar-glow sugar-spark sugar-wishlist
             candy-mold candy-tetris super-candy sugar-crush
+            sugar-stash candy-query sugar-tick
+            candy-mines candy-flip honey-flap
           )
           # Render-all triggers: manual dispatch, or a workflow-file
           # change (in which case we want to verify the new pipeline

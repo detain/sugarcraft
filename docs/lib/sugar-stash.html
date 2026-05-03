@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarStash — SugarCraft</title>
+<meta name="description" content="SugarStash: Terminal git client. PHP port of lazygit.">
+<meta property="og:title" content="SugarStash — SugarCraft">
+<meta property="og:description" content="Terminal git client. Port of lazygit.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-stash.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-stash.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-stash.png" alt="SugarStash">
+      <div>
+        <h2>🌿 SugarStash</h2>
+        <p class="detail-sub">Terminal git client</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/jesseduffield/lazygit" style="color: inherit;">lazygit</a></span>
+          <span class="tag-chip">git</span>
+          <span class="tag-chip">tui</span>
+          <span class="tag-chip">porcelain</span>
+          <span class="tag-chip">force-command-friendly</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Three-pane git TUI on the SugarCraft stack — status / branches / log laid out side-by-side, single-key stage / unstage, refresh. Shells out to <code>git</code> for every mutation so users keep their existing aliases, hooks, and signing config.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/sugar-stash</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>// Run from any git working tree:
+sugar-stash
+
+// Or wire your own driver in PHP:
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Stash\App;
+use CandyCore\Stash\Git;
+
+$git = new Git(getcwd());
+(new Program(App::start($git), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Status pane</strong><span>Parses <code>git status --porcelain=v1 -b</code> with per-row index / work flags and a branch-summary header.</span></div>
+      <div class="feature"><strong>Branches pane</strong><span><code>git for-each-ref</code> driven; current branch is highlighted + bold.</span></div>
+      <div class="feature"><strong>Log pane</strong><span>Last 20 commits with short SHA + subject + author + relative time.</span></div>
+      <div class="feature"><strong>Stage / unstage</strong><span><code>s</code> in the status pane toggles staging via <code>git add</code> / <code>git restore --staged</code>.</span></div>
+      <div class="feature"><strong>Pluggable driver</strong><span><code>GitDriver</code> interface lets tests inject a fixture-backed driver without staging real repos.</span></div>
+      <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk; cursors are clamped if the row count shrinks.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-stash">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-stash/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-stash/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/jesseduffield/lazygit">lazygit</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stash/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Three-pane TUI — switch panes, move cursor, stage / unstage.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-stash/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

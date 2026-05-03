@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyMines — SugarCraft</title>
+<meta name="description" content="CandyMines: Minesweeper on the SugarCraft stack. PHP port of go-sweep.">
+<meta property="og:title" content="CandyMines — SugarCraft">
+<meta property="og:description" content="Minesweeper on the SugarCraft stack. Port of go-sweep.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mines.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-mines.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-mines.png" alt="CandyMines">
+      <div>
+        <h2>💣 CandyMines</h2>
+        <p class="detail-sub">Minesweeper on the SugarCraft stack</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/maxpaulus43/go-sweep" style="color: inherit;">go-sweep</a></span>
+          <span class="tag-chip">game</span>
+          <span class="tag-chip">minesweeper</span>
+          <span class="tag-chip">candycore</span>
+          <span class="tag-chip">deterministic-rng</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Customisable board (width / height / mine count), recursive zero-flood-fill, win / lose detection. Pure-state Board class so every reveal is unit-testable without touching the runtime.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/candy-mines</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>./bin/candy-mines              # 10×10, 12 mines (defaults)
+./bin/candy-mines 16 16 40     # custom board
+
+// Programmatic:
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Mines\Game;
+
+(new Program(Game::start(width: 16, height: 16, mines: 40),
+             new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>First-click safety</strong><span>Mines aren't placed until the first reveal, with the clicked cell's 3×3 neighbourhood excluded — every game gets a non-trivial flood-fill on click 1.</span></div>
+      <div class="feature"><strong>Recursive flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like the original.</span></div>
+      <div class="feature"><strong>Vim-style movement</strong><span><code>hjkl</code> alongside arrows; cursor clamps at board edges.</span></div>
+      <div class="feature"><strong>Flag toggle</strong><span><code>f</code> flags / unflags the cursor cell; flagged cells can't be revealed by accident.</span></div>
+      <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked.</span></div>
+      <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mines">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mines/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mines/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/maxpaulus43/go-sweep">go-sweep</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mines/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Cursor walk, flood-fill reveal, flag plant.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-mines/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "honey-flap: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Flap\Game;
+
+(new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();

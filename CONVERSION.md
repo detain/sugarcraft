@@ -1133,3 +1133,48 @@ This phase is itself a candidate for incremental PRs — most of the
 (Phase 9+ #17) is a natural milestone**: targeting v2-equivalent parity
 makes the AI-coding-agent port land on top of an already-modern
 runtime.
+
+---
+
+## Phase 12 — Six more reference apps (TUI ecosystem ports)
+
+Six additional Go-TUI apps from the wider community, ported to the
+SugarCraft stack to demonstrate the runtime end-to-end against
+real-world workloads beyond the original Charmbracelet roster.
+
+| Slug          | Upstream                                          | Role                                                                 |
+|---------------|---------------------------------------------------|----------------------------------------------------------------------|
+| **sugar-stash**  | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit)       | Three-pane git TUI — status / branches / log, single-key stage / unstage. Shells out to `git`. |
+| **candy-query**  | [jorgerojas26/lazysql](https://github.com/jorgerojas26/lazysql)         | SQLite browser — list tables, browse rows, run ad-hoc queries (PDO + `:memory:` test fixtures). |
+| **sugar-tick**   | [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime)         | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard. |
+| **candy-mines**  | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep)         | Minesweeper — first-click safety, recursive flood-fill, deterministic-RNG injectable. |
+| **candy-flip**   | [namzug16/gifterm](https://github.com/namzug16/gifterm)                 | ASCII GIF viewer — `ext-gd` decode, downsample to a cell grid, render as truecolor blocks or a luminance ramp. |
+| **honey-flap**   | [kbrgl/flapioca](https://github.com/kbrgl/flapioca)                     | Flappy-Bird clone — bird motion is a HoneyBounce projectile; pipes scroll left at a fixed cell rate; per-cell collision. |
+
+`yorukot/superfile` (which the user requested) was already shipped as
+**super-candy**; that entry was skipped in this wave.
+
+### Per-app shape
+
+Each app follows the same SugarCraft monorepo conventions:
+
+- `composer.json` with a `candycore/<slug>` name, `@dev` constraints
+  on the libs it pulls from, path-repo entries for every monorepo
+  sibling.
+- `bin/<slug>` — autoload bootstrap then `Program::run()`.
+- `src/` — pure-state Model + value objects; transitions are pure
+  functions; PRNG / I/O dependencies are injected for testability.
+- `tests/` — PHPUnit 10, in-memory fixtures (`:memory:` SQLite,
+  closure-driven RNG, fixture `GitDriver`) so transition correctness
+  is asserted without touching disk.
+- `examples/play.php` — runnable demo that doesn't require external
+  config (synthetic data seeded into a tmp dir).
+- `.vhs/play.tape` — VHS recording driving the example.
+- `.assets/icon.png` — placeholder candy-themed icon.
+- `README.md` — H1, right-floated icon, demo gif at the top, install
+  + keys + architecture + test sections.
+- A matching `docs/lib/<slug>.html` detail page on the website,
+  styled identically to the existing twenty.
+
+The wider workflow surface — `ci.yml`, `vhs.yml`,
+`sync-sugarcraft.yml` — was extended to include all six.

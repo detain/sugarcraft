@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "sugar-stash: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Stash\App;
+use CandyCore\Stash\Git;
+
+$cwd = getcwd();
+if ($cwd === false || !is_dir("$cwd/.git")) {
+    fwrite(STDERR, "sugar-stash: not a git repository (no .git in $cwd)\n");
+    exit(1);
+}
+(new Program(App::start(new Git($cwd)), new ProgramOptions(useAltScreen: true)))->run();

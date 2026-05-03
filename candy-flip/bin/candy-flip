@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-flip: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Flip\Decoder;
+use CandyCore\Flip\Player;
+use CandyCore\Flip\Renderer;
+
+$argv = $argv ?? [];
+$path  = $argv[1] ?? null;
+$preset = ($argv[2] ?? '') === 'density' ? Renderer::PRESET_DENSITY : Renderer::PRESET_SOLID;
+if ($path === null) {
+    fwrite(STDERR, "usage: candy-flip <gif> [solid|density]\n");
+    exit(1);
+}
+
+$frames = Decoder::decode($path, cellsW: 60, cellsH: 24);
+$player = new Player($frames, preset: $preset);
+
+(new Program($player, new ProgramOptions(useAltScreen: true)))->run();

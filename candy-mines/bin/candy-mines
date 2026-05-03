@@ -1,0 +1,28 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "candy-mines: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Mines\Game;
+
+// Optional CLI: candy-mines [width] [height] [mines]
+$argv2 = $argv ?? [];
+$w = (int)($argv2[1] ?? 10);
+$h = (int)($argv2[2] ?? 10);
+$m = (int)($argv2[3] ?? max(1, intdiv($w * $h, 8)));
+
+(new Program(Game::start($w, $h, $m), new ProgramOptions(useAltScreen: true)))->run();

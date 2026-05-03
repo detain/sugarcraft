@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HoneyFlap — SugarCraft</title>
+<meta name="description" content="HoneyFlap: Flappy-Bird in your terminal. PHP port of flapioca.">
+<meta property="og:title" content="HoneyFlap — SugarCraft">
+<meta property="og:description" content="Flappy-Bird in your terminal. Port of flapioca.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/honey-flap.png">
+<link rel="icon" type="image/png" href="../img/icons/honey-flap.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/honey-flap.png" alt="HoneyFlap">
+      <div>
+        <h2>🐝 HoneyFlap</h2>
+        <p class="detail-sub">Flappy-Bird in your terminal</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/kbrgl/flapioca" style="color: inherit;">flapioca</a></span>
+          <span class="tag-chip">game</span>
+          <span class="tag-chip">flappy</span>
+          <span class="tag-chip">honeybounce</span>
+          <span class="tag-chip">physics</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Physics-driven flap game — the bird's vertical motion is a HoneyBounce projectile (gravity + an upward velocity kick on each tap), pipes scroll left at a fixed cell rate, collision is per-cell. Pure-state Game class; the renderer is a one-pass canvas fill.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/honey-flap</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>./bin/honey-flap
+
+// Programmatic:
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Flap\Game;
+
+(new Program(Game::start(),
+             new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Real physics</strong><span>Bird movement is a <code>Projectile</code> with gravity vector. <code>flap()</code> rebuilds the projectile with an upward velocity kick — same trick the original flapioca uses, just expressed as projectile state.</span></div>
+      <div class="feature"><strong>Pipe spawning</strong><span>A new pipe pair every <code>PIPE_EVERY</code> ticks; the gap row is sampled from the injected PRNG so tests pin layouts deterministically.</span></div>
+      <div class="feature"><strong>Tick-driven</strong><span><code>Cmd::tick(0.033, …)</code> ≈ 30 fps. Each tick advances physics + scrolls pipes + checks collision.</span></div>
+      <div class="feature"><strong>Per-cell collision</strong><span>Bird's row is rounded to a cell index; collision = bird column matches a pipe column AND the row is outside the open gap.</span></div>
+      <div class="feature"><strong>Restart on crash</strong><span><code>r</code> reseeds the world; <code>q</code> / <code>Esc</code> quits.</span></div>
+      <div class="feature"><strong>Score on pass</strong><span>Every tick that moves a pipe past the bird's column bumps the score.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/honey-flap">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/honey-flap/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/honey-flap/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/kbrgl/flapioca">flapioca</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/honey-flap/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Physics-driven flapping with scrolling pipes.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/honey-flap/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

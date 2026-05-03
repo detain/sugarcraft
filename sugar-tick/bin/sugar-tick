@@ -1,0 +1,40 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function () {
+    foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
+        $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+    fwrite(STDERR, "sugar-tick: cannot find composer autoload.php\n");
+    exit(1);
+})();
+
+use CandyCore\Core\Program;
+use CandyCore\Core\ProgramOptions;
+use CandyCore\Tick\Dashboard;
+use CandyCore\Tick\Heartbeat;
+use CandyCore\Tick\Store;
+
+$argv = $argv ?? [];
+$cmd = $argv[1] ?? 'dashboard';
+
+$store = new Store(getenv('SUGARTICK_DIR') ?: Store::defaultDir());
+
+if ($cmd === 'push') {
+    // sugar-tick push <project> <language> <file> [duration]
+    $project  = $argv[2] ?? 'unknown';
+    $language = $argv[3] ?? 'unknown';
+    $file     = $argv[4] ?? '';
+    $duration = (int)($argv[5] ?? 60);
+    $store->append(new Heartbeat(time(), $project, $language, $file, $duration));
+    fwrite(STDOUT, "tick pushed: $project ($language) +{$duration}s\n");
+    exit(0);
+}
+
+(new Program(Dashboard::start($store), new ProgramOptions(useAltScreen: true)))->run();
