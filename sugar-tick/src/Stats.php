@@ -64,10 +64,13 @@ final class Stats
     public function timeline(): array
     {
         $out = array_fill(0, count($this->days), 0);
+        $dayKeys = array_map(static fn(\DateTimeImmutable $d) => $d->format('Y-m-d'), $this->days);
+        $tz = $this->days[0]->getTimezone() ?? new \DateTimeZone(date_default_timezone_get());
         foreach ($this->beats as $b) {
-            $stamp = (new \DateTimeImmutable('@' . $b->time))->setTime(0, 0);
-            foreach ($this->days as $i => $day) {
-                if ($stamp == $day) {
+            $stamp = (new \DateTimeImmutable('@' . $b->time))->setTimezone($tz);
+            $key = $stamp->format('Y-m-d');
+            foreach ($dayKeys as $i => $dayKey) {
+                if ($key === $dayKey) {
                     $out[$i] += $b->duration;
                     break;
                 }
