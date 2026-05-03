@@ -4,27 +4,79 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarCharts — SugarCraft</title>
-<meta name="description" content="SugarCharts: Charts + image rendering. Port of ntcharts.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="SugarCharts: Terminal charts for CandyCore. PHP port of ntcharts.">
+<meta property="og:title" content="SugarCharts — SugarCraft">
+<meta property="og:description" content="Terminal charts for CandyCore. Port of ntcharts.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-charts.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-charts.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">📊</div>
-      <div><h2 style="margin: 0;">SugarCharts</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Charts + image rendering</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-charts.png" alt="SugarCharts">
+      <div>
+        <h2>📊 SugarCharts</h2>
+        <p class="detail-sub">Terminal charts for CandyCore</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/NimbleMarkets/ntcharts" style="color: inherit;">ntcharts</a></span>
+          <span class="tag-chip">charts</span>
+          <span class="tag-chip">sparkline</span>
+          <span class="tag-chip">heatmap</span>
+          <span class="tag-chip">sixel</span>
+          <span class="tag-chip">kitty</span>
+          <span class="tag-chip">iterm2</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus Picture (Sixel / Kitty / iTerm2 image transports for terminals that support them).</p>
+
+    <p class="lede" style="margin-top: 28px;">Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, plus inline image rendering via Sixel / Kitty / iTerm2 protocols. Auto-detects terminal capability.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/sugar-charts</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Charts\Sparkline\Sparkline;
+use CandyCore\Charts\BarChart\BarChart;
+use CandyCore\Charts\LineChart\LineChart;
+
+echo Sparkline::new([1, 3, 2, 8, 5, 4, 7, 6], 8)-&gt;view() . PHP_EOL;
+// ▁▃▂█▅▄▇▆
+
+echo BarChart::new(
+    [['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], 20, 5
+)-&gt;view() . PHP_EOL;
+
+echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)-&gt;view();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Canvas</strong><span>Fixed cell grid with rune + Sprinkles Style per cell. Foundation under every chart type.</span></div>
+      <div class="feature"><strong>Sparkline</strong><span>Single-row series via 8 Unicode bar glyphs. Perfect for log dashboards.</span></div>
+      <div class="feature"><strong>Bar / Line</strong><span>Auto-scaling y-axis, configurable axis labels, optional grid.</span></div>
+      <div class="feature"><strong>Heatmap</strong><span>Density visualisation with palette gradients.</span></div>
+      <div class="feature"><strong>OHLC</strong><span>Candlestick chart for financial time-series.</span></div>
+      <div class="feature"><strong>TimeSeries</strong><span>Streaming series with bucket aggregation.</span></div>
+      <div class="feature"><strong>Picture (Sixel/Kitty/iTerm2)</strong><span>Inline raster image rendering. Auto-detects via terminal-version query.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-charts">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-charts/blob/main/README.md">Full README</a></li>
@@ -36,47 +88,65 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/sparkline.gif" alt="Sparkline">
+                <h3>Sparkline</h3>
+                <span class="demo-caption">Single-row series — eight Unicode glyphs.</span>
+            </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/bar.gif" alt="Bar chart">
                 <h3>Bar chart</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/heatmap.gif" alt="Heatmap">
-                <h3>Heatmap</h3>
+                <span class="demo-caption">Auto-scaling labelled vertical bars.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/line.gif" alt="Line chart">
                 <h3>Line chart</h3>
+                <span class="demo-caption">Single-series ASCII plot with axes.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/ohlc.gif" alt="OHLC candlestick">
-                <h3>OHLC candlestick</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/picture.gif" alt="Picture (Sixel)">
-                <h3>Picture (Sixel)</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/heatmap.gif" alt="Heatmap">
+                <h3>Heatmap</h3>
+                <span class="demo-caption">Density visualisation with palette gradient.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/scatter.gif" alt="Scatter">
                 <h3>Scatter</h3>
+                <span class="demo-caption">Cell-quantised XY plot.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/sparkline.gif" alt="Sparkline">
-                <h3>Sparkline</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/timeseries.gif" alt="TimeSeries">
+                <h3>TimeSeries</h3>
+                <span class="demo-caption">Streaming series with bucket aggregation.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/timeseries.gif" alt="Time series">
-                <h3>Time series</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/ohlc.gif" alt="OHLC">
+                <h3>OHLC</h3>
+                <span class="demo-caption">Candlestick chart for financial data.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-charts/main/.vhs/picture.gif" alt="Picture">
+                <h3>Picture</h3>
+                <span class="demo-caption">Inline image via Sixel / Kitty / iTerm2.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-charts/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

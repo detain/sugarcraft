@@ -4,27 +4,83 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandySprinkles — SugarCraft</title>
-<meta name="description" content="CandySprinkles: Declarative styling + layout. Port of lipgloss.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandySprinkles: Declarative styling + layout. PHP port of lipgloss.">
+<meta property="og:title" content="CandySprinkles — SugarCraft">
+<meta property="og:description" content="Declarative styling + layout. Port of lipgloss.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-sprinkles.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-sprinkles.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">✨</div>
-      <div><h2 style="margin: 0;">CandySprinkles</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Declarative styling + layout</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-sprinkles.png" alt="CandySprinkles">
+      <div>
+        <h2>✨ CandySprinkles</h2>
+        <p class="detail-sub">Declarative styling + layout</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/lipgloss" style="color: inherit;">lipgloss</a></span>
+          <span class="tag-chip">styling</span>
+          <span class="tag-chip">layout</span>
+          <span class="tag-chip">borders</span>
+          <span class="tag-chip">tables</span>
+          <span class="tag-chip">trees</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Style, Border, Table, List, Tree, Layout::join / Place, Canvas (multi-layer compositor for popovers and floating panes).</p>
+
+    <p class="lede" style="margin-top: 28px;">Style, Border, Table, List, Tree, Layout::join, Place, multi-layer Canvas. Pure rendering — no I/O — so you can render frames inside a unit test.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-sprinkles</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Sprinkles\{Style, Border, Layout, Position};
+use CandyCore\Sprinkles\Table\Table;
+use CandyCore\Core\Util\Color;
+
+$banner = Style::new()
+    -&gt;bold()
+    -&gt;foreground(Color::hex('#ff5f87'))
+    -&gt;padding(0, 2)
+    -&gt;render('hello, candy world');
+
+$table = Table::new()
+    -&gt;headers('Name', 'Age')
+    -&gt;row('Alice', '30')
+    -&gt;row('Bob', '25')
+    -&gt;border(Border::rounded())
+    -&gt;render();
+
+echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Style</strong><span>Foreground / background, bold / italic / underline, padding, margin, width, alignment. Immutable <code>with*()</code> chain.</span></div>
+      <div class="feature"><strong>Border</strong><span>Six built-in styles + custom. <code>Border::rounded()</code>, <code>thick()</code>, <code>double()</code>, <code>hidden()</code>, <code>normal()</code>, <code>ascii()</code>.</span></div>
+      <div class="feature"><strong>Table</strong><span>Headers, rows, per-cell styleFunc. ANSI-aware width calc with grapheme cluster support.</span></div>
+      <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
+      <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, <code>placeOverlay</code> for popovers.</span></div>
+      <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-sprinkles">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-sprinkles/blob/main/README.md">Full README</a></li>
@@ -36,43 +92,60 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/border.gif" alt="Border styles">
-                <h3>Border styles</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/canvas.gif" alt="Canvas (multi-layer)">
-                <h3>Canvas (multi-layer)</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/dashboard.gif" alt="Layout dashboard">
-                <h3>Layout dashboard</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/list.gif" alt="List">
-                <h3>List</h3>
-            </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/style.gif" alt="Style">
                 <h3>Style</h3>
+                <span class="demo-caption">Foreground / background, bold, italic — chained Style builders.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/border.gif" alt="Border">
+                <h3>Border</h3>
+                <span class="demo-caption">All six built-in border styles.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/table.gif" alt="Table">
                 <h3>Table</h3>
+                <span class="demo-caption">Per-cell styleFunc with header highlighting.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/list.gif" alt="List">
+                <h3>List</h3>
+                <span class="demo-caption">Bulleted list with custom enumerator.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/tree.gif" alt="Tree">
                 <h3>Tree</h3>
+                <span class="demo-caption">Indented tree with branch glyphs.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/dashboard.gif" alt="Dashboard">
+                <h3>Dashboard</h3>
+                <span class="demo-caption">Multi-panel layout joined horizontally + vertically.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-sprinkles/main/.vhs/canvas.gif" alt="Canvas">
+                <h3>Canvas</h3>
+                <span class="demo-caption">Multi-layer compositor with z-ordered overlays.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-sprinkles/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

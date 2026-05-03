@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-glow" width="160" align="right">
+
 # SugarGlow
 
 ![demo](.vhs/render.gif)

@@ -4,27 +4,81 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarPrompt — SugarCraft</title>
-<meta name="description" content="SugarPrompt: Form library. Port of huh.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="SugarPrompt: Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker. PHP port of huh.">
+<meta property="og:title" content="SugarPrompt — SugarCraft">
+<meta property="og:description" content="Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker. Port of huh.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-prompt.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-prompt.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">💬</div>
-      <div><h2 style="margin: 0;">SugarPrompt</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Form library</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-prompt.png" alt="SugarPrompt">
+      <div>
+        <h2>💬 SugarPrompt</h2>
+        <p class="detail-sub">Interactive forms — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/huh" style="color: inherit;">huh</a></span>
+          <span class="tag-chip">forms</span>
+          <span class="tag-chip">wizards</span>
+          <span class="tag-chip">validation</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Note, Input, Confirm, Select, MultiSelect, Text, FilePicker. Multi-page Groups for wizards. Six themes — base, charm, dracula, base16, catppuccin, ansi.</p>
+
+    <p class="lede" style="margin-top: 28px;">Form library built on CandyCore + SugarBits. Multi-page Group wizards, six themes, per-field validators, conditional skip predicates. The form is itself a Model — drop it into a Program.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/sugar-prompt</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Prompt\Form;
+use CandyCore\Prompt\Field\{Input, Confirm, Select, Note};
+
+$form = Form::new(
+    Note::new('welcome')
+        -&gt;withTitle('Onboarding')
+        -&gt;withDescription('A few quick questions.'),
+    Input::new('name')
+        -&gt;withTitle('Your name?')
+        -&gt;withPlaceholder('Ada Lovelace')
+        -&gt;withValidate(fn($v) =&gt; strlen($v) &gt;= 2 ? null : 'too short'),
+    Confirm::new('newsletter')
+        -&gt;withTitle('Subscribe to the newsletter?'),
+    Select::new('lang')
+        -&gt;withTitle('Favorite language?')
+        -&gt;withOptions('PHP', 'Go', 'Rust', 'Python'),
+);
+// $form is a CandyCore Model — drop it into a Program.</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Field types</strong><span>Note, Input, Confirm, Select, MultiSelect, Text, FilePicker.</span></div>
+      <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit.</span></div>
+      <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
+      <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink.</span></div>
+      <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
+      <div class="feature"><strong>Submit hook</strong><span><code>$form->getValue('name')</code> after the Program ends — typed value retrieval.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-prompt">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-prompt/blob/main/README.md">Full README</a></li>
@@ -36,43 +90,60 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/confirm.gif" alt="Confirm">
-                <h3>Confirm</h3>
-            </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/form.gif" alt="Multi-page form">
                 <h3>Multi-page form</h3>
+                <span class="demo-caption">Wizard across multiple Groups.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/input.gif" alt="Input">
                 <h3>Input</h3>
+                <span class="demo-caption">Single-line text with validation.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/multi-select.gif" alt="Multi-select">
-                <h3>Multi-select</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/confirm.gif" alt="Confirm">
+                <h3>Confirm</h3>
+                <span class="demo-caption">Y/N boolean.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/select.gif" alt="Select">
                 <h3>Select</h3>
+                <span class="demo-caption">Single-choice list.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/text.gif" alt="Text (multi-line)">
-                <h3>Text (multi-line)</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/multi-select.gif" alt="MultiSelect">
+                <h3>MultiSelect</h3>
+                <span class="demo-caption">Toggle multiple options.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/text.gif" alt="Text">
+                <h3>Text</h3>
+                <span class="demo-caption">Multi-line text input.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-prompt/main/.vhs/themes.gif" alt="Themes">
                 <h3>Themes</h3>
+                <span class="demo-caption">All six form themes side-by-side.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-prompt/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

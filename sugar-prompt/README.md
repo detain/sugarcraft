@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-prompt" width="160" align="right">
+
 # SugarPrompt
 
 ![demo](.vhs/form.gif)

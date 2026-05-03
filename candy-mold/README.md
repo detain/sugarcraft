@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-mold" width="160" align="right">
+
 # CandyMold
 
 ![demo](.vhs/start.gif)

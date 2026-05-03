@@ -4,27 +4,85 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HoneyBounce — SugarCraft</title>
-<meta name="description" content="HoneyBounce: Damped spring physics + projectile sim. Port of harmonica.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="HoneyBounce: Damped spring physics + Newtonian projectile sim. PHP port of harmonica.">
+<meta property="og:title" content="HoneyBounce — SugarCraft">
+<meta property="og:description" content="Damped spring physics + Newtonian projectile sim. Port of harmonica.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/honey-bounce.png">
+<link rel="icon" type="image/png" href="../img/icons/honey-bounce.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🐝</div>
-      <div><h2 style="margin: 0;">HoneyBounce</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Damped spring physics + projectile sim</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/honey-bounce.png" alt="HoneyBounce">
+      <div>
+        <h2>🐝 HoneyBounce</h2>
+        <p class="detail-sub">Damped spring physics + Newtonian projectile sim</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/harmonica" style="color: inherit;">harmonica</a></span>
+          <span class="tag-chip">physics</span>
+          <span class="tag-chip">animation</span>
+          <span class="tag-chip">math</span>
+          <span class="tag-chip">no-deps</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Underpins every smooth scroll and animated progress bar in the stack. Spring(angularFreq, damping)->update(dt, current, target, velocity); Projectile + Vector + Point types.</p>
+
+    <p class="lede" style="margin-top: 28px;">Pure-math animation engine. Damped harmonic oscillators (Ryan-Juckett) for smooth scroll / overshoot, Newtonian projectile sim for arcs and particle effects. No terminal dependency.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/honey-bounce</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Bounce\{Spring, Projectile, Point, Vector};
+
+$spring = new Spring(
+    deltaTime:        Spring::fps(60),
+    angularFrequency: 6.0,
+    dampingRatio:     1.0,    // critical
+);
+$pos = 0.0; $vel = 0.0; $target = 100.0;
+for ($f = 0; $f &lt; 60; $f++) {
+    [$pos, $vel] = $spring-&gt;update($pos, $vel, $target);
+}
+
+$ball = Projectile::new(
+    deltaTime:    Spring::fps(60),
+    position:     Point::zero(),
+    velocity:     new Vector(5.0, -10.0),
+    acceleration: Projectile::gravity(),
+);
+for ($i = 0; $i &lt; 60; $i++) {
+    $ball = $ball-&gt;update();
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Spring</strong><span><code>dampingRatio &lt; 1</code> oscillates, <code>= 1</code> critical (no overshoot, fastest), <code>&gt; 1</code> over-damped.</span></div>
+      <div class="feature"><strong>Projectile</strong><span>Position, velocity, acceleration vectors. <code>Projectile::gravity()</code> + <code>terminalGravity()</code> helpers.</span></div>
+      <div class="feature"><strong>Frame helpers</strong><span><code>Spring::fps(60)</code> returns 1/60 deltaTime. Pair with a 60Hz loop for smooth animation.</span></div>
+      <div class="feature"><strong>Pure functions</strong><span>No state hidden in the engine — caller passes <code>$pos</code> and <code>$vel</code> in, gets the next pair out.</span></div>
+      <div class="feature"><strong>Used everywhere</strong><span>AnimatedProgress, Viewport scroll, ItemList paging — every smooth motion in SugarBits goes through HoneyBounce.</span></div>
+      <div class="feature"><strong>Zero deps</strong><span>No ReactPHP, no <code>ext-pcntl</code>, nothing. Drop into a job worker if you need physics in a non-TUI.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/honey-bounce">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/honey-bounce/blob/main/README.md">Full README</a></li>
@@ -36,23 +94,35 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/honey-bounce/main/.vhs/projectile.gif" alt="Projectile motion">
-                <h3>Projectile motion</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/honey-bounce/main/.vhs/spring.gif" alt="Spring">
+                <h3>Spring</h3>
+                <span class="demo-caption">Damped harmonic oscillator — settles smoothly to its target.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/honey-bounce/main/.vhs/spring.gif" alt="Spring physics">
-                <h3>Spring physics</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/honey-bounce/main/.vhs/projectile.gif" alt="Projectile">
+                <h3>Projectile</h3>
+                <span class="demo-caption">Newtonian projectile sim with gravity + bouncing.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/honey-bounce/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

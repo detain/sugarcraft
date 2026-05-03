@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="honey-bounce" width="160" align="right">
+
 # HoneyBounce
 
 PHP port of [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) —

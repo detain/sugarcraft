@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCrush — SugarCraft</title>
+<meta name="description" content="SugarCrush: AI coding-assistant chat shell. PHP port of crush.">
+<meta property="og:title" content="SugarCrush — SugarCraft">
+<meta property="og:description" content="AI coding-assistant chat shell. Port of crush.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-crush.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-crush.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-crush.png" alt="SugarCrush">
+      <div>
+        <h2>🤖 SugarCrush</h2>
+        <p class="detail-sub">AI coding-assistant chat shell</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/crush" style="color: inherit;">crush</a></span>
+          <span class="tag-chip">ai</span>
+          <span class="tag-chip">chat</span>
+          <span class="tag-chip">anthropic</span>
+          <span class="tag-chip">openai</span>
+          <span class="tag-chip">ollama</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Chat-shell TUI for AI coding assistants. Pluggable backends (ship your own Anthropic / OpenAI / Ollama / shell-out adapter), Markdown rendering of replies via CandyShine, scrollback above a fixed input box.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/sugar-crush</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>composer install
+./bin/sugarcrush
+
+# By default it ships with EchoBackend (offline). Wire to a real LLM:
+export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic-stream.sh
+./bin/sugarcrush
+
+# ~/bin/anthropic-stream.sh
+#!/usr/bin/env bash
+payload=$(jq -nc --argjson h "$(cat)" \
+  '{model: "claude-opus-4-7", max_tokens: 4096, messages: $h}')
+
+curl -sN https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" \
+  -d "$payload" \
+  | jq -r '.content[0].text'</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Pluggable Backend</strong><span>Implement <code>Backend::send(History): string</code>. EchoBackend ships for offline runs.</span></div>
+      <div class="feature"><strong>CommandBackend</strong><span>Shell out to <code>$SUGARCRUSH_BACKEND_CMD</code> — hand it JSON history, read its stdout.</span></div>
+      <div class="feature"><strong>Markdown reply rendering</strong><span>Assistant replies pass through CandyShine — code blocks, lists, links all rendered.</span></div>
+      <div class="feature"><strong>Scrollback + fixed input</strong><span>Top region scrolls, input box stays glued to the bottom.</span></div>
+      <div class="feature"><strong>History persistence</strong><span>Every turn is appended to a JSONL file you can grep / replay.</span></div>
+      <div class="feature"><strong>Network-dep-free</strong><span>Wrapping curl / your provider SDK in a wrapper script keeps the PHP package import-light.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-crush">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-crush/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/crush">crush</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-crush/main/.vhs/chat.gif" alt="Chat">
+                <h3>Chat</h3>
+                <span class="demo-caption">Full chat session with scrollback + Markdown-rendered replies.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-crush/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

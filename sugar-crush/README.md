@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-crush" width="160" align="right">
+
 # SugarCrush
 
 ![demo](.vhs/chat.gif)

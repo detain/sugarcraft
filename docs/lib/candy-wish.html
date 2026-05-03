@@ -4,27 +4,80 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyWish — SugarCraft</title>
-<meta name="description" content="CandyWish: SSH server middleware framework. Port of wish.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyWish: SSH server middleware framework. PHP port of wish.">
+<meta property="og:title" content="CandyWish — SugarCraft">
+<meta property="og:description" content="SSH server middleware framework. Port of wish.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-wish.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-wish.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🔐</div>
-      <div><h2 style="margin: 0;">CandyWish</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">SSH server middleware framework</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-wish.png" alt="CandyWish">
+      <div>
+        <h2>🔐 CandyWish</h2>
+        <p class="detail-sub">SSH server middleware framework</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/wish" style="color: inherit;">wish</a></span>
+          <span class="tag-chip">ssh</span>
+          <span class="tag-chip">middleware</span>
+          <span class="tag-chip">force-command</span>
+          <span class="tag-chip">multi-tenant</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">Logger, Auth (user + key fingerprint allowlist), RateLimit (per-IP token bucket), BubbleTea (mount a CandyCore Program). Leans on host sshd via ForceCommand — battle-tested key exchange, fail2ban, audit log, all stay with OpenSSH.</p>
+
+    <p class="lede" style="margin-top: 28px;">Build TUIs anyone can <code>ssh user@host</code> to run. Leans on the host's OpenSSH daemon (ForceCommand) rather than re-implementing the SSH wire protocol. sshd handles auth, ciphers, host keys, fail2ban, audit logs.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-wish</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>// /opt/wish/server.php — invoked by sshd ForceCommand
+require '/opt/wish/vendor/autoload.php';
+
+use CandyCore\Wish\Server;
+use CandyCore\Wish\Middleware\{Logger, Auth, RateLimit, BubbleTea};
+
+Server::new()
+    -&gt;use(new Logger('/var/log/wish.jsonl'))
+    -&gt;use(new RateLimit(
+        '/var/lib/wish/buckets.json',
+        burst:      5,
+        ratePerSec: 0.5,
+    ))
+    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new BubbleTea(fn($session) =&gt; new MyApp($session)))
+    -&gt;serve();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>ForceCommand entry</strong><span>Each connection forks a fresh PHP under sshd. Audit / rate-limit / ssh-cert all stay your existing stack.</span></div>
+      <div class="feature"><strong>Logger middleware</strong><span>Structured JSONL session log to stdout / file.</span></div>
+      <div class="feature"><strong>Auth middleware</strong><span>Allowlist by username; denied connections close cleanly.</span></div>
+      <div class="feature"><strong>RateLimit middleware</strong><span>Token-bucket per username, persisted to JSON. Burst + rate configurable.</span></div>
+      <div class="feature"><strong>BubbleTea middleware</strong><span>Mount a CandyCore Program at the end of the chain.</span></div>
+      <div class="feature"><strong>Custom middleware</strong><span>Anything implementing <code>Middleware::handle($session, $next)</code>.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-wish">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-wish/blob/main/README.md">Full README</a></li>
@@ -36,7 +89,16 @@
   </div>
 </section>
 
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-wish/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

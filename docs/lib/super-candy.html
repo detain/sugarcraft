@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SuperCandy — SugarCraft</title>
+<meta name="description" content="SuperCandy: Dual-pane terminal file manager. PHP port of superfile.">
+<meta property="og:title" content="SuperCandy — SugarCraft">
+<meta property="og:description" content="Dual-pane terminal file manager. Port of superfile.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/super-candy.png">
+<link rel="icon" type="image/png" href="../img/icons/super-candy.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/super-candy.png" alt="SuperCandy">
+      <div>
+        <h2>📂 SuperCandy</h2>
+        <p class="detail-sub">Dual-pane terminal file manager</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/yorukot/superfile" style="color: inherit;">superfile</a></span>
+          <span class="tag-chip">file-manager</span>
+          <span class="tag-chip">midnight-commander</span>
+          <span class="tag-chip">dual-pane</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require candycore/super-candy</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>composer install
+./bin/supercandy [LEFT_DIR] [RIGHT_DIR]
+
+# Default: left = cwd, right = $HOME
+
+# Keys
+# Tab        Swap focus
+# ↑ / k      Move up
+# ↓ / j      Move down
+# Home / g   Top
+# End / G    Bottom
+# Enter / →  Open directory
+# ← / h      Up one directory
+# Space      Toggle selection + advance
+# s          Cycle sort order
+# .          Toggle hidden files
+# d          Delete (selection or cursor) — y to confirm
+# r          Refresh active pane
+# q          Quit</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Dual panes</strong><span>Left + right; Tab swaps focus. Each pane has its own cwd, cursor, selection, sort, hidden-flag.</span></div>
+      <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. Selection survives sort / cwd-change.</span></div>
+      <div class="feature"><strong>Six sort modes</strong><span>name / mtime / size, asc / desc — <code>s</code> cycles.</span></div>
+      <div class="feature"><strong>Hidden-file toggle</strong><span><code>.</code> hides / shows dotfiles.</span></div>
+      <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
+      <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/super-candy">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/super-candy/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/super-candy/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/yorukot/superfile">superfile</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/super-candy/main/.vhs/navigate.gif" alt="Navigate">
+                <h3>Navigate</h3>
+                <span class="demo-caption">Tab-swap, multi-select, sort cycle, delete-with-confirm.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/super-candy/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

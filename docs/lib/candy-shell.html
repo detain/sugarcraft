@@ -4,27 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyShell — SugarCraft</title>
-<meta name="description" content="CandyShell: Composer-installable CLI. Port of gum.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="CandyShell: Composer-installable CLI of TUI primitives. PHP port of gum.">
+<meta property="og:title" content="CandyShell — SugarCraft">
+<meta property="og:description" content="Composer-installable CLI of TUI primitives. Port of gum.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-shell.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-shell.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🐚</div>
-      <div><h2 style="margin: 0;">CandyShell</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">Composer-installable CLI</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-shell.png" alt="CandyShell">
+      <div>
+        <h2>🐚 CandyShell</h2>
+        <p class="detail-sub">Composer-installable CLI of TUI primitives</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/gum" style="color: inherit;">gum</a></span>
+          <span class="tag-chip">cli</span>
+          <span class="tag-chip">shell-script</span>
+          <span class="tag-chip">one-shot</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">13 subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
+
+    <p class="lede" style="margin-top: 28px;">13 subcommands — choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write. Drop into a shell script and instantly get a Charm-quality interactive UX.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/candy-shell</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code># Apply styling.
+candyshell style --foreground "#ff5f87" --bold "Hello, candy!"
+
+# Pick one item.
+choice=$(candyshell choose Pizza Burger Salad)
+
+# Read a single line.
+name=$(candyshell input --placeholder "Your name?")
+
+# Confirm a destructive action.
+candyshell confirm "Really delete $file?" &amp;&amp; rm "$file"
+
+# Show a spinner while running a command.
+candyshell spin --title "Building..." -- make build
+
+# Fuzzy-filter a list.
+git branch | candyshell filter</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>style</strong><span>Apply Sprinkles styling to argv (or stdin) and print.</span></div>
+      <div class="feature"><strong>choose</strong><span>Pick one item from a list; prints the selection to stdout.</span></div>
+      <div class="feature"><strong>confirm</strong><span>Yes/no — exit code 0 on yes, 1 on no.</span></div>
+      <div class="feature"><strong>filter</strong><span>Fuzzy-filter over stdin lines.</span></div>
+      <div class="feature"><strong>input / write</strong><span>Single-line / multi-line text input.</span></div>
+      <div class="feature"><strong>file</strong><span>File picker — print the selected path.</span></div>
+      <div class="feature"><strong>format</strong><span>Render Markdown via CandyShine.</span></div>
+      <div class="feature"><strong>pager</strong><span>Scroll long input through a SugarBits Viewport.</span></div>
+      <div class="feature"><strong>spin</strong><span>Show a spinner while running an external command.</span></div>
+      <div class="feature"><strong>table</strong><span>Render a CSV / TSV table with rounded borders.</span></div>
+      <div class="feature"><strong>log</strong><span>Leveled logging output (debug / info / warn / error / fatal).</span></div>
+      <div class="feature"><strong>join</strong><span>Concatenate styled strings horizontally / vertically.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-shell">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/candy-shell/blob/main/README.md">Full README</a></li>
@@ -36,67 +95,90 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/choose.gif" alt="choose">
                 <h3>choose</h3>
+                <span class="demo-caption">Pick one item from a list.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/confirm.gif" alt="Confirm">
-                <h3>Confirm</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/confirm.gif" alt="confirm">
+                <h3>confirm</h3>
+                <span class="demo-caption">Yes/no with exit-code semantics.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/file.gif" alt="file">
-                <h3>file</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/filter.gif" alt="filter">
-                <h3>filter</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/format.gif" alt="format">
-                <h3>format</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/input.gif" alt="Input">
-                <h3>Input</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/join.gif" alt="join">
-                <h3>join</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/log.gif" alt="log">
-                <h3>log</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/pager.gif" alt="pager">
-                <h3>pager</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/spin.gif" alt="spin">
-                <h3>spin</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/style.gif" alt="Style">
-                <h3>Style</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/table.gif" alt="Table">
-                <h3>Table</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/input.gif" alt="input">
+                <h3>input</h3>
+                <span class="demo-caption">Read a single line.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/write.gif" alt="write">
                 <h3>write</h3>
+                <span class="demo-caption">Multi-line text editor.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/file.gif" alt="file">
+                <h3>file</h3>
+                <span class="demo-caption">Pick a file path.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/filter.gif" alt="filter">
+                <h3>filter</h3>
+                <span class="demo-caption">Fuzzy filter over stdin.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/format.gif" alt="format">
+                <h3>format</h3>
+                <span class="demo-caption">Render Markdown via CandyShine.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/style.gif" alt="style">
+                <h3>style</h3>
+                <span class="demo-caption">Apply foreground / bold to argv.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/table.gif" alt="table">
+                <h3>table</h3>
+                <span class="demo-caption">Render CSV with rounded borders.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/pager.gif" alt="pager">
+                <h3>pager</h3>
+                <span class="demo-caption">Scroll long input.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/log.gif" alt="log">
+                <h3>log</h3>
+                <span class="demo-caption">Leveled logging output.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/spin.gif" alt="spin">
+                <h3>spin</h3>
+                <span class="demo-caption">Spinner while running a command.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/candy-shell/main/.vhs/join.gif" alt="join">
+                <h3>join</h3>
+                <span class="demo-caption">Concatenate styled chunks.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/candy-shell/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

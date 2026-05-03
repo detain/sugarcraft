@@ -4,27 +4,93 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarBits — SugarCraft</title>
-<meta name="description" content="SugarBits: 14 ready-made components. Port of bubbles.">
-<link rel="icon" type="image/svg+xml" href="../img/favicon.svg">
+<meta name="description" content="SugarBits: Fourteen pre-built TUI components. PHP port of bubbles.">
+<meta property="og:title" content="SugarBits — SugarCraft">
+<meta property="og:description" content="Fourteen pre-built TUI components. Port of bubbles.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-bits.png">
+<link rel="icon" type="image/png" href="../img/icons/sugar-bits.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
 
-<nav class="nav"><div class="nav-inner"><a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a><div class="nav-links"><a href="../#libraries">Libraries</a><a href="../#quickstart">Quickstart</a><a href="../compare.html">Compare</a><a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a></div></div></nav>
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
 
 <section class="section">
   <div class="container">
-    <p style="color: var(--ink-2); margin: 0 0 8px 0;"><a href="../#libraries">← All libraries</a></p>
-    <div style="display: flex; align-items: center; gap: 18px; margin-bottom: 8px;">
-      <div style="font-size: 3.2rem;">🧁</div>
-      <div><h2 style="margin: 0;">SugarBits</h2><p style="margin: 4px 0 0 0; color: var(--ink-2);">14 ready-made components</p></div>
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-bits.png" alt="SugarBits">
+      <div>
+        <h2>🧁 SugarBits</h2>
+        <p class="detail-sub">Fourteen pre-built TUI components</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/bubbles" style="color: inherit;">bubbles</a></span>
+          <span class="tag-chip">components</span>
+          <span class="tag-chip">widgets</span>
+          <span class="tag-chip">forms</span>
+          <span class="tag-chip">input</span>
+        </div>
+      </div>
     </div>
-    <p class="lede" style="margin-top: 24px;">TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress (incl. AnimatedProgress with HoneyBounce springs), Spinner (12 styles), Cursor, Help, Key, Paginator, Stopwatch, Timer.</p>
+
+    <p class="lede" style="margin-top: 28px;">TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. Everything you'd hand-roll on day one of a TUI project, ready to drop into your Model.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require candycore/sugar-bits</code></pre>
 
-    <h3 style="margin-top: 32px;">Source &amp; demos</h3>
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use CandyCore\Bits\TextInput\TextInput;
+use CandyCore\Bits\Spinner\Spinner;
+use CandyCore\Core\{Cmd, Model, Msg, Program};
+use CandyCore\Core\Msg\KeyMsg;
+use CandyCore\Core\KeyType;
+
+final class Search implements Model {
+    public function __construct(
+        public readonly TextInput $ti,
+        public readonly Spinner $sp,
+    ) {}
+
+    public function init(): ?\Closure { return $this-&gt;sp-&gt;tick(); }
+
+    public function update(Msg $msg): array {
+        if ($msg instanceof KeyMsg &amp;&amp; $msg-&gt;type === KeyType::Enter) {
+            return [$this, Cmd::quit()];
+        }
+        [$ti, $cmd]  = $this-&gt;ti-&gt;update($msg);
+        [$sp, $cmd2] = $this-&gt;sp-&gt;update($msg);
+        return [new self($ti, $sp), Cmd::batch($cmd, $cmd2)];
+    }
+
+    public function view(): string {
+        return $this-&gt;sp-&gt;view().' '.$this-&gt;ti-&gt;view();
+    }
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
+      <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
+      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, line numbers, soft-wrap.</span></div>
+      <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav.</span></div>
+      <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
+      <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
+      <div class="feature"><strong>Paginator + Help + Key</strong><span>Dot / arabic page indicator, key-help footer, KeyMap binding DSL.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-bits">Source on GitHub</a></li>
       <li><a href="https://github.com/sugarcraft/sugar-bits/blob/main/README.md">Full README</a></li>
@@ -36,67 +102,90 @@
   </div>
 </section>
 
-<section class="section" id="demos" style="background: var(--card); border-block: 1px solid var(--line);">
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
-        <p class="lede">VHS-recorded GIFs of every example shipped with the lib.</p>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/cursor.gif" alt="Cursor">
-                <h3>Cursor</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/spinners.gif" alt="Spinner gallery">
+                <h3>Spinner gallery</h3>
+                <span class="demo-caption">All 12 spinner styles ticking in parallel.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/file-picker.gif" alt="File picker">
-                <h3>File picker</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/text-input.gif" alt="TextInput">
+                <h3>TextInput</h3>
+                <span class="demo-caption">Single-line input with autocomplete + placeholder.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/help.gif" alt="Help">
-                <h3>Help</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/text-area.gif" alt="TextArea">
+                <h3>TextArea</h3>
+                <span class="demo-caption">Multi-line editor with line numbers + soft-wrap.</span>
             </div>
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/item-list.gif" alt="Item list">
-                <h3>Item list</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/paginator.gif" alt="Paginator">
-                <h3>Paginator</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/progress.gif" alt="Progress">
-                <h3>Progress</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/spinners.gif" alt="Spinners">
-                <h3>Spinners</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/stopwatch.gif" alt="Stopwatch">
-                <h3>Stopwatch</h3>
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/item-list.gif" alt="ItemList">
+                <h3>ItemList</h3>
+                <span class="demo-caption">Filterable scrollable list with status messages.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/table.gif" alt="Table">
                 <h3>Table</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/text-area.gif" alt="Text area">
-                <h3>Text area</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/text-input.gif" alt="Text input">
-                <h3>Text input</h3>
-            </div>
-            <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/timer.gif" alt="Timer">
-                <h3>Timer</h3>
+                <span class="demo-caption">Selectable data table with column delegates.</span>
             </div>
             <div class="demo-card">
                 <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/viewport.gif" alt="Viewport">
                 <h3>Viewport</h3>
+                <span class="demo-caption">Scrollable text region with mouse wheel + scrollbar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/file-picker.gif" alt="FilePicker">
+                <h3>FilePicker</h3>
+                <span class="demo-caption">Directory browser with icons + size + sort.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/progress.gif" alt="Progress">
+                <h3>Progress</h3>
+                <span class="demo-caption">Spring-physics-animated progress bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/cursor.gif" alt="Cursor">
+                <h3>Cursor</h3>
+                <span class="demo-caption">Animated text cursor with BlinkMsg tick.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/help.gif" alt="Help">
+                <h3>Help</h3>
+                <span class="demo-caption">Short / full key-help footer from a KeyMap.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/paginator.gif" alt="Paginator">
+                <h3>Paginator</h3>
+                <span class="demo-caption">Dot + arabic page indicator.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/stopwatch.gif" alt="Stopwatch">
+                <h3>Stopwatch</h3>
+                <span class="demo-caption">Elapsed-time counter.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/sugarcraft/sugar-bits/main/.vhs/timer.gif" alt="Timer">
+                <h3>Timer</h3>
+                <span class="demo-caption">Countdown timer.</span>
             </div>
         </div>
     </div>
 </section>
-<footer class="footer"><div class="container"><div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div><div><a href="https://github.com/sugarcraft">GitHub</a> · <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> · <a href="https://github.com/sugarcraft/candy-core/issues">Issues</a></div></div></footer>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONVERSION.md">Architecture</a> ·
+            <a href="https://github.com/sugarcraft/sugar-bits/issues">Issues</a>
+        </div>
+    </div>
+</footer>
 
 <script src="../js/main.js"></script>
 </body>

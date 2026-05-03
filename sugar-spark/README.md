@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-spark" width="160" align="right">
+
 # SugarSpark
 
 ![demo](.vhs/inspect.gif)

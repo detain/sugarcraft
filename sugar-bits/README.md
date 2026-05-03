@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-bits" width="160" align="right">
+
 # SugarBits
 
 ![demo](.vhs/spinners.gif)

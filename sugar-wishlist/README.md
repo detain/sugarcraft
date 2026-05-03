@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="sugar-wishlist" width="160" align="right">
+
 # SugarWishlist
 
 ![demo](.vhs/picker.gif)

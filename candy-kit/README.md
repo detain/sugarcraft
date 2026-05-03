@@ -1,3 +1,5 @@
+<img src=".assets/icon.png" alt="candy-kit" width="160" align="right">
+
 # CandyKit
 
 ![demo](.vhs/cli-page.gif)

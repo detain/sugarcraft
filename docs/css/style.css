@@ -475,6 +475,264 @@ pre.code .num  { color: #fcd5b4; }
 .footer a { color: var(--ink-2); }
 .footer a:hover { color: var(--pink); }
 
+/* ── Hero banner image ─────────────────────────────────────────── */
+.hero-banner {
+    display: block;
+    width: 100%;
+    max-width: 720px;
+    margin: 0 auto 32px auto;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    aspect-ratio: 2 / 1;
+    object-fit: cover;
+}
+
+.hero-mark {
+    display: inline-block;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-lg);
+}
+
+/* ── Stats strip ───────────────────────────────────────────────── */
+.stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 18px;
+    margin: 32px 0 0 0;
+}
+
+.stat {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+}
+
+.stat .num {
+    display: block;
+    font-size: 2.2rem;
+    font-weight: 700;
+    background: var(--gradient-hero);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+}
+
+.stat .label {
+    color: var(--ink-2);
+    font-size: 0.92rem;
+    margin-top: 6px;
+}
+
+/* ── Library / app card icon image ─────────────────────────────── */
+.lib-card .lib-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    object-fit: cover;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 12px;
+    background: var(--card);
+}
+
+.lib-card .lib-icon-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+}
+
+.lib-card .lib-icon-row h3 { margin: 0; }
+
+/* ── Lib detail page header ────────────────────────────────────── */
+.detail-header {
+    display: grid;
+    grid-template-columns: 144px 1fr;
+    gap: 28px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.detail-header .detail-icon {
+    width: 144px;
+    height: 144px;
+    border-radius: 28px;
+    object-fit: cover;
+    box-shadow: var(--shadow-md);
+    background: var(--card);
+}
+
+.detail-header h2 { margin: 0; font-size: 2.2rem; letter-spacing: -0.02em; }
+.detail-header .detail-sub { margin: 6px 0 0 0; color: var(--ink-2); }
+
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0 0 0;
+}
+
+.tag-chip {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.82rem;
+    color: var(--ink-2);
+}
+
+.tag-chip.accent {
+    background: var(--gradient-pop);
+    color: var(--ink);
+    border-color: transparent;
+    font-weight: 600;
+}
+
+/* ── Feature grid (lib pages) ──────────────────────────────────── */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 24px;
+}
+
+.feature-grid .feature {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+}
+
+.feature-grid .feature strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--ink);
+    font-size: 0.98rem;
+}
+
+.feature-grid .feature span {
+    color: var(--ink-2);
+    font-size: 0.9rem;
+}
+
+/* ── Architecture pillars (front page) ─────────────────────────── */
+.pillars {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 18px;
+    margin-top: 32px;
+}
+
+.pillar {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 24px;
+}
+
+.pillar .icon {
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+}
+
+.pillar h3 { margin: 0 0 8px 0; font-size: 1.05rem; }
+.pillar p { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+
+/* ── Demo card with caption inside ─────────────────────────────── */
+.demo-card .demo-caption {
+    display: block;
+    margin: 0 18px 14px;
+    color: var(--ink-2);
+    font-size: 0.88rem;
+}
+
+/* ── Layer diagram ─────────────────────────────────────────────── */
+.layers {
+    display: grid;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.layer {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 18px;
+    align-items: center;
+}
+
+.layer .layer-title {
+    font-weight: 700;
+    color: var(--ink);
+    font-size: 0.98rem;
+}
+
+.layer .layer-bullets {
+    color: var(--ink-2);
+    font-size: 0.94rem;
+}
+
+.layer.l1 { border-left: 4px solid var(--pink); }
+.layer.l2 { border-left: 4px solid var(--grape); }
+.layer.l3 { border-left: 4px solid var(--mint); }
+.layer.l4 { border-left: 4px solid var(--orange); }
+.layer.l5 { border-left: 4px solid var(--sky); }
+
+/* ── Logo strip on home page ───────────────────────────────────── */
+.logo-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    gap: 16px;
+    margin-top: 32px;
+    align-items: center;
+    justify-items: center;
+}
+
+.logo-strip img {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    object-fit: cover;
+    transition: transform .18s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.logo-strip a:hover img {
+    transform: translateY(-3px) scale(1.05);
+}
+
+/* ── Callout / quote panel ─────────────────────────────────────── */
+.callout {
+    background: var(--gradient-pop);
+    border-radius: var(--radius-lg);
+    padding: 36px 40px;
+    margin-top: 32px;
+    color: var(--ink);
+    box-shadow: var(--shadow-md);
+}
+
+.callout h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.4rem;
+    letter-spacing: -0.01em;
+}
+
+.callout p {
+    margin: 0;
+    font-size: 1.05rem;
+    color: var(--ink);
+}
+
 /* ── Responsive ────────────────────────────────────────────────── */
 @media (max-width: 640px) {
     .nav-links a:not(.btn) { display: none; }
@@ -483,4 +741,7 @@ pre.code .num  { color: #fcd5b4; }
     .hero { padding: 64px 0 48px 0; }
     .quickstart { padding: 22px; }
     .quickstart .install { flex-direction: column; }
+    .detail-header { grid-template-columns: 1fr; text-align: center; }
+    .detail-header .detail-icon { margin: 0 auto; }
+    .layer { grid-template-columns: 1fr; }
 }
