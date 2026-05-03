@@ -8,7 +8,7 @@
 #   ./scripts/bootstrap-org-repos.sh
 
 set -euo pipefail
-
+unset GITHUB_TOKEN
 ORG="sugarcraft"
 
 declare -A DESCRIPTIONS=(
