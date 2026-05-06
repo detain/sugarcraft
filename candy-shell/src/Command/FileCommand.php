@@ -26,14 +26,40 @@ final class FileCommand extends Command
     {
         $this
             ->addArgument('cwd',    InputArgument::OPTIONAL, 'Starting directory. Default: current.')
-            ->addOption('height', null, InputOption::VALUE_REQUIRED, 'Visible rows.', 10);
+            ->addOption('height',    null, InputOption::VALUE_REQUIRED, 'Visible rows.', 10)
+            ->addOption('header',    null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the picker.', '')
+            ->addOption('all',       'a',  InputOption::VALUE_NONE,     'Show hidden (dot) files.')
+            ->addOption('directory', null, InputOption::VALUE_NONE,     'Allow selecting directories.')
+            ->addOption('file',      null, InputOption::VALUE_NONE,     'Allow selecting files (default).')
+            ->addOption('show-size', null, InputOption::VALUE_NONE,     'Render the file-size column.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $cwd     = $input->getArgument('cwd');
-        $cwd     = is_string($cwd) && $cwd !== '' ? $cwd : null;
-        $model   = FileModel::newPrompt($cwd, (int) $input->getOption('height'));
+        $cwd = $input->getArgument('cwd');
+        $cwd = is_string($cwd) && $cwd !== '' ? $cwd : null;
+
+        $directoryFlag = (bool) $input->getOption('directory');
+        $fileFlag      = (bool) $input->getOption('file');
+        // Match gum: --directory alone implies dirs-only; --file alone
+        // means files-only (the default); both flags = both kinds; neither
+        // = files-only.
+        $allowDirs  = $directoryFlag;
+        $allowFiles = $fileFlag || !$directoryFlag;
+
+        $header = (string) $input->getOption('header');
+        if ($header !== '') {
+            $output->writeln($header);
+        }
+
+        $model   = FileModel::newPrompt(
+            cwd:        $cwd,
+            height:     (int) $input->getOption('height'),
+            allowDirs:  $allowDirs,
+            allowFiles: $allowFiles,
+            showHidden: (bool) $input->getOption('all'),
+            showSize:   (bool) $input->getOption('show-size'),
+        );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,

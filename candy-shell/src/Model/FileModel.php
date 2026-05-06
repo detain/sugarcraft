@@ -19,9 +19,27 @@ use CandyCore\Core\Msg\KeyMsg;
  */
 final class FileModel implements Model
 {
-    public static function newPrompt(?string $cwd = null, int $height = 10): self
-    {
-        $picker = FilePicker::new($cwd, max(1, $height));
+    /**
+     * @param bool $allowDirs    When true, Enter on a directory selects it
+     *                           rather than descending. Used for `--directory`.
+     * @param bool $allowFiles   When false, files are listed but cannot be
+     *                           selected (paired with `--directory`).
+     * @param bool $showHidden   Include dotfiles in the listing.
+     * @param bool $showSize     Render the file-size column.
+     */
+    public static function newPrompt(
+        ?string $cwd = null,
+        int $height = 10,
+        bool $allowDirs = false,
+        bool $allowFiles = true,
+        bool $showHidden = false,
+        bool $showSize = false,
+    ): self {
+        $picker = FilePicker::new($cwd, max(1, $height))
+            ->withDirAllowed($allowDirs)
+            ->withFileAllowed($allowFiles)
+            ->withShowHidden($showHidden)
+            ->withShowSize($showSize);
         [$picker, ] = $picker->focus();
         return new self($picker, false);
     }
@@ -50,8 +68,9 @@ final class FileModel implements Model
         }
         [$next, $cmd] = $this->picker->update($msg);
         $self = new self($next, false);
-        if ($next->selected() !== null && !$next->highlightedEntry()?->isDir) {
-            // File selected — quit; cwd-only descents keep the picker open.
+        if ($next->selected() !== null) {
+            // Selection lands once the picker confirms — for files when
+            // dirAllowed=false, or for directories when it's true.
             return [$self, Cmd::quit()];
         }
         return [$self, $cmd];
