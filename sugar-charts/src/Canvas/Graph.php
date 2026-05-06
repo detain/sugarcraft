@@ -259,5 +259,228 @@ final class Graph
         return $pts;
     }
 
+    /**
+     * Sample N points along the unit circle, capped to `$limit` points.
+     * Mirrors ntcharts' `getCirclePointsWithLimit`.
+     *
+     * @return list<array{0:int,1:int}>
+     */
+    public static function getCirclePointsWithLimit(
+        int $cx,
+        int $cy,
+        int $radius,
+        int $limit,
+        int $samples = 32,
+    ): array {
+        $pts = self::getCirclePoints($cx, $cy, $radius, $samples);
+        if ($limit > 0 && count($pts) > $limit) {
+            $pts = array_slice($pts, 0, $limit);
+        }
+        return $pts;
+    }
+
+    /**
+     * Sample points along the line from `($x0, $y0)` to `($x1, $y1)`,
+     * capped at `$limit` points. Mirrors ntcharts'
+     * `getLinePointsWithLimit`.
+     *
+     * @return list<array{0:int,1:int}>
+     */
+    public static function getLinePointsWithLimit(int $x0, int $y0, int $x1, int $y1, int $limit): array
+    {
+        if ($limit <= 0) {
+            return [];
+        }
+        $pts = [];
+        $dx = abs($x1 - $x0);
+        $dy = -abs($y1 - $y0);
+        $sx = $x0 < $x1 ? 1 : -1;
+        $sy = $y0 < $y1 ? 1 : -1;
+        $err = $dx + $dy;
+        while (true) {
+            $pts[] = [$x0, $y0];
+            if (count($pts) >= $limit) {
+                break;
+            }
+            if ($x0 === $x1 && $y0 === $y1) {
+                break;
+            }
+            $e2 = 2 * $err;
+            if ($e2 >= $dy) { $err += $dy; $x0 += $sx; }
+            if ($e2 <= $dx) { $err += $dx; $y0 += $sy; }
+        }
+        return $pts;
+    }
+
+    /**
+     * Draw a vertical line from bottom (`$yBottom`) up to `$yTop`. Mirrors
+     * ntcharts' `DrawVerticalLineUp`.
+     */
+    public static function drawVerticalLineUp(
+        Canvas $c,
+        int $x,
+        int $yTop,
+        int $yBottom,
+        ?Style $style = null,
+        string $rune = '│',
+    ): void {
+        self::drawVLine($c, $x, min($yTop, $yBottom), max($yTop, $yBottom), $style, $rune);
+    }
+
+    /** Mirror of {@see drawVerticalLineUp()} for the down direction (semantically identical). */
+    public static function drawVerticalLineDown(
+        Canvas $c,
+        int $x,
+        int $yTop,
+        int $yBottom,
+        ?Style $style = null,
+        string $rune = '│',
+    ): void {
+        self::drawVerticalLineUp($c, $x, $yTop, $yBottom, $style, $rune);
+    }
+
+    /** Mirror of {@see drawHLine()} with explicit left-to-right direction. */
+    public static function drawHorizontalLineLeft(
+        Canvas $c,
+        int $y,
+        int $xLeft,
+        int $xRight,
+        ?Style $style = null,
+        string $rune = '─',
+    ): void {
+        self::drawHLine($c, $y, min($xLeft, $xRight), max($xLeft, $xRight), $style, $rune);
+    }
+
+    /** Mirror of {@see drawHorizontalLineLeft()} for the right direction. */
+    public static function drawHorizontalLineRight(
+        Canvas $c,
+        int $y,
+        int $xLeft,
+        int $xRight,
+        ?Style $style = null,
+        string $rune = '─',
+    ): void {
+        self::drawHorizontalLineLeft($c, $y, $xLeft, $xRight, $style, $rune);
+    }
+
+    /**
+     * Render a Braille glyph at `($x, $y)` from a 2x4 dot pattern.
+     * Each `$dots` entry is a `[colDotX, rowDotY]` pair where colDotX
+     * ∈ {0,1} and rowDotY ∈ {0,1,2,3}, matching the Braille Patterns
+     * codepoint layout (U+2800).
+     *
+     * @param list<array{0:int,1:int}> $dots
+     */
+    public static function drawBrailleRune(
+        Canvas $c,
+        int $x,
+        int $y,
+        array $dots,
+        ?Style $style = null,
+    ): void {
+        // U+2800 = 0x2800 = 10240. Each dot bit:
+        //   col 0:  row0=0x01  row1=0x02  row2=0x04  row3=0x40
+        //   col 1:  row0=0x08  row1=0x10  row2=0x20  row3=0x80
+        $bitmap = [
+            0 => [0x01, 0x02, 0x04, 0x40],
+            1 => [0x08, 0x10, 0x20, 0x80],
+        ];
+        $code = 0x2800;
+        foreach ($dots as [$col, $row]) {
+            if ($col < 0 || $col > 1 || $row < 0 || $row > 3) {
+                continue;
+            }
+            $code |= $bitmap[$col][$row];
+        }
+        $c->setCell($x, $y, mb_chr($code, 'UTF-8'), $style);
+    }
+
+    /**
+     * Repeated form of {@see drawBrailleRune()} — places a sequence
+     * of Braille glyphs left-to-right starting at `($x, $y)`. Each
+     * `$patterns[i]` is a list of `[col, row]` dots for the i-th glyph.
+     *
+     * @param list<list<array{0:int,1:int}>> $patterns
+     */
+    public static function drawBraillePatterns(
+        Canvas $c,
+        int $x,
+        int $y,
+        array $patterns,
+        ?Style $style = null,
+    ): void {
+        foreach ($patterns as $i => $dots) {
+            self::drawBrailleRune($c, $x + $i, $y, $dots, $style);
+        }
+    }
+
+    /**
+     * Place `$columns` next to each other left-to-right starting at
+     * `($x, $yBottom)`, each column drawn from `$yBottom` up to
+     * `$yBottom - $h_i`. Mirrors ntcharts' `DrawColumns`.
+     *
+     * @param list<int> $heights
+     */
+    public static function drawColumns(
+        Canvas $c,
+        int $x,
+        int $yBottom,
+        array $heights,
+        string $rune = '█',
+        ?Style $style = null,
+    ): void {
+        foreach ($heights as $i => $h) {
+            if ($h <= 0) {
+                continue;
+            }
+            $top = $yBottom - $h + 1;
+            self::drawVLine($c, $x + $i, $top, $yBottom, $style, $rune);
+        }
+    }
+
+    /**
+     * Draw rows of length `$widths` stacked top-down starting at
+     * `($xLeft, $y)`. Mirrors ntcharts' `DrawRows`.
+     *
+     * @param list<int> $widths
+     */
+    public static function drawRows(
+        Canvas $c,
+        int $xLeft,
+        int $y,
+        array $widths,
+        string $rune = '█',
+        ?Style $style = null,
+    ): void {
+        foreach ($widths as $i => $w) {
+            if ($w <= 0) {
+                continue;
+            }
+            self::drawHLine($c, $y + $i, $xLeft, $xLeft + $w - 1, $style, $rune);
+        }
+    }
+
+    /**
+     * Draw a single OHLC candle stick at column `$x`. `$open` /
+     * `$close` are filled with `$body`; the high-low wick is drawn
+     * with `$wick`. Coordinates are canvas rows (top = 0).
+     */
+    public static function drawCandlestick(
+        Canvas $c,
+        int $x,
+        int $high,
+        int $open,
+        int $close,
+        int $low,
+        ?Style $style = null,
+        string $body = '│',
+        string $wick = '│',
+    ): void {
+        // Wick: high → low.
+        self::drawVLine($c, $x, min($high, $low), max($high, $low), $style, $wick);
+        // Body: open ↔ close (overlay).
+        self::drawVLine($c, $x, min($open, $close), max($open, $close), $style, $body);
+    }
+
     private function __construct() {}
 }
