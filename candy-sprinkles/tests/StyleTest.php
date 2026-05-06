@@ -695,4 +695,81 @@ final class StyleTest extends TestCase
         $this->assertStringContainsString("\x1b[32m", $lines[0]);
         $this->assertStringContainsString("\x1b[31m", $lines[1]);
     }
+
+    public function testHyperlinkWrapsRenderedOutputInOsc8(): void
+    {
+        $s = Style::new()->hyperlink('https://example.com');
+        $out = $s->render('docs');
+        $this->assertStringContainsString("\x1b]8;;https://example.com\x1b\\", $out);
+        $this->assertStringContainsString('docs', $out);
+        $this->assertStringContainsString("\x1b]8;;\x1b\\", $out);
+    }
+
+    public function testHyperlinkWithIdEmbedsId(): void
+    {
+        $s = Style::new()->hyperlink('https://example.com', 'mygroup-1');
+        $out = $s->render('x');
+        $this->assertStringContainsString("\x1b]8;id=mygroup-1;https://example.com\x1b\\", $out);
+    }
+
+    public function testGetHyperlinkRoundTrips(): void
+    {
+        $this->assertNull(Style::new()->getHyperlink());
+        $this->assertSame('https://x.com', Style::new()->hyperlink('https://x.com')->getHyperlink());
+    }
+
+    public function testEmptyUrlIsAliasForUnset(): void
+    {
+        $s = Style::new()->hyperlink('https://x.com')->hyperlink('');
+        $this->assertNull($s->getHyperlink());
+        $out = $s->render('plain');
+        $this->assertStringNotContainsString("\x1b]8", $out);
+    }
+
+    public function testUnsetHyperlinkClearsLink(): void
+    {
+        $s = Style::new()->hyperlink('https://x.com')->unsetHyperlink();
+        $this->assertNull($s->getHyperlink());
+        $this->assertStringNotContainsString("\x1b]8", $s->render('hello'));
+    }
+
+    public function testHyperlinkComposesWithStylingAndContent(): void
+    {
+        $s = Style::new()->bold()->hyperlink('https://x.com');
+        $out = $s->render('hello');
+        $this->assertStringContainsString("\x1b[1m", $out);          // bold SGR
+        $this->assertStringContainsString("\x1b]8;;https://x.com", $out); // OSC 8 prefix
+    }
+
+    public function testUnsetPaddingZeroesAllSides(): void
+    {
+        $s = Style::new()->padding(2, 3)->unsetPadding();
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testUnsetMarginZeroesAllSides(): void
+    {
+        $s = Style::new()->margin(1)->unsetMargin();
+        $this->assertSame('hi', $s->render('hi'));
+    }
+
+    public function testUnsetTabWidthRevertsToFour(): void
+    {
+        $s = Style::new()->tabWidth(8)->unsetTabWidth();
+        // 4 spaces from the default tabWidth, not 8.
+        $this->assertSame('a    b', $s->render("a\tb"));
+    }
+
+    public function testUnsetAlignRevertsToLeft(): void
+    {
+        $s = Style::new()->align(Align::Right)->width(5)->unsetAlign();
+        // Left-aligned 'hi' in a 5-wide field is 'hi   '.
+        $this->assertSame('hi   ', $s->render('hi'));
+    }
+
+    public function testUnsetInlineRevertsToFalse(): void
+    {
+        $s = Style::new()->inline(true)->unsetInline();
+        $this->assertSame("a\nb", $s->render("a\nb"));
+    }
 }

@@ -73,6 +73,8 @@ final class Style
         private readonly bool $colorWhitespace = true,
         private readonly int $tabWidth = 4,
         private readonly ?\Closure $transform = null,
+        private readonly ?string $hyperlink = null,
+        private readonly string $hyperlinkId = '',
     ) {}
 
     public static function new(): self
@@ -277,6 +279,37 @@ final class Style
     }
 
     /**
+     * Wrap rendered output in an OSC 8 hyperlink envelope so terminals
+     * that support it render the styled text as a clickable link.
+     * Mirrors lipgloss v2's `Hyperlink()` setter.
+     *
+     * Pass an empty `$url` to clear the hyperlink (the unsetter
+     * `unsetHyperlink()` is the canonical way; this overload is for
+     * symmetry with `foreground(null)`).
+     *
+     * `$id` groups multi-line links so terminals can highlight every
+     * line on hover. Empty (default) leaves grouping to the terminal.
+     */
+    public function hyperlink(string $url, string $id = ''): self
+    {
+        if ($url === '') {
+            return $this->unsetHyperlink();
+        }
+        return $this->with(
+            hyperlink: $url,
+            hyperlinkSet: true,
+            hyperlinkId: $id,
+            propsAdded: ['hyperlink'],
+        );
+    }
+
+    /** Currently-set hyperlink target, or null if unset. */
+    public function getHyperlink(): ?string
+    {
+        return $this->hyperlink;
+    }
+
+    /**
      * Width of a `\t` character when expanded inside content. Defaults
      * to 4. Pass 0 to keep tabs as literal `\t` (no expansion).
      */
@@ -441,6 +474,67 @@ final class Style
     public function unsetMaxHeight(): self     { return $this->withUnset('maxHeight', maxHeight: null); }
     public function unsetBorder(): self        { return $this->withUnset('border', border: null); }
     public function unsetTransform(): self     { return $this->withUnset('transform', transform: null); }
+
+    /**
+     * Drop the currently-set hyperlink. Mirrors lipgloss's
+     * `UnsetHyperlink`.
+     */
+    public function unsetHyperlink(): self
+    {
+        return $this->with(
+            hyperlink: null,
+            hyperlinkSet: true,
+            hyperlinkId: '',
+        )->withUnsetProp('hyperlink');
+    }
+
+    /** Drop padding entirely (all four sides → 0). */
+    public function unsetPadding(): self
+    {
+        return $this->with(padding: [0, 0, 0, 0])->withUnsetProp('padding');
+    }
+
+    /** Drop margin entirely (all four sides → 0). */
+    public function unsetMargin(): self
+    {
+        return $this->with(margin: [0, 0, 0, 0])->withUnsetProp('margin');
+    }
+
+    /** Reset tab width to the default of 4. */
+    public function unsetTabWidth(): self
+    {
+        return $this->with(tabWidth: 4)->withUnsetProp('tabWidth');
+    }
+
+    /** Reset horizontal alignment to {@see Align::Left}. */
+    public function unsetAlign(): self
+    {
+        return $this->with(alignH: Align::Left)->withUnsetProp('alignH');
+    }
+
+    /** Reset vertical alignment to {@see VAlign::Top}. */
+    public function unsetVerticalAlign(): self
+    {
+        return $this->with(alignV: VAlign::Top)->withUnsetProp('alignV');
+    }
+
+    /** Drop inline mode. */
+    public function unsetInline(): self
+    {
+        return $this->with(inline: false)->withUnsetProp('inline');
+    }
+
+    /** Drop the margin background colour. */
+    public function unsetMarginBackground(): self
+    {
+        return $this->with(marginBg: null, marginBgSet: true)->withUnsetProp('marginBg');
+    }
+
+    /** Reset colorWhitespace to the default (true). */
+    public function unsetColorWhitespace(): self
+    {
+        return $this->with(colorWhitespace: true)->withUnsetProp('colorWhitespace');
+    }
 
     /**
      * Duplicate this style. Returns an identical instance (the explicit
@@ -627,7 +721,17 @@ final class Style
             $out[] = $marginBlank;
         }
 
-        return implode("\n", $out);
+        $rendered = implode("\n", $out);
+
+        // Wrap in an OSC 8 hyperlink envelope when set. The Ansi
+        // helper builds `ESC ] 8 ; <id> ; <url> ST <text> ESC ] 8 ; ; ST`,
+        // so terminals that support it render the styled text as a
+        // clickable link; terminals that don't ignore the OSC.
+        if ($this->hyperlink !== null) {
+            $rendered = Ansi::hyperlink($this->hyperlink, $rendered, $this->hyperlinkId);
+        }
+
+        return $rendered;
     }
 
     public function __invoke(string $content): string
@@ -879,6 +983,8 @@ final class Style
         ?bool $colorWhitespace = null,
         ?int $tabWidth = null,
         ?\Closure $transform = null, bool $transformSet = false,
+        ?string $hyperlink = null, bool $hyperlinkSet = false,
+        ?string $hyperlinkId = null,
         array $propsAdded = [],
     ): self {
         $newProps = $this->propsSet;
@@ -920,6 +1026,8 @@ final class Style
             colorWhitespace:  $colorWhitespace ?? $this->colorWhitespace,
             tabWidth:         $tabWidth      ?? $this->tabWidth,
             transform:        $transformSet  ? $transform       : $this->transform,
+            hyperlink:        $hyperlinkSet  ? $hyperlink       : $this->hyperlink,
+            hyperlinkId:      $hyperlinkId   ?? $this->hyperlinkId,
         );
     }
 
@@ -984,6 +1092,39 @@ final class Style
             colorWhitespace:  $next->colorWhitespace,
             tabWidth:         $next->tabWidth,
             transform:        $prop === 'transform'  ? null         : $next->transform,
+            hyperlink:        $next->hyperlink,
+            hyperlinkId:      $next->hyperlinkId,
+        );
+    }
+
+    /**
+     * Lightweight reset variant — only scrubs `$prop` from `propsSet`.
+     * Caller is expected to have already applied the new value via
+     * `with()`. Used by per-side unsetters that flip a value to its
+     * default rather than to a true zero.
+     */
+    private function withUnsetProp(string $prop): self
+    {
+        $newProps = $this->propsSet;
+        unset($newProps[$prop]);
+        return new self(
+            fg: $this->fg, bg: $this->bg,
+            fgAdaptive: $this->fgAdaptive, bgAdaptive: $this->bgAdaptive,
+            fgComplete: $this->fgComplete, bgComplete: $this->bgComplete,
+            bold: $this->bold, italic: $this->italic, underline: $this->underline,
+            strike: $this->strike, faint: $this->faint, blink: $this->blink, reverse: $this->reverse,
+            padding: $this->padding, margin: $this->margin,
+            width: $this->width, height: $this->height,
+            maxWidth: $this->maxWidth, maxHeight: $this->maxHeight,
+            alignH: $this->alignH, alignV: $this->alignV,
+            border: $this->border, borderSides: $this->borderSides,
+            borderFg: $this->borderFg, borderBg: $this->borderBg,
+            borderSideFg: $this->borderSideFg, borderSideBg: $this->borderSideBg,
+            profile: $this->profile, propsSet: $newProps,
+            inline: $this->inline, marginBg: $this->marginBg,
+            colorWhitespace: $this->colorWhitespace, tabWidth: $this->tabWidth,
+            transform: $this->transform,
+            hyperlink: $this->hyperlink, hyperlinkId: $this->hyperlinkId,
         );
     }
 }
