@@ -84,7 +84,7 @@ final class LogCommand extends Command
         string $timeFormat = '',
         string $formatter = 'text',
     ): string {
-        $ts = $timeFormat !== '' ? date($timeFormat) : '';
+        $ts = $timeFormat !== '' ? date(self::resolveTimeFormat($timeFormat)) : '';
         return match ($formatter) {
             'json'   => json_encode([
                 'time'    => $ts !== '' ? $ts : null,
@@ -114,6 +114,43 @@ final class LogCommand extends Command
         $parts[] = $level->style()->render($level->badge());
         $parts[] = $message;
         return implode(' ', $parts);
+    }
+
+    /**
+     * Resolve a Go-style time-constant alias (`rfc822`, `rfc3339`,
+     * `kitchen`, `stamp`, `datetime`, `dateonly`, `timeonly`, `ansic`,
+     * `unixdate`) to its corresponding PHP `date()` format string.
+     * Anything else is treated as an explicit `date()` format and
+     * passed through.
+     *
+     * Mirrors gum log's Go time-constant parser. The PHP shapes here
+     * are pragmatic equivalents — `kitchen` is `g:ia` (12-hour with
+     * lowercase am/pm), `rfc822` is the version with single-digit
+     * day, etc. Callers that need an exact byte-for-byte match
+     * should pass an explicit format.
+     */
+    public static function resolveTimeFormat(string $alias): string
+    {
+        return match (strtolower($alias)) {
+            'rfc822',   'rfc-822'   => 'D, j M y H:i:s O',
+            'rfc822z',  'rfc-822z'  => 'D, j M y H:i:s O',
+            'rfc850'                => 'l, d-M-y H:i:s T',
+            'rfc1123',  'rfc-1123'  => 'D, d M Y H:i:s O',
+            'rfc1123z', 'rfc-1123z' => 'D, d M Y H:i:s O',
+            'rfc3339',  'rfc-3339'  => 'Y-m-d\\TH:i:sP',
+            'rfc3339nano'           => 'Y-m-d\\TH:i:s.uP',
+            'kitchen'               => 'g:ia',
+            'stamp'                 => 'M j H:i:s',
+            'stampmilli'            => 'M j H:i:s.v',
+            'stampmicro'            => 'M j H:i:s.u',
+            'ansic'                 => 'D M j H:i:s Y',
+            'unixdate'              => 'D M j H:i:s T Y',
+            'datetime'              => 'Y-m-d H:i:s',
+            'dateonly'              => 'Y-m-d',
+            'timeonly'              => 'H:i:s',
+            'layout'                => '01/02 03:04:05PM \'06 -0700',
+            default                 => $alias,
+        };
     }
 
     /** @param array<string,string> $fields */
