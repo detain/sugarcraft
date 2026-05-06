@@ -7,6 +7,7 @@ namespace CandyCore\Bits\Help;
 use CandyCore\Bits\Key\Binding;
 use CandyCore\Bits\Key\KeyMap;
 use CandyCore\Core\Util\Width;
+use CandyCore\Sprinkles\Style;
 
 /**
  * Renders a {@see KeyMap} as either a short, single-line summary or a
@@ -33,7 +34,22 @@ final class Help
         public readonly int    $maxWidth   = 0,
         public readonly string $ellipsis   = '…',
         public readonly string $fullSeparator = "\n",
+        public readonly ?Styles $styles    = null,
     ) {}
+
+    /**
+     * Override the rendered colour / styling of every visible help
+     * element. Mirrors upstream Bubbles' `help.Styles` struct. Default
+     * null means "no styling" (every binding rendered verbatim) so
+     * existing callers / snapshots are unchanged.
+     */
+    public function withStyles(?Styles $styles): self
+    {
+        return $this->copy(styles: $styles, stylesSet: true);
+    }
+
+    /** Read-only accessor. */
+    public function getStyles(): ?Styles { return $this->styles; }
 
     public function withSeparator(string $s): self
     {
@@ -113,12 +129,15 @@ final class Help
     {
         $parts = [];
         foreach ($bindings as $b) {
-            $entry = $this->renderBinding($b);
+            $entry = $this->renderBinding($b, full: false);
             if ($entry !== '') {
                 $parts[] = $entry;
             }
         }
-        $rendered = implode($this->separator, $parts);
+        $sep = $this->styles !== null
+            ? $this->styles->shortSeparator->render($this->separator)
+            : $this->separator;
+        $rendered = implode($sep, $parts);
         if ($this->maxWidth > 0 && Width::string($rendered) > $this->maxWidth) {
             $rendered = $this->truncate($rendered);
         }
@@ -143,7 +162,7 @@ final class Help
         foreach ($columns as $col) {
             $lines = [];
             foreach ($col as $b) {
-                $entry = $this->renderBinding($b);
+                $entry = $this->renderBinding($b, full: true);
                 if ($entry !== '') {
                     $lines[] = $entry;
                 }
@@ -177,12 +196,19 @@ final class Help
         return implode($this->fullSeparator, $out);
     }
 
-    private function renderBinding(Binding $b): string
+    private function renderBinding(Binding $b, bool $full = false): string
     {
-        if ($b->disabled || $b->help->key === '' && $b->help->desc === '') {
+        if ($b->disabled || ($b->help->key === '' && $b->help->desc === '')) {
             return '';
         }
-        return $b->help->key . $this->keyDescGap . $b->help->desc;
+        if ($this->styles === null) {
+            return $b->help->key . $this->keyDescGap . $b->help->desc;
+        }
+        $keyStyle  = $full ? $this->styles->fullKey  : $this->styles->shortKey;
+        $descStyle = $full ? $this->styles->fullDesc : $this->styles->shortDesc;
+        return $keyStyle->render($b->help->key)
+             . $this->keyDescGap
+             . $descStyle->render($b->help->desc);
     }
 
     /**
@@ -202,7 +228,10 @@ final class Help
             }
             $kept = $next;
         }
-        return $kept . $this->ellipsis;
+        $glyph = $this->styles !== null
+            ? $this->styles->ellipsis->render($this->ellipsis)
+            : $this->ellipsis;
+        return $kept . $glyph;
     }
 
     /**
@@ -216,6 +245,8 @@ final class Help
         ?int    $maxWidth = null,
         ?string $ellipsis = null,
         ?string $fullSeparator = null,
+        ?Styles $styles = null,
+        bool    $stylesSet = false,
     ): self {
         return new self(
             separator:     $separator     ?? $this->separator,
@@ -225,6 +256,7 @@ final class Help
             maxWidth:      $maxWidth      ?? $this->maxWidth,
             ellipsis:      $ellipsis      ?? $this->ellipsis,
             fullSeparator: $fullSeparator ?? $this->fullSeparator,
+            styles:        $stylesSet ? $styles : $this->styles,
         );
     }
 }

@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace CandyCore\Bits\Tests\Help;
 
 use CandyCore\Bits\Help\Help;
+use CandyCore\Bits\Help\Styles;
 use CandyCore\Bits\Key\Binding;
 use CandyCore\Bits\Key\KeyMap;
+use CandyCore\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
 final class FakeKeyMap implements KeyMap
@@ -152,5 +154,63 @@ final class HelpTest extends TestCase
         ]);
         $help = (new Help())->withFullSeparator(' :: ');
         $this->assertSame('a alpha :: b beta', $help->fullView($map));
+    }
+
+    public function testWithStylesAppliesShortKeyStyle(): void
+    {
+        $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
+        $styles = new Styles(shortKey: Style::new()->bold());
+        $help = (new Help())->withStyles($styles);
+        $rendered = $help->shortView($map);
+        // Bold opens with \x1b[1m and resets with \x1b[0m around 'a'.
+        $this->assertStringContainsString("\x1b[1ma\x1b[0m", $rendered);
+        $this->assertStringContainsString('alpha', $rendered);
+    }
+
+    public function testWithStylesAppliesShortDescStyle(): void
+    {
+        $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
+        $styles = new Styles(shortDesc: Style::new()->italic());
+        $help = (new Help())->withStyles($styles);
+        $rendered = $help->shortView($map);
+        $this->assertStringContainsString("\x1b[3malpha\x1b[0m", $rendered);
+    }
+
+    public function testWithStylesAppliesShortSeparator(): void
+    {
+        $map = new FakeKeyMap([$this->b('a', 'alpha'), $this->b('b', 'beta')], []);
+        $styles = new Styles(shortSeparator: Style::new()->faint());
+        $help = (new Help())->withStyles($styles);
+        $rendered = $help->shortView($map);
+        // Default separator is ' • ' — wrapped in faint SGR.
+        $this->assertStringContainsString("\x1b[2m • \x1b[0m", $rendered);
+    }
+
+    public function testWithStylesAppliesFullKey(): void
+    {
+        $map = new FakeKeyMap([], [[$this->b('a', 'alpha')]]);
+        $styles = new Styles(fullKey: Style::new()->underline());
+        $help = (new Help())->withStyles($styles);
+        $rendered = $help->fullView($map);
+        $this->assertStringContainsString("\x1b[4ma\x1b[0m", $rendered);
+    }
+
+    public function testWithStylesNullClearsStyles(): void
+    {
+        $map = new FakeKeyMap([$this->b('a', 'alpha')], []);
+        $help = (new Help())
+            ->withStyles(new Styles(shortKey: Style::new()->bold()))
+            ->withStyles(null);
+        $this->assertSame('a alpha', $help->shortView($map));
+        $this->assertNull($help->getStyles());
+    }
+
+    public function testStylesUniformHelper(): void
+    {
+        $bold = Style::new()->bold();
+        $s = Styles::uniform($bold);
+        $this->assertSame($bold, $s->shortKey);
+        $this->assertSame($bold, $s->fullDesc);
+        $this->assertSame($bold, $s->ellipsis);
     }
 }

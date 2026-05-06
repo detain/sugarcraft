@@ -96,4 +96,62 @@ final class ProgressTest extends TestCase
         $p = Progress::new()->withWidth(20)->withPercent(0.5);
         $this->assertSame(20, $p->viewWidth());
     }
+
+    public function testWithColorsThreeStops(): void
+    {
+        $red    = Color::hex('#ff0000');
+        $green  = Color::hex('#00ff00');
+        $blue   = Color::hex('#0000ff');
+        $p = Progress::new()
+            ->withWidth(8)
+            ->withShowPercent(false)
+            ->withColors($red, $green, $blue)
+            ->withPercent(1.0);
+        $this->assertSame([$red, $green, $blue], $p->gradientStops);
+        $rendered = $p->view();
+        $this->assertStringContainsString("\x1b[38;2;255;0;0m", $rendered);
+        $this->assertStringContainsString("\x1b[38;2;0;0;255m", $rendered);
+    }
+
+    public function testWithColorsSingleColorActsAsSolidFill(): void
+    {
+        $red = Color::hex('#ff0000');
+        $p = Progress::new()->withColors($red)->withPercent(0.5);
+        $this->assertSame($red, $p->fillColor);
+        $this->assertSame([], $p->gradientStops);
+    }
+
+    public function testWithColorsEmptyClearsGradient(): void
+    {
+        $p = Progress::new()
+            ->withGradient(Color::hex('#000'), Color::hex('#fff'))
+            ->withColors();
+        $this->assertSame([], $p->gradientStops);
+        $this->assertNull($p->gradientStart);
+        $this->assertNull($p->gradientEnd);
+    }
+
+    public function testWithColorFuncOverridesEverything(): void
+    {
+        $p = Progress::new()
+            ->withWidth(4)
+            ->withShowPercent(false)
+            ->withColorFunc(static function (int $i, int $n, float $pct): Color {
+                return Color::hex('#000000');
+            })
+            ->withPercent(1.0);
+        $rendered = $p->view();
+        $this->assertStringContainsString("\x1b[38;2;0;0;0m", $rendered);
+    }
+
+    public function testWithColorFuncNullClears(): void
+    {
+        $p = Progress::new()
+            ->withColorFunc(static fn (int $i, int $n, float $pct) => Color::hex('#fff'))
+            ->withColorFunc(null)
+            ->withWidth(4)
+            ->withShowPercent(false)
+            ->withPercent(1.0);
+        $this->assertStringNotContainsString("\x1b[38", $p->view());
+    }
 }

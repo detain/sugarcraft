@@ -261,21 +261,26 @@ code, pre, .mono {
 /* ── Library grid ──────────────────────────────────────────────── */
 .lib-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 18px;
+    /* Larger min so each card has room for the preview gif + body
+       without crowding. The grid still reflows down to a single
+       column on phones via the auto-fill below. */
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
 }
 
 .lib-card {
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: var(--radius);
-    padding: 22px;
-    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+    /* Beefier radius + drop shadow makes each card visibly its own
+       grouped block — fixes the "where does one end and another
+       begin?" complaint at the previous tighter spacing. */
+    border-radius: 18px;
+    padding: 0;                      /* preview/body manage their own pad */
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     position: relative;
     overflow: hidden;
     color: var(--ink);
-    /* Stack content with consistent vertical rhythm so descriptions
-       and link rows don't drift around as the cards reflow. */
+    box-shadow: 0 1px 2px rgba(15, 12, 24, 0.06), 0 8px 24px rgba(15, 12, 24, 0.04);
     display: flex;
     flex-direction: column;
     text-decoration: none;
@@ -295,9 +300,9 @@ code, pre, .mono {
 }
 
 .lib-card:hover {
-    transform: translateY(-4px);
-    box-shadow: var(--shadow-md);
-    border-color: transparent;
+    transform: translateY(-6px);
+    box-shadow: 0 2px 6px rgba(15, 12, 24, 0.08), 0 24px 48px rgba(255, 95, 135, 0.18);
+    border-color: rgba(255, 95, 135, 0.55);
 }
 
 .lib-card:hover::after {
@@ -306,9 +311,62 @@ code, pre, .mono {
 
 .lib-card > * { position: relative; z-index: 1; }
 
+/* ── Card preview (animated gif strip) ────────────────────────────
+   The preview sits at the top of every card and zooms in slightly
+   so users see clear motion even at small card widths. Background
+   is the candy gradient so empty / "demo coming soon" placeholders
+   read as decorative rather than broken.                           */
+.lib-card .lib-card-preview {
+    height: 150px;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    background: var(--gradient-pop);
+    border-bottom: 1px solid var(--line);
+}
+
+.lib-card .lib-card-preview img {
+    width: 100%;
+    height: 100%;
+    /* Cover crops vertically so the most active part of the GIF
+       stays in frame; transform-scale gives a slight zoom-in so
+       small text is still readable. */
+    object-fit: cover;
+    object-position: top center;
+    transform: scale(1.06);
+    transition: transform .35s ease;
+    display: block;
+}
+
+.lib-card:hover .lib-card-preview img {
+    transform: scale(1.1);
+}
+
+.lib-card .lib-card-preview--empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.lib-card .lib-card-preview-placeholder {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(15, 12, 24, 0.25);
+    letter-spacing: 0.02em;
+}
+
+/* The preview eats the rounded top corners so the card's outer
+   radius shows clean above it. */
+.lib-card .lib-card-preview {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+}
+
 .lib-card .glyph-tag {
     font-size: 1.6rem;
     margin-bottom: 8px;
+    padding: 0 22px;
 }
 
 .lib-card h3 {
@@ -321,14 +379,14 @@ code, pre, .mono {
 .lib-card .lib-source {
     color: var(--ink-2);
     font-size: 0.82rem;
-    margin: 4px 0 0 0;
+    margin: 4px 22px 0 22px;
 }
 
 .lib-card .lib-source a { color: var(--ink-2); }
 .lib-card .lib-source a:hover { color: var(--pink); }
 
 .lib-card p.summary {
-    margin: 12px 0 0 0;
+    margin: 12px 22px 0 22px;
     color: var(--ink-2);
     font-size: 0.95rem;
     line-height: 1.5;
@@ -342,7 +400,7 @@ code, pre, .mono {
     gap: 8px;
     font-size: 0.82rem;
     flex-wrap: wrap;
-    margin-top: 16px;
+    margin: 16px 22px 22px 22px;
 }
 
 /* Inner links — render as compact pills instead of inline text. The
@@ -583,9 +641,11 @@ pre.code .num  { color: #fcd5b4; }
 
 /* ── Library / app card icon image ─────────────────────────────── */
 .lib-card .lib-icon {
-    width: 56px;
-    height: 56px;
-    border-radius: 12px;
+    /* Smaller now that the preview gif is the visual anchor — the
+       icon sits inline next to the title as a glyph-style accent. */
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
     object-fit: cover;
     box-shadow: var(--shadow-sm);
     background: var(--card);
@@ -595,7 +655,10 @@ pre.code .num  { color: #fcd5b4; }
 .lib-card .lib-icon-row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
+    /* Icon-row + heading + source-line all share the body padding
+       since the parent .lib-card now has zero padding. */
+    padding: 18px 22px 0 22px;
 }
 
 .lib-card .lib-icon-row h3 { margin: 0; }

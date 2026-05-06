@@ -27,6 +27,12 @@ final class Progress
 {
     public readonly float $percent;
 
+    /** @var list<Color> */
+    public readonly array $gradientStops;
+
+    /** @var ?\Closure(int, int, float): Color */
+    private readonly ?\Closure $colorFunc;
+
     public function __construct(
         float $percent = 0.0,
         public readonly int $width = 40,
@@ -39,14 +45,15 @@ final class Progress
         public readonly ?Color $gradientStart = null,
         public readonly ?Color $gradientEnd   = null,
         public readonly string $percentFormat = '%3d%%',
+        array $gradientStops = [],
+        ?\Closure $colorFunc = null,
     ) {
         if ($width < 0) {
             throw new \InvalidArgumentException('progress width must be >= 0');
         }
-        // Clamp at construction time so direct `new Progress(...)` callers
-        // can't smuggle in an out-of-range value that later turns into a
-        // negative str_repeat() count and crashes view().
         $this->percent = max(0.0, min(1.0, $percent));
+        $this->gradientStops = array_values($gradientStops);
+        $this->colorFunc = $colorFunc;
     }
 
     public static function new(): self
@@ -118,6 +125,50 @@ final class Progress
     }
 
     /**
+     * Multi-stop colour gradient. Two or more {@see Color}s are evenly
+     * distributed across the bar's filled cells; pairs of adjacent
+     * stops drive linear blends. Mirrors upstream Bubbles'
+     * `WithColors(...colors)`.
+     *
+     * Passing a single colour acts like {@see withSolidFill()};
+     * passing zero clears every gradient setting.
+     */
+    public function withColors(Color ...$colors): self
+    {
+        if ($colors === []) {
+            return $this->mutate(
+                gradientStops: [], gradientStopsSet: true,
+                gradientStart: null, gradientStartSet: true,
+                gradientEnd: null, gradientEndSet: true,
+            );
+        }
+        if (count($colors) === 1) {
+            return $this->withSolidFill($colors[0]);
+        }
+        return $this->mutate(
+            gradientStops: array_values($colors), gradientStopsSet: true,
+            // Mirror the first/last stops onto the legacy fields for
+            // back-compat — callers that read $gradientStart/End get
+            // sensible values.
+            gradientStart: $colors[0],                 gradientStartSet: true,
+            gradientEnd:   $colors[count($colors) - 1], gradientEndSet: true,
+        );
+    }
+
+    /**
+     * Closure invoked per filled cell to produce a {@see Color}:
+     * `fn(int $cell, int $totalCells, float $percent): Color`.
+     * Wins over every other colour setting when set. Mirrors
+     * upstream `WithColorFunc`.
+     *
+     * Pass `null` to clear.
+     */
+    public function withColorFunc(?\Closure $fn): self
+    {
+        return $this->mutate(colorFunc: $fn, colorFuncSet: true);
+    }
+
+    /**
      * Custom format string for the percent suffix. Receives the
      * 0-100 integer via printf, e.g. `'%3d%%'` (default), `'%5.1f%%'`,
      * or `'(%d%%)'`. Mirrors Bubbles' `PercentFormat`.
@@ -152,8 +203,13 @@ final class Progress
         $filledCells = (int) round($this->percent * $barWidth);
         $emptyCells  = $barWidth - $filledCells;
 
-        // Gradient takes priority over flat fillColor.
-        if ($this->gradientStart !== null && $this->gradientEnd !== null && $filledCells > 0) {
+        // Precedence (highest first): colorFunc > multi-stop gradient
+        // > 2-stop gradient > flat fillColor > no colour.
+        if ($this->colorFunc !== null && $filledCells > 0) {
+            $full = $this->renderColorFunc($filledCells);
+        } elseif (count($this->gradientStops) >= 2 && $filledCells > 0) {
+            $full = $this->renderMultiStopGradient($filledCells);
+        } elseif ($this->gradientStart !== null && $this->gradientEnd !== null && $filledCells > 0) {
             $full = $this->renderGradient($filledCells);
         } else {
             $full = str_repeat($this->fullChar, $filledCells);
@@ -192,6 +248,53 @@ final class Progress
         return $out;
     }
 
+    /**
+     * Render `$cells` filled glyphs across N evenly-spaced colour
+     * stops. Each cell's colour is the linear blend of its bracketing
+     * pair of stops.
+     */
+    private function renderMultiStopGradient(int $cells): string
+    {
+        $stops = $this->gradientStops;
+        $n = count($stops);
+        if ($cells <= 0 || $n < 2) {
+            return '';
+        }
+        $out = '';
+        $segments = $n - 1;
+        for ($i = 0; $i < $cells; $i++) {
+            $t = $cells === 1 ? 0.0 : $i / ($cells - 1);
+            $segPos = $t * $segments;
+            $segIdx = (int) floor($segPos);
+            if ($segIdx >= $segments) {
+                $segIdx = $segments - 1;
+            }
+            $localT = $segPos - $segIdx;
+            $c = $stops[$segIdx]->blend($stops[$segIdx + 1], $localT);
+            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+        }
+        return $out;
+    }
+
+    /**
+     * Render `$cells` filled glyphs by invoking the user's colour
+     * closure for each. Closure shape:
+     * `fn(int $cell, int $totalCells, float $percent): Color`.
+     */
+    private function renderColorFunc(int $cells): string
+    {
+        if ($cells <= 0 || $this->colorFunc === null) {
+            return '';
+        }
+        $out = '';
+        for ($i = 0; $i < $cells; $i++) {
+            /** @var Color $c */
+            $c = ($this->colorFunc)($i, $cells, $this->percent);
+            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+        }
+        return $out;
+    }
+
     private function mutate(
         ?float $percent = null,
         ?int $width = null,
@@ -204,6 +307,8 @@ final class Progress
         ?Color $gradientStart = null, bool $gradientStartSet = false,
         ?Color $gradientEnd = null, bool $gradientEndSet = false,
         ?string $percentFormat = null,
+        ?array $gradientStops = null, bool $gradientStopsSet = false,
+        ?\Closure $colorFunc = null, bool $colorFuncSet = false,
     ): self {
         return new self(
             percent:        $percent       ?? $this->percent,
@@ -217,6 +322,8 @@ final class Progress
             gradientStart:  $gradientStartSet ? $gradientStart : $this->gradientStart,
             gradientEnd:    $gradientEndSet   ? $gradientEnd   : $this->gradientEnd,
             percentFormat:  $percentFormat ?? $this->percentFormat,
+            gradientStops:  $gradientStopsSet ? ($gradientStops ?? []) : $this->gradientStops,
+            colorFunc:      $colorFuncSet  ? $colorFunc       : $this->colorFunc,
         );
     }
 
