@@ -24,9 +24,11 @@ final class PagerCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addOption('file',   'f', InputOption::VALUE_REQUIRED, 'Input file. Default: stdin.')
-            ->addOption('width',  null, InputOption::VALUE_REQUIRED, 'Pager width.',  80)
-            ->addOption('height', null, InputOption::VALUE_REQUIRED, 'Pager height.', 20);
+            ->addOption('file',               'f',  InputOption::VALUE_REQUIRED, 'Input file. Default: stdin.')
+            ->addOption('width',              null, InputOption::VALUE_REQUIRED, 'Pager width.',  80)
+            ->addOption('height',             null, InputOption::VALUE_REQUIRED, 'Pager height.', 20)
+            ->addOption('show-line-numbers',  null, InputOption::VALUE_NONE,     'Prefix every line with a 1-based line number.')
+            ->addOption('match',              null, InputOption::VALUE_REQUIRED, 'Highlight every case-insensitive occurrence of the substring.', '');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -39,7 +41,13 @@ final class PagerCommand extends Command
             return Command::FAILURE;
         }
 
-        $model   = PagerModel::fromContent($raw, (int) $input->getOption('width'), (int) $input->getOption('height'));
+        $model   = PagerModel::fromContent(
+            $raw,
+            (int)    $input->getOption('width'),
+            (int)    $input->getOption('height'),
+            (bool)   $input->getOption('show-line-numbers'),
+            (string) $input->getOption('match'),
+        );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,

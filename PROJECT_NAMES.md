@@ -1,3 +1,11 @@
+# Project naming — decision history
+
+> The **canonical upstream → SugarCraft port mapping** lives in
+> [MATCHUPS.md](./MATCHUPS.md). This file is the open-ended naming
+> sketchpad — early ideas, rejected names, and the rationale behind
+> the prefix system (Candy- / Sugar- / Honey-). When you're adding a
+> new library, pick a name here, add it to MATCHUPS.md, then follow
+> the contributor playbook in [AGENTS.md](./AGENTS.md).
 
 ### ✅ Strong (keep / build around)
 
