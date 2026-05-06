@@ -105,4 +105,20 @@ final class StopwatchTest extends TestCase
         $this->assertFalse($s2->isRunning());
         $this->assertNull($cmd);
     }
+
+    public function testIntervalGetter(): void
+    {
+        $s = Stopwatch::new(0.5);
+        $this->assertSame(0.5, $s->interval());
+    }
+
+    public function testWithIntervalPreservesElapsedAndId(): void
+    {
+        $s = Stopwatch::new(1.0);
+        [$s, ] = $s->start();
+        $s2 = $s->withInterval(0.25);
+        $this->assertSame(0.25, $s2->interval());
+        $this->assertTrue($s2->isRunning());
+        $this->assertSame($s->id(), $s2->id());
+    }
 }

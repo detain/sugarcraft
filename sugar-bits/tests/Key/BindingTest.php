@@ -112,4 +112,23 @@ final class BindingTest extends TestCase
         $j = new KeyMsg(KeyType::Char, 'j');
         $this->assertFalse(Binding::any($j, $down, $other));
     }
+
+    public function testWithDisabledFactory(): void
+    {
+        $b = Binding::withDisabled(['?'], new Help('?', 'help'));
+        $this->assertFalse($b->enabled());
+        $this->assertSame(['?'], $b->getKeys());
+        $this->assertSame('?', $b->getHelp()->key);
+        $this->assertFalse($b->matches(new KeyMsg(KeyType::Char, '?')));
+    }
+
+    public function testNewFactoryAcceptsDefaults(): void
+    {
+        $b = Binding::new();
+        $this->assertSame([], $b->getKeys());
+        $this->assertTrue($b->enabled());
+
+        $c = Binding::new(keys: ['ctrl+c'], help: new Help('ctrl+c', 'quit'));
+        $this->assertTrue($c->matches(new KeyMsg(KeyType::Char, 'c', ctrl: true)));
+    }
 }

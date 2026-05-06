@@ -79,4 +79,28 @@ final class Spinner implements Model
      * Mirrors upstream Bubbles `ID()`.
      */
     public function id(): int { return $this->id; }
+
+    /**
+     * Read-only access to the active {@see Style}. Mirrors upstream's
+     * public `Spinner` field, which callers inspect to read frame
+     * counts, colour, FPS, etc. The same data is reachable via the
+     * already-public `style` property; the method form is provided
+     * for parity with the rest of the read-only API surface.
+     */
+    public function style(): Style { return $this->style; }
+
+    /** Current frame index (0-based, modulo `count(style->frames)`). */
+    public function frame(): int { return $this->frame; }
+
+    /**
+     * Swap the spinner style mid-flight. Frame index resets to 0 so the
+     * new style starts from its first frame. The next tick adopts the
+     * new style's interval automatically. Mirrors upstream's mutable
+     * `Spinner` field assignment (rendered immutable here so snapshot-
+     * based tests stay deterministic).
+     */
+    public function withStyle(Style $style): self
+    {
+        return new self($style, 0, $this->id);
+    }
 }

@@ -122,6 +122,35 @@ final class Timer implements Model
      */
     public function id(): int { return $this->id; }
 
+    /**
+     * Tick cadence in seconds. Mirrors the upstream `Interval` field
+     * which Bubbles exposes for inspection by surrounding code (e.g.
+     * progress bars syncing animation frames to the tick interval).
+     */
+    public function interval(): float { return $this->interval; }
+
+    /**
+     * Remaining duration in seconds. Mirrors the upstream `Timeout`
+     * field. Returns 0 for a timer that has fired its
+     * {@see TimeoutMsg}; returns the original duration before
+     * {@see start()} is called.
+     */
+    public function timeout(): float { return $this->remaining; }
+
+    /**
+     * Recreate the timer with a new interval. Stopped/running state and
+     * the remaining duration are preserved. Mirrors upstream's mutable
+     * `Interval` field assignment (which we render immutable here so
+     * snapshot-based tests stay deterministic).
+     */
+    public function withInterval(float $interval): self
+    {
+        if ($interval <= 0.0) {
+            throw new \InvalidArgumentException('timer interval must be > 0');
+        }
+        return new self($this->remaining, $interval, $this->running, $this->timedOut, $this->id);
+    }
+
     private function tick(): \Closure
     {
         $id = $this->id;

@@ -457,6 +457,36 @@ final class TextArea implements Model
 
     public function lineCount(): int { return count($this->lines); }
 
+    // ---- public read-only accessors ---------------------------------
+
+    /** Mirrors upstream Bubbles `Focused()` — true when the area accepts input. */
+    public function focused(): bool { return $this->focused; }
+
+    /** Read-only access to the embedded {@see Cursor}. */
+    public function cursor(): Cursor { return $this->cursor; }
+
+    /** Currently-active line (0-based). Mirrors upstream `Line()`. */
+    public function line(): int { return $this->row; }
+
+    /** Cursor column on {@see line()} (0-based, codepoint count). Mirrors `Column()`. */
+    public function column(): int { return $this->col; }
+
+    /** Configured visible width in cells (0 = unbounded). */
+    public function getWidth(): int { return $this->width; }
+
+    /** Configured visible height in rows (0 = unbounded). */
+    public function getHeight(): int { return $this->height; }
+
+    /** Vertical scroll offset (0-based row index of the topmost visible line). */
+    public function getRowOffset(): int { return $this->rowOffset; }
+
+    /**
+     * Idiomatic split for callers that prefer dedicated setters over
+     * the bundled `with*` chain. Mirrors upstream's `SetWidth(int)`.
+     */
+    public function setWidth(int $w): self  { return $this->withWidth($w); }
+    public function setHeight(int $h): self { return $this->withHeight($h); }
+
     // ---- editing primitives -----------------------------------------
 
     private function insert(string $rune): self

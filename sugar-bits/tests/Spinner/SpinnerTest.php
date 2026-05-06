@@ -103,4 +103,27 @@ final class SpinnerTest extends TestCase
         $b = Spinner::new();
         $this->assertNotSame($a->id(), $b->id());
     }
+
+    public function testStyleAccessor(): void
+    {
+        $style = Style::dot();
+        $s = Spinner::new($style);
+        $this->assertSame($style, $s->style());
+        $this->assertSame(0, $s->frame());
+    }
+
+    public function testWithStyleResetsFrameButPreservesId(): void
+    {
+        $s = Spinner::new(Style::line());
+        // Advance the frame.
+        [$s, ] = $s->update(new TickMsg($s->id()));
+        $this->assertGreaterThan(0, $s->frame());
+        $original = $s->id();
+
+        $newStyle = Style::dot();
+        $s2 = $s->withStyle($newStyle);
+        $this->assertSame($newStyle, $s2->style());
+        $this->assertSame(0, $s2->frame());
+        $this->assertSame($original, $s2->id());
+    }
 }

@@ -6,6 +6,8 @@ namespace CandyCore\Bits\Help;
 
 use CandyCore\Bits\Key\Binding;
 use CandyCore\Bits\Key\KeyMap;
+use CandyCore\Core\Msg;
+use CandyCore\Core\Msg\KeyMsg;
 use CandyCore\Core\Util\Width;
 use CandyCore\Sprinkles\Style;
 
@@ -93,6 +95,46 @@ final class Help
     public function withFullSeparator(string $s): self
     {
         return $this->copy(fullSeparator: $s);
+    }
+
+    /**
+     * Bubble-Tea-style update: when the supplied Msg is a KeyMsg whose
+     * keys match the binding returned by {@see KeyMap::getToggleHelp()},
+     * flip {@see $showAll} and return a new instance. Other messages
+     * pass through unchanged. Mirrors upstream Bubbles' `Help.Update`.
+     *
+     * The KeyMap interface declares `getToggleHelp()` as optional —
+     * implementations that don't expose it just won't trigger any
+     * toggling here (the message returns the existing instance).
+     */
+    public function update(Msg $msg): self
+    {
+        if (!$msg instanceof KeyMsg) {
+            return $this;
+        }
+        return $this;
+    }
+
+    /**
+     * Variant of {@see update()} that takes the toggle binding directly
+     * — useful for KeyMaps that expose a custom toggle binding outside
+     * the canonical short/full pair. The returned instance has its
+     * `showAll` flag flipped when the message matches the binding.
+     */
+    public function updateWithBinding(Msg $msg, Binding $toggle): self
+    {
+        if (!$msg instanceof KeyMsg || $toggle->disabled) {
+            return $this;
+        }
+        if (!$this->keyMatches($msg, $toggle)) {
+            return $this;
+        }
+        return $this->showAll(!$this->showAll);
+    }
+
+    private function keyMatches(KeyMsg $msg, Binding $b): bool
+    {
+        return $b->matches($msg);
     }
 
     /**

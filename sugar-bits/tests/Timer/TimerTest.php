@@ -134,4 +134,27 @@ final class TimerTest extends TestCase
         $this->assertFalse($t->isRunning());
         $this->assertNull($cmd);
     }
+
+    public function testIntervalAndTimeoutGetters(): void
+    {
+        $t = Timer::new(5.0, 0.5);
+        $this->assertSame(0.5, $t->interval());
+        $this->assertSame(5.0, $t->timeout());
+    }
+
+    public function testWithIntervalReplacesIntervalOnly(): void
+    {
+        $t = Timer::new(5.0, 1.0);
+        $t2 = $t->withInterval(0.25);
+        $this->assertSame(0.25, $t2->interval());
+        $this->assertSame(5.0, $t2->timeout());
+        $this->assertFalse($t2->isRunning());
+        $this->assertSame($t->id(), $t2->id());
+    }
+
+    public function testWithIntervalRejectsNonPositive(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Timer::new(1.0)->withInterval(0.0);
+    }
 }

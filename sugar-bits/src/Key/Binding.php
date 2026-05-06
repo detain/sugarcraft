@@ -25,6 +25,36 @@ final class Binding
         public readonly bool $disabled = false,
     ) {}
 
+    /**
+     * Construct a disabled-from-the-start binding. Equivalent to
+     * `(new Binding($keys, $help))->disable()` — kept as a factory so
+     * callers configuring a KeyMap up front can express the intent
+     * inline. Mirrors upstream Bubbles' `key.WithDisabled`.
+     *
+     * @param list<string> $keys
+     */
+    public static function withDisabled(array $keys, Help $help = new Help()): self
+    {
+        return new self(array_values($keys), $help, true);
+    }
+
+    /**
+     * Variadic factory mirroring upstream Bubbles' `key.NewBinding`.
+     * Without options the binding is enabled with no keys / no help.
+     * Pass options as keyword args:
+     *
+     * ```php
+     * Binding::new(keys: ['ctrl+c'], help: new Help('ctrl+c', 'quit'));
+     * Binding::new(keys: ['?'], help: new Help('?', 'help'), disabled: true);
+     * ```
+     *
+     * @param list<string> $keys
+     */
+    public static function new(array $keys = [], Help $help = new Help(), bool $disabled = false): self
+    {
+        return new self(array_values($keys), $help, $disabled);
+    }
+
     public function matches(KeyMsg $msg): bool
     {
         if ($this->disabled) {

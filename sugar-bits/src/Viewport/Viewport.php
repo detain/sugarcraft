@@ -133,6 +133,37 @@ final class Viewport implements Model
         return $this->copy(width: $width, height: $height)->clamp();
     }
 
+    /**
+     * Resize only the visible width. Mirrors upstream Bubbles'
+     * `Viewport.SetWidth(int)` — separate from `SetHeight` so callers
+     * can resize one axis at a time without rebuilding the whole
+     * geometry. Negative values throw.
+     */
+    public function setWidth(int $width): self
+    {
+        if ($width < 0) {
+            throw new \InvalidArgumentException('viewport width must be >= 0');
+        }
+        return $this->copy(width: $width)->clamp();
+    }
+
+    /**
+     * Resize only the visible height. Mirrors upstream Bubbles'
+     * `Viewport.SetHeight(int)`. Negative values throw.
+     */
+    public function setHeight(int $height): self
+    {
+        if ($height < 0) {
+            throw new \InvalidArgumentException('viewport height must be >= 0');
+        }
+        return $this->copy(height: $height)->clamp();
+    }
+
+    /** Read-only accessor for the configured visible width (cells). */
+    public function getWidth(): int  { return $this->width; }
+    /** Read-only accessor for the configured visible height (rows). */
+    public function getHeight(): int { return $this->height; }
+
     /** Direct seek to `$offset`. Clamped to `[0, maxOffset]`. */
     public function setYOffset(int $offset): self
     {

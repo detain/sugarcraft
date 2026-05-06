@@ -213,4 +213,28 @@ final class ViewportTest extends TestCase
         $v = Viewport::new(5, 1)->setContent('abcdefghij')->setXOffset(3);
         $this->assertSame('defghij', $v->view());
     }
+
+    public function testSetWidthAndSetHeightAreIndependent(): void
+    {
+        $v = Viewport::new(20, 5);
+        $v2 = $v->setWidth(40);
+        $this->assertSame(40, $v2->getWidth());
+        $this->assertSame(5, $v2->getHeight());
+
+        $v3 = $v2->setHeight(10);
+        $this->assertSame(40, $v3->getWidth());
+        $this->assertSame(10, $v3->getHeight());
+    }
+
+    public function testSetWidthRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Viewport::new(20, 5)->setWidth(-1);
+    }
+
+    public function testSetHeightRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Viewport::new(20, 5)->setHeight(-1);
+    }
 }

@@ -353,4 +353,33 @@ final class TextAreaTest extends TestCase
             ->setPromptFunc(null);
         $this->assertStringContainsString('> hi', $t->view());
     }
+
+    public function testFocusedAndCursorAccessors(): void
+    {
+        $t = TextArea::new();
+        $this->assertFalse($t->focused());
+        [$t, ] = $t->focus();
+        $this->assertTrue($t->focused());
+        $this->assertNotNull($t->cursor());
+    }
+
+    public function testLineAndColumnTrackPosition(): void
+    {
+        [$t, ] = TextArea::new()->setValue("hello\nworld")->focus();
+        // After setValue, the cursor sits at end-of-buffer (1, 5).
+        $this->assertSame(1, $t->line());
+        $this->assertSame(5, $t->column());
+
+        $t = $t->setCursor(0, 2);
+        $this->assertSame(0, $t->line());
+        $this->assertSame(2, $t->column());
+    }
+
+    public function testWidthHeightGettersAndSetters(): void
+    {
+        $t = TextArea::new()->setWidth(40)->setHeight(8);
+        $this->assertSame(40, $t->getWidth());
+        $this->assertSame(8, $t->getHeight());
+        $this->assertSame(0, $t->getRowOffset());
+    }
 }

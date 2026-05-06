@@ -107,6 +107,26 @@ final class Stopwatch implements Model
     /** Elapsed wall-clock seconds since the last reset / new(). */
     public function elapsed(): float { return $this->elapsed; }
 
+    /**
+     * Tick cadence in seconds. Mirrors the upstream `Interval` field
+     * which Bubbles exposes for inspection by surrounding code.
+     */
+    public function interval(): float { return $this->interval; }
+
+    /**
+     * Recreate the stopwatch with a new interval. Elapsed time and
+     * running state are preserved. Mirrors upstream's mutable
+     * `Interval` field assignment (rendered immutable here so
+     * snapshot-based tests stay deterministic).
+     */
+    public function withInterval(float $interval): self
+    {
+        if ($interval <= 0.0) {
+            throw new \InvalidArgumentException('stopwatch interval must be > 0');
+        }
+        return new self($this->elapsed, $interval, $this->running, $this->id);
+    }
+
     private function tick(): \Closure
     {
         $id = $this->id;

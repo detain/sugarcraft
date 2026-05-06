@@ -213,4 +213,31 @@ final class HelpTest extends TestCase
         $this->assertSame($bold, $s->fullDesc);
         $this->assertSame($bold, $s->ellipsis);
     }
+
+    public function testUpdateWithBindingTogglesShowAll(): void
+    {
+        $h = new Help();
+        $this->assertFalse($h->showAll);
+        $toggle = (new Binding(['?']))->withHelp('?', 'help');
+        $h2 = $h->updateWithBinding(new \CandyCore\Core\Msg\KeyMsg(\CandyCore\Core\KeyType::Char, '?'), $toggle);
+        $this->assertTrue($h2->showAll);
+        $h3 = $h2->updateWithBinding(new \CandyCore\Core\Msg\KeyMsg(\CandyCore\Core\KeyType::Char, '?'), $toggle);
+        $this->assertFalse($h3->showAll);
+    }
+
+    public function testUpdateWithBindingIgnoresUnrelatedKey(): void
+    {
+        $h = new Help();
+        $toggle = (new Binding(['?']))->withHelp('?', 'help');
+        $h2 = $h->updateWithBinding(new \CandyCore\Core\Msg\KeyMsg(\CandyCore\Core\KeyType::Char, 'x'), $toggle);
+        $this->assertFalse($h2->showAll);
+    }
+
+    public function testUpdateWithBindingIgnoresDisabled(): void
+    {
+        $h = new Help();
+        $toggle = (Binding::withDisabled(['?']))->withHelp('?', 'help');
+        $h2 = $h->updateWithBinding(new \CandyCore\Core\Msg\KeyMsg(\CandyCore\Core\KeyType::Char, '?'), $toggle);
+        $this->assertFalse($h2->showAll);
+    }
 }
