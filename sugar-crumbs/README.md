@@ -1,3 +1,11 @@
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-crumbs)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-crumbs)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-crumbs?label=packagist)](https://packagist.org/packages/sugarcore/sugar-crumbs)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
 # SugarCrumbs
 
 PHP port of [KevM/bubbleo](https://github.com/KevM/bubbleo) — NavStack (navigation stack) and Breadcrumb components for terminal UIs.

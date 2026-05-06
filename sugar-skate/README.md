@@ -1,3 +1,11 @@
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-skate)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-skate)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-skate?label=packagist)](https://packagist.org/packages/sugarcore/sugar-skate)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
 # SugarSkate
 
 PHP port of [charmbracelet/skate](https://github.com/charmbracelet/skate) — a personal key/value store with multi-database support, binary data handling, and glob/list filtering.

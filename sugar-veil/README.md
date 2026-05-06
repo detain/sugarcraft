@@ -1,3 +1,11 @@
+<!-- BADGES:BEGIN -->
+[![CI](https://github.com/detain/sugarcraft/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/detain/sugarcraft/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-veil)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-veil)
+[![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-veil?label=packagist)](https://packagist.org/packages/sugarcore/sugar-veil)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+<!-- BADGES:END -->
+
 # SugarVeil
 
 PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) — modal/overlay compositing for terminal UIs. Composite one string (foreground) over another (background) at any position with optional pixel offsets.
