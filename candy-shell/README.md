@@ -31,24 +31,84 @@ name=$(candyshell input --placeholder "Your name?")
 candyshell confirm "Really delete $file?" && rm "$file"
 ```
 
-## Subcommands (MVP)
+## Subcommands
 
-- `style`   — apply Sprinkles styling to its argv (or stdin) and print.
-- `choose`  — select one item from a list; prints the selection.
-- `input`   — read a single line from the user.
-- `confirm` — yes/no; exit code `0` on yes, `1` on no.
+All 13 gum subcommands ship. Run `candyshell <cmd> --help` for the full
+flag list per command.
 
-## Roadmap (post-v0)
+| Command   | Role |
+|-----------|------|
+| `choose`  | Pick one or many items from a list. |
+| `confirm` | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
+| `file`    | Interactive file picker. |
+| `filter`  | Fuzzy filter over stdin lines (single- or multi-select). |
+| `format`  | Render Markdown / code / template / emoji to the terminal. |
+| `input`   | Read a single line; supports `--password` masking. |
+| `join`    | Concatenate two styled fragments side-by-side or stacked. |
+| `log`     | Levelled / structured log output (text · json · logfmt). |
+| `pager`   | Scrollable viewer for long input. |
+| `spin`    | Run an external command behind a spinner. |
+| `style`   | Apply Sprinkles styling to argv (or stdin). |
+| `table`   | Render a CSV / TSV table. |
+| `write`   | Multi-line text editor. |
 
-- `spin`     — show a spinner while running an external command.
-- `filter`   — fuzzy filter over stdin lines.
-- `format`   — render Markdown / templates.
-- `pager`    — scroll long input.
-- `table`    — render a CSV / TSV table.
-- `write`    — multi-line text editor.
-- `file`     — file picker.
-- `log`      — leveled logging output.
-- `join`     — string join.
+## Flag reference (selected highlights)
+
+The audit lists upstream-gum flags that are not yet wired in CandyShell.
+The shipped surface today covers the 80 % case for shell scripts; see
+[AUDIT_2026_05_06.md](../AUDIT_2026_05_06.md) for the full delta. Common
+flags across commands:
+
+- `--limit N` / `--no-limit` / `--ordered` / `--selected="a,b"` —
+  multi-select on `choose` and `filter`.
+- `--header "Email:"` / `--prompt "> "` / `--value "$LAST"` /
+  `--char-limit N` / `--width N` / `--max-lines N` / `--show-line-numbers`
+  on `input` / `write`.
+- `--affirmative "Yes"` / `--negative "No"` / `--default=yes|no` /
+  `--show-output` on `confirm`.
+- `--show-output` / `--show-error` plus 12 spinner styles
+  (`dot` · `line` · `pulse` · `globe` · `points` · `monkey` · `moon`
+  · `meter` · `mini-dot` · `hamburger` · `ellipsis` · `jump`) on `spin`.
+- `--min-level info` / `--prefix` / `--time RFC3339` / `--file out.log`
+  / `--formatter text|json|logfmt` / `--structured` on `log`.
+- `--border` / `--border-foreground "#ff0"` / `--height N` / `--trim`
+  on `style`.
+
+## Environment
+
+CandyShell respects standard CLI colour conventions:
+
+- **`NO_COLOR=1`** disables every SGR escape — output is plain ASCII.
+- **`CLICOLOR=0`** disables colour when stdout is not a TTY (otherwise
+  defaults to colour).
+- **`CLICOLOR_FORCE=1`** keeps colour even when stdout is piped or
+  redirected.
+- **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
+  TrueColor).
+
+## Exit codes
+
+- `0`   — normal completion. For `confirm`, this means the user picked
+  the affirmative answer.
+- `1`   — `confirm` declined; or non-zero exit forwarded from the
+  external command run by `spin`.
+- `130` — interrupted (Ctrl-C / SIGINT). Matches POSIX shell convention.
+
+## Porting from gum
+
+Most `gum X` invocations work as `candyshell X` verbatim. Known
+behavioural differences (also see
+[AUDIT_2026_05_06.md](../AUDIT_2026_05_06.md)):
+
+- `format` still uses `--theme` while gum uses `-t/--type` —
+  template-function support and the `emoji` / `template` types are
+  pending.
+- `--style` flags using the gum dotted form (`--header.foreground`,
+  `--cursor.foreground`, …) are not yet wired across every command.
+- `--timeout` / `--show-help` / `--padding` are not yet universally
+  honoured.
+- `confirm --default=yes|no` is the form to use; the older `--default-yes`
+  alias is no longer needed.
 
 ## Test
 
