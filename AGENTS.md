@@ -260,7 +260,7 @@ When the new lib lands, update **all four** of these:
 
 - Commit author **must** be `Joe Huss <detain@interserver.net>` for
   any maintainer-driven flow. CI infrastructure relies on this.
-- **Branch name**: `claude/<slug>-<short>` for AI-driven work,
+- **Branch name**: `agent/<slug>-<short>` for AI-driven work,
   `feat/<slug>-<short>` for human contributors.
 - **PR title**: `<lib>: <short summary> (audit #N)` when closing audit
   items, or `<lib>: <feature>` for feature work.
