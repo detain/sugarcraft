@@ -75,9 +75,33 @@ final class Counter implements Model
 ## Status
 
 - **Phase 0** (foundation utilities): 🟢 complete.
-- **Phase 3** (runtime): 🟡 ~40% — primitives + Program loop landed. Mouse, focus/blur, bracketed paste, function keys, and the diff renderer are upcoming.
+- **Phase 3** (runtime): 🟢 v1 — Program loop, mouse (cell-motion + all-motion + SGR 1006), focus / blur, bracketed paste, full function-key set including F13–F63 and the Kitty PUA range, the cell-diff "cursed" renderer (synchronized output 2026 + unicode mode 2027), inline-mode rendering, declarative `View` struct, plus the v2 Cmd surface (`Suspend` / `Interrupt` / `Resume` / `Exec` / `Sequence` / `Every` / `Printf` / `Raw` / `wait` / `kill` / `releaseTerminal` / `restoreTerminal`).
 
-See [../CONVERSION.md](../CONVERSION.md) for the full roadmap.
+See [../CONVERSION.md](../CONVERSION.md) for the full roadmap and the
+[v2 parity sweep](../CONVERSION.md#phase-11--v2-parity-sweep-bubble-tea--lipgloss--bubbles)
+table tracking each Bubble Tea v2 / Lipgloss v2 / Bubbles v2
+feature.
+
+## Companion libraries
+
+CandyCore is the foundation — the rest of the SugarCraft stack
+builds on it. From the same monorepo:
+
+- **CandySprinkles** (← lipgloss) — declarative styling + layout.
+- **SugarBits** (← bubbles) — 14 prebuilt components.
+- **SugarPrompt** (← huh) — multi-page form library.
+- **SugarCharts** (← ntcharts) — sparkline / bar / line / heatmap / OHLC.
+- **CandyShell** (← gum) — composer-installable CLI of 13 subcommands.
+- **CandyShine** (← glamour) — Markdown → ANSI renderer.
+- **CandyZone** (← bubblezone) — mouse-zone tracker.
+- **HoneyBounce** (← harmonica) — spring physics + Newtonian projectile sim.
+- **CandyKit** (← fang) — opinionated CLI presentation helpers.
+- **CandyFreeze** (← freeze) — code → SVG screenshot.
+- **CandyWish** (← wish) — SSH server middleware framework.
+- **SugarSpark** (← sequin) — ANSI escape-sequence inspector.
+
+See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
+package names, and namespace mappings.
 
 ## Test
 
