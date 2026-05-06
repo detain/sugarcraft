@@ -54,7 +54,22 @@
         { "type": "path", "url": "sugar-glow",      "options": { "symlink": true } },
         { "type": "path", "url": "sugar-prompt",    "options": { "symlink": true } },
         { "type": "path", "url": "sugar-spark",     "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-wishlist",  "options": { "symlink": true } }
+        { "type": "path", "url": "sugar-wishlist",  "options": { "symlink": true } },
+        { "type": "path", "url": "candy-log",  "options": { "symlink": true } },
+        { "type": "path", "url": "candy-palette",  "options": { "symlink": true } },
+        { "type": "path", "url": "candy-lister",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-boxer",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-veil",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-crumbs",  "options": { "symlink": true } },
+        { "type": "path", "url": "candy-hermit",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-stickers",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-toast",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-calendar",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-readline",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-table",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-skate",  "options": { "symlink": true } },
+        { "type": "path", "url": "sugar-post",  "options": { "symlink": true } },
+        { "type": "path", "url": "candy-serve",  "options": { "symlink": true } }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true
