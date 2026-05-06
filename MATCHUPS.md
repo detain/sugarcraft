@@ -46,7 +46,7 @@ Status legend:
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🔴 | Self-hostable Git server over SSH |
 | [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🟢 | Personal key/value store |
 | [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `candycore/sugar-post` | `CandyCore\Post` | 🟢 |
-| [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `candycore/candy-lister` | `CandyCore\Lister` | 🔴 | List view component with boxing support |
+| [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `candycore/candy-lister` | `CandyCore\Lister` | 🟢 |
 | [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) | **SugarBoxer** | `sugar-boxer/` | `candycore/sugar-boxer` | `CandyCore\Boxer` | 🔴 | Boxing/padding/whitespace component |
 | [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) | **SugarVeil** | `sugar-veil/` | `candycore/sugar-veil` | `CandyCore\Veil` | 🔴 | Modal / overlay window component |
 | [KevM/bubbleo](https://github.com/KevM/bubbleo) | **SugarCrumbs** | `sugar-crumbs/` | `candycore/sugar-crumbs` | `CandyCore\Crumbs` | 🔴 | NavStack / Breadcrumbs / Menu navigation components |
