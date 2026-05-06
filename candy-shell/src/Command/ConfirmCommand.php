@@ -34,6 +34,7 @@ final class ConfirmCommand extends Command
             ->addOption('affirmative', null, InputOption::VALUE_REQUIRED, 'Label for the yes option.',  'Yes')
             ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
             ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
+            ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
             ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
                 "Per-element style: '<elem>.<prop>=<value>'. Elements: prompt, selected, unselected.",
                 []
@@ -48,6 +49,11 @@ final class ConfirmCommand extends Command
 
         $affirm = (string) $input->getOption('affirmative');
         $negate = (string) $input->getOption('negative');
+
+        $header = (string) $input->getOption('header');
+        if ($header !== '') {
+            $output->writeln($header);
+        }
 
         $model   = ConfirmModel::newPrompt(
             title:       (string) $input->getArgument('question'),
