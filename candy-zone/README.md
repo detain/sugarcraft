@@ -42,6 +42,60 @@ so they don't affect layout. {@see Manager::scan()} computes each zone's
 bounding box in 1-based terminal cells, accounting for ANSI styling and
 Unicode width.
 
+## Manager API
+
+Beyond `mark()` / `scan()` / `get()`:
+
+- `setEnabled(bool)` / `isEnabled()` — flip marker emission off in
+  non-interactive contexts (CI logs, file dumps). When off, `mark()`
+  returns content verbatim and `scan()` is identity.
+- `Manager::newPrefix(?string)` — namespace every id with a prefix so
+  two CandyZone-aware components don't collide on `'item-0'`. Auto-
+  generates a monotonic prefix when called bare.
+- `prefix()` — read-only accessor for the prefix string.
+- `get($id)` / `all()` / `clear(?$id)` — single-zone lookup, every
+  zone, and targeted-or-wipe-all clear.
+- `close()` — drop every zone + flip the manager into pass-through
+  mode. Idempotent. PHP synchronous-scan has no worker to stop, so
+  this is purely a state cleanup.
+
+## Package-level facade
+
+`CandyCore\Zone\Zones` mirrors bubblezone's package-level surface
+(`bubblezone.DefaultManager` + `Mark` / `Scan` / `Clear` / `Get` /
+`Close` / `SetEnabled` / `Enabled` / `NewPrefix` / `AnyInBounds*`)
+as static methods over a single shared `Manager`:
+
+```php
+use CandyCore\Zone\Zones;
+
+$marked = Zones::mark('header', $header);
+$cleaned = Zones::scan($marked);
+if (Zones::get('header')?->inBounds($mouse)) { /* … */ }
+```
+
+`Zones::setDefaultManager(?Manager)` swaps in a custom manager —
+useful in tests (`Zones::setDefaultManager(null)` flushes state) or
+when you want every package-level call routed through a prefixed
+manager.
+
+## Tips
+
+- Each id should be unique within a `Manager`. Use
+  `Manager::newPrefix()` per UI sub-tree so two child models don't
+  shadow each other's ids.
+- Run `scan()` once on the **full root frame**, not per sub-tree —
+  nested zone bounds depend on the outer layout.
+- `lipgloss.Width()` (CandySprinkles) and CandyZone interact cleanly:
+  `scan()` strips markers before measurement.
+- `Zone::isZero()` distinguishes "never rendered" from "rendered but
+  empty bounding box".
+- Organic shapes (ASCII art) report a rectangular bounding box —
+  the marker pair only carries 4 corners' worth of information.
+- The PHP port has a synchronous `scan()` (no background worker), so
+  `close()` is purely a state reset / disable rather than a thread
+  join.
+
 ## Test
 
 ```sh
