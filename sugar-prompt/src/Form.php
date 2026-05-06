@@ -265,6 +265,111 @@ final class Form implements Model
         return $out;
     }
 
+    /**
+     * Untyped value lookup by key. Returns the field's raw `value()`
+     * for the given key, or `$default` when the key is unknown or the
+     * containing group is hidden.
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        $values = $this->values();
+        return array_key_exists($key, $values) ? $values[$key] : $default;
+    }
+
+    /**
+     * String accessor — coerces scalar or stringable values; arrays are
+     * imploded with `, ` to mirror huh's `GetString`. Returns `$default`
+     * on missing key or values that don't coerce sensibly.
+     */
+    public function getString(string $key, string $default = ''): string
+    {
+        $v = $this->get($key);
+        if ($v === null) {
+            return $default;
+        }
+        if (is_string($v)) {
+            return $v;
+        }
+        if (is_bool($v)) {
+            return $v ? 'true' : 'false';
+        }
+        if (is_int($v) || is_float($v)) {
+            return (string) $v;
+        }
+        if (is_array($v)) {
+            return implode(', ', array_map(static fn ($x) => (string) $x, $v));
+        }
+        if (is_object($v) && method_exists($v, '__toString')) {
+            return (string) $v;
+        }
+        return $default;
+    }
+
+    /**
+     * Int accessor — coerces numeric values via `(int) $v`. Strings
+     * that aren't numeric return `$default`.
+     */
+    public function getInt(string $key, int $default = 0): int
+    {
+        $v = $this->get($key);
+        if (is_int($v)) {
+            return $v;
+        }
+        if (is_float($v)) {
+            return (int) $v;
+        }
+        if (is_string($v) && is_numeric($v)) {
+            return (int) $v;
+        }
+        if (is_bool($v)) {
+            return $v ? 1 : 0;
+        }
+        return $default;
+    }
+
+    /**
+     * Bool accessor — true / false / "true" / "false" / "yes" / "no" /
+     * "1" / "0" / 1 / 0. Anything else returns `$default`.
+     */
+    public function getBool(string $key, bool $default = false): bool
+    {
+        $v = $this->get($key);
+        if (is_bool($v)) {
+            return $v;
+        }
+        if (is_int($v)) {
+            return $v !== 0;
+        }
+        if (is_string($v)) {
+            $low = strtolower(trim($v));
+            return match ($low) {
+                'true', 'yes', 'y', '1', 'on'   => true,
+                'false', 'no', 'n', '0', 'off' => false,
+                default                          => $default,
+            };
+        }
+        return $default;
+    }
+
+    /**
+     * Array accessor — returns a list when the underlying value is an
+     * array (multi-select); a single-element list when the value is
+     * a non-empty scalar; an empty list otherwise.
+     *
+     * @return list<mixed>
+     */
+    public function getArray(string $key): array
+    {
+        $v = $this->get($key);
+        if (is_array($v)) {
+            return array_values($v);
+        }
+        if ($v === null || $v === '' || $v === false) {
+            return [];
+        }
+        return [$v];
+    }
+
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
     public function focusedField(): ?Field
