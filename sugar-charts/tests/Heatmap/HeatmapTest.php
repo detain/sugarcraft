@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CandyCore\Charts\Tests\Heatmap;
 
 use CandyCore\Charts\Heatmap\Heatmap;
+use CandyCore\Charts\Heatmap\HeatPoint;
 use CandyCore\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 
@@ -105,5 +106,51 @@ final class HeatmapTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Heatmap::new([])->withPalette([Color::rgb(0, 0, 0)]);
+    }
+
+    public function testHeatPointConstructorsExposeFields(): void
+    {
+        $p = new HeatPoint(2, 3, 4.5);
+        $this->assertSame(2, $p->x);
+        $this->assertSame(3, $p->y);
+        $this->assertSame(4.5, $p->value);
+
+        $i = HeatPoint::ofInt(1, 0, 9);
+        $this->assertSame(1, $i->x);
+        $this->assertSame(0, $i->y);
+        $this->assertSame(9.0, $i->value);
+    }
+
+    public function testPushPointGrowsGrid(): void
+    {
+        $h = Heatmap::new([])->pushPoint(new HeatPoint(2, 1, 7.0));
+        // Grid should now have row 0 (empty), row 1 with [0,0,7].
+        $this->assertCount(2, $h->grid);
+        $this->assertSame([],          $h->grid[0]);
+        $this->assertSame([0, 0, 7.0], $h->grid[1]);
+    }
+
+    public function testPushPointOverwritesExistingCell(): void
+    {
+        $h = Heatmap::new([[1.0, 2.0], [3.0, 4.0]])
+            ->pushPoint(new HeatPoint(0, 0, 99.0));
+        $this->assertSame(99.0, $h->grid[0][0]);
+        $this->assertSame(2.0,  $h->grid[0][1]);
+    }
+
+    public function testPushAllStreamsEveryPoint(): void
+    {
+        $h = Heatmap::new([])->pushAll([
+            new HeatPoint(0, 0, 1.0),
+            HeatPoint::ofInt(1, 0, 2),
+            HeatPoint::ofInt(2, 0, 3),
+        ]);
+        $this->assertSame([1.0, 2.0, 3.0], $h->grid[0]);
+    }
+
+    public function testPushPointRejectsNegativeCoordinates(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Heatmap::new([])->pushPoint(new HeatPoint(-1, 0, 0));
     }
 }
