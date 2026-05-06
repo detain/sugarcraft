@@ -183,6 +183,77 @@ final class Program
         $this->send(new QuitMsg());
     }
 
+    /**
+     * Hard-stop the program. Unlike {@see quit()} (which routes through
+     * the message queue and lets the model react to {@see QuitMsg} on
+     * its next update tick), {@see kill()} stops the loop synchronously,
+     * tears down the terminal, and returns. The model is not notified.
+     */
+    public function kill(): void
+    {
+        if (!$this->running) {
+            return;
+        }
+        $this->running = false;
+        $this->loop->stop();
+    }
+
+    /**
+     * Block until the loop has stopped. Mirrors bubbletea's
+     * `Program.Wait()`. In PHP {@see run()} is itself a blocking call
+     * so this is mainly useful as a status query — it returns true if
+     * the program is no longer running.
+     */
+    public function wait(): bool
+    {
+        return !$this->running;
+    }
+
+    /**
+     * Release the terminal back to a cooked / line-buffered state so
+     * the caller can shell out to `$EDITOR`-style external commands
+     * without fighting the renderer for raw-mode keys. Pair with
+     * {@see restoreTerminal()} once the external command exits.
+     */
+    public function releaseTerminal(): void
+    {
+        $this->teardownTerminal();
+    }
+
+    /**
+     * Re-acquire the terminal after a {@see releaseTerminal()} call:
+     * re-enter alt screen / raw mode / mouse / paste / focus modes
+     * exactly as run() did at startup, then trigger a full repaint on
+     * the next tick.
+     */
+    public function restoreTerminal(): void
+    {
+        $this->setupTerminal();
+        $this->renderer->reset();
+        $this->dirty = true;
+    }
+
+    /**
+     * Print a single line above the program region. Equivalent to
+     * sending `Cmd::println($text)()` directly through the message
+     * queue, but reachable as an instance method for callers that hold
+     * a {@see Program} reference (matches bubbletea's
+     * `Program.Println(...)`).
+     */
+    public function println(string ...$parts): void
+    {
+        $this->send(new PrintMsg(implode(' ', $parts)));
+    }
+
+    /**
+     * sprintf-flavoured companion to {@see println()}. Mirrors
+     * bubbletea's `Program.Printf(format, args...)`.
+     */
+    public function printf(string $format, mixed ...$args): void
+    {
+        $this->send(new PrintMsg(sprintf($format, ...$args)));
+    }
+
     private function dispatch(Msg $msg): void
     {
         if ($msg instanceof BatchMsg) {

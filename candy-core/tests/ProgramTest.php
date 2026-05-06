@@ -701,4 +701,131 @@ final class ProgramTest extends TestCase
         fclose($in);
         fclose($out);
     }
+
+    public function testKillStopsLoopWithoutNotifyingModel(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->kill());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $final = $program->run();
+
+        // kill() bypasses the message queue: model only sees the 3
+        // startup msgs (WindowSize / Env / ColorProfile).
+        $this->assertCount(3, $final->log);
+        $this->assertTrue($program->wait());
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testWaitReturnsTrueAfterRun(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        // wait() before run() returns true (program not running yet).
+        $this->assertTrue($program->wait());
+
+        $program->quit();
+        $program->run();
+        $this->assertTrue($program->wait());
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testPrintlnConvenienceWritesAboveProgram(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->println('hello', 'world'));
+        $loop->addTimer(0.10, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $final = $program->run();
+        foreach ($final->log as $msg) {
+            $this->assertNotInstanceOf(PrintMsg::class, $msg);
+        }
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString("hello world\n", $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testPrintfConvenienceFormatsAndWrites(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->printf('count=%d ratio=%0.2f', 42, 0.5));
+        $loop->addTimer(0.10, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString("count=42 ratio=0.50\n", $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testReleaseAndRestoreTerminalAreReentrant(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $opts = new ProgramOptions(
+            useAltScreen: true,
+            catchInterrupts: false,
+            hideCursor: false,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        );
+        $program = new Program($model, $opts);
+        $loop->addTimer(0.03, function () use ($program): void {
+            // round-trip: release -> restore -> release -> restore
+            $program->releaseTerminal();
+            $program->restoreTerminal();
+            $program->releaseTerminal();
+            $program->restoreTerminal();
+        });
+        $loop->addTimer(0.08, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        // Alt-screen should have been entered + exited at least three
+        // times (once at startup + once per release/restore pair).
+        $this->assertGreaterThanOrEqual(3, substr_count($written, Ansi::altScreenEnter()));
+        $this->assertGreaterThanOrEqual(2, substr_count($written, Ansi::altScreenLeave()));
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
 }
