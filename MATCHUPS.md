@@ -41,7 +41,7 @@ Status legend:
 | [charmbracelet/wish](https://github.com/charmbracelet/wish) | **CandyWish** | `candy-wish/` | `candycore/candy-wish` | `CandyCore\Wish` | 🟢 | SSH-server middleware framework (leans on host `sshd`) |
 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** | `sugar-wishlist/` | `candycore/sugar-wishlist` | `CandyCore\Wishlist` | 🟢 | SSH endpoint launcher (YAML / JSON shortcuts directory) |
 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` | `candycore/candy-metrics` | `CandyCore\Metrics` | 🟢 | Telemetry primitives + CandyWish session middleware |
-| [charmbracelet/log](https://github.com/charmbracelet/log) | **CandyLog** | `candy-log/` | `candycore/candy-log` | `CandyCore\Log` | 🔴 | Minimal, colorful logging library |
+| [charmbracelet/log](https://github.com/charmbracelet/log) | **CandyLog** | `candy-log/` | `candycore/candy-log` | `CandyCore\Log` | 🟢 | Minimal, colorful logging library |
 | [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) | **CandyPalette** | `candy-palette/` | `candycore/candy-palette` | `CandyCore\Palette` | 🔴 | Terminal color detection + ICC profile handling |
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🔴 | Self-hostable Git server over SSH |
 | [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🔴 | Personal key/value store |
