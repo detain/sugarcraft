@@ -68,6 +68,43 @@ final class Sparkline
     public function withMin(?float $m): self { return new self($this->data, $this->width, $m, $this->max); }
     public function withMax(?float $m): self { return new self($this->data, $this->width, $this->min, $m); }
 
+    /**
+     * Append a single sample. Mirrors ntcharts'
+     * `Sparkline::Push(value)`. The window slide in {@see view()}
+     * keeps only the last `width` points, so callers can append
+     * indefinitely without trimming.
+     */
+    public function push(int|float $value): self
+    {
+        $next = $this->data;
+        $next[] = $value;
+        return new self($next, $this->width, $this->min, $this->max);
+    }
+
+    /**
+     * Append every sample in `$values`, in order. Mirrors ntcharts'
+     * `Sparkline::PushAll([]float64)`.
+     *
+     * @param list<int|float> $values
+     */
+    public function pushAll(array $values): self
+    {
+        if ($values === []) {
+            return $this;
+        }
+        $next = $this->data;
+        foreach ($values as $v) {
+            $next[] = $v;
+        }
+        return new self($next, $this->width, $this->min, $this->max);
+    }
+
+    /** Drop every recorded sample. Mirrors ntcharts' `Clear`. */
+    public function clear(): self
+    {
+        return new self([], $this->width, $this->min, $this->max);
+    }
+
     public function view(): string
     {
         $w = $this->width;

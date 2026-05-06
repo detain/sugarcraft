@@ -81,6 +81,47 @@ final class Heatmap
 
     public function withMin(?float $m): self  { return $this->copy(min: $m, minSet: true); }
     public function withMax(?float $m): self  { return $this->copy(max: $m, maxSet: true); }
+
+    /**
+     * Stream a single sample into the grid. Auto-grows the grid to
+     * accommodate `(x, y)` so callers don't need to pre-size. Cells
+     * outside the explicit bounding box are zero-filled until first
+     * write. Mirrors ntcharts' `Heatmap::Push(HeatPoint)`.
+     */
+    public function pushPoint(HeatPoint $p): self
+    {
+        if ($p->x < 0 || $p->y < 0) {
+            throw new \InvalidArgumentException('heat point coordinates must be >= 0');
+        }
+        $grid = $this->grid;
+        // Pad rows up to y inclusive.
+        while (count($grid) <= $p->y) {
+            $grid[] = [];
+        }
+        $row = $grid[$p->y];
+        // Pad columns within the row up to x inclusive.
+        while (count($row) <= $p->x) {
+            $row[] = 0;
+        }
+        $row[$p->x] = $p->value;
+        $grid[$p->y] = $row;
+        return $this->copy(grid: $grid);
+    }
+
+    /**
+     * Stream every supplied {@see HeatPoint} into the grid in order.
+     * Mirrors ntcharts' `Heatmap::PushAll`.
+     *
+     * @param list<HeatPoint> $points
+     */
+    public function pushAll(array $points): self
+    {
+        $next = $this;
+        foreach ($points as $p) {
+            $next = $next->pushPoint($p);
+        }
+        return $next;
+    }
     public function withRune(string $r): self { return $this->copy(rune: $r); }
     public function withColors(Color $cold, Color $hot): self
     {
