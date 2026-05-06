@@ -301,4 +301,87 @@ MD;
         $this->assertStringContainsString('alt text', $out);
         $this->assertStringContainsString('(http://x/y.png)', $out);
     }
+
+    public function testWithBaseURLPrefixesRelativeLinks(): void
+    {
+        $out = $this->plain()
+            ->withBaseURL('https://example.com/docs')
+            ->withHyperlinks(false)
+            ->render('[home](readme.md)');
+        $this->assertStringContainsString('(https://example.com/docs/readme.md)', $out);
+    }
+
+    public function testWithBaseURLLeavesAbsoluteLinksAlone(): void
+    {
+        $out = $this->plain()
+            ->withBaseURL('https://example.com/')
+            ->withHyperlinks(false)
+            ->render('[gh](https://github.com/x/y)');
+        $this->assertStringContainsString('(https://github.com/x/y)', $out);
+        $this->assertStringNotContainsString('example.com', $out);
+    }
+
+    public function testWithBaseURLPrefixesImages(): void
+    {
+        $out = $this->plain()
+            ->withBaseURL('https://cdn.example.com/')
+            ->render('![logo](logo.png)');
+        $this->assertStringContainsString('(https://cdn.example.com/logo.png)', $out);
+    }
+
+    public function testWithTableWrapWrapsCells(): void
+    {
+        $md  = "| h |\n|---|\n| this is a long cell that should wrap |\n";
+        $unwrapped = $this->plain()->render($md);
+        $wrapped = $this->plain()
+            ->withWordWrap(15)
+            ->withTableWrap(true)
+            ->render($md);
+        // Wrapped output must contain at least one extra newline that
+        // unwrapped doesn't, since the cell body now spans multiple
+        // visible lines.
+        $this->assertGreaterThan(
+            substr_count($unwrapped, "\n"),
+            substr_count($wrapped, "\n"),
+        );
+    }
+
+    public function testWithInlineTableLinksOff(): void
+    {
+        $md = "| col |\n|-----|\n| [home](https://example.com/) |\n";
+        $out = $this->plain()
+            ->withInlineTableLinks(false)
+            ->withHyperlinks(false)
+            ->render($md);
+        $this->assertStringNotContainsString('(https://example.com/)', $out);
+        $this->assertStringContainsString('home', $out);
+    }
+
+    public function testWithInlineTableLinksOnByDefault(): void
+    {
+        $md = "| col |\n|-----|\n| [home](https://example.com/) |\n";
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render($md);
+        $this->assertStringContainsString('(https://example.com/)', $out);
+    }
+
+    public function testWithPreservedNewLines(): void
+    {
+        $md = "first\n\n\n\n\nlast";
+        $out = $this->plain()
+            ->withPreservedNewLines(true)
+            ->render($md);
+        $this->assertStringContainsString('first', $out);
+        $this->assertStringContainsString('last',  $out);
+        $this->assertGreaterThan(2, substr_count($out, "\n"));
+    }
+
+    public function testPreservedNewLinesOffByDefault(): void
+    {
+        $md = "first\n\n\n\n\nlast";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('first', $out);
+        $this->assertStringContainsString('last',  $out);
+    }
 }

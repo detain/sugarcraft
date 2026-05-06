@@ -55,12 +55,28 @@ final class Renderer
     private readonly MarkdownParser $parser;
     private readonly ?int $wrapWidth;
     private readonly bool $emitHyperlinks;
+    private readonly ?string $baseUrl;
+    private readonly bool $tableWrap;
+    private readonly bool $inlineTableLinks;
+    private readonly bool $preservedNewLines;
+    private bool $inTableCell = false;
 
-    public function __construct(?Theme $theme = null, ?int $wrapWidth = null, bool $emitHyperlinks = true)
-    {
+    public function __construct(
+        ?Theme $theme = null,
+        ?int $wrapWidth = null,
+        bool $emitHyperlinks = true,
+        ?string $baseUrl = null,
+        bool $tableWrap = false,
+        bool $inlineTableLinks = true,
+        bool $preservedNewLines = false,
+    ) {
         $this->theme = $theme ?? Theme::ansi();
         $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
         $this->emitHyperlinks = $emitHyperlinks;
+        $this->baseUrl = $baseUrl;
+        $this->tableWrap = $tableWrap;
+        $this->inlineTableLinks = $inlineTableLinks;
+        $this->preservedNewLines = $preservedNewLines;
 
         $env = new Environment();
         $env->addExtension(new CommonMarkCoreExtension());
@@ -88,7 +104,7 @@ final class Renderer
 
     public function withTheme(Theme $theme): self
     {
-        return new self($theme, $this->wrapWidth, $this->emitHyperlinks);
+        return $this->copy(theme: $theme);
     }
 
     /**
@@ -100,7 +116,7 @@ final class Renderer
      */
     public function withWordWrap(?int $cols): self
     {
-        return new self($this->theme, $cols, $this->emitHyperlinks);
+        return $this->copy(wrapWidth: $cols, wrapWidthSet: true);
     }
 
     /**
@@ -111,14 +127,133 @@ final class Renderer
      */
     public function withHyperlinks(bool $on = true): self
     {
-        return new self($this->theme, $this->wrapWidth, $on);
+        return $this->copy(emitHyperlinks: $on);
+    }
+
+    /**
+     * Base URL prefixed onto relative `[text](path)` link / image targets.
+     * URLs that already have a scheme (http://, https://, mailto:, …)
+     * pass through unchanged. Mirrors glamour's `WithBaseURL`.
+     */
+    public function withBaseURL(?string $url): self
+    {
+        $url = $url === null || $url === '' ? null : rtrim($url, '/') . '/';
+        return $this->copy(baseUrl: $url, baseUrlSet: true);
+    }
+
+    /**
+     * Wrap text inside table cells at the renderer's word-wrap width.
+     * Default off (cells render unwrapped, matching glamour's default).
+     * Mirrors glamour's `WithTableWrap`.
+     */
+    public function withTableWrap(bool $on = true): self
+    {
+        return $this->copy(tableWrap: $on);
+    }
+
+    /**
+     * Whether links inside table cells render as inline `[text](url)`
+     * pairs (default — terse, scannable) or as full hyperlinks. When
+     * false, table cells suppress the trailing `(url)` and OSC-8 envelope
+     * since they bloat narrow columns. Mirrors glamour's
+     * `WithInlineTableLinks`.
+     */
+    public function withInlineTableLinks(bool $on = true): self
+    {
+        return $this->copy(inlineTableLinks: $on);
+    }
+
+    /**
+     * Preserve consecutive blank lines in source markdown. By default
+     * CommonMark collapses runs of blank lines; with this on, every
+     * `\n\n+` in the source survives into the output. Mirrors glamour's
+     * `WithPreservedNewLines`.
+     */
+    public function withPreservedNewLines(bool $on = true): self
+    {
+        return $this->copy(preservedNewLines: $on);
+    }
+
+    /** @internal copy-with-overrides for chainable builders. */
+    private function copy(
+        ?Theme $theme = null,
+        ?int $wrapWidth = null, bool $wrapWidthSet = false,
+        ?bool $emitHyperlinks = null,
+        ?string $baseUrl = null, bool $baseUrlSet = false,
+        ?bool $tableWrap = null,
+        ?bool $inlineTableLinks = null,
+        ?bool $preservedNewLines = null,
+    ): self {
+        return new self(
+            $theme            ?? $this->theme,
+            $wrapWidthSet ? $wrapWidth : $this->wrapWidth,
+            $emitHyperlinks   ?? $this->emitHyperlinks,
+            $baseUrlSet ? $baseUrl : $this->baseUrl,
+            $tableWrap        ?? $this->tableWrap,
+            $inlineTableLinks ?? $this->inlineTableLinks,
+            $preservedNewLines ?? $this->preservedNewLines,
+        );
     }
 
     public function render(string $markdown): string
     {
         $document = $this->parser->parse($markdown);
         $rendered = $this->renderChildren($document);
-        return rtrim($rendered, "\n");
+        $rendered = rtrim($rendered, "\n");
+        if ($this->preservedNewLines) {
+            // CommonMark collapses `\n\n+` to one blank-line break;
+            // re-inflate by counting source blank lines and padding the
+            // output. We approximate by matching `\n{3,}` runs in the
+            // source and copying the count into the output where the
+            // first single blank line lives.
+            $sourceRuns = self::extractBlankRuns($markdown);
+            if ($sourceRuns !== []) {
+                $rendered = self::reapplyBlankRuns($rendered, $sourceRuns);
+            }
+        }
+        return $rendered;
+    }
+
+    /**
+     * Extract sequences of 3+ consecutive newlines from the source,
+     * recording the count for each match. Used by
+     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
+     * collapses on parse.
+     *
+     * @return list<int> list of blank-line counts, in source order
+     */
+    private static function extractBlankRuns(string $source): array
+    {
+        $out = [];
+        if (preg_match_all('/\n{3,}/', $source, $m) === false) {
+            return $out;
+        }
+        foreach ($m[0] as $run) {
+            $out[] = strlen($run) - 1; // n newlines = n-1 blank lines
+        }
+        return $out;
+    }
+
+    /**
+     * Replace the first `len(runs)` `\n\n` separators in `$rendered`
+     * with `\n` repeated by the matching run count.
+     *
+     * @param list<int> $runs
+     */
+    private static function reapplyBlankRuns(string $rendered, array $runs): string
+    {
+        $i = 0;
+        return (string) preg_replace_callback(
+            '/\n{2,}/',
+            static function (array $m) use (&$i, $runs) {
+                if ($i < count($runs)) {
+                    $blanks = $runs[$i++];
+                    return str_repeat("\n", $blanks);
+                }
+                return $m[0];
+            },
+            $rendered,
+        );
     }
 
     private function renderNode(Node $node): string
@@ -172,10 +307,26 @@ final class Renderer
     private function renderImage(Image $node): string
     {
         $alt = $this->renderChildren($node);
-        $url = $node->getUrl();
+        $url = $this->resolveUrl($node->getUrl());
         $imageStyle = $this->theme->image ?? \CandyCore\Sprinkles\Style::new()->italic();
         $rendered = $imageStyle->render($alt === '' ? '[image]' : $alt);
         return $rendered . ' (' . $url . ')';
+    }
+
+    /**
+     * Apply {@see withBaseURL()} to a relative link / image target.
+     * Absolute URLs (any scheme, or `//host/...`) pass through unchanged.
+     */
+    private function resolveUrl(string $url): string
+    {
+        if ($this->baseUrl === null || $url === '') {
+            return $url;
+        }
+        if (preg_match('#^(?:[a-z][a-z0-9+.\-]*:|//)#i', $url) || str_starts_with($url, '#')) {
+            // Has scheme, protocol-relative, or fragment-only — leave alone.
+            return $url;
+        }
+        return $this->baseUrl . ltrim($url, '/');
     }
 
     private function renderHtmlBlock(HtmlBlock $node): string
@@ -288,25 +439,27 @@ final class Renderer
     private function renderLink(Link $l): string
     {
         $text = $this->renderChildren($l);
-        $url  = $l->getUrl();
+        $url  = $this->resolveUrl($l->getUrl());
         $linkText = $this->theme->linkText ?? $this->theme->link;
+
+        $insideTable = $this->inTableCell;
+        $hyperlinks  = $this->emitHyperlinks && !($insideTable && !$this->inlineTableLinks);
+        $showSuffix  = !$insideTable || $this->inlineTableLinks;
 
         if ($text === '' || $text === $url) {
             $rendered = $this->theme->link->render($url);
-            return $this->emitHyperlinks
+            return $hyperlinks
                 ? Ansi::hyperlink($url, $rendered)
                 : $rendered;
         }
 
         $styledText = $linkText->render($text);
-        if ($this->emitHyperlinks) {
-            // OSC 8: terminals that support it render text as a real
-            // clickable link; those that don't see the styled text plus
-            // a no-op escape, so we still want the (url) suffix as a
-            // visible fallback.
-            return Ansi::hyperlink($url, $styledText) . ' (' . $url . ')';
+        if ($hyperlinks) {
+            return $showSuffix
+                ? Ansi::hyperlink($url, $styledText) . ' (' . $url . ')'
+                : Ansi::hyperlink($url, $styledText);
         }
-        return $styledText . ' (' . $url . ')';
+        return $showSuffix ? $styledText . ' (' . $url . ')' : $styledText;
     }
 
     /**
@@ -334,7 +487,16 @@ final class Renderer
                     if (!$cell instanceof TableCell) {
                         continue;
                     }
-                    $cells[] = rtrim($this->renderChildren($cell));
+                    $this->inTableCell = true;
+                    try {
+                        $body = rtrim($this->renderChildren($cell));
+                    } finally {
+                        $this->inTableCell = false;
+                    }
+                    if ($this->tableWrap && $this->wrapWidth !== null) {
+                        $body = Width::wrapAnsi($body, $this->wrapWidth);
+                    }
+                    $cells[] = $body;
                 }
                 if ($isHeader) {
                     $headers = $cells;
