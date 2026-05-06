@@ -229,4 +229,114 @@ final class ManagerTest extends TestCase
         $this->assertSame('a-item-0', $a->get('item-0')->id);
         $this->assertSame('b-item-0', $b->get('item-0')->id);
     }
+
+    public function testClearWithIdDropsOnlyThatZone(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn-a', 'A') . $m->mark('btn-b', 'B'));
+        $this->assertCount(2, $m->all());
+        $m->clear('btn-a');
+        $this->assertNull($m->get('btn-a'));
+        $this->assertNotNull($m->get('btn-b'));
+    }
+
+    public function testClearWithoutIdDropsAllZones(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn-a', 'A') . $m->mark('btn-b', 'B'));
+        $m->clear();
+        $this->assertSame([], $m->all());
+    }
+
+    public function testCloseDropsZonesAndDisablesManager(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn', 'OK'));
+        $this->assertCount(1, $m->all());
+        $m->close();
+        $this->assertSame([], $m->all());
+        $this->assertFalse($m->isEnabled());
+        // After close(), mark() should pass content through unchanged.
+        $this->assertSame('plain', $m->mark('x', 'plain'));
+    }
+
+    public function testCloseIsIdempotent(): void
+    {
+        $m = Manager::newGlobal();
+        $m->close();
+        $m->close();
+        $this->assertSame([], $m->all());
+        $this->assertFalse($m->isEnabled());
+    }
+
+    public function testAnyInBoundsReturnsHitZone(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn', 'OK'));
+        $hit = $m->anyInBounds($this->click(1, 1));
+        $this->assertInstanceOf(Zone::class, $hit);
+        $this->assertSame('btn', $hit->id);
+    }
+
+    public function testAnyInBoundsReturnsNullWhenNothingMatches(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn', 'OK'));
+        $this->assertNull($m->anyInBounds($this->click(50, 50)));
+    }
+
+    public function testAnyInBoundsReturnsNullForNonMouseMsg(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn', 'OK'));
+        $this->assertNull($m->anyInBounds(new \CandyCore\Core\Msg\KeyMsg(\CandyCore\Core\KeyType::Char, 'a')));
+    }
+
+    public function testAnyInBoundsAndUpdateRoutesHitToModelAsMsgZoneInBounds(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn-1', 'OK'));
+        $model = new ZoneRoutingModel();
+
+        [$next, $cmd] = $m->anyInBoundsAndUpdate($model, $this->click(1, 1));
+
+        $this->assertInstanceOf(ZoneRoutingModel::class, $next);
+        $this->assertNotNull($next->lastInBoundsHit);
+        $this->assertSame('btn-1', $next->lastInBoundsHit->zone->id);
+        $this->assertNull($cmd);
+    }
+
+    public function testAnyInBoundsAndUpdatePassesThroughOnMiss(): void
+    {
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('btn', 'OK'));
+        $model = new ZoneRoutingModel();
+
+        $miss = $this->click(50, 50);
+        [$next, $cmd] = $m->anyInBoundsAndUpdate($model, $miss);
+
+        $this->assertNull($next->lastInBoundsHit);
+        $this->assertSame($miss, $next->lastPlainMouse);
+    }
+}
+
+final class ZoneRoutingModel implements \CandyCore\Core\Model
+{
+    public ?\CandyCore\Zone\MsgZoneInBounds $lastInBoundsHit  = null;
+    public ?\CandyCore\Core\Msg\MouseMsg    $lastPlainMouse   = null;
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(\CandyCore\Core\Msg $msg): array
+    {
+        $next = clone $this;
+        if ($msg instanceof \CandyCore\Zone\MsgZoneInBounds) {
+            $next->lastInBoundsHit = $msg;
+        } elseif ($msg instanceof \CandyCore\Core\Msg\MouseMsg) {
+            $next->lastPlainMouse = $msg;
+        }
+        return [$next, null];
+    }
+
+    public function view(): string { return ''; }
 }

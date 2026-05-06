@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace CandyCore\Zone;
 
+use CandyCore\Core\Model;
+use CandyCore\Core\Msg;
+use CandyCore\Core\Msg\MouseMsg;
 use CandyCore\Core\Util\Width;
 
 /**
@@ -221,9 +224,77 @@ final class Manager
         return $this->zones;
     }
 
-    public function clear(): void
+    /**
+     * Forget zone state. With no argument, drops every recorded zone
+     * (the original `clear()` shape, kept for back-compat). Pass an
+     * `$id` to drop a single zone — equivalent to the upstream
+     * `Manager::Clear(id string)` overload.
+     */
+    public function clear(?string $id = null): void
+    {
+        if ($id === null) {
+            $this->zones = [];
+            return;
+        }
+        unset($this->zones[$this->idPrefix . $id]);
+    }
+
+    /**
+     * Tear down the manager. Mirrors bubblezone's `Manager::Close()` —
+     * upstream stops the background `zoneWorker` goroutine here. Our
+     * port computes everything synchronously inside `scan()` so there
+     * is no worker to stop, but `close()` still drops every recorded
+     * zone and disables the manager so subsequent `mark()` / `scan()`
+     * calls become pass-throughs. Idempotent.
+     */
+    public function close(): void
     {
         $this->zones = [];
+        $this->enabled = false;
+    }
+
+    /**
+     * Walk the recorded zones, return the first one whose bounds
+     * contain `$mouse`. Returns null if no zone matches (or if the
+     * Msg isn't a {@see MouseMsg} to begin with — handy when models
+     * blanket-route every Msg through this helper).
+     *
+     * Mirrors bubblezone's `Manager::AnyInBounds()`.
+     */
+    public function anyInBounds(Msg $mouse): ?Zone
+    {
+        if (!$mouse instanceof MouseMsg) {
+            return null;
+        }
+        foreach ($this->zones as $zone) {
+            if ($zone->inBounds($mouse)) {
+                return $zone;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Hit-test `$mouse` against every recorded zone. If a zone matches,
+     * dispatch a {@see MsgZoneInBounds} carrying the hit zone + the
+     * original Msg through `$model->update()` and return the resulting
+     * pair `[Model, ?Cmd]`. If nothing matches, dispatch the original
+     * Msg verbatim.
+     *
+     * Mirrors bubblezone's `Manager::AnyInBoundsAndUpdate()` — the
+     * idiomatic dispatch helper for routing a click to whichever
+     * sub-component owns the hit area without writing an explicit
+     * dispatch table.
+     *
+     * @return array{0:Model,1:?\Closure}
+     */
+    public function anyInBoundsAndUpdate(Model $model, Msg $mouse): array
+    {
+        $zone = $this->anyInBounds($mouse);
+        if ($zone !== null && $mouse instanceof MouseMsg) {
+            return $model->update(new MsgZoneInBounds($zone, $mouse));
+        }
+        return $model->update($mouse);
     }
 
     /**

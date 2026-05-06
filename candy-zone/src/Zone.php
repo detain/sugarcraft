@@ -42,4 +42,20 @@ final class Zone
 
     public function width(): int  { return $this->endCol - $this->startCol + 1; }
     public function height(): int { return $this->endRow - $this->startRow + 1; }
+
+    /**
+     * True when the zone has no recorded position — bubblezone returns
+     * a zero-valued struct from `Get()` if the id has never been
+     * scanned. CandyZone's `Manager::get()` returns null for the same
+     * case, but holders of a Zone that was never scanned (e.g. an
+     * end-marker arrived without a start) can use `isZero()` to spot
+     * the degenerate state without a special-case check at every site.
+     */
+    public function isZero(): bool
+    {
+        return $this->startCol === 0
+            && $this->startRow === 0
+            && $this->endCol === 0
+            && $this->endRow === 0;
+    }
 }

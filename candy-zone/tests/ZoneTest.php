@@ -78,4 +78,11 @@ final class ZoneTest extends TestCase
         $z = new Zone('myButton', 0, 0, 5, 5);
         $this->assertSame('myButton', $z->id);
     }
+
+    public function testIsZeroDetectsDegenerateZone(): void
+    {
+        $this->assertTrue((new Zone('x', 0, 0, 0, 0))->isZero());
+        $this->assertFalse((new Zone('x', 1, 1, 5, 5))->isZero());
+        $this->assertFalse((new Zone('x', 0, 0, 0, 1))->isZero());
+    }
 }
