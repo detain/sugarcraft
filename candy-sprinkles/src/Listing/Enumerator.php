@@ -80,6 +80,23 @@ final class Enumerator
         return self::arabic();
     }
 
+    /**
+     * List-as-tree enumerator — emits the box-drawing branch glyphs
+     * `├─` (intermediate) and `└─` (last item) so an `ItemList`
+     * renders as a flat tree without nesting. Mirrors lipgloss's
+     * `list.Tree` enumerator.
+     *
+     * Use this when you want the tree-style layout but only have a
+     * flat list of items (no parent / child structure). For real
+     * nested trees, reach for {@see \CandyCore\Sprinkles\Tree\Tree}
+     * directly.
+     */
+    public static function tree(): \Closure
+    {
+        return static fn(int $index, int $total): string =>
+            $index === $total - 1 ? '└─' : '├─';
+    }
+
     private static function toRoman(int $n): string
     {
         if ($n <= 0) {

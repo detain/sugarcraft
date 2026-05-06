@@ -435,6 +435,29 @@ final class Style
     public function borderBackground(?Color $c): self { return $this->with(borderBg: $c, borderBgSet: true, propsAdded: ['borderBg']); }
 
     /**
+     * Border-foreground gradient — pre-blends `$start` and `$end` and
+     * sets distinct per-side colours on top, right, bottom, left so
+     * the rendered border fades from one colour to the other when
+     * traversed clockwise from the top edge.
+     *
+     * Mirrors lipgloss `BorderForegroundBlend(start, end)`. The blend
+     * picks four points along the gradient (t=0 / 0.33 / 0.66 / 1.0)
+     * to seed the four sides — terminals see flat colour per side, but
+     * the eye reads it as a gradient. Pair with
+     * {@see borderTopForeground()} et al. when you need finer control.
+     */
+    public function borderForegroundBlend(Color $start, Color $end): self
+    {
+        $sides = [
+            $start->blend($end, 0.0),
+            $start->blend($end, 1.0 / 3.0),
+            $start->blend($end, 2.0 / 3.0),
+            $start->blend($end, 1.0),
+        ];
+        return $this->with(borderSideFg: $sides, propsAdded: ['borderSideFg']);
+    }
+
+    /**
      * Per-side border foreground colours. Each setter overrides the
      * default `borderForeground()` for that one side; pass `null` to
      * clear the override and fall back to the default.

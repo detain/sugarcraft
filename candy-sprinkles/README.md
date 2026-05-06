@@ -114,7 +114,142 @@ echo Tree::new()
   connector sets; per-section style overrides; custom indenter.
 - **`Table\Table`** — `headers` / `row(s)` / `border` / `align` /
   `headerAlign` / `rowAlign` / `styleFunc` / per-side border toggles /
-  `width` / `offset`.
+  `width` / `offset` / `clearRows` / `data(Data)`.
+- **`Table\Data`** — row-reader interface (`rows` / `columns` /
+  `at($r, $c)`). Default impl `Table\StringData::fromMatrix(iterable)`.
+- **`Output`** — top-level `print` / `println` / `sprint` / `printf` /
+  `fprint($stream, …)` (style-agnostic).
+- **`Renderer`** — per-writer rendering context: `withColorProfile` /
+  `withHasDarkBackground` / `newStyle()` / `lightDark()` /
+  `resolveAdaptive(AdaptiveColor)` / `fromEnvironment()`.
+- **`Palette`** — named ANSI 16-slot constants (Black / Red / …
+  BrightWhite) + `hasDarkBackground()` helper.
+- **`UnderlineStyle`** — enum (None / Single / Double / Curly /
+  Dotted / Dashed) for SGR `4:N` sub-style emit.
+
+## Custom Renderer & color-profile
+
+`Sprinkles\Renderer` bundles a colour profile + a dark-background
+flag so you can branch behaviour without threading the values
+through every `Style` call:
+
+```php
+$r     = Renderer::new()
+    ->withColorProfile(ColorProfile::Ansi256)   // forced 256-colour
+    ->withHasDarkBackground(false);              // light terminal
+$style = $r->newStyle()->bold()->foreground(...);
+$pick  = $r->lightDark();                        // closure(light, dark)
+```
+
+Each `Style` owns a `colorProfile()` setter too — the renderer is
+just a convenience wrapper. `Renderer::fromEnvironment()` calls
+`ColorProfile::detect()` for you (consults `NO_COLOR`,
+`CLICOLOR_FORCE`, `TERM_PROGRAM`, etc.).
+
+PHP's stream model is coarser than Go's, so the writer-binding
+`NewRenderer(out)` shape is *not* mirrored. Pair with
+`Output::fprint($stream, ...)` when you need to write to a
+specific stream.
+
+## Color blending utilities
+
+`Util\Color` ships the lipgloss-equivalent helpers:
+
+| Method | Returns |
+|---|---|
+| `Color::hex('#ff5f87')` | RGB |
+| `Color::ansi(13)` | named ANSI slot |
+| `Color::ansi256(213)` | xterm-256 |
+| `$c->blend($other, $t)` | linear LERP, t ∈ [0, 1] |
+| `Color::blend1D($a, $b, int $steps)` | list of N stops |
+| `Color::blend2D($tl, $tr, $bl, $br, $w, $h)` | 2D grid |
+| `$c->lighten($amount)` / `darken($amount)` | luminance ±amount |
+| `$c->alpha($amount)` | premultiply alpha onto a backdrop |
+| `$c->complementary()` | hue + 180° |
+
+Named ANSI slots live on `Sprinkles\Palette`:
+`Palette::Red`, `Palette::BrightWhite`, etc. Use
+`Palette::hasDarkBackground()` for a no-args terminal-detect.
+
+## OSC-8 hyperlinks & underline styles
+
+`Style::hyperlink($url)` wraps the rendered output in `\x1b]8;;URL…`
+escapes; modern terminals turn it into a clickable link, the rest
+fall through to plain text. Combine with `Style::underline()` +
+`Style::underlineStyle(UnderlineStyle::Curly)` (the SGR `4:3`
+sub-style) and `Style::underlineColor(Color::hex('#ff0000'))` to
+emit a wavy red spell-check-style underline that degrades cleanly
+to a plain SGR 4 underline on terminals that don't speak the
+sub-style.
+
+## Style copy-vs-inheritance
+
+Every `with*()` setter returns a new `Style` — the receiver is
+never mutated. `Style::copy()` returns a shallow clone for those
+moments you want a known checkpoint to branch from.
+
+`Style::inherit($parent)` merges *unset* props from the parent.
+Inheritable properties: `bold` / `italic` / `underline` / `strike` /
+`faint` / `blink` / `reverse` / `fg` / `bg` / `borderFg` / `borderBg`
+(only if the child hasn't set them). Layout / structural properties
+(width / height / padding / margin / border / borderSides) **don't**
+inherit — every component is layout-independent. This matches
+lipgloss v2's "explicit wins" rule.
+
+## Measurement utilities
+
+`Sprinkles\Layout` exposes the three measurement helpers from
+lipgloss's package level:
+
+- `Layout::Width($s)` — visible cell width of a (possibly
+  ANSI-coloured, multibyte) string.
+- `Layout::Height($s)` — number of `\n`-separated lines.
+- `Layout::Size($s)` — `[width, height]` tuple.
+
+All three strip ANSI escapes before measuring, honour East-Asian
+wide cells, and round the same way `Style::render()` does — so
+you can `Layout::Width($style->render('xx'))` to budget a
+component's footprint reliably.
+
+## Table StyleFunc + per-section borders
+
+`Table::styleFunc(\Closure(int $row, int $col): Style)` runs once
+per cell to pick its style. Row index `Table::HEADER_ROW` (constant
+`-1`) identifies the header.
+
+```php
+$striped = Table::new()
+    ->headers('Name', 'Score')
+    ->rows([['Alice', '93'], ['Bob', '87']])
+    ->styleFunc(static fn (int $r, int $c): Style =>
+        $r === Table::HEADER_ROW
+            ? Style::new()->bold()
+            : ($r % 2 === 0 ? Style::new()->faint() : Style::new()),
+    );
+```
+
+The four border-section flags (`borderHeader` / `borderRow` /
+`borderColumn` / `borderTop/Right/Bottom/Left`) decide which
+separators draw. Defaults: rounded outer + header rule + column
+verticals; row separators off.
+
+## Graceful colour degradation
+
+A `Style` carries a `ColorProfile` (TrueColor / Ansi256 / Ansi /
+NoTty). `render()` downsamples every colour to that tier before
+emit:
+
+```
+TrueColor  → SGR 38;2;R;G;B  (24-bit)
+Ansi256    → SGR 38;5;N      (xterm-256 nearest match)
+Ansi       → SGR 30..37 / 90..97  (named slots)
+NoTty      → no SGR at all   (clean text)
+```
+
+Use `Style::colorProfile(ColorProfile::Ansi)` for a forced
+downgrade or `Renderer::fromEnvironment()` to auto-detect from
+`NO_COLOR` / `CLICOLOR_FORCE` / `TERM` / `COLORTERM` /
+`TERM_PROGRAM` / `WT_SESSION` / CI markers.
 
 ## Test
 

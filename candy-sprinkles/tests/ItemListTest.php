@@ -197,4 +197,14 @@ final class ItemListTest extends TestCase
         $this->assertStringContainsString('inner-2', $out);
         $this->assertStringContainsString('after',   $out);
     }
+
+    public function testTreeEnumeratorBranchGlyphs(): void
+    {
+        $out = ItemList::new('a', 'b', 'c')
+            ->enumerator(Enumerator::tree())
+            ->render();
+        // Intermediate items use ├─; the last uses └─.
+        $this->assertStringContainsString('├─', $out);
+        $this->assertStringContainsString('└─', $out);
+    }
 }
