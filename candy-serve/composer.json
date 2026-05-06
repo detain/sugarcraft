@@ -1,0 +1,77 @@
+{
+    "name": "candycore/candy-serve",
+    "description": "PHP port of charmbracelet/soft-serve \u2014 self-hostable Git server over SSH, Git daemon, and HTTP. Supports user management via SSH public keys, repo access control (public/private), collaborators, on-demand repo creation, Git LFS, and an SSH-accessible TUI for browsing repos/files/commits.",
+    "type": "project",
+    "license": "MIT",
+    "keywords": ["git", "git-server", "self-hosted", "ssh", "lfs", "candycore"],
+    "homepage": "https://github.com/sugarcraft/candy-serve",
+    "authors": [
+        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-serve/issues",
+        "source": "https://github.com/sugarcraft/candy-serve"
+    },
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "ext-openssl": "*",
+        "ext-ssh2": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "repositories": [
+        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "../honey-bounce",    "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-zone",      "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-bits",      "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-charts",    "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-prompt",    "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-shell",     "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-shine",     "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-kit",       "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-freeze",    "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-glow",      "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-spark",     "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-wish",      "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-wishlist",  "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-metrics",   "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-mold",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-tetris",    "options": { "symlink": true } },
+        { "type": "path", "url": "../super-candy",     "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-crush",     "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-log",       "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-palette",   "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-skate",     "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-post",      "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-lister",    "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-boxer",     "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-veil",      "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-crumbs",    "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-hermit",    "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-stickers",  "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-toast",     "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-calendar",  "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-readline",  "options": { "symlink": true } },
+        { "type": "path", "url": "../sugar-table",     "options": { "symlink": true } }
+    ],
+    "autoload": {
+        "psr-4": {
+            "CandyCore\\Serve\\": "src/",
+            "CandyCore\\Serve\\SSH\\": "src/SSH/",
+            "CandyCore\\Serve\\Git\\": "src/Git/",
+            "CandyCore\\Serve\\LFS\\": "src/LFS/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": { "CandyCore\\Serve\\Tests\\": "tests/" }
+    },
+    "bin": ["bin/soft-serve"],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "scripts": {
+        "serve": "php bin/soft-serve serve"
+    }
+}

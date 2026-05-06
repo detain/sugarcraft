@@ -43,7 +43,7 @@ Status legend:
 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` | `candycore/candy-metrics` | `CandyCore\Metrics` | 🟢 | Telemetry primitives + CandyWish session middleware |
 | [charmbracelet/log](https://github.com/charmbracelet/log) | **CandyLog** | `candy-log/` | `candycore/candy-log` | `CandyCore\Log` | 🟢 | Minimal, colorful logging library |
 | [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) | **CandyPalette** | `candy-palette/` | `candycore/candy-palette` | `CandyCore\Palette` | 🟢 | Terminal color detection + ICC profile handling |
-| [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🔴 | Self-hostable Git server over SSH |
+| [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🟢 |
 | [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🟢 | Personal key/value store |
 | [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `candycore/sugar-post` | `CandyCore\Post` | 🟢 |
 | [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `candycore/candy-lister` | `CandyCore\Lister` | 🟢 |
