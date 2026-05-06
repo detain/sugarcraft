@@ -249,4 +249,108 @@ final class TextAreaTest extends TestCase
         $this->assertSame(3, $info['col']);
         $this->assertSame(2, $info['totalLines']);
     }
+
+    public function testCursorUpDownClampsAtBoundaries(): void
+    {
+        $t = TextArea::new()->setValue("abc\ndef\nghi")->setCursor(0, 1);
+        $t = $t->cursorDown();
+        $this->assertSame(1, $t->row);
+        $this->assertSame(1, $t->col);
+        $t = $t->cursorDown()->cursorDown();
+        $this->assertSame(2, $t->row); // clamped at last row
+        $t = $t->cursorUp();
+        $this->assertSame(1, $t->row);
+        $t = $t->cursorUp()->cursorUp();
+        $this->assertSame(0, $t->row); // clamped at first row
+    }
+
+    public function testMoveToBeginAndEnd(): void
+    {
+        $t = TextArea::new()->setValue("abc\ndef\nghi")->setCursor(1, 2);
+        $t = $t->moveToBegin();
+        $this->assertSame(0, $t->row);
+        $this->assertSame(0, $t->col);
+        $t = $t->moveToEnd();
+        $this->assertSame(2, $t->row);
+        $this->assertSame(3, $t->col); // 'ghi' length
+    }
+
+    public function testPageUpDownUsesHeight(): void
+    {
+        // setValue() leaves the cursor at the last row; reset to (0,0).
+        $t = TextArea::new()->withHeight(3)
+            ->setValue("a\nb\nc\nd\ne\nf\ng\nh\ni")
+            ->moveToBegin();
+        $down = $t->pageDown();
+        $this->assertSame(3, $down->row);
+        $down2 = $down->pageDown();
+        $this->assertSame(6, $down2->row);
+        $down3 = $down2->pageDown()->pageDown();
+        $this->assertSame(8, $down3->row); // clamped at last row
+        $up = $down2->pageUp();
+        $this->assertSame(3, $up->row);
+    }
+
+    public function testPageUpDownFallsBackToOneRowWhenHeightZero(): void
+    {
+        $t = TextArea::new()->setValue("a\nb\nc")->setCursor(1, 0);
+        $this->assertSame(0, $t->pageUp()->row);
+        $this->assertSame(2, $t->pageDown()->row);
+    }
+
+    public function testInsertRuneInsertsSingleCharacter(): void
+    {
+        $t = TextArea::new()->setValue('ac')->setCursorColumn(1);
+        $t = $t->insertRune('b');
+        $this->assertSame('abc', $t->value());
+        $this->assertSame(2, $t->col);
+    }
+
+    public function testInsertRuneAcceptsMultibyteCluster(): void
+    {
+        $t = TextArea::new()->setValue('a')->setCursorColumn(1);
+        $t = $t->insertRune('日');
+        $this->assertSame('a日', $t->value());
+    }
+
+    public function testWordReturnsCurrentWord(): void
+    {
+        $t = TextArea::new()->setValue('hello world')->setCursorColumn(2);
+        $this->assertSame('hello', $t->word());
+        // Cursor on the space → no word.
+        $t = TextArea::new()->setValue('hello world')->setCursorColumn(5);
+        $this->assertSame('', $t->word());
+        // Cursor in second word.
+        $t = TextArea::new()->setValue('hello world')->setCursorColumn(7);
+        $this->assertSame('world', $t->word());
+    }
+
+    public function testWordHandlesEmptyLine(): void
+    {
+        $this->assertSame('', TextArea::new()->word());
+    }
+
+    public function testSetPromptFuncWinsOverStaticPrompt(): void
+    {
+        $t = TextArea::new()
+            ->setValue("a\nb\nc")
+            ->withPrompt('> ')
+            ->withHeight(3)
+            ->setPromptFunc(fn(int $row, string $line) => sprintf('[%d] ', $row));
+        $rendered = $t->view();
+        $this->assertStringContainsString('[0] a', $rendered);
+        $this->assertStringContainsString('[1] b', $rendered);
+        $this->assertStringContainsString('[2] c', $rendered);
+        $this->assertStringNotContainsString('> a', $rendered);
+    }
+
+    public function testSetPromptFuncNullRevertsToStaticPrompt(): void
+    {
+        $t = TextArea::new()
+            ->setValue('hi')
+            ->withPrompt('> ')
+            ->setPromptFunc(fn() => '!! ')
+            ->setPromptFunc(null);
+        $this->assertStringContainsString('> hi', $t->view());
+    }
 }

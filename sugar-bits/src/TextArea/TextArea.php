@@ -49,6 +49,8 @@ final class TextArea implements Model
         public readonly string $prompt = '',
         public readonly ?\Closure $validate = null,
         public readonly ?string $err = null,
+        /** Optional dynamic-prompt closure: `fn(int $rowIndex, string $line): string`. Wins over $prompt when set. */
+        public readonly ?\Closure $promptFunc = null,
     ) {}
 
     public static function new(): self
@@ -161,7 +163,7 @@ final class TextArea implements Model
      */
     private function prefixWithGutter(array $lines, int $startRow): array
     {
-        if (!$this->showLineNumbers && $this->prompt === '') {
+        if (!$this->showLineNumbers && $this->prompt === '' && $this->promptFunc === null) {
             return $lines;
         }
         $totalLines = count($this->lines);
@@ -175,7 +177,10 @@ final class TextArea implements Model
                 $label = $isFiller ? '' : (string) ($row + 1);
                 $gutter = str_pad($label, $gutterWidth, ' ', STR_PAD_LEFT) . ' ';
             }
-            $out[] = $gutter . $this->prompt . $line;
+            $prompt = $this->promptFunc !== null
+                ? ($this->promptFunc)($row, $line)
+                : $this->prompt;
+            $out[] = $gutter . $prompt . $line;
         }
         return $out;
     }
@@ -262,6 +267,19 @@ final class TextArea implements Model
     }
 
     /**
+     * Dynamic prompt: closure `fn(int $rowIndex, string $line): string`.
+     * Called once per visible row to compute the line prefix. When set,
+     * wins over the static {@see withPrompt()} prefix. Pass null to
+     * clear and revert to the static prompt. Mirrors Bubbles'
+     * `SetPromptFunc` (with the row-index argument also exposed so
+     * callers can render `> ` on the active row, ` ` elsewhere).
+     */
+    public function setPromptFunc(?\Closure $fn): self
+    {
+        return $this->mutate(promptFunc: $fn, promptFuncSet: true);
+    }
+
+    /**
      * Set a validator. Receives the joined value, returns an error
      * message or null. Re-runs after every edit; result is exposed via
      * {@see err()}.
@@ -290,6 +308,119 @@ final class TextArea implements Model
     public function setCursorColumn(int $col): self
     {
         return $this->moveCursor($this->row, $col);
+    }
+
+    /**
+     * Move cursor up one row, preserving column where possible.
+     * Mirrors Bubbles' `CursorUp`. Clamps at the first row.
+     */
+    public function cursorUp(): self
+    {
+        if ($this->row === 0) {
+            return $this;
+        }
+        return $this->moveCursor($this->row - 1, $this->col);
+    }
+
+    /**
+     * Move cursor down one row, preserving column where possible.
+     * Mirrors Bubbles' `CursorDown`. Clamps at the last row.
+     */
+    public function cursorDown(): self
+    {
+        if ($this->row >= count($this->lines) - 1) {
+            return $this;
+        }
+        return $this->moveCursor($this->row + 1, $this->col);
+    }
+
+    /**
+     * Jump to (0, 0). Mirrors Bubbles' `MoveToBegin`.
+     */
+    public function moveToBegin(): self
+    {
+        return $this->moveCursor(0, 0);
+    }
+
+    /**
+     * Jump to the last row, end of last line. Mirrors Bubbles' `MoveToEnd`.
+     */
+    public function moveToEnd(): self
+    {
+        $lastRow = count($this->lines) - 1;
+        return $this->moveCursor($lastRow, $this->lineLen($lastRow));
+    }
+
+    /**
+     * Move cursor up by the configured display height (one viewport).
+     * Mirrors Bubbles' `PageUp`. Falls back to a single row when height
+     * is unset (`height = 0`).
+     */
+    public function pageUp(): self
+    {
+        $delta = $this->height > 0 ? $this->height : 1;
+        return $this->moveCursor(max(0, $this->row - $delta), $this->col);
+    }
+
+    /**
+     * Move cursor down by the configured display height. Mirrors
+     * Bubbles' `PageDown`.
+     */
+    public function pageDown(): self
+    {
+        $delta = $this->height > 0 ? $this->height : 1;
+        $lastRow = count($this->lines) - 1;
+        return $this->moveCursor(min($lastRow, $this->row + $delta), $this->col);
+    }
+
+    /**
+     * Insert a single rune (one or more bytes — multibyte safe) at the
+     * cursor. Mirrors Bubbles' `InsertRune`.
+     */
+    public function insertRune(string $rune): self
+    {
+        if ($rune === '' || str_contains($rune, "\n")) {
+            return $this->insertString($rune);
+        }
+        return $this->insert($rune);
+    }
+
+    /**
+     * Return the word containing the cursor — a maximal run of
+     * non-whitespace characters that the cursor sits in or adjacent
+     * to. Mirrors Bubbles' `Word`. Returns the empty string when the
+     * cursor is on whitespace.
+     */
+    public function word(): string
+    {
+        $line = $this->lines[$this->row] ?? '';
+        $len  = mb_strlen($line, 'UTF-8');
+        if ($len === 0) {
+            return '';
+        }
+        $col = max(0, min($len, $this->col));
+        // If the cursor is at the very end, look at the previous char.
+        $probeAt = $col >= $len ? $len - 1 : $col;
+        $charAt  = mb_substr($line, $probeAt, 1, 'UTF-8');
+        if ($charAt === '' || ctype_space($charAt)) {
+            return '';
+        }
+
+        // Walk left to the start of the word.
+        $start = $probeAt;
+        while ($start > 0) {
+            $c = mb_substr($line, $start - 1, 1, 'UTF-8');
+            if (ctype_space($c)) break;
+            $start--;
+        }
+        // Walk right to the end of the word.
+        $end = $probeAt;
+        while ($end < $len - 1) {
+            $c = mb_substr($line, $end + 1, 1, 'UTF-8');
+            if (ctype_space($c)) break;
+            $end++;
+        }
+        return mb_substr($line, $start, $end - $start + 1, 'UTF-8');
     }
 
     /**
@@ -498,6 +629,7 @@ final class TextArea implements Model
         ?string $prompt = null,
         ?\Closure $validate = null, bool $validateSet = false,
         ?string $err = null, bool $errSet = false,
+        ?\Closure $promptFunc = null, bool $promptFuncSet = false,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -526,6 +658,7 @@ final class TextArea implements Model
             prompt:                $prompt               ?? $this->prompt,
             validate:              $resolvedValidate,
             err:                   $err,
+            promptFunc:            $promptFuncSet        ? $promptFunc : $this->promptFunc,
         );
     }
 }
