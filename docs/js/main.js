@@ -25,6 +25,26 @@ document.querySelectorAll('.lib-card .glyph-tag').forEach((g) => {
     g.style.transform = `rotate(${r}deg)`;
 });
 
+// Inner pill-links inside the outer lib-card anchor: nested <a> is invalid
+// HTML, so most browsers flatten it and navigate only to the outer href.
+// Intercept clicks on the inner pills and follow their hrefs explicitly,
+// honouring modifier keys / middle-click for "open in new tab".
+document.querySelectorAll('.lib-card .links a').forEach((pill) => {
+    pill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const href = pill.getAttribute('href');
+        if (!href) return;
+        const newTab = e.metaKey || e.ctrlKey || e.button === 1
+            || pill.target === '_blank';
+        if (newTab) {
+            window.open(href, '_blank', 'noopener');
+        } else {
+            window.location.href = href;
+        }
+    });
+});
+
 // ── Lightbox: click any demo-card image to see it full-size.
 //    Click off the image, hit Escape, or click the close button to dismiss.
 (function initLightbox() {

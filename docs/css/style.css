@@ -274,6 +274,11 @@ code, pre, .mono {
     position: relative;
     overflow: hidden;
     color: var(--ink);
+    /* Stack content with consistent vertical rhythm so descriptions
+       and link rows don't drift around as the cards reflow. */
+    display: flex;
+    flex-direction: column;
+    text-decoration: none;
 }
 
 .lib-card::after {
@@ -307,31 +312,59 @@ code, pre, .mono {
 }
 
 .lib-card h3 {
-    margin: 0 0 6px 0;
+    margin: 0;
     font-size: 1.1rem;
     letter-spacing: -0.005em;
+    line-height: 1.3;
 }
 
 .lib-card .lib-source {
     color: var(--ink-2);
     font-size: 0.82rem;
-    margin: 0 0 12px 0;
+    margin: 4px 0 0 0;
 }
 
 .lib-card .lib-source a { color: var(--ink-2); }
 .lib-card .lib-source a:hover { color: var(--pink); }
 
 .lib-card p.summary {
-    margin: 0 0 16px 0;
+    margin: 12px 0 0 0;
     color: var(--ink-2);
     font-size: 0.95rem;
+    line-height: 1.5;
+    /* Anchor the links row to the card bottom regardless of how much
+       text the description takes — gives every card the same shape. */
+    flex-grow: 1;
 }
 
 .lib-card .links {
     display: flex;
-    gap: 12px;
-    font-size: 0.85rem;
+    gap: 8px;
+    font-size: 0.82rem;
     flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+/* Inner links — render as compact pills instead of inline text. The
+   markup nests `<a>` inside `<a class="lib-card">` which browsers
+   render but treat as a single link target; the JS in the page
+   intercepts clicks on these pills and follows them individually. */
+.lib-card .links a {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-2);
+    background: transparent;
+    transition: border-color .15s ease, color .15s ease, background .15s ease;
+    text-decoration: none;
+}
+
+.lib-card .links a:hover {
+    color: var(--ink);
+    border-color: var(--pink);
+    background: rgba(255, 95, 135, 0.08);
 }
 
 /* ── Demo gallery ──────────────────────────────────────────────── */
@@ -550,20 +583,19 @@ pre.code .num  { color: #fcd5b4; }
 
 /* ── Library / app card icon image ─────────────────────────────── */
 .lib-card .lib-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 14px;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
     object-fit: cover;
     box-shadow: var(--shadow-sm);
-    margin-bottom: 12px;
     background: var(--card);
+    flex-shrink: 0;
 }
 
 .lib-card .lib-icon-row {
     display: flex;
     align-items: center;
     gap: 14px;
-    margin-bottom: 8px;
 }
 
 .lib-card .lib-icon-row h3 { margin: 0; }
