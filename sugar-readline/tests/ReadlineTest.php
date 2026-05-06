@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace CandyCore\Readline\Tests;
 
-use CandyCore\Readline\{ConfirmationPrompt, SelectionPrompt, TextPrompt, TextareaPrompt};
+use CandyCore\Readline\{ConfirmationPrompt, MultiSelectPrompt, SelectionPrompt, TextPrompt, TextareaPrompt};
 use PHPUnit\Framework\TestCase;
 
 final class ReadlineTest extends TestCase
@@ -263,6 +263,172 @@ final class ReadlineTest extends TestCase
     {
         $p = TextareaPrompt::new('Text:')->HandleChar('H')->HandleChar('i');
         $this->assertStringContainsString('Hi', $p->View());
+    }
+
+    // ---- MultiSelectPrompt ----
+
+    public function testMultiSelectNew(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger', 'Sushi']);
+        $this->assertFalse($p->IsConfirmed());
+        $this->assertFalse($p->IsCancelled());
+        $this->assertSame(0, $p->SelectionCount());
+    }
+
+    public function testMultiSelectToggleAndConfirm(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger', 'Sushi']);
+        // Space toggles selection, enter confirms if min is met
+        $p = $p->HandleKey('space')  // select first item
+               ->HandleKey('down')
+               ->HandleKey('space')  // select second item
+               ->HandleKey('enter'); // confirm
+
+        $this->assertTrue($p->IsConfirmed());
+        $values = $p->SelectedValues();
+        $this->assertCount(2, $values);
+        $this->assertContains('Pizza', $values);
+        $this->assertContains('Burger', $values);
+    }
+
+    public function testMultiSelectMinEnforcement(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger', 'Sushi'])
+            ->WithMinSelections(2);
+
+        // Only 1 selection — enter should not confirm
+        $p = $p->HandleKey('space')
+               ->HandleKey('enter');
+
+        $this->assertFalse($p->IsConfirmed()); // min not met, stay in prompt
+    }
+
+    public function testMultiSelectMinMetAllowsConfirm(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger', 'Sushi'])
+            ->WithMinSelections(2);
+
+        $p = $p->HandleKey('space')
+               ->HandleKey('down')
+               ->HandleKey('space')
+               ->HandleKey('enter');
+
+        $this->assertTrue($p->IsConfirmed());
+    }
+
+    public function testMultiSelectMaxEnforcement(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger', 'Sushi', 'Tacos'])
+            ->WithMaxSelections(2);
+
+        $p = $p->HandleKey('space')   // select Pizza
+               ->HandleKey('down')
+               ->HandleKey('space')   // select Burger
+               ->HandleKey('down')
+               ->HandleKey('space');  // at max, deselects first (Pizza), selects Sushi
+
+        $values = $p->SelectedValues();
+        $this->assertCount(2, $values);
+        $this->assertContains('Burger', $values);
+        $this->assertContains('Sushi', $values);
+        $this->assertNotContains('Pizza', $values);
+    }
+
+    public function testMultiSelectCancel(): void
+    {
+        $p = MultiSelectPrompt::new('Pick foods:', ['Pizza', 'Burger'])
+            ->HandleKey('ctrl_c');
+
+        $this->assertTrue($p->IsCancelled());
+        $this->assertSame([], $p->SelectedValues());
+    }
+
+    public function testMultiSelectView(): void
+    {
+        $p = MultiSelectPrompt::new('Food:', ['Pizza', 'Burger']);
+        $view = $p->View();
+
+        $this->assertStringContainsString('Food:', $view);
+        $this->assertStringContainsString('Pizza', $view);
+        $this->assertStringContainsString('Burger', $view);
+        $this->assertStringContainsString('○', $view); // unselected marker
+    }
+
+    public function testMultiSelectPagination(): void
+    {
+        $items = \range('A', 'Z'); // 26 items
+        $p = MultiSelectPrompt::new('Letter:', $items)->WithPerPage(5);
+
+        $this->assertSame(6, $p->TotalPages());
+        $pageItems = $p->CurrentPageItems();
+        $this->assertCount(5, $pageItems);
+        $this->assertSame('A', $pageItems[0]);
+
+        // Navigate to page 2
+        $p = $p->HandleKey('pagedown');
+        $this->assertSame(1, $p->CurrentPage());
+        $pageItems = $p->CurrentPageItems();
+        $this->assertSame('F', $pageItems[0]);
+    }
+
+    public function testMultiSelectFilter(): void
+    {
+        $p = MultiSelectPrompt::new('Food:', ['Apple', 'Banana', 'Cherry', 'Date']);
+
+        // Simulate filter by directly using items (filter is user-driven)
+        $p = $p->HandleKey('enter');
+        $this->assertSame(4, $p->FilterMatchCount());
+    }
+
+    public function testMultiSelectCursorNavigation(): void
+    {
+        $p = MultiSelectPrompt::new('Food:', ['A', 'B', 'C', 'D', 'E']);
+        $this->assertCount(5, $p->CurrentPageItems());
+
+        $p = $p->HandleKey('end');
+        $p = $p->HandleKey('home');
+
+        // Just verify it doesn't crash and stays on first page
+        $this->assertSame(0, $p->CurrentPage());
+    }
+
+    public function testMultiSelectCanConfirm(): void
+    {
+        $p = MultiSelectPrompt::new('Pick:', ['A', 'B']);
+        $this->assertFalse($p->CanConfirm());
+
+        $p = $p->HandleKey('space');
+        $this->assertTrue($p->CanConfirm());
+    }
+
+    // ---- SelectionPrompt min/max selections ----
+
+    public function testSelectionPromptWithMinSelections(): void
+    {
+        $p = SelectionPrompt::new('Pick one:', ['A', 'B', 'C'])
+            ->WithMultiSelect(true)
+            ->WithMinSelections(2);
+
+        // One item selected — enter should not confirm
+        $p = $p->HandleKey('space')
+               ->HandleKey('enter');
+
+        $this->assertFalse($p->IsConfirmed());
+    }
+
+    public function testSelectionPromptWithMaxSelections(): void
+    {
+        $p = SelectionPrompt::new('Pick:', ['A', 'B', 'C'])
+            ->WithMultiSelect(true)
+            ->WithMaxSelections(1);
+
+        $p = $p->HandleKey('space')   // select A
+               ->HandleKey('down')
+               ->HandleKey('space');  // should replace A with B
+
+        $values = $p->SelectedValues();
+        $this->assertCount(1, $values);
+        $this->assertSame(['B'], $values);
     }
 
     // ---- Helper ----

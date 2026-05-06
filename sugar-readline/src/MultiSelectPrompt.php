@@ -5,24 +5,27 @@ declare(strict_types=1);
 namespace CandyCore\Readline;
 
 /**
- * Filterable selection prompt with cursor navigation and pagination.
+ * Multi-item selection prompt with cursor navigation, filtering, pagination,
+ * and minimum/maximum selection enforcement.
  *
- * Port of erikgeiser/promptkit Selection.
+ * Port of erikgeiser/promptkit.selection.MultiSelection.
  *
  * @see https://github.com/erikgeiser/promptkit
  */
-final class SelectionPrompt
+final class MultiSelectPrompt
 {
     private string $label;
     private array $allItems = [];
+
+    /** @var list<string> */
     private array $filteredItems = [];
+
     private string $filterText = '';
-    private int $cursor = 0;     // cursor in filtered list
+    private int $cursor = 0;
     private int $page    = 0;
     private int $perPage = 10;
-    private bool $multi  = false;
 
-    /** @var array<int, true> Selected indices in filteredItems */
+    /** @var array<int, true> Indices into allItems that are selected */
     private array $selected = [];
 
     private int $minSelections = 0;
@@ -31,9 +34,10 @@ final class SelectionPrompt
     private bool $confirmed  = false;
     private bool $cancelled  = false;
 
-    private string $cursorStyle      = '7';    // reverse
-    private string $selectedStyle    = '32';   // green
-    private string $labelStyle       = '1;36'; // bold cyan
+    private string $cursorStyle   = '7';    // reverse
+    private string $selectedStyle = '32';   // green
+    private string $labelStyle    = '1;36'; // bold cyan
+    private string $matchedStyle  = '33';   // yellow for filter match highlight
 
     // -------------------------------------------------------------------------
     // Factory
@@ -41,9 +45,9 @@ final class SelectionPrompt
 
     public function __construct(string $label, array $items)
     {
-        $this->label        = $label;
-        $this->allItems     = $items;
-        $this->filteredItems = $items;
+        $this->label          = $label;
+        $this->allItems       = $items;
+        $this->filteredItems  = $items;
     }
 
     public static function new(string $label, array $items): self
@@ -55,10 +59,23 @@ final class SelectionPrompt
     // Configuration
     // -------------------------------------------------------------------------
 
-    public function WithMultiSelect(bool $multi = true): self
+    /**
+     * Minimum number of selections required before confirmation is allowed.
+     */
+    public function WithMinSelections(int $min): self
     {
         $clone = clone $this;
-        $clone->multi = $multi;
+        $clone->minSelections = $min;
+        return $clone;
+    }
+
+    /**
+     * Maximum number of selections allowed (0 = unlimited).
+     */
+    public function WithMaxSelections(int $max): self
+    {
+        $clone = clone $this;
+        $clone->maxSelections = $max;
         return $clone;
     }
 
@@ -69,17 +86,13 @@ final class SelectionPrompt
         return $clone;
     }
 
-    public function WithMinSelections(int $min): self
+    /**
+     * Style for selected check marker.
+     */
+    public function WithSelectedStyle(string $ansiCodes): self
     {
         $clone = clone $this;
-        $clone->minSelections = $min;
-        return $clone;
-    }
-
-    public function WithMaxSelections(int $max): self
-    {
-        $clone = clone $this;
-        $clone->maxSelections = $max;
+        $clone->selectedStyle = $ansiCodes;
         return $clone;
     }
 
@@ -87,38 +100,21 @@ final class SelectionPrompt
     // Input handling
     // -------------------------------------------------------------------------
 
-    public function Filter(string $text): self
-    {
-        $clone = clone $this;
-        $clone->filterText   = $text;
-        $clone->cursor       = 0;
-        $clone->page         = 0;
-        $clone->selected     = [];
-        $clone->filteredItems = $text === ''
-            ? $clone->allItems
-            : \array_values(
-                \array_filter($clone->allItems, fn(string $item): bool =>
-                    \stripos($item, $text) !== false
-                )
-              );
-        return $clone;
-    }
-
     public function HandleKey(string $key): self
     {
         if ($this->confirmed || $this->cancelled) return $this;
 
         return match ($key) {
-            'up', 'k'   => $this->moveCursor(-1),
-            'down', 'j' => $this->moveCursor(1),
-            'pageup'    => $this->prevPage(),
-            'pagedown'  => $this->nextPage(),
-            'home'      => $this->moveCursorToStart(),
-            'end'       => $this->moveCursorToEnd(),
-            'enter'     => $this->confirm(),
-            'space'     => $this->toggleSelect(),
+            'up', 'k'       => $this->moveCursor(-1),
+            'down', 'j'     => $this->moveCursor(1),
+            'pageup'        => $this->prevPage(),
+            'pagedown'      => $this->nextPage(),
+            'home'          => $this->moveCursorToStart(),
+            'end'           => $this->moveCursorToEnd(),
+            'space'         => $this->toggleSelect(),
+            'enter'         => $this->confirm(),
             'esc', 'ctrl_c' => $this->cancel(),
-            default     => $this,
+            default         => $this,
         };
     }
 
@@ -141,40 +137,35 @@ final class SelectionPrompt
     // Queries
     // -------------------------------------------------------------------------
 
-    public function SelectedValue(): ?string
-    {
-        if ($this->cancelled || $this->filteredItems === []) return null;
-        $idx = $this->filteredCursor();
-        return $this->filteredItems[$idx] ?? null;
-    }
-
     /**
-     * @return list<string>  All selected values (useful in multi-select mode)
+     * @return list<string>
      */
     public function SelectedValues(): array
     {
         if ($this->cancelled) return [];
-        if ($this->multi) {
-            return \array_values(
-                \array_filter($this->filteredItems, fn($_, $i): bool =>
-                    isset($this->selected[$i]), ARRAY_FILTER_USE_BOTH
-                )
-            );
-        }
-        $v = $this->SelectedValue();
-        return $v !== null ? [$v] : [];
+        return \array_values(
+            \array_filter($this->allItems, fn($_, $i): bool =>
+                isset($this->selected[$i]), ARRAY_FILTER_USE_BOTH
+            )
+        );
     }
 
-    public function IsConfirmed(): bool  { return $this->confirmed; }
-    public function IsCancelled(): bool  { return $this->cancelled; }
+    public function IsConfirmed(): bool { return $this->confirmed; }
+    public function IsCancelled(): bool { return $this->cancelled; }
+
+    public function SelectionCount(): int
+    {
+        return \count($this->selected);
+    }
 
     public function CanConfirm(): bool
     {
-        return $this->multi
-            ? \count($this->selected) >= $this->minSelections
-            : $this->confirmed;
+        return $this->selectionCount() >= $this->minSelections;
     }
 
+    /**
+     * @return list<string>
+     */
     public function CurrentPageItems(): array
     {
         $offset = $this->page * $this->perPage;
@@ -188,6 +179,11 @@ final class SelectionPrompt
 
     public function CurrentPage(): int { return $this->page; }
 
+    public function FilterMatchCount(): int
+    {
+        return \count($this->filteredItems);
+    }
+
     // -------------------------------------------------------------------------
     // Rendering
     // -------------------------------------------------------------------------
@@ -198,6 +194,11 @@ final class SelectionPrompt
 
         // Label
         $lines[] = $this->ansi($this->label, $this->labelStyle);
+
+        // Constraint hint
+        $minTxt = $this->minSelections > 0 ? " (min {$this->minSelections})" : '';
+        $maxTxt = $this->maxSelections > 0 ? " (max {$this->maxSelections})" : '';
+        $lines[] = "[multi-select{$minTxt}{$maxTxt}] selected: " . $this->selectionCount();
 
         // Filter bar
         $filterBar = '[filter] ' . $this->filterText . ' ';
@@ -217,26 +218,40 @@ final class SelectionPrompt
             $idx = $offset + $i;
             if (!isset($this->filteredItems[$idx])) break;
 
-            $item   = $this->filteredItems[$idx];
-            $marker = isset($this->selected[$idx]) ? '◉' : '○';
-            $prefix = $marker . ' ';
+            $item        = $this->filteredItems[$idx];
+            // Map filtered index back to allItems index
+            $allIdx      = $this->filteredToAllIndex($idx);
+            $isSelected  = isset($this->selected[$allIdx]);
+            $marker      = $isSelected ? '◉' : '○';
+            $prefix      = $marker . ' ';
 
-            $isCursor = ($idx === $this->filteredCursor());
+            $isCursor = ($idx === $this->cursor);
 
             $itemStr = $prefix . $item;
+
             if ($isCursor) {
                 $itemStr = $this->ansi($itemStr, $this->cursorStyle);
-            } elseif (isset($this->selected[$idx])) {
+            } elseif ($isSelected) {
                 $itemStr = $this->ansi($itemStr, $this->selectedStyle);
             }
 
             $lines[] = $itemStr;
         }
 
-        // Pagination indicator
+        // Pagination
         $total = $this->TotalPages();
         if ($total > 1) {
             $lines[] = \sprintf('Page %d/%d', $this->page + 1, $total);
+        }
+
+        // Confirm hint
+        if ($this->CanConfirm()) {
+            $lines[] = $this->ansi('Press Enter to confirm', '90');
+        } else {
+            $lines[] = $this->ansi(
+                "Select at least {$this->minSelections} item(s)",
+                '90'
+            );
         }
 
         return \implode("\n", $lines);
@@ -258,9 +273,7 @@ final class SelectionPrompt
         if ($cursor >= $count) $cursor = $count - 1;
 
         $clone->cursor = $cursor;
-
-        // Auto-scroll page
-        $clone->page = \min($clone->TotalPages() - 1, (int) \floor($cursor / $clone->perPage));
+        $clone->page   = \min($clone->TotalPages() - 1, (int) \floor($cursor / $clone->perPage));
 
         return $clone;
     }
@@ -297,26 +310,22 @@ final class SelectionPrompt
 
     private function toggleSelect(): self
     {
-        if (!$this->multi) {
-            // Single-select: space selects and confirms
-            return $this->Confirm();
-        }
-
-        $idx = $this->filteredCursor();
         $clone = clone $this;
+        $allIdx = $clone->filteredToAllIndex($clone->cursor);
 
-        if (isset($clone->selected[$idx])) {
-            unset($clone->selected[$idx]);
+        if (isset($clone->selected[$allIdx])) {
+            unset($clone->selected[$allIdx]);
         } else {
             // Check max
             if ($clone->maxSelections > 0 && \count($clone->selected) >= $clone->maxSelections) {
+                // At max, deselect the first selected instead
                 $first = \array_key_first($clone->selected);
                 if ($first !== null) {
                     unset($clone->selected[$first]);
-                    $clone->selected[$idx] = true;
+                    $clone->selected[$allIdx] = true;
                 }
             } else {
-                $clone->selected[$idx] = true;
+                $clone->selected[$allIdx] = true;
             }
         }
 
@@ -325,6 +334,7 @@ final class SelectionPrompt
 
     private function confirm(): self
     {
+        if (!$this->CanConfirm()) return $this;
         return $this->Confirm();
     }
 
@@ -333,12 +343,25 @@ final class SelectionPrompt
         return $this->Cancel();
     }
 
-    /**
-     * Map our flat cursor (across all filtered items) to the item's index in filteredItems.
-     */
-    private function filteredCursor(): int
+    private function selectionCount(): int
     {
-        return $this->cursor;
+        return \count($this->selected);
+    }
+
+    /**
+     * Map a cursor position in the filtered list to the corresponding index in allItems.
+     * We store by allItems indices; filtering may reorder, so we track via the actual item.
+     */
+    private function filteredToAllIndex(int $filteredIdx): int
+    {
+        $item = $this->filteredItems[$filteredIdx] ?? null;
+        if ($item === null) return $filteredIdx;
+
+        // Linear search (items list is small)
+        foreach ($this->allItems as $i => $v) {
+            if ($v === $item) return $i;
+        }
+        return $filteredIdx;
     }
 
     private function ansi(string $text, string $codes): string
