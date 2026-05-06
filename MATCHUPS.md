@@ -41,6 +41,21 @@ Status legend:
 | [charmbracelet/wish](https://github.com/charmbracelet/wish) | **CandyWish** | `candy-wish/` | `candycore/candy-wish` | `CandyCore\Wish` | 🟢 | SSH-server middleware framework (leans on host `sshd`) |
 | [charmbracelet/wishlist](https://github.com/charmbracelet/wishlist) | **SugarWishlist** | `sugar-wishlist/` | `candycore/sugar-wishlist` | `CandyCore\Wishlist` | 🟢 | SSH endpoint launcher (YAML / JSON shortcuts directory) |
 | [charmbracelet/promwish](https://github.com/charmbracelet/promwish) | **CandyMetrics** | `candy-metrics/` | `candycore/candy-metrics` | `CandyCore\Metrics` | 🟢 | Telemetry primitives + CandyWish session middleware |
+| [charmbracelet/log](https://github.com/charmbracelet/log) | **CandyLog** | `candy-log/` | `candycore/candy-log` | `CandyCore\Log` | 🔴 | Minimal, colorful logging library |
+| [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) | **CandyPalette** | `candy-palette/` | `candycore/candy-palette` | `CandyCore\Palette` | 🔴 | Terminal color detection + ICC profile handling |
+| [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🔴 | Self-hostable Git server over SSH |
+| [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🔴 | Personal key/value store |
+| [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `candycore/sugar-post` | `CandyCore\Post` | 🔴 | Terminal email client (SMTP/IMAP) |
+| [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `candycore/candy-lister` | `CandyCore\Lister` | 🔴 | List view component with boxing support |
+| [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) | **SugarBoxer** | `sugar-boxer/` | `candycore/sugar-boxer` | `CandyCore\Boxer` | 🔴 | Boxing/padding/whitespace component |
+| [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) | **SugarVeil** | `sugar-veil/` | `candycore/sugar-veil` | `CandyCore\Veil` | 🔴 | Modal / overlay window component |
+| [KevM/bubbleo](https://github.com/KevM/bubbleo) | **SugarCrumbs** | `sugar-crumbs/` | `candycore/sugar-crumbs` | `CandyCore\Crumbs` | 🔴 | NavStack / Breadcrumbs / Menu navigation components |
+| [Genekkion/theHermit](https://github.com/Genekkion/theHermit) | **CandyHermit** | `candy-hermit/` | `candycore/candy-hermit` | `CandyCore\Hermit` | 🔴 | Model for the Bubble Tea lifecycle |
+| [Evertras/bubble-table](https://github.com/Evertras/bubble-table) | **SugarTable** | `sugar-table/` | `candycore/sugar-table` | `CandyCore\Table` | 🔴 | Customizable interactive table component |
+| [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit) | **SugarReadline** | `sugar-readline/` | `candycore/sugar-readline` | `CandyCore\Readline` | 🔴 | Line-editing prompt library |
+| [EthanEFung/bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) | **SugarCalendar** | `sugar-calendar/` | `candycore/sugar-calendar` | `CandyCore\Calendar` | 🔴 | Date picker component |
+| [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) | **SugarToast** | `sugar-toast/` | `candycore/sugar-toast` | `CandyCore\Toast` | 🔴 | Floating alert notification component |
+| [76creates/stickers](https://github.com/76creates/stickers) | **SugarStickers** | `sugar-stickers/` | `candycore/sugar-stickers` | `CandyCore\Stickers` | 🔴 | Lipgloss utility components / building blocks |
 
 ## Reference apps
 

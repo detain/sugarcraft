@@ -102,3 +102,25 @@ You want names that:
 Stick close to this structure:
 > **[Cute prefix] + [technical/function suffix]**
 
+---
+
+## New entries (2026-05-06)
+
+| Name | Upstream | Rationale |
+|---|---|---|
+| **CandyLog** | charmbracelet/log | Foundation/system — logging is infrastructure |
+| **CandyPalette** | charmbracelet/colorprofile | Styling/colors → foundation-level color tooling |
+| **CandyServe** | charmbracelet/soft-serve | Foundation — self-hostable Git server |
+| **CandyLister** | treilik/bubblelister | Foundation — list/box layout component |
+| **CandyHermit** | Genekkion/theHermit | Foundation — model/lifecycle helper |
+| **SugarSkate** | charmbracelet/skate | Data — key/value store (data layer) |
+| **SugarPost** | charmbracelet/pop | App — terminal email client |
+| **SugarBoxer** | treilik/bubbleboxer | Component — boxing/padding |
+| **SugarVeil** | rmhubbert/bubbletea-overlay | Component — modal/overlay |
+| **SugarCrumbs** | KevM/bubbleo | Component — NavStack/Breadcrumbs/Menu |
+| **SugarTable** | Evertras/bubble-table | Component — interactive table |
+| **SugarReadline** | erikgeiser/promptkit | Component — line-editing prompt |
+| **SugarCalendar** | EthanEFung/bubble-datepicker | Component — date picker |
+| **SugarToast** | DaltonSW/bubbleup | Component — floating alerts |
+| **SugarStickers** | 76creates/stickers | Component — Lipgloss building blocks |
+
