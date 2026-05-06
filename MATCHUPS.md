@@ -53,7 +53,7 @@ Status legend:
 | [Genekkion/theHermit](https://github.com/Genekkion/theHermit) | **CandyHermit** | `candy-hermit/` | `candycore/candy-hermit` | `CandyCore\Hermit` | 🟢 |
 | [Evertras/bubble-table](https://github.com/Evertras/bubble-table) | **SugarTable** | `sugar-table/` | `candycore/sugar-table` | `CandyCore\Table` | 🔴 | Customizable interactive table component |
 | [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit) | **SugarReadline** | `sugar-readline/` | `candycore/sugar-readline` | `CandyCore\Readline` | 🔴 | Line-editing prompt library |
-| [EthanEFung/bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) | **SugarCalendar** | `sugar-calendar/` | `candycore/sugar-calendar` | `CandyCore\Calendar` | 🔴 | Date picker component |
+| [EthanEFung/bubble-datepicker](https://github.com/EthanEFung/bubble-datepicker) | **SugarCalendar** | `sugar-calendar/` | `candycore/sugar-calendar` | `CandyCore\Calendar` | 🟢 |
 | [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) | **SugarToast** | `sugar-toast/` | `candycore/sugar-toast` | `CandyCore\Toast` | 🟢 |
 | [76creates/stickers](https://github.com/76creates/stickers) | **SugarStickers** | `sugar-stickers/` | `candycore/sugar-stickers` | `CandyCore\Stickers` | 🟢 |
 
