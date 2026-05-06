@@ -77,6 +77,9 @@ final class Style
         private readonly string $hyperlinkId = '',
         private readonly ?string $boundString = null,
         private readonly ?Color $underlineColor = null,
+        private readonly UnderlineStyle $underlineStyle = UnderlineStyle::None,
+        private readonly string $paddingChar = ' ',
+        private readonly string $marginChar  = ' ',
     ) {}
 
     public static function new(): self
@@ -108,6 +111,42 @@ final class Style
     }
 
     public function getUnderlineColor(): ?Color { return $this->underlineColor; }
+
+    /**
+     * Underline-line shape (single / double / curly / dotted / dashed).
+     * Modern terminals interpret SGR `4:N` as a sub-style; older
+     * terminals draw a plain underline regardless. Mirrors lipgloss
+     * `UnderlineStyle`.
+     */
+    public function underlineStyle(UnderlineStyle $style): self
+    {
+        return $this->with(underlineStyle: $style, propsAdded: ['underlineStyle']);
+    }
+
+    public function getUnderlineStyle(): UnderlineStyle { return $this->underlineStyle; }
+
+    /**
+     * Glyph used to fill padding cells. Default `' '`. Single-cell
+     * graphemes are recommended; wider clusters render but break
+     * lipgloss-style width math. Mirrors lipgloss `PaddingChar`.
+     */
+    public function paddingChar(string $char): self
+    {
+        return $this->with(paddingChar: $char, propsAdded: ['paddingChar']);
+    }
+
+    public function getPaddingChar(): string { return $this->paddingChar; }
+
+    /**
+     * Glyph used to fill margin cells. Default `' '`. Mirrors
+     * lipgloss `MarginChar`.
+     */
+    public function marginChar(string $char): self
+    {
+        return $this->with(marginChar: $char, propsAdded: ['marginChar']);
+    }
+
+    public function getMarginChar(): string { return $this->marginChar; }
 
     public function foreground(?Color $c): self          { return $this->with(fg: $c, fgSet: true, propsAdded: ['fg']); }
     public function background(?Color $c): self          { return $this->with(bg: $c, bgSet: true, propsAdded: ['bg']); }
@@ -707,17 +746,18 @@ final class Style
         $lines = array_map(fn(string $l) => $this->halign($l, $innerWidth), $lines);
 
         // 4. Padding (styled — only if colorWhitespace).
+        $padCh = $this->paddingChar !== '' ? $this->paddingChar : ' ';
         $contentWidth = $pL + $innerWidth + $pR;
         if ($this->colorWhitespace) {
-            $padBlank = $sgr . str_repeat(' ', $contentWidth) . $reset;
-            $padLeftStr  = $sgr . str_repeat(' ', $pL);
-            $padRightStr = str_repeat(' ', $pR) . $reset;
+            $padBlank = $sgr . str_repeat($padCh, $contentWidth) . $reset;
+            $padLeftStr  = $sgr . str_repeat($padCh, $pL);
+            $padRightStr = str_repeat($padCh, $pR) . $reset;
             $linePrefix = $sgr;
             $lineSuffix = $reset;
         } else {
-            $padBlank = str_repeat(' ', $contentWidth);
-            $padLeftStr  = str_repeat(' ', $pL);
-            $padRightStr = str_repeat(' ', $pR);
+            $padBlank = str_repeat($padCh, $contentWidth);
+            $padLeftStr  = str_repeat($padCh, $pL);
+            $padRightStr = str_repeat($padCh, $pR);
             $linePrefix = $sgr;
             $lineSuffix = $reset;
         }
@@ -728,9 +768,9 @@ final class Style
         }
         foreach ($lines as $l) {
             if ($this->colorWhitespace) {
-                $body[] = $sgr . str_repeat(' ', $pL) . $l . str_repeat(' ', $pR) . $reset;
+                $body[] = $sgr . str_repeat($padCh, $pL) . $l . str_repeat($padCh, $pR) . $reset;
             } else {
-                $body[] = str_repeat(' ', $pL) . $linePrefix . $l . $lineSuffix . str_repeat(' ', $pR);
+                $body[] = str_repeat($padCh, $pL) . $linePrefix . $l . $lineSuffix . str_repeat($padCh, $pR);
             }
         }
         for ($i = 0; $i < $pB; $i++) {
@@ -765,9 +805,10 @@ final class Style
             $marginSgr = $this->marginBg->toBg($this->profile);
             $marginReset = $marginSgr === '' ? '' : Ansi::reset();
         }
-        $marginBlank = $marginSgr . str_repeat(' ', $mL + $borderedWidth + $mR) . $marginReset;
-        $mLstr = $marginSgr . str_repeat(' ', $mL) . $marginReset;
-        $mRstr = $marginSgr . str_repeat(' ', $mR) . $marginReset;
+        $mCh = $this->marginChar !== '' ? $this->marginChar : ' ';
+        $marginBlank = $marginSgr . str_repeat($mCh, $mL + $borderedWidth + $mR) . $marginReset;
+        $mLstr = $marginSgr . str_repeat($mCh, $mL) . $marginReset;
+        $mRstr = $marginSgr . str_repeat($mCh, $mR) . $marginReset;
         if ($mL === 0) { $mLstr = ''; }
         if ($mR === 0) { $mRstr = ''; }
 
@@ -950,12 +991,22 @@ final class Style
         if ($this->bold)      $codes[] = Ansi::BOLD;
         if ($this->faint)     $codes[] = Ansi::FAINT;
         if ($this->italic)    $codes[] = Ansi::ITALIC;
-        if ($this->underline) $codes[] = Ansi::UNDERLINE;
+        if ($this->underline && $this->underlineStyle === UnderlineStyle::None) {
+            // Plain underline — emit SGR 4 only.
+            $codes[] = Ansi::UNDERLINE;
+        }
         if ($this->blink)     $codes[] = Ansi::BLINK;
         if ($this->reverse)   $codes[] = Ansi::REVERSE;
         if ($this->strike)    $codes[] = Ansi::STRIKE;
 
         $sgr = $codes === [] ? '' : Ansi::sgr(...$codes);
+
+        // Sub-styled underline — SGR `4:N` where N is the line shape.
+        // Emitted alongside SGR 4 for terminals that don't grok the
+        // sub-parameter (kitty, WezTerm, recent xterm honour it).
+        if ($this->underline && $this->underlineStyle !== UnderlineStyle::None) {
+            $sgr .= "\x1b[4:" . $this->underlineStyle->value . 'm';
+        }
         if ($this->fg !== null) $sgr .= $this->fg->toFg($this->profile);
         if ($this->bg !== null) $sgr .= $this->bg->toBg($this->profile);
         // SGR 58: coloured underline (xterm-256 extension). Only emit
@@ -1054,6 +1105,9 @@ final class Style
         ?string $hyperlinkId = null,
         ?string $boundString = null, bool $boundStringSet = false,
         ?Color $underlineColor = null, bool $underlineColorSet = false,
+        ?UnderlineStyle $underlineStyle = null,
+        ?string $paddingChar = null,
+        ?string $marginChar = null,
         array $propsAdded = [],
     ): self {
         $newProps = $this->propsSet;
@@ -1099,6 +1153,9 @@ final class Style
             hyperlinkId:      $hyperlinkId   ?? $this->hyperlinkId,
             boundString:      $boundStringSet ? $boundString    : $this->boundString,
             underlineColor:   $underlineColorSet ? $underlineColor : $this->underlineColor,
+            underlineStyle:   $underlineStyle    ?? $this->underlineStyle,
+            paddingChar:      $paddingChar       ?? $this->paddingChar,
+            marginChar:       $marginChar        ?? $this->marginChar,
         );
     }
 
@@ -1167,6 +1224,9 @@ final class Style
             hyperlinkId:      $next->hyperlinkId,
             boundString:      $next->boundString,
             underlineColor:   $next->underlineColor,
+            underlineStyle:   $next->underlineStyle,
+            paddingChar:      $next->paddingChar,
+            marginChar:       $next->marginChar,
         );
     }
 
@@ -1200,6 +1260,9 @@ final class Style
             hyperlink: $this->hyperlink, hyperlinkId: $this->hyperlinkId,
             boundString: $this->boundString,
             underlineColor: $this->underlineColor,
+            underlineStyle: $this->underlineStyle,
+            paddingChar:    $this->paddingChar,
+            marginChar:     $this->marginChar,
         );
     }
 }

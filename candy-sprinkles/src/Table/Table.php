@@ -87,6 +87,39 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Drop every body row but keep the headers + every other setting
+     * intact. Mirrors lipgloss's `ClearRows()`. Useful when you want
+     * to refill a static-headers table from a streaming data source.
+     */
+    public function clearRows(): self
+    {
+        $clone = clone $this;
+        $clone->rows = [];
+        return $clone;
+    }
+
+    /**
+     * Bulk-replace body rows from any {@see Data} source. Mirrors
+     * lipgloss's `Data(StringData)` setter — pass {@see StringData}
+     * (or any custom Data implementation) for streaming ingest.
+     */
+    public function data(Data $data): self
+    {
+        $clone = clone $this;
+        $clone->rows = [];
+        $rowCount = $data->rows();
+        $colCount = $data->columns();
+        for ($r = 0; $r < $rowCount; $r++) {
+            $row = [];
+            for ($c = 0; $c < $colCount; $c++) {
+                $row[] = $data->at($r, $c);
+            }
+            $clone->rows[] = $row;
+        }
+        return $clone;
+    }
+
     public function border(?Border $b): self
     {
         $clone = clone $this;
