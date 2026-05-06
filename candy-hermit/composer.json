@@ -43,7 +43,7 @@
         { "type": "path", "url": "../candy-palette",   "options": { "symlink": true } },
         { "type": "path", "url": "../sugar-skate",     "options": { "symlink": true } },
         { "type": "path", "url": "../sugar-post",      "options": { "symlink": true } },
-        { "type": "path": "url": "../candy-lister",    "options": { "symlink": true } },
+        { "type": "path", "url": "../candy-lister",    "options": { "symlink": true } },
         { "type": "path", "url": "../sugar-boxer",     "options": { "symlink": true } },
         { "type": "path", "url": "../sugar-veil",      "options": { "symlink": true } },
         { "type": "path", "url": "../sugar-crumbs",    "options": { "symlink": true } }
