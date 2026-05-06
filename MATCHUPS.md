@@ -44,7 +44,7 @@ Status legend:
 | [charmbracelet/log](https://github.com/charmbracelet/log) | **CandyLog** | `candy-log/` | `candycore/candy-log` | `CandyCore\Log` | 🟢 | Minimal, colorful logging library |
 | [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) | **CandyPalette** | `candy-palette/` | `candycore/candy-palette` | `CandyCore\Palette` | 🟢 | Terminal color detection + ICC profile handling |
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `candycore/candy-serve` | `CandyCore\Serve` | 🔴 | Self-hostable Git server over SSH |
-| [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🔴 | Personal key/value store |
+| [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `candycore/sugar-skate` | `CandyCore\Skate` | 🟢 | Personal key/value store |
 | [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `candycore/sugar-post` | `CandyCore\Post` | 🔴 | Terminal email client (SMTP/IMAP) |
 | [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `candycore/candy-lister` | `CandyCore\Lister` | 🔴 | List view component with boxing support |
 | [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) | **SugarBoxer** | `sugar-boxer/` | `candycore/sugar-boxer` | `CandyCore\Boxer` | 🔴 | Boxing/padding/whitespace component |

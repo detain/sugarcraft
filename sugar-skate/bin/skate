@@ -1,0 +1,154 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * SugarSkate CLI — charmbracelet/skate equivalent.
+ *
+ * Usage:
+ *   skate set <key> [value]          Set a key (reads from stdin if no value)
+ *   skate get <key>                  Get a value
+ *   skate list [-k|-v] [-r] [-d delim] [pattern]  List entries
+ *   skate delete <key>               Delete a key (supports glob)
+ *   skate list-dbs                   List all databases
+ *
+ * Database suffix: key@dbname
+ */
+namespace CandyCore\Skate;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use CandyCore\Skate\Store;
+
+$bin = basename($argv[0]);
+
+if ($argc < 2) {
+    help($bin);
+    exit(0);
+}
+
+$store = new Store();
+$cmd = $argv[1];
+
+switch ($cmd) {
+    case 'set':
+        if ($argc < 3) {
+            fwrite(STDERR, "Usage: {$bin} set <key> [value]\n");
+            exit(1);
+        }
+        $key = $argv[2];
+        $value = $argc >= 4 ? $argv[3] : trim(fgets(STDIN) ?: '');
+        $store->set($key, $value);
+        break;
+
+    case 'get':
+        if ($argc < 3) {
+            fwrite(STDERR, "Usage: {$bin} get <key>\n");
+            exit(1);
+        }
+        $val = $store->get($argv[2]);
+        if ($val === '') {
+            // silent exit for missing keys — matches Go skate behaviour
+            exit(1);
+        }
+        echo $val;
+        break;
+
+    case 'list':
+        $opts = parseListOpts($argv, 2);
+        $delim = $opts['delimiter'];
+        foreach ($store->list($opts['pattern'], null, $opts['reverse'], $opts['mode'], $delim) as $item) {
+            if ($item instanceof Entry) {
+                echo "{$item->key}{$delim}{$item->value}\n";
+            } else {
+                echo "{$item}\n";
+            }
+        }
+        break;
+
+    case 'delete':
+        if ($argc < 3) {
+            fwrite(STDERR, "Usage: {$bin} delete <key>\n");
+            exit(1);
+        }
+        $n = $store->delete($argv[2]);
+        echo "Deleted {$n} entries.\n";
+        break;
+
+    case 'list-dbs':
+        foreach ($store->listDatabases() as $db) {
+            echo "{$db}\n";
+        }
+        break;
+
+    case '--help':
+    case '-h':
+    case 'help':
+        help($bin);
+        break;
+
+    default:
+        fwrite(STDERR, "Unknown command: {$cmd}\n");
+        help($bin);
+        exit(1);
+}
+
+function help(string $bin): void
+{
+    echo <<<HELP
+SugarSkate — personal key/value store
+
+Usage:
+  {$bin} set <key> [value]       Set a key
+  {$bin} get <key>               Get a value
+  {$bin} list [-k|-v] [-r] [-d delim] [pattern]
+                                 List entries (default: keys+values)
+  {$bin} delete <key>            Delete a key (glob patterns supported)
+  {$bin} list-dbs                List all databases
+  {$bin} --help                  Show this help
+
+Patterns:
+  *  matches any characters
+  ?  matches a single character
+
+Database suffix:
+  Use key@dbname to target a specific database.
+  E.g. {$bin} get token@passwords
+
+HELP;
+}
+
+function parseListOpts(array $argv, int $offset): array
+{
+    $mode = 'all';
+    $reverse = false;
+    $delimiter = "\t";
+    $pattern = null;
+
+    $remaining = \array_slice($argv, $offset);
+    $positional = [];
+
+    foreach ($remaining as $arg) {
+        if ($arg === '-k') {
+            $mode = 'keys';
+        } elseif ($arg === '-v') {
+            $mode = 'values';
+        } elseif ($arg === '-r') {
+            $reverse = true;
+        } elseif (\str_starts_with($arg, '-d')) {
+            $delimiter = \substr($arg, 2) ?: "\t";
+        } elseif (\str_starts_with($arg, '-')) {
+            // ignore unknown flags
+        } else {
+            $positional[] = $arg;
+        }
+    }
+
+    return [
+        'mode' => $mode,
+        'reverse' => $reverse,
+        'delimiter' => $delimiter,
+        'pattern' => $positional[0] ?? null,
+    ];
+}
