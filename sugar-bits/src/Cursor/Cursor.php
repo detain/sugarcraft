@@ -8,6 +8,7 @@ use CandyCore\Core\Cmd;
 use CandyCore\Core\Model;
 use CandyCore\Core\Msg;
 use CandyCore\Core\Util\Ansi;
+use CandyCore\Sprinkles\Style;
 
 /**
  * Text-cursor primitive used inside {@see \CandyCore\Bits\TextInput\TextInput}
@@ -33,6 +34,8 @@ final class Cursor implements Model
         public readonly bool $blinkOn,
         public readonly float $blinkSpeed,
         ?int $id = null,
+        public readonly ?Style $style = null,
+        public readonly ?Style $textStyle = null,
     ) {
         $this->id = $id ?? ++self::$nextId;
     }
@@ -70,7 +73,17 @@ final class Cursor implements Model
             Mode::Hidden => false,
         };
         if ($highlighted) {
+            // Caller-supplied $style takes precedence over the default
+            // reverse-video highlight.
+            if ($this->style !== null) {
+                return $this->style->render($this->char);
+            }
             return Ansi::sgr(Ansi::REVERSE) . $this->char . Ansi::reset();
+        }
+        // Off-state: optional textStyle paints the cell when not
+        // highlighted (matches upstream Bubbles' TextStyle).
+        if ($this->textStyle !== null) {
+            return $this->textStyle->render($this->char);
         }
         return $this->char;
     }
@@ -82,25 +95,49 @@ final class Cursor implements Model
      */
     public function focus(): array
     {
-        $next = new self($this->char, $this->mode, true, true, $this->blinkSpeed, $this->id);
+        $next = new self($this->char, $this->mode, true, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
         $cmd = $this->mode === Mode::Blink ? $next->blink() : null;
         return [$next, $cmd];
     }
 
     public function blur(): self
     {
-        return new self($this->char, $this->mode, false, true, $this->blinkSpeed, $this->id);
+        return new self($this->char, $this->mode, false, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
     }
 
     public function setChar(string $c): self
     {
-        return new self($c, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id);
+        return new self($c, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
     }
 
     public function setMode(Mode $m): self
     {
-        return new self($this->char, $m, $this->focused, true, $this->blinkSpeed, $this->id);
+        return new self($this->char, $m, $this->focused, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
     }
+
+    /**
+     * Highlight style — used when the cursor cell is "on" (focused +
+     * static mode, or blink-on). Default null = reverse video.
+     */
+    public function withStyle(?Style $s): self
+    {
+        return new self($this->char, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $s, $this->textStyle);
+    }
+
+    /**
+     * Off-state style — used when the cursor cell is "off" (unfocused,
+     * blink-off, or Hidden mode). Default null = bare char.
+     */
+    public function withTextStyle(?Style $s): self
+    {
+        return new self($this->char, $this->mode, $this->focused, $this->blinkOn, $this->blinkSpeed, $this->id, $this->style, $s);
+    }
+
+    /** Stable per-instance ID. Mirror upstream Bubbles `ID()`. */
+    public function id(): int { return $this->id; }
+
+    /** Current cursor mode. */
+    public function mode(): Mode { return $this->mode; }
 
     private function blink(): \Closure
     {
