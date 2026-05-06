@@ -49,6 +49,40 @@ final class BarChart
         return new self(self::coerceBars($bars), $this->width, $this->height, $this->min, $this->max, $this->showLabels);
     }
 
+    /**
+     * Append a single bar to the chart. Accepts a {@see Bar} instance,
+     * a `[label, value]` tuple, or a `label => value` pair (when called
+     * via `push(['Apple', 12])` or `push(new Bar('Apple', 12))`).
+     * Mirrors ntcharts' `BarChart::Push(BarData)`. Immutable.
+     */
+    public function push(Bar|array $bar): self
+    {
+        $next = [...$this->bars, ...self::coerceBars([$bar])];
+        return new self($next, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+    }
+
+    /**
+     * Append every bar in `$bars` to the chart, in order. Accepts the
+     * same shapes as {@see new()}. Mirrors ntcharts' `BarChart::PushAll`.
+     *
+     * @param iterable<mixed> $bars
+     */
+    public function pushAll(iterable $bars): self
+    {
+        $appended = self::coerceBars($bars);
+        if ($appended === []) {
+            return $this;
+        }
+        $next = [...$this->bars, ...$appended];
+        return new self($next, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+    }
+
+    /** Drop every bar. Mirrors ntcharts' `Clear`. */
+    public function clear(): self
+    {
+        return new self([], $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+    }
+
     public function withSize(int $w, int $h): self
     {
         if ($w < 0 || $h < 0) {

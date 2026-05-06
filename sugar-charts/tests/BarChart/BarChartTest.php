@@ -117,4 +117,48 @@ final class BarChartTest extends TestCase
         $this->assertStringContainsString('└', $out);
         $this->assertStringContainsString('─', $out);
     }
+
+    public function testPushAppendsSingleBar(): void
+    {
+        $b = BarChart::new([['a', 0.5]]);
+        $b = $b->push(['b', 0.7]);
+        $this->assertCount(2, $b->bars);
+        $this->assertSame('a', $b->bars[0]->label);
+        $this->assertSame('b', $b->bars[1]->label);
+    }
+
+    public function testPushAcceptsBarInstance(): void
+    {
+        $b = BarChart::new()->push(new Bar('only', 1.0));
+        $this->assertCount(1, $b->bars);
+        $this->assertSame('only', $b->bars[0]->label);
+    }
+
+    public function testPushAllAppendsEvery(): void
+    {
+        $b = BarChart::new([['a', 1.0]])->pushAll([['b', 2.0], ['c', 3.0]]);
+        $this->assertCount(3, $b->bars);
+        $this->assertSame('c', $b->bars[2]->label);
+    }
+
+    public function testPushAllOnEmptyArrayIsNoop(): void
+    {
+        $a = BarChart::new([['x', 1.0]]);
+        $b = $a->pushAll([]);
+        $this->assertSame($a->bars, $b->bars);
+    }
+
+    public function testClearWipesBars(): void
+    {
+        $b = BarChart::new([['a', 1.0], ['b', 2.0]])->clear();
+        $this->assertSame([], $b->bars);
+    }
+
+    public function testPushIsImmutable(): void
+    {
+        $a = BarChart::new([['a', 1.0]]);
+        $b = $a->push(['b', 2.0]);
+        $this->assertCount(1, $a->bars);
+        $this->assertCount(2, $b->bars);
+    }
 }
