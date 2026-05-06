@@ -21,6 +21,9 @@ final class Confirm implements Field
     use HasHideFunc;
     use HasDynamicLabels;
 
+    /** @var ?\Closure(bool):?string */
+    private ?\Closure $validator = null;
+
     private function __construct(
         public readonly string $key,
         public readonly bool $value,
@@ -29,6 +32,7 @@ final class Confirm implements Field
         public readonly string $description,
         public readonly string $affirmative,
         public readonly string $negative,
+        public readonly ?string $error = null,
     ) {}
 
     public static function new(string $key, bool $default = false): self
@@ -43,6 +47,35 @@ final class Confirm implements Field
         return $this->mutate(affirmative: $yes, negative: $no);
     }
     public function withDefault(bool $v): self       { return $this->mutate(value: $v); }
+
+    /**
+     * Run the closure on every value change. Returns null on valid,
+     * a non-empty error string on invalid. Mirrors huh's
+     * `WithValidator` on Confirm.
+     *
+     * @param ?\Closure(bool):?string $fn pass null to clear
+     */
+    public function withValidator(?\Closure $fn): self
+    {
+        $clone = clone $this;
+        $clone->validator = $fn;
+        return $clone->revalidate();
+    }
+
+    /** @internal */
+    private function revalidate(): self
+    {
+        $err = $this->validator !== null ? ($this->validator)($this->value) : null;
+        if ($err === $this->error) {
+            return $this;
+        }
+        $clone = clone $this;
+        // Bypass mutate() because $error is readonly on a fresh ctor.
+        return new self(
+            $this->key, $this->value, $this->focused, $this->title,
+            $this->description, $this->affirmative, $this->negative, $err,
+        );
+    }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed { return $this->value; }
@@ -89,7 +122,7 @@ final class Confirm implements Field
     public function isFocused(): bool         { return $this->focused; }
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
     public function getDescription(): string  { return $this->resolveDescription($this->description); }
-    public function getError(): ?string       { return null; }
+    public function getError(): ?string       { return $this->error; }
     public function skippable(): bool         { return false; }
     public function consumes(Msg $msg): bool  { return false; }
 
@@ -101,7 +134,7 @@ final class Confirm implements Field
         ?string $affirmative = null,
         ?string $negative = null,
     ): self {
-        return new self(
+        $next = new self(
             key:         $this->key,
             value:       $value       ?? $this->value,
             focused:     $focused     ?? $this->focused,
@@ -109,6 +142,13 @@ final class Confirm implements Field
             description: $description ?? $this->description,
             affirmative: $affirmative ?? $this->affirmative,
             negative:    $negative    ?? $this->negative,
+            error:       $this->error,
         );
+        $next->validator = $this->validator;
+        // Re-run validator when the value changed.
+        if ($value !== null && $value !== $this->value) {
+            return $next->revalidate();
+        }
+        return $next;
     }
 }

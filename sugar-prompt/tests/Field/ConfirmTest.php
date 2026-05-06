@@ -57,4 +57,28 @@ final class ConfirmTest extends TestCase
         $this->assertStringContainsString('Cancel', $view);
         $this->assertStringContainsString('Continue?', $view);
     }
+
+    public function testValidatorRunsOnDefault(): void
+    {
+        $f = Confirm::new('agree', false)
+            ->withValidator(static fn (bool $v): ?string => $v ? null : 'must agree');
+        $this->assertSame('must agree', $f->getError());
+    }
+
+    public function testValidatorRunsOnValueChange(): void
+    {
+        $f = Confirm::new('agree', false)
+            ->withValidator(static fn (bool $v): ?string => $v ? null : 'must agree');
+        [$f, ] = $f->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'y'));
+        $this->assertNull($f->getError());
+    }
+
+    public function testValidatorNullClears(): void
+    {
+        $f = Confirm::new('q')
+            ->withValidator(static fn (bool $v): ?string => 'always')
+            ->withValidator(null);
+        $this->assertNull($f->getError());
+    }
 }

@@ -482,4 +482,38 @@ final class FormTest extends TestCase
         $this->assertStringContainsString('quit', $help);
         $this->assertStringContainsString('•', $help);
     }
+
+    public function testWithShowHelpDefaultIsOn(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $this->assertTrue($form->showHelp);
+    }
+
+    public function testWithShowHelpToggle(): void
+    {
+        $form = Form::new(Input::new('a'))->withShowHelp(false);
+        $this->assertFalse($form->showHelp);
+    }
+
+    public function testWithShowErrorsToggle(): void
+    {
+        $form = Form::new(Input::new('a'))->withShowErrors(false);
+        $this->assertFalse($form->showErrors);
+    }
+
+    public function testWithWidthClampsToZero(): void
+    {
+        $form = Form::new(Input::new('a'))->withWidth(-5);
+        $this->assertSame(0, $form->width);
+        $form2 = $form->withWidth(80);
+        $this->assertSame(80, $form2->width);
+    }
+
+    public function testWithHeightClampsToZero(): void
+    {
+        $form = Form::new(Input::new('a'))->withHeight(-1);
+        $this->assertSame(0, $form->height);
+        $form2 = $form->withHeight(24);
+        $this->assertSame(24, $form2->height);
+    }
 }

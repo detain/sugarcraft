@@ -37,6 +37,10 @@ final class Form implements Model
         public readonly Theme $theme,
         public readonly bool $accessible,
         private readonly ?\Closure $initCmd = null,
+        public readonly bool $showHelp = true,
+        public readonly bool $showErrors = true,
+        public readonly int $width = 0,
+        public readonly int $height = 0,
     ) {}
 
     /**
@@ -105,6 +109,44 @@ final class Form implements Model
     public function withAccessible(bool $on = true): self
     {
         return $this->mutate(accessible: $on);
+    }
+
+    /**
+     * Show / hide the help footer rendered below the focused field.
+     * Default on. Mirrors huh's `WithShowHelp`.
+     */
+    public function withShowHelp(bool $on = true): self
+    {
+        return $this->mutate(showHelp: $on);
+    }
+
+    /**
+     * Show / hide the inline `! error` line under fields with active
+     * validation errors. Default on. Mirrors huh's `WithShowErrors`.
+     */
+    public function withShowErrors(bool $on = true): self
+    {
+        return $this->mutate(showErrors: $on);
+    }
+
+    /**
+     * Pin the rendered width to `$cells` cells (clamped to 0). The
+     * field views are wrapped at this budget when they support
+     * width caps. Default 0 = no cap. Mirrors huh's `WithWidth`.
+     */
+    public function withWidth(int $cells): self
+    {
+        return $this->mutate(width: max(0, $cells));
+    }
+
+    /**
+     * Pin the rendered height. Currently advisory — fields decide
+     * how to use the budget. Default 0 = no cap. Mirrors huh's
+     * `WithHeight`.
+     */
+    public function withHeight(int $rows): self
+    {
+        return $this->mutate(height: max(0, $rows));
     }
 
     public function nextGroup(): self
@@ -605,6 +647,10 @@ final class Form implements Model
         ?bool $aborted = null,
         ?Theme $theme = null,
         ?bool $accessible = null,
+        ?bool $showHelp = null,
+        ?bool $showErrors = null,
+        ?int $width = null,
+        ?int $height = null,
     ): self {
         return new self(
             groups:         $this->groups,
@@ -616,6 +662,10 @@ final class Form implements Model
             theme:          $theme          ?? $this->theme,
             accessible:     $accessible     ?? $this->accessible,
             initCmd:        null,
+            showHelp:       $showHelp       ?? $this->showHelp,
+            showErrors:     $showErrors     ?? $this->showErrors,
+            width:          $width          ?? $this->width,
+            height:         $height         ?? $this->height,
         );
     }
 }
