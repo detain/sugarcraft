@@ -378,6 +378,90 @@ final class Form implements Model
     }
 
     /**
+     * Alias for {@see focusedField()} matching huh's `GetFocusedField`.
+     */
+    public function getFocusedField(): ?Field
+    {
+        return $this->focusedField();
+    }
+
+    /**
+     * Validation errors keyed by field key. Hidden groups and skippable
+     * fields (Note) are excluded. Empty when every visible field
+     * validates cleanly. Mirrors huh's `Errors()`.
+     *
+     * @return array<string, string>
+     */
+    public function errors(): array
+    {
+        $out = [];
+        $accumulated = [];
+        foreach ($this->groups as $i => $group) {
+            if ($group->isHidden($accumulated)) {
+                continue;
+            }
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if ($f->skippable()) {
+                    continue;
+                }
+                $accumulated[$f->key()] = $f->value();
+                $err = $f->getError();
+                if ($err !== null && $err !== '') {
+                    $out[$f->key()] = $err;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * True when any visible field has a non-empty validation error.
+     */
+    public function hasErrors(): bool
+    {
+        return $this->errors() !== [];
+    }
+
+    /**
+     * Currently-applicable key bindings rendered as `[label, keys]` rows
+     * suitable for a status / help bar. The bindings reflect form-level
+     * navigation (Tab, Shift-Tab, Enter, Esc/Ctrl-C) plus any extras
+     * the focused field exposes via {@see Field::keyBindings()} when
+     * implemented (currently only used by the standard navigation set
+     * since per-field bindings vary). Mirrors the surface of huh's
+     * `KeyBinds()`.
+     *
+     * @return list<array{0:string, 1:string}>
+     */
+    public function keyBinds(): array
+    {
+        $binds = [
+            ['next',   'tab / ↓'],
+            ['prev',   'shift+tab / ↑'],
+            ['submit', 'enter'],
+            ['quit',   'esc / ctrl+c'],
+        ];
+        if (count($this->groups) > 1) {
+            $binds[] = ['next page', 'tab past last field'];
+            $binds[] = ['prev page', 'shift+tab on first field'];
+        }
+        return $binds;
+    }
+
+    /**
+     * Single-line help string composed from {@see keyBinds()}. Useful
+     * for status bars / footers. Mirrors huh's `Help()`.
+     */
+    public function help(): string
+    {
+        $parts = [];
+        foreach ($this->keyBinds() as [$label, $keys]) {
+            $parts[] = $label . ' ' . $keys;
+        }
+        return implode(' • ', $parts);
+    }
+
+    /**
      * Forward a Msg to the focused field and return the resulting Form.
      *
      * @return array{0:self, 1:?\Closure}

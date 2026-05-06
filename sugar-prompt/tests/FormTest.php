@@ -410,4 +410,76 @@ final class FormTest extends TestCase
         $form = Form::new(Input::new('name'));
         $this->assertSame([], $form->getArray('missing'));
     }
+
+    public function testGetFocusedFieldAlias(): void
+    {
+        $form = Form::new(Input::new('a'), Input::new('b'));
+        $this->assertSame($form->focusedField(), $form->getFocusedField());
+    }
+
+    public function testErrorsEmptyByDefault(): void
+    {
+        $form = Form::new(Input::new('a'), Input::new('b'));
+        $this->assertSame([], $form->errors());
+        $this->assertFalse($form->hasErrors());
+    }
+
+    public function testErrorsCollectsFromValidators(): void
+    {
+        $form = Form::new(
+            Input::new('email')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'must contain @'),
+            Input::new('name'),
+        );
+        // Type a bad value into the focused field (email).
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'a'));
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'd'));
+        $errors = $form->errors();
+        $this->assertArrayHasKey('email', $errors);
+        $this->assertSame('must contain @', $errors['email']);
+        $this->assertTrue($form->hasErrors());
+    }
+
+    public function testErrorsClearedAfterFix(): void
+    {
+        $form = Form::new(
+            Input::new('email')
+                ->withValidator(static fn (string $v) => $v === '' || str_contains($v, '@') ? null : 'must contain @'),
+        );
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertTrue($form->hasErrors());
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, '@'));
+        $this->assertFalse($form->hasErrors());
+    }
+
+    public function testKeyBindsContainsCoreNavigation(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $binds = $form->keyBinds();
+        $labels = array_map(static fn ($b) => $b[0], $binds);
+        $this->assertContains('next',   $labels);
+        $this->assertContains('prev',   $labels);
+        $this->assertContains('submit', $labels);
+        $this->assertContains('quit',   $labels);
+    }
+
+    public function testKeyBindsAddsPagingForMultiGroup(): void
+    {
+        $form = Form::groups(
+            \CandyCore\Prompt\Group::new(Input::new('a')),
+            \CandyCore\Prompt\Group::new(Input::new('b')),
+        );
+        $labels = array_map(static fn ($b) => $b[0], $form->keyBinds());
+        $this->assertContains('next page', $labels);
+    }
+
+    public function testHelpFlattensKeyBinds(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $help = $form->help();
+        $this->assertStringContainsString('next', $help);
+        $this->assertStringContainsString('quit', $help);
+        $this->assertStringContainsString('•', $help);
+    }
 }
