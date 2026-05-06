@@ -76,4 +76,81 @@ final class HelpTest extends TestCase
         $map = new FakeKeyMap([], []);
         $this->assertSame('', (new Help())->fullView($map));
     }
+
+    public function testViewDispatchesByShowAll(): void
+    {
+        $map = new FakeKeyMap([
+            $this->b('q', 'quit'),
+        ], [
+            [$this->b('q', 'quit')],
+        ]);
+        $shortFirst = new Help();
+        $this->assertSame('q quit', $shortFirst->view($map));
+        $this->assertSame('q quit', $shortFirst->showAll(true)->view($map));
+        // Original instance unchanged.
+        $this->assertSame('q quit', $shortFirst->view($map));
+    }
+
+    public function testWidthTruncatesWithEllipsis(): void
+    {
+        $map = new FakeKeyMap([
+            $this->b('a', 'alpha'),
+            $this->b('b', 'beta'),
+            $this->b('c', 'gamma'),
+        ], []);
+        $help = (new Help())->width(15);
+        $out = $help->shortView($map);
+        $this->assertLessThanOrEqual(15, mb_strwidth($out));
+        $this->assertStringEndsWith('…', $out);
+    }
+
+    public function testCustomEllipsisGlyph(): void
+    {
+        $map = new FakeKeyMap([
+            $this->b('a', 'alpha'),
+            $this->b('b', 'beta'),
+        ], []);
+        $help = (new Help())->width(8)->withEllipsis('...');
+        $out  = $help->shortView($map);
+        $this->assertStringEndsWith('...', $out);
+    }
+
+    public function testWidthRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new Help())->width(-1);
+    }
+
+    public function testGetWidthRoundTrips(): void
+    {
+        $this->assertSame(0,  (new Help())->getWidth());
+        $this->assertSame(20, (new Help())->width(20)->getWidth());
+    }
+
+    public function testShortHelpViewBypassKeyMap(): void
+    {
+        $bs = [$this->b('q', 'quit'), $this->b('?', 'help')];
+        $this->assertSame('q quit • ? help', (new Help())->shortHelpView($bs));
+    }
+
+    public function testFullHelpViewBypassKeyMap(): void
+    {
+        $cols = [
+            [$this->b('a', 'alpha'), $this->b('b', 'beta')],
+            [$this->b('c', 'gamma')],
+        ];
+        $out = (new Help())->fullHelpView($cols);
+        $this->assertStringContainsString('a alpha', $out);
+        $this->assertStringContainsString('c gamma', $out);
+    }
+
+    public function testCustomFullSeparator(): void
+    {
+        // Two-row column → fullSeparator joins the rows.
+        $map = new FakeKeyMap([], [
+            [$this->b('a', 'alpha'), $this->b('b', 'beta')],
+        ]);
+        $help = (new Help())->withFullSeparator(' :: ');
+        $this->assertSame('a alpha :: b beta', $help->fullView($map));
+    }
 }

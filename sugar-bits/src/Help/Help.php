@@ -14,12 +14,14 @@ use CandyCore\Core\Util\Width;
  *
  * ```php
  * $help = new Help();
- * echo $help->shortView($keymap);  // "↑/k up • ↓/j down • q quit"
- * echo $help->fullView($keymap);   // multi-column block with aligned key columns
+ * echo $help->shortView($keymap);   // "↑/k up • ↓/j down • q quit"
+ * echo $help->fullView($keymap);    // multi-column block with aligned key columns
+ * echo $help->showAll(true)
+ *           ->width(40)
+ *           ->view($keymap);        // unified entry — picks short or full
  * ```
  *
- * The component is immutable — separators are configurable through
- * `with*()` factories that return new instances.
+ * The component is immutable — every setter returns a new instance.
  */
 final class Help
 {
@@ -27,35 +29,114 @@ final class Help
         public readonly string $separator = ' • ',
         public readonly string $keyDescGap = ' ',
         public readonly string $columnGap  = '    ',
+        public readonly bool   $showAll    = false,
+        public readonly int    $maxWidth   = 0,
+        public readonly string $ellipsis   = '…',
+        public readonly string $fullSeparator = "\n",
     ) {}
 
     public function withSeparator(string $s): self
     {
-        return new self($s, $this->keyDescGap, $this->columnGap);
+        return $this->copy(separator: $s);
+    }
+
+    /**
+     * Toggle the unified {@see view()} entry between short and full
+     * rendering. `false` (default) → short row; `true` → full block.
+     * Mirrors Bubbles' `Help.ShowAll` field.
+     */
+    public function showAll(bool $on = true): self
+    {
+        return $this->copy(showAll: $on);
+    }
+
+    /**
+     * Cap the rendered width (cells). When the short view would exceed
+     * `$cells`, trailing entries get dropped and the {@see $ellipsis}
+     * glyph is appended. Pass `0` (default) to disable truncation.
+     * Mirrors Bubbles' `Help.SetWidth` / `Help.Width`.
+     */
+    public function width(int $cells): self
+    {
+        if ($cells < 0) {
+            throw new \InvalidArgumentException('help width must be >= 0');
+        }
+        return $this->copy(maxWidth: $cells);
+    }
+
+    /** Read-only accessor for the configured max width. */
+    public function getWidth(): int { return $this->maxWidth; }
+
+    /** Truncation glyph appended when the short row exceeds {@see $maxWidth}. */
+    public function withEllipsis(string $glyph): self
+    {
+        return $this->copy(ellipsis: $glyph);
+    }
+
+    /** Separator between rows in the full-help block (default newline). */
+    public function withFullSeparator(string $s): self
+    {
+        return $this->copy(fullSeparator: $s);
+    }
+
+    /**
+     * Unified entry: render short or full according to {@see $showAll}.
+     * Mirrors Bubbles' `Help.View(KeyMap)`.
+     */
+    public function view(KeyMap $map): string
+    {
+        return $this->showAll
+            ? $this->fullView($map)
+            : $this->shortView($map);
     }
 
     /** Render the inline (short) help row from `KeyMap::shortHelp()`. */
     public function shortView(KeyMap $map): string
     {
-        $parts = [];
-        foreach ($map->shortHelp() as $b) {
-            $entry = $this->renderBinding($b);
-            if ($entry !== '') {
-                $parts[] = $entry;
-            }
-        }
-        return implode($this->separator, $parts);
+        return $this->shortHelpView($map->shortHelp());
     }
 
     /** Render the multi-column full help block from `KeyMap::fullHelp()`. */
     public function fullView(KeyMap $map): string
     {
-        $columns = $map->fullHelp();
+        return $this->fullHelpView($map->fullHelp());
+    }
+
+    /**
+     * Render an arbitrary list of {@see Binding}s as a short row,
+     * bypassing the KeyMap. Mirrors Bubbles'
+     * `Help.ShortHelpView([]Binding)`.
+     *
+     * @param list<Binding> $bindings
+     */
+    public function shortHelpView(array $bindings): string
+    {
+        $parts = [];
+        foreach ($bindings as $b) {
+            $entry = $this->renderBinding($b);
+            if ($entry !== '') {
+                $parts[] = $entry;
+            }
+        }
+        $rendered = implode($this->separator, $parts);
+        if ($this->maxWidth > 0 && Width::string($rendered) > $this->maxWidth) {
+            $rendered = $this->truncate($rendered);
+        }
+        return $rendered;
+    }
+
+    /**
+     * Render an arbitrary multi-column matrix of {@see Binding}s as a
+     * full block, bypassing the KeyMap. Mirrors Bubbles'
+     * `Help.FullHelpView([][]Binding)`.
+     *
+     * @param list<list<Binding>> $columns
+     */
+    public function fullHelpView(array $columns): string
+    {
         if ($columns === []) {
             return '';
         }
-
-        // Build per-column lines; pad to equal height.
         /** @var list<list<string>> $colLines */
         $colLines = [];
         $maxRows = 0;
@@ -71,7 +152,6 @@ final class Help
             $maxRows = max($maxRows, count($lines));
         }
 
-        // Right-pad each column to its max line width.
         foreach ($colLines as $idx => $lines) {
             $width = 0;
             foreach ($lines as $l) {
@@ -86,7 +166,6 @@ final class Help
             $colLines[$idx] = $padded;
         }
 
-        // Stitch columns together row by row.
         $out = [];
         for ($i = 0; $i < $maxRows; $i++) {
             $row = [];
@@ -95,7 +174,7 @@ final class Help
             }
             $out[] = rtrim(implode($this->columnGap, $row));
         }
-        return implode("\n", $out);
+        return implode($this->fullSeparator, $out);
     }
 
     private function renderBinding(Binding $b): string
@@ -104,5 +183,48 @@ final class Help
             return '';
         }
         return $b->help->key . $this->keyDescGap . $b->help->desc;
+    }
+
+    /**
+     * Truncate a rendered short row to {@see $maxWidth} cells, replacing
+     * the dropped tail with {@see $ellipsis}. Width is measured via
+     * `Width::string()` so multibyte / wide-cell content rounds correctly.
+     */
+    private function truncate(string $rendered): string
+    {
+        $eW = Width::string($this->ellipsis);
+        $target = max(0, $this->maxWidth - $eW);
+        $kept = '';
+        foreach (preg_split('//u', $rendered, -1, PREG_SPLIT_NO_EMPTY) as $ch) {
+            $next = $kept . $ch;
+            if (Width::string($next) > $target) {
+                break;
+            }
+            $kept = $next;
+        }
+        return $kept . $this->ellipsis;
+    }
+
+    /**
+     * Internal copy-with-overrides helper.
+     */
+    private function copy(
+        ?string $separator = null,
+        ?string $keyDescGap = null,
+        ?string $columnGap = null,
+        ?bool   $showAll = null,
+        ?int    $maxWidth = null,
+        ?string $ellipsis = null,
+        ?string $fullSeparator = null,
+    ): self {
+        return new self(
+            separator:     $separator     ?? $this->separator,
+            keyDescGap:    $keyDescGap    ?? $this->keyDescGap,
+            columnGap:     $columnGap     ?? $this->columnGap,
+            showAll:       $showAll       ?? $this->showAll,
+            maxWidth:      $maxWidth      ?? $this->maxWidth,
+            ellipsis:      $ellipsis      ?? $this->ellipsis,
+            fullSeparator: $fullSeparator ?? $this->fullSeparator,
+        );
     }
 }
