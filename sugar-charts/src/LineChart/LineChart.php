@@ -39,6 +39,12 @@ final class LineChart
         public readonly bool $showAxes     = false,
         public readonly array $xLabels     = [],
         public readonly array $yLabels     = [],
+        public readonly ?float $xMin       = null,
+        public readonly ?float $xMax       = null,
+        public readonly ?\Closure $xLabelFormatter = null,
+        public readonly ?\Closure $yLabelFormatter = null,
+        public readonly int $xLabelTicks   = 0,
+        public readonly int $yLabelTicks   = 0,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException('line chart width/height must be >= 0');
@@ -68,6 +74,67 @@ final class LineChart
     public function withMin(?float $m): self        { return $this->copy(min: $m, minSet: true); }
     public function withMax(?float $m): self        { return $this->copy(max: $m, maxSet: true); }
     public function withPoint(string $rune): self   { return $this->copy(point: $rune); }
+
+    /**
+     * Y-axis data range as a `[min, max]` pair. Equivalent to chaining
+     * `withMin($min)->withMax($max)`. Mirrors ntcharts' `SetYRange`.
+     */
+    public function withYRange(?float $min, ?float $max): self
+    {
+        return $this->copy(min: $min, minSet: true, max: $max, maxSet: true);
+    }
+
+    /**
+     * X-axis range used by the {@see withXLabelFormatter()} when
+     * generating X tick labels. The data itself remains column-indexed;
+     * the range is the conceptual `[xMin, xMax]` mapped across the
+     * plot width. Mirrors ntcharts' `SetXRange`.
+     */
+    public function withXRange(?float $min, ?float $max): self
+    {
+        return $this->copy(xMin: $min, xMinSet: true, xMax: $max, xMaxSet: true);
+    }
+
+    /**
+     * Combined `setXYRange` shortcut.
+     */
+    public function withXYRange(?float $xMin, ?float $xMax, ?float $yMin, ?float $yMax): self
+    {
+        return $this->withXRange($xMin, $xMax)->withYRange($yMin, $yMax);
+    }
+
+    /**
+     * Reset both axes to auto-detect from the dataset. Equivalent to
+     * `withYRange(null, null)->withXRange(null, null)`. Mirrors
+     * ntcharts' `AutoAdjustRange`.
+     */
+    public function autoAdjustRange(): self
+    {
+        return $this->copy(
+            min: null, minSet: true, max: null, maxSet: true,
+            xMin: null, xMinSet: true, xMax: null, xMaxSet: true,
+        );
+    }
+
+    /**
+     * Closure invoked per X tick to format axis labels: `fn(float $v): string`.
+     * Used only when {@see withXLabels()} hasn't been called explicitly.
+     * `$ticks` controls the count of label slots — defaults to a sensible
+     * value based on plot width.
+     */
+    public function withXLabelFormatter(\Closure $fn, int $ticks = 0): self
+    {
+        return $this->copy(xLabelFormatter: $fn, xLabelFormatterSet: true, xLabelTicks: max(0, $ticks));
+    }
+
+    /**
+     * Closure invoked per Y tick to format axis labels: `fn(float $v): string`.
+     * Used only when {@see withYLabels()} hasn't been called explicitly.
+     */
+    public function withYLabelFormatter(\Closure $fn, int $ticks = 0): self
+    {
+        return $this->copy(yLabelFormatter: $fn, yLabelFormatterSet: true, yLabelTicks: max(0, $ticks));
+    }
 
     /**
      * Add or replace a named series. Series share the same axes as the
@@ -139,17 +206,22 @@ final class LineChart
             $max = $min + 1.0;
         }
 
+        // Resolve labels — explicit lists win, formatters fill in
+        // when no list was supplied.
+        $xLabels = $this->resolveXLabels(count($this->data));
+        $yLabels = $this->resolveYLabels((float) $min, (float) $max);
+
         // When axes are on, reserve a 2-cell left gutter (Y labels +
         // axis line) and a 1-row bottom gutter (X axis + labels).
         $gutterLeft = 0;
         $gutterBottom = 0;
         if ($this->showAxes) {
             $maxYLabel = 0;
-            foreach ($this->yLabels as $lbl) {
+            foreach ($yLabels as $lbl) {
                 $maxYLabel = max($maxYLabel, mb_strlen($lbl, 'UTF-8'));
             }
             $gutterLeft   = max(2, $maxYLabel + 1);
-            $gutterBottom = $this->xLabels !== [] ? 2 : 1;
+            $gutterBottom = $xLabels !== [] ? 2 : 1;
         }
         $plotW = max(1, $this->width  - $gutterLeft);
         $plotH = max(1, $this->height - $gutterBottom);
@@ -193,10 +265,67 @@ final class LineChart
             Graph::drawXYAxis($canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1);
             Graph::drawXYAxisLabel(
                 $canvas, $xOrigin, $yOrigin, $plotW - 1, $plotH - 1,
-                $this->xLabels, $this->yLabels,
+                $xLabels, $yLabels,
             );
         }
         return $canvas->view();
+    }
+
+    /**
+     * Resolve the X-axis label list: explicit `xLabels` win, formatter
+     * + range fills in when none supplied. Default tick count = 5 when
+     * neither labels nor formatter are present (returns empty).
+     *
+     * @return list<string>
+     */
+    private function resolveXLabels(int $sampleCount): array
+    {
+        if ($this->xLabels !== []) {
+            return $this->xLabels;
+        }
+        if ($this->xLabelFormatter === null) {
+            return [];
+        }
+        $ticks = $this->xLabelTicks > 0 ? $this->xLabelTicks : 5;
+        $xMin = $this->xMin ?? 0.0;
+        $xMax = $this->xMax ?? (float) max(0, $sampleCount - 1);
+        if ($xMax === $xMin) {
+            $xMax = $xMin + 1.0;
+        }
+        $out = [];
+        $fn = $this->xLabelFormatter;
+        for ($i = 0; $i < $ticks; $i++) {
+            $t = $ticks > 1 ? $i / ($ticks - 1) : 0.0;
+            $v = $xMin + $t * ($xMax - $xMin);
+            $out[] = (string) $fn($v);
+        }
+        return $out;
+    }
+
+    /**
+     * Resolve the Y-axis label list. Mirrors {@see resolveXLabels()}
+     * for the Y axis using the data range (`min`..`max`) as the source.
+     *
+     * @return list<string>
+     */
+    private function resolveYLabels(float $min, float $max): array
+    {
+        if ($this->yLabels !== []) {
+            return $this->yLabels;
+        }
+        if ($this->yLabelFormatter === null) {
+            return [];
+        }
+        $ticks = $this->yLabelTicks > 0 ? $this->yLabelTicks : 4;
+        $out = [];
+        $fn = $this->yLabelFormatter;
+        // Top-to-bottom: largest to smallest (axis convention).
+        for ($i = 0; $i < $ticks; $i++) {
+            $t = $ticks > 1 ? $i / ($ticks - 1) : 0.0;
+            $v = $max - $t * ($max - $min);
+            $out[] = (string) $fn($v);
+        }
+        return $out;
     }
 
     /** Internal copy-with-overrides helper. */
@@ -212,19 +341,31 @@ final class LineChart
         ?bool $showAxes = null,
         ?array $xLabels = null,
         ?array $yLabels = null,
+        ?float $xMin = null, bool $xMinSet = false,
+        ?float $xMax = null, bool $xMaxSet = false,
+        ?\Closure $xLabelFormatter = null, bool $xLabelFormatterSet = false,
+        ?\Closure $yLabelFormatter = null, bool $yLabelFormatterSet = false,
+        ?int $xLabelTicks = null,
+        ?int $yLabelTicks = null,
     ): self {
         return new self(
-            data:           $data         ?? $this->data,
-            width:          $width        ?? $this->width,
-            height:         $height       ?? $this->height,
-            min:            $minSet ? $min : $this->min,
-            max:            $maxSet ? $max : $this->max,
-            point:          $point        ?? $this->point,
-            datasets:       $datasets     ?? $this->datasets,
-            datasetPoints:  $datasetPoints?? $this->datasetPoints,
-            showAxes:       $showAxes     ?? $this->showAxes,
-            xLabels:        $xLabels      ?? $this->xLabels,
-            yLabels:        $yLabels      ?? $this->yLabels,
+            data:            $data         ?? $this->data,
+            width:           $width        ?? $this->width,
+            height:          $height       ?? $this->height,
+            min:             $minSet ? $min : $this->min,
+            max:             $maxSet ? $max : $this->max,
+            point:           $point        ?? $this->point,
+            datasets:        $datasets     ?? $this->datasets,
+            datasetPoints:   $datasetPoints?? $this->datasetPoints,
+            showAxes:        $showAxes     ?? $this->showAxes,
+            xLabels:         $xLabels      ?? $this->xLabels,
+            yLabels:         $yLabels      ?? $this->yLabels,
+            xMin:            $xMinSet ? $xMin : $this->xMin,
+            xMax:            $xMaxSet ? $xMax : $this->xMax,
+            xLabelFormatter: $xLabelFormatterSet ? $xLabelFormatter : $this->xLabelFormatter,
+            yLabelFormatter: $yLabelFormatterSet ? $yLabelFormatter : $this->yLabelFormatter,
+            xLabelTicks:     $xLabelTicks  ?? $this->xLabelTicks,
+            yLabelTicks:     $yLabelTicks  ?? $this->yLabelTicks,
         );
     }
 
