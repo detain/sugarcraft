@@ -116,7 +116,14 @@ final class Breadcrumb
             }
         }
 
-        return \implode($this->separator, \array_reverse($out));
+        $result = \implode($this->separator, \array_reverse($out));
+
+        // If any titles were dropped, prefix the truncator so the elision is visible
+        if (\count($out) < \count($titles)) {
+            $result = $this->truncator . $result;
+        }
+
+        return $result;
     }
 
     private function effectiveWidth(string $s): int
