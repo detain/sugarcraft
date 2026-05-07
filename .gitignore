@@ -1,3 +1,4 @@
+.caliber
 .caliber/learning/
 /vendor/
 **/vendor/
@@ -11,3 +12,20 @@ composer.lock
 .vscode/
 *.log
 .cache/
+.claude/settings.local.json
+.claude/shell-snapshots
+.claude/paste-cache
+.claude/file-history
+.claude/remote
+.claude/worktrees
+.claude/history.jsonl
+.claude/backups
+.claude/mcp-needs-auth-cache.json
+.claude/projects
+.claude/cache
+.claude.json
+.claude/.credentials.json
+.claude/ide/
+.claude/policy-limits.json
+.claude/sessions/
+

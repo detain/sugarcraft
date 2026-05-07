@@ -1,331 +1,162 @@
 # SugarCraft contributor playbook
 
-End-to-end recipe for adding a new library or reference app to the
-SugarCraft monorepo. Targeted at AI coding assistants and contributors
-new to the project — every step says **what** to change and **where**.
+PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+, PHPUnit 10, ReactPHP.
 
-If you're working through the audit (`AUDIT_2026_05_06.md`) instead of
-adding a new lib, skip to the [Audit-driven PR section](#audit-driven-prs).
+## Source-of-truth files
 
-> **Source-of-truth files** to keep in sync when adding any new lib or
-> app: [`MATCHUPS.md`](./MATCHUPS.md) (upstream → SugarCraft mapping),
-> [`PROJECT_NAMES.md`](./PROJECT_NAMES.md) (naming-decision history),
-> [`CONVERSION.md`](./CONVERSION.md) (architectural roadmap),
-> [`LOCALES.md`](./LOCALES.md) (translation locale codes — pick a code
-> from here when adding `lang/*.php` files),
-> [`docs/index.html`](./docs/index.html) (homepage tile),
-> [`docs/lib/<slug>.html`](./docs/lib/) (per-lib detail page),
-> and the audit file when an audit pass exists.
+- `MATCHUPS.md` — upstream → SugarCraft port mapping (status icons 🔴🟡🟢🚀)
+- `PROJECT_NAMES.md` — naming-decision history + prefix cheat sheet
+- `CONVERSION.md` — phase roadmap, per-lib status, v2 parity sweep
+- `LOCALES.md` — i18n locale codes + recommended set
+- `UPSTREAM_OPPORTUNITIES.md` — port-back candidates from upstream
+- `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
+- `docs/index.html` — public website homepage tile grid
+- `media/` — shared icons, profile.png, social-preview.png used by the homepage + social share metadata
+- `scripts/` — Dockerfile (CI image) + bootstrap-org-repos.sh (org provisioning)
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
 
----
+## Naming
 
-## 0 — Pick a name
+Pick prefix from `PROJECT_NAMES.md` cheat sheet:
+- `Candy-` foundation/system/framework (`candy-core`, `candy-shell`, `candy-shine`)
+- `Sugar-` components/data/forms/apps (`sugar-bits`, `sugar-prompt`, `sugar-charts`)
+- `Honey-` math/physics/motion (`honey-bounce`, `honey-flap`)
 
-1. Decide the **prefix** from [`MATCHUPS.md`'s cheat sheet](./MATCHUPS.md#naming-conventions-cheat-sheet):
-   - `Candy-` — foundation / system / framework
-   - `Sugar-` — components / data / forms / apps
-   - `Honey-` — math / physics / motion
-2. Pick a **short technical suffix** that describes the role (Core /
-   Sprinkles / Bits / Charts / Prompt / Shell / Shine / …).
-3. The PHP **subdir** + **composer name** follow the kebab-cased pair:
-   `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine`.
-4. The **PSR-4 namespace** drops the prefix: `CandyShine` →
-   `SugarCraft\Shine`. (`SugarCraft\Core` is the one quirky exception
-   for the runtime that shares the umbrella name.)
-5. Record the choice in two places:
-   - Add a new row to [`MATCHUPS.md`](./MATCHUPS.md) under the right
-     table (Libraries or Reference apps).
-   - Add a one-line entry + any naming-decision rationale to
-     [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
+Slug → kebab-case dir → composer pkg → namespace: `CandyShine` → `candy-shine` dir → `sugarcraft/candy-shine` → `SugarCraft\Shine`. (`SugarCraft\Core` is the one quirk — runtime shares umbrella name.)
 
----
+## Lib skeleton
 
-## 1 — Scaffold the package
+Reference the existing leaf lib `sugar-bits/` for the canonical layout. Each lib carries:
 
-```
-<slug>/
-├── composer.json
-├── phpunit.xml
-├── README.md
-├── examples/
-│   └── <demo>.php       # at least one runnable example
-├── src/
-│   └── <Class>.php      # primary entry-point class(es)
-├── tests/
-│   └── <Class>Test.php  # PHPUnit 10
-└── .vhs/
-    └── <demo>.tape      # VHS recording driving the example
-```
+- `composer.json` — package metadata
+- `README.md` — composer require + quickstart
+- `CALIBER_LEARNINGS.md` — accumulated patterns
+- `src/` — PSR-4 source
 
-### `composer.json` skeleton
+### `composer.json`
 
-```json
-{
-    "name": "sugarcraft/<slug>",
-    "description": "PHP port of <upstream> — <one-line role>.",
-    "type": "library",
-    "license": "MIT",
-    "keywords": ["tui", "terminal", "sugarcraft", "<lib-specific>"],
-    "homepage": "https://github.com/sugarcraft/<slug>",
-    "authors": [
-        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
-    ],
-    "support": {
-        "issues": "https://github.com/sugarcraft/<slug>/issues",
-        "source": "https://github.com/sugarcraft/<slug>"
-    },
-    "require": {
-        "php": "^8.1",
-        "sugarcraft/candy-core": "@dev"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^10.5"
-    },
-    "autoload": {
-        "psr-4": { "<NS>\\<Sub>\\": "src/" }
-    },
-    "autoload-dev": {
-        "psr-4": { "<NS>\\<Sub>\\Tests\\": "tests/" }
-    },
-    "minimum-stability": "dev"
-}
+PHP `^8.1`, PHPUnit `^10.5`, `minimum-stability: dev`. Metadata block (after `license`, before `require`): `keywords` (lowercase kebab, include `"sugarcraft"` + upstream Go name like `"bubbletea"`), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. PSR-4 `"<NS>\\<Sub>\\": "src/"` plus matching test namespace. Sibling deps: `"sugarcraft/<dep>": "@dev"` AND path-repo `{type: path, url: "../<dep>", options: {symlink: true}}` for the FULL transitive closure — copy from `sugar-charts/composer.json`.
+
+### PHPUnit config
+
+Each lib carries its own PHPUnit XML config. `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`. Source `<include><directory>src</directory></include>`. See `candy-core/phpunit.xml`.
+
+## Code conventions
+
+- `declare(strict_types=1);` top of every file. PSR-12 + PSR-4.
+- Public classes `final` unless extension is part of contract.
+- **Immutable + fluent**: every `with*()` returns new instance via private `mutate()` helper. Public `readonly` properties for state.
+- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`.
+- Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
+- Don't comment what code does — only why (constraints, invariants, links to upstream issues).
+
+## Tests
+
+PHPUnit 10. Every public method needs ≥1 test. Patterns (see `sugar-bits/tests/`, `candy-core/tests/`):
+- **Snapshot** — `view()`, assert raw `\x1b[1m`-style SGR bytes. Don't abstract.
+- **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]` tuple.
+- **Coercion** — feed edge cases (negative/oversized index, empty, null), assert clamp/no-op matching upstream.
+
+Stream-write gotcha: don't `ftruncate; rewind;` between writes — slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical in `candy-core/tests/RendererTest.php`).
+
+```sh
+cd candy-core && composer install && vendor/bin/phpunit
 ```
 
-Wire the new package into the **root** `composer.json` so `composer
-install` from the monorepo root pulls it: add a `repositories` entry
-and require it from the umbrella metapackage. Existing packages
-provide a working pattern.
+## VHS demos
 
-### `phpunit.xml` skeleton
+Each non-trivial demo gets a `.tape` file under the lib's `.vhs/` dir. CI re-renders to `.gif` via `.github/workflows/vhs.yml` (hand-maintained matrix — silently skips libs not listed). Tape uses `Set Theme "TokyoNight"`, dimensions, `Type "php examples/<demo>.php"`, `Enter`, `Sleep 2s`. Rendered GIF: `https://raw.githubusercontent.com/detain/sugarcraft/master/<slug>/.vhs/<demo>.gif`.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true"
-         cacheDirectory=".phpunit.cache"
-         failOnWarning="true">
-    <testsuites>
-        <testsuite name="<slug>"><directory>tests</directory></testsuite>
-    </testsuites>
-    <source>
-        <include><directory>src</directory></include>
-    </source>
-</phpunit>
-```
+## i18n
 
----
+Lang files under each lib's `lang/` dir per `LOCALES.md`. Lookup: exact locale → base language → `en` → raw key. Each lib has thin `Lang::t($key, $params)` wrapping `SugarCraft\Core\I18n\T` with namespace baked in (see `sugar-wishlist/src/Lang.php`). App-level overrides via `T::overrideNamespace`.
 
-## 2 — Code conventions
-
-- `declare(strict_types=1);` at the top of every PHP file.
-- PSR-12 + PSR-4. Every public class is final unless extension is part
-  of the contract.
-- **Immutable values, fluent builders.** Mirror upstream's `with*`
-  pattern: each setter returns a new instance via a private `mutate()`
-  / `copy()` helper.
-- **Public readonly properties** for state; methods (without `get`
-  prefix) for read-only accessors that need to compute.
-- **Factory methods** named after upstream where possible: `Theme::ansi()`
-  / `Theme::dracula()` / `Spinner::line()` etc.
-- Keep PHP **8.1+ compatible** — fibers, readonly properties, enums
-  are all fair game; named arguments encouraged on multi-param ctors.
-- New surface that mirrors an upstream API gets a doc-comment
-  `Mirrors upstream's <UpstreamName>.<Method>` so readers can pivot
-  back to the Go reference.
-
----
-
-## 3 — Tests
-
-PHPUnit 10. **Every public method needs at least one test.** Tests
-live alongside source under `tests/<Class>Test.php` with namespace
-`<NS>\\<Sub>\\Tests\\…`.
-
-Common patterns in the codebase (look at `sugar-bits/tests/` for
-prior art):
-
-- **Snapshot tests** for renderers — call `view()`, assert SGR bytes.
-  We use `\x1b[1m`-style raw escape strings in assertions; don't
-  abstract.
-- **Behaviour tests** for state machines — drive `update()` with
-  scripted `KeyMsg` / `MouseMsg` instances, assert resulting state.
-- **Coercion tests** for value APIs — feed edge cases (negative
-  index, oversized index, empty input, null) and assert clamped /
-  default behaviour. Most fluent setters silently no-op on
-  out-of-range inputs to match upstream.
-
-CI runs `vendor/bin/phpunit` per package. Don't merge with red
-tests; if a test fixture needs adjusting, fix the test alongside the
-behaviour change.
-
----
-
-## 4 — Examples
-
-Each library ships at least one runnable demo under `examples/`:
+## Adding a lib — checklist
 
 ```
-<slug>/examples/<feature>.php
+[ ] <slug>/composer.json + README.md + CALIBER_LEARNINGS.md
+[ ] <slug>/src/<Class>.php
+[ ] composer.json (root)               — repositories + require entry
+[ ] .github/workflows/ci.yml           — matrix lib: entry
+[ ] .github/workflows/vhs.yml          — matrix lib: entry
+[ ] MATCHUPS.md                        — new row + status icon
+[ ] PROJECT_NAMES.md                   — naming entry
+[ ] CONVERSION.md                      — phase table entry
+[ ] README.md (root)                   — library count, table row, test-loop snippet
+[ ] docs/index.html                    — homepage tile
+[ ] media/ or docs/img/icons/          — 256-square candy-themed PNG
 ```
 
-The demo is a self-contained `php examples/<feature>.php` invocation
-that exercises the visible surface. For TUI libraries, the demo
-should let the user interact (keys + quit) and not rely on external
-input fixtures.
+## PR workflow
 
----
-
-## 5 — Demos (VHS recordings)
-
-Every non-trivial demo gets a corresponding `.tape` file under
-`<slug>/.vhs/<demo>.tape`. The CI workflow re-renders these to
-`.gif` on every push that touches the source.
-
-```
-# .vhs/<demo>.tape
-Set Theme "TokyoNight"
-Output <demo>.gif
-Set FontSize 14
-Set Width 800
-Set Height 480
-Type "php examples/<demo>.php"
-Enter
-Sleep 2s
-…
-Sleep 1s
-```
-
-The rendered GIF lives at:
-
-```
-https://raw.githubusercontent.com/detain/sugarcraft/master/<slug>/.vhs/<demo>.gif
-```
-
-The website pulls these URLs directly — no manual copy step.
-
----
-
-## 6 — Wire the new lib into the website
-
-Two edits, both in [`docs/`](./docs/):
-
-### `docs/index.html`
-
-- **Homepage tile.** Add a new `<a class="lib-card" href="lib/<slug>.html">`
-  block to the `#libraries` grid (or `#apps` for reference apps).
-  Match the structure of the existing tiles: a `.lib-card-preview`
-  wrapper containing the demo `<img>` (or the `lib-card-preview--empty`
-  placeholder if no demo exists yet), then `.lib-icon-row` + title +
-  `.lib-source` + `<p class="summary">` + `.links`.
-- **Demo gallery.** If the lib has a headline demo, add a tile to the
-  `#demos` section too.
-
-### `docs/lib/<slug>.html`
-
-Copy any sibling lib's detail page (e.g. `docs/lib/candy-core.html`)
-and customise:
-
-- `<title>` / `<meta description>` / `og:*` tags.
-- The hero header: icon path, title, sub-title, port-of-X chip, role
-  chips.
-- Install snippet: `composer require sugarcraft/<slug>`.
-- Quickstart: a self-contained snippet small enough to read at a
-  glance.
-- "What's in the box" feature grid — 4–6 short feature cards.
-- Source & demos list, then a Demo grid pulling each `.vhs/*.gif`.
-
-### `docs/img/icons/<slug>.png`
-
-A 256-square candy-themed icon. PNG with transparent background.
-
----
-
-## 7 — Update the central docs
-
-When the new lib lands, update **all four** of these:
-
-1. **[`MATCHUPS.md`](./MATCHUPS.md)** — add the row + bump the status
-   icon as you progress (🔴 → 🟡 → 🟢 → 🚀).
-2. **[`PROJECT_NAMES.md`](./PROJECT_NAMES.md)** — naming rationale, if
-   non-obvious.
-3. **[`CONVERSION.md`](./CONVERSION.md)** — append to the "Phase 9+"
-   table (or the right phase) with the dependency chain.
-4. **[`AUDIT_2026_05_06.md`](./AUDIT_2026_05_06.md)** — only if there's
-   an active audit and the lib has an upstream we're tracking gaps
-   against. Otherwise leave alone.
-
----
-
-## 8 — Commit + PR conventions
-
-- Commit author **must** be `Joe Huss <detain@interserver.net>` for
-  any maintainer-driven flow. CI infrastructure relies on this.
-- **Branch name**: `ai/<slug>-<short>` for AI-driven work,
-  `feat/<slug>-<short>` for human contributors.
-- **PR title**: `<lib>: <short summary> (audit #N)` when closing audit
-  items, or `<lib>: <feature>` for feature work.
-- **PR body** ends with a `## Test plan` checklist that cites the
-  test count + suite name (e.g. `sugar-bits full suite green
-  (260/260)`).
-- **PR size**: bundle 2–4 related items per PR — one-feature-per-PR
-  produces too much churn. Mix domains where it makes sense
-  (e.g. one lib feature + a website polish pass).
-- **Auto-merge** is **not** enabled on the repo. Merge with
-  `gh pr merge <num> --squash --delete-branch` after the PR creates
-  cleanly.
-
----
+- **Branches**: `ai/<slug>-<short>` (AI-driven), `feat/<slug>-<short>` (humans).
+- **Title**: `<lib>: <summary>` or `<lib>: <feature> (audit #N)`.
+- **Body** ends with `## Test plan` citing test count + suite name.
+- **Bundle 2–4 related items per PR** — one-feature-per-PR is too much churn.
+- **Multi-lib audit work**: split into one PR per lib/phase, sequenced by dependency order. Commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only` → next phase.
+- Author: `Joe Huss <detain@interserver.net>`. Don't skip pre-commit hooks.
 
 ## Audit-driven PRs
 
-The `AUDIT_2026_05_06.md` file lists per-library API / example / doc
-gaps against the upstream Go counterpart. Audit work flows
-identically to feature work, with two extra rules:
-
-1. **Update the audit file inline.** When you ship something the audit
-   listed, mark it ✅ with a one-line summary right where it lived in
-   the file. Don't move it; readers should see history in place.
-2. **Skip credit + upgrade-guide entries.** Doc gaps that exist
-   solely to credit upstream authors (e.g. "no Acknowledgements
-   section") or to ship `UPGRADE_GUIDE.md` files are **out of scope**
-   for this pre-1.0 PHP port. Drop them from the audit when you
-   touch a section that contains them.
-
----
+When working through `AUDIT_*.md` files: mark items ✅ inline with one-line summary right where they live (don't move them — readers see history in place). Skip audit items for "credit upstream author" — out of scope pre-1.0.
 
 ## Release / split-out
 
-When a library hits **v1.0** (every audit item closed or explicitly
-deferred, examples + tests + docs in place):
+At v1.0: tag monorepo `<slug>-v1.0.0`, `git filter-repo` into `github.com/sugarcraft/<slug>`, publish to Packagist as `sugarcraft/<slug>`, bump `MATCHUPS.md` row to 🚀, replace path-repo in root `composer.json` with Packagist constraint. All commits land in `detain/sugarcraft`; per-lib repos auto-distributed by `sync-sugarcraft.yml`.
 
-1. Tag the monorepo: `<slug>-v1.0.0`.
-2. Extract the subtree into its own repo under `github.com/sugarcraft/<slug>`
-   with full git history (`git filter-repo`).
-3. Publish to Packagist under `sugarcraft/<slug>` (will move to
-   `sugarcraft/<slug>` when the org migrates).
-4. Bump the row in [`MATCHUPS.md`](./MATCHUPS.md) to 🚀.
-5. Replace the `repositories: [{type: path, ...}]` entry in the root
-   `composer.json` with a Packagist constraint.
+## Gotchas
 
----
+- `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED for path-repos pre-1.0. Drop `--strict`.
+- New transitive `@dev` deps need their path-repo added to every consuming lib's `composer.json` `repositories` array.
+- `.github/workflows/{ci,vhs}.yml` matrices are hand-maintained, NOT glob-driven. Adding a lib without updating both means PHPUnit/GIFs silently never run.
+- Run sub-agents ONE AT A TIME, never in parallel — burns extra-usage budget, concurrent writes to shared files like `MATCHUPS.md` collide.
+- Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — secrets don't exist in repo settings yet.
+- When wrapping external CLI tools, pass ALL flags every invocation using `escapeshellarg((string)($field ?? ''))` so `null`/`''` render as `''` rather than dropping the flag.
+- Bash tool's working directory persists across calls — anchor with absolute paths or `cd /home/sites/sugarcraft && ...` to avoid silent empty reads.
 
-## Quick reference: file checklist for a new lib
+<!-- caliber:managed:pre-commit -->
+## Before Committing
 
+**IMPORTANT:** Before every git commit, you MUST ensure Caliber syncs agent configs with the latest code changes.
+
+First, check if the pre-commit hook is already installed:
+```bash
+grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"
 ```
-[ ] <slug>/composer.json
-[ ] <slug>/phpunit.xml
-[ ] <slug>/README.md
-[ ] <slug>/src/<Class>.php
-[ ] <slug>/tests/<Class>Test.php
-[ ] <slug>/examples/<demo>.php
-[ ] <slug>/.vhs/<demo>.tape
-[ ] composer.json (root)        — add repositories + require entry
-[ ] MATCHUPS.md                 — new row + status
-[ ] PROJECT_NAMES.md            — naming entry
-[ ] CONVERSION.md               — phase table entry
-[ ] docs/index.html             — homepage tile
-[ ] docs/lib/<slug>.html        — detail page
-[ ] docs/img/icons/<slug>.png   — 256-square icon
-```
+
+- If **hook-active**: the hook handles sync automatically — just commit normally. Tell the user: "Caliber will sync your agent configs automatically via the pre-commit hook."
+- If **no-hook**: run Caliber manually before committing:
+  1. Tell the user: "Caliber: Syncing agent configs with your latest changes..."
+  2. Run: `caliber refresh && git add CLAUDE.md .claude/ .cursor/ .cursorrules .github/copilot-instructions.md .github/instructions/ AGENTS.md CALIBER_LEARNINGS.md .agents/ .opencode/ 2>/dev/null`
+  3. After it completes, briefly tell the user what Caliber updated. Then proceed with the commit.
+
+**Valid `caliber refresh` options:** `--quiet` (suppress output) and `--dry-run` (preview without writing). Do not pass any other flags — options like `--auto-approve`, `--debug`, or `--force` do not exist and will cause errors.
+
+**`caliber config`** takes no flags — it runs an interactive provider setup. Do not pass `--provider`, `--api-key`, or `--endpoint`.
+
+If `caliber` is not found, read `.agents/skills/setup-caliber/SKILL.md` and follow its instructions to install Caliber.
+<!-- /caliber:managed:pre-commit -->
+
+<!-- caliber:managed:learnings -->
+## Session Learnings
+
+Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
+These are auto-extracted from real tool usage — treat them as project-specific rules.
+<!-- /caliber:managed:learnings -->
+
+<!-- caliber:managed:model-config -->
+## Model Configuration
+
+Recommended default: `claude-sonnet-4-6` with high effort (stronger reasoning; higher cost and latency than smaller models).
+Smaller/faster models trade quality for speed and cost — pick what fits the task.
+Pin your choice (`/model` in Claude Code, or `CALIBER_MODEL` when using Caliber with an API provider) so upstream default changes do not silently change behavior.
+
+<!-- /caliber:managed:model-config -->
+
+<!-- caliber:managed:sync -->
+## Context Sync
+
+This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
+Configs update automatically before each commit via `caliber refresh`.
+If the pre-commit hook is not set up, read `.agents/skills/setup-caliber/SKILL.md` and follow the setup instructions.
+<!-- /caliber:managed:sync -->
