@@ -70,7 +70,7 @@ jobs:
             git subtree split --prefix="$lib" --branch="$br" --quiet
             git push --force \
               "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
-              "$br:main"
+              "$br:master"
             git branch -D "$br" >/dev/null
             echo "✓ synced $lib"
           done
@@ -81,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Mirror docs/ → sugarcraft.github.io main
+      - name: Mirror docs/ → sugarcraft.github.io master
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
         run: |
@@ -102,5 +102,5 @@ jobs:
             exit 0
           fi
           git commit --quiet -m "Sync from monorepo @ ${GITHUB_SHA:0:7}"
-          git push --quiet origin main
+          git push --quiet origin master
           echo "✓ pushed site update"
