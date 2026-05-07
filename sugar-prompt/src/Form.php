@@ -42,6 +42,7 @@ final class Form implements Model
         public readonly int $width = 0,
         public readonly int $height = 0,
         public readonly int $timeoutMs = 0,
+        public readonly ?KeyMap $keyMap = null,
     ) {}
 
     /**
@@ -170,6 +171,25 @@ final class Form implements Model
         return $this->mutate(timeoutMs: max(0, $ms));
     }
 
+    /**
+     * Replace the form's {@see KeyMap} — the bindings for next / prev /
+     * submit / abort. Pass null to fall back to {@see KeyMap::default()}.
+     *
+     * Mirrors upstream charmbracelet/huh #272 ("Overriding KeyMaps and
+     * KeyBinds"). Use to rebind nav keys without forking the runtime —
+     * e.g. swap Tab for `j` / `k`, or add Ctrl-Enter as a submit shortcut.
+     */
+    public function withKeyMap(?KeyMap $keyMap): self
+    {
+        return $this->mutate(keyMap: $keyMap, keyMapSet: true);
+    }
+
+    /** Resolved keymap — the configured override if set, else the default. */
+    public function activeKeyMap(): KeyMap
+    {
+        return $this->keyMap ?? KeyMap::default();
+    }
+
     // Short-form aliases.
     public function theme(Theme $t): self          { return $this->withTheme($t); }
     public function accessible(bool $on = true): self { return $this->withAccessible($on); }
@@ -258,31 +278,25 @@ final class Form implements Model
         }
 
         if ($msg instanceof KeyMsg) {
+            $keyMap = $this->activeKeyMap();
+
             // Abort.
-            if ($msg->type === KeyType::Escape
-                || ($msg->ctrl && $msg->rune === 'c')) {
+            if ($keyMap->isAbort($msg)) {
                 return [$this->mutate(aborted: true), Cmd::quit()];
             }
 
-            // Navigation: Tab / Shift-Tab / Down / Up.
-            if (!$msg->ctrl) {
-                if ($msg->type === KeyType::Tab && !$msg->alt) {
-                    return $this->advance(+1);
-                }
-                if ($msg->type === KeyType::Down) {
-                    return $this->advance(+1);
-                }
-                if ($msg->type === KeyType::Up) {
-                    return $this->advance(-1);
-                }
+            // Navigation: forward bindings first, then back.
+            if ($keyMap->isNext($msg)) {
+                return $this->advance(+1);
             }
-            if ($msg->type === KeyType::Tab && $msg->alt) {
+            if ($keyMap->isPrev($msg)) {
                 return $this->advance(-1);
             }
 
-            // Submission: Enter on the last interactive field of the
-            // last visible group.
-            if ($msg->type === KeyType::Enter) {
+            // Submission: any key in the submit binding list, but only
+            // when the form is on the last interactive field of the
+            // last visible group. Default keymap binds Enter here.
+            if ($keyMap->isSubmit($msg)) {
                 $last = self::firstNonSkippable($fields, count($fields) - 1, -1);
                 if ($last !== null && $this->focusedIndex === $last) {
                     $isLastGroup = self::firstVisibleGroup(
@@ -729,6 +743,7 @@ final class Form implements Model
         ?int $width = null,
         ?int $height = null,
         ?int $timeoutMs = null,
+        ?KeyMap $keyMap = null, bool $keyMapSet = false,
     ): self {
         return new self(
             groups:         $this->groups,
@@ -745,6 +760,7 @@ final class Form implements Model
             width:          $width          ?? $this->width,
             height:         $height         ?? $this->height,
             timeoutMs:      $timeoutMs      ?? $this->timeoutMs,
+            keyMap:         $keyMapSet      ? $keyMap : $this->keyMap,
         );
     }
 }
