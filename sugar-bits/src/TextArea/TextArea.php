@@ -51,6 +51,13 @@ final class TextArea implements Model
         public readonly ?string $err = null,
         /** Optional dynamic-prompt closure: `fn(int $rowIndex, string $line): string`. Wins over $prompt when set. */
         public readonly ?\Closure $promptFunc = null,
+        /**
+         * Dynamic-height mode (mirrors upstream Bubbles #910). When on,
+         * {@see view()} renders only as many rows as the content has,
+         * capped by `$maxHeight` (0 = unlimited). When off (default),
+         * `$height` is the fixed row count.
+         */
+        public readonly bool $dynamic = false,
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -124,17 +131,23 @@ final class TextArea implements Model
             return $this->prefixWithGutter([$this->placeholder], 0)[0];
         }
 
+        // Resolve the effective row count for this render. In static
+        // mode this is just `$this->height`; in dynamic mode it's
+        // `min(maxHeight, max(1, line count))`.
+        $effectiveHeight = $this->effectiveHeight();
+
         // Slice rows by height (height = 0 means show all).
         $start = max(0, $this->rowOffset);
-        $rows  = $this->height > 0
-            ? array_slice($this->lines, $start, $this->height)
+        $rows  = $effectiveHeight > 0
+            ? array_slice($this->lines, $start, $effectiveHeight)
             : $this->lines;
 
         // End-of-buffer filler — vim-style `~` rows when the buffer
-        // doesn't fill the configured height.
-        if ($this->height > 0) {
+        // doesn't fill the configured height. Skipped in dynamic mode
+        // since the effective height matches the content.
+        if ($effectiveHeight > 0 && !$this->dynamic) {
             $shown = count($rows);
-            for ($i = $shown; $i < $this->height; $i++) {
+            for ($i = $shown; $i < $effectiveHeight; $i++) {
                 $rows[] = $this->endOfBufferCharacter;
             }
         }
@@ -248,6 +261,41 @@ final class TextArea implements Model
     public function withHeight(int $h): self         { return $this->mutate(height: max(0, $h)); }
     public function withMaxWidth(int $w): self       { return $this->mutate(maxWidth: max(0, $w)); }
     public function withMaxHeight(int $h): self      { return $this->mutate(maxHeight: max(0, $h)); }
+
+    /**
+     * Toggle dynamic-height mode. When on, {@see view()} renders only
+     * as many rows as the content has, capped at {@see $maxHeight} (0
+     * means uncapped). When off (default), `$height` is the fixed row
+     * count and short content gets padded with end-of-buffer glyphs.
+     *
+     * Mirrors upstream Bubbles `WithDynamicHeight` (#910).
+     */
+    public function withDynamic(bool $on = true): self
+    {
+        return $this->mutate(dynamic: $on);
+    }
+
+    /** Short alias for {@see withDynamic()}. */
+    public function dynamic(bool $on = true): self { return $this->withDynamic($on); }
+
+    /**
+     * Number of rows {@see view()} will render given the current
+     * mode. In static mode (`dynamic=false`) returns `$height`; in
+     * dynamic mode returns `min(maxHeight ?: ∞, max(1, line count))`
+     * — at least one row, at most maxHeight if set, otherwise content
+     * count.
+     */
+    public function effectiveHeight(): int
+    {
+        if (!$this->dynamic) {
+            return $this->height;
+        }
+        $contentRows = max(1, count($this->lines));
+        if ($this->maxHeight > 0) {
+            return min($this->maxHeight, $contentRows);
+        }
+        return $contentRows;
+    }
 
     /** Show 1-based line numbers in a left gutter. Default off. */
     public function showLineNumbers(bool $on = true): self
@@ -674,6 +722,7 @@ final class TextArea implements Model
         ?\Closure $validate = null, bool $validateSet = false,
         ?string $err = null, bool $errSet = false,
         ?\Closure $promptFunc = null, bool $promptFuncSet = false,
+        ?bool $dynamic = null,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -703,6 +752,7 @@ final class TextArea implements Model
             validate:              $resolvedValidate,
             err:                   $err,
             promptFunc:            $promptFuncSet        ? $promptFunc : $this->promptFunc,
+            dynamic:               $dynamic              ?? $this->dynamic,
         );
     }
 }
