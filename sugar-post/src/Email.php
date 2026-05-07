@@ -252,17 +252,20 @@ final class Email
     /** Helper for simple field replacements. */
     private function with(string $prop, mixed $value): self
     {
-        return new self(
-            from:         $this->from,
-            to:           $this->to,
-            subject:      $this->subject,
-            body:         $this->body,
-            cc:           $this->cc,
-            bcc:          $this->bcc,
-            htmlBody:     $this->htmlBody,
-            replyTo:      $this->replyTo,
-            attachments:  $this->attachments,
-            signature:    $this->signature,
-        );
+        $args = [
+            'from'        => $this->from,
+            'to'          => $this->to,
+            'subject'     => $this->subject,
+            'body'        => $this->body,
+            'cc'          => $this->cc,
+            'bcc'         => $this->bcc,
+            'htmlBody'    => $this->htmlBody,
+            'replyTo'     => $this->replyTo,
+            'attachments' => $this->attachments,
+            'signature'   => $this->signature,
+        ];
+        $args[$prop] = $value;
+
+        return new self(...$args);
     }
 }
