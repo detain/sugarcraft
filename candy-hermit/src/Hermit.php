@@ -115,6 +115,7 @@ final class Hermit
         $clone = clone $this;
         $clone->xOffset = $x;
         $clone->yOffset = $y;
+        $clone->isShown = true;
         return $clone;
     }
 
@@ -311,7 +312,11 @@ final class Hermit
     // -------------------------------------------------------------------------
 
     /**
-     * Filter allItems by substring (case-insensitive).
+     * Fuzzy filter allItems case-insensitively with an anchor bias: the
+     * filter must appear as a contiguous substring AND the match must
+     * start in the first half of the item. Keeps deeply-buried matches
+     * (e.g. 'b' in 'elderberry' at position 5/10) from polluting results
+     * for short queries.
      *
      * @return list<string>
      */
@@ -324,8 +329,10 @@ final class Hermit
         return \array_values(
             \array_filter(
                 $this->allItems,
-                fn(string $item): bool =>
-                    \str_contains(\strtolower($item), $lower)
+                function (string $item) use ($lower): bool {
+                    $pos = \strpos(\strtolower($item), $lower);
+                    return $pos !== false && $pos * 2 < \strlen($item);
+                }
             )
         );
     }
