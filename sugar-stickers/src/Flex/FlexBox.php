@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Flex;
 
+/** {@see FlexBox} main-axis direction — equivalent to CSS `flex-direction`. */
 enum Direction {
     case Row;     // horizontal
     case Column;  // vertical
 }
 
+/** {@see FlexBox} main-axis distribution of free space — equivalent to CSS `justify-content`. */
 enum Justify {
     case Start;
     case Center;
@@ -17,6 +19,7 @@ enum Justify {
     case SpaceAround;
 }
 
+/** {@see FlexBox} cross-axis item alignment — equivalent to CSS `align-items`. */
 enum Align {
     case Start;
     case Center;

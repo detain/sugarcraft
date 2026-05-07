@@ -10,6 +10,14 @@ use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
 
+/**
+ * Stateless renderer for the candy-query TUI shell.
+ *
+ * `Renderer::render(App)` composes the three panes (tables list, rows
+ * preview, query editor) plus a help footer into a single ANSI string.
+ * Pure function — given the same {@see App} it always produces the
+ * same bytes.
+ */
 final class Renderer
 {
     public static function render(App $a): string

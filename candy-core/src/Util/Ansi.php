@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+/**
+ * Low-level ANSI / CSI / OSC escape-sequence constants and helpers.
+ *
+ * Higher-level callers (Style, Renderer, Cursor) compose the strings
+ * here to build their final output. Direct use is uncommon — prefer
+ * the typed APIs in candy-sprinkles wherever possible.
+ */
 final class Ansi
 {
     public const ESC = "\x1b";

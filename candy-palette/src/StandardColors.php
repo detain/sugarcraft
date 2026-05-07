@@ -2,15 +2,16 @@
 
 declare(strict_types=1);
 
+namespace SugarCraft\Palette;
+
 /**
- * Standard 16-color ANSI palette as named Color objects.
+ * Standard 16-color ANSI palette as named {@see Color} objects.
  *
- * Mirrors the standard ANSI 16-color palette from the Go colorprofile package.
+ * Mirrors the standard ANSI 16-color palette from the Go colorprofile
+ * package. Use these as readable shortcuts in place of `Color::ansi(N)`.
  *
  * @see https://en.wikipedia.org/wiki/ANSI_escape_code#3/4-bit
  */
-namespace SugarCraft\Palette;
-
 final class StandardColors
 {
     // --- Basic colors (0–7) ----------------------------------------------------
