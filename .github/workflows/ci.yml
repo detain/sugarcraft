@@ -14,6 +14,12 @@ env:
   # ubuntu-latest as of 2025-Q4).
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
+  # Single source of truth for the PHP extension union — referenced by
+  # both the cache-extensions step (for cache-key computation) and the
+  # setup-php step (for the actual install). See the test job for why
+  # we install everything on every cell.
+  PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl
+
 jobs:
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
@@ -77,22 +83,32 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Cache the *built* PHP extension binaries (ssh2 / gd / curl / sqlite3
+      # / pdo_sqlite — the ones that aren't bundled with the runner image).
+      # Without this, every matrix cell rebuilds them from PECL, adding
+      # 5–10s × 164 cells = ~20 minutes of total CPU per push.
+      - name: Compute PHP-extension cache key
+        id: ext-cache
+        uses: shivammathur/cache-extensions@v1
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          # Bump key suffix when adding/removing extensions or when a runner
+          # image upgrade invalidates ABI compatibility.
+          key: php-ext-v2
+
+      - name: Restore PHP extensions
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.ext-cache.outputs.dir }}
+          key: ${{ steps.ext-cache.outputs.key }}
+          restore-keys: ${{ steps.ext-cache.outputs.key }}
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          # Union of every extension required across the lib matrix:
-          #   mbstring, intl, json    — universal (terminal width, JSON config)
-          #   pcntl                   — sugar-wishlist (process control)
-          #   sqlite3                 — sugar-skate (KV store)
-          #   pdo_sqlite              — candy-query (SQL query builder)
-          #   ssh2                    — candy-serve, candy-wish (SSH bridges)
-          #   gd                      — candy-flip (image decode), sugar-charts/Picture
-          #   curl                    — sugar-crush (HTTP-backed AI clients)
-          #   openssl                 — candy-serve (SSH key handling)
-          # Listed on every job because the action skips already-present
-          # extensions; per-lib branching would just complicate the matrix.
-          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl
+          extensions: ${{ env.PHP_EXTENSIONS }}
           tools: composer:v2
           coverage: none
 
@@ -108,6 +124,19 @@ jobs:
           key: composer-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
           restore-keys: |
             composer-${{ matrix.php }}-
+
+      # Cache the per-lib vendor/ directory keyed on its composer.json. When
+      # only one lib changes, every other lib's vendor cache hits and
+      # composer install becomes a ~100ms validation pass. The fallback
+      # restore-keys lets a sibling-lib's cache seed dependency resolution
+      # before composer fills in the rest from the warm composer cache.
+      - name: Cache vendor/
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.lib }}/vendor
+          key: vendor-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            vendor-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
         working-directory: ${{ matrix.lib }}
@@ -181,13 +210,29 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Same extension-cache pattern as the test job (see comment there).
+      - name: Compute PHP-extension cache key
+        id: ext-cache
+        uses: shivammathur/cache-extensions@v1
+        with:
+          php-version: '8.3'
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          key: php-ext-cov-v2
+
+      - name: Restore PHP extensions
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.ext-cache.outputs.dir }}
+          key: ${{ steps.ext-cache.outputs.key }}
+          restore-keys: ${{ steps.ext-cache.outputs.key }}
+
       - name: Setup PHP (with pcov)
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
           # Same extension union as the test job — keeps test- and
           # coverage-job environments byte-identical.
-          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl
+          extensions: ${{ env.PHP_EXTENSIONS }}
           tools: composer:v2
           coverage: pcov
 
@@ -198,6 +243,14 @@ jobs:
           key: composer-cov-${{ hashFiles('**/composer.json') }}
           restore-keys: |
             composer-cov-
+
+      - name: Cache vendor/
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.lib }}/vendor
+          key: vendor-cov-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            vendor-cov-${{ matrix.lib }}-
 
       - name: Install dependencies
         working-directory: ${{ matrix.lib }}
