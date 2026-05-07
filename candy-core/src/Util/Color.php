@@ -32,6 +32,10 @@ final class Color
         public readonly int $b,
     ) {}
 
+    /**
+     * Construct from 24-bit RGB. Each component must be in `[0, 255]`
+     * — out-of-range values throw {@see \InvalidArgumentException}.
+     */
     public static function rgb(int $r, int $g, int $b): self
     {
         foreach ([$r, $g, $b] as $v) {
@@ -42,6 +46,11 @@ final class Color
         return new self($r, $g, $b);
     }
 
+    /**
+     * Construct from a CSS-style hex string. Accepts 3- or 6-digit forms,
+     * with or without leading `#`: `'#ff5'`, `'ff5'`, `'#ff5500'`,
+     * `'ff5500'`. Invalid input throws {@see \InvalidArgumentException}.
+     */
     public static function hex(string $hex): self
     {
         $h = ltrim($hex, '#');
@@ -149,6 +158,7 @@ final class Color
         );
     }
 
+    /** Round-trip back to 6-digit lowercase hex string (with leading `#`). */
     public function toHex(): string
     {
         return sprintf('#%02x%02x%02x', $this->r, $this->g, $this->b);
@@ -313,11 +323,18 @@ final class Color
         return $this->luminance() < 0.5;
     }
 
+    /**
+     * Render as a foreground SGR escape (e.g. `"\x1b[38;2;255;128;0m"`)
+     * for the given {@see ColorProfile}. Quantises the 24-bit color
+     * down to the profile's palette (TrueColor → 256 → ANSI16 →
+     * empty-string for `NoTTY`).
+     */
     public function toFg(ColorProfile $profile): string
     {
         return $this->toSgr($profile, fg: true);
     }
 
+    /** Background variant of {@see toFg()}. */
     public function toBg(ColorProfile $profile): string
     {
         return $this->toSgr($profile, fg: false);

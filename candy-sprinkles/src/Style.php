@@ -98,6 +98,7 @@ final class Style
     }
 
     /** Currently-bound string from {@see setString()}, or null. */
+    /** Bound default content (set via {@see setString()} / {@see of()}). */
     public function value(): ?string { return $this->boundString; }
 
     /**
@@ -110,6 +111,7 @@ final class Style
         return $this->with(underlineColor: $c, underlineColorSet: true, propsAdded: ['underlineColor']);
     }
 
+    /** Underline color (SGR 58), or null when default. */
     public function getUnderlineColor(): ?Color { return $this->underlineColor; }
 
     /**
@@ -123,6 +125,7 @@ final class Style
         return $this->with(underlineStyle: $style, propsAdded: ['underlineStyle']);
     }
 
+    /** Underline shape (single / double / curly / dotted / dashed / none). */
     public function getUnderlineStyle(): UnderlineStyle { return $this->underlineStyle; }
 
     /**
@@ -135,6 +138,7 @@ final class Style
         return $this->with(paddingChar: $char, propsAdded: ['paddingChar']);
     }
 
+    /** Glyph used to fill padding cells (default `' '`). */
     public function getPaddingChar(): string { return $this->paddingChar; }
 
     /**
@@ -146,9 +150,12 @@ final class Style
         return $this->with(marginChar: $char, propsAdded: ['marginChar']);
     }
 
+    /** Glyph used to fill margin cells (default `' '`). */
     public function getMarginChar(): string { return $this->marginChar; }
 
+    /** Set the foreground color. Pass null to clear (no SGR emitted). */
     public function foreground(?Color $c): self          { return $this->with(fg: $c, fgSet: true, propsAdded: ['fg']); }
+    /** Set the background color. Pass null to clear. */
     public function background(?Color $c): self          { return $this->with(bg: $c, bgSet: true, propsAdded: ['bg']); }
 
     // ---------------------------------------------------------------------
@@ -158,10 +165,13 @@ final class Style
     // Pass null to clear.
     // ---------------------------------------------------------------------
 
-    /** Short alias for {@see foreground()}. Accepts a Color, hex string (e.g. `'#ff5'`), or null. */
+    /**
+     * Short alias for {@see foreground()}. Accepts a {@see Color}, hex
+     * string (e.g. `'#ff5'`), or null to clear.
+     */
     public function fg(Color|string|null $c): self { return $this->foreground(self::asColor($c)); }
 
-    /** Short alias for {@see background()}. Accepts a Color, hex string, or null. */
+    /** Short alias for {@see background()}. Same input shape as {@see fg()}. */
     public function bg(Color|string|null $c): self { return $this->background(self::asColor($c)); }
 
     /**
@@ -170,7 +180,11 @@ final class Style
      */
     public function on(Color|string|null $c): self { return $this->background(self::asColor($c)); }
 
-    /** Short alias for {@see setString()}. `Style::new()->of('hello')->render()` works. */
+    /**
+     * Short alias for {@see setString()} — bind a default content
+     * string. After `->of('hello')`, `render()` with no argument
+     * uses that string.
+     */
     public function of(string $content): self { return $this->setString($content); }
 
     /** Coerce a Color | hex string | null into a `?Color` for the long-form setters. */
@@ -277,12 +291,19 @@ final class Style
         }
         return $next;
     }
+    /** Toggle bold (SGR 1). */
     public function bold(bool $on = true): self          { return $this->with(bold: $on, propsAdded: ['bold']); }
+    /** Toggle italic (SGR 3). */
     public function italic(bool $on = true): self        { return $this->with(italic: $on, propsAdded: ['italic']); }
+    /** Toggle underline (SGR 4). See {@see underlineStyle()} / {@see underlineColor()} for sub-options. */
     public function underline(bool $on = true): self     { return $this->with(underline: $on, propsAdded: ['underline']); }
+    /** Toggle strikethrough (SGR 9). */
     public function strikethrough(bool $on = true): self { return $this->with(strike: $on, propsAdded: ['strike']); }
+    /** Toggle faint / dim (SGR 2). */
     public function faint(bool $on = true): self         { return $this->with(faint: $on, propsAdded: ['faint']); }
+    /** Toggle blink (SGR 5) — terminal-dependent; many emulators ignore it. */
     public function blink(bool $on = true): self         { return $this->with(blink: $on, propsAdded: ['blink']); }
+    /** Toggle reverse video — swap fg / bg (SGR 7). */
     public function reverse(bool $on = true): self       { return $this->with(reverse: $on, propsAdded: ['reverse']); }
 
     /** padding($all) | padding($v, $h) | padding($t, $r, $b, $l) */
