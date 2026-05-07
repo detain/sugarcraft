@@ -103,7 +103,7 @@ final class ModelTest extends TestCase
         $this->model->lessFunc = fn($a, $b) => \strcmp((string) $a, (string) $b);
         $this->model->sort();
 
-        $this->assertSame('a', (string) $this->model->cursorIndex());
+        $this->assertSame('a', (string) $this->model->cursorItem());
         $this->assertSame('a', $this->model->lines()[0]);
     }
 

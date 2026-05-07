@@ -197,6 +197,21 @@ final class Model
         return $this->cursorIndex;
     }
 
+    /**
+     * Return the value at the cursor.
+     *
+     * Mirrors Go upstream's GetCursorItem.
+     *
+     * @throws \RuntimeException if the list has no items
+     */
+    public function cursorItem(): \Stringable
+    {
+        if ($this->isEmpty()) {
+            throw new \RuntimeException('NoItems: list has no items');
+        }
+        return $this->items[$this->cursorIndex]->value;
+    }
+
     public function setCursor(int $index): self
     {
         $this->cursorIndex = \max(0, \min($index, \count($this->items) - 1));
@@ -268,23 +283,35 @@ final class Model
             throw new \RuntimeException("Can't display with zero width or height of viewport");
         }
 
+        $count = \count($this->items);
+
+        // Collect lines for items above the cursor, walking outward, capped by lineOffset.
+        // We collect them bottom-up (closest to cursor first), then reverse for display order.
+        $before = [];
+        for ($c = 1; $this->cursorIndex - $c >= 0 && $c <= $this->lineOffset; $c++) {
+            $index = $this->cursorIndex - $c;
+            $itemLines = $this->renderItem($index);
+            for ($i = \count($itemLines) - 1; $i >= 0 && \count($before) < $this->lineOffset; $i--) {
+                $before[] = $itemLines[$i];
+            }
+            if (\count($before) >= $this->lineOffset) {
+                break;
+            }
+        }
+
         $allLines = [];
+        for ($c = \count($before) - 1; $c >= 0; $c--) {
+            $allLines[] = $before[$c];
+        }
 
-        // Lines before cursor (above)
-        $beforeCursor = $this->collectLinesBeforeCursor();
-
-        // Lines after cursor (below)
-        $afterCursor = $this->collectLinesAfterCursor();
-
-        // Interleave: [before in reverse] + [cursor item] + [after]
-        $beforeReversed = \array_reverse($beforeCursor);
-        foreach ($beforeReversed as $l) { $allLines[] = $l; }
-        $allLines[] = $this->renderItemLines($this->cursorIndex);
-        foreach ($afterCursor as $l) { $allLines[] = $l; }
-
-        // Trim to viewport height
-        if (\count($allLines) > $this->height) {
-            $allLines = \array_slice($allLines, 0, $this->height);
+        // Lines from the cursor downward, capped by viewport height.
+        for ($index = $this->cursorIndex; $index < $count && \count($allLines) < $this->height; $index++) {
+            foreach ($this->renderItem($index) as $line) {
+                if (\count($allLines) >= $this->height) {
+                    break 2;
+                }
+                $allLines[] = $line;
+            }
         }
 
         return $allLines;
@@ -307,113 +334,17 @@ final class Model
     // -------------------------------------------------------------------------
 
     /**
-     * Collect lines for all items above the cursor, limited by lineOffset.
-     *
-     * @return list<array{0: int, 1: string}> (itemIndex, renderedLines) pairs
-     */
-    private function collectLinesBeforeCursor(): array
-    {
-        $result = [];
-        $linesNeeded = $this->lineOffset;
-
-        for ($c = 1; $c <= $this->cursorIndex && $linesNeeded > 0; $c++) {
-            $itemIndex = $this->cursorIndex - $c;
-            $lines = $this->getItemLines($itemIndex);
-            $linesCount = \count($lines);
-
-            // Add as many as fit
-            $toAdd = \array_slice($lines, 0, $linesNeeded);
-            foreach (\array_reverse($toAdd) as $line) {
-                $result[] = [$itemIndex, $line];
-            }
-            $linesNeeded -= \count($toAdd);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Collect lines for all items below the cursor, filling the viewport.
-     *
-     * @return list<array{0: int, 1: string}> (itemIndex, renderedLines) pairs
-     */
-    private function collectLinesAfterCursor(): array
-    {
-        $result = [];
-        $linesNeeded = $this->height - 1; // -1 for cursor item
-
-        for ($i = $this->cursorIndex + 1; $i < \count($this->items) && $linesNeeded > 0; $i++) {
-            $lines = $this->getItemLines($i);
-            $toAdd = \array_slice($lines, 0, $linesNeeded);
-            foreach ($toAdd as $line) {
-                $result[] = [$i, $line];
-            }
-            $linesNeeded -= \count($toAdd);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Render all lines for a single item (with pre/suffix), applying cursor style.
-     *
-     * @return string Single string (may contain \n if item is multi-line)
-     */
-    private function renderItemLines(int $itemIndex): string
-    {
-        $item  = $this->items[$itemIndex];
-        $lines = $this->itemLines($item, $itemIndex);
-        $total = \count($lines);
-
-        $outputLines = [];
-        foreach ($lines as $lineIdx => $lineContent) {
-            // Prefix
-            $prefix = '';
-            if ($this->prefixer !== null) {
-                $prefix = $this->prefixer->prefix($lineIdx, $total);
-            }
-
-            // Content width (for suffix padding)
-            $contentWidth = $this->ansiWidth($lineContent);
-
-            // Suffix
-            $suffix = '';
-            $suffixWidth = 0;
-            if ($this->suffixer !== null) {
-                $suffix     = $this->suffixer->suffix($lineIdx, $total);
-                $suffixWidth = $this->ansiWidth($suffix);
-            }
-
-            // Right-pad with spaces to fill viewport
-            $filled = $lineContent;
-            $used   = $this->ansiWidth($prefix) + $contentWidth + $suffixWidth;
-            if ($used < $this->width) {
-                $filled .= \str_repeat(' ', $this->width - $used);
-            }
-
-            $styled = $prefix . $filled . $suffix;
-            if ($itemIndex === $this->cursorIndex && $this->currentStyle !== '') {
-                $styled = $this->applyStyle($styled, $this->currentStyle);
-            } elseif ($this->lineStyle !== '') {
-                $styled = $this->applyStyle($styled, $this->lineStyle);
-            }
-
-            $outputLines[] = $styled;
-        }
-
-        return \implode("\n", $outputLines);
-    }
-
-    /**
-     * Get the raw (unprefixed) lines for an item, respecting wrap limit.
+     * Render styled lines for a single item — applies prefix, optional padded
+     * suffix, and per-item style. Mirrors Go upstream's getItemLines.
      *
      * @return list<string>
      */
-    private function itemLines(Item $item, int $itemIndex): array
+    private function renderItem(int $itemIndex): array
     {
+        $item = $this->items[$itemIndex];
+
         $prefixWidth = 0;
         $suffixWidth = 0;
-
         if ($this->prefixer !== null) {
             $prefixWidth = $this->prefixer->initPrefixer(
                 $item->value, $itemIndex, $this->cursorIndex,
@@ -432,14 +363,37 @@ final class Model
             return [''];
         }
 
-        // Word-wrap the item string to contentWidth
-        $raw = (string) $item->value;
-        $wrapped = $this->hardWrap($raw, $contentWidth);
-        if ($this->wrap > 0 && \count($wrapped) > $this->wrap) {
-            $wrapped = \array_slice($wrapped, 0, $this->wrap);
+        $rawLines = $this->hardWrap((string) $item->value, $contentWidth);
+        if ($this->wrap > 0 && \count($rawLines) > $this->wrap) {
+            $rawLines = \array_slice($rawLines, 0, $this->wrap);
+        }
+        $total = \count($rawLines);
+
+        $output = [];
+        foreach ($rawLines as $lineIdx => $lineContent) {
+            $linePrefix = $this->prefixer?->prefix($lineIdx, $total) ?? '';
+
+            // Suffix is only emitted (and content right-padded) when the suffixer
+            // actually produces a non-empty marker for this line. Matches Go upstream.
+            $lineSuffix = '';
+            if ($this->suffixer !== null) {
+                $rawSuffix = $this->suffixer->suffix($lineIdx, $total);
+                if ($rawSuffix !== '') {
+                    $free = $contentWidth - $this->ansiWidth($lineContent);
+                    $lineSuffix = \str_repeat(' ', \max(0, $free)) . $rawSuffix;
+                }
+            }
+
+            $line  = $linePrefix . $lineContent . $lineSuffix;
+            $style = ($itemIndex === $this->cursorIndex) ? $this->currentStyle : $this->lineStyle;
+            if ($style !== '') {
+                $line = $this->applyStyle($line, $style);
+            }
+
+            $output[] = $line;
         }
 
-        return $wrapped;
+        return $output;
     }
 
     /**
@@ -497,45 +451,6 @@ final class Model
             $chunks[] = \substr($word, $i, $maxWidth);
         }
         return $chunks ?: [''];
-    }
-
-    /**
-     * Wrap item lines with prefix/suffix for external consumption (before stylng).
-     *
-     * @return array{0: int, 1: list<string>} (itemIndex, prefixed lines)
-     */
-    private function getItemLines(int $itemIndex): array
-    {
-        $item  = $this->items[$itemIndex];
-        $rawLines = $this->itemLines($item, $itemIndex);
-        $total = \count($rawLines);
-
-        $prefixWidth = 0;
-        $suffixWidth = 0;
-
-        if ($this->prefixer !== null) {
-            $prefixWidth = $this->prefixer->initPrefixer(
-                $item->value, $itemIndex, $this->cursorIndex,
-                $this->lineOffset, $this->width, $this->height,
-            );
-        }
-        if ($this->suffixer !== null) {
-            $suffixWidth = $this->suffixer->initSuffixer(
-                $item->value, $itemIndex, $this->cursorIndex,
-                $this->lineOffset, $this->width, $this->height,
-            );
-        }
-
-        $contentWidth = $this->width - $prefixWidth - $suffixWidth;
-        $lines = [];
-
-        foreach ($rawLines as $lineIdx => $lineContent) {
-            $prefix = $this->prefixer?->prefix($lineIdx, $total) ?? '';
-            $suffix = $this->suffixer?->suffix($lineIdx, $total) ?? '';
-            $lines[] = $prefix . $lineContent . $suffix;
-        }
-
-        return $lines;
     }
 
     // -------------------------------------------------------------------------
