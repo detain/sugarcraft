@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Veil;
 
+use SugarCraft\Core\Util\Width;
+
 /**
  * Terminal overlay compositor.
  *
@@ -126,7 +128,7 @@ final class Veil
      */
     public function lineWidth(string $line): int
     {
-        return \strlen(\preg_replace('/\x1b\[[0-9;]*[a-zA-Z]/', '', $line) ?: '');
+        return Width::string($line);
     }
 
     /**

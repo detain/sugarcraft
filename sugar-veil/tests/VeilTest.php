@@ -40,7 +40,7 @@ final class VeilTest extends TestCase
     public function testMaxLineWidth(): void
     {
         $lines = ['short', 'medium text', 'tiny'];
-        $this->assertSame(12, $this->veil->maxLineWidth($lines));
+        $this->assertSame(11, $this->veil->maxLineWidth($lines));
     }
 
     public function testMaxLineWidthStripsAnsi(): void
@@ -56,7 +56,7 @@ final class VeilTest extends TestCase
 
     public function testLineWidthWithAnsi(): void
     {
-        $this->assertSame(5, $this->veil->lineWidth("\x1b[1m\x1b[38;5;196mbold red\x1b[0m"));
+        $this->assertSame(8, $this->veil->lineWidth("\x1b[1m\x1b[38;5;196mbold red\x1b[0m"));
     }
 
     public function testCompositeCentered(): void
