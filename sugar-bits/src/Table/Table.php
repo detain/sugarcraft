@@ -24,6 +24,12 @@ use SugarCraft\Core\Util\Width;
  */
 final class Table implements Model
 {
+    /**
+     * Row index passed to a {@see styleFunc()} callback when rendering
+     * the header row. Mirrors lipgloss / candy-sprinkles `HEADER_ROW`.
+     */
+    public const HEADER_ROW = -1;
+
     private function __construct(
         /** @var list<string> */ public readonly array $headers,
         /** @var list<list<string>> */ public readonly array $rows,
@@ -35,6 +41,8 @@ final class Table implements Model
         /** @var list<int> per-column explicit widths (0 = auto). Aligned to $headers index. */
         public readonly array $colWidths = [],
         public readonly ?Styles $styles = null,
+        /** @var ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style */
+        public readonly ?\Closure $styleFunc = null,
     ) {}
 
     /**
@@ -134,7 +142,7 @@ final class Table implements Model
 
         $lines = [];
         if ($this->headers !== []) {
-            $headerRow = $this->renderRow($this->headers, $cols);
+            $headerRow = $this->renderRow($this->headers, $cols, self::HEADER_ROW);
             $lines[] = $this->styles !== null
                 ? $this->styles->header->render($headerRow)
                 : Ansi::sgr(Ansi::UNDERLINE) . $headerRow . Ansi::reset();
@@ -144,7 +152,7 @@ final class Table implements Model
         $window = array_slice($this->rows, $top, $this->height);
         foreach ($window as $i => $row) {
             $idx = $top + $i;
-            $line = $this->renderRow($row, $cols);
+            $line = $this->renderRow($row, $cols, $idx);
             $isSelected = $idx === $this->cursor && $this->focused;
             if ($this->styles !== null) {
                 $line = $isSelected
@@ -181,6 +189,30 @@ final class Table implements Model
     }
 
     public function getStyles(): ?Styles { return $this->styles; }
+
+    /**
+     * Per-cell styling callback. The closure receives `(int $row, int $col)`
+     * and returns the {@see \SugarCraft\Sprinkles\Style} to apply to that
+     * cell. The header row is reported as `$row === Table::HEADER_ROW`.
+     *
+     * The styleFunc runs *per cell*, before the row-level Styles
+     * (header / cell / selected) — so you can do striped rows or
+     * conditional highlighting per column without losing the
+     * selected-row inversion.
+     *
+     * Pass null to clear the override.
+     *
+     * Mirrors charmbracelet/bubbles #246 (long-requested upstream
+     * feature) and lipgloss / candy-sprinkles `Table::styleFunc()`.
+     *
+     * @param ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style $fn
+     */
+    public function styleFunc(?\Closure $fn): self
+    {
+        return $this->mutate(styleFunc: $fn, styleFuncSet: true);
+    }
+
+    public function getStyleFunc(): ?\Closure { return $this->styleFunc; }
 
     /** @return list<string> */
     public function selectedRow(): array
@@ -293,14 +325,22 @@ final class Table implements Model
      * @param list<string> $row
      * @param list<int>    $widths
      */
-    private function renderRow(array $row, array $widths): string
+    private function renderRow(array $row, array $widths, int $rowIndex = self::HEADER_ROW): string
     {
         $cells = [];
         foreach ($widths as $i => $w) {
             $cell = $row[$i] ?? '';
             $cell = Width::truncate($cell, $w);
             $pad  = $w - Width::string($cell);
-            $cells[] = $cell . str_repeat(' ', max(0, $pad));
+            $padded = $cell . str_repeat(' ', max(0, $pad));
+            // Apply per-cell styleFunc when set. Runs before any row-level
+            // Styles, so striped rows / conditional highlighting compose
+            // with the selected-row inversion downstream.
+            if ($this->styleFunc !== null) {
+                $style = ($this->styleFunc)($rowIndex, $i);
+                $padded = $style->render($padded);
+            }
+            $cells[] = $padded;
         }
         return implode(' ', $cells);
     }
@@ -338,6 +378,8 @@ final class Table implements Model
         ?array $colWidths = null,
         ?Styles $styles = null,
         bool $stylesSet = false,
+        ?\Closure $styleFunc = null,
+        bool $styleFuncSet = false,
     ): self {
         return new self(
             headers:   $headers   ?? $this->headers,
@@ -349,6 +391,7 @@ final class Table implements Model
             focused:   $focused   ?? $this->focused,
             colWidths: $colWidths ?? $this->colWidths,
             styles:    $stylesSet ? $styles : $this->styles,
+            styleFunc: $styleFuncSet ? $styleFunc : $this->styleFunc,
         );
     }
 }
