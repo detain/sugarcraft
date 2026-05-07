@@ -53,6 +53,7 @@ final class TextArea implements Model
         public readonly ?\Closure $promptFunc = null,
     ) {}
 
+    /** Construct a fresh instance with default state. */
     public static function new(): self
     {
         return new self(
@@ -69,6 +70,7 @@ final class TextArea implements Model
         );
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -114,6 +116,7 @@ final class TextArea implements Model
         };
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         // Empty + unfocused with placeholder.
@@ -196,6 +199,7 @@ final class TextArea implements Model
         return [$this->mutate(cursor: $cursor, focused: true), $cmd];
     }
 
+    /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
         return $this->mutate(cursor: $this->cursor->blur(), focused: false);

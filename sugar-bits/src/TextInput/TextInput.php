@@ -51,6 +51,7 @@ final class TextInput implements Model
         public readonly ?Styles $styles = null,
     ) {}
 
+    /** Construct a fresh instance with default state. */
     public static function new(): self
     {
         return new self(
@@ -68,6 +69,7 @@ final class TextInput implements Model
         );
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -110,6 +112,7 @@ final class TextInput implements Model
         };
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         $stylePrompt      = fn (string $s): string => $this->styles !== null ? $this->styles->prompt->render($s)      : $s;
@@ -167,6 +170,7 @@ final class TextInput implements Model
         return [$this->withCursor($cursor)->withFocused(true), $cmd];
     }
 
+    /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
         return $this->withCursor($this->cursor->blur())->withFocused(false);

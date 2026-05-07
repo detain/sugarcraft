@@ -38,6 +38,7 @@ final class Viewport implements Model
         public readonly string $scrollbarTrack = '│',
     ) {}
 
+    /** Construct a fresh instance with default state. */
     public static function new(int $width = 80, int $height = 24): self
     {
         if ($width < 0 || $height < 0) {
@@ -46,6 +47,7 @@ final class Viewport implements Model
         return new self($width, $height, [''], 0);
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -101,6 +103,7 @@ final class Viewport implements Model
         };
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         $top    = max(0, $this->yOffset);

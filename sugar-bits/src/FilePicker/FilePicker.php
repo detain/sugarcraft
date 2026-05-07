@@ -47,6 +47,7 @@ final class FilePicker implements Model
         public readonly ?string $error    = null,
     ) {}
 
+    /** Construct a fresh instance with default state. */
     public static function new(?string $cwd = null, int $height = 10): self
     {
         $cwd = self::normalizeCwd($cwd ?? (string) getcwd());
@@ -66,6 +67,7 @@ final class FilePicker implements Model
         return $self->refresh();
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -101,6 +103,7 @@ final class FilePicker implements Model
         };
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         $lines = [$this->cwd];
@@ -168,6 +171,7 @@ final class FilePicker implements Model
         return [$this->mutate(focused: true), null];
     }
 
+    /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
         return $this->mutate(focused: false);

@@ -75,6 +75,7 @@ final class ItemList implements Model
         );
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -116,6 +117,7 @@ final class ItemList implements Model
         };
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         $visible = $this->visibleItems();
@@ -190,6 +192,7 @@ final class ItemList implements Model
         return [$this->mutate(focused: true), null];
     }
 
+    /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
         return $this->mutate(focused: false);

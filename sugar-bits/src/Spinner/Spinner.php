@@ -39,11 +39,13 @@ final class Spinner implements Model
         $this->id = $id ?? ++self::$nextId;
     }
 
+    /** Construct a fresh instance with default state. */
     public static function new(?Style $style = null): self
     {
         return new self($style ?? Style::line());
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return $this->tick();
@@ -61,6 +63,7 @@ final class Spinner implements Model
         return [$next, $next->tick()];
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         return $this->style->frames[$this->frame] ?? '';

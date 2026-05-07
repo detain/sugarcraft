@@ -56,6 +56,7 @@ final class Progress
         $this->colorFunc = $colorFunc;
     }
 
+    /** Construct a fresh instance with default state. */
     public static function new(): self
     {
         return new self();
@@ -187,6 +188,7 @@ final class Progress
         return $this->withPercent($percent)->view();
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         // The percent suffix " 100%" needs ~5 cells. Rather than guess

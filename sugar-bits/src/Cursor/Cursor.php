@@ -40,11 +40,13 @@ final class Cursor implements Model
         $this->id = $id ?? ++self::$nextId;
     }
 
+    /** Construct a fresh instance with default state. */
     public static function new(string $char = ' ', Mode $mode = Mode::Blink, float $blinkSpeed = 0.5): self
     {
         return new self($char, $mode, false, true, $blinkSpeed);
     }
 
+    /** Bubble-Tea Init — returns the bootstrap Cmd (cursor blink, first tick, etc.) or null. */
     public function init(): ?\Closure
     {
         return null;
@@ -65,6 +67,7 @@ final class Cursor implements Model
         return [$next, $next->blink()];
     }
 
+    /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
         $highlighted = match ($this->mode) {
@@ -100,6 +103,7 @@ final class Cursor implements Model
         return [$next, $cmd];
     }
 
+    /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
         return new self($this->char, $this->mode, false, true, $this->blinkSpeed, $this->id, $this->style, $this->textStyle);
