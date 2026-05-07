@@ -20,7 +20,7 @@ namespace SugarCraft\Serve\Bin;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Serve\{AccessControl, Config, Repo, SSH\SSHServer, User};
+use SugarCraft\Serve\{AccessControl, Config, Lang, Repo, SSH\SSHServer, User};
 
 const VERSION = '0.1.0';
 
@@ -60,33 +60,35 @@ function cmdServe(array $args): int
 
     $ac = AccessControl::getInstance();
 
-    echo "CandyServe v" . VERSION . "\n";
-    echo "Data path:  {$config->dataPath}\n";
-    echo "SSH:        {$config->sshListenAddr}\n";
-    echo "HTTP:       {$config->httpListenAddr}\n";
-    echo "Git daemon: {$config->gitListenAddr}\n";
-    echo "\nStarting servers...\n";
-    echo "(Full daemon mode requires the ssh2 extension and a running SSH daemon.)\n";
-    echo "(Use 'soft-serve init' to initialize your data directory first.)\n\n";
+    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
+    echo Lang::t('cli.config_summary', [
+        'data_path' => $config->dataPath,
+        'ssh_addr'  => $config->sshListenAddr,
+        'http_addr' => $config->httpListenAddr,
+        'git_addr'  => $config->gitListenAddr,
+    ]) . "\n";
+    echo "\n" . Lang::t('cli.starting_servers') . "\n";
+    echo Lang::t('cli.note_ssh2_required') . "\n";
+    echo Lang::t('cli.note_run_init') . "\n\n";
 
     // List registered repos
     $dataPath = $config->dataPath;
     $reposPath = $dataPath . '/repositories';
 
-    echo "Repositories:\n";
+    echo Lang::t('cli.repos_header') . "\n";
     if (\is_dir($reposPath)) {
         foreach (\scandir($reposPath) as $entry) {
             if ($entry === '.' || $entry === '..') continue;
             $repoPath = $reposPath . '/' . $entry;
             if (\is_dir($repoPath . '/.git')) {
-                echo "  - {$entry}\n";
+                echo Lang::t('cli.repo_listing_entry', ['name' => $entry]) . "\n";
             }
         }
     }
 
-    echo "\nNot yet running as daemon (daemon mode needs a process manager.)\n";
-    echo "To serve Git over HTTP, point your web server to this script.\n";
-    echo "For SSH access, use a reverse tunnel or configure sshd with ForceCommand.\n";
+    echo "\n" . Lang::t('cli.note_not_a_daemon') . "\n";
+    echo Lang::t('cli.note_http_help') . "\n";
+    echo Lang::t('cli.note_ssh_help') . "\n";
 
     return 0;
 }
@@ -96,11 +98,11 @@ function cmdInit(array $args): int
     $dataPath = $args[0] ?? \getenv('CANDY_SERVE_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-serve';
 
     if (\is_dir($dataPath) && \is_file($dataPath . '/config.yaml')) {
-        echo "Already initialized: {$dataPath}\n";
+        echo Lang::t('cli.already_initialized', ['path' => $dataPath]) . "\n";
         return 0;
     }
 
-    echo "Initializing CandyServe data directory: {$dataPath}\n";
+    echo Lang::t('cli.initializing', ['path' => $dataPath]) . "\n";
 
     // Create directories
     foreach (['repositories', 'ssh', 'hooks', 'tmp'] as $dir) {
@@ -132,12 +134,12 @@ YAML;
 
     \file_put_contents("{$dataPath}/config.yaml", $configYaml);
 
-    echo "Done.\n";
-    echo "Next steps:\n";
-    echo "  1. Edit {$dataPath}/config.yaml\n";
-    echo "  2. Generate SSH host key: ssh-keygen -t ed25519 -f {$dataPath}/ssh/soft_serve_host\n";
-    echo "  3. Set CANDY_SERVE_INITIAL_ADMIN_KEYS=your-ssh-public-key\n";
-    echo "  4. Run: soft-serve serve --config {$dataPath}/config.yaml\n";
+    echo Lang::t('cli.done') . "\n";
+    echo Lang::t('cli.next_steps') . "\n";
+    echo Lang::t('cli.next_step_1', ['path' => $dataPath]) . "\n";
+    echo Lang::t('cli.next_step_2', ['path' => $dataPath]) . "\n";
+    echo Lang::t('cli.next_step_3') . "\n";
+    echo Lang::t('cli.next_step_4', ['path' => $dataPath]) . "\n";
 
     return 0;
 }
@@ -151,7 +153,7 @@ function cmdUser(array $args): int
         'add'    => cmdUserAdd($subargs),
         'key'    => cmdUserKey($subargs),
         'list'   => cmdUserList($subargs),
-        'help'   => echo("Usage: soft-serve user add|key|list\n"),
+        'help'   => say(Lang::t('cli.usage_user_root')),
         default  => cmdUnknown("user {$subcommand}"),
     };
 }
@@ -159,14 +161,14 @@ function cmdUser(array $args): int
 function cmdUserAdd(array $args): int
 {
     if (!isset($args[0])) {
-        return error("Usage: soft-serve user add <username>\n");
+        return error(Lang::t('cli.usage_user_add') . "\n");
     }
 
     $username = $args[0];
     $user = User::new($username)->withAdmin(true);
 
-    echo "User '{$username}' created (admin: true)\n";
-    echo "Use 'soft-serve user key {$username} < key.pub' to add an SSH public key.\n";
+    echo Lang::t('cli.user_created', ['username' => $username]) . "\n";
+    echo Lang::t('cli.user_key_hint', ['username' => $username]) . "\n";
 
     return 0;
 }
@@ -174,21 +176,21 @@ function cmdUserAdd(array $args): int
 function cmdUserKey(array $args): int
 {
     if (!isset($args[0]) || !isset($args[1])) {
-        return error("Usage: soft-serve user key <username> [key-file]\n");
+        return error(Lang::t('cli.usage_user_key') . "\n");
     }
 
     [$username, $keyFile] = $args;
     $key = $keyFile === '-' ? \stream_get_contents(\STDIN) : \file_get_contents($keyFile);
 
     if ($key === false || $key === '') {
-        return error("Failed to read key from: {$keyFile}\n");
+        return error(Lang::t('cli.user_key_read_failed', ['file' => $keyFile]) . "\n");
     }
 
     $user = User::new($username)->addAuthorizedKey(\trim($key));
-    echo "Key added for user '{$username}'\n";
-    echo "Authorized keys:\n";
+    echo Lang::t('cli.user_key_added', ['username' => $username]) . "\n";
+    echo Lang::t('cli.user_keys_header') . "\n";
     foreach ($user->authorizedKeysList() as $k) {
-        echo "  " . \substr($k, 0, 60) . "...\n";
+        echo Lang::t('cli.user_key_entry', ['prefix' => \substr($k, 0, 60)]) . "\n";
     }
 
     return 0;
@@ -196,7 +198,7 @@ function cmdUserKey(array $args): int
 
 function cmdUserList(array $args): int
 {
-    echo "Users:\n  (No users registered. Use 'soft-serve user add <username>')\n";
+    echo Lang::t('cli.user_list_empty') . "\n";
     return 0;
 }
 
@@ -209,7 +211,7 @@ function cmdRepo(array $args): int
         'list'   => cmdRepoList($subargs),
         'create' => cmdRepoCreate($subargs),
         'info'   => cmdRepoInfo($subargs),
-        'help'   => echo("Usage: soft-serve repo list|create|info\n"),
+        'help'   => say(Lang::t('cli.usage_repo_root')),
         default  => cmdUnknown("repo {$subcommand}"),
     };
 }
@@ -220,11 +222,11 @@ function cmdRepoList(array $args): int
     $reposPath = $dataPath . '/repositories';
 
     if (!\is_dir($reposPath)) {
-        echo "No repositories yet.\n";
+        echo Lang::t('cli.no_repos') . "\n";
         return 0;
     }
 
-    echo "Repositories:\n";
+    echo Lang::t('cli.repos_header') . "\n";
     $found = false;
 
     foreach (\scandir($reposPath) as $entry) {
@@ -235,11 +237,11 @@ function cmdRepoList(array $args): int
         $found = true;
         $size  = \filesize($repoPath . '/.git/objects/pack/pack-' . \array_values(\array_filter(\scandir($repoPath . '/.git/objects/pack'), fn($f) => \str_starts_with($f, 'pack-')))[0] ?? 'N/A') ?? 0;
 
-        echo "  {$entry}\n";
+        echo Lang::t('cli.repo_listing_plain', ['name' => $entry]) . "\n";
     }
 
     if (!$found) {
-        echo "  (no repositories yet)\n";
+        echo Lang::t('cli.repo_listing_none') . "\n";
     }
 
     return 0;
@@ -248,21 +250,21 @@ function cmdRepoList(array $args): int
 function cmdRepoCreate(array $args): int
 {
     if (!isset($args[0])) {
-        return error("Usage: soft-serve repo create <name>\n");
+        return error(Lang::t('cli.usage_repo_create') . "\n");
     }
 
     $dataPath = $args[1] ?? \getenv('CANDY_SERVE_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-serve';
     $name     = $args[0];
 
     if (!\preg_match('/^[a-zA-Z0-9._-]+$/', $name)) {
-        return error("Invalid repo name: {$name} (use only alphanumeric, dot, underscore, hyphen)\n");
+        return error(Lang::t('cli.repo_invalid_name', ['name' => $name]) . "\n");
     }
 
     $path = "{$dataPath}/repositories/{$name}";
     $repo = Repo::new($name, $path)->withPublic(true)->init();
 
-    echo "Repository '{$name}' created at {$path}\n";
-    echo "Clone URL: ssh://localhost:23231/{$name}\n";
+    echo Lang::t('cli.repo_created', ['name' => $name, 'path' => $path]) . "\n";
+    echo Lang::t('cli.repo_clone_url', ['name' => $name]) . "\n";
 
     return 0;
 }
@@ -270,7 +272,7 @@ function cmdRepoCreate(array $args): int
 function cmdRepoInfo(array $args): int
 {
     if (!isset($args[0])) {
-        return error("Usage: soft-serve repo info <name>\n");
+        return error(Lang::t('cli.usage_repo_info') . "\n");
     }
 
     $dataPath = $args[1] ?? \getenv('CANDY_SERVE_DATA_PATH') ?: \sys_get_temp_dir() . '/candy-serve';
@@ -278,59 +280,37 @@ function cmdRepoInfo(array $args): int
     $path     = "{$dataPath}/repositories/{$name}";
 
     if (!\is_dir($path . '/.git')) {
-        return error("Repository not found: {$name}\n");
+        return error(Lang::t('cli.repo_not_found', ['name' => $name]) . "\n");
     }
 
     $repo = Repo::new($name, $path);
 
-    echo "Name:         {$repo->name}\n";
-    echo "Description:  {$repo->description ?: '(none)'}\n";
-    echo "Public:       " . ($repo->isPublic ? 'yes' : 'no') . "\n";
-    echo "Private:      " . ($repo->isPrivate() ? 'yes' : 'no') . "\n";
-    echo "Allow push:   " . ($repo->allowPush ? 'yes' : 'no') . "\n";
-    echo "Path:         {$repo->path()}\n";
-    echo "Branches:     " . \implode(', ', $repo->branches()) . "\n";
-    echo "Tags:         " . \implode(', ', $repo->tags()) . "\n";
+    $yes = Lang::t('cli.bool_yes');
+    $no  = Lang::t('cli.bool_no');
+
+    echo Lang::t('cli.repo_info', [
+        'name'        => $repo->name,
+        'description' => $repo->description !== '' ? $repo->description : Lang::t('cli.none_value'),
+        'is_public'   => $repo->isPublic ? $yes : $no,
+        'is_private'  => $repo->isPrivate() ? $yes : $no,
+        'allow_push'  => $repo->allowPush ? $yes : $no,
+        'path'        => $repo->path(),
+        'branches'    => \implode(', ', $repo->branches()),
+        'tags'        => \implode(', ', $repo->tags()),
+    ]) . "\n";
 
     return 0;
 }
 
 function cmdHelp(): int
 {
-    echo <<<'HELP'
-CandyServe — Self-hostable Git Server
-
-Usage:
-  soft-serve <command> [options]
-
-Commands:
-  serve [--config path]    Start the Git server
-  init [data-path]         Initialize a new data directory
-  user add <username>      Create a user
-  user key <username> <file>  Add SSH public key for user (use - for stdin)
-  user list                List users
-  repo list [data-path]    List repositories
-  repo create <name> [data-path]  Create a repository
-  repo info <name> [data-path]    Show repository info
-  help, --help, -h         Show this help
-  version, --version, -v   Show version
-
-Environment:
-  CANDY_SERVE_DATA_PATH    Data directory (default: /tmp/candy-serve)
-
-Examples:
-  soft-serve init ~/candy-serve-data
-  soft-serve serve --config ~/candy-serve-data/config.yaml
-  soft-serve repo create my-project
-  soft-serve user key alice ~/.ssh/id_ed25519.pub
-
-HELP;
+    echo Lang::t('cli.help') . "\n";
     return 0;
 }
 
 function cmdVersion(): int
 {
-    echo "CandyServe v" . VERSION . "\n";
+    echo Lang::t('cli.banner', ['version' => VERSION]) . "\n";
     return 0;
 }
 
@@ -344,19 +324,19 @@ function error(string $msg): int
     return 1;
 }
 
-function echo(string $msg): int
+function say(string $msg): int
 {
-    echo $msg;
+    echo $msg . "\n";
     return 0;
 }
 
 function cmdUnknown(string $cmd): int
 {
-    return error("Unknown command: {$cmd}\n  Run 'soft-serve help' for usage.\n");
+    return error(Lang::t('cli.unknown_command', ['cmd' => $cmd]) . "\n");
 }
 
 // -------------------------------------------------------------------------
 // Bootstrap
 // -------------------------------------------------------------------------
 
-\exit(main($argv));
+exit(main($argv));
