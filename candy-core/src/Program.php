@@ -398,7 +398,9 @@ final class Program
             $cmd = is_array($req->command) ? $req->command : (string) $req->command;
             $proc = @proc_open($cmd, $descriptors, $pipes);
             if (!is_resource($proc)) {
-                throw new \RuntimeException('proc_open failed for: ' . (is_array($cmd) ? implode(' ', $cmd) : $cmd));
+                throw new \RuntimeException(Lang::t('program.proc_open_failed', [
+                    'cmd' => is_array($cmd) ? implode(' ', $cmd) : $cmd,
+                ]));
             }
             if ($req->captureOutput) {
                 $stdout = is_resource($pipes[1]) ? (string) stream_get_contents($pipes[1]) : '';

@@ -106,6 +106,56 @@ builds on it. From the same monorepo:
 See the matchup table in [../MATCHUPS.md](../MATCHUPS.md) for status,
 package names, and namespace mappings.
 
+## Localization (i18n)
+
+candy-core ships a tiny zero-dep translation registry that the rest of
+the SugarCraft monorepo plugs into. Every library owns a **namespace**
+(`core`, `charts`, `prompt`, …) and a `lang/<locale>.php` file per
+locale — call sites look strings up by fully-qualified key.
+
+```php
+use SugarCraft\Core\I18n\T;
+
+T::setLocale(T::detect());                 // 'en' / 'fr' / 'de' from $LANG
+echo T::t('core.color.invalid_hex', ['hex' => '#zz']);
+// => "invalid hex color: #zz"
+```
+
+Each library exposes a thin `Lang::t($key, $params)` wrapper with its
+namespace baked in, so call sites stay short:
+
+```php
+use SugarCraft\Core\Lang;
+
+throw new \InvalidArgumentException(
+    Lang::t('color.invalid_hex', ['hex' => $hex])
+);
+```
+
+### Adding a new locale
+
+1.  Copy `candy-core/lang/en.php` to `candy-core/lang/<locale>.php`
+    (e.g. `fr.php`).
+2.  Translate the values, keeping keys and `{placeholders}` intact.
+3.  Set the locale at app startup with `T::setLocale('fr')` or
+    `T::setLocale(T::detect())`.
+
+Missing translations fall back to `en`, then to the raw key — a
+forgotten string is visible, never a fatal error.
+
+### Application-level overrides
+
+Apps can ship their own translations of any library's strings without
+patching upstream:
+
+```php
+T::overrideNamespace('charts', '/etc/myapp/lang/charts');
+```
+
+See the [`SugarCraft\Core\I18n\T`](src/I18n/T.php) docblock for the
+full API surface (`register`, `translate`, `setLocale`, `locale`,
+`detect`, `overrideNamespace`, `reset`).
+
 ## Composing Cmds
 
 The runtime ships several Cmd combinators. The cheat-sheet below

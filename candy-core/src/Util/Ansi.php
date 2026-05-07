@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * Low-level ANSI / CSI / OSC escape-sequence constants and helpers.
  *
@@ -45,7 +47,7 @@ final class Ansi
     public static function fg16(int $code): string
     {
         if ($code < 30 || ($code > 37 && $code < 90) || $code > 97) {
-            throw new \InvalidArgumentException("invalid 16-color fg code: $code");
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_fg_code', ['code' => $code]));
         }
         return self::CSI . $code . 'm';
     }
@@ -53,7 +55,7 @@ final class Ansi
     public static function bg16(int $code): string
     {
         if ($code < 40 || ($code > 47 && $code < 100) || $code > 107) {
-            throw new \InvalidArgumentException("invalid 16-color bg code: $code");
+            throw new \InvalidArgumentException(Lang::t('ansi.invalid_bg_code', ['code' => $code]));
         }
         return self::CSI . $code . 'm';
     }
@@ -491,7 +493,7 @@ final class Ansi
     private static function assertByte(int $v, string $label): void
     {
         if ($v < 0 || $v > 255) {
-            throw new \InvalidArgumentException("$label out of range [0,255]: $v");
+            throw new \InvalidArgumentException(Lang::t('ansi.component_out_of_range', ['label' => $label, 'value' => $v]));
         }
     }
 }

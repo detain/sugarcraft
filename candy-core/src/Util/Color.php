@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Core\Lang;
+
 /**
  * A color value, expressed as RGB internally.
  *
@@ -40,7 +42,7 @@ final class Color
     {
         foreach ([$r, $g, $b] as $v) {
             if ($v < 0 || $v > 255) {
-                throw new \InvalidArgumentException("rgb component out of range [0,255]: $v");
+                throw new \InvalidArgumentException(Lang::t('color.rgb_out_of_range', ['value' => $v]));
             }
         }
         return new self($r, $g, $b);
@@ -58,7 +60,7 @@ final class Color
             $h = $h[0] . $h[0] . $h[1] . $h[1] . $h[2] . $h[2];
         }
         if (strlen($h) !== 6 || !ctype_xdigit($h)) {
-            throw new \InvalidArgumentException("invalid hex color: $hex");
+            throw new \InvalidArgumentException(Lang::t('color.invalid_hex', ['hex' => $hex]));
         }
         return new self(
             hexdec(substr($h, 0, 2)),
@@ -71,7 +73,7 @@ final class Color
     public static function ansi(int $index): self
     {
         if (!isset(self::ANSI16[$index])) {
-            throw new \InvalidArgumentException("ansi index out of range [0,15]: $index");
+            throw new \InvalidArgumentException(Lang::t('color.ansi_out_of_range', ['index' => $index]));
         }
         [$r, $g, $b] = self::ANSI16[$index];
         return new self($r, $g, $b);
@@ -81,7 +83,7 @@ final class Color
     public static function ansi256(int $index): self
     {
         if ($index < 0 || $index > 255) {
-            throw new \InvalidArgumentException("ansi256 index out of range [0,255]: $index");
+            throw new \InvalidArgumentException(Lang::t('color.ansi256_out_of_range', ['index' => $index]));
         }
         if ($index < 16) {
             return self::ansi($index);
