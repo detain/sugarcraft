@@ -140,8 +140,14 @@ throw new \InvalidArgumentException(
 3.  Set the locale at app startup with `T::setLocale('fr')` or
     `T::setLocale(T::detect())`.
 
-Missing translations fall back to `en`, then to the raw key — a
-forgotten string is visible, never a fatal error.
+Lookup chain: **exact locale → base language → `en` → raw key**. So a
+single `fr.php` automatically serves `fr-fr`, `fr-ca`, `fr-be`, etc. —
+only add a regional file (e.g. `pt-br.php`) when the wording genuinely
+diverges from the base language. A forgotten string is visible, never
+a fatal error.
+
+See [`lang/LOCALES.md`](lang/LOCALES.md) for the recommended set of
+codes plus a list of every base language a contributor can target.
 
 ### Application-level overrides
 

@@ -56,6 +56,40 @@ final class TTest extends TestCase
         $this->assertSame('Hello', T::t('demo.greeting'));
     }
 
+    public function testRegionalLocaleFallsBackToBaseLanguage(): void
+    {
+        // fr.php covers fr-fr, fr-ca, fr-be, … unless a regional file exists.
+        $this->writeLang('en', ['greeting' => 'Hello']);
+        $this->writeLang('fr', ['greeting' => 'Bonjour']);
+        T::register('demo', $this->tmpDir);
+        T::setLocale('fr-fr');
+
+        $this->assertSame('Bonjour', T::t('demo.greeting'));
+    }
+
+    public function testRegionalFilePreemptsBaseLanguage(): void
+    {
+        // pt-br.php (Brazilian) takes precedence over pt.php (European) when
+        // the active locale is pt-br.
+        $this->writeLang('en',    ['noun.you' => 'you']);
+        $this->writeLang('pt',    ['noun.you' => 'tu']);
+        $this->writeLang('pt-br', ['noun.you' => 'você']);
+        T::register('demo', $this->tmpDir);
+        T::setLocale('pt-br');
+
+        $this->assertSame('você', T::t('demo.noun.you'));
+    }
+
+    public function testRegionalFallsThroughBaseLanguageThenEnglish(): void
+    {
+        // Locale 'fr-fr' with no fr.php and no fr-fr.php → 'en' fallback.
+        $this->writeLang('en', ['greeting' => 'Hello']);
+        T::register('demo', $this->tmpDir);
+        T::setLocale('fr-fr');
+
+        $this->assertSame('Hello', T::t('demo.greeting'));
+    }
+
     public function testFallsBackToKeyWhenAllLookupsMiss(): void
     {
         $this->writeLang('en', ['present' => 'yes']);

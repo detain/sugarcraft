@@ -155,9 +155,14 @@ final class T
      *
      * Resolution order:
      *
-     *  1. `lang/$locale.php` for the namespace
-     *  2. `lang/en.php` for the namespace (fallback)
-     *  3. The raw key (so a missing translation surfaces visibly)
+     *  1. `lang/$locale.php` (e.g. `fr-fr`) for the namespace
+     *  2. `lang/<base-language>.php` (e.g. `fr` when locale is `fr-fr`)
+     *  3. `lang/en.php` for the namespace (universal fallback)
+     *  4. The raw key (so a missing translation surfaces visibly)
+     *
+     * Step 2 means a single `fr.php` file covers `fr-fr`, `fr-ca`,
+     * `fr-be`, etc. — only add a regional file (e.g. `pt-br.php`) when
+     * the wording genuinely diverges from the base language.
      *
      * @param string                          $key    e.g. `'core.color.invalid_hex'`.
      * @param array<string, string|int|float> $params Placeholder values for `{name}` substitution.
@@ -174,9 +179,14 @@ final class T
         $namespace = substr($key, 0, $dot);
         $subKey    = substr($key, $dot + 1);
 
-        $value = self::lookup($namespace, $subKey, $locale)
-              ?? self::lookup($namespace, $subKey, 'en')
-              ?? $key;
+        $value = self::lookup($namespace, $subKey, $locale);
+        if ($value === null) {
+            $dash = strpos($locale, '-');
+            if ($dash !== false) {
+                $value = self::lookup($namespace, $subKey, substr($locale, 0, $dash));
+            }
+        }
+        $value ??= self::lookup($namespace, $subKey, 'en') ?? $key;
 
         return self::interpolate($value, $params);
     }
