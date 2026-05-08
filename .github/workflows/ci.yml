@@ -146,6 +146,69 @@ jobs:
         working-directory: ${{ matrix.lib }}
         run: vendor/bin/phpunit --colors=never
 
+  # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
+  # in candy-core) pass on windows-latest. Uses a small matrix of the most
+  # TTY-sensitive libs to keep wall-clock time reasonable.
+  windows-test:
+    name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
+    runs-on: windows-latest
+    # Cancel an in-progress run of the same cell when a fresh push lands.
+    concurrency:
+      group: ci-windows-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3']
+        lib:
+          - candy-core
+          - sugar-prompt
+          - sugar-bits
+          - candy-shell
+          - candy-shine
+    steps:
+      - uses: actions/checkout@v5
+
+      # PHP on Windows comes with FFI enabled by default in PHP 8.2+.
+      # We still declare mbstring / intl / json / pcntl explicitly so that
+      # the action installs them if they are missing from the runner image.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, json, pcntl
+          tools: composer:v2
+          coverage: none
+
+      - name: Get composer cache dir
+        id: cache
+        run: |
+          echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer downloads
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.cache.outputs.dir }}
+          key: composer-win-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
+          restore-keys: |
+            composer-win-${{ matrix.php }}-
+
+      - name: Cache vendor/
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.lib }}/vendor
+          key: vendor-win-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.lib }}
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        working-directory: ${{ matrix.lib }}
+        run: vendor\bin\phpunit --colors=never
+
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
   # as a flag. Codecov uses the flag to surface a separate badge per
