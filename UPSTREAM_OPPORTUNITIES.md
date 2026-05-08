@@ -105,6 +105,18 @@ on several axes (Streamline, Wavelinechart, BrailleGrid). No port-back items.
 
 ---
 
+## charmbracelet/x — experimental subpackages
+
+Living in `charmbracelet/x/`, these are small reusable utilities that
+the rest of the ecosystem leans on. SugarCraft picks them up as helpers
+under `candy-core/src/Util/` rather than stand-alone libs.
+
+| Upstream | Title | Status in SugarCraft | Notes |
+|---|---|:--:|---|
+| [`x/exp/open`](https://github.com/charmbracelet/x/tree/main/exp/open) | Cross-platform `open` for URLs / files | 🟢 | Ported to `candy-core/src/Util/Open.php` — Linux/BSD/Solaris (`xdg-open`), macOS (`open`), Windows (`cmd /c start`), WSL (`wslview` w/ `cmd.exe` fallback), scheme allowlist (`http(s)`, `file`, `ftp`, `ssh`, `mailto`). |
+
+---
+
 ## Recommended next-port wave
 
 If we run a feature-port wave next, **prioritize**:
