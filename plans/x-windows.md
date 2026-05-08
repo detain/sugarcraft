@@ -177,6 +177,13 @@ public static function drainSignals(): bool
 - Pipe-stdin fallback: when `stream_isatty(STDIN) === false` on Windows, try `CreateFileW("CONIN$", GENERIC_READ|GENERIC_WRITE, FILE_SHARE_READ|FILE_SHARE_WRITE, NULL, OPEN_EXISTING, 0, NULL)` and same for `CONOUT$`. Mirrors POSIX `/dev/tty` open. Returns `null` if `GetLastError() == 6` (invalid handle).
 - Tests: env-var matrix → expected backend class
 
+**✅ Done — commit `aaf6b66`**:
+- `WindowsBackend::openTty()` — opens CONIN$/CONOUT$ via `CreateFileW`, wraps raw handles as `php://fd/N` streams
+- `drainSignals()` polls CONIN$ via `ReadConsoleInputW` when `openTty()` succeeded — any KEY_EVENT sets `SIGNAL_INTERRUPT` (one-shot guard)
+- `CreateFileW` + `ReadConsoleInputW` FFI cdefs in Kernel32; `KEY_EVENT` constant in Kernel32Interface
+- Fix `isset($interruptKeySeen)` always-true bug → `!== true`
+- Tests: `testOpenTtyReturnsHandlesWhenCreateFileSucceeds`, `testOpenTtyReturnsNullWhenConinFails` (Windows-only), `testDrainSignalsReturnsInterruptWhenConinHandleOpenAndKeyEvents`
+
 ### PR6 — CI matrix (~half day)
 
 - `.github/workflows/ci.yml` — add `runs-on: windows-latest` job, PHP 8.1/8.2/8.3, run `cd candy-core && composer install && vendor/bin/phpunit`
