@@ -304,6 +304,7 @@ of the others; pick whichever the first user complaint demands.
 - Caveat: tmux must be configured with `set -g allow-passthrough on` (default off in tmux 3.3+). Document.
 - Tests: enable env var, render same image with/without tmux wrap, assert byte difference matches the envelope grammar
 - **Effort**: half day
+- **Status**: DONE (PR [#279](https://github.com/detain/sugarcraft/pull/279))
 
 ### PR10 — scaling modes (~half day)  *[from go-termimg]*
 
@@ -317,6 +318,7 @@ of the others; pick whichever the first user complaint demands.
 - Wire through `render($image, width, height, scale: Scale::Fit)` and `Mosaic::builder()->withScale(...)`
 - Tests: 4×2 fixture rendered at 8×8 in each mode; assert pixel grid
 - **Effort**: half day
+- **Status**: DONE (PR [#280](https://github.com/detain/sugarcraft/pull/280))
 
 ### PR11 — Kitty z-index + virtual images (~1 day)  *[from go-termimg, marked experimental upstream]*
 
