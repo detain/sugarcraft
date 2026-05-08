@@ -333,6 +333,208 @@ final class DetectTest extends TestCase
         }
     }
 
+    /**
+     * @group tty
+     * Font-size probing requires a real interactive terminal (STDOUT write +
+     * STDIN read round-trip).  Socket-pair tests cannot simulate this because
+     * probeXtwino() writes XTWINOPS queries to STDOUT and reads replies from
+     * STDIN — the socket pair only mocks the read side.  In a TTY environment
+     * these tests run end-to-end; in CI / non-interactive environments they
+     * are skipped and the parse logic is covered by unit tests instead.
+     */
+    public function testFontSizeDetectedViaXtwino16(): void
+    {
+        if (!posix_isatty(1) || !posix_isatty(0)) {
+            $this->markTestSkipped('Font-size probe requires an interactive TTY.');
+        }
+
+        // Terminal responds to XTWINOPS 16 with cell pixel size.
+        // Reply format: ESC [ 6 ; <cellHeight> ; <cellWidth> t
+        $pair = $this->createStreamPair();
+        stream_set_blocking($pair['write'], false);
+        stream_set_blocking($pair['read'], false);
+
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+
+        // Write reply AFTER setProbeStdin so the data sits in the kernel
+        // socket buffer until stream_select is called inside probeFontSize().
+        @fwrite($pair['write'], "\x1b[6;20;10t");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+
+        $this->assertNotNull($cap->cellSize);
+        $this->assertSame(10, $cap->cellSize->cellWidth);
+        $this->assertSame(20, $cap->cellSize->cellHeight);
+    }
+
+    /**
+     * @group tty  — see testFontSizeDetectedViaXtwino16 for rationale.
+     */
+    public function testFontSizeDerivedFromXtwino14Plus18(): void
+    {
+        if (!posix_isatty(1) || !posix_isatty(0)) {
+            $this->markTestSkipped('Font-size probe requires an interactive TTY.');
+        }
+
+        // Terminal does NOT support 16t, but responds to 14t + 18t.
+        // We load all three replies so the reader processes them in order:
+        //   1. 16t times out (empty) → probe tries 14t
+        //   2. 14t: window 800×480  → probe tries 18t
+        //   3. 18t: 24 rows × 80 cols
+        $pair = $this->createStreamPair();
+        stream_set_blocking($pair['write'], false);
+        stream_set_blocking($pair['read'], false);
+
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+
+        // Write AFTER setProbeStdin (see testFontSizeDetectedViaXtwino16 note).
+        @fwrite($pair['write'], "\x1b[4;480;800t\x1b[8;24;80t");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+
+        // window 800×480 ÷ 80 cols × 24 rows = 10×20 cell pixels
+        $this->assertNotNull($cap->cellSize);
+        $this->assertSame(10, $cap->cellSize->cellWidth);
+        $this->assertSame(20, $cap->cellSize->cellHeight);
+    }
+
+    public function testFontSizeReturnsNullOnTimeout(): void
+    {
+        // No font-size replies → cellSize stays null.
+        Detect::reset();
+        Detect::setProbeStdin(null);
+
+        $cap = Detect::probe();
+
+        // cellSize is null when font-size probing returns no reply.
+        $this->assertNull($cap->cellSize);
+    }
+
+    /**
+     * Unit test for parseXtwinoReply: verifies 16t (direct cell size) parsing.
+     * Uses reflection to access the private method.
+     */
+    public function testParseXtwinoReply16tDirectCellSize(): void
+    {
+        $reply = "\x1b[6;20;10t";  // cellHeight=20, cellWidth=10
+        $method = new \ReflectionMethod(Detect::class, 'parseXtwinoReply');
+        $method->setAccessible(true);
+        $result = $method->invoke(null, $reply, "\x1b[16t");
+
+        $this->assertNotNull($result);
+        $this->assertSame(10, $result->cellWidth);
+        $this->assertSame(20, $result->cellHeight);
+    }
+
+    /**
+     * Unit test for parseXtwinoReply: verifies 14t+18t (window÷grid cell size).
+     * Uses reflection to access the private method.
+     */
+    public function testParseXtwinoReplyComputesCellSizeFrom14Plus18(): void
+    {
+        // 14t reply: window 800×480 px
+        $reply14 = "\x1b[4;480;800t";
+        $method = new \ReflectionMethod(Detect::class, 'parseXtwinoReply');
+        $method->setAccessible(true);
+        $windowSize = $method->invoke(null, $reply14, "\x1b[14t");
+
+        // 18t reply: 80 cols × 24 rows
+        $reply18 = "\x1b[8;24;80t";
+        $gridSize = $method->invoke(null, $reply18, "\x1b[18t");
+
+        // 14t: window pixel dimensions  (800 cols × 480 rows)
+        // 18t: terminal grid dimensions (80 cols × 24 rows)
+        // Derived cell size: 800/80=10 px/cell, 480/24=20 px/cell
+        $this->assertNotNull($windowSize);
+        $this->assertNotNull($gridSize);
+        $this->assertSame(800, $windowSize->cellWidth);   // window px
+        $this->assertSame(480, $windowSize->cellHeight);  // window px
+        $this->assertSame(80, $gridSize->cellWidth);      // grid cols
+        $this->assertSame(24, $gridSize->cellHeight);     // grid rows
+    }
+
+    /**
+     * Without a real TTY the font-size probe returns null (no reply to read),
+     * but Kitty detection from env vars still works correctly.  The cellSize
+     * assertion mirrors the real-world behaviour: env-driven detection bypasses
+     * the DA1 + font-size I/O round-trip, so cellSize stays null.
+     *
+     * @group tty  — see testFontSizeDetectedViaXtwino16 for rationale.
+     */
+    public function testFontSizeAttachedToKittyCapability(): void
+    {
+        if (!posix_isatty(1) || !posix_isatty(0)) {
+            $this->markTestSkipped('Font-size probe requires an interactive TTY.');
+        }
+
+        // KITTY_WINDOW_ID triggers kitty detection; font-size probe still runs.
+        $pair = $this->createStreamPair();
+        stream_set_blocking($pair['write'], false);
+        stream_set_blocking($pair['read'], false);
+
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+        putenv('KITTY_WINDOW_ID=1');
+
+        @fwrite($pair['write'], "\x1b[6;16;8t");
+        @fflush($pair['write']);
+
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+        putenv('KITTY_WINDOW_ID');
+
+        $this->assertTrue($cap->kitty);
+        $this->assertFalse($cap->iterm2);
+        $this->assertNotNull($cap->cellSize);
+        $this->assertSame(8, $cap->cellSize->cellWidth);
+        $this->assertSame(16, $cap->cellSize->cellHeight);
+    }
+
+    /**
+     * @group tty  — see testFontSizeDetectedViaXtwino16 for rationale.
+     */
+    public function testFontSizeAttachedToSixelCapability(): void
+    {
+        if (!posix_isatty(1) || !posix_isatty(0)) {
+            $this->markTestSkipped('Font-size probe requires an interactive TTY.');
+        }
+
+        // DA1 confirms sixel; font-size probe still runs.
+        // No env hints → probeEnv returns unknown → DA1 is issued.
+        $pair = $this->createStreamPair();
+        stream_set_blocking($pair['write'], false);
+        stream_set_blocking($pair['read'], false);
+
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+
+        // Font-size reply first (consumed by probeFontSize), then DA1
+        // reply (consumed by probeDa1).  Write AFTER setProbeStdin.
+        @fwrite($pair['write'], "\x1b[6;12;6t\x1b[?62;4;0c");
+        @fflush($pair['write']);
+        usleep(20_000);
+
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+
+        $this->assertTrue($cap->sixel);
+        $this->assertNotNull($cap->cellSize);
+        $this->assertSame(6, $cap->cellSize->cellWidth);
+        $this->assertSame(12, $cap->cellSize->cellHeight);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

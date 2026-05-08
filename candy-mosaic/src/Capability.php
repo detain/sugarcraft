@@ -57,15 +57,21 @@ final class Capability
     {
         return new self(false, false, false, true, $cellSize);
     }
+
+    /**
+     * Return a copy of this capability with the given cell size attached.
+     * Used by {@see Detect::probeFontSize()} to attach font-size data
+     * to whatever protocol was detected via env vars or DA1.
+     */
+    public function withCellSize(?CellSize $cellSize): self
+    {
+        return new self(
+            $this->sixel,
+            $this->kitty,
+            $this->iterm2,
+            $this->halfblock,
+            $cellSize,
+        );
+    }
 }
 
-/**
- * Terminal cell pixel dimensions (width × height in pixels).
- */
-final class CellSize
-{
-    public function __construct(
-        public readonly int $cellWidth,
-        public readonly int $cellHeight,
-    ) {}
-}
