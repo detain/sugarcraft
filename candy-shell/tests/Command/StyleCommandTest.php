@@ -21,7 +21,8 @@ final class StyleCommandTest extends TestCase
         $tester->assertCommandIsSuccessful();
         // Output should have no SGR escapes (the input ones were
         // stripped, no new styling was requested).
-        $this->assertSame("hello\n", $tester->getDisplay());
+        // rtrim: Windows CI normalises output line endings to CRLF.
+        $this->assertSame("hello\n", rtrim($tester->getDisplay(), "\r\n"));
     }
 
     public function testStripAnsiCombinesWithStyling(): void
@@ -35,6 +36,7 @@ final class StyleCommandTest extends TestCase
         ]);
         $tester->assertCommandIsSuccessful();
         // The pre-existing red was stripped; the new bold survived.
-        $this->assertSame("\x1b[1mhello\x1b[0m\n", $tester->getDisplay());
+        // rtrim: Windows CI normalises output line endings to CRLF.
+        $this->assertSame("\x1b[1mhello\x1b[0m\n", rtrim($tester->getDisplay(), "\r\n"));
     }
 }
