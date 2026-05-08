@@ -61,8 +61,7 @@ jobs:
           - sugar-stash
           - candy-query
           - sugar-tick
-          - candy-mines
-          - candy-flip
+          - candy-mosaic
           - honey-flap
           - candy-hermit
           - candy-lister
@@ -247,6 +246,7 @@ jobs:
           - sugar-wishlist
           - candy-metrics
           - candy-mold
+          - candy-mosaic
           - candy-tetris
           - super-candy
           - sugar-crush
