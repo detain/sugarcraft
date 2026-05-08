@@ -114,6 +114,7 @@ under `candy-core/src/Util/` rather than stand-alone libs.
 | Upstream | Title | Status in SugarCraft | Notes |
 |---|---|:--:|---|
 | [`x/exp/open`](https://github.com/charmbracelet/x/tree/main/exp/open) | Cross-platform `open` for URLs / files | 🟢 | Ported to `candy-core/src/Util/Open.php` — Linux/BSD/Solaris (`xdg-open`), macOS (`open`), Windows (`cmd /c start`), WSL (`wslview` w/ `cmd.exe` fallback), scheme allowlist (`http(s)`, `file`, `ftp`, `ssh`, `mailto`). |
+| [`x/editor`](https://github.com/charmbracelet/x/tree/main/editor) | Spawn `$EDITOR` on a temp file and round-trip the contents | 🟢 | Ported to `candy-core/src/Util/Editor.php`. Discovery walks `$VISUAL` → `$EDITOR` → platform defaults (`vi`/`nano` on POSIX, `notepad` on Windows); splits the env-var so `EDITOR='vim -p'` keeps its flags. Wired into `sugar-bits/TextArea` via `Ctrl+O` (Cmd::exec → temp file round-trip → `TextAreaEditedMsg`); `:cq`-style non-zero exits preserve the pre-edit value. |
 
 ---
 

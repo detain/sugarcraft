@@ -6,10 +6,12 @@ namespace SugarCraft\Bits\TextArea;
 
 use SugarCraft\Bits\Cursor\BlinkMsg;
 use SugarCraft\Bits\Cursor\Cursor;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Editor;
 
 /**
  * Multi-line text input. Holds a list of lines and a (row, col) cursor.
@@ -58,6 +60,13 @@ final class TextArea implements Model
          * `$height` is the fixed row count.
          */
         public readonly bool $dynamic = false,
+        /**
+         * Filename suffix used when {@see openInEditor()} writes the
+         * seed temp file. Mirrors upstream Bubbles' editor example —
+         * `.md` triggers vim's markdown ftplugin, `.json` opens with
+         * JSON syntax highlighting, etc. Default `.txt`.
+         */
+        public readonly string $editorExtension = '.txt',
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -92,6 +101,9 @@ final class TextArea implements Model
             [$cursor, $cmd] = $this->cursor->update($msg);
             return [$this->mutate(cursor: $cursor), $cmd];
         }
+        if ($msg instanceof TextAreaEditedMsg) {
+            return [$this->setValue($msg->value), null];
+        }
         if (!$msg instanceof KeyMsg || !$this->focused) {
             return [$this, null];
         }
@@ -102,6 +114,7 @@ final class TextArea implements Model
                 'e'     => [$this->moveCursor($this->row, $this->lineLen($this->row)), null],
                 'u'     => [$this->deleteToLineStart(), null],
                 'k'     => [$this->deleteToLineEnd(), null],
+                'o'     => [$this, $this->openInEditor()],
                 default => [$this, null],
             };
         }
@@ -277,6 +290,24 @@ final class TextArea implements Model
 
     /** Short alias for {@see withDynamic()}. */
     public function dynamic(bool $on = true): self { return $this->withDynamic($on); }
+
+    /**
+     * Filename suffix used when Ctrl+O opens the buffer in the user's
+     * external `$EDITOR`. Pass with the leading dot (`'.md'`) or
+     * without (`'md'`); both are accepted. Empty string skips the
+     * suffix entirely. Mirrors the editor-example pattern in
+     * upstream `bubbles/textarea`.
+     */
+    public function withEditorExtension(string $ext): self
+    {
+        return $this->mutate(editorExtension: $ext);
+    }
+
+    /** Short alias for {@see withEditorExtension()}. */
+    public function editorExtension(string $ext): self
+    {
+        return $this->withEditorExtension($ext);
+    }
 
     /**
      * Number of rows {@see view()} will render given the current
@@ -691,6 +722,60 @@ final class TextArea implements Model
         return $sum;
     }
 
+    /**
+     * Build the `Cmd::exec` Cmd that hands the current value to the
+     * user's external editor and dispatches a {@see TextAreaEditedMsg}
+     * with the result. Returns `null` (no Cmd) when no editor can be
+     * discovered or the temp file cannot be created — the keystroke
+     * collapses to a no-op so the UI never wedges.
+     *
+     * Non-zero exit (vim `:cq`, child crash, proc_open failure) does
+     * not produce a Msg either; the pre-edit value is preserved.
+     */
+    private function openInEditor(): ?\Closure
+    {
+        try {
+            $argv = Editor::command();
+        } catch (\RuntimeException) {
+            return null;
+        }
+
+        $tmp = @tempnam(sys_get_temp_dir(), 'sc-textarea-');
+        if ($tmp === false) {
+            return null;
+        }
+        $ext = ltrim($this->editorExtension, '.');
+        if ($ext !== '') {
+            $renamed = $tmp . '.' . $ext;
+            if (@rename($tmp, $renamed)) {
+                $tmp = $renamed;
+            }
+        }
+        if (@file_put_contents($tmp, $this->value()) === false) {
+            @unlink($tmp);
+            return null;
+        }
+
+        return Cmd::exec(
+            [...$argv, $tmp],
+            captureOutput: false,
+            onComplete: static function (int $exit, string $out, string $err, ?\Throwable $error) use ($tmp): ?Msg {
+                try {
+                    if ($exit !== 0 || $error !== null) {
+                        return null;
+                    }
+                    $content = @file_get_contents($tmp);
+                    if ($content === false) {
+                        return null;
+                    }
+                    return new TextAreaEditedMsg($content);
+                } finally {
+                    @unlink($tmp);
+                }
+            },
+        );
+    }
+
     private function renderCursorLine(string $line): string
     {
         $lineLen = mb_strlen($line, 'UTF-8');
@@ -723,6 +808,7 @@ final class TextArea implements Model
         ?string $err = null, bool $errSet = false,
         ?\Closure $promptFunc = null, bool $promptFuncSet = false,
         ?bool $dynamic = null,
+        ?string $editorExtension = null,
     ): self {
         $newLines = $lines ?? $this->lines;
         $resolvedValidate = $validateSet ? $validate : $this->validate;
@@ -753,6 +839,7 @@ final class TextArea implements Model
             err:                   $err,
             promptFunc:            $promptFuncSet        ? $promptFunc : $this->promptFunc,
             dynamic:               $dynamic              ?? $this->dynamic,
+            editorExtension:       $editorExtension      ?? $this->editorExtension,
         );
     }
 }
