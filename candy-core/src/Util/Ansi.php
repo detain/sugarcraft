@@ -210,6 +210,36 @@ final class Ansi
     }
 
     /**
+     * Emit the opening OSC 8 hyperlink sequence for `$url`. Use
+     * {@see hyperlinkClose()} to close the link after the linked text.
+     *
+     * Encoding: `\x1b]8;<id>;<url>\x1b\\`. ST (the String Terminator)
+     * is preferred over BEL because some terminals mis-render BEL
+     * inside an OSC.
+     *
+     * Mirrors charmbracelet/x/ansi. LinkFormatter.
+     *
+     * @param string      $uri  Target URL
+     * @param string|null $id   Optional link ID for shared destinations
+     */
+    public static function hyperlinkOpen(string $uri, ?string $id = null): string
+    {
+        $params = $id === null ? '' : 'id=' . $id;
+        return self::OSC . '8;' . $params . ';' . $uri . self::ST;
+    }
+
+    /**
+     * Emit the OSC 8 hyperlink terminator (no-op close, used after
+     * the linked text to restore normal underline state).
+     *
+     * Mirrors charmbracelet/x/ansi. LinkFormatter.
+     */
+    public static function hyperlinkClose(): string
+    {
+        return self::OSC . '8;;' . self::ST;
+    }
+
+    /**
      * Wrap `$text` in an OSC 8 hyperlink so terminals that support it
      * (iTerm2, WezTerm, Kitty, GNOME Terminal, Windows Terminal) render
      * `$text` as a clickable link to `$url`. `$id` lets multiple
@@ -223,10 +253,9 @@ final class Ansi
      */
     public static function hyperlink(string $url, string $text, string $id = ''): string
     {
-        $params = $id === '' ? '' : 'id=' . $id;
-        return self::OSC . '8;' . $params . ';' . $url . self::ST
+        return self::hyperlinkOpen($url, $id === '' ? null : $id)
              . $text
-             . self::OSC . '8;;' . self::ST;
+             . self::hyperlinkClose();
     }
 
     /**
