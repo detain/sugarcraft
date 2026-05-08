@@ -32,6 +32,13 @@ final class WindowsBackendTest extends TestCase
             $this->windowsBackend->restore();
             $this->windowsBackend = null;
         }
+
+        // Reset static state so the next test starts clean.
+        // Do NOT call setTestKernel32(null) here — the next test's setUp()
+        // will inject its own FakeKernel32 (or null to use the real Kernel32).
+        // Clearing it would cause the next test's size() call to use the real
+        // Kernel32 singleton (FFI crash on Linux before it can inject its fake).
+        WindowsBackend::setTestInterruptFlags(null);
         WindowsBackend::resetStaticState();
         parent::tearDown();
     }
@@ -377,6 +384,7 @@ final class WindowsBackendTest extends TestCase
         // was on the fake, which is now dropped — no signal pending.
         // drainSignals returns false (no interrupt flag injected, no resize callback).
         $result = WindowsBackend::drainSignals();
+        $this->assertFalse($result);
         $this->assertFalse($result);
     }
 }

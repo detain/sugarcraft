@@ -4,80 +4,55 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Tty;
 
+use SugarCraft\Core\Util\Tty\InterruptFlags;
+
 /**
- * Windows FFI-based TTY backend.
+ * Windows-specific TTY backend using FFI to kernel32.dll.
  *
- * Uses kernel32.dll FFI to query and manipulate the Windows console.
- * This backend targets Windows 10 1809+ (Windows Terminal or modern
- * ConHost) which supports Virtual Terminal processing.
+ * This class is never instantiated directly — use {@see Tty}
+ * which selects the correct backend based on environment detection.
  *
- * ## Implemented slices
+ * Windows console handles (HANDLE) are represented as plain PHP `int`
+ * values throughout this class.  FFI pointer types never leak outside
+ * Kernel32.php / Kernel32Interface.php.
  *
- * - `isTty()`         — PR1: detects whether the stream is a console handle.
- * - `size()`          — PR1: queries the window dimensions via `GetConsoleScreenBufferInfo`.
- * - `enableRawMode()` — PR2: captures modes, sets VT raw mode, sets UTF-8 codepage.
- * - `restore()`       — PR2: restores all captured modes and codepage.
- * - `onResize()`      — PR3: registers a resize callback.
- * - `drainSignals()`  — PR3: polls `GetConsoleScreenBufferInfo` each tick;
- *                        fires the callback when window dimensions change.
- *
- * The following are stub no-ops in this slice and will be wired up
- * in subsequent slices:
- *
- * - `openTty()` — PR5: `CONIN$`/`CONOUT$` via `CreateFileW`
- *
- * ## Resize signalling design
- *
- * Windows has no `SIGWINCH` equivalent.  The resize-poll loop calls
- * `GetConsoleScreenBufferInfo(stdout)` once per {@see drainSignals()}
- * invocation (i.e. once per event-loop tick) and compares the window
- * rect against the last known size.  When the dimensions differ, the
- * registered callback is fired with the new `(cols, rows)`.
- *
- * The poll frequency is therefore one check per tick — the same
- * granularity as POSIX `pcntl_signal(SIGWINCH)`.
- *
- * @see \SugarCraft\Core\Util\Tty\Kernel32
- * @see \SugarCraft\Core\Util\Tty\Kernel32Interface
+ * @see Tty
+ * @see PosixBackend
  */
 final class WindowsBackend implements Backend
 {
+    // Mask for clearing input mode flags that are unsafe in raw mode.
+    // Uses bitwise NOT so that AND-ing with the saved mode CLEARS those bits.
     private const MASK_CLEAR_INPUT = ~(
-        Kernel32Interface::ENABLE_PROCESSED_INPUT
-        | Kernel32Interface::ENABLE_LINE_INPUT
+        Kernel32Interface::ENABLE_LINE_INPUT
+        | Kernel32Interface::ENABLE_PROCESSED_INPUT
         | Kernel32Interface::ENABLE_ECHO_INPUT
     );
 
-    /** @var resource */
+    /** @var resource|null */
     private $stream;
 
     /** @var Kernel32Interface */
     private Kernel32Interface $kernel32;
 
-    // ─── Raw-mode state ──────────────────────────────────────────────────────
+    /** Saved input mode (null when not in raw mode). */
+    private ?int $savedInputMode = null;
 
-    /** Saved input mode (null when raw mode is not active). */
-    private int|null $savedInputMode = null;
-
-    /** Saved output mode (null when raw mode is not active). */
-    private int|null $savedOutputMode = null;
+    /** Saved output mode (null when not in raw mode). */
+    private ?int $savedOutputMode = null;
 
     /** Saved input codepage. */
-    private int|null $savedInputCp = null;
+    private ?int $savedInputCp = null;
 
     /** Saved output codepage. */
-    private int|null $savedOutputCp = null;
+    private ?int $savedOutputCp = null;
 
-    // ─── Resize-signalling state ─────────────────────────────────────────────
+    // ─── Static resize state ─────────────────────────────────────────────────
 
     /**
-     * Registered resize callback, or null when none is active.
+     * Registered resize callback.
      *
-     * Stored as a static so both {@see onResize()} (static façade) and
-     * {@see drainSignalsInstance()} share the same reference without
-     * needing a shared instance reference.
-     *
-     * @var (\Closure(int $cols, int $rows):void)|null
+     * @var \Closure(int $cols, int $rows): void|null
      */
     private static ?\Closure $resizeCallback = null;
 
@@ -90,6 +65,9 @@ final class WindowsBackend implements Backend
 
     /**
      * Injected Kernel32 instance for testing.
+     *
+     * When set (via {@see setTestKernel32()}), drainSignals() uses this
+     * instead of the real Kernel32 singleton.  Do not use in production.
      *
      * @var Kernel32Interface|null
      */
@@ -263,12 +241,14 @@ final class WindowsBackend implements Backend
      * checks the shared interrupt flag once.  Returns a bitmask indicating
      * which signals were dispatched.
      *
-     * When SIGNAL_INTERRUPT is returned, {@see InterruptMsg} is dispatched
-     * to the running {@see Program} instance immediately.
+     * When SIGNAL_INTERRUPT is returned, the caller (e.g. Program::tick)
+     * is responsible for dispatching {@see InterruptMsg} to the running
+     * Program instance.
      *
      * Call this exactly once per event-loop tick.
      *
-     * @return int|false bitmask (SIGNAL_INTERRUPT | SIGNAL_RESIZE), false on error
+     * @return int|false int bitmask (SIGNAL_INTERRUPT | SIGNAL_RESIZE) when signals
+     *                   were dispatched, false when nothing happened
      */
     public static function drainSignals(): int|false
     {
@@ -357,6 +337,8 @@ final class WindowsBackend implements Backend
 
     /**
      * Inject a test Kernel32 double.
+     *
+     * This is an internal test-only API.  Do not call in production.
      *
      * @internal test-only
      */

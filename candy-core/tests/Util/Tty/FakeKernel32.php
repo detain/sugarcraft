@@ -44,6 +44,26 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     /** @var list<int> */
     private array $setConsoleOutputCPCalls = [];
 
+    // ─── Test lifecycle ─────────────────────────────────────────────────────
+
+    /**
+     * Reset all mutable state (call in tearDown).
+     *
+     * @internal test-only
+     */
+    public function reset(): void
+    {
+        $this->consoleModeStdin           = null;
+        $this->consoleModeStdout          = null;
+        $this->consoleCpIn                = 437;
+        $this->consoleCpOut               = 437;
+        $this->screenBufferInfo           = null;
+        $this->screenBufferInfoSequence   = [];
+        $this->setConsoleModeCalls        = [];
+        $this->setConsoleCPCalls          = [];
+        $this->setConsoleOutputCPCalls    = [];
+    }
+
     // ─── Configurators ───────────────────────────────────────────────────────
 
     public function setConsoleModeStdin(int $mode): void
