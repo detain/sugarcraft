@@ -6,6 +6,8 @@ namespace SugarCraft\Core\Tests\Util\Tty;
 
 use SugarCraft\Core\Util\Tty\WindowsBackend;
 use SugarCraft\Core\Tests\Util\Tty\FakeInterruptFlags;
+use SugarCraft\Core\Tests\Util\Tty\FakeKernel32;
+use SugarCraft\Core\Util\Tty\Kernel32Interface;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -386,5 +388,65 @@ final class WindowsBackendTest extends TestCase
         $result = WindowsBackend::drainSignals();
         $this->assertFalse($result);
         $this->assertFalse($result);
+    }
+
+    // ─── PR5: openTty ───────────────────────────────────────────────────────
+
+    public function testOpenTtyReturnsHandlesWhenCreateFileSucceeds(): void
+    {
+        // Use default FakeKernel32 — createFile returns stream_socket_pair fds
+        // for CONIN$/CONOUT$, so fopen("php://fd/N") succeeds on Linux.
+        $fake = new FakeKernel32();
+        WindowsBackend::setTestKernel32($fake);
+
+        $handles = WindowsBackend::openTty();
+
+        $this->assertNotNull($handles);
+        $this->assertCount(2, $handles);
+        [$fin, $fout] = $handles;
+        $this->assertIsResource($fin);
+        $this->assertIsResource($fout);
+
+        WindowsBackend::resetStaticState();
+    }
+
+    public function testOpenTtyReturnsNullWhenConinFails(): void
+    {
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $this->markTestSkipped('CONIN$ failure simulation requires Windows');
+        }
+        $fake = new FakeKernel32();
+        // Simulate createFile returning false for CONIN$ (no console attached).
+        $fake->setCreateFileHandle('CONIN$', false);
+        WindowsBackend::setTestKernel32($fake);
+
+        $this->assertNull(WindowsBackend::openTty());
+
+        WindowsBackend::resetStaticState();
+    }
+
+    // ─── PR5: drainSignals + CONIN$ key detection ──────────────────────────
+
+    public function testDrainSignalsReturnsInterruptWhenConinHandleOpenAndKeyEvents(): void
+    {
+        $fake = new FakeKernel32();
+        // Seed a KEY_EVENT into the console input queue (simulates Ctrl+C).
+        $fake->setReadConsoleInputSequence([
+            ['type' => Kernel32Interface::KEY_EVENT],
+        ]);
+        WindowsBackend::setTestKernel32($fake);
+        // Open TTY so drainSignals reads CONIN$ for key events.
+        $opened = WindowsBackend::openTty();
+        $this->assertNotNull($opened);
+
+        // No interrupt flag set; drainSignals must detect via KEY_EVENT polling.
+        WindowsBackend::setTestInterruptFlags(new FakeInterruptFlags());
+
+        $result = WindowsBackend::drainSignals();
+
+        $this->assertNotFalse($result);
+        $this->assertNotSame(0, $result & WindowsBackend::SIGNAL_INTERRUPT);
+
+        WindowsBackend::resetStaticState();
     }
 }
