@@ -197,9 +197,14 @@ jobs:
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
+      # Windows CI runs only the TTY subsystem tests.  The full suite includes
+      # tests that make platform assumptions (PCNTL, Unix paths, TTY streams)
+      # that are not met on the windows-latest runner.  The TTY tests exercise
+      # the WindowsBackend / kernel32 FFI path that is the subject of this job.
       - name: Run tests
         working-directory: ${{ matrix.lib }}
-        run: vendor\bin\phpunit --colors=never
+        run: |
+          vendor\bin\phpunit tests/Util/Tty/ --colors=never
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
