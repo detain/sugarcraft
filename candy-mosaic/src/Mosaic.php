@@ -279,6 +279,28 @@ final class Mosaic
         $clone->scale = $scale;
         return $clone;
     }
+
+    /**
+     * Create a memoizing AdaptiveImage for the given source.
+     *
+     * The returned AdaptiveImage re-encodes on demand using this Mosaic
+     * instance (so scale, dither, and tmux wrapping are all applied).
+     */
+    public function adaptive(ImageSource $image): AdaptiveImage
+    {
+        return new AdaptiveImage($image, $this);
+    }
+
+    /**
+     * Render and cache one specific size as a PrecomputedImage.
+     */
+    public function precompute(ImageSource $image, int $width, ?int $height = null): PrecomputedImage
+    {
+        return $this->adaptive($image)->precompute(
+            $width,
+            $height ?? (int) round($width / $image->aspectRatio()),
+        );
+    }
 }
 
 /**
@@ -328,6 +350,12 @@ final class MosaicBuilder
         return $clone;
     }
 
+    /**
+     * Create a memoizing AdaptiveImage for the given source.
+     *
+     * The returned AdaptiveImage re-encodes on demand using this Mosaic
+     * instance (so scale, dither, and tmux wrapping are all applied).
+     */
     public function build(): Mosaic
     {
         $renderer = $this->renderer;
