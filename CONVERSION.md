@@ -1147,7 +1147,9 @@ real-world workloads beyond the original Charmbracelet roster.
 | **sugar-stash**  | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit)       | Three-pane git TUI — status / branches / log, single-key stage / unstage. Shells out to `git`. |
 | **candy-query**  | [jorgerojas26/lazysql](https://github.com/jorgerojas26/lazysql)         | SQLite browser — list tables, browse rows, run ad-hoc queries (PDO + `:memory:` test fixtures). |
 | **sugar-tick**   | [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime)         | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard. |
-| **candy-mines**  | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep)         | Minesweeper — first-click safety, recursive flood-fill, deterministic-RNG injectable. |
+| **candy-mines**  | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep)
+| **candy-mosaic** | [charmbracelet/x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) | Image-to-cell renderer — four backends (Sixel, Kitty, iTerm2, Unicode half-block); probe-once Picker facade; ext-gd; aspect-ratio handling; resize. |
+         | Minesweeper — first-click safety, recursive flood-fill, deterministic-RNG injectable. |
 | **candy-flip**   | [namzug16/gifterm](https://github.com/namzug16/gifterm)                 | ASCII GIF viewer — `ext-gd` decode, downsample to a cell grid, render as truecolor blocks or a luminance ramp. |
 | **honey-flap**   | [kbrgl/flapioca](https://github.com/kbrgl/flapioca)                     | Flappy-Bird clone — bird motion is a HoneyBounce projectile; pipes scroll left at a fixed cell rate; per-cell collision. |
 
