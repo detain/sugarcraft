@@ -559,6 +559,12 @@ final class Ansi
         if (isset($opts['z'])) {
             $parts[] = 'z=' . $opts['z'];
         }
+        if (isset($opts['x'])) {
+            $parts[] = 'x=' . $opts['x'];
+        }
+        if (isset($opts['y'])) {
+            $parts[] = 'y=' . $opts['y'];
+        }
         return self::APC . 'G' . implode(',', $parts) . ';';
     }
 
