@@ -40,6 +40,7 @@ jobs:
         lib:
           - candy-core
           - candy-sprinkles
+          - candy-vt
           - honey-bounce
           - candy-zone
           - sugar-bits
@@ -231,6 +232,7 @@ jobs:
         lib:
           - candy-core
           - candy-sprinkles
+          - candy-vt
           - honey-bounce
           - candy-zone
           - sugar-bits
