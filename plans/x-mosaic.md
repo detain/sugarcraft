@@ -342,6 +342,7 @@ of the others; pick whichever the first user complaint demands.
 - Cap memoization cache at N entries (LRU), default 4 — typical use case is one or two sizes alternating
 - Tests: render same size twice, assert encoder called once; resize, assert re-encoded
 - **Effort**: half day
+- **Status**: DONE — **MERGED** [#283](https://github.com/detain/sugarcraft/pull/283)
 
 ### PR13 — async resize hook (~1 day)  *[from ratatui-image's ThreadProtocol]*
 
