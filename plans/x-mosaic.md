@@ -318,7 +318,7 @@ of the others; pick whichever the first user complaint demands.
 - Wire through `render($image, width, height, scale: Scale::Fit)` and `Mosaic::builder()->withScale(...)`
 - Tests: 4×2 fixture rendered at 8×8 in each mode; assert pixel grid
 - **Effort**: half day
-- **Status**: DONE (PR [#280](https://github.com/detain/sugarcraft/pull/280))
+- **Status**: DONE — **MERGED** [#280](https://github.com/detain/sugarcraft/pull/280)
 
 ### PR11 — Kitty z-index + virtual images (~1 day)  *[from go-termimg, marked experimental upstream]*
 
