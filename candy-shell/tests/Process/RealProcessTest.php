@@ -9,6 +9,13 @@ use PHPUnit\Framework\TestCase;
 
 final class RealProcessTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $this->markTestSkipped('RealProcessTest requires Unix commands (/bin/sh) not available on Windows.');
+        }
+    }
+
     public function testSpawnReadsExitCodeFromTrueCommand(): void
     {
         $proc = RealProcess::spawn(['/bin/sh', '-c', 'exit 0']);
