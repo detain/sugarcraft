@@ -10,6 +10,7 @@ use SugarCraft\Mosaic\Renderer\KittyRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Dither;
+use SugarCraft\Mosaic\Scale;
 use SugarCraft\Mosaic\TmuxPassthroughDecorator;
 
 /**
@@ -33,11 +34,12 @@ use SugarCraft\Mosaic\TmuxPassthroughDecorator;
  */
 final class Mosaic
 {
-    private function __construct(
+    public function __construct(
         private readonly Renderer $renderer,
         private readonly Capability $capability,
         private readonly ?int $forcedWidth,
         private readonly ?int $forcedHeight,
+        private ?Scale $scale,
     ) {}
 
     /**
@@ -61,7 +63,7 @@ final class Mosaic
             $renderer = new TmuxPassthroughDecorator($renderer);
         }
 
-        return new self($renderer, $cap, null, null);
+        return new self($renderer, $cap, null, null, null);
     }
 
     /** Force the iTerm2 / WezTerm inline-image renderer. */
@@ -70,6 +72,7 @@ final class Mosaic
         return new self(
             new Iterm2Renderer(),
             Capability::universal(),
+            null,
             null,
             null,
         );
@@ -81,6 +84,7 @@ final class Mosaic
         return new self(
             new HalfBlockRenderer(),
             Capability::universal(),
+            null,
             null,
             null,
         );
@@ -102,6 +106,7 @@ final class Mosaic
             Capability::universal(),
             null,
             null,
+            null,
         );
     }
 
@@ -113,7 +118,7 @@ final class Mosaic
     public function withDither(Dither $dither): self
     {
         if ($this->renderer instanceof SixelRenderer) {
-            return new self(new SixelRenderer($dither), $this->capability, $this->forcedWidth, $this->forcedHeight);
+            return new self(new SixelRenderer($dither), $this->capability, $this->forcedWidth, $this->forcedHeight, $this->scale);
         }
         return $this;
     }
@@ -150,6 +155,14 @@ final class Mosaic
     }
 
     /**
+     * The configured scale mode, or null for the default (Fit).
+     */
+    public function scale(): ?Scale
+    {
+        return $this->scale;
+    }
+
+    /**
      * Render the image to ANSI bytes at the given cell dimensions.
      *
      * @param ImageSource $image  Source image
@@ -162,7 +175,63 @@ final class Mosaic
     {
         $w = $width > 0 ? $width : 1;
         $h = $height;
+
+        // Apply scale transformation before rendering.
+        if ($this->scale !== null) {
+            // For Fit mode: derive cell height from aspect ratio first so
+            // applyScale computes the right crop/resize target.
+            // For None mode with null height: use source native dimensions
+            // (no letterboxing/scaling).
+            // Other modes: compute cell height the same way.
+            if ($h === null) {
+                $h = (int) round($w / $image->aspectRatio());
+            }
+
+            // None: use source native size when no explicit height was given.
+            if ($this->scale === Scale::None && $height === null) {
+                $w = $image->width;
+                $h = $image->height;
+            }
+
+            $image = $this->applyScale($image, $w, $h);
+            // After scaling, the image fits exactly — no further aspect-ratio
+            // derivation is needed; pass the computed dimensions directly.
+            $h = null;
+        }
+
         return $this->renderer->render($image, $w, $h);
+    }
+
+    /**
+     * Apply the configured scale mode to the image.
+     */
+    private function applyScale(ImageSource $image, int $cellW, int $cellH): ImageSource
+    {
+        if ($cellH === null) {
+            $cellH = (int) round($cellW / $image->aspectRatio());
+        }
+
+        $dims = $this->scale->computeDimensions($image->width, $image->height, $cellW, $cellH);
+
+        // No transformation needed — return original.
+        if ($dims['srcX'] === 0 && $dims['srcY'] === 0
+            && $dims['srcW'] === $image->width && $dims['srcH'] === $image->height
+            && $dims['dstW'] === $image->width && $dims['dstH'] === $image->height
+        ) {
+            return $image;
+        }
+
+        // Apply crop first (if any), then resize to destination dimensions.
+        $img = $image;
+        if ($dims['srcW'] < $image->width || $dims['srcH'] < $image->height) {
+            $img = $img->crop($dims['srcX'], $dims['srcY'], $dims['srcW'], $dims['srcH']);
+        }
+
+        if ($dims['dstW'] !== $img->width || $dims['dstH'] !== $img->height) {
+            $img = $img->resize($dims['dstW'], $dims['dstH']);
+        }
+
+        return $img;
     }
 
     /**
@@ -200,6 +269,16 @@ final class Mosaic
 
         return new HalfBlockRenderer();
     }
+
+    /**
+     * Set the scale mode for rendering.
+     */
+    public function withScale(Scale $scale): self
+    {
+        $clone = clone $this;
+        $clone->scale = $scale;
+        return $clone;
+    }
 }
 
 /**
@@ -211,6 +290,7 @@ final class MosaicBuilder
     private ?int $width = null;
     private ?int $height = null;
     private ?Dither $dither = null;
+    private ?Scale $scale = null;
 
     public function withRenderer(Renderer $renderer): self
     {
@@ -238,6 +318,16 @@ final class MosaicBuilder
         return $clone;
     }
 
+    /**
+     * Set the scale mode for rendering.
+     */
+    public function withScale(Scale $scale): self
+    {
+        $clone = clone $this;
+        $clone->scale = $scale;
+        return $clone;
+    }
+
     public function build(): Mosaic
     {
         $renderer = $this->renderer;
@@ -255,6 +345,6 @@ final class MosaicBuilder
             $cap = Capability::universal();
         }
 
-        return new Mosaic($renderer, $cap, $this->width, $this->height);
+        return new Mosaic($renderer, $cap, $this->width, $this->height, $this->scale);
     }
 }
