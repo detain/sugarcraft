@@ -243,10 +243,12 @@ interface Renderer
 
 ### PR4 — SixelRenderer (~2 days)
 
-- Median-cut quantizer
-- Sixel band encoder
-- Tests: small fixture (8×6 PNG checker) → known-good sixel bytes (cross-reference upstream test fixtures from `charmbracelet/x/mosaic`)
-- Add `Ansi::sixelDcsHeader/Data/Terminator/ColorIntroducer` (item A1 from x-ansi plan)
+- ... DONE (PR #274)
+  - Median-cut quantizer (corrects bucket leak: buckets grew 2× per iteration instead of 1×)
+  - Sixel band encoder (DECGCI palette decl, DECGCR per-band select, RLE sixel data)
+  - 16 tests: fixture smoke, dimension validation, palette count, multi-band, printable sixel bytes
+  - `Ansi::sixelDcsHeader`, `sixelColorIntroducer`, `sixelColorSelect`, `sixelPixelData`, `sixelTerminator`
+  - Wired into `Mosaic::bestBackend()` — Kitty > iTerm2 > Sixel > HalfBlock
 
 ### PR5 — DA1 probe + capability fallback (~half day)
 
