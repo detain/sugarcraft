@@ -5,101 +5,105 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Util;
 
 /**
- * Minimal portable TTY control. Uses `stty` shell-out on POSIX; FFI/termios
- * is a future optimization. Windows support is deferred until VT-mode toggling
- * is wired up in SugarCraft\Core\Program.
+ * Minimal portable TTY façade.
+ *
+ * This class acts as a facade over the platform-specific TTY backends:
+ *
+ * - **PosixBackend** — Linux, macOS, BSD; shell-out to `stty`.
+ * - **WindowsBackend** — Native Windows PHP via FFI to kernel32.dll.
+ *
+ * The backend is selected at construction time based on the environment
+ * (WSL, Mintty, native Windows).  All downstream callers (Renderer,
+ * InputReader, Program) continue to use this class without any changes;
+ * the backend swap is entirely internal.
+ *
+ * ## Platform detection order
+ *
+ * WSL must be detected before native Windows because WSL sets
+ * `$WSL_INTEROP` but also runs a real Linux kernel — we want the POSIX
+ * code path.  Mintty must be detected before `stream_isatty()` because
+ * mintty uses pipe stdin so `isatty()` returns false even though a PTY
+ * is present.
+ *
+ * @see \SugarCraft\Core\Util\Tty\PosixBackend
+ * @see \SugarCraft\Core\Util\Tty\WindowsBackend
+ * @see \SugarCraft\Core\Util\Tty\EnvDetect
  */
 final class Tty
 {
-    /** @var resource */
-    private $stream;
-    private ?string $savedSttyState = null;
+    /** @var \SugarCraft\Core\Util\Tty\Backend */
+    private \SugarCraft\Core\Util\Tty\Backend $backend;
 
     /** @param resource|null $stream defaults to STDIN */
     public function __construct($stream = null)
     {
-        $this->stream = $stream ?? STDIN;
+        $this->backend = self::backend($stream ?? STDIN);
+    }
+
+    /**
+     * Resolve the appropriate backend for the current process environment.
+     *
+     * Detection order:
+     * 1. WSL  → PosixBackend (Linux ELF binary on Windows)
+     * 2. Mintty / MSYS2 / Git-Bash → PosixBackend (PTY pipe)
+     * 3. Cygwin → PosixBackend (POSIX-like environment)
+     * 4. Native Windows (DIRECTORY_SEPARATOR === '\\') → WindowsBackend
+     * 5. Everything else → PosixBackend
+     */
+    private static function backend($stream): \SugarCraft\Core\Util\Tty\Backend
+    {
+        if (DIRECTORY_SEPARATOR === '\\') {
+            // WSL_INTEROP / WSL_DISTRO_NAME are set inside WSL even when
+            // running Windows-side PHP via interop, but the PHP binary
+            // itself is a Linux ELF so DIRECTORY_SEPARATOR would be '/'.
+            // If we are here, DIRECTORY_SEPARATOR is '\\', so this IS
+            // native Windows and we should use the WindowsBackend.
+            if (!Tty\EnvDetect::isWsl()) {
+                return new Tty\WindowsBackend($stream);
+            }
+        }
+
+        // WSL, Mintty, MSYS2, Git-Bash, Cygwin — all use a POSIX-like PTY.
+        if (Tty\EnvDetect::isWsl() || Tty\EnvDetect::isMintty() || Tty\EnvDetect::isCygwin()) {
+            return new Tty\PosixBackend($stream);
+        }
+
+        // Native Windows PHP.
+        if (DIRECTORY_SEPARATOR === '\\') {
+            return new Tty\WindowsBackend($stream);
+        }
+
+        return new Tty\PosixBackend($stream);
     }
 
     public function isTty(): bool
     {
-        return is_resource($this->stream) && stream_isatty($this->stream);
+        return $this->backend->isTty();
     }
 
     /**
-     * Open the controlling terminal directly (`/dev/tty`) so a program
-     * can read keys when stdin is piped from a file or another
-     * process. Mirrors Bubble Tea v2's `OpenTTY()`.
-     *
-     * Returns `[input, output]` — both are pointers at the same
-     * `/dev/tty` device, opened separately so each can be configured
-     * independently. Returns `null` on platforms without `/dev/tty`
-     * (Windows, some sandboxed envs) so callers can fall back to
-     * STDIN/STDOUT.
-     *
      * @return array{0:resource,1:resource}|null
      */
     public static function openTty(): ?array
     {
-        if (DIRECTORY_SEPARATOR === '\\') {
-            return null;
-        }
-        if (!is_readable('/dev/tty') || !is_writable('/dev/tty')) {
-            return null;
-        }
-        $in  = @fopen('/dev/tty', 'rb');
-        $out = @fopen('/dev/tty', 'wb');
-        if ($in === false || $out === false) {
-            if (is_resource($in))  fclose($in);
-            if (is_resource($out)) fclose($out);
-            return null;
-        }
-        return [$in, $out];
+        $cls = self::concreteBackendClass();
+        return $cls::openTty();
     }
 
     /** @return array{cols:int, rows:int} */
     public function size(): array
     {
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES')   ?: 0);
-        if ($cols > 0 && $rows > 0) {
-            return ['cols' => $cols, 'rows' => $rows];
-        }
-        if ($this->isTty() && self::hasStty()) {
-            $out = @shell_exec('stty size 2>/dev/null');
-            if (is_string($out) && preg_match('/^(\d+)\s+(\d+)/', trim($out), $m) === 1) {
-                return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
-            }
-        }
-        return ['cols' => 80, 'rows' => 24];
+        return $this->backend->size();
     }
 
     public function enableRawMode(): void
     {
-        if ($this->savedSttyState !== null || !$this->isTty() || !self::hasStty()) {
-            return;
-        }
-        $saved = @shell_exec('stty -g 2>/dev/null');
-        if (!is_string($saved)) {
-            return;
-        }
-        $this->savedSttyState = trim($saved);
-        @shell_exec('stty -icanon -echo min 1 time 0 2>/dev/null');
-        if (is_resource($this->stream)) {
-            @stream_set_blocking($this->stream, false);
-        }
+        $this->backend->enableRawMode();
     }
 
     public function restore(): void
     {
-        if ($this->savedSttyState === null) {
-            return;
-        }
-        @shell_exec('stty ' . escapeshellarg($this->savedSttyState) . ' 2>/dev/null');
-        if (is_resource($this->stream)) {
-            @stream_set_blocking($this->stream, true);
-        }
-        $this->savedSttyState = null;
+        $this->backend->restore();
     }
 
     public function __destruct()
@@ -107,57 +111,32 @@ final class Tty
         $this->restore();
     }
 
-    /**
-     * Install a SIGWINCH handler that calls `$onResize($cols, $rows)`
-     * whenever the terminal is resized. Returns `true` if the handler
-     * was installed (requires the `pcntl` extension and a POSIX
-     * platform), `false` otherwise. The signal handler does NOT call
-     * the closure synchronously — it sets a flag that a downstream
-     * event loop should drain via {@see drainResize()}.
-     *
-     * Use this when you have your own dispatch loop. Bubble Tea-style
-     * programs can rely on `Program` to wire SIGWINCH directly into
-     * the runtime; this helper is for callers that need terminal-size
-     * tracking outside the Program.
-     */
     public static function onResize(\Closure $onResize): bool
     {
-        if (DIRECTORY_SEPARATOR === '\\' || !function_exists('pcntl_signal')) {
-            return false;
-        }
-        // SIGWINCH = 28 on Linux, but we look it up portably.
-        $sig = defined('SIGWINCH') ? SIGWINCH : 28;
-        $tty = new self();
-        return @\pcntl_signal($sig, static function () use ($tty, $onResize): void {
-            $size = $tty->size();
-            $onResize($size['cols'], $size['rows']);
-        });
+        $cls = self::concreteBackendClass();
+        return $cls::onResize($onResize);
+    }
+
+    public static function drainSignals(): bool
+    {
+        $cls = self::concreteBackendClass();
+        return $cls::drainSignals();
     }
 
     /**
-     * Drain pending SIGWINCH (and other) signals into their installed
-     * handlers. Call once per event-loop tick so resize callbacks
-     * actually fire. No-op without pcntl. Returns `true` if at least
-     * one signal was dispatched.
+     * Return the fully-qualified name of the concrete backend class for
+     * the current process environment.
      */
-    public static function drainSignals(): bool
+    private static function concreteBackendClass(): string
     {
-        if (!function_exists('pcntl_signal_dispatch')) {
-            return false;
+        // WSL, Mintty, MSYS2, Git-Bash, Cygwin — all use a POSIX-like PTY.
+        if (Tty\EnvDetect::isWsl() || Tty\EnvDetect::isMintty() || Tty\EnvDetect::isCygwin()) {
+            return Tty\PosixBackend::class;
         }
-        return @\pcntl_signal_dispatch();
-    }
-
-    private static function hasStty(): bool
-    {
-        static $cached = null;
-        if ($cached !== null) {
-            return $cached;
-        }
+        // Native Windows PHP.
         if (DIRECTORY_SEPARATOR === '\\') {
-            return $cached = false;
+            return Tty\WindowsBackend::class;
         }
-        $out = @shell_exec('command -v stty 2>/dev/null');
-        return $cached = is_string($out) && trim($out) !== '';
+        return Tty\PosixBackend::class;
     }
 }
