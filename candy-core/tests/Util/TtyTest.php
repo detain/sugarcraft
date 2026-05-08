@@ -121,9 +121,11 @@ final class TtyTest extends TestCase
         }
     }
 
-    public function testDrainSignalsReturnsBool(): void
+    public function testDrainSignalsReturnsIntOrFalse(): void
     {
         $result = Tty::drainSignals();
-        $this->assertIsBool($result);
+        // Returns int (0 or SIGNAL_INTERRUPT|SIGNAL_RESIZE) when signals are
+        // present, or false when nothing happened.
+        $this->assertTrue(\is_int($result) || $result === false);
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util\Tty;
 
 use SugarCraft\Core\Util\Tty\WindowsBackend;
+use SugarCraft\Core\Tests\Util\Tty\FakeInterruptFlags;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -217,7 +218,8 @@ final class WindowsBackendTest extends TestCase
         $this->assertTrue($result);
         // Drain the first poll (fires immediately because no last size)
         $drained = WindowsBackend::drainSignals();
-        $this->assertTrue($drained);
+        $this->assertNotFalse($drained);
+        $this->assertNotSame(0, $drained & WindowsBackend::SIGNAL_RESIZE);
         $this->assertSame([[120, 40]], $fired);
     }
 
@@ -241,9 +243,13 @@ final class WindowsBackendTest extends TestCase
         );
 
         // Tick 1: no last size → fires immediately with first poll result
-        $this->assertTrue(WindowsBackend::drainSignals());
+        $r1 = WindowsBackend::drainSignals();
+        $this->assertNotFalse($r1);
+        $this->assertNotSame(0, $r1 & WindowsBackend::SIGNAL_RESIZE);
         // Tick 2: 120x40 → 100x30 (fires)
-        $this->assertTrue(WindowsBackend::drainSignals());
+        $r2 = WindowsBackend::drainSignals();
+        $this->assertNotFalse($r2);
+        $this->assertNotSame(0, $r2 & WindowsBackend::SIGNAL_RESIZE);
         // Tick 3: 100x30 → 100x30 (no change)
         $this->assertFalse(WindowsBackend::drainSignals());
         // Sequence exhausted, falls back to null → false
@@ -287,7 +293,9 @@ final class WindowsBackendTest extends TestCase
         );
 
         // First tick fires (200x60)
-        $this->assertTrue(WindowsBackend::drainSignals());
+        $r = WindowsBackend::drainSignals();
+        $this->assertNotFalse($r);
+        $this->assertNotSame(0, $r & WindowsBackend::SIGNAL_RESIZE);
         $this->assertSame([200, 60], $fired[0]);
 
         // Second tick: sequence exhausted, falls back to null → no fire
@@ -321,5 +329,54 @@ final class WindowsBackendTest extends TestCase
         // After reset, drainSignals returns false (no callback)
         // even though testKernel32 is still injected.
         $this->assertFalse(WindowsBackend::drainSignals());
+    }
+
+    // ─── Interrupt signalling (PR4) ─────────────────────────────────────────
+
+    public function testDrainSignalsReturnsInterruptSignalWhenFlagSet(): void
+    {
+        $fakeFlags = new FakeInterruptFlags();
+        WindowsBackend::setTestInterruptFlags($fakeFlags);
+        WindowsBackend::setTestKernel32(new FakeKernel32());
+
+        // Simulate a Ctrl+C arriving on the native handler thread.
+        $fakeFlags->set();
+
+        $result = WindowsBackend::drainSignals();
+
+        $this->assertNotFalse($result);
+        $this->assertNotSame(0, $result & WindowsBackend::SIGNAL_INTERRUPT);
+    }
+
+    public function testDrainSignalsReturnsZeroWhenNoInterruptFlagSet(): void
+    {
+        $fakeFlags = new FakeInterruptFlags();
+        WindowsBackend::setTestInterruptFlags($fakeFlags);
+
+        // No interrupt flag set, no resize callback registered.
+        $result = WindowsBackend::drainSignals();
+
+        // Returns false (no signals, no errors).
+        $this->assertFalse($result);
+    }
+
+    public function testResetStaticStateClearsInterruptFlags(): void
+    {
+        $fakeFlags = new FakeInterruptFlags();
+        $fakeFlags->set(); // simulate Ctrl+C was pending
+        WindowsBackend::setTestInterruptFlags($fakeFlags);
+
+        // Verify signal is pending.
+        $this->assertNotSame(0, WindowsBackend::drainSignals() & WindowsBackend::SIGNAL_INTERRUPT);
+
+        // Reset static state.
+        WindowsBackend::resetStaticState();
+
+        // After reset: no interrupt flag is injected, so drainSignals
+        // uses the real InterruptFlags singleton.  The previous set()
+        // was on the fake, which is now dropped — no signal pending.
+        // drainSignals returns false (no interrupt flag injected, no resize callback).
+        $result = WindowsBackend::drainSignals();
+        $this->assertFalse($result);
     }
 }

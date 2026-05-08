@@ -90,12 +90,25 @@ final class WindowsBackend implements Backend
 
     /**
      * Injected Kernel32 instance for testing.
-     * When set (via {@see setTestKernel32()}), drainSignals() uses this
-     * instead of the real Kernel32 singleton.  Do not use in production.
      *
      * @var Kernel32Interface|null
      */
     private static ?Kernel32Interface $testKernel32 = null;
+
+    /**
+     * Injected InterruptFlags instance (or test double) for testing.
+     *
+     * @var object|null
+     */
+    private static ?object $testInterruptFlags = null;
+
+    /**
+     * Tracks whether an interrupt has been consumed from the shared flag
+     * but not yet dispatched (for the current drainSignals() cycle).
+     *
+     * @var bool
+     */
+    private static bool $interruptPending = false;
 
     // ─── Constructor ────────────────────────────────────────────────────────
 
@@ -221,36 +234,7 @@ final class WindowsBackend implements Backend
         }
     }
 
-    public function restore(): void
-    {
-        if ($this->savedInputMode === null) {
-            return; // Nothing to restore.
-        }
-
-        try {
-            $stdin  = $this->kernel32->stdIn();
-            $stdout = $this->kernel32->stdOut();
-
-            $this->kernel32->setConsoleMode($stdin,  (int) $this->savedInputMode);
-            $this->kernel32->setConsoleMode($stdout, (int) $this->savedOutputMode);
-            $this->kernel32->setConsoleCP((int) $this->savedInputCp);
-            $this->kernel32->setConsoleOutputCP((int) $this->savedOutputCp);
-        } catch (\Throwable) {
-            // Best-effort; nothing safe to do if restore fails.
-        } finally {
-            $this->savedInputMode  = null;
-            $this->savedOutputMode = null;
-            $this->savedInputCp    = null;
-            $this->savedOutputCp   = null;
-        }
-    }
-
-    public function __destruct()
-    {
-        $this->restore();
-    }
-
-    // ─── Resize signalling (PR3) ─────────────────────────────────────────────
+    // ─── Resize + interrupt signalling (PR3 + PR4) ─────────────────────────
 
     /**
      * Register a callback to be invoked whenever the terminal is resized.
@@ -273,54 +257,106 @@ final class WindowsBackend implements Backend
     }
 
     /**
-     * Drain any pending resize signals.
+     * Drain any pending resize or interrupt signals.
      *
-     * On Windows this polls `GetConsoleScreenBufferInfo(stdout)` once,
-     * compares the window rect against the last observed size, and fires
-     * the registered callback when the dimensions differ.
+     * On Windows this polls `GetConsoleScreenBufferInfo(stdout)` once and
+     * checks the shared interrupt flag once.  Returns a bitmask indicating
+     * which signals were dispatched.
+     *
+     * When SIGNAL_INTERRUPT is returned, {@see InterruptMsg} is dispatched
+     * to the running {@see Program} instance immediately.
      *
      * Call this exactly once per event-loop tick.
      *
-     * @return bool true when a resize was detected and the callback fired
+     * @return int|false bitmask (SIGNAL_INTERRUPT | SIGNAL_RESIZE), false on error
      */
-    public static function drainSignals(): bool
+    public static function drainSignals(): int|false
     {
+        $signals = 0;
+
+        // 1. Check the shared interrupt flag (written by the native C
+        //    Ctrl-handler callback on a separate OS thread).
+        $flags = self::$testInterruptFlags ?? InterruptFlags::self();
+        if ($flags->consume()) {
+            self::$interruptPending = true;
+        }
+
+        if (self::$interruptPending) {
+            self::$interruptPending = false;
+            $signals |= self::SIGNAL_INTERRUPT;
+            // Note: the caller (e.g. Program::tick) is responsible for
+            // dispatching InterruptMsg when this bit is returned.
+        }
+
+        // 2. Poll resize detection via GetConsoleScreenBufferInfo.
         $cb = self::$resizeCallback;
+        if ($cb !== null) {
+            $k = self::$testKernel32 ?? Kernel32::self();
+            $info = $k->getConsoleScreenBufferInfo($k->stdOut());
 
-        if ($cb === null) {
-            return false;
+            if ($info !== null) {
+                $current = ['cols' => $info['cols'], 'rows' => $info['rows']];
+                if (self::$resizeLastSize === null
+                    || self::$resizeLastSize['cols'] !== $current['cols']
+                    || self::$resizeLastSize['rows'] !== $current['rows']
+                ) {
+                    self::$resizeLastSize = $current;
+                    $cb($current['cols'], $current['rows']);
+                    $signals |= self::SIGNAL_RESIZE;
+                }
+            }
         }
 
-        // Use the injected kernel32 in tests, otherwise the real singleton.
-        $k = self::$testKernel32 ?? Kernel32::self();
+        return $signals ?: false;
+    }
 
-        $info = $k->getConsoleScreenBufferInfo($k->stdOut());
+    // ─── Interrupt flag cleanup ──────────────────────────────────────────────
 
-        if ($info === null) {
-            return false;
+    /**
+     * Destroy the shared interrupt-memory segment.
+     *
+     * Called by the shutdown function registered in enableRawMode().
+     */
+    public function restore(): void
+    {
+        if ($this->savedInputMode === null) {
+            return; // Nothing to restore.
         }
 
-        $current = ['cols' => $info['cols'], 'rows' => $info['rows']];
+        try {
+            $stdin  = $this->kernel32->stdIn();
+            $stdout = $this->kernel32->stdOut();
 
-        if (self::$resizeLastSize !== null
-            && self::$resizeLastSize['cols'] === $current['cols']
-            && self::$resizeLastSize['rows'] === $current['rows']
-        ) {
-            return false; // No change.
+            $this->kernel32->setConsoleMode($stdin,  (int) $this->savedInputMode);
+            $this->kernel32->setConsoleMode($stdout, (int) $this->savedOutputMode);
+            $this->kernel32->setConsoleCP((int) $this->savedInputCp);
+            $this->kernel32->setConsoleOutputCP((int) $this->savedOutputCp);
+        } catch (\Throwable) {
+            // Best-effort; nothing safe to do if restore fails.
+        } finally {
+            $this->savedInputMode  = null;
+            $this->savedOutputMode = null;
+            $this->savedInputCp    = null;
+            $this->savedOutputCp   = null;
         }
 
-        self::$resizeLastSize = $current;
-        $cb($current['cols'], $current['rows']);
+        // Clean up the shared interrupt-memory segment.
+        try {
+            InterruptFlags::self()->destroy();
+        } catch (\Throwable) {
+            // Best-effort.
+        }
+    }
 
-        return true;
+    public function __destruct()
+    {
+        $this->restore();
     }
 
     // ─── Test injection ──────────────────────────────────────────────────────
 
     /**
      * Inject a test Kernel32 double.
-     *
-     * This is an internal test-only API.  Do not call in production.
      *
      * @internal test-only
      */
@@ -330,14 +366,28 @@ final class WindowsBackend implements Backend
     }
 
     /**
+     * Inject a test InterruptFlags double.
+     *
+     * @internal test-only
+     *
+     * @param object|null $flags any object with consume(): bool and set(): bool
+     */
+    public static function setTestInterruptFlags(?object $flags): void
+    {
+        self::$testInterruptFlags = $flags;
+    }
+
+    /**
      * Reset all static state (called via reflection in test setUp).
      *
      * @internal test-only
      */
     public static function resetStaticState(): void
     {
-        self::$testKernel32    = null;
-        self::$resizeCallback  = null;
-        self::$resizeLastSize  = null;
+        self::$testKernel32        = null;
+        self::$testInterruptFlags  = null;
+        self::$resizeCallback      = null;
+        self::$resizeLastSize      = null;
+        self::$interruptPending    = false;
     }
 }

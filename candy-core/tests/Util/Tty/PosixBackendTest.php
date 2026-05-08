@@ -105,9 +105,11 @@ final class PosixBackendTest extends TestCase
         }
     }
 
-    public function testDrainSignalsReturnsBool(): void
+    public function testDrainSignalsReturnsIntOrFalse(): void
     {
         $result = PosixBackend::drainSignals();
-        $this->assertIsBool($result);
+        // Returns int (0 or SIGNAL_RESIZE=2) when pcntl is available,
+        // or false when pcntl_signal_dispatch does not exist.
+        $this->assertTrue(\is_int($result) || $result === false);
     }
 }
