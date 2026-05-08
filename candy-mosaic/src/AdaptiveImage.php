@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
+
 /**
  * Memoizing image renderer.
  *
@@ -25,7 +29,26 @@ final class AdaptiveImage
         private readonly ImageSource $image,
         private readonly Mosaic $mosaic,
         private readonly int $maxCache = 4,
+        private readonly ?AsyncRenderer $asyncRenderer = null,
     ) {}
+
+    /**
+     * Return a version of this AdaptiveImage that uses async rendering.
+     *
+     * The async renderer is used only for renderAsync(); the normal render()
+     * method is always synchronous.
+     */
+    public function withAsync(?AsyncRenderer $renderer = null): self
+    {
+        $asyncRenderer = $renderer ?? new SyncAsyncRenderer($this->mosaic);
+
+        return new self(
+            image:      $this->image,
+            mosaic:     $this->mosaic,
+            maxCache:   $this->maxCache,
+            asyncRenderer: $asyncRenderer,
+        );
+    }
 
     /**
      * Render at the given cell dimensions, using the cache if available.
@@ -47,6 +70,43 @@ final class AdaptiveImage
         $this->touchLru($key);
 
         return $bytes;
+    }
+
+    /**
+     * Async render — resolves with ANSI bytes, using the cache.
+     *
+     * Requires withAsync() to have been called first; throws otherwise.
+     *
+     * @throws \BadMethodCallException if no async renderer is configured.
+     */
+    public function renderAsync(int $cellWidth, int $cellHeight): PromiseInterface
+    {
+        if ($this->asyncRenderer === null) {
+            throw new \BadMethodCallException(
+                'renderAsync() requires withAsync() to be called first.',
+            );
+        }
+
+        $key = "{$cellWidth}x{$cellHeight}";
+
+        // Serve from cache if available (resolve immediately).
+        if (isset($this->cache[$key])) {
+            $this->touchLru($key);
+
+            // Resolve in the next tick so the behaviour is consistently async.
+            $deferred = new \React\Promise\Deferred();
+            Loop::futureTick(fn() => $deferred->resolve($this->cache[$key]));
+
+            return $deferred->promise();
+        }
+
+        return $this->asyncRenderer->renderAsync($this->image, $cellWidth, $cellHeight)
+            ->then(function (string $bytes) use ($key, $cellWidth, $cellHeight): string {
+                $this->cache[$key] = $bytes;
+                $this->touchLru($key);
+
+                return $bytes;
+            });
     }
 
     /**
