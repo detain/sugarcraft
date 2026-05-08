@@ -359,6 +359,7 @@ of the others; pick whichever the first user complaint demands.
 - Required for any TUI that wants to handle large images without blocking the main loop
 - Tests: assert promise resolves with same bytes as sync `render()`; assert non-blocking via timing assertion
 - **Effort**: 1 day
+- **Status**: DONE — **MERGED** [#284](https://github.com/detain/sugarcraft/pull/284)
 
 ## Test strategy
 
