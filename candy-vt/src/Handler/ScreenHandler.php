@@ -32,6 +32,8 @@ final class ScreenHandler implements Handler
 
     private SgrHandler $sgrHandler;
     private CursorHandler $cursorHandler;
+    private EraseHandler $eraseHandler;
+    private ScrollHandler $scrollHandler;
 
     public function __construct(
         Buffer $buffer,
@@ -45,6 +47,8 @@ final class ScreenHandler implements Handler
         $this->mode = $mode ?? new Mode();
         $this->sgrHandler = new SgrHandler();
         $this->cursorHandler = new CursorHandler();
+        $this->eraseHandler = new EraseHandler();
+        $this->scrollHandler = new ScrollHandler();
     }
 
     public function printChar(string $rune): void
@@ -65,6 +69,9 @@ final class ScreenHandler implements Handler
             0x09 => $this->horizontalTab(),
             0x0A, 0x0B, 0x0C => $this->lineFeed(),
             0x0D => $this->carriageReturn(),
+            0x84 => $this->index(),       // IND (C1)
+            0x85 => $this->nextLine(),     // NEL (C1)
+            0x8D => $this->reverseIndex(), // RI  (C1)
             default => null,
         };
     }
@@ -78,6 +85,12 @@ final class ScreenHandler implements Handler
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'H': case 'd': case 'f': case 's': case 'u':
                 $this->cursor = $this->cursorHandler->apply($final, $params, $this->cursor, $this->buffer);
+                return;
+            case 'K': case 'J': case 'X': case 'P': case '@':
+                $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor);
+                return;
+            case 'S': case 'T':
+                $this->scrollHandler->applyCsi($final, $params, $this->buffer);
                 return;
             case 'h':
                 if ($prefix === ord('?')) {
@@ -99,6 +112,9 @@ final class ScreenHandler implements Handler
         match ($final) {
             0x37 /* '7' */ => $this->cursor = $this->cursor->save(),
             0x38 /* '8' */ => $this->cursor = $this->cursor->restore(),
+            0x44 /* 'D' */ => $this->index(),
+            0x45 /* 'E' */ => $this->nextLine(),
+            0x4D /* 'M' */ => $this->reverseIndex(),
             default => null,
         };
     }
@@ -132,12 +148,27 @@ final class ScreenHandler implements Handler
 
     private function lineFeed(): void
     {
-        $this->cursor = $this->cursor->withRow(min($this->buffer->rows - 1, $this->cursor->row + 1));
+        $this->index();
     }
 
     private function carriageReturn(): void
     {
         $this->cursor = $this->cursor->withCol(0);
+    }
+
+    private function index(): void
+    {
+        $this->cursor = $this->scrollHandler->index($this->buffer, $this->cursor);
+    }
+
+    private function reverseIndex(): void
+    {
+        $this->cursor = $this->scrollHandler->reverseIndex($this->buffer, $this->cursor);
+    }
+
+    private function nextLine(): void
+    {
+        $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor);
     }
 
     /** @param list<int> $params */
