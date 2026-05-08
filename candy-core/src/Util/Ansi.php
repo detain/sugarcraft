@@ -20,6 +20,7 @@ final class Ansi
     public const OSC = "\x1b]";
     public const APC = "\x1b_";
     public const DCS = "\x1bP";
+    public const PM  = "\x1b^";
     public const ST  = "\x1b\\";
     public const BEL = "\x07";
 
@@ -32,6 +33,17 @@ final class Ansi
     public const REVERSE   = 7;
     public const CONCEAL   = 8;
     public const STRIKE    = 9;
+
+    // DEC private mode constants (CSI ? <n> h/l)
+    public const DECCKM             = 1;  // Application cursor keys
+    public const DECAWM             = 7;  // Auto-wrap mode
+    public const MOUSE_NORMAL       = 1000; // Mouse tracking (button events)
+    public const MOUSE_BUTTON       = 1002; // Button-event tracking
+    public const MOUSE_ANY          = 1003; // All motion tracking
+    public const MOUSE_SGR          = 1006; // SGR mouse coordinates
+    public const ALT_SCREEN_BUFFER   = 1049; // Alternate screen buffer
+    public const BRACKETED_PASTE    = 2004; // Bracketed paste mode
+    public const SYNCHRONIZED_OUTPUT = 2026; // Synchronized output
 
     public static function sgr(int ...$codes): string
     {
@@ -713,5 +725,55 @@ final class Ansi
     private static function toSixelByte(int $paletteIndex): int
     {
         return $paletteIndex & 0x3F;
+    }
+
+    /**
+     * Set a DEC private mode (CSI ? <n> h).
+     *
+     * @param int $mode One of the DEC* constants (e.g. DECAWM, MOUSE_SGR)
+     */
+    public static function decSet(int $mode): string
+    {
+        return self::CSI . '?' . $mode . 'h';
+    }
+
+    /**
+     * Reset a DEC private mode (CSI ? <n> l).
+     *
+     * @param int $mode One of the DEC* constants (e.g. DECAWM, MOUSE_SGR)
+     */
+    public static function decReset(int $mode): string
+    {
+        return self::CSI . '?' . $mode . 'l';
+    }
+
+    /**
+     * Wrap a payload in a DCS (Device Control String) sequence.
+     *
+     * Format: ESC P … ESC \
+     */
+    public static function dcs(string $payload): string
+    {
+        return self::DCS . $payload . self::ST;
+    }
+
+    /**
+     * Wrap a payload in an APC (Application Program Control) sequence.
+     *
+     * Format: ESC _ … ESC \
+     */
+    public static function apc(string $payload): string
+    {
+        return self::APC . $payload . self::ST;
+    }
+
+    /**
+     * Wrap a payload in a PM (Privacy Message) sequence.
+     *
+     * Format: ESC ^ … ESC \
+     */
+    public static function pm(string $payload): string
+    {
+        return self::PM . $payload . self::ST;
     }
 }

@@ -136,4 +136,46 @@ final class AnsiTest extends TestCase
         $this->assertSame("\x1b7",   Ansi::decsc());
         $this->assertSame("\x1b8",   Ansi::decrc());
     }
+
+    public function testDecPrivateModeConstants(): void
+    {
+        $this->assertSame(1,     Ansi::DECCKM);
+        $this->assertSame(7,     Ansi::DECAWM);
+        $this->assertSame(1000,  Ansi::MOUSE_NORMAL);
+        $this->assertSame(1002,  Ansi::MOUSE_BUTTON);
+        $this->assertSame(1003,  Ansi::MOUSE_ANY);
+        $this->assertSame(1006,  Ansi::MOUSE_SGR);
+        $this->assertSame(1049,  Ansi::ALT_SCREEN_BUFFER);
+        $this->assertSame(2004,  Ansi::BRACKETED_PASTE);
+        $this->assertSame(2026,  Ansi::SYNCHRONIZED_OUTPUT);
+    }
+
+    public function testDecSetDecReset(): void
+    {
+        $this->assertSame("\x1b[?1h",    Ansi::decSet(Ansi::DECCKM));
+        $this->assertSame("\x1b[?1l",    Ansi::decReset(Ansi::DECCKM));
+        $this->assertSame("\x1b[?1049h", Ansi::decSet(Ansi::ALT_SCREEN_BUFFER));
+        $this->assertSame("\x1b[?1049l", Ansi::decReset(Ansi::ALT_SCREEN_BUFFER));
+        $this->assertSame("\x1b[?1006h", Ansi::decSet(Ansi::MOUSE_SGR));
+        $this->assertSame("\x1b[?1006l", Ansi::decReset(Ansi::MOUSE_SGR));
+        $this->assertSame("\x1b[?2026h", Ansi::decSet(Ansi::SYNCHRONIZED_OUTPUT));
+        $this->assertSame("\x1b[?2026l", Ansi::decReset(Ansi::SYNCHRONIZED_OUTPUT));
+    }
+
+    public function testDcsApcPmWrappers(): void
+    {
+        // DCS: ESC P … ESC \
+        $this->assertSame("\x1bPpayload\x1b\\", Ansi::dcs('payload'));
+        // APC: ESC _ … ESC \
+        $this->assertSame("\x1b_payload\x1b\\", Ansi::apc('payload'));
+        // PM:  ESC ^ … ESC \
+        $this->assertSame("\x1b^payload\x1b\\", Ansi::pm('payload'));
+    }
+
+    public function testDcsWrappersWithEmptyPayload(): void
+    {
+        $this->assertSame("\x1bP\x1b\\", Ansi::dcs(''));
+        $this->assertSame("\x1b_\x1b\\", Ansi::apc(''));
+        $this->assertSame("\x1b^\x1b\\", Ansi::pm(''));
+    }
 }
