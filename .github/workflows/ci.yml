@@ -176,9 +176,10 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, intl, json, pcntl
+          extensions: mbstring, intl, json, pcntl, ffi
           tools: composer:v2
           coverage: none
+          ini-values: ffi.enable=true
 
       # Composer cache disabled on Windows: path encoding issues in GH Actions
       # runner make the cache more trouble than it's worth.  Vendor/ caching
