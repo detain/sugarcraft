@@ -18,6 +18,8 @@ final class Ansi
     public const ESC = "\x1b";
     public const CSI = "\x1b[";
     public const OSC = "\x1b]";
+    public const APC = "\x1b_";
+    public const DCS = "\x1bP";
     public const ST  = "\x1b\\";
     public const BEL = "\x07";
 
@@ -521,5 +523,75 @@ final class Ansi
         }
         $parts[] = 'inline=1';
         return self::OSC . '1337;' . implode(';', $parts) . self::BEL;
+    }
+
+    /**
+     * Begin a Kitty graphics protocol (AGM) APC sequence.
+     *
+     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     *
+     * @param array $opts  Keys: a (action, default 'T'=transmit+display),
+     *                     f (format, default 100=PNG), q (compression, default 2),
+     *                     s/v (pixel width/height), c/r (cell columns/rows),
+     *                     i (image id), z (z-index)
+     */
+    public static function kittyGraphicsBegin(array $opts = []): string
+    {
+        $a = $opts['a'] ?? 'T';
+        $f = $opts['f'] ?? 100;
+        $q = $opts['q'] ?? 2;
+        $parts = ["a=$a", "f=$f", "q=$q"];
+        if (isset($opts['s'])) {
+            $parts[] = 's=' . $opts['s'];
+        }
+        if (isset($opts['v'])) {
+            $parts[] = 'v=' . $opts['v'];
+        }
+        if (isset($opts['c'])) {
+            $parts[] = 'c=' . $opts['c'];
+        }
+        if (isset($opts['r'])) {
+            $parts[] = 'r=' . $opts['r'];
+        }
+        if (isset($opts['i'])) {
+            $parts[] = 'i=' . $opts['i'];
+        }
+        if (isset($opts['z'])) {
+            $parts[] = 'z=' . $opts['z'];
+        }
+        return self::APC . 'G' . implode(',', $parts) . ';';
+    }
+
+    /**
+     * Emit a Kitty graphics protocol data chunk.
+     *
+     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     *
+     * @param string $base64  Base64-encoded data chunk
+     * @param bool   $more    True if more chunks follow (sets m=1)
+     */
+    public static function kittyGraphicsChunk(string $base64, bool $more): string
+    {
+        return 'm=' . ($more ? '1' : '0') . ',' . $base64;
+    }
+
+    /**
+     * Emit the final end-of-transmission chunk for Kitty graphics.
+     *
+     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     */
+    public static function kittyGraphicsEnd(): string
+    {
+        return 'm=0' . self::ST;
+    }
+
+    /**
+     * Clear a Kitty graphics protocol image by id (or all if id=0).
+     *
+     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     */
+    public static function kittyGraphicsClear(int $imageId = 0): string
+    {
+        return self::APC . 'G' . "a=d,i=$imageId" . self::ST;
     }
 }
