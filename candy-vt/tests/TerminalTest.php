@@ -34,12 +34,54 @@ final class TerminalTest extends TestCase
         $this->assertSame(10, $screen->rows);
     }
 
-    public function testFeedIsNoOpInPr1(): void
+    public function testFeedPrintsCharactersAtCursor(): void
     {
         $term = Terminal::create(cols: 5, rows: 5);
-        $buf = $term->screen();
-        $term->feed("\x1b[31mRed\x1b[0m");
-        $this->assertEquals($buf, $term->screen());
+        $term->feed("Red");
+        $screen = $term->screen();
+        $this->assertSame('R', $screen->cell(0, 0)->grapheme);
+        $this->assertSame('e', $screen->cell(0, 1)->grapheme);
+        $this->assertSame('d', $screen->cell(0, 2)->grapheme);
+        $this->assertSame(0, $term->cursor()->row);
+        $this->assertSame(3, $term->cursor()->col);
+    }
+
+    public function testFeedAppliesSgrToPrintedCells(): void
+    {
+        $term = Terminal::create(cols: 5, rows: 5);
+        $term->feed("\x1b[31mR\x1b[0mX");
+        $screen = $term->screen();
+        $this->assertNotNull($screen->cell(0, 0)->foreground());
+        $this->assertSame(1, $screen->cell(0, 0)->foreground()->kind); // Indexed16
+        $this->assertSame(1, $screen->cell(0, 0)->foreground()->value); // red
+        $this->assertNull($screen->cell(0, 1)->foreground()); // reset to default
+    }
+
+    public function testFeedMovesCursorViaCsiH(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 10);
+        $term->feed("\x1b[3;5H");
+        $this->assertSame(2, $term->cursor()->row);
+        $this->assertSame(4, $term->cursor()->col);
+    }
+
+    public function testFeedHidesCursorViaDecMode25(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b[?25l");
+        $this->assertFalse($term->cursor()->visible);
+        $this->assertFalse($term->mode()->cursorVisible);
+        $term->feed("\x1b[?25h");
+        $this->assertTrue($term->cursor()->visible);
+        $this->assertTrue($term->mode()->cursorVisible);
+    }
+
+    public function testFeedSavesAndRestoresCursorViaDecScDecRc(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 10);
+        $term->feed("\x1b[3;5H\x1b7\x1b[1;1H\x1b8");
+        $this->assertSame(2, $term->cursor()->row);
+        $this->assertSame(4, $term->cursor()->col);
     }
 
     public function testResize(): void
