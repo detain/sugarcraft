@@ -9,6 +9,7 @@ use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\KittyRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
+use SugarCraft\Mosaic\Dither;
 
 /**
  * Public facade — the "Picker" from ratatui-image.
@@ -75,6 +76,38 @@ final class Mosaic
             null,
             null,
         );
+    }
+
+    /**
+     * Force the Sixel renderer with an optional dither algorithm.
+     *
+     * ```php
+     * $mosaic = Mosaic::sixel();                        // Floyd–Steinberg (default)
+     * $mosaic = Mosaic::sixel(Dither::Stucki);          // Stucki dithering
+     * $mosaic = Mosaic::sixel(Dither::None);            // no dithering
+     * ```
+     */
+    public static function sixel(Dither $dither = Dither::FloydSteinberg): self
+    {
+        return new self(
+            new SixelRenderer($dither),
+            Capability::universal(),
+            null,
+            null,
+        );
+    }
+
+    /**
+     * Return a new Mosaic with a different dither algorithm.
+     * Only meaningful when the current renderer is a SixelRenderer;
+     * returns the same instance otherwise.
+     */
+    public function withDither(Dither $dither): self
+    {
+        if ($this->renderer instanceof SixelRenderer) {
+            return new self(new SixelRenderer($dither), $this->capability, $this->forcedWidth, $this->forcedHeight);
+        }
+        return $this;
     }
 
     /**
@@ -169,6 +202,7 @@ final class MosaicBuilder
     private ?Renderer $renderer = null;
     private ?int $width = null;
     private ?int $height = null;
+    private ?Dither $dither = null;
 
     public function withRenderer(Renderer $renderer): self
     {
@@ -185,15 +219,34 @@ final class MosaicBuilder
         return $clone;
     }
 
+    /**
+     * Set the dither algorithm for the Sixel renderer.
+     * Only takes effect when the built renderer is a SixelRenderer.
+     */
+    public function withDither(Dither $dither): self
+    {
+        $clone = clone $this;
+        $clone->dither = $dither;
+        return $clone;
+    }
+
     public function build(): Mosaic
     {
-        return new Mosaic(
-            $this->renderer ?? new HalfBlockRenderer(),
-            $this->renderer !== null
-                ? Capability::universal()
-                : Capability::unknown(),
-            $this->width,
-            $this->height,
-        );
+        $renderer = $this->renderer;
+
+        // When no renderer is specified, default to sixel with the configured
+        // dither (if any); when a SixelRenderer is passed we honour its dither.
+        if ($renderer === null) {
+            $renderer = new SixelRenderer($this->dither ?? Dither::FloydSteinberg);
+            $cap = Capability::unknown();
+        } elseif ($renderer instanceof SixelRenderer && $this->dither !== null) {
+            // Builder dither overrides an explicit SixelRenderer dither.
+            $renderer = new SixelRenderer($this->dither);
+            $cap = Capability::universal();
+        } else {
+            $cap = Capability::universal();
+        }
+
+        return new Mosaic($renderer, $cap, $this->width, $this->height);
     }
 }
