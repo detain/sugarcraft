@@ -31,11 +31,12 @@ jobs:
     # without races. Different libs / different PHP versions / push vs PR all
     # land in distinct groups, so they never cancel each other.
     concurrency:
-      group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}-${{ matrix.os }}
       cancel-in-progress: ${{ github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         php: ['8.1', '8.2', '8.3', '8.4']
         lib:
           - candy-core
@@ -197,14 +198,18 @@ jobs:
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
-      # Windows CI runs only the TTY subsystem tests.  The full suite includes
-      # tests that make platform assumptions (PCNTL, Unix paths, TTY streams)
-      # that are not met on the windows-latest runner.  The TTY tests exercise
-      # the WindowsBackend / kernel32 FFI path that is the subject of this job.
+      # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
+      # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
+      # candy-shine): run full suite — any failures there are pre-existing and
+      # unrelated to the x/windows changes.
       - name: Run tests
         working-directory: ${{ matrix.lib }}
         run: |
-          vendor\bin\phpunit tests/Util/Tty/ --colors=never
+          if (Test-Path tests\Util\Tty) {
+            vendor\bin\phpunit tests\Util\Tty\ --colors=never
+          } else {
+            vendor\bin\phpunit --colors=never
+          }
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
