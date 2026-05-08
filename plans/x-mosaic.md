@@ -281,6 +281,7 @@ of the others; pick whichever the first user complaint demands.
 - Plumb font-size through to KittyRenderer + SixelRenderer for accurate cell-to-pixel mapping
 - Tests: stub stdin replies with canned bytes; assert detected font size
 - **Effort**: half day
+- **Status**: DONE (PR [#277](https://github.com/detain/sugarcraft/pull/277))
 
 ### PR8 — Sixel dithering (~1 day)  *[from go-termimg]*
 
