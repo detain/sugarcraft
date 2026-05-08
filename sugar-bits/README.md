@@ -44,7 +44,7 @@ to keep the static `Progress` lean).
 | `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Elapsed-time counter; `interval()`, `withInterval(float)` | `Stopwatch\TickMsg` |
 | `TextInput\TextInput` | Single-line input with autocomplete + validators + `Styles` | — |
-| `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()` | — |
+| `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages | — |
@@ -57,7 +57,8 @@ to keep the static `Progress` lean).
 Forward these into your model's `update()` so the embedded component
 can react: `BlinkMsg` (Cursor / TextInput), `Spinner\TickMsg`
 (Spinner), `Timer\TickMsg` + `Timer\TimeoutMsg`, `Stopwatch\TickMsg`,
-`SpringTickMsg` (AnimatedProgress), `StartStopMsg` (Timer / Stopwatch).
+`SpringTickMsg` (AnimatedProgress), `StartStopMsg` (Timer / Stopwatch),
+`TextArea\TextAreaEditedMsg` (TextArea's Ctrl+O round-trip).
 Each component's `update()` filters by its own `id()` so multiple
 instances of the same component coexist on one event loop.
 
