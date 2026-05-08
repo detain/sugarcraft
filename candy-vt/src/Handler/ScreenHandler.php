@@ -6,7 +6,9 @@ namespace SugarCraft\Vt\Handler;
 
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell\Cell;
+use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;
+use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Parser\Handler;
 use SugarCraft\Vt\Sgr\Sgr;
@@ -32,6 +34,15 @@ final class ScreenHandler implements Handler
     public Mode $mode;
     public ?string $windowTitle = null;
 
+    /** @var array<int, Color> Indexed palette overrides set via OSC 4. */
+    public array $palette = [];
+
+    /** Active OSC 8 hyperlink — attached to every cell printed while non-null. */
+    public ?Hyperlink $currentHyperlink = null;
+
+    /** @var list<array{kind: string, selection: string, payload?: string}> */
+    public array $clipboardEvents = [];
+
     private ?Buffer $savedBuffer = null;
     private ?Cursor $savedCursor = null;
     private ?Sgr $savedSgr = null;
@@ -41,6 +52,7 @@ final class ScreenHandler implements Handler
     private EraseHandler $eraseHandler;
     private ScrollHandler $scrollHandler;
     private ModeHandler $modeHandler;
+    private OscHandler $oscHandler;
 
     public function __construct(
         Buffer $buffer,
@@ -57,6 +69,7 @@ final class ScreenHandler implements Handler
         $this->eraseHandler = new EraseHandler();
         $this->scrollHandler = new ScrollHandler();
         $this->modeHandler = new ModeHandler();
+        $this->oscHandler = new OscHandler();
     }
 
     public function printChar(string $rune): void
@@ -64,9 +77,13 @@ final class ScreenHandler implements Handler
         $r = $this->cursor->row;
         $c = $this->cursor->col;
         if ($r >= 0 && $r < $this->buffer->rows && $c >= 0 && $c < $this->buffer->cols) {
-            $this->buffer->put($r, $c, new Cell(grapheme: $rune, sgr: $this->sgr));
+            $this->buffer->put($r, $c, new Cell(
+                grapheme: $rune,
+                sgr: $this->sgr,
+                hyperlink: $this->currentHyperlink,
+            ));
         }
-        // Auto-wrap is part of the scroll/margin work in PR4; for now clamp at the right edge.
+        // Auto-wrap is deferred until DECSTBM margins land; clamp at the right edge.
         $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $c + 1));
     }
 
@@ -129,7 +146,7 @@ final class ScreenHandler implements Handler
 
     public function oscDispatch(string $data): void
     {
-        // OSC handling lands in PR6.
+        $this->oscHandler->apply($data, $this);
     }
 
     public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
