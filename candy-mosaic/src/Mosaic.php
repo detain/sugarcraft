@@ -6,6 +6,7 @@ namespace SugarCraft\Mosaic;
 
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
+use SugarCraft\Mosaic\Renderer\KittyRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 
 /**
@@ -138,13 +139,12 @@ final class Mosaic
      * Pick the best available renderer for the given capability snapshot.
      * Precedence: Kitty > iTerm2 > Sixel > HalfBlock.
      *
-     * PR3 swaps Kitty renderer in; PR4 swaps Sixel renderer in.
+     * PR4 swaps Sixel renderer in.
      */
     private static function bestBackend(Capability $cap): Renderer
     {
         if ($cap->kitty) {
-            // PR3: return new KittyRenderer();
-            return new HalfBlockRenderer();
+            return new KittyRenderer();
         }
         if ($cap->iterm2) {
             return new Iterm2Renderer();
