@@ -281,6 +281,7 @@ of the others; pick whichever the first user complaint demands.
 - Plumb font-size through to KittyRenderer + SixelRenderer for accurate cell-to-pixel mapping
 - Tests: stub stdin replies with canned bytes; assert detected font size
 - **Effort**: half day
+- **Status**: DONE (PR [#277](https://github.com/detain/sugarcraft/pull/277))
 
 ### PR8 — Sixel dithering (~1 day)  *[from go-termimg]*
 
@@ -290,6 +291,7 @@ of the others; pick whichever the first user complaint demands.
 - Default: `FloydSteinberg` (best quality/speed trade-off; matches what xterm itself does for sixel)
 - Tests: snapshot test with deliberately-banded gradient — assert dither pattern emerges
 - **Effort**: 1 day (the actual error-diffusion math is ~30 lines per algorithm; spread cost is fixture creation)
+- **Status**: IN_PROGRESS (PR [#278](https://github.com/detain/sugarcraft/pull/278))
 
 ### PR9 — tmux passthrough wrapper (~half day)  *[from go-termimg]*
 
