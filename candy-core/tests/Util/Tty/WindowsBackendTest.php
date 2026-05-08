@@ -394,8 +394,13 @@ final class WindowsBackendTest extends TestCase
 
     public function testOpenTtyReturnsHandlesWhenCreateFileSucceeds(): void
     {
-        // Use default FakeKernel32 — createFile returns stream_socket_pair fds
-        // for CONIN$/CONOUT$, so fopen("php://fd/N") succeeds on Linux.
+        // openTty() requires a real console; on headless Windows CI (no ConHost)
+        // it returns null. Skip the test in that environment.
+        if (DIRECTORY_SEPARATOR === '\\' && WindowsBackend::openTty() === null) {
+            $this->markTestSkipped('openTty() returned null: no console attached on this Windows environment');
+        }
+        // Use default FakeKernel32 — createFile returns fds 0/1 (stdio fds)
+        // for CONIN$/CONOUT$, so fopen("php://fd/0") succeeds.
         $fake = new FakeKernel32();
         WindowsBackend::setTestKernel32($fake);
 
@@ -429,6 +434,11 @@ final class WindowsBackendTest extends TestCase
 
     public function testDrainSignalsReturnsInterruptWhenConinHandleOpenAndKeyEvents(): void
     {
+        // openTty() must succeed for this test — skip if no console is attached
+        // (e.g. headless Windows CI runner with no ConHost).
+        if (DIRECTORY_SEPARATOR === '\\' && WindowsBackend::openTty() === null) {
+            $this->markTestSkipped('openTty() returned null: no console attached on this Windows environment');
+        }
         $fake = new FakeKernel32();
         // Seed a KEY_EVENT into the console input queue (simulates Ctrl+C).
         $fake->setReadConsoleInputSequence([
