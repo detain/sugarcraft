@@ -165,4 +165,103 @@ final class ScreenHandlerTest extends TestCase
         $this->assertSame(2, $orig->cursor->row);
         $this->assertSame(0, $clone->cursor->row);
     }
+
+    // ─── Linefeed scrolling at bottom (PR4) ───────────────────────────────
+
+    public function testLinefeedAtBottomScrollsAndStays(): void
+    {
+        // Place 'AB' at row 0, 'CD' at row 1 via explicit moves, then LF from
+        // bottom row to trigger scroll. Cursor stays at last row; previous
+        // row 1 contents move up to row 0.
+        $h = $this->feed("\x1b[1;1HAB\x1b[2;1HCD\x0A", cols: 3, rows: 2);
+        $this->assertSame(1, $h->cursor->row);
+        $this->assertSame('C', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('D', $h->buffer->cell(0, 1)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(1, 0)->grapheme);
+    }
+
+    // ─── IND / RI / NEL via ESC dispatch (PR4) ─────────────────────────────
+
+    public function testEscDIsIndex(): void
+    {
+        // Move to row 1, then ESC D => row 2.
+        $h = $this->feed("\x1b[2;1H\x1bD", cols: 5, rows: 5);
+        $this->assertSame(2, $h->cursor->row);
+    }
+
+    public function testEscMIsReverseIndex(): void
+    {
+        // ESC M from row 1 → row 0.
+        $h = $this->feed("\x1b[2;3H\x1bM", cols: 5, rows: 5);
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(2, $h->cursor->col);
+    }
+
+    public function testEscEIsNextLine(): void
+    {
+        $h = $this->feed("\x1b[2;3H\x1bE", cols: 5, rows: 5);
+        $this->assertSame(2, $h->cursor->row);
+        $this->assertSame(0, $h->cursor->col);
+    }
+
+    // ─── Erase via CSI dispatch ────────────────────────────────────────────
+
+    public function testCsiKErasesLineToEnd(): void
+    {
+        $h = $this->feed("ABCDE\x1b[3G\x1b[K", cols: 5, rows: 1);
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(0, 2)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(0, 4)->grapheme);
+    }
+
+    public function testCsiJ2ErasesEntireScreen(): void
+    {
+        $h = $this->feed("ABC\x0AXYZ\x1b[2J", cols: 3, rows: 2);
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(1, 0)->grapheme);
+    }
+
+    // ─── Scroll via CSI dispatch ───────────────────────────────────────────
+
+    public function testCsiSScrollsUp(): void
+    {
+        $h = $this->feed("\x1b[1;1HABC\x1b[2;1HDEF\x1b[1S", cols: 3, rows: 2);
+        // After scroll up by 1: previous row 1 ('DEF') moves to row 0; row 1 blank.
+        $this->assertSame('D', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('E', $h->buffer->cell(0, 1)->grapheme);
+        $this->assertSame('F', $h->buffer->cell(0, 2)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(1, 0)->grapheme);
+    }
+
+    public function testCsiTScrollsDown(): void
+    {
+        $h = $this->feed("\x1b[1;1HABC\x1b[2;1HDEF\x1b[1T", cols: 3, rows: 2);
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('A', $h->buffer->cell(1, 0)->grapheme);
+        $this->assertSame('B', $h->buffer->cell(1, 1)->grapheme);
+    }
+
+    // ─── DCH / ICH ─────────────────────────────────────────────────────────
+
+    public function testCsiPDeletesChars(): void
+    {
+        $h = $this->feed("ABCDEF\x1b[3G\x1b[2P", cols: 6, rows: 1);
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
+        $this->assertSame('E', $h->buffer->cell(0, 2)->grapheme);
+        $this->assertSame('F', $h->buffer->cell(0, 3)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(0, 4)->grapheme);
+    }
+
+    public function testCsiAtSignInsertsBlanks(): void
+    {
+        $h = $this->feed("ABCDEF\x1b[3G\x1b[2@", cols: 6, rows: 1);
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+        $this->assertSame('B', $h->buffer->cell(0, 1)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(0, 2)->grapheme);
+        $this->assertSame(' ', $h->buffer->cell(0, 3)->grapheme);
+        $this->assertSame('C', $h->buffer->cell(0, 4)->grapheme);
+        $this->assertSame('D', $h->buffer->cell(0, 5)->grapheme);
+    }
 }
