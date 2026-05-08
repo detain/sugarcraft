@@ -23,7 +23,17 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     private int|null $consoleModeStdout = null;
     private int $consoleCpIn  = 437;
     private int $consoleCpOut = 437;
+    /** Single snapshot (PR1/PR2 style) or null. */
     private ?array $screenBufferInfo = null;
+
+    /**
+     * Optional sequence of snapshots returned across successive calls.
+     * Each call to getConsoleScreenBufferInfo() pops the next entry.
+     * When exhausted, falls back to $screenBufferInfo (or null).
+     *
+     * @var list<?array{cols:int,rows:int}>
+     */
+    private array $screenBufferInfoSequence = [];
 
     /** @var list<array{0:int,1:int}> handle → mode */
     private array $setConsoleModeCalls = [];
@@ -59,6 +69,25 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
     public function setScreenBufferInfo(?array $info): void
     {
         $this->screenBufferInfo = $info;
+    }
+
+    /**
+     * Set a sequence of screen-buffer snapshots returned on successive
+     * calls to getConsoleScreenBufferInfo().  First call returns index 0,
+     * second call returns index 1, and so on.  After the sequence is
+     * exhausted the value falls through to $screenBufferInfo.
+     *
+     * @param list<?array{cols:int,rows:int}> $sequence
+     */
+    public function setScreenBufferInfoSequence(array $sequence): void
+    {
+        $this->screenBufferInfoSequence = $sequence;
+    }
+
+    /** @internal for assertions */
+    public function getSequenceConsumed(): int
+    {
+        return \count($this->screenBufferInfoSequence);
     }
 
     // ─── Queryors (for assertions) ───────────────────────────────────────────
@@ -159,6 +188,9 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
 
     public function getConsoleScreenBufferInfo(int $_h): ?array
     {
+        if ($this->screenBufferInfoSequence !== []) {
+            return array_shift($this->screenBufferInfoSequence);
+        }
         return $this->screenBufferInfo;
     }
 
