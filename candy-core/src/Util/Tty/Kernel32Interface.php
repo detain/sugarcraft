@@ -52,6 +52,16 @@ interface Kernel32Interface
 
     public const ERROR_INVALID_HANDLE = 6;
 
+    // ─── Console input event types ────────────────────────────────────────
+
+    public const KEY_EVENT                   = 0x0001;
+    public const WINDOW_BUFFER_SIZE_EVENT    = 0x0004;
+
+    // ─── Wait states ──────────────────────────────────────────────────────
+
+    public const WAIT_TIMEOUT  = 0x00000102;
+    public const WAIT_OBJECT_0 = 0x00000000;
+
     // ─── Ctrl event constants ───────────────────────────────────────────────
 
     public const CTRL_C_EVENT     = 0;
@@ -141,6 +151,37 @@ interface Kernel32Interface
      * @throws \LogicException if FFI::dynamicFunction is not available
      */
     public function setConsoleCtrlHandler(\Closure $handler, bool $add = true): bool;
+
+    // ─── Console input reading ───────────────────────────────────────────────
+
+    /**
+     * Wait for a handle to become ready (or timeout).
+     *
+     * @param int $h a Win32 handle (e.g. CONIN$)
+     * @param int $timeoutMs 0 = return immediately, >0 = wait ms
+     * @return int WAIT_OBJECT_0 (0) if ready, WAIT_TIMEOUT (0x102) if not,
+     *             or another error code
+     */
+    public function waitForSingleObject(int $h, int $timeoutMs): int;
+
+    /**
+     * Peek at console input events without consuming them.
+     *
+     * @param int $h CONIN$ handle
+     * @param list<array{type:int, dataIndex:int}> &$records filled with peeked records
+     * @param int $recordSize max records to peek
+     * @return int|false record count, or false on error
+     */
+    public function peekConsoleInput(int $h, array &$records, int $recordSize = 1): int|false;
+
+    /**
+     * Read and consume console input events.
+     *
+     * @param int $h CONIN$ handle
+     * @param int $recordSize max records to read
+     * @return list<array{type:int, dataIndex:int}>|false records read, or false
+     */
+    public function readConsoleInput(int $h, int $recordSize = 1): array|false;
 
     // ─── Wide-string helper ─────────────────────────────────────────────────
 
