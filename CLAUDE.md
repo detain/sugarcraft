@@ -9,7 +9,7 @@ PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+
 
 Each lib at its own directory shares the same skeleton: `composer.json` · `README.md` · `CALIBER_LEARNINGS.md` · `src/` (PSR-4 `SugarCraft\<Sub>\`). Auxiliary trees: `media/` (icons, profile.png, social-preview.png used by the website hero + social share cards) and `scripts/` (Dockerfile for reproducible CI image, bootstrap-org-repos.sh for one-shot org provisioning).
 
-**Libs**: `candy-core` `candy-sprinkles` `candy-shell` `candy-shine` `candy-kit` `candy-freeze` `candy-wish` `candy-zone` `candy-metrics` `candy-mold` `candy-tetris` `candy-log` `candy-palette` `candy-lister` `candy-hermit` `candy-mines` `candy-flip` `candy-query` `candy-serve` `candy-flip` `candy-freeze` `honey-bounce` `honey-flap` `sugar-bits` `sugar-charts` `sugar-prompt` `sugar-glow` `sugar-spark` `sugar-skate` `sugar-stash` `sugar-table` `sugar-tick` `sugar-toast` `sugar-veil` `sugar-crumbs` `sugar-readline` `sugar-stickers` `sugar-calendar` `sugar-boxer` `sugar-post` `sugar-wishlist` `sugar-crush` `super-candy`.
+**Libs**: `candy-core` `candy-sprinkles` `candy-shell` `candy-shine` `candy-kit` `candy-freeze` `candy-wish` `candy-zone` `candy-metrics` `candy-mold` `candy-tetris` `candy-log` `candy-palette` `candy-lister` `candy-hermit` `candy-mines` `candy-mosaic` `candy-flip` `candy-query` `candy-serve` `candy-flip` `candy-freeze` `honey-bounce` `honey-flap` `sugar-bits` `sugar-charts` `sugar-prompt` `sugar-glow` `sugar-spark` `sugar-skate` `sugar-stash` `sugar-table` `sugar-tick` `sugar-toast` `sugar-veil` `sugar-crumbs` `sugar-readline` `sugar-stickers` `sugar-calendar` `sugar-boxer` `sugar-post` `sugar-wishlist` `sugar-crush` `super-candy`.
 
 **Cross-cuts**: `MATCHUPS.md` (upstream→port), `PROJECT_NAMES.md` (naming), `CONVERSION.md` (phase roadmap), `LOCALES.md` (i18n codes), `UPSTREAM_OPPORTUNITIES.md` (port-back candidates), `CALIBER_LEARNINGS.md` (gotchas), `docs/index.html` (website), `media/` (shared icons + social-preview.png + profile.png), `scripts/` (Dockerfile, bootstrap-org-repos.sh).
 
@@ -74,7 +74,6 @@ Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh
 - When wrapping external CLI tools, pass ALL flags every invocation using `escapeshellarg((string)($field ?? ''))` — even empty values render as `''` rather than dropping the flag.
 - All commits land in `detain/sugarcraft`; per-lib repos under `github.com/sugarcraft/<slug>` are auto-distributed downstream by `sync-sugarcraft.yml`.
 
-<!-- caliber:managed:pre-commit -->
 ## Before Committing
 
 **IMPORTANT:** Before every git commit, you MUST ensure Caliber syncs agent configs with the latest code changes.
@@ -95,28 +94,18 @@ grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || ech
 **`caliber config`** takes no flags — it runs an interactive provider setup. Do not pass `--provider`, `--api-key`, or `--endpoint`.
 
 If `caliber` is not found, tell the user: "This project uses Caliber for agent config sync. Run /setup-caliber to get set up."
-<!-- /caliber:managed:pre-commit -->
-
-<!-- caliber:managed:learnings -->
 ## Session Learnings
 
 Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
 These are auto-extracted from real tool usage — treat them as project-specific rules.
-<!-- /caliber:managed:learnings -->
-
-<!-- caliber:managed:model-config -->
 ## Model Configuration
 
 Recommended default: `claude-sonnet-4-6` with high effort (stronger reasoning; higher cost and latency than smaller models).
 Smaller/faster models trade quality for speed and cost — pick what fits the task.
 Pin your choice (`/model` in Claude Code, or `CALIBER_MODEL` when using Caliber with an API provider) so upstream default changes do not silently change behavior.
 
-<!-- /caliber:managed:model-config -->
-
-<!-- caliber:managed:sync -->
 ## Context Sync
 
 This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
 Configs update automatically before each commit via `caliber refresh`.
 If the pre-commit hook is not set up, run `/setup-caliber` to configure everything automatically.
-<!-- /caliber:managed:sync -->
