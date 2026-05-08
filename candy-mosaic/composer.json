@@ -32,7 +32,8 @@
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
         "ext-gd": "*",
-        "ext-mbstring": "*"
+        "ext-mbstring": "*",
+        "react/promise": "^3.3"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
