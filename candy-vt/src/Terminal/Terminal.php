@@ -6,22 +6,23 @@ namespace SugarCraft\Vt\Terminal;
 
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cursor\Cursor;
-use SugarCraft\Vt\Hyperlink\Hyperlink;
+use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\Parser\Parser;
 use SugarCraft\Vt\Screen\Screen;
+use SugarCraft\Vt\Sgr\Sgr;
 
 /**
  * Public terminal facade.
  *
- * Create via `Terminal::create()`. In PR1 feed() is a no-op stub.
- * PR2 wires in the real Parser + ScreenHandler.
+ * Holds a {@see Parser} and a {@see ScreenHandler} that owns the
+ * Buffer, Cursor, Sgr pen, and Mode. `feed()` drives bytes through the
+ * parser; accessors return the handler's current state.
  */
 final class Terminal
 {
-    private Buffer $buffer;
-    private Cursor $cursor;
-    private Mode $mode;
-    private ?string $windowTitle = null;
+    private Parser $parser;
+    private ScreenHandler $handler;
 
     public function __construct(
         int $cols,
@@ -30,9 +31,13 @@ final class Terminal
         ?Cursor $cursor = null,
         ?Mode $mode = null,
     ) {
-        $this->buffer = $buffer ?? new Buffer($cols, $rows);
-        $this->cursor = $cursor ?? new Cursor();
-        $this->mode = $mode ?? new Mode();
+        $this->handler = new ScreenHandler(
+            buffer: $buffer ?? new Buffer($cols, $rows),
+            cursor: $cursor,
+            sgr: Sgr::empty(),
+            mode: $mode,
+        );
+        $this->parser = new Parser($this->handler);
     }
 
     public static function create(int $cols = 80, int $rows = 24): self
@@ -40,35 +45,29 @@ final class Terminal
         return new self($cols, $rows);
     }
 
-    /**
-     * Feed raw ANSI bytes into the terminal.
-     *
-     * In PR1 this is a no-op stub. PR2 replaces it with a real
-     * Parser + ScreenHandler pipeline.
-     */
     public function feed(string $bytes): void
     {
-        // no-op in PR1; replaced by Parser in PR2
+        $this->parser->feed($bytes);
     }
 
     public function screen(): Screen
     {
-        return Screen::fromBuffer($this->buffer);
+        return Screen::fromBuffer($this->handler->buffer);
     }
 
     public function cursor(): Cursor
     {
-        return $this->cursor;
+        return $this->handler->cursor;
     }
 
     public function mode(): Mode
     {
-        return $this->mode;
+        return $this->handler->mode;
     }
 
     public function windowTitle(): ?string
     {
-        return $this->windowTitle;
+        return $this->handler->windowTitle;
     }
 
     public function resize(int $cols, int $rows): void
@@ -76,16 +75,20 @@ final class Terminal
         if ($cols < 1 || $rows < 1) {
             throw new \InvalidArgumentException('cols and rows must be >= 1');
         }
-        $this->buffer = $this->buffer->resize($cols, $rows);
+        $this->handler->buffer = $this->handler->buffer->resize($cols, $rows);
     }
 
-    // --- Internal mutation helpers (used by handlers in later PRs) ---
+    public function __clone(): void
+    {
+        $this->handler = clone $this->handler;
+        $this->parser = new Parser($this->handler);
+    }
 
     /** @internal */
     public function withBuffer(Buffer $buf): self
     {
         $clone = clone $this;
-        $clone->buffer = $buf;
+        $clone->handler->buffer = $buf;
         return $clone;
     }
 
@@ -93,7 +96,7 @@ final class Terminal
     public function withCursor(Cursor $cursor): self
     {
         $clone = clone $this;
-        $clone->cursor = $cursor;
+        $clone->handler->cursor = $cursor;
         return $clone;
     }
 
@@ -101,7 +104,7 @@ final class Terminal
     public function withMode(Mode $mode): self
     {
         $clone = clone $this;
-        $clone->mode = $mode;
+        $clone->handler->mode = $mode;
         return $clone;
     }
 
@@ -109,7 +112,7 @@ final class Terminal
     public function withWindowTitle(?string $title): self
     {
         $clone = clone $this;
-        $clone->windowTitle = $title;
+        $clone->handler->windowTitle = $title;
         return $clone;
     }
 }
