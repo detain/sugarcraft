@@ -130,7 +130,7 @@ public static function drainSignals(): bool
 
 ## Implementation slices (one PR each)
 
-### PR1 — FFI scaffold (~half day)
+### PR1 — FFI scaffold (~half day) ✅ merged `a2da599`
 
 - New: `src/Util/Tty/Backend.php` (interface)
 - New: `src/Util/Tty/Kernel32.php` (FFI cdef + handle helpers)
@@ -138,7 +138,7 @@ public static function drainSignals(): bool
 - Refactor: extract POSIX impl from `Util/Tty.php` into `Tty/PosixBackend.php`. Keep `Util/Tty.php` as façade.
 - Tests: `tests/Util/Tty/PosixBackendTest.php` (existing tests moved). `WindowsBackendTest.php` skipped on non-Windows.
 
-### PR2 — raw mode + restore (~half day)
+### PR2 — raw mode + restore (~half day) ✅ merged `e2fb396`
 
 - `WindowsBackend::enableRawMode()`:
   - capture `GetConsoleMode(stdin)` → `$savedInputMode`
@@ -151,7 +151,7 @@ public static function drainSignals(): bool
 - Hook into `Program::run()` — already calls `Tty::enableRawMode/restore`, so no Program changes needed
 - Tests: round-trip mode capture + restore via stub Kernel32
 
-### PR3 — resize via poll (~half day)
+### PR3 — resize via poll (~half day) ✅ merged `8a31660` (#268)
 
 - `WindowsBackend::onResize(Closure $cb)` — register the closure on the backend
 - Add `pollResize()` method called once per event-loop tick (via `Tty::drainSignals` redirect):
@@ -160,10 +160,10 @@ public static function drainSignals(): bool
 - Wire into `Program`'s tick loop (already calls `drainSignals()`)
 - Tests: drive a stub Kernel32 returning two different sizes across two ticks; assert one callback
 
-### PR4 — Ctrl handler → InterruptMsg (~half day)
+### PR4 — Ctrl handler → InterruptMsg (~half day) ✅ merged `028643c` (#269)
 
-- Allocate a `\FFI\CData` callback for `SetConsoleCtrlHandler`
-- Handler must be reentrant-safe — runs on a separate Windows thread. **Only** sets a process-global `volatile` flag (php `\Atomic` not available; use `\Shmop` or a static bool — see caveat 6 below)
+- Allocate a `\FFI\CData` callback for `SetConsoleCtrlHandler` (requires `FFI::dynamicFunction`, PHP 8.4+)
+- Handler must be reentrant-safe — runs on a separate Windows thread. **Only** sets a process-global `volatile` flag (use `\Shmop` — see caveat 6 below)
 - `pollResize()` (renamed `pollEvents()`) checks the flag each tick; if set, posts `InterruptMsg` into the Program's msg queue
 - Register handlers for `CTRL_C_EVENT (0)`, `CTRL_BREAK_EVENT (1)`, `CTRL_CLOSE_EVENT (2)`
 - Tests: simulate flag-set; assert `InterruptMsg` posted
