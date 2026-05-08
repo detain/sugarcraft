@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mosaic\Renderer;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Mosaic\Dither;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Lang;
 
@@ -14,13 +15,18 @@ use SugarCraft\Mosaic\Lang;
  * Algorithm (per plan):
  *   1. Resize image to ($width × $effectiveHeight) via GD
  *   2. Quantize: extract pixels → median-cut → max 256 palette entries
- *   3. Build index grid: grid[row][col] = palette index
- *   4. For each 6-row band:
+ *   3. Error-diffusion dithering (optional, per Dither enum)
+ *   4. Build index grid: grid[row][col] = palette index
+ *   5. For each 6-row band:
  *        For each color used in band: emit color introducer + sixel data
  *        (RLE applied: "!" + count prefix before runs of same sixel byte)
  */
 final class SixelRenderer implements Renderer
 {
+    public function __construct(
+        private readonly Dither $dither = Dither::FloydSteinberg,
+    ) {}
+
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         if ($width <= 0) {
@@ -64,7 +70,11 @@ final class SixelRenderer implements Renderer
         try {
             $pixels  = $this->extractPixels($resized);
             $palette = $this->medianCut($pixels, 256);
-            $grid    = $this->buildIndexGrid($resized, $palette);
+
+            // Apply error-diffusion dithering before building the index grid.
+            $grid = $this->dither === Dither::None
+                ? $this->buildIndexGrid($resized, $palette)
+                : $this->ditheredIndexGrid($resized, $palette, $this->dither);
 
             $out = Ansi::sixelDcsHeader($width, $effectiveHeight);
             $out .= $this->emitPalette($palette);
@@ -93,6 +103,11 @@ final class SixelRenderer implements Renderer
     public function supportsAlpha(): bool
     {
         return false;
+    }
+
+    public function dither(): Dither
+    {
+        return $this->dither;
     }
 
     // ─── Pixel extraction ─────────────────────────────────────────────────────
@@ -135,13 +150,12 @@ final class SixelRenderer implements Renderer
         while (count($buckets) < $maxColors) {
             $largestIdx = $this->largestBucketIndex($buckets);
             if ($largestIdx === null) {
-                break; // no splittable bucket (all have < 2 pixels or range = 0)
+                break;
             }
             $split = $this->splitBucket($buckets[$largestIdx]);
             if ($split === null) {
-                break; // bucket could not be split (all same color)
+                break;
             }
-            // Replace the original bucket with its two halves.
             array_splice($buckets, $largestIdx, 1, $split);
         }
 
@@ -151,12 +165,6 @@ final class SixelRenderer implements Renderer
         );
     }
 
-    /**
-     * Find the index of the bucket with the largest colour range.
-     * Returns null when no bucket can be split (all have < 2 pixels).
-     *
-     * @param list<list<array{int,int,int}>> $buckets
-     */
     private function largestBucketIndex(array $buckets): ?int
     {
         $largestIdx   = null;
@@ -177,10 +185,6 @@ final class SixelRenderer implements Renderer
     }
 
     /**
-     * Split a single bucket into two halves along the axis with
-     * greatest colour range. Returns null when the bucket cannot be
-     * split (fewer than 2 pixels, or all pixels are the same colour).
-     *
      * @param list<array{int,int,int}> $bucket
      * @return array{0:list<array{int,int,int}>,1:list<array{int,int,int}>}|null
      */
@@ -205,12 +209,11 @@ final class SixelRenderer implements Renderer
         $gRange = $maxG - $minG;
         $bRange = $maxB - $minB;
 
-        // Already uniform — no point splitting.
         if ($rRange === 0 && $gRange === 0 && $bRange === 0) {
             return null;
         }
 
-        $axis   = $rRange >= $gRange && $rRange >= $bRange ? 0
+        $axis = $rRange >= $gRange && $rRange >= $bRange ? 0
             : ($gRange >= $bRange ? 1 : 2);
 
         usort($bucket, static fn(array $a, array $b): int => $a[$axis] <=> $b[$axis]);
@@ -255,6 +258,8 @@ final class SixelRenderer implements Renderer
         ];
     }
 
+    // ─── Index grid (no dithering) ────────────────────────────────────────────
+
     /**
      * Map each pixel to its nearest palette entry by Euclidean RGB distance.
      *
@@ -277,10 +282,151 @@ final class SixelRenderer implements Renderer
         return $grid;
     }
 
+    // ─── Index grid (error-diffusion dithering) ───────────────────────────────
+
+    /**
+     * Build an index grid with error-diffusion dithering.
+     *
+     * Each pixel is quantized to its nearest palette entry, the rounding
+     * error is accumulated, and that error is diffused to neighboring
+     * unprocessed pixels using Floyd–Steinberg, Stucki, or Atkinson
+     * coefficients before they are themselves quantized.
+     *
+     * @param list<array{int,int,int}> $palette
+     */
+    private function ditheredIndexGrid(
+        \GdImage $img,
+        array $palette,
+        Dither $dither,
+    ): array {
+        $w = imagesx($img);
+        $h = imagesy($img);
+
+        // Accumulated floating-point pixel values (RGB, may exceed [0,255]
+        // during error diffusion — clamped before quantization).
+        /** @var list<list<array{float,float,float}> $accum */
+        $accum = [];
+        for ($y = 0; $y < $h; $y++) {
+            $accum[$y] = [];
+            for ($x = 0; $x < $w; $x++) {
+                $idx = imagecolorat($img, $x, $y);
+                $c   = imagecolorsforindex($img, $idx);
+                $accum[$y][$x] = [(float) $c['red'], (float) $c['green'], (float) $c['blue']];
+            }
+        }
+
+        $grid = [];
+
+        for ($y = 0; $y < $h; $y++) {
+            $row = [];
+            for ($x = 0; $x < $w; $x++) {
+                // Quantize the accumulated (possibly error-diffused) value.
+                [$r, $g, $b] = $accum[$y][$x];
+                $clampedR = max(0.0, min(255.0, $r));
+                $clampedG = max(0.0, min(255.0, $g));
+                $clampedB = max(0.0, min(255.0, $b));
+
+                $palIdx = $this->nearestColor(
+                    (int) round($clampedR),
+                    (int) round($clampedG),
+                    (int) round($clampedB),
+                    $palette,
+                );
+                [$pr, $pg, $pb] = $palette[$palIdx];
+
+                // Quantization error (original − quantized).
+                $eR = $clampedR - (float) $pr;
+                $eG = $clampedG - (float) $pg;
+                $eB = $clampedB - (float) $pb;
+
+                $this->diffuseError($accum, $w, $h, $x, $y, $eR, $eG, $eB, $dither);
+
+                $row[] = $palIdx;
+            }
+            $grid[] = $row;
+        }
+
+        return $grid;
+    }
+
+    /**
+     * Diffuse quantization error to future (unprocessed) neighbors.
+     *
+     * Coefficient layouts (current pixel marked ·):
+     *
+     * Floyd–Steinberg (propagates ¾ of error):
+     *    ·  7/16
+     *  3/16 5/16 7/16
+     *
+     * Stucki (propagates to 12 neighbors, slightly sharper):
+     *    ·  8/42  4/42
+     *  2/42 8/42 4/42 2/42
+     *  1/42 2/42 4/42 2/42 1/42
+     *
+     * Atkinson (Apple; propagates ¾, more contrast/lighter result):
+     *    ·  1/8  1/8
+     *  1/8  1/8  1/8
+     *       1/8
+     *
+     * @param list<list<array{float,float,float}> $accum
+     */
+    private function diffuseError(
+        array &$accum,
+        int $w, int $h,
+        int $x, int $y,
+        float $eR, float $eG, float $eB,
+        Dither $dither,
+    ): void {
+        $neighbors = match ($dither) {
+            // Floyd–Steinberg: 4 neighbors
+            Dither::FloydSteinberg => [
+                [$x + 1, $y,     7.0 / 16.0],
+                [$x - 1, $y + 1, 3.0 / 16.0],
+                [$x,     $y + 1, 5.0 / 16.0],
+                [$x + 1, $y + 1, 1.0 / 16.0],
+            ],
+            // Stucki: 12 neighbors
+            Dither::Stucki => [
+                [$x + 1, $y,     8.0 / 42.0],
+                [$x + 2, $y,     4.0 / 42.0],
+                [$x - 2, $y + 1, 1.0 / 42.0],
+                [$x - 1, $y + 1, 2.0 / 42.0],
+                [$x,     $y + 1, 4.0 / 42.0],
+                [$x + 1, $y + 1, 2.0 / 42.0],
+                [$x + 2, $y + 1, 1.0 / 42.0],
+                [$x - 2, $y + 2, 1.0 / 42.0],
+                [$x - 1, $y + 2, 2.0 / 42.0],
+                [$x,     $y + 2, 4.0 / 42.0],
+                [$x + 1, $y + 2, 2.0 / 42.0],
+                [$x + 2, $y + 2, 1.0 / 42.0],
+            ],
+            // Atkinson: 6 neighbors, only ¾ of error propagates
+            Dither::Atkinson => [
+                [$x + 1, $y,     1.0 / 8.0],
+                [$x + 2, $y,     1.0 / 8.0],
+                [$x - 1, $y + 1, 1.0 / 8.0],
+                [$x,     $y + 1, 1.0 / 8.0],
+                [$x + 1, $y + 1, 1.0 / 8.0],
+                [$x,     $y + 2, 1.0 / 8.0],
+            ],
+            default => [],
+        };
+
+        foreach ($neighbors as [$nx, $ny, $factor]) {
+            if ($nx >= 0 && $nx < $w && $ny >= 0 && $ny < $h) {
+                $accum[$ny][$nx][0] += $eR * $factor;
+                $accum[$ny][$nx][1] += $eG * $factor;
+                $accum[$ny][$nx][2] += $eB * $factor;
+            }
+        }
+    }
+
+    // ─── Palette & nearest-color ──────────────────────────────────────────────
+
     /** @param list<array{int,int,int}> $palette */
     private function nearestColor(int $r, int $g, int $b, array $palette): int
     {
-        $best    = 0;
+        $best     = 0;
         $bestDist = PHP_INT_MAX;
         foreach ($palette as $i => $entry) {
             $dr   = $r - $entry[0];
@@ -335,16 +481,12 @@ final class SixelRenderer implements Renderer
         $out = '';
 
         foreach (array_keys($activeColors) as $palIndex) {
-            // DECGCR selects a declared palette entry for subsequent sixel data.
             $out .= Ansi::sixelColorSelect($palIndex);
 
-            // Emit sixel columns for this color only.
-            // Bitmask for each column: bit 0 = top row of band.
-            // Sixel byte = (palIndex << 6) | bitmask
             $sixelBase = $palIndex << 6;
 
-            $col   = 0;
-            $runCount = 0;
+            $col       = 0;
+            $runCount  = 0;
             $prevByte  = -1;
 
             while ($col < $width) {
@@ -362,8 +504,8 @@ final class SixelRenderer implements Renderer
                     if ($runCount > 0) {
                         $out .= $this->emitRle($prevByte, $runCount);
                     }
-                    $prevByte  = $sixelByte;
-                    $runCount  = 1;
+                    $prevByte = $sixelByte;
+                    $runCount = 1;
                 }
                 $col++;
             }
@@ -378,8 +520,6 @@ final class SixelRenderer implements Renderer
 
     private function emitRle(int $sixelByte, int $count): string
     {
-        // Sixel bytes must be printable ASCII 63-126 (0x3F-0x7E).
-        // We already OR'd the index into bits 6-7, so mask and clamp.
         $ascii = ($sixelByte >= 0 && $sixelByte < 128)
             ? max(63, min(126, $sixelByte))
             : 63;
