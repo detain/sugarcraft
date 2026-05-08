@@ -84,6 +84,38 @@ final class TerminalTest extends TestCase
         $this->assertSame(4, $term->cursor()->col);
     }
 
+    public function testFeedToggle1049PreservesMainScreen(): void
+    {
+        $term = Terminal::create(cols: 5, rows: 3);
+        $term->feed("Main\x1b[?1049h");
+        $this->assertTrue($term->mode()->altScreen);
+        // Alt is fresh.
+        $this->assertSame(' ', $term->screen()->cell(0, 0)->grapheme);
+        // Write something different on alt, then leave.
+        $term->feed("Z\x1b[?1049l");
+        $this->assertFalse($term->mode()->altScreen);
+        // Main contents are restored.
+        $this->assertSame('M', $term->screen()->cell(0, 0)->grapheme);
+        $this->assertSame('a', $term->screen()->cell(0, 1)->grapheme);
+    }
+
+    public function testFeedSetsBracketedPaste(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b[?2004h");
+        $this->assertTrue($term->mode()->bracketedPaste);
+        $term->feed("\x1b[?2004l");
+        $this->assertFalse($term->mode()->bracketedPaste);
+    }
+
+    public function testFeedSetsMouseModes(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b[?1000;1006h");
+        $this->assertTrue($term->mode()->mouseAny);
+        $this->assertTrue($term->mode()->mouseSgr);
+    }
+
     public function testResize(): void
     {
         $term = Terminal::create(cols: 10, rows: 5);

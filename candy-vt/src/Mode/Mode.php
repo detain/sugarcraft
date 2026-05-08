@@ -68,6 +68,81 @@ final readonly class Mode
         );
     }
 
+    public function withMouseAny(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $v,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+        );
+    }
+
+    public function withMouseCellMotion(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $v,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+        );
+    }
+
+    public function withMouseExtended(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $v,
+        );
+    }
+
+    public function withBracketedPaste(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $v,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+        );
+    }
+
+    public function withSyncUpdate(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $v,
+            mouseExtended: $this->mouseExtended,
+        );
+    }
+
     public function equals(self $other): bool
     {
         return $this->altScreen === $other->altScreen

@@ -17,10 +17,12 @@ use SugarCraft\Vt\Sgr\Sgr;
  *
  * State is held as public mutable references so {@see \SugarCraft\Vt\Terminal\Terminal}
  * (or a test harness) can read it back after `feed()`. Sub-handlers
- * (SgrHandler, CursorHandler) are stateless and receive parser params.
+ * (SgrHandler, CursorHandler, EraseHandler, ScrollHandler, ModeHandler)
+ * are stateless and receive parser params.
  *
- * PR3 covers SGR + cursor moves + DEC mode 25 (cursor visibility).
- * Erase, scroll, alt-screen, OSC, DCS, and tabs land in later slices.
+ * Holds optional saved-main state for the alt-screen swap (DEC 1049):
+ * when alt mode is entered, the current Buffer/Cursor/Sgr move into the
+ * `saved*` fields and a fresh blank Buffer takes the active slot.
  */
 final class ScreenHandler implements Handler
 {
@@ -30,10 +32,15 @@ final class ScreenHandler implements Handler
     public Mode $mode;
     public ?string $windowTitle = null;
 
+    private ?Buffer $savedBuffer = null;
+    private ?Cursor $savedCursor = null;
+    private ?Sgr $savedSgr = null;
+
     private SgrHandler $sgrHandler;
     private CursorHandler $cursorHandler;
     private EraseHandler $eraseHandler;
     private ScrollHandler $scrollHandler;
+    private ModeHandler $modeHandler;
 
     public function __construct(
         Buffer $buffer,
@@ -49,6 +56,7 @@ final class ScreenHandler implements Handler
         $this->cursorHandler = new CursorHandler();
         $this->eraseHandler = new EraseHandler();
         $this->scrollHandler = new ScrollHandler();
+        $this->modeHandler = new ModeHandler();
     }
 
     public function printChar(string $rune): void
@@ -94,12 +102,12 @@ final class ScreenHandler implements Handler
                 return;
             case 'h':
                 if ($prefix === ord('?')) {
-                    $this->setDecMode($params, true);
+                    $this->modeHandler->apply($params, true, $this);
                 }
                 return;
             case 'l':
                 if ($prefix === ord('?')) {
-                    $this->setDecMode($params, false);
+                    $this->modeHandler->apply($params, false, $this);
                 }
                 return;
             default:
@@ -171,15 +179,40 @@ final class ScreenHandler implements Handler
         $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor);
     }
 
-    /** @param list<int> $params */
-    private function setDecMode(array $params, bool $set): void
+    /**
+     * Enter the alt screen (DEC 1049 set). Saves the current Buffer +
+     * Cursor + Sgr and swaps in a fresh blank Buffer of the same size.
+     * Idempotent — re-entering while already in alt mode is a no-op.
+     */
+    public function enterAltScreen(): void
     {
-        foreach ($params as $p) {
-            if ($p === 25) {
-                $this->mode = $this->mode->withCursorVisible($set);
-                $this->cursor = $this->cursor->withVisible($set);
-            }
-            // Other DEC modes (1049, 2004, 1000/1002/1003/1006, 2026) land in PR5.
+        if ($this->mode->altScreen) {
+            return;
         }
+        $this->savedBuffer = $this->buffer;
+        $this->savedCursor = $this->cursor;
+        $this->savedSgr = $this->sgr;
+        $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
+        $this->cursor = new Cursor(visible: $this->cursor->visible);
+        $this->sgr = Sgr::empty();
+        $this->mode = $this->mode->withAltScreen(true);
+    }
+
+    /**
+     * Leave the alt screen (DEC 1049 reset). Restores the saved Buffer
+     * + Cursor + Sgr. No-op if not currently in alt mode.
+     */
+    public function leaveAltScreen(): void
+    {
+        if (!$this->mode->altScreen || $this->savedBuffer === null) {
+            return;
+        }
+        $this->buffer = $this->savedBuffer;
+        $this->cursor = $this->savedCursor ?? $this->cursor;
+        $this->sgr = $this->savedSgr ?? Sgr::empty();
+        $this->savedBuffer = null;
+        $this->savedCursor = null;
+        $this->savedSgr = null;
+        $this->mode = $this->mode->withAltScreen(false);
     }
 }
