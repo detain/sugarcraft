@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Mosaic;
 
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
+use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 
 /**
@@ -43,9 +44,18 @@ final class Mosaic
      */
     public static function probe(): self
     {
+        $cap     = Detect::cached();
+        $renderer = self::bestBackend($cap);
+
+        return new self($renderer, $cap, null, null);
+    }
+
+    /** Force the iTerm2 / WezTerm inline-image renderer. */
+    public static function iterm2(): self
+    {
         return new self(
-            new HalfBlockRenderer(),  // PR2+ will swap in the best backend
-            Detect::cached(),
+            new Iterm2Renderer(),
+            Capability::universal(),
             null,
             null,
         );
@@ -122,6 +132,29 @@ final class Mosaic
     public static function builder(): MosaicBuilder
     {
         return new MosaicBuilder();
+    }
+
+    /**
+     * Pick the best available renderer for the given capability snapshot.
+     * Precedence: Kitty > iTerm2 > Sixel > HalfBlock.
+     *
+     * PR3 swaps Kitty renderer in; PR4 swaps Sixel renderer in.
+     */
+    private static function bestBackend(Capability $cap): Renderer
+    {
+        if ($cap->kitty) {
+            // PR3: return new KittyRenderer();
+            return new HalfBlockRenderer();
+        }
+        if ($cap->iterm2) {
+            return new Iterm2Renderer();
+        }
+        if ($cap->sixel) {
+            // PR4: return new SixelRenderer();
+            return new HalfBlockRenderer();
+        }
+
+        return new HalfBlockRenderer();
     }
 }
 
