@@ -110,12 +110,20 @@ final class PosixBackend implements Backend
         });
     }
 
-    public static function drainSignals(): bool
+    /**
+     * @return int|false bitmask of dispatched signals (SIGNAL_RESIZE), or false if not available
+     */
+    public static function drainSignals(): int|false
     {
         if (!function_exists('pcntl_signal_dispatch')) {
             return false;
         }
-        return @\pcntl_signal_dispatch();
+
+        // pcntl_signal_dispatch() returns true if any handler was invoked.
+        // We treat that as equivalent to SIGNAL_RESIZE since drainSignals
+        // on POSIX is only wired for SIGWINCH; a fired handler means a
+        // resize was detected.
+        return @\pcntl_signal_dispatch() ? self::SIGNAL_RESIZE : 0;
     }
 
     private static function hasStty(): bool

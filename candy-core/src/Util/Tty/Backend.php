@@ -15,6 +15,16 @@ namespace SugarCraft\Core\Util\Tty;
 interface Backend
 {
     /**
+     * drainSignals() return: a Ctrl+C (or equivalent) interrupt was received.
+     */
+    public const SIGNAL_INTERRUPT = 1;
+
+    /**
+     * drainSignals() return: the terminal was resized.
+     */
+    public const SIGNAL_RESIZE = 2;
+
+    /**
      * Returns true when the wrapped stream is a terminal device.
      */
     public function isTty(): bool;
@@ -60,9 +70,14 @@ interface Backend
     public static function onResize(\Closure $onResize): bool;
 
     /**
-     * Drain any pending resize (or other) signals.  Call once per
-     * event-loop tick.  Returns `true` when at least one signal was
-     * dispatched.
+     * Drain any pending resize or interrupt signals.
+     *
+     * Call once per event-loop tick.  Returns a bitmask of the signals
+     * that were dispatched (zero or more of SIGNAL_INTERRUPT |
+     * SIGNAL_RESIZE), or `false` when the platform does not support
+     * signal draining (should not happen on Windows or POSIX).
+     *
+     * @return int|false bitmask of dispatched signals, or false on error
      */
-    public static function drainSignals(): bool;
+    public static function drainSignals(): int|false;
 }

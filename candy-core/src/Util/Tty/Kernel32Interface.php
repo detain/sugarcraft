@@ -57,6 +57,8 @@ interface Kernel32Interface
     public const CTRL_C_EVENT     = 0;
     public const CTRL_BREAK_EVENT = 1;
     public const CTRL_CLOSE_EVENT = 2;
+    public const CTRL_LOGOFF_EVENT = 5;
+    public const CTRL_SHUTDOWN_EVENT = 6;
 
     // ─── Handle accessors ──────────────────────────────────────────────────
 
@@ -125,7 +127,18 @@ interface Kernel32Interface
     // ─── Ctrl handler ───────────────────────────────────────────────────────
 
     /**
-     * @param \Closure(int $dwCtrlEvent):bool $handler reentrant-safe only
+     * Register a Ctrl-handler callback with the process.
+     *
+     * On Windows this calls the native `SetConsoleCtrlHandler` via FFI.
+     * The `$handler` MUST be reentrant-safe — it runs on a separate OS
+     * thread.  See caveat 1 in the `x/windows.md` plan.
+     *
+     * @param \Closure(int $dwCtrlEvent):bool $handler reentrant-safe only;
+     *           write to InterruptFlags, do NOT touch Zend memory
+     * @param bool $add true to register, false to unregister
+     * @return bool true on success
+     *
+     * @throws \LogicException if FFI::dynamicFunction is not available
      */
     public function setConsoleCtrlHandler(\Closure $handler, bool $add = true): bool;
 

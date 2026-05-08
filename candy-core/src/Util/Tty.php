@@ -31,6 +31,10 @@ namespace SugarCraft\Core\Util;
  */
 final class Tty
 {
+    // Re-export Backend SIGNAL_* constants so callers don't need to import both.
+    public const SIGNAL_INTERRUPT = Tty\Backend::SIGNAL_INTERRUPT;
+    public const SIGNAL_RESIZE    = Tty\Backend::SIGNAL_RESIZE;
+
     /** @var \SugarCraft\Core\Util\Tty\Backend */
     private \SugarCraft\Core\Util\Tty\Backend $backend;
 
@@ -117,9 +121,13 @@ final class Tty
         return $cls::onResize($onResize);
     }
 
-    public static function drainSignals(): bool
+    /**
+     * @return int|false bitmask of dispatched signals (SIGNAL_INTERRUPT | SIGNAL_RESIZE)
+     */
+    public static function drainSignals(): int|false
     {
         $cls = self::concreteBackendClass();
+
         return $cls::drainSignals();
     }
 
