@@ -8,6 +8,7 @@ use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\KittyRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
+use SugarCraft\Mosaic\Renderer\SixelRenderer;
 
 /**
  * Public facade — the "Picker" from ratatui-image.
@@ -150,8 +151,7 @@ final class Mosaic
             return new Iterm2Renderer();
         }
         if ($cap->sixel) {
-            // PR4: return new SixelRenderer();
-            return new HalfBlockRenderer();
+            return new SixelRenderer();
         }
 
         return new HalfBlockRenderer();
