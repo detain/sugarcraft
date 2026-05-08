@@ -199,7 +199,7 @@ jobs:
 
       - name: Run tests
         working-directory: ${{ matrix.lib }}
-        run: vendor\bin\phpunit --colors=never --fail-on-warning=false
+        run: vendor\bin\phpunit --colors=never
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
