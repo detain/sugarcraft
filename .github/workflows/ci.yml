@@ -31,12 +31,11 @@ jobs:
     # without races. Different libs / different PHP versions / push vs PR all
     # land in distinct groups, so they never cancel each other.
     concurrency:
-      group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}-${{ matrix.os }}
+      group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: ${{ github.event_name == 'push' }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         php: ['8.1', '8.2', '8.3', '8.4']
         lib:
           - candy-core
