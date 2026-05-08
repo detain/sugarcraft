@@ -46,17 +46,21 @@ final class Detect
      */
     public static function probe(): Capability
     {
-        $cap = self::probeEnv();
+        $inTmux = getenv('TMUX') !== false;
+
+        $cap = self::probeEnv($inTmux);
 
         // Env vars gave a definite answer — no DA1 needed.
         if ($cap->kitty || $cap->iterm2) {
             return $cap->withCellSize(self::probeFontSize());
         }
 
-        // Try DA1 to detect sixel when env vars were inconclusive.
+        // Run DA1 sixel probing BEFORE font-size probing so that in tests
+        // using a preloaded socket pair, DA1 reply bytes are not consumed
+        // by probeFontSize() before probeDa1() gets to read them.
         $sixelViaDa1 = self::probeDa1();
         if ($sixelViaDa1 === true) {
-            return Capability::sixel()->withCellSize(self::probeFontSize());
+            return Capability::sixel(self::probeFontSize(), $inTmux);
         }
 
         return $cap->withCellSize(self::probeFontSize());
@@ -377,7 +381,7 @@ final class Detect
     /**
      * Detect based solely on environment variables (no TTY I/O).
      */
-    private static function probeEnv(): Capability
+    private static function probeEnv(bool $inTmux = false): Capability
     {
         // Kitty: KITTY_WINDOW_ID set, or known kitty-family $TERM, or ghostty/WezTerm.
         if (getenv('KITTY_WINDOW_ID') !== false
@@ -385,7 +389,7 @@ final class Detect
             || getenv('TERM_PROGRAM') === 'ghostty'
             || preg_match('/xterm-kitty/i', (string) getenv('TERM')) === 1
         ) {
-            return Capability::kitty();
+            return Capability::kitty(null, $inTmux);
         }
 
         // iTerm2: iTerm.app, iTerm2, WezTerm, mintty, or LC_TERMINAL=iTerm2.
@@ -397,16 +401,16 @@ final class Detect
             || $termProgram === 'mintty'
             || $lcTerminal === 'iTerm2'
         ) {
-            return Capability::iterm2();
+            return Capability::iterm2(null, $inTmux);
         }
 
         // Sixel: strong env-var hints (mlterm, foot, xterm with XTERM_VERSION).
         if (self::hasSixelEnvHints()) {
-            return Capability::sixel();
+            return Capability::sixel(null, $inTmux);
         }
 
         // Half-block: always available.
-        return Capability::unknown();
+        return Capability::unknown(null, $inTmux);
     }
 
     /**
