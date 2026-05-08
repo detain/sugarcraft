@@ -496,4 +496,30 @@ final class Ansi
             throw new \InvalidArgumentException(Lang::t('ansi.component_out_of_range', ['label' => $label, 'value' => $v]));
         }
     }
+
+    /**
+     * Emit an iTerm2 / WezTerm inline image via OSC 1337.
+     *
+     * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
+     *
+     * @param string $base64Png  Base64-encoded PNG bytes
+     * @param array  $opts       Optional keys: width, height (cell count or
+     *                           Npx/Npt), preserveAspectRatio (bool),
+     *                           inline (bool, default true)
+     */
+    public static function iterm2InlineImage(string $base64Png, array $opts = []): string
+    {
+        $parts = ['File=' . $base64Png];
+        if (isset($opts['width'])) {
+            $parts[] = 'width=' . $opts['width'];
+        }
+        if (isset($opts['height'])) {
+            $parts[] = 'height=' . $opts['height'];
+        }
+        if (isset($opts['preserveAspectRatio'])) {
+            $parts[] = 'preserveAspectRatio=' . ($opts['preserveAspectRatio'] ? '1' : '0');
+        }
+        $parts[] = 'inline=1';
+        return self::OSC . '1337;' . implode(';', $parts) . self::BEL;
+    }
 }
