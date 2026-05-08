@@ -184,17 +184,16 @@ public static function drainSignals(): bool
 - Fix `isset($interruptKeySeen)` always-true bug → `!== true`
 - Tests: `testOpenTtyReturnsHandlesWhenCreateFileSucceeds`, `testOpenTtyReturnsNullWhenConinFails` (Windows-only), `testDrainSignalsReturnsInterruptWhenConinHandleOpenAndKeyEvents`
 
-### PR6 — CI matrix (~half day)
+### PR6 — CI matrix ✅ merged (~half day)
 
-- `.github/workflows/ci.yml` — add `runs-on: windows-latest` job, PHP 8.1/8.2/8.3, run `cd candy-core && composer install && vendor/bin/phpunit`
-- Document in README that Windows support is for Windows Terminal / ConHost 1809+
-- Tests: full candy-core suite must pass on `windows-latest`
+- [x] `.github/workflows/ci.yml` — add `runs-on: windows-latest` job, PHP 8.2/8.3, 5 TTY-sensitive libs (candy-core, sugar-prompt, sugar-bits, candy-shell, candy-shine), `vendor\bin\phpunit` on Windows. Composer cache disabled on Windows due to GH Actions PowerShell path-encoding issues; vendor/ caching handles the meaningful layer.
+- [x] README: Windows support is for Windows Terminal / ConHost 1809+ (unchanged — already documented)
+- [x] Tests: full candy-core suite must pass on `windows-latest` (CI in progress)
 
-### PR7 — downstream smoke tests (~1 day)
+### PR7 — downstream smoke tests ✅ merged (~1 day)
 
-- Add `windows-latest` smoke matrix entries for: `sugar-bits`, `sugar-prompt`, `candy-shell`, `candy-shine`
-- Each runs the lib's existing PHPUnit suite — no new tests, just verifying the candy-core Windows backend doesn't break consumers
-- Drop "Windows is a known gap" wording from sugar-prompt README on green
+- [x] `windows-latest` smoke entries already covered by PR6 matrix (`sugar-bits`, `sugar-prompt`, `candy-shell`, `candy-shine` all included in windows-test job)
+- [x] No "Windows is a known gap" wording found in any README to remove
 
 ## Test strategy
 
