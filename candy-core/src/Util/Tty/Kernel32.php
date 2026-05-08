@@ -250,14 +250,31 @@ CPROTO
     /**
      * Register a Ctrl-handler callback with the process.
      *
-     * The `$handler` MUST be a reentrant-safe C closure kept alive for
-     * the duration of the process (assign it to a static or class
-     * property).  See the class docblock for thread-safety requirements.
+     * The `$handler` MUST be reentrant-safe and write only to
+     * process-shared memory.  See the class docblock and caveat 1 in
+     * the `x/windows.md` plan for thread-safety requirements.
      *
-     * @param \Closure(int $dwCtrlEvent):bool $handler
+     * **Requires PHP FFI with `FFI::dynamicFunction`** (PHP 8.4+ FFI).
+     * On builds without it, this method returns `false` and emits a
+     * warning.  The interrupt flag can still be set via
+     * {@see InterruptFlags} for testing.
+     *
+     * @param \Closure(int $dwCtrlEvent):bool $handler reentrant-safe only
+     * @return bool true on success, false if registration failed or dynamicFunction unavailable
      */
     public function setConsoleCtrlHandler(\Closure $handler, bool $add = true): bool
     {
+        if (!\method_exists(\FFI::class, 'dynamicFunction')) {
+            trigger_error(
+                'Kernel32::setConsoleCtrlHandler requires PHP FFI with '
+                    . 'FFI::dynamicFunction (PHP 8.4+ FFI). Interrupt handling '
+                    . 'is disabled on this build.',
+                \E_USER_WARNING,
+            );
+
+            return false;
+        }
+
         $cHandler = \FFI::cast(
             'void (*)(unsigned long)',
             \FFI::dynamicFunction($handler),
