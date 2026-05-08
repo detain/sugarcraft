@@ -330,6 +330,9 @@ of the others; pick whichever the first user complaint demands.
 - Document as **experimental** since upstream upstreams it as experimental
 - Tests: assert APC sequences include the right `a=`, `i=`, `z=`, `q=` keys
 - **Effort**: 1 day
+- **Status**: DONE — **MERGED** [#282](https://github.com/detain/sugarcraft/pull/282); companion 
+  
+[#281](https://github.com/detain/sugarcraft/pull/281) (candy-core Ansi x/y support) also merged
 
 ### PR12 — two-tier rendering API (~half day)  *[from ratatui-image]*
 
