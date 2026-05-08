@@ -58,7 +58,7 @@ final class Detect
             || getenv('TERM_PROGRAM') === 'ghostty'
             || preg_match('/xterm-kitty/i', (string) getenv('TERM')) === 1
         ) {
-            return Capability::universal();
+            return Capability::kitty();
         }
 
         // iTerm2: iTerm.app, WezTerm, mintty, or LC_TERMINAL=iTerm2.
@@ -69,12 +69,12 @@ final class Detect
             || $termProgram === 'mintty'
             || $lcTerminal === 'iTerm2'
         ) {
-            return Capability::universal();
+            return Capability::iterm2();
         }
 
         // Sixel: strong env-var hints.
         if (self::hasSixelEnvHints()) {
-            return Capability::universal();
+            return Capability::sixel();
         }
 
         // Half-block: always available.
