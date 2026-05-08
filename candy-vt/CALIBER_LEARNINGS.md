@@ -82,6 +82,39 @@ down. Scrolled-off rows are dropped; scrollback comes later.
 current background — can land later if a TUI relies on it; charm's
 default vt has the same simple behavior so this matches upstream.
 
+## Mode field ↔ DEC private mode mapping (PR5)
+
+`Mode`'s field names predate the DEC mode numbering and don't align
+1:1. The canonical mapping `ModeHandler` uses:
+
+| DEC mode | Mode field         | Notes                              |
+|----------|--------------------|------------------------------------|
+| 25       | `cursorVisible`    | also mirrored on `Cursor::visible` |
+| 1000     | `mouseAny`         | X11 button-only                    |
+| 1002     | `mouseCellMotion`  | button + drag motion               |
+| 1003     | `mouseExtended`    | any motion (button or not)         |
+| 1006     | `mouseSgr`         | SGR coordinate format              |
+| 1049     | `altScreen`        | + buffer/cursor/sgr swap           |
+| 2004     | `bracketedPaste`   |                                    |
+| 2026     | `syncUpdate`       | toggle only — no actual buffering  |
+
+`Mode::$mouseHighlights` is reserved for 1001 (highlight tracking)
+but no handler currently sets it. Don't read it as "highlights mode is
+on"; read it as "1001 was sent to ModeHandler if/when wired."
+
+## Alt-screen swap (DEC 1049) is held on ScreenHandler
+
+Entering alt mode saves the current `Buffer`/`Cursor`/`Sgr` into
+`ScreenHandler` private fields and replaces the active buffer with a
+fresh blank one. Leaving restores them. Mutations on the alt buffer
+don't bleed to the saved main state (it's a different `Buffer`
+instance). Re-entering while already in alt mode is a no-op so it
+won't clobber alt content; leaving without entering is a no-op too.
+
+Resize while in alt mode currently resizes only the active (alt)
+buffer; the saved main buffer keeps its old dimensions. Real terminals
+typically resize both — revisit if a downstream TUI exercises this.
+
 ## Wide-character handling
 
 CJK and emoji graphemes occupy 2 cells. The second cell is marked with
