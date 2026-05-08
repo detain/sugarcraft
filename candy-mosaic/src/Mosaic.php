@@ -46,6 +46,12 @@ final class Mosaic
      */
     public static function probe(): self
     {
+        // Use Detect::cached() for the fast env-var path.  This matches
+        // the terminal type from environment variables without issuing a
+        // DA1 query.  DA1 probing is available separately via
+        // Detect::probe() when full terminal capability detection is
+        // needed (e.g. to confirm Sixel support in a known Sixel-capable
+        // terminal where no env-var hint is present).
         $cap     = Detect::cached();
         $renderer = self::bestBackend($cap);
 

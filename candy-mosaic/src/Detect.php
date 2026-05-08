@@ -61,10 +61,11 @@ final class Detect
             return Capability::kitty();
         }
 
-        // iTerm2: iTerm.app, WezTerm, mintty, or LC_TERMINAL=iTerm2.
+        // iTerm2: iTerm.app, iTerm2, WezTerm, mintty, or LC_TERMINAL=iTerm2.
         $termProgram = (string) getenv('TERM_PROGRAM');
         $lcTerminal  = (string) getenv('LC_TERMINAL');
         if ($termProgram === 'iTerm.app'
+            || $termProgram === 'iTerm2'
             || $termProgram === 'WezTerm'
             || $termProgram === 'mintty'
             || $lcTerminal === 'iTerm2'
