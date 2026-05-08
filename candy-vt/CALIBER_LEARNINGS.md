@@ -115,6 +115,47 @@ Resize while in alt mode currently resizes only the active (alt)
 buffer; the saved main buffer keeps its old dimensions. Real terminals
 typically resize both — revisit if a downstream TUI exercises this.
 
+## OSC dispatch lives in OscHandler; ScreenHandler holds the slots (PR6)
+
+`OscHandler::apply($data, ScreenHandler)` parses the OSC payload (the
+text between `ESC ]` and the terminator) and writes into specific
+public slots on the handler:
+
+| OSC cmd  | Slot                              |
+|----------|-----------------------------------|
+| 0/1/2    | `windowTitle`                     |
+| 4        | `palette[idx]` (`array<int, Color>`) |
+| 8        | `currentHyperlink`                |
+| 52       | `clipboardEvents[]` log            |
+
+Unknown OSC commands and malformed payloads silently no-op — matches
+xterm behavior. Read responses for OSC 52 (`?` payload) are recorded
+as `kind=read` events; the parser doesn't synthesize the reply, so a
+real PTY consumer needs to walk `Terminal::clipboardEvents()` and
+emit a response itself.
+
+## Hyperlink span attribution
+
+`OscHandler` flips `ScreenHandler::$currentHyperlink` between a
+`Hyperlink` instance and `null`. Every `printChar()` while non-null
+attaches that exact reference to the new `Cell`. Cells written before
+the hyperlink opened keep their previous hyperlink (typically null);
+cells written after it closes get null again. There's no "hyperlink
+ranges" structure — attribution is per-cell.
+
+OSC 8 form is `OSC 8 ; params ; URI`. An empty URI (`OSC 8;;`) closes
+the link. The `id=` param is parsed out of `params` if present;
+other key=value pairs (separated by `:`) are ignored for now.
+
+## OSC 4 color spec parsing
+
+xterm's `rgb:RRRR/GGGG/BBBB` form allows 1-4 hex digits per component;
+they're MSB-aligned. `OscHandler::scaleHexComponent()` scales to 8
+bits by either left-padding (1 digit → high nibble) or right-shifting
+to keep the most-significant byte. We also accept the CSS-style
+`#RRGGBB` shorthand. Other formats (named colors, hsl, etc.) are
+rejected — the entry is silently dropped.
+
 ## Wide-character handling
 
 CJK and emoji graphemes occupy 2 cells. The second cell is marked with
