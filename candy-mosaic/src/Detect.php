@@ -15,8 +15,11 @@ namespace SugarCraft\Mosaic;
  */
 final class Detect
 {
-    private const DA1_QUERY  = "\x1b[c";        // DA1 "who are you?"
-    private const TIMEOUT_MS = 100;
+    private const DA1_QUERY    = "\x1b[c";           // DA1 "who are you?"
+    private const XTWINOP_14  = "\x1b[14t";          // window pixel size
+    private const XTWINOP_16  = "\x1b[16t";          // cell pixel size
+    private const XTWINOP_18  = "\x1b[18t";          // terminal cell count
+    private const TIMEOUT_MS  = 100;
 
     /** @var resource|null */
     private static $probeStdin = null;
@@ -47,16 +50,16 @@ final class Detect
 
         // Env vars gave a definite answer — no DA1 needed.
         if ($cap->kitty || $cap->iterm2) {
-            return $cap;
+            return $cap->withCellSize(self::probeFontSize());
         }
 
         // Try DA1 to detect sixel when env vars were inconclusive.
         $sixelViaDa1 = self::probeDa1();
         if ($sixelViaDa1 === true) {
-            return Capability::sixel($cap->cellSize);
+            return Capability::sixel()->withCellSize(self::probeFontSize());
         }
 
-        return $cap;
+        return $cap->withCellSize(self::probeFontSize());
     }
 
     /**
@@ -252,6 +255,123 @@ final class Detect
         // We scan for either ";4" or "?4" to cover all known formats.
         return (str_contains($reply, ';4;') || str_contains($reply, ';4c')
             || str_contains($reply, '?4c'));
+    }
+
+    /**
+     * Probe font / cell size via XTWINOPS queries.
+     *
+     * Probes in order: 16t (cell pixels), 14t (window px) + 18t
+     * (cell count) as fallback.  Returns null when stdin/out is not
+     * a TTY or all queries time out.
+     */
+    private static function probeFontSize(): ?CellSize
+    {
+        if (!self::isInteractiveTty()) {
+            return null;
+        }
+
+        // Try 16t first — it gives cell pixels directly.
+        $cellSize = self::probeXtwino(self::XTWINOP_16);
+        if ($cellSize !== null) {
+            return $cellSize;
+        }
+
+        // Fall back: 14t (window px) + 18t (cell count).
+        $windowPx = self::probeXtwino(self::XTWINOP_14);
+        $cellCount = self::probeXtwinoCellCount();
+        if ($windowPx !== null && $cellCount !== null
+            && $cellCount->cellWidth > 0 && $cellCount->cellHeight > 0
+        ) {
+            $cellW = (int) round($windowPx->cellWidth / $cellCount->cellWidth);
+            $cellH = (int) round($windowPx->cellHeight / $cellCount->cellHeight);
+            if ($cellW > 0 && $cellH > 0) {
+                return new CellSize($cellW, $cellH);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Send a single XTWINOPS query and parse the numeric reply.
+     *
+     * Replies are `` ESC [ <val1> ; <val2> t `` for 16t, and
+     * `` ESC [ <rows> ; <cols> t `` for 14t.
+     *
+     * @return CellSize|null  parsed cell size, or null on timeout/parse error
+     */
+    private static function probeXtwino(string $query): ?CellSize
+    {
+        // Write the query to stdout.
+        $written = @fwrite(STDOUT, $query);
+        if ($written === false || $written !== strlen($query)) {
+            return null;
+        }
+        fflush(STDOUT);
+
+        // Read the response with a tight timeout (terminal responds fast).
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::$probeStdin ?? STDIN);
+
+        return self::parseXtwinoReply($reply, $query);
+    }
+
+    /**
+     * Probe terminal cell count via XTWINOPS 18t.
+     *
+     * Returns a CellSize where cellWidth = columns, cellHeight = rows.
+     */
+    private static function probeXtwinoCellCount(): ?CellSize
+    {
+        $written = @fwrite(STDOUT, self::XTWINOP_18);
+        if ($written === false || $written !== strlen(self::XTWINOP_18)) {
+            return null;
+        }
+        fflush(STDOUT);
+
+        $reply = self::readStdinTimed(self::TIMEOUT_MS, self::$probeStdin ?? STDIN);
+
+        return self::parseXtwinoReply($reply, self::XTWINOP_18);
+    }
+
+    /**
+     * Parse an XTWINOPS reply into a CellSize.
+     *
+     * - 16t: `` ESC [ 6 ; <cellHeight> ; <cellWidth> t ``
+     * - 14t: `` ESC [ 4 ; <windowHeight> ; <windowWidth> t ``
+     *
+     * @return CellSize|null
+     */
+    private static function parseXtwinoReply(string $reply, string $query): ?CellSize
+    {
+        if (!str_contains($reply, "\x1b[")) {
+            return null;
+        }
+
+        $inner = substr($reply, strpos($reply, "\x1b[") + 2);
+        if (!str_ends_with($inner, 't')) {
+            return null;
+        }
+        $inner = rtrim(substr($inner, 0, -1)); // strip trailing 't'
+        $parts = array_map('intval', explode(';', $inner));
+
+        // 16t: format is 6;<cellHeight>;<cellWidth>t
+        // 14t: format is 4;<windowHeight>;<windowWidth>t
+        if (count($parts) < 3) {
+            return null;
+        }
+        [$id, $v1, $v2] = $parts;
+
+        if ($id === 6 && $query === self::XTWINOP_16) {
+            return new CellSize($v2, $v1); // w, h
+        }
+        if ($id === 4 && $query === self::XTWINOP_14) {
+            return new CellSize($v2, $v1); // w, h
+        }
+        if ($id === 8 && $query === self::XTWINOP_18) {
+            return new CellSize($v2, $v1); // cols, rows
+        }
+
+        return null;
     }
 
     /**
