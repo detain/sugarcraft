@@ -46,6 +46,33 @@ fresh from Ground.
 handlers downstream should resolve to spec-defined defaults
 (`?: 1` for cursor moves, `?: 0` for SGR, etc.).
 
+## ScreenHandler holds mutable state; Terminal delegates
+
+`ScreenHandler` owns `Buffer` (mutable in place), `Cursor` / `Sgr` /
+`Mode` (immutable values, reassigned on update), and `?string $windowTitle`.
+`Terminal::feed()` drives bytes through the Parser; accessors delegate
+to the handler. `Terminal::__clone()` deep-clones the handler so that
+`withCursor()` / `withMode()` etc. don't share mutable state with the
+original instance — without that, mutating one Terminal's cursor
+would silently affect every Terminal cloned from it.
+
+## SGR sub-handlers are stateless
+
+`SgrHandler::apply($params, $current)` and
+`CursorHandler::apply($final, $params, $cursor, $buffer)` take state
+as input and return the new state. ScreenHandler owns the only stateful
+copy; sub-handlers are reusable across handlers and tests. New CSI
+final-byte routes (erase, scroll, mode, OSC) should follow the same
+shape so they unit-test in isolation.
+
+## Auto-wrap and scroll are deferred to PR4
+
+`ScreenHandler::printChar()` clamps the cursor at the right edge rather
+than wrapping. `lineFeed()` clamps at the bottom row rather than
+scrolling. The first call to "write past the right edge" overwrites
+the rightmost cell. PR4 introduces SU/SD/IND/RI and proper margin
+handling, after which auto-wrap should land too.
+
 ## Wide-character handling
 
 CJK and emoji graphemes occupy 2 cells. The second cell is marked with
