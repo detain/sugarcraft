@@ -180,18 +180,9 @@ jobs:
           tools: composer:v2
           coverage: none
 
-      - name: Get composer cache dir
-        id: cache
-        run: |
-          echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache composer downloads
-        uses: actions/cache@v5
-        with:
-          path: ${{ steps.cache.outputs.dir }}
-          key: composer-win-${{ matrix.php }}-${{ hashFiles('**/composer.json') }}
-          restore-keys: |
-            composer-win-${{ matrix.php }}-
+      # Composer cache disabled on Windows: path encoding issues in GH Actions
+      # runner make the cache more trouble than it's worth.  Vendor/ caching
+      # (below) handles the significant per-lib dependency layer.
 
       - name: Cache vendor/
         uses: actions/cache@v5
