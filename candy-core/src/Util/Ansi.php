@@ -594,4 +594,118 @@ final class Ansi
     {
         return self::APC . 'G' . "a=d,i=$imageId" . self::ST;
     }
+
+    /**
+     * Emit the Sixel DCS header: DECSIXEL sixel-graphics mode.
+     *
+     * Full form: DCS P1 ; P2 ; ... q ST
+     * P1=1 (graphics, not rulers), followed by zero params (uses
+     * Sixel Defaults are fine: aspect ratio 2:1, no background extended).
+     *
+     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     *
+     * @param int $width  Pixel width of the full image
+     * @param int $height Pixel height of the full image
+     */
+    public static function sixelDcsHeader(int $width, int $height): string
+    {
+        // Phrase color selection and aspect ratio come after the header;
+        // here we emit just the mode setting: "1;0" = Set Raster Status +
+        // aspect 2:1 (0) which is the Sixel default.
+        return self::DCS . '1;0;0q' . "$width;$height" . ';';
+    }
+
+    /**
+     * Emit a Sixel color introducer to DECLARE a palette entry (DECGCI).
+     *
+     * Format: DCS Pn; Pr; Pg; Pb $ ST
+     * Each component is 0-100 (percentage of 0-255 range).
+     *
+     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     *
+     * @param int $index  Palette index 0-255
+     * @param int $r      Red   0-255
+     * @param int $g      Green 0-255
+     * @param int $b      Blue  0-255
+     */
+    public static function sixelColorIntroducer(int $index, int $r, int $g, int $b): string
+    {
+        return self::DCS
+            . (string) $index
+            . ';' . self::toSixelColor($r)
+            . ';' . self::toSixelColor($g)
+            . ';' . self::toSixelColor($b)
+            . '$' . self::ST;
+    }
+
+    /**
+     * Emit a Sixel color select sequence (DECGCR, no RGB) to activate
+     * a previously declared palette entry for subsequent sixel data.
+     *
+     * Format: DCS Pn $ ST
+     *
+     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     *
+     * @param int $index  Palette index 0-255 to select
+     */
+    public static function sixelColorSelect(int $index): string
+    {
+        return self::DCS . (string) $index . '$' . self::ST;
+    }
+
+    /**
+     * Emit a Sixel pixel-data string for one band (6 rows at a time).
+     *
+     * Each 6-row band is encoded left-to-right, top-to-bottom within
+     * the band. For each pixel column a byte is emitted — bits 0-5
+     * represent the six rows: bit 0 = top row of the band, bit 5 = bottom.
+     * The byte value is the palette index ORed with 0x3F (63).
+     *
+     * A repeat count prefix "pn" (where n>1) precedes runs of the same
+     * palette index for column efficiency, encoded as (count + 63) using
+     * printable ASCII range 63-126.
+     *
+     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     *
+     * @param list<int> $column  Palette indices for each row in this band column
+     * @param int|null $repeat   Run-length repeat count (null = single pixel)
+     *
+     * @return non-empty-string
+     */
+    public static function sixelPixelData(array $column, ?int $repeat = null): string
+    {
+        $pal = $column[0] ?? 0;
+        if ($repeat !== null && $repeat > 1) {
+            // Repeat count encoding: (count + 63) for printable range.
+            $byte = chr(self::toSixelByte($pal) + 63);
+            return '!' . ((string) $repeat) . $byte;
+        }
+        return chr(self::toSixelByte($pal) + 63);
+    }
+
+    /**
+     * Emit the Sixel terminator sequence.
+     *
+     * Mirrors charmbracelet/x/ansi. SixelRenderer.
+     */
+    public static function sixelTerminator(): string
+    {
+        return self::BEL;
+    }
+
+    /**
+     * Convert an 8-bit color value to Sixel's 0-100 range.
+     */
+    private static function toSixelColor(int $v): int
+    {
+        return (int) round($v / 255 * 100);
+    }
+
+    /**
+     * Encode a palette index as a Sixel byte value (0-63 range).
+     */
+    private static function toSixelByte(int $paletteIndex): int
+    {
+        return $paletteIndex & 0x3F;
+    }
 }
