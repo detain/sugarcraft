@@ -91,6 +91,28 @@ HANDLE CreateFileW(const wchar_t *lpFileName, DWORD dwDesiredAccess,
 
 BOOL CloseHandle(HANDLE h);
 DWORD GetLastError(void);
+
+DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+
+BOOL PeekConsoleInputW(HANDLE hConsoleInput, void *lpBuffer,
+                       DWORD nLength, DWORD *lpNumberOfEventsRead);
+BOOL ReadConsoleInputW(HANDLE hConsoleInput, void *lpBuffer,
+                       DWORD nLength, DWORD *lpNumberOfEventsRead);
+
+typedef struct _INPUT_RECORD {
+    unsigned short EventType;
+    unsigned char  EventData[6];
+} INPUT_RECORD;
+
+enum {
+    KEY_EVENT = 0x0001,
+    WINDOW_BUFFER_SIZE_EVENT = 0x0004,
+};
+
+enum {
+    WAIT_TIMEOUT   = 0x00000102,
+    WAIT_OBJECT_0  = 0x00000000,
+};
 CPROTO
             ,
             'kernel32.dll'
@@ -111,6 +133,100 @@ CPROTO
         $h = $this->ffi()->GetStdHandle($stdHandle);
 
         return (int) \FFI::cast('intptr_t', $h)->cdata;
+    }
+
+    // ─── Console input reading ───────────────────────────────────────────────
+
+    /**
+     * Wait for a handle to become signalled (or timeout).
+     *
+     * Used to poll CONIN$ without busy-waiting.  A timeout of 0 returns
+     * immediately if the handle is not signalled.
+     *
+     * @param int $h handle to wait on
+     * @param int $timeoutMs milliseconds to wait (0 = return immediately)
+     * @return int WAIT_TIMEOUT (0x102) if not signalled within timeout,
+     *             WAIT_OBJECT_0 (0x0000) if signalled, or error code
+     */
+    public function waitForSingleObject(int $h, int $timeoutMs): int
+    {
+        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
+        $handle->cdata = $h;
+
+        return (int) $this->ffi()->WaitForSingleObject($handle, $timeoutMs);
+    }
+
+    /**
+     * Peek at console input events without consuming them.
+     *
+     * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
+     * @param list<array{type:int, data:nonempty-string}> $records buffer to fill
+     * @param int $recordSize max number of records to read
+     * @return int|false number of records peeked, or false on error
+     */
+    public function peekConsoleInput(int $h, array &$records, int $recordSize = 1): int|false
+    {
+        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
+        $handle->cdata = $h;
+
+        $buf = $this->ffi()->new("unsigned char[8][{$recordSize}]");
+        $count = $this->ffi()->new('unsigned long');
+
+        $ok = $this->ffi()->PeekConsoleInputW(
+            $handle,
+            \FFI::addr($buf),
+            $recordSize,
+            \FFI::addr($count),
+        );
+
+        if (!$ok) {
+            return false;
+        }
+
+        $records = [];
+        for ($i = 0; $i < $count->cdata; $i++) {
+            $type = \FFI::cast('unsigned short*', \FFI::ptr($buf, $i))
+                ->cdata;
+            $records[] = ['type' => $type, 'index' => $i];
+        }
+
+        return (int) $count->cdata;
+    }
+
+    /**
+     * Read and consume console input events.
+     *
+     * @param int $h CONIN$ handle from {@see openTty()} or {@see stdIn()}
+     * @param int $recordSize max number of records to read
+     * @return list<array{type:int, dataIndex:int}>|false records read, or false on error
+     */
+    public function readConsoleInput(int $h, int $recordSize = 1): array|false
+    {
+        $handle = \FFI::cast('void*', \FFI::new('intptr_t'));
+        $handle->cdata = $h;
+
+        $buf   = $this->ffi()->new("unsigned char[8][{$recordSize}]");
+        $count = $this->ffi()->new('unsigned long');
+
+        $ok = $this->ffi()->ReadConsoleInputW(
+            $handle,
+            \FFI::addr($buf),
+            $recordSize,
+            \FFI::addr($count),
+        );
+
+        if (!$ok) {
+            return false;
+        }
+
+        $records = [];
+        for ($i = 0; $i < $count->cdata; $i++) {
+            $type = \FFI::cast('unsigned short*', \FFI::ptr($buf, $i))
+                ->cdata;
+            $records[] = ['type' => $type, 'index' => $i];
+        }
+
+        return $records;
     }
 
     public function stdIn(): int
