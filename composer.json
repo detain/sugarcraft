@@ -22,6 +22,7 @@
     "require": {
         "php": "^8.1",
         "sugarcraft/candy-core":      "@dev",
+        "sugarcraft/candy-vt":        "@dev",
         "sugarcraft/candy-freeze":    "@dev",
         "sugarcraft/candy-metrics":   "@dev",
         "sugarcraft/candy-kit":       "@dev",
@@ -46,6 +47,7 @@
         { "type": "path", "url": "candy-shell",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-shine",     "options": { "symlink": true } },
         { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
+        { "type": "path", "url": "candy-vt",         "options": { "symlink": true } },
         { "type": "path", "url": "candy-wish",      "options": { "symlink": true } },
         { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
         { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
