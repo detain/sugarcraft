@@ -17,45 +17,43 @@ final class Capability
         public readonly bool $halfblock,
         /** Cell pixel dimensions if probed, null otherwise. */
         public readonly ?CellSize $cellSize,
+        /** True when TMUX env var is set (requires allow-passthrough on). */
+        public readonly bool $inTmux,
     ) {}
 
     /**
      * Build a full-capability instance (all protocols available).
      * Used for {@see Mosaic::halfBlock()} which is always available.
      */
-    /**
-     * Build a full-capability instance (all protocols available).
-     * Used for {@see Mosaic::halfBlock()} which is always available.
-     */
-    public static function universal(?CellSize $cellSize = null): self
+    public static function universal(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(true, true, true, true, $cellSize);
+        return new self(true, true, true, true, $cellSize, $inTmux);
     }
 
     /** Kitty-only capability (other protocols unknown until DA1 probing). */
-    public static function kitty(?CellSize $cellSize = null): self
+    public static function kitty(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, true, false, true, $cellSize);
+        return new self(false, true, false, true, $cellSize, $inTmux);
     }
 
     /** iTerm2-only capability. */
-    public static function iterm2(?CellSize $cellSize = null): self
+    public static function iterm2(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, false, true, true, $cellSize);
+        return new self(false, false, true, true, $cellSize, $inTmux);
     }
 
     /** Sixel-only capability. */
-    public static function sixel(?CellSize $cellSize = null): self
+    public static function sixel(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(true, false, false, true, $cellSize);
+        return new self(true, false, false, true, $cellSize, $inTmux);
     }
 
     /**
      * Empty capability set — used when no probe data is available.
      */
-    public static function unknown(?CellSize $cellSize = null): self
+    public static function unknown(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, false, false, true, $cellSize);
+        return new self(false, false, false, true, $cellSize, $inTmux);
     }
 
     /**
@@ -71,7 +69,7 @@ final class Capability
             $this->iterm2,
             $this->halfblock,
             $cellSize,
+            $this->inTmux,
         );
     }
 }
-

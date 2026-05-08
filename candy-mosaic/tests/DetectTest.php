@@ -191,6 +191,10 @@ final class DetectTest extends TestCase
 
     public function testSixelDetectedViaDa1Reply(): void
     {
+        // Disable font-size TTY probing — it would consume the DA1 reply
+        // bytes from the socket before probeDa1() gets to read them.
+        $GLOBALS['__candy_non_interactive'] = false;
+
         // Create a socket pair and preload the reply before calling probe().
         $pair = $this->createStreamPair();
         stream_set_blocking($pair['write'], false);
@@ -275,6 +279,8 @@ final class DetectTest extends TestCase
 
     public function testLastDa1ReplyRecordsRawResponse(): void
     {
+        $GLOBALS['__candy_non_interactive'] = false;
+
         $pair = $this->createStreamPair();
         stream_set_blocking($pair['write'], false);
         stream_set_blocking($pair['read'], false);
@@ -310,6 +316,8 @@ final class DetectTest extends TestCase
         ];
 
         foreach ($cases as $reply => $expectSixel) {
+            $GLOBALS['__candy_non_interactive'] = false;
+
             $pair = $this->createStreamPair();
             stream_set_blocking($pair['write'], false);
             stream_set_blocking($pair['read'], false);

@@ -10,6 +10,7 @@ use SugarCraft\Mosaic\Renderer\KittyRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Dither;
+use SugarCraft\Mosaic\TmuxPassthroughDecorator;
 
 /**
  * Public facade — the "Picker" from ratatui-image.
@@ -50,8 +51,15 @@ final class Mosaic
         // Use Detect::probe() for full capability resolution including
         // DA1 querying (sixel) and XTWINOPS font-size probing.  The
         // result is cached per-process, so the TTY I/O happens once.
-        $cap     = Detect::probe();
+        $cap      = Detect::probe();
         $renderer = self::bestBackend($cap);
+
+        // When running inside tmux, wrap all renderer output in the
+        // tmux passthrough envelope so DCS/APC/OSC sequences pass
+        // through to the inner terminal.
+        if ($cap->inTmux) {
+            $renderer = new TmuxPassthroughDecorator($renderer);
+        }
 
         return new self($renderer, $cap, null, null);
     }
