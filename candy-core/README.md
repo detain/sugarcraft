@@ -49,10 +49,12 @@ final class Counter implements Model
 
 ## Requirements
 
-- PHP 8.1+
+- PHP 8.1+ (PHP 8.4+ recommended on Windows for FFI `SetConsoleCtrlHandler` support)
 - `mbstring`, `intl` (for grapheme width)
-- `pcntl` (signal handling — POSIX only)
+- `pcntl` (signal handling — POSIX only; not available on Windows)
+- `FFI` extension (required on Windows for raw TTY support)
 - `react/event-loop` ^1.6 (Composer)
+- Windows 10 version 1809+ (for `ENABLE_VIRTUAL_TERMINAL_PROCESSING`)
 
 ## Architecture
 

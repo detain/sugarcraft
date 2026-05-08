@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+, PHPUnit 10, ReactPHP.
+PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+ (PHP 8.4+ for Windows FFI features), PHPUnit 10, ReactPHP. Windows 10 1809+ required for TTY raw mode support.
 
 ## Source-of-truth files
 
