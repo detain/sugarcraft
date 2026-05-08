@@ -381,7 +381,7 @@ CPROTO
     public function setConsoleCtrlHandler(\Closure $handler, bool $add = true): bool
     {
         if (!\method_exists(\FFI::class, 'dynamicFunction')) {
-            trigger_error(
+            @trigger_error(
                 'Kernel32::setConsoleCtrlHandler requires PHP FFI with '
                     . 'FFI::dynamicFunction (PHP 8.4+ FFI). Interrupt handling '
                     . 'is disabled on this build.',
