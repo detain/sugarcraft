@@ -65,13 +65,22 @@ copy; sub-handlers are reusable across handlers and tests. New CSI
 final-byte routes (erase, scroll, mode, OSC) should follow the same
 shape so they unit-test in isolation.
 
-## Auto-wrap and scroll are deferred to PR4
+## Auto-wrap is deferred; scroll lives in ScrollHandler (PR4)
 
-`ScreenHandler::printChar()` clamps the cursor at the right edge rather
-than wrapping. `lineFeed()` clamps at the bottom row rather than
-scrolling. The first call to "write past the right edge" overwrites
-the rightmost cell. PR4 introduces SU/SD/IND/RI and proper margin
-handling, after which auto-wrap should land too.
+`ScreenHandler::printChar()` still clamps the cursor at the right edge
+rather than auto-wrapping — that lands once we have DECSTBM scroll
+margins. Vertical scroll IS in PR4: `LF` (and `IND`, `NEL`, `ESC D`,
+`ESC E`) at the bottom row scroll the buffer up by one and keep the
+cursor at the bottom. `RI` / `ESC M` at the top scroll the buffer
+down. Scrolled-off rows are dropped; scrollback comes later.
+
+## EraseHandler erases to empty cells, not background-colored
+
+`CSI K`, `CSI J`, `CSI X`, `CSI P`, `CSI @` all replace cells with
+`Cell::empty()` regardless of the current SGR pen. Real-world
+"background-color erase" (BCE) — where the erased region inherits the
+current background — can land later if a TUI relies on it; charm's
+default vt has the same simple behavior so this matches upstream.
 
 ## Wide-character handling
 
