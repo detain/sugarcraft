@@ -125,15 +125,26 @@ final class ImageSource
         $width  = imagesx($resource);
         $height = imagesy($resource);
 
-        // Re-encode to bytes for Kitty pass-through (preserves original format).
-        $bytes = match ($format) {
-            'image/png'  => imagepng($resource),
-            'image/jpeg' => imagejpeg($resource, null, 100),
-            'image/gif'  => imagegif($resource),
-            default      => throw new \InvalidArgumentException(
-                Lang::t('image_source.unsupported_mime', ['mime' => $format])
-            ),
-        };
+        // Some GD builds write to output buffer and return bool|int rather
+        // than returning the encoded bytes as a string.  Use a temp file to
+        // guarantee we get the binary payload regardless of the GD variant.
+        $tmp = fopen('php://temp', 'w+b');
+
+        try {
+            $ok = match ($format) {
+                'image/png'  => imagepng($resource, $tmp, 9),
+                'image/jpeg' => imagejpeg($resource, $tmp, 100),
+                'image/gif'  => imagegif($resource, $tmp),
+                default      => throw new \InvalidArgumentException(
+                    Lang::t('image_source.unsupported_mime', ['mime' => $format])
+                ),
+            };
+
+            rewind($tmp);
+            $bytes = stream_get_contents($tmp);
+        } finally {
+            fclose($tmp);
+        }
 
         return new self($bytes, $format, $width, $height);
     }
@@ -144,5 +155,89 @@ final class ImageSource
     public function aspectRatio(): float
     {
         return $this->height === 0 ? 1.0 : $this->width / $this->height;
+    }
+
+    /**
+     * Return a new ImageSource cropped to the given pixel region.
+     * The crop region must be fully within the source image bounds.
+     *
+     * @param int $x  Left offset in pixels
+     * @param int $y  Top offset in pixels
+     * @param int $w  Crop width in pixels
+     * @param int $h  Crop height in pixels
+     * @throws \InvalidArgumentException  if crop region is outside image bounds
+     */
+    public function crop(int $x, int $y, int $w, int $h): self
+    {
+        if ($x < 0 || $y < 0 || $w <= 0 || $h <= 0
+            || $x + $w > $this->width || $y + $h > $this->height
+        ) {
+            throw new \InvalidArgumentException(
+                "Crop region [$x,$y {$w}×{$h}] is outside image bounds "
+                . "{$this->width}×{$this->height}"
+            );
+        }
+
+        $src = imagecreatefromstring($this->bytes);
+        if ($src === false) {
+            throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
+        }
+        if (!imageistruecolor($src)) {
+            imagepalettetotruecolor($src);
+        }
+
+        $cropped = imagecrop($src, ['x' => $x, 'y' => $y, 'width' => $w, 'height' => $h]);
+        imagedestroy($src);
+        if ($cropped === false) {
+            throw new \RuntimeException(Lang::t('image_source.crop_failed'));
+        }
+
+        try {
+            return $this->fromGd($cropped, $this->format);
+        } finally {
+            imagedestroy($cropped);
+        }
+    }
+
+    /**
+     * Return a new ImageSource resized to the given pixel dimensions
+     * using bicubic (high-quality) resampling.
+     *
+     * @param int $w  Target width in pixels (must be > 0)
+     * @param int $h  Target height in pixels (must be > 0)
+     * @throws \InvalidArgumentException  if dimensions are not positive
+     */
+    public function resize(int $w, int $h): self
+    {
+        if ($w <= 0 || $h <= 0) {
+            throw new \InvalidArgumentException("Resize dimensions must be positive, got {$w}×{$h}");
+        }
+
+        $src = imagecreatefromstring($this->bytes);
+        if ($src === false) {
+            throw new \RuntimeException(Lang::t('image_source.gd_load_failed_from_string'));
+        }
+        if (!imageistruecolor($src)) {
+            imagepalettetotruecolor($src);
+        }
+
+        $dst = imagecreatetruecolor($w, $h);
+        if ($dst === false) {
+            imagedestroy($src);
+            throw new \RuntimeException(Lang::t('image_source.gd_create_failed'));
+        }
+
+        // Preserve alpha channel for PNG.
+        imagesavealpha($dst, true);
+        imagealphablending($dst, false);
+
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $w, $h, $this->width, $this->height);
+        imagedestroy($src);
+
+        try {
+            return $this->fromGd($dst, $this->format);
+        } finally {
+            imagedestroy($dst);
+        }
     }
 }
