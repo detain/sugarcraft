@@ -70,6 +70,25 @@ final class Terminal
         return $this->handler->windowTitle;
     }
 
+    /** @return array<int, \SugarCraft\Vt\Color\Color> Indexed palette overrides set via OSC 4. */
+    public function palette(): array
+    {
+        return $this->handler->palette;
+    }
+
+    /**
+     * Clipboard events recorded from OSC 52 sequences.
+     *
+     * Each entry: `['kind' => 'write'|'read', 'selection' => string, 'payload' => string]`
+     * (`payload` is base64-encoded content for writes; absent for reads).
+     *
+     * @return list<array{kind: string, selection: string, payload?: string}>
+     */
+    public function clipboardEvents(): array
+    {
+        return $this->handler->clipboardEvents;
+    }
+
     public function resize(int $cols, int $rows): void
     {
         if ($cols < 1 || $rows < 1) {

@@ -116,6 +116,44 @@ final class TerminalTest extends TestCase
         $this->assertTrue($term->mode()->mouseSgr);
     }
 
+    public function testFeedSetsWindowTitleViaOsc(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b]2;Hello world\x07");
+        $this->assertSame('Hello world', $term->windowTitle());
+    }
+
+    public function testFeedAttachesHyperlinkSpan(): void
+    {
+        $term = Terminal::create(cols: 10, rows: 1);
+        $term->feed("\x1b]8;id=x;https://example.com\x07AB\x1b]8;;\x07C");
+        $screen = $term->screen();
+        $this->assertNotNull($screen->cell(0, 0)->hyperlink);
+        $this->assertSame('https://example.com', $screen->cell(0, 0)->hyperlink->uri);
+        $this->assertNotNull($screen->cell(0, 1)->hyperlink);
+        $this->assertNull($screen->cell(0, 2)->hyperlink);
+    }
+
+    public function testFeedSetsPaletteEntryViaOsc4(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b]4;1;rgb:ffff/0000/0000\x07");
+        $this->assertArrayHasKey(1, $term->palette());
+        $this->assertSame(0xFF0000, $term->palette()[1]->value);
+    }
+
+    public function testFeedRecordsClipboardEventsViaOsc52(): void
+    {
+        $term = Terminal::create();
+        $term->feed("\x1b]52;c;SGk=\x07\x1b]52;p;?\x07");
+        $events = $term->clipboardEvents();
+        $this->assertCount(2, $events);
+        $this->assertSame('write', $events[0]['kind']);
+        $this->assertSame('SGk=', $events[0]['payload']);
+        $this->assertSame('read', $events[1]['kind']);
+        $this->assertSame('p', $events[1]['selection']);
+    }
+
     public function testResize(): void
     {
         $term = Terminal::create(cols: 10, rows: 5);
