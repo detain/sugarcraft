@@ -11,19 +11,31 @@ namespace SugarCraft\Core\Util\Tty;
  * This backend targets Windows 10 1809+ (Windows Terminal or modern
  * ConHost) which supports Virtual Terminal processing.
  *
- * ## Implemented in this slice (PR2)
+ * ## Implemented slices
  *
  * - `isTty()`         — PR1: detects whether the stream is a console handle.
  * - `size()`          — PR1: queries the window dimensions via `GetConsoleScreenBufferInfo`.
  * - `enableRawMode()` — PR2: captures modes, sets VT raw mode, sets UTF-8 codepage.
  * - `restore()`       — PR2: restores all captured modes and codepage.
+ * - `onResize()`      — PR3: registers a resize callback.
+ * - `drainSignals()`  — PR3: polls `GetConsoleScreenBufferInfo` each tick;
+ *                        fires the callback when window dimensions change.
  *
  * The following are stub no-ops in this slice and will be wired up
  * in subsequent slices:
  *
- * - `openTty()`      — PR5: `CONIN$`/`CONOUT$` via `CreateFileW`
- * - `onResize()`     — PR3: resize-poll loop
- * - `drainSignals()` — PR3: resize-poll loop
+ * - `openTty()` — PR5: `CONIN$`/`CONOUT$` via `CreateFileW`
+ *
+ * ## Resize signalling design
+ *
+ * Windows has no `SIGWINCH` equivalent.  The resize-poll loop calls
+ * `GetConsoleScreenBufferInfo(stdout)` once per {@see drainSignals()}
+ * invocation (i.e. once per event-loop tick) and compares the window
+ * rect against the last known size.  When the dimensions differ, the
+ * registered callback is fired with the new `(cols, rows)`.
+ *
+ * The poll frequency is therefore one check per tick — the same
+ * granularity as POSIX `pcntl_signal(SIGWINCH)`.
  *
  * @see \SugarCraft\Core\Util\Tty\Kernel32
  * @see \SugarCraft\Core\Util\Tty\Kernel32Interface
@@ -42,6 +54,8 @@ final class WindowsBackend implements Backend
     /** @var Kernel32Interface */
     private Kernel32Interface $kernel32;
 
+    // ─── Raw-mode state ──────────────────────────────────────────────────────
+
     /** Saved input mode (null when raw mode is not active). */
     private int|null $savedInputMode = null;
 
@@ -54,6 +68,37 @@ final class WindowsBackend implements Backend
     /** Saved output codepage. */
     private int|null $savedOutputCp = null;
 
+    // ─── Resize-signalling state ─────────────────────────────────────────────
+
+    /**
+     * Registered resize callback, or null when none is active.
+     *
+     * Stored as a static so both {@see onResize()} (static façade) and
+     * {@see drainSignalsInstance()} share the same reference without
+     * needing a shared instance reference.
+     *
+     * @var (\Closure(int $cols, int $rows):void)|null
+     */
+    private static ?\Closure $resizeCallback = null;
+
+    /**
+     * Last observed dimensions, or null before the first poll.
+     *
+     * @var array{cols:int, rows:int}|null
+     */
+    private static ?array $resizeLastSize = null;
+
+    /**
+     * Injected Kernel32 instance for testing.
+     * When set (via {@see setTestKernel32()}), drainSignals() uses this
+     * instead of the real Kernel32 singleton.  Do not use in production.
+     *
+     * @var Kernel32Interface|null
+     */
+    private static ?Kernel32Interface $testKernel32 = null;
+
+    // ─── Constructor ────────────────────────────────────────────────────────
+
     /**
      * @param resource|null          $stream   defaults to STDIN
      * @param Kernel32Interface|null $kernel32 defaults to real kernel32; pass a test double on Linux
@@ -63,6 +108,8 @@ final class WindowsBackend implements Backend
         $this->stream   = $stream ?? STDIN;
         $this->kernel32 = $kernel32 ?? Kernel32::self();
     }
+
+    // ─── TTY detection ───────────────────────────────────────────────────────
 
     public function isTty(): bool
     {
@@ -83,6 +130,8 @@ final class WindowsBackend implements Backend
         }
     }
 
+    // ─── Controlling terminal ────────────────────────────────────────────────
+
     /**
      * @return array{0:resource,1:resource}|null
      */
@@ -91,6 +140,8 @@ final class WindowsBackend implements Backend
         // Implemented in PR5: CONIN$/CONOUT$ via CreateFileW.
         return null;
     }
+
+    // ─── Dimensions ──────────────────────────────────────────────────────────
 
     /** @return array{cols:int, rows:int} */
     public function size(): array
@@ -108,6 +159,8 @@ final class WindowsBackend implements Backend
 
         return ['cols' => 80, 'rows' => 24];
     }
+
+    // ─── Raw mode ────────────────────────────────────────────────────────────
 
     public function enableRawMode(): void
     {
@@ -197,15 +250,94 @@ final class WindowsBackend implements Backend
         $this->restore();
     }
 
-    public static function onResize(\Closure $_onResize): bool
+    // ─── Resize signalling (PR3) ─────────────────────────────────────────────
+
+    /**
+     * Register a callback to be invoked whenever the terminal is resized.
+     *
+     * Windows has no SIGWINCH equivalent; this implementation uses a
+     * poll loop: {@see drainSignals()} must be called once per event-loop
+     * tick for resize detection to work.
+     *
+     * Only one callback can be active at a time.  Calling this a second
+     * time replaces the previously registered callback.
+     *
+     * @param \Closure(int $cols, int $rows):void $onResize
+     * @return bool true (Windows always supports polling-based resize detection)
+     */
+    public static function onResize(\Closure $onResize): bool
     {
-        // PR3: register resize-poll callback.
-        return false;
+        self::$resizeCallback = $onResize;
+
+        return true;
     }
 
+    /**
+     * Drain any pending resize signals.
+     *
+     * On Windows this polls `GetConsoleScreenBufferInfo(stdout)` once,
+     * compares the window rect against the last observed size, and fires
+     * the registered callback when the dimensions differ.
+     *
+     * Call this exactly once per event-loop tick.
+     *
+     * @return bool true when a resize was detected and the callback fired
+     */
     public static function drainSignals(): bool
     {
-        // PR3: poll GetConsoleScreenBufferInfo, fire callback on change.
-        return false;
+        $cb = self::$resizeCallback;
+
+        if ($cb === null) {
+            return false;
+        }
+
+        // Use the injected kernel32 in tests, otherwise the real singleton.
+        $k = self::$testKernel32 ?? Kernel32::self();
+
+        $info = $k->getConsoleScreenBufferInfo($k->stdOut());
+
+        if ($info === null) {
+            return false;
+        }
+
+        $current = ['cols' => $info['cols'], 'rows' => $info['rows']];
+
+        if (self::$resizeLastSize !== null
+            && self::$resizeLastSize['cols'] === $current['cols']
+            && self::$resizeLastSize['rows'] === $current['rows']
+        ) {
+            return false; // No change.
+        }
+
+        self::$resizeLastSize = $current;
+        $cb($current['cols'], $current['rows']);
+
+        return true;
+    }
+
+    // ─── Test injection ──────────────────────────────────────────────────────
+
+    /**
+     * Inject a test Kernel32 double.
+     *
+     * This is an internal test-only API.  Do not call in production.
+     *
+     * @internal test-only
+     */
+    public static function setTestKernel32(?Kernel32Interface $k): void
+    {
+        self::$testKernel32 = $k;
+    }
+
+    /**
+     * Reset all static state (called via reflection in test setUp).
+     *
+     * @internal test-only
+     */
+    public static function resetStaticState(): void
+    {
+        self::$testKernel32    = null;
+        self::$resizeCallback  = null;
+        self::$resizeLastSize  = null;
     }
 }
