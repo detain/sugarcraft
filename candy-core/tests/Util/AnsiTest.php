@@ -110,6 +110,33 @@ final class AnsiTest extends TestCase
         $this->assertSame("\x1b[4b", Ansi::repeatChar(4));
     }
 
+    public function testHyperlinkOpenClose(): void
+    {
+        // Just the open sequence
+        $open = Ansi::hyperlinkOpen('https://example.com');
+        $this->assertSame("\x1b]8;;https://example.com\x1b\\", $open);
+
+        // Open with id
+        $openWithId = Ansi::hyperlinkOpen('https://example.com', 'my-id');
+        $this->assertSame("\x1b]8;id=my-id;https://example.com\x1b\\", $openWithId);
+
+        // Close sequence
+        $this->assertSame("\x1b]8;;\x1b\\", Ansi::hyperlinkClose());
+
+        // Composed equals hyperlink()
+        $url = 'https://example.com';
+        $text = 'click me';
+        $id = '42';
+        $this->assertSame(
+            Ansi::hyperlink($url, $text, $id),
+            Ansi::hyperlinkOpen($url, $id) . $text . Ansi::hyperlinkClose(),
+        );
+        $this->assertSame(
+            Ansi::hyperlink($url, $text),
+            Ansi::hyperlinkOpen($url) . $text . Ansi::hyperlinkClose(),
+        );
+    }
+
     public function testHyperlink(): void
     {
         $expect = "\x1b]8;;https://example.com\x1b\\click me\x1b]8;;\x1b\\";
