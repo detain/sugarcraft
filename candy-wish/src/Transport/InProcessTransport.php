@@ -25,7 +25,7 @@ use SugarCraft\Wish\Transport;
  *
  * @see plans/plan-candy-wish-pty.md
  */
-final class InProcessTransport implements Transport
+final class InProcessTransport implements Transport, ChildSpawner
 {
     /** Bytes per `fread` / `fwrite` chunk in the pump loop. */
     private const PUMP_CHUNK = 4096;
@@ -53,6 +53,17 @@ final class InProcessTransport implements Transport
 
     public function run(Session $session, array $stack): void
     {
+        // Duck-typed transport injection: any middleware that exposes
+        // a `setTransport(ChildSpawner)` method gets us handed in
+        // before the dispatch loop runs. Currently the only consumer
+        // is the {@see \SugarCraft\Wish\Middleware\Spawn} terminal
+        // middleware (PR3), but the hook is open-ended for future
+        // PTY-aware middleware (recorder taps, observability tees).
+        foreach ($stack as $mw) {
+            if (\method_exists($mw, 'setTransport')) {
+                $mw->setTransport($this);
+            }
+        }
         $this->dispatch($session, $stack, 0);
     }
 
