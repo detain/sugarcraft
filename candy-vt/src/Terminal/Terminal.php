@@ -134,4 +134,26 @@ final class Terminal
         $clone->handler->windowTitle = $title;
         return $clone;
     }
+
+    /**
+     * Replace the active tab stops with explicit column indices.
+     *
+     * Pass column numbers (0-based). Out-of-range or duplicate entries
+     * are normalised. To clear all tab stops pass an empty array.
+     *
+     * @param list<int> $cols
+     */
+    public function withTabStops(array $cols): self
+    {
+        $clone = clone $this;
+        $stops = [];
+        foreach ($cols as $c) {
+            $i = (int) $c;
+            if ($i >= 0) {
+                $stops[$i] = true;
+            }
+        }
+        $clone->handler->tabStops = $stops;
+        return $clone;
+    }
 }
