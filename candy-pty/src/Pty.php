@@ -37,6 +37,18 @@ final class Pty
 
     private bool $closed = false;
 
+    /**
+     * Lazily-materialised PHP stream wrapper around the master fd.
+     *
+     * Created on first {@see stream()} / {@see read()} / {@see write()}
+     * / {@see setBlocking()} call. The wrapper takes ownership of the
+     * fd — `fclose()` on the resource closes the underlying fd, so
+     * {@see close()} routes through this resource when it's set.
+     *
+     * @var resource|null
+     */
+    private $stream = null;
+
     public function __construct(
         public readonly Master $master,
     ) {}
@@ -142,14 +154,124 @@ final class Pty
     }
 
     /**
+     * Return (and cache) a PHP stream resource wrapping the master fd
+     * via the `php://fd/N` wrapper. The wrapper takes ownership of the
+     * fd — closing the returned resource also closes the underlying
+     * fd, so prefer {@see close()} to unwind both at once.
+     *
+     * @return resource
+     */
+    public function stream()
+    {
+        $this->assertOpen();
+        if ($this->stream !== null) {
+            return $this->stream;
+        }
+
+        $stream = @\fopen('php://fd/' . $this->master->fd, 'r+b');
+        if (!\is_resource($stream)) {
+            throw new PtyException(Lang::t('stream.fopen_failed', ['fd' => $this->master->fd]));
+        }
+        $this->stream = $stream;
+        return $this->stream;
+    }
+
+    /**
+     * Write `$bytes` to the master end. Returns the number of bytes
+     * actually written (may be less than `strlen($bytes)` in
+     * non-blocking mode under back-pressure).
+     */
+    public function write(string $bytes): int
+    {
+        $this->assertOpen();
+        $stream = $this->stream();
+
+        $written = @\fwrite($stream, $bytes);
+        if ($written === false) {
+            throw new PtyException(Lang::t('write.failed', [
+                'fd'  => $this->master->fd,
+                'len' => \strlen($bytes),
+            ]));
+        }
+        return $written;
+    }
+
+    /**
+     * Read up to `$len` bytes from the master end.
+     *
+     * Return semantics:
+     *
+     * | Mode                              | No data on PTY | Data available | Slave closed       |
+     * |-----------------------------------|----------------|----------------|--------------------|
+     * | Blocking, `$timeout` null         | blocks         | bytes          | `''` (EOF)         |
+     * | Non-blocking, `$timeout` null     | `''`           | bytes          | `''` (EOF)         |
+     * | Any blocking mode, `$timeout` set | `null`         | bytes          | `''` (EOF)         |
+     *
+     * `$timeout` is in fractional seconds (`0.05` = 50 ms). It uses
+     * `stream_select()` to wait for the master fd to become readable;
+     * if the timeout elapses with nothing pending, returns `null`.
+     */
+    public function read(int $len = 8192, ?float $timeout = null): ?string
+    {
+        $this->assertOpen();
+        if ($len <= 0) {
+            throw new \InvalidArgumentException("read length must be > 0; got {$len}");
+        }
+
+        $stream = $this->stream();
+
+        if ($timeout !== null) {
+            if ($timeout < 0) {
+                throw new \InvalidArgumentException("timeout must be >= 0; got {$timeout}");
+            }
+            $sec  = (int) \floor($timeout);
+            $usec = (int) \round(($timeout - $sec) * 1_000_000);
+            $r = [$stream]; $w = null; $e = null;
+            $ready = @\stream_select($r, $w, $e, $sec, $usec);
+            if ($ready === false) {
+                throw new PtyException(Lang::t('read.select_failed', ['fd' => $this->master->fd]));
+            }
+            if ($ready === 0) {
+                return null;
+            }
+        }
+
+        $bytes = @\fread($stream, $len);
+        if ($bytes === false) {
+            // Linux: master fread() after every slave fd is closed
+            // returns false (errno EIO). Treat as EOF — same outcome
+            // the caller expects when the child has exited cleanly.
+            return '';
+        }
+        return $bytes;
+    }
+
+    /**
+     * Toggle blocking / non-blocking mode on the master fd.
+     */
+    public function setBlocking(bool $blocking): void
+    {
+        $this->assertOpen();
+        if (!@\stream_set_blocking($this->stream(), $blocking)) {
+            throw new PtyException(Lang::t('stream.set_blocking_failed', [
+                'fd'       => $this->master->fd,
+                'blocking' => $blocking ? 'true' : 'false',
+            ]));
+        }
+    }
+
+    /**
      * Close the master fd. Idempotent — second call is a no-op.
+     *
+     * Routes through `fclose()` if the stream wrapper was materialised
+     * (it owns the fd) or `close(2)` otherwise.
      *
      * Children spawned through this Pty are NOT auto-killed; reap
      * them via {@see Child::wait()} or {@see Child::exited()} before
      * (or after) closing the parent end.
      *
-     * @throws PtyException if `close(2)` returns non-zero on the
-     *                      first call.
+     * @throws PtyException if the underlying close fails on the first
+     *                      call.
      */
     public function close(): void
     {
@@ -157,6 +279,18 @@ final class Pty
             return;
         }
         $this->closed = true;
+
+        if ($this->stream !== null) {
+            $stream = $this->stream;
+            $this->stream = null;
+            if (\is_resource($stream) && !@\fclose($stream)) {
+                throw new PtyException(Lang::t('close.failed', [
+                    'fd' => $this->master->fd,
+                    'rc' => -1,
+                ]));
+            }
+            return;
+        }
 
         $rc = Libc::lib()->close($this->master->fd);
         if ($rc !== 0) {
