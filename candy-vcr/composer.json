@@ -1,0 +1,88 @@
+{
+    "name": "sugarcraft/candy-vcr",
+    "description": "Record and replay candy-core Program sessions into cassettes — bug-repro / regression / fuzzing.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "ansi",
+        "vcr",
+        "record",
+        "replay",
+        "cassette",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-vcr",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-vcr/issues",
+        "source": "https://github.com/sugarcraft/candy-vcr",
+        "docs": "https://sugarcraft.github.io/lib/candy-vcr.html"
+    },
+    "require": {
+        "php": "^8.1",
+        "sugarcraft/candy-core": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "suggest": {
+        "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise."
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-vt",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../honey-bounce",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-zone",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Vcr\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Vcr\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
