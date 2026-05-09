@@ -154,6 +154,74 @@ final class TerminalTest extends TestCase
         $this->assertSame('p', $events[1]['selection']);
     }
 
+    public function testFeedHtMovesToNextDefaultTabStop(): void
+    {
+        $term = Terminal::create(cols: 20, rows: 1);
+        $term->feed("\x09");
+        $this->assertSame(8, $term->cursor()->col);
+        $term->feed("\x09");
+        $this->assertSame(16, $term->cursor()->col);
+    }
+
+    public function testFeedEscHSetsCustomTabStopAndHtJumpsToIt(): void
+    {
+        $term = Terminal::create(cols: 20, rows: 1);
+        // Move to col 5, set tab stop, move to col 0, tab.
+        $term->feed("\x1b[1;6H\x1bH\x1b[1;1H\x09");
+        $this->assertSame(5, $term->cursor()->col);
+    }
+
+    public function testFeedCsiGZeroClearsTabAtCursor(): void
+    {
+        $term = Terminal::create(cols: 20, rows: 1);
+        // Move to col 8 (default stop) and clear that stop, then tab from col 0.
+        $term = $term->withTabStops([8, 16]);
+        $term->feed("\x1b[1;9H\x1b[g\x1b[1;1H\x09");
+        // Default 8 cleared → next stop is 16.
+        $this->assertSame(16, $term->cursor()->col);
+    }
+
+    public function testFeedCsiG3ClearsAllTabs(): void
+    {
+        $term = Terminal::create(cols: 20, rows: 1);
+        $term->feed("\x1b[3g\x09");
+        // No stops left → HT clamps at right edge (col 19).
+        $this->assertSame(19, $term->cursor()->col);
+    }
+
+    public function testFeedCsiIMovesForwardNTabs(): void
+    {
+        $term = Terminal::create(cols: 40, rows: 1);
+        $term->feed("\x1b[3I");
+        $this->assertSame(24, $term->cursor()->col); // 8 + 8 + 8
+    }
+
+    public function testFeedCsiZMovesBackwardNTabs(): void
+    {
+        $term = Terminal::create(cols: 40, rows: 1);
+        $term->feed("\x1b[1;30H\x1b[2Z");
+        // From col 29: back to 24, then back to 16.
+        $this->assertSame(16, $term->cursor()->col);
+    }
+
+    public function testWithTabStopsReplacesDefaults(): void
+    {
+        $term = Terminal::create(cols: 40, rows: 1);
+        $term = $term->withTabStops([5, 15, 25]);
+        $term->feed("\x09");
+        $this->assertSame(5, $term->cursor()->col);
+        $term->feed("\x09");
+        $this->assertSame(15, $term->cursor()->col);
+    }
+
+    public function testWithTabStopsEmptyArrayDisablesTabs(): void
+    {
+        $term = Terminal::create(cols: 20, rows: 1);
+        $term = $term->withTabStops([]);
+        $term->feed("\x09");
+        $this->assertSame(19, $term->cursor()->col); // clamps at right edge
+    }
+
     public function testResize(): void
     {
         $term = Terminal::create(cols: 10, rows: 5);
