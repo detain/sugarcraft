@@ -34,6 +34,39 @@ pointer). Same trap for `reset`, `next`, `prev`, `array_pop`, `array_shift`,
 The error file:line points at the line that calls the by-ref function,
 not at any assignment, which can be confusing.
 
+## Msg serializers use unqualified class names as `@type` for builtins
+
+The `BuiltinSerializer` tags candy-core Msg classes by their unqualified
+name (`KeyMsg`, `WindowSizeMsg`, etc.) rather than FQCN. Cassettes stay
+readable, and the cassette format spec in `plans/x-vcr.md` shows this
+form. `JsonableSerializer` (the catch-all for user Msgs) DOES use FQCN
+to avoid collisions across user namespaces; the two coexist because
+`canDecode()` for the builtin checks against an explicit allowlist via
+`classForTag()`, so it never accidentally claims a user FQCN.
+
+## JsonableSerializer round-trips via named-arg constructor expansion
+
+User Msgs implementing `\JsonSerializable` get encoded as
+`{"@type": "App\\\\Foo\\\\MyMsg", "data": {…}}` where `data` is the
+`jsonSerialize()` result. Decoding does `new $class(...$data)` which
+relies on PHP's named-arg unpacking — the `data` array's string keys
+must match constructor parameter names. The common case
+`__construct(public readonly string $foo, …)` paired with
+`jsonSerialize(): ['foo' => $this->foo, …]` round-trips with no extra
+plumbing. Classes that need a different shape register a dedicated
+serializer ahead of the catch-all.
+
+## Test fixtures shared between test files need their own files
+
+PSR-4 autoload requires one class per file with name = basename. Putting
+`UserJsonableMsg` inside `JsonableSerializerTest.php` works ONLY because
+that file gets `require`'d when PHPUnit instantiates the test class —
+side-effect-loading the fixture classes too. But if another test
+(`RegistryTest.php`) references the fixture and runs first in
+isolation, autoload fails. Move shared fixtures into their own
+PSR-4-conformant files (`tests/Msg/UserJsonableMsg.php`) so they're
+discoverable on demand.
+
 ## Recorder is an interface in candy-core, impl in candy-vcr
 
 To avoid candy-core depending on candy-vcr (it's the other way around),
