@@ -16,8 +16,8 @@ roadmap.
 |----|-------|
 | PR1 | Cassette + Event + JsonlFormat |
 | PR2 | Recorder + `Program::withRecorder()` |
-| PR3 | Msg serializers — Builtin + Jsonable + Registry (current) |
-| PR4 | Player + ByteAssertion |
+| PR3 | Msg serializers — Builtin + Jsonable + Registry |
+| PR4 | Player + ByteAssertion + ReplayResult (current) |
 | PR5 | ScreenAssertion via candy-vt |
 | PR6 | YAML format |
 | PR7 | CLI + examples + tracking |
@@ -79,7 +79,36 @@ foreach ($cassette->events as $event) {
 }
 ```
 
-The Player (replay-and-assert) lands in PR4; the CLI lands in PR7.
+The CLI lands in PR7.
+
+### Replay (PR4)
+
+```php
+use SugarCraft\Vcr\Player;
+use SugarCraft\Vcr\Assert\ByteAssertion;
+
+$player = Player::open('/tmp/session.cas');
+$result = $player->play(
+    programFactory: fn ($input, $output, $loop) => new Program(
+        new MyModel(),
+        new ProgramOptions(
+            useAltScreen: false, catchInterrupts: false, hideCursor: false,
+            input: $input, output: $output, loop: $loop,
+        ),
+    ),
+    assertion: new ByteAssertion(),
+    speed: Player::SPEED_INSTANT,  // or SPEED_REALTIME for demo replay
+);
+
+if (!$result->ok) {
+    echo $result->diffSummary();
+    exit(1);
+}
+```
+
+`Player::play` walks the cassette and feeds each event into the program: resize → `WindowSizeMsg`, input bytes → re-parsed via `InputReader` and dispatched, input msg envelope → decoded via the serializer registry, quit → `program->quit()`. Output events accumulate into the expected byte buffer; the program's actual output stream is captured and compared via the supplied assertion.
+
+`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. PR5 adds `ScreenAssertion` (cell-grid equality via candy-vt) which is more robust to renderer reordering.
 
 ### Msg serializers (PR3)
 
