@@ -11,24 +11,41 @@ namespace SugarCraft\Pty;
  *
  * The slave path is opened three separate times — once per descriptor
  * — by PHP's stream layer. The kernel handles this fine on Linux; the
- * macOS path is verified by SpawnTest. The alternative (dup the slave
- * fd via `pcntl_fork`) is held in reserve as a fallback if we hit a
- * macOS quirk during PR2 stabilisation.
+ * macOS path is verified by SpawnTest.
  *
- * Mirrors charmbracelet/x/xpty.UnixPty.Start's spawn algorithm minus
- * the TIOCSCTTY shim — see candy-pty/CALIBER_LEARNINGS.md for the
- * controlling-terminal gap (Ctrl+C signals don't reach the child yet).
+ * When `$controllingTerminal` is true, the spawn is wrapped in
+ * `bin/pty-shim.php` which runs `setsid()` + `ioctl(0, TIOCSCTTY, 0)`
+ * + `pcntl_exec()` so the child claims the slave PTY as its
+ * controlling terminal — required for Ctrl+C → SIGINT delivery and
+ * other tty-driven job-control signals.
+ *
+ * Mirrors charmbracelet/x/xpty.UnixPty.Start's spawn algorithm.
  */
 final class Spawn
 {
+    /** Path to the bundled controlling-terminal shim. */
+    private const SHIM_RELATIVE = '/../bin/pty-shim.php';
+
     /**
      * @param list<string>              $cmd
      * @param array<string,string>|null $env  null inherits parent env
+     * @param bool                      $controllingTerminal  see class
+     *                                  doc; opt-in because shim startup
+     *                                  costs ~5-50ms and only interactive
+     *                                  shells / editors actually need it.
      */
-    public static function proc(Master $master, array $cmd, ?array $env = null): Child
-    {
+    public static function proc(
+        Master $master,
+        array $cmd,
+        ?array $env = null,
+        bool $controllingTerminal = false,
+    ): Child {
         if ($cmd === []) {
             throw new \InvalidArgumentException('Spawn::proc requires a non-empty command');
+        }
+
+        if ($controllingTerminal) {
+            $cmd = self::wrapInShim($cmd);
         }
 
         $descriptors = [
@@ -63,6 +80,28 @@ final class Spawn
         }
 
         return new Child($pid, $process);
+    }
+
+    /**
+     * Prepend `[PHP_BINARY, /path/to/pty-shim.php]` to the cmd so the
+     * actual command runs inside a session where the slave PTY is the
+     * controlling terminal.
+     *
+     * @param list<string> $cmd
+     * @return list<string>
+     */
+    private static function wrapInShim(array $cmd): array
+    {
+        if (!\extension_loaded('pcntl')) {
+            throw new PtyException(Lang::t('spawn.shim_pcntl_required'));
+        }
+
+        $shim = __DIR__ . self::SHIM_RELATIVE;
+        if (!\is_file($shim) || !\is_readable($shim)) {
+            throw new PtyException(Lang::t('spawn.shim_not_found', ['path' => $shim]));
+        }
+
+        return [PHP_BINARY, $shim, ...$cmd];
     }
 
     private function __construct() {}

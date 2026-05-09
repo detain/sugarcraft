@@ -84,7 +84,7 @@ SignalForwarder::attachSigwinch(
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Pty::open()</strong><span>Allocates a master/slave pair via <code>posix_openpt(O_RDWR | O_NOCTTY)</code> + <code>grantpt</code> + <code>unlockpt</code> + <code>ptsname_r</code>. Failures close the master fd before throwing — callers never get a half-open Pty.</span></div>
-      <div class="feature"><strong>spawn(cmd, env, cols, rows)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots and resizes via TIOCSWINSZ before the child starts. Returns a <code>Child</code> with pid + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
+      <div class="feature"><strong>spawn(cmd, env, cols, rows, controllingTerminal?)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots and resizes via TIOCSWINSZ before the child starts. Pass <code>controllingTerminal: true</code> to route through <code>bin/pty-shim.php</code> for Ctrl+C → SIGINT delivery (requires ext-pcntl). Returns a <code>Child</code> with pid + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
       <div class="feature"><strong>read / write / setBlocking</strong><span><code>read($len, $timeout)</code> returns <code>null</code> on timeout, <code>''</code> on EOF, bytes otherwise. Non-blocking + <code>stream_select</code> with EINTR retry. <code>write</code> returns bytes actually written.</span></div>
       <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ. Platform-aware constants for Linux + macOS.</span></div>
       <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
@@ -99,9 +99,18 @@ SignalForwarder::attachSigwinch(
       <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>
     </ul>
 
+    <h3 style="margin-top: 40px;">Controlling terminal (Ctrl+C, job control)</h3>
+    <p>Pass <code>controllingTerminal: true</code> to <code>spawn()</code> when you need <code>Ctrl+C</code> typed at the master to deliver <code>SIGINT</code> to the child — required for interactive shells (<code>bash -i</code>), editors (<code>vim</code>, <code>less</code>), and anything else that uses tty-driven job control.</p>
+    <pre class="code"><code>$child = $pty-&gt;spawn(
+    ['/bin/bash', '-i'],
+    env: [...],
+    controllingTerminal: true,    // claim slave as the child's ctty
+);
+$pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></pre>
+    <p>Routes the spawn through <code>bin/pty-shim.php</code>, which does <code>setsid()</code> + <code>ioctl(0, TIOCSCTTY, 0)</code> + <code>pcntl_exec()</code> between <code>proc_open</code> and the actual cmd. Requires <code>ext-pcntl</code>. Costs ~5-50 ms of shim startup per spawn — opt-in because non-interactive spawns don't benefit.</p>
+
     <h3 style="margin-top: 40px;">Known limitations</h3>
     <ul>
-      <li><strong>TIOCSCTTY not yet wired.</strong> The spawned child does not claim the slave PTY as its controlling terminal, so <code>Ctrl+C</code> typed at the master does NOT deliver <code>SIGINT</code> to the child. Non-interactive commands (<code>echo</code>, <code>date</code>, <code>tput</code>, <code>bash -c '…'</code>) work cleanly; interactive shells / editors mis-handle line-editing and signal-driven UI. Tracked as a hard prerequisite for the <a href="candy-wish.html">CandyWish</a> in-process SSH upgrade.</li>
       <li><strong>Linux + macOS only.</strong> Windows ConPTY is a separate port and not in scope for this lib.</li>
     </ul>
 
