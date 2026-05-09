@@ -56,6 +56,7 @@ final class Program
     private ?MouseMode $activeMouseMode = null;
     private ?bool $activeFocusReporting = null;
     private ?bool $activeBracketedPaste = null;
+    private ?Recorder $recorder = null;
 
     /**
      * Wrap a {@see Model} with runtime options.
@@ -90,6 +91,26 @@ final class Program
             cellDiff: $options->cellDiffRenderer,
         );
         $this->tty = new Tty($this->input);
+    }
+
+    /**
+     * Tee the program's input bytes, output bytes, and lifecycle events
+     * to the given {@see Recorder}. Pass null to detach.
+     *
+     * Returns `$this` so callers can chain at construction:
+     * `(new Program($model))->withRecorder($recorder)->run();`
+     *
+     * Only one recorder per program — calling again replaces the previous
+     * one (and does NOT close it; that's the caller's responsibility).
+     * The recorder's {@see Recorder::close()} fires automatically when
+     * the program loop ends, after a final {@see Recorder::recordQuit()}
+     * if the program exited via QuitMsg.
+     */
+    public function withRecorder(?Recorder $recorder): self
+    {
+        $this->recorder = $recorder;
+        $this->renderer->setRecorder($recorder);
+        return $this;
     }
 
     /**
@@ -136,6 +157,7 @@ final class Program
                 }
                 return;
             }
+            $this->recorder?->recordInputBytes($bytes);
             foreach ($this->reader->parse($bytes) as $msg) {
                 $this->dispatch($msg);
                 if (!$this->running) {
@@ -168,6 +190,7 @@ final class Program
         $this->loop->removeReadStream($this->input);
 
         $this->teardownTerminal();
+        $this->recorder?->close();
         return $this->model;
     }
 
@@ -292,14 +315,14 @@ final class Program
         if ($msg instanceof RawMsg) {
             // Side-channel: write bytes verbatim, no re-render, no model
             // notification. Caller is responsible for cursor-area effects.
-            fwrite($this->output, $msg->bytes);
+            $this->writeOutput($msg->bytes);
             return;
         }
         if ($msg instanceof PrintMsg) {
             // Print above the program region. The renderer's diff state
             // is now stale, so reset it so the next render() repaints
             // every visible row.
-            fwrite($this->output, $msg->text . "\n");
+            $this->writeOutput($msg->text . "\n");
             $this->renderer->reset();
             $this->dirty = true;
             return;
@@ -318,9 +341,19 @@ final class Program
             return;
         }
         if ($msg instanceof QuitMsg) {
+            // Record + close immediately so the cassette ends on a clean
+            // `quit` line — teardownTerminal() afterwards still calls
+            // writeOutput, but the recorder no-ops after close.
+            $this->recorder?->recordQuit();
+            $this->recorder?->close();
             $this->running = false;
             $this->loop->stop();
             return;
+        }
+        if ($msg instanceof WindowSizeMsg) {
+            // Recorded for both the startup dispatch and SIGWINCH-driven
+            // updates; the model still receives the Msg via update() below.
+            $this->recorder?->recordResize($msg->cols, $msg->rows);
         }
 
         // WithFilter pre-processor.
@@ -512,28 +545,28 @@ final class Program
     private function setupTerminal(): void
     {
         if ($this->options->useAltScreen) {
-            fwrite($this->output, Ansi::altScreenEnter());
+            $this->writeOutput(Ansi::altScreenEnter());
         }
         if ($this->options->hideCursor) {
-            fwrite($this->output, Ansi::cursorHide());
+            $this->writeOutput(Ansi::cursorHide());
         }
         // Bubble Tea v2 enables grapheme-cluster mode (DEC 2027) by
         // default to fix long-standing emoji-width drift. We follow.
         if ($this->options->unicodeMode) {
-            fwrite($this->output, Ansi::unicodeOn());
+            $this->writeOutput(Ansi::unicodeOn());
         }
         match ($this->options->mouseMode) {
-            MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOn()),
-            MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOn()),
+            MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOn()),
+            MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOn()),
             MouseMode::Off        => null,
         };
         $this->activeMouseMode = $this->options->mouseMode;
         if ($this->options->reportFocus) {
-            fwrite($this->output, Ansi::focusReportingOn());
+            $this->writeOutput(Ansi::focusReportingOn());
         }
         $this->activeFocusReporting = $this->options->reportFocus;
         if ($this->options->bracketedPaste) {
-            fwrite($this->output, Ansi::bracketedPasteOn());
+            $this->writeOutput(Ansi::bracketedPasteOn());
         }
         $this->activeBracketedPaste = $this->options->bracketedPaste;
         $this->tty->enableRawMode();
@@ -543,24 +576,24 @@ final class Program
     {
         $this->tty->restore();
         if ($this->activeBracketedPaste) {
-            fwrite($this->output, Ansi::bracketedPasteOff());
+            $this->writeOutput(Ansi::bracketedPasteOff());
         }
         if ($this->activeFocusReporting) {
-            fwrite($this->output, Ansi::focusReportingOff());
+            $this->writeOutput(Ansi::focusReportingOff());
         }
         match ($this->activeMouseMode) {
-            MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOff()),
-            MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOff()),
+            MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOff()),
+            MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOff()),
             MouseMode::Off, null  => null,
         };
         if ($this->options->unicodeMode) {
-            fwrite($this->output, Ansi::unicodeOff());
+            $this->writeOutput(Ansi::unicodeOff());
         }
         if ($this->options->hideCursor) {
-            fwrite($this->output, Ansi::cursorShow());
+            $this->writeOutput(Ansi::cursorShow());
         }
         if ($this->options->useAltScreen) {
-            fwrite($this->output, Ansi::altScreenLeave());
+            $this->writeOutput(Ansi::altScreenLeave());
         }
     }
 
@@ -594,58 +627,58 @@ final class Program
             // Turn the previous mode off, then the new one on. Both
             // pairs happily no-op when fed back to themselves.
             match ($this->activeMouseMode) {
-                MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOff()),
-                MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOff()),
+                MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOff()),
+                MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOff()),
                 MouseMode::Off, null  => null,
             };
             match ($view->mouseMode) {
-                MouseMode::CellMotion => fwrite($this->output, Ansi::mouseCellMotionOn()),
-                MouseMode::AllMotion  => fwrite($this->output, Ansi::mouseAllMotionOn()),
+                MouseMode::CellMotion => $this->writeOutput(Ansi::mouseCellMotionOn()),
+                MouseMode::AllMotion  => $this->writeOutput(Ansi::mouseAllMotionOn()),
                 MouseMode::Off        => null,
             };
             $this->activeMouseMode = $view->mouseMode;
         }
 
         if ($view->reportFocus !== null && $view->reportFocus !== $this->activeFocusReporting) {
-            fwrite($this->output, $view->reportFocus
+            $this->writeOutput($view->reportFocus
                 ? Ansi::focusReportingOn()
                 : Ansi::focusReportingOff());
             $this->activeFocusReporting = $view->reportFocus;
         }
 
         if ($view->bracketedPaste !== null && $view->bracketedPaste !== $this->activeBracketedPaste) {
-            fwrite($this->output, $view->bracketedPaste
+            $this->writeOutput($view->bracketedPaste
                 ? Ansi::bracketedPasteOn()
                 : Ansi::bracketedPasteOff());
             $this->activeBracketedPaste = $view->bracketedPaste;
         }
 
         if ($view->windowTitle !== null && $view->windowTitle !== $this->lastWindowTitle) {
-            fwrite($this->output, Ansi::setWindowTitle($view->windowTitle));
+            $this->writeOutput(Ansi::setWindowTitle($view->windowTitle));
             $this->lastWindowTitle = $view->windowTitle;
         }
 
         if ($view->progressBar !== null && !$this->progressEquals($view->progressBar, $this->lastProgress)) {
-            fwrite($this->output, Ansi::setProgressBar($view->progressBar->state, $view->progressBar->percent));
+            $this->writeOutput(Ansi::setProgressBar($view->progressBar->state, $view->progressBar->percent));
             $this->lastProgress = $view->progressBar;
         }
 
         if ($view->foregroundColor !== null && !$this->colorEquals($view->foregroundColor, $this->lastForegroundColor)) {
             $c = $view->foregroundColor;
-            fwrite($this->output, Ansi::setForegroundColor($c->r, $c->g, $c->b));
+            $this->writeOutput(Ansi::setForegroundColor($c->r, $c->g, $c->b));
             $this->lastForegroundColor = $c;
         }
 
         if ($view->backgroundColor !== null && !$this->colorEquals($view->backgroundColor, $this->lastBackgroundColor)) {
             $c = $view->backgroundColor;
-            fwrite($this->output, Ansi::setBackgroundColor($c->r, $c->g, $c->b));
+            $this->writeOutput(Ansi::setBackgroundColor($c->r, $c->g, $c->b));
             $this->lastBackgroundColor = $c;
         }
 
         if ($view->cursor === null) {
             // null cursor → hide.
             if (!$this->lastCursorHidden) {
-                fwrite($this->output, Ansi::cursorHide());
+                $this->writeOutput(Ansi::cursorHide());
                 $this->lastCursorHidden = true;
             }
             return;
@@ -653,7 +686,7 @@ final class Program
 
         // Show cursor if it was hidden.
         if ($this->lastCursorHidden) {
-            fwrite($this->output, Ansi::cursorShow());
+            $this->writeOutput(Ansi::cursorShow());
             $this->lastCursorHidden = false;
         }
 
@@ -662,12 +695,25 @@ final class Program
         if ($prev === null
             || $prev->shape !== $cur->shape
             || $prev->blink !== $cur->blink) {
-            fwrite($this->output, Ansi::cursorShape($cur->shape, $cur->blink));
+            $this->writeOutput(Ansi::cursorShape($cur->shape, $cur->blink));
         }
         if ($cur->row !== null && $cur->col !== null) {
-            fwrite($this->output, Ansi::cursorTo($cur->row, $cur->col));
+            $this->writeOutput(Ansi::cursorTo($cur->row, $cur->col));
         }
         $this->lastCursor = $cur;
+    }
+
+    /**
+     * Write a chunk to the program's output stream and tee it to the
+     * recorder if one is attached. Every byte that leaves the runtime —
+     * renderer frames, RawMsg / PrintMsg, terminal-mode bytes, cursor /
+     * title / progress emitters — flows through here so cassettes
+     * reflect what the user actually saw.
+     */
+    private function writeOutput(string $bytes): void
+    {
+        fwrite($this->output, $bytes);
+        $this->recorder?->recordOutput($bytes);
     }
 
     private function progressEquals(?Progress $a, ?Progress $b): bool
