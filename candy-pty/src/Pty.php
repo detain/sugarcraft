@@ -94,7 +94,14 @@ final class Pty
      * vim) see the requested geometry as soon as they start;
      * defaults of 80×24 mirror the de-facto VT100 baseline.
      *
-     * @param list<string>             $cmd
+     * `$controllingTerminal` (default `false`) routes the spawn
+     * through `bin/pty-shim.php` so the child claims the slave PTY
+     * as its controlling terminal — required for Ctrl+C → SIGINT
+     * delivery and other tty-driven job-control signals. Costs
+     * ~5-50 ms of shim startup; pass `true` only when running
+     * interactive shells / editors that depend on it.
+     *
+     * @param list<string>              $cmd
      * @param array<string,string>|null $env
      */
     public function spawn(
@@ -102,10 +109,11 @@ final class Pty
         ?array $env = null,
         int $cols = self::DEFAULT_COLS,
         int $rows = self::DEFAULT_ROWS,
+        bool $controllingTerminal = false,
     ): Child {
         $this->assertOpen();
         $this->resize($cols, $rows);
-        return Spawn::proc($this->master, $cmd, $env);
+        return Spawn::proc($this->master, $cmd, $env, $controllingTerminal);
     }
 
     /**
