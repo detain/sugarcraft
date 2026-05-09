@@ -341,11 +341,13 @@ final class Program
             return;
         }
         if ($msg instanceof QuitMsg) {
-            // Record + close immediately so the cassette ends on a clean
-            // `quit` line — teardownTerminal() afterwards still calls
-            // writeOutput, but the recorder no-ops after close.
+            // Record the quit marker, but keep the recorder open so
+            // teardownTerminal()'s output bytes (alt-screen leave, mode
+            // resets, etc.) make it into the cassette. run() closes the
+            // recorder once the loop exits and teardown is complete —
+            // crucial for replay parity, since a fresh Program emits
+            // those same bytes on its way out.
             $this->recorder?->recordQuit();
-            $this->recorder?->close();
             $this->running = false;
             $this->loop->stop();
             return;
