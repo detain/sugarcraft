@@ -20,6 +20,7 @@ use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Middleware\Logger;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\Transport\HostSshdTransport;
 
 final class Banner implements Middleware
 {
@@ -42,7 +43,14 @@ final class Banner implements Middleware
     }
 }
 
+// HostSshdTransport pinned explicitly because Banner reads STDIN
+// directly via fread(STDIN, 1). Under the new InProcessTransport
+// default, that STDIN is the supervisor's input pipe (already
+// being pumped into a candy-pty master), so an inline read would
+// race with the pump. HostSshd keeps STDIN/STDOUT attached to
+// sshd's PTY, the way pre-PTY-upgrade candy-wish always was.
 Server::new()
+    ->withTransport(new HostSshdTransport())
     ->use(new Logger())
     ->use(new Banner())
     ->serve();

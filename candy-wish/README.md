@@ -18,13 +18,34 @@ composer require sugarcraft/candy-wish
 
 ## Architecture
 
-CandyWish leans on the host's OpenSSH daemon rather than implementing the SSH wire protocol from scratch. The deployment shape is:
+CandyWish leans on the host's OpenSSH daemon rather than implementing the SSH wire protocol from scratch. Each SSH connection forks a fresh PHP process under `sshd` (via `ForceCommand`). What that PHP process does internally depends on the active **transport**:
+
+### `InProcessTransport` (default)
 
 ```
-[client] ─ssh─▶ [sshd] ─ForceCommand──▶ [php server.php] ──▶ [middleware stack] ──▶ [SugarCraft Program]
+[client] ─ssh─▶ [sshd] ─ForceCommand──▶ [php supervisor] ──▶ [middleware stack]
+                                              │                    │
+                                              └─pump bytes──┐      └─Spawn middleware
+                                                            │              │
+                                                            ▼              ▼
+                                           [candy-pty master ◀──── slave / inner cmd]
+                                                            (bash, vim, custom binary)
 ```
 
-Each connection forks a fresh PHP process under `sshd`. The PHP entry script builds a `Server`, registers middleware, calls `serve()`, and returns when the user disconnects. This trades implementing SSH (key exchange, ciphers, host keys, fail2ban hooks, audit logs) for delegating it to the production-grade implementation already on every server.
+The supervisor allocates a `candy-pty` master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), and pumps bytes between the supervisor's STDIN/STDOUT (= sshd's PTY slave) and the candy-pty master. The terminal middleware is `Spawn`, which produces the cmd from the Session.
+
+### `HostSshdTransport` (legacy, opt-in)
+
+```
+[client] ─ssh─▶ [sshd] ─ForceCommand──▶ [php supervisor] ──▶ [middleware stack] ──▶ [SugarCraft Program reading STDIN, writing STDOUT]
+```
+
+The pre-PTY-upgrade architecture: middleware run inline in the supervisor, and the terminal middleware (`BubbleTea`) mounts a SugarCraft `Program` directly on the supervisor's STDIN/STDOUT. Pin via `Server::new()->withTransport(new HostSshdTransport())`. Use this if your existing entry script reads STDIN/echoes STDOUT directly without a subprocess.
+
+### Picking a transport
+
+- **`InProcessTransport`** when you want to spawn arbitrary shells (`bash -i`, `zsh`, `fish`), editors (`vim`, `less`), or compiled TUI binaries — anything that needs a controlling terminal. Subprocess overhead per connection (~50-200ms PHP cold start), but full PTY semantics.
+- **`HostSshdTransport`** when your TUI is a SugarCraft `Program` and you want zero subprocess overhead, or when you have an inline-STDIN-reading middleware (banner-style). No subprocess, but no controlling-terminal isolation.
 
 ## Quickstart
 
@@ -44,6 +65,35 @@ Then `systemctl reload sshd`.
 
 ### 2. Write the entry script
 
+**InProcessTransport (default) — spawn an interactive shell:**
+
+```php
+<?php // /opt/wish/server.php
+require '/opt/wish/vendor/autoload.php';
+
+use SugarCraft\Wish\Server;
+use SugarCraft\Wish\Middleware\Logger;
+use SugarCraft\Wish\Middleware\Auth;
+use SugarCraft\Wish\Middleware\RateLimit;
+use SugarCraft\Wish\Middleware\Spawn;
+use SugarCraft\Wish\Session;
+
+Server::new()
+    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
+    ->use(new Auth(users: ['alice', 'bob']))
+    ->use(new Spawn(fn (Session $s) => [
+        'cmd' => ['/bin/bash', '-l'],
+        'env' => [
+            'TERM' => $s->term, 'USER' => $s->user, 'HOME' => "/home/{$s->user}",
+            'PATH' => '/usr/local/bin:/usr/bin:/bin',
+        ],
+    ]))
+    ->serve();
+```
+
+**HostSshdTransport (legacy) — mount a SugarCraft Program inline:**
+
 ```php
 <?php // /opt/wish/server.php
 require '/opt/wish/vendor/autoload.php';
@@ -53,12 +103,14 @@ use SugarCraft\Wish\Middleware\Logger;
 use SugarCraft\Wish\Middleware\Auth;
 use SugarCraft\Wish\Middleware\RateLimit;
 use SugarCraft\Wish\Middleware\BubbleTea;
+use SugarCraft\Wish\Transport\HostSshdTransport;
 
 Server::new()
+    ->withTransport(new HostSshdTransport())
     ->use(new Logger('/var/log/wish.jsonl'))
     ->use(new RateLimit('/var/lib/wish/buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new Auth(users: ['alice', 'bob']))
-    ->use(new BubbleTea(fn($session) => new MyApp($session)))
+    ->use(new BubbleTea(fn ($session) => new MyApp($session)))
     ->serve();
 ```
 
@@ -70,12 +122,13 @@ ssh wishuser@your-host
 
 ## Middleware
 
-| Middleware    | Purpose                                                                            |
-|---------------|------------------------------------------------------------------------------------|
-| `Logger`      | One-line JSON event at session start + end, with elapsed time and connection meta. |
-| `Auth`        | Username allowlist, public-key fingerprint allowlist (or both).                    |
-| `RateLimit`   | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.          |
-| `BubbleTea`   | Terminal middleware. Mounts a SugarCraft Program for the connected user.            |
+| Middleware    | Transport       | Purpose                                                                            |
+|---------------|-----------------|------------------------------------------------------------------------------------|
+| `Logger`      | both            | One-line JSON event at session start + end, with elapsed time and connection meta. |
+| `Auth`        | both            | Username allowlist, public-key fingerprint allowlist (or both).                    |
+| `RateLimit`   | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.          |
+| `Spawn`       | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.         |
+| `BubbleTea`   | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.       |
 
 You can write your own — implement `SugarCraft\Wish\Middleware`:
 
