@@ -88,6 +88,7 @@ final class Player
         int $speed = self::SPEED_INSTANT,
         ?Registry $serializerRegistry = null,
         ?float $timeoutSeconds = null,
+        bool $skipFirstResize = true,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
@@ -109,6 +110,12 @@ final class Player
         $tally = ['input' => 0, 'resize' => 0, 'output' => 0, 'quit' => 0];
         $expectedOutput = '';
         $programQuitCleanly = false;
+        // Track whether the first resize has been seen (and possibly
+        // skipped). The replay program emits its own startup
+        // WindowSizeMsg from its tty.size() lookup, so the cassette's
+        // first resize would be a duplicate that throws the model's
+        // msg count off by one.
+        $firstResizeSkipped = !$skipFirstResize;
 
         $events = $this->cassette->events;
         $eventCount = count($events);
@@ -126,6 +133,7 @@ final class Player
             &$tally,
             &$expectedOutput,
             &$programQuitCleanly,
+            &$firstResizeSkipped,
         ): void {
             if ($i >= $eventCount) {
                 return;
@@ -140,6 +148,7 @@ final class Player
                 $tally,
                 $expectedOutput,
                 $programQuitCleanly,
+                $firstResizeSkipped,
             ))();
 
             if ($i >= $eventCount) {
@@ -213,16 +222,25 @@ final class Player
         array &$tally,
         string &$expectedOutput,
         bool &$programQuitCleanly,
+        bool &$firstResizeSkipped,
     ): \Closure {
-        return function () use ($event, $program, $inputWrite, $registry, &$tally, &$expectedOutput, &$programQuitCleanly): void {
+        return function () use ($event, $program, $inputWrite, $registry, &$tally, &$expectedOutput, &$programQuitCleanly, &$firstResizeSkipped): void {
             switch ($event->kind) {
                 case EventKind::Resize:
+                    $tally['resize']++;
+                    if (!$firstResizeSkipped) {
+                        // First resize is the cassette-recorded startup
+                        // size; the replay program emits its own
+                        // startup WindowSizeMsg, so dispatching this
+                        // would duplicate it and throw msg counts off.
+                        $firstResizeSkipped = true;
+                        break;
+                    }
                     $cols = (int) ($event->payload['cols'] ?? 0);
                     $rows = (int) ($event->payload['rows'] ?? 0);
                     if ($cols > 0 && $rows > 0) {
                         $program->send(new WindowSizeMsg($cols, $rows));
                     }
-                    $tally['resize']++;
                     break;
 
                 case EventKind::Input:
