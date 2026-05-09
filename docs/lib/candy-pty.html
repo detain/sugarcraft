@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyPty</title>
+<meta name="description" content="CandyPty: pseudo-terminal primitive — open / spawn / read / write / resize. PHP port of charmbracelet/x/xpty (Linux + macOS).">
+<meta property="og:title" content="SugarCraft — CandyPty">
+<meta property="og:description" content="Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-pty.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-pty.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-pty.png" alt="CandyPty">
+      <div>
+        <h2>🖥️ CandyPty</h2>
+        <p class="detail-sub">Pseudo-terminal primitive — open / spawn / read / write / resize</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/xpty" style="color: inherit;">x/xpty</a></span>
+          <span class="tag-chip">linux + macos</span>
+          <span class="tag-chip">ext-ffi</span>
+          <span class="tag-chip">posix_openpt</span>
+          <span class="tag-chip">tiocswinsz</span>
+          <span class="tag-chip">sigwinch</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Open a master/slave PTY pair, spawn a child process with its stdin/stdout/stderr wired to the slave, and pump bytes / forward resizes between the host terminal and the child. Wraps the libc PTY syscalls (<code>posix_openpt</code>, <code>grantpt</code>, <code>unlockpt</code>, <code>ptsname_r</code>, <code>ioctl(TIOCSWINSZ)</code>) via ext-ffi — no shelling out to <code>/usr/bin/script</code>, no C extension to compile.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-pty</code></pre>
+    <p style="color: var(--ink-2);">Requires PHP 8.1+ with <code>ext-ffi</code>. <code>ext-pcntl</code> is optional — the lib polls <code>waitpid()</code> when pcntl is absent and SignalForwarder degrades to a no-op.</p>
+
+    <h3 style="margin-top: 32px;">Open + spawn + drain</h3>
+    <pre class="code"><code>use SugarCraft\Pty\Pty;
+
+$pty   = Pty::open();
+$child = $pty-&gt;spawn(
+    ['/bin/bash', '-c', 'echo $TERM; date'],
+    ['TERM' =&gt; 'xterm-256color'],
+    100, 30,                              // cols × rows
+);
+
+$pty-&gt;setBlocking(false);
+$out = '';
+while (!$child-&gt;exited()) {
+    $chunk = $pty-&gt;read(4096, 0.05);     // 50ms timeout
+    if ($chunk === null || $chunk === '') continue;
+    $out .= $chunk;
+}
+$exit = $child-&gt;wait();
+$pty-&gt;close();</code></pre>
+
+    <h3 style="margin-top: 32px;">Resize forwarding</h3>
+    <pre class="code"><code>use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Core\Util\Tty;
+
+SignalForwarder::attachSigwinch(
+    $pty,
+    fn () =&gt; Tty::size(),                // [cols =&gt; N, rows =&gt; N]
+);
+// Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Pty::open()</strong><span>Allocates a master/slave pair via <code>posix_openpt(O_RDWR | O_NOCTTY)</code> + <code>grantpt</code> + <code>unlockpt</code> + <code>ptsname_r</code>. Failures close the master fd before throwing — callers never get a half-open Pty.</span></div>
+      <div class="feature"><strong>spawn(cmd, env, cols, rows)</strong><span>Wires the slave path to <code>proc_open</code>'s <code>[0,1,2]</code> descriptor slots and resizes via TIOCSWINSZ before the child starts. Returns a <code>Child</code> with pid + idempotent <code>wait()</code> + non-blocking <code>exited()</code>.</span></div>
+      <div class="feature"><strong>read / write / setBlocking</strong><span><code>read($len, $timeout)</code> returns <code>null</code> on timeout, <code>''</code> on EOF, bytes otherwise. Non-blocking + <code>stream_select</code> with EINTR retry. <code>write</code> returns bytes actually written.</span></div>
+      <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ. Platform-aware constants for Linux + macOS.</span></div>
+      <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
+      <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>In-process SSH session hosting</strong> — drives <a href="candy-wish.html">CandyWish</a> away from depending on host sshd; spawn the user's shell directly inside the SSH server process with full PTY control.</li>
+      <li><strong>Recorded TUI sessions</strong> — pair with <a href="candy-vcr.html">CandyVcr</a> to capture both the input bytes (typed into the master) and the rendered output (read back from the master).</li>
+      <li><strong>Test harnesses for ANSI-emitting CLIs</strong> — spawn the binary under test in a controlled PTY, pump fixture input, assert on the captured output via <a href="candy-vt.html">CandyVt</a>'s cell-grid.</li>
+      <li><strong>VHS-style demo recorders</strong> — run a script in a PTY, capture the byte stream + winsize, replay later.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Known limitations</h3>
+    <ul>
+      <li><strong>TIOCSCTTY not yet wired.</strong> The spawned child does not claim the slave PTY as its controlling terminal, so <code>Ctrl+C</code> typed at the master does NOT deliver <code>SIGINT</code> to the child. Non-interactive commands (<code>echo</code>, <code>date</code>, <code>tput</code>, <code>bash -c '…'</code>) work cleanly; interactive shells / editors mis-handle line-editing and signal-driven UI. Tracked as a hard prerequisite for the <a href="candy-wish.html">CandyWish</a> in-process SSH upgrade.</li>
+      <li><strong>Linux + macOS only.</strong> Windows ConPTY is a separate port and not in scope for this lib.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/xpty">charmbracelet/x/xpty</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/candy-pty/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
