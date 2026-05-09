@@ -49,31 +49,51 @@
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-wish</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 style="margin-top: 32px;">Two transports</h3>
+    <p>What the supervisor PHP process does internally is pluggable via the <code>Transport</code> abstraction:</p>
+    <ul>
+      <li><strong>InProcessTransport (default).</strong> Allocates a <a href="candy-pty.html">candy-pty</a> master/slave pair, spawns the user's cmd as a subprocess with full controlling-terminal semantics (Ctrl+C → SIGINT, SIGWINCH-driven resize, job control), pumps bytes between the supervisor's STDIN/STDOUT and the candy-pty master. Terminal middleware: <code>Spawn</code>.</li>
+      <li><strong>HostSshdTransport (legacy, opt-in).</strong> Pre-PTY-upgrade architecture: middleware run inline in the supervisor; the terminal middleware (<code>BubbleTea</code>) mounts a SugarCraft <code>Program</code> directly on the supervisor's STDIN/STDOUT. Pin via <code>Server::withTransport(new HostSshdTransport())</code>. Use this for inline-STDIN-reading middleware or zero-subprocess Program mounts.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Quickstart — in-process bash</h3>
     <pre class="code"><code>// /opt/wish/server.php — invoked by sshd ForceCommand
 require '/opt/wish/vendor/autoload.php';
 
 use SugarCraft\Wish\Server;
-use SugarCraft\Wish\Middleware\{Logger, Auth, RateLimit, BubbleTea};
+use SugarCraft\Wish\Middleware\{Logger, Auth, RateLimit, Spawn};
+use SugarCraft\Wish\Session;
 
 Server::new()
     -&gt;use(new Logger('/var/log/wish.jsonl'))
-    -&gt;use(new RateLimit(
-        '/var/lib/wish/buckets.json',
-        burst:      5,
-        ratePerSec: 0.5,
-    ))
+    -&gt;use(new Auth(users: ['alice', 'bob']))
+    -&gt;use(new Spawn(fn (Session $s) =&gt; [
+        'cmd' =&gt; ['/bin/bash', '-l'],
+        'env' =&gt; [
+            'TERM' =&gt; $s-&gt;term, 'USER' =&gt; $s-&gt;user, 'HOME' =&gt; "/home/{$s-&gt;user}",
+            'PATH' =&gt; '/usr/local/bin:/usr/bin:/bin',
+        ],
+    ]))
+    -&gt;serve();</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart — host-sshd legacy</h3>
+    <pre class="code"><code>use SugarCraft\Wish\Transport\HostSshdTransport;
+use SugarCraft\Wish\Middleware\BubbleTea;
+
+Server::new()
+    -&gt;withTransport(new HostSshdTransport())
+    -&gt;use(new Logger('/var/log/wish.jsonl'))
     -&gt;use(new Auth(users: ['alice', 'bob']))
     -&gt;use(new BubbleTea(fn($session) =&gt; new MyApp($session)))
     -&gt;serve();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>ForceCommand entry</strong><span>Each connection forks a fresh PHP under sshd. Audit / rate-limit / ssh-cert all stay your existing stack.</span></div>
-      <div class="feature"><strong>Logger middleware</strong><span>Structured JSONL session log to stdout / file.</span></div>
-      <div class="feature"><strong>Auth middleware</strong><span>Allowlist by username; denied connections close cleanly.</span></div>
-      <div class="feature"><strong>RateLimit middleware</strong><span>Token-bucket per username, persisted to JSON. Burst + rate configurable.</span></div>
-      <div class="feature"><strong>BubbleTea middleware</strong><span>Mount a SugarCraft Program at the end of the chain.</span></div>
+      <div class="feature"><strong>InProcessTransport (default)</strong><span>candy-pty supervisor — allocates a PTY, spawns child with controllingTerminal:true, pumps bytes, forwards SIGWINCH. Lets you mount any cmd / shell / editor.</span></div>
+      <div class="feature"><strong>HostSshdTransport (legacy)</strong><span>Pre-PTY-upgrade behaviour. Middleware run inline against sshd's PTY directly. Zero subprocess overhead.</span></div>
+      <div class="feature"><strong>Spawn middleware (InProcess only)</strong><span>Terminal — produces cmd[] from Session via factory. Drives runChild() on the active transport.</span></div>
+      <div class="feature"><strong>BubbleTea middleware (HostSshd only)</strong><span>Terminal — mounts a SugarCraft Program inline reading STDIN/STDOUT. Transport-aware: throws clearly under InProcess.</span></div>
+      <div class="feature"><strong>Logger / Auth / RateLimit</strong><span>Transport-agnostic. Same composition surface under either mode.</span></div>
       <div class="feature"><strong>Custom middleware</strong><span>Anything implementing <code>Middleware::handle($session, $next)</code>.</span></div>
     </div>
 
