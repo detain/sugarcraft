@@ -95,6 +95,7 @@ int   grantpt(int fd);
 int   unlockpt(int fd);
 int   ptsname_r(int fd, char *buf, unsigned long buflen);
 int   close(int fd);
+int   ioctl(int fd, unsigned long request, void *arg);
 CPROTO;
     }
 

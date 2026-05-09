@@ -29,6 +29,12 @@ final class Pty
     /** `O_RDWR` flag — value identical on Linux and macOS. */
     private const O_RDWR = 0x0002;
 
+    /** Default cols passed to `spawn()` when caller doesn't override. */
+    public const DEFAULT_COLS = 80;
+
+    /** Default rows passed to `spawn()` when caller doesn't override. */
+    public const DEFAULT_ROWS = 24;
+
     private bool $closed = false;
 
     public function __construct(
@@ -71,15 +77,68 @@ final class Pty
      *
      * `$cmd` is passed to `proc_open()` as an array (no shell
      * expansion). `$env` defaults to inheriting the parent's
-     * environment when null.
+     * environment when null. `$cols` / `$rows` set the initial
+     * `TIOCSWINSZ` so terminal-size-aware programs (tput, ncurses,
+     * vim) see the requested geometry as soon as they start;
+     * defaults of 80×24 mirror the de-facto VT100 baseline.
      *
      * @param list<string>             $cmd
      * @param array<string,string>|null $env
      */
-    public function spawn(array $cmd, ?array $env = null): Child
+    public function spawn(
+        array $cmd,
+        ?array $env = null,
+        int $cols = self::DEFAULT_COLS,
+        int $rows = self::DEFAULT_ROWS,
+    ): Child {
+        $this->assertOpen();
+        $this->resize($cols, $rows);
+        return Spawn::proc($this->master, $cmd, $env);
+    }
+
+    /**
+     * Set the master/slave winsize via `TIOCSWINSZ`. The kernel
+     * notifies the child via `SIGWINCH` if the child is in its own
+     * process group — currently NOT the case (see TIOCSCTTY caveat
+     * in `CALIBER_LEARNINGS.md`), so the new size becomes visible
+     * only when the child queries it via `TIOCGWINSZ` itself.
+     */
+    public function resize(int $cols, int $rows): void
     {
         $this->assertOpen();
-        return Spawn::proc($this->master, $cmd, $env);
+
+        $libc = Libc::lib();
+        $ws = SizeIoctl::pack($rows, $cols);
+        $rc = $libc->ioctl($this->master->fd, SizeIoctl::setRequest(), $ws);
+        if ($rc !== 0) {
+            throw new PtyException(Lang::t('resize.failed', [
+                'fd'   => $this->master->fd,
+                'cols' => $cols,
+                'rows' => $rows,
+                'rc'   => $rc,
+            ]));
+        }
+    }
+
+    /**
+     * Read the current winsize via `TIOCGWINSZ`.
+     *
+     * @return array{cols:int, rows:int, xpix:int, ypix:int}
+     */
+    public function size(): array
+    {
+        $this->assertOpen();
+
+        $libc = Libc::lib();
+        $ws = SizeIoctl::emptyBuffer();
+        $rc = $libc->ioctl($this->master->fd, SizeIoctl::getRequest(), $ws);
+        if ($rc !== 0) {
+            throw new PtyException(Lang::t('size.failed', [
+                'fd' => $this->master->fd,
+                'rc' => $rc,
+            ]));
+        }
+        return SizeIoctl::unpack($ws);
     }
 
     /**
