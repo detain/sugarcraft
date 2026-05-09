@@ -26,7 +26,7 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Twenty-four libraries grouped by layer:
+Twenty-five libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
@@ -36,6 +36,7 @@ Twenty-four libraries grouped by layer:
 | <img src="media/icons/candy-zone.png" width="48" alt=""> | **[CandyZone](candy-zone/)** | Mouse-zone tracker — wrap rendered chunks, get back bounding boxes. Port of [bubblezone](https://github.com/lrstanley/bubblezone). |
 | <img src="media/icons/sugar-bits.png" width="48" alt=""> | **[SugarBits](sugar-bits/)** | 14 components: TextInput, TextArea, ItemList, Table, Viewport, FilePicker, Progress, Spinner, Cursor, Help, Key, Paginator, Stopwatch, Timer. Port of [bubbles](https://github.com/charmbracelet/bubbles). |
 | <img src="media/icons/candy-vt.png" width="48" alt=""> | **[CandyVt](candy-vt/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. Port of [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt). |
+| <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay candy-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. Port of [charmbracelet/x/vcr](https://github.com/charmbracelet/x/tree/main/vcr). |
 | <img src="media/icons/sugar-charts.png" width="48" alt=""> | **[SugarCharts](sugar-charts/)** | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2). Port of [ntcharts](https://github.com/NimbleMarkets/ntcharts). |
 | <img src="media/icons/sugar-prompt.png" width="48" alt=""> | **[SugarPrompt](sugar-prompt/)** | Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker; multi-page Groups; 6 themes. Port of [huh](https://github.com/charmbracelet/huh). |
 | <img src="media/icons/candy-shine.png" width="48" alt=""> | **[CandyShine](candy-shine/)** | Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, 8 themes. Port of [glamour](https://github.com/charmbracelet/glamour). |
