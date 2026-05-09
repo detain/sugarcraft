@@ -107,6 +107,7 @@ single-purpose lib.
 | **CandyMold** | candy + mold = the project skeleton you pour into. ✓✓ |
 | **CandyMosaic** | candy + mosaic = image-to-cell renderer. mosaic is the technical term; candy is the brand. clear and literal. |
 | **CandyVt**     | candy + vt = virtual terminal emulator. mirrors charmbracelet/x/vt exactly; vt is the established upstream name. |
+| **CandyVcr**    | candy + vcr = record + replay terminal sessions. mirrors charmbracelet/x/vcr; "vcr" carries the cassette / playback metaphor for free. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = SQLite browser. clear. |
 
