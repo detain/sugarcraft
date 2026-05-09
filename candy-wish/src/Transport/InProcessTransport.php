@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Transport;
 
+use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Pty;
 use SugarCraft\Pty\PtyException;
+use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Pty\SizeIoctl;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -50,6 +53,33 @@ final class InProcessTransport implements Transport, ChildSpawner
     /** VEOF char (Ctrl+D, 0x04). In cooked-mode PTY this signals
      *  EOF on the slave's stdin to the inner child. */
     private const VEOF = "\x04";
+
+    /**
+     * Override the size provider used by SIGWINCH forwarding.
+     *
+     * Defaults to {@see readHostStdinSize()} which queries
+     * `TIOCGWINSZ` on fd 0 — i.e. the slave side of sshd's PTY in
+     * a ForceCommand deployment. Tests inject a fake provider so
+     * SIGWINCH-driven resize can be verified without setting up a
+     * host PTY.
+     *
+     * @var (callable(): array{cols:int, rows:int})|null
+     */
+    private $sizeProvider = null;
+
+    /**
+     * Returns a clone of this transport with the given size
+     * provider — used by SIGWINCH forwarding to query the host's
+     * PTY winsize. Production code rarely needs to call this.
+     *
+     * @param callable(): array{cols:int, rows:int} $provider
+     */
+    public function withSizeProvider(callable $provider): self
+    {
+        $clone = clone $this;
+        $clone->sizeProvider = $provider;
+        return $clone;
+    }
 
     public function run(Session $session, array $stack): void
     {
@@ -129,22 +159,45 @@ final class InProcessTransport implements Transport, ChildSpawner
                 controllingTerminal: true,
             );
 
-            $this->pump($pty, $child, $stdin, $stdout);
+            // SIGWINCH forwarding — when sshd resizes the supervisor's
+            // PTY, the kernel sends SIGWINCH to us; the handler queries
+            // the new dimensions via the size provider and propagates
+            // them into the inner candy-pty via $pty->resize(). Caller
+            // can override the provider via withSizeProvider() — useful
+            // for tests that need to drive resize events without an
+            // actual host PTY.
+            $sigwinchAttached = false;
+            if (SignalForwarder::pcntlReady() && \defined('SIGWINCH')) {
+                $provider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
+                $sigwinchAttached = SignalForwarder::attachSigwinch($pty, $provider);
+            }
 
-            // Drain any tail bytes the kernel buffered on the master
-            // before we tear down. Best-effort — broken stdout is
-            // silently ignored.
-            $flushDeadline = \microtime(true) + self::FLUSH_DEADLINE_SEC;
-            while (\microtime(true) < $flushDeadline) {
-                $tail = $pty->read(self::PUMP_CHUNK);
-                if ($tail === null || $tail === '') {
-                    if ($child->exited()) {
-                        break;
+            try {
+                $this->pump($pty, $child, $stdin, $stdout);
+
+                // Drain any tail bytes the kernel buffered on the master
+                // before we tear down. Best-effort — broken stdout is
+                // silently ignored.
+                $flushDeadline = \microtime(true) + self::FLUSH_DEADLINE_SEC;
+                while (\microtime(true) < $flushDeadline) {
+                    $tail = $pty->read(self::PUMP_CHUNK);
+                    if ($tail === null || $tail === '') {
+                        if ($child->exited()) {
+                            break;
+                        }
+                        \usleep(20_000);
+                        continue;
                     }
-                    \usleep(20_000);
-                    continue;
+                    @\fwrite($stdout, $tail);
                 }
-                @\fwrite($stdout, $tail);
+            } finally {
+                // Restore SIGWINCH default disposition before any
+                // session-specific cleanup runs. Otherwise a stale
+                // closure with this $pty captured would fire on the
+                // next session's SIGWINCH and target a closed Pty.
+                if ($sigwinchAttached && \defined('SIGWINCH')) {
+                    SignalForwarder::reset(\SIGWINCH);
+                }
             }
         } finally {
             // If the child is still running (pump exited because of
@@ -238,6 +291,52 @@ final class InProcessTransport implements Transport, ChildSpawner
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Default size-provider implementation — queries TIOCGWINSZ on
+     * fd 0 (the supervisor's stdin) which is sshd's slave PTY in a
+     * ForceCommand deployment.
+     *
+     * Falls back to the spawn-time `[$cols, $rows]` when stdin
+     * isn't a tty (test environments, non-pty pipes) — TIOCGWINSZ
+     * returns ENOTTY there and we don't want to surface that as a
+     * "size went to 0" event.
+     *
+     * @param resource $stdin
+     * @return array{cols:int, rows:int}
+     */
+    private function readHostStdinSize($stdin, int $fallbackCols, int $fallbackRows): array
+    {
+        if (!\is_resource($stdin)) {
+            return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
+        }
+
+        // We need the underlying integer fd, not the PHP stream.
+        // PHP exposes the fd for stdin/stdout/stderr as constants
+        // STDIN/STDOUT/STDERR, but for arbitrary streams there's no
+        // public API. As a heuristic: if the resource is the global
+        // STDIN, use fd 0 — anything else (proc_open pipes, sockets,
+        // etc.) almost certainly isn't a tty and the fallback is the
+        // right answer.
+        if ($stdin !== \STDIN) {
+            return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
+        }
+
+        try {
+            $libc = Libc::lib();
+            $ws = SizeIoctl::emptyBuffer();
+            $rc = $libc->ioctl(0, SizeIoctl::getRequest(), $ws);
+            if ($rc !== 0) {
+                return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
+            }
+            $unpacked = SizeIoctl::unpack($ws);
+            $cols = $unpacked['cols'] > 0 ? $unpacked['cols'] : $fallbackCols;
+            $rows = $unpacked['rows'] > 0 ? $unpacked['rows'] : $fallbackRows;
+            return ['cols' => $cols, 'rows' => $rows];
+        } catch (\Throwable) {
+            return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
         }
     }
 
