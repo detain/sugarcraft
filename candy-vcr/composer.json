@@ -81,6 +81,7 @@
             "SugarCraft\\Vcr\\": "src/"
         }
     },
+    "bin": ["bin/candy-vcr"],
     "autoload-dev": {
         "psr-4": {
             "SugarCraft\\Vcr\\Tests\\": "tests/"
