@@ -21,15 +21,16 @@ env:
   PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl, ffi
 
 jobs:
+  # Unified test matrix — single job, four PHP versions, with per-lib include
+  # overrides to skip libs that don't support certain PHP majors.
+  #
+  # Lib exclusions by PHP version:
+  #   PHP 8.1  — excluded: candy-vt, candy-vcr (^8.2), candy-wish (^8.3)
+  #   PHP 8.2  — excluded: candy-wish (^8.3)
+  #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
-    # Cancel an in-progress run of the *same* matrix cell (same lib + same PHP
-    # version + same branch) when a fresh push lands — typical pattern during
-    # rapid commits to a single lib. PR runs are scoped under the PR ref and
-    # NOT cancelled, so reviewers always see the result of the latest commit
-    # without races. Different libs / different PHP versions / push vs PR all
-    # land in distinct groups, so they never cancel each other.
     concurrency:
       group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: ${{ github.event_name == 'push' }}
@@ -40,8 +41,6 @@ jobs:
         lib:
           - candy-core
           - candy-sprinkles
-          - candy-vt
-          - candy-vcr
           - candy-pty
           - honey-bounce
           - candy-zone
@@ -54,9 +53,7 @@ jobs:
           - candy-freeze
           - sugar-glow
           - sugar-spark
-          - candy-wish
           - sugar-wishlist
-          - candy-metrics
           - candy-mold
           - candy-tetris
           - super-candy
@@ -81,6 +78,32 @@ jobs:
           - sugar-table
           - sugar-toast
           - sugar-veil
+        include:
+          # candy-vt / candy-vcr — PHP ^8.2, not 8.1
+          - php: '8.2'
+            lib: candy-vt
+          - php: '8.3'
+            lib: candy-vt
+          - php: '8.4'
+            lib: candy-vt
+          - php: '8.2'
+            lib: candy-vcr
+          - php: '8.3'
+            lib: candy-vcr
+          - php: '8.4'
+            lib: candy-vcr
+          # candy-wish — PHP ^8.3, not 8.1 or 8.2
+          - php: '8.3'
+            lib: candy-wish
+          - php: '8.4'
+            lib: candy-wish
+          # candy-metrics — composer.lock was stale; runs on all 8.2+ cells
+          - php: '8.2'
+            lib: candy-metrics
+          - php: '8.3'
+            lib: candy-metrics
+          - php: '8.4'
+            lib: candy-metrics
 
     steps:
       - uses: actions/checkout@v5
@@ -279,8 +302,6 @@ jobs:
         lib:
           - candy-core
           - candy-sprinkles
-          - candy-vt
-          - candy-vcr
           - candy-pty
           - honey-bounce
           - candy-zone
@@ -293,9 +314,7 @@ jobs:
           - candy-freeze
           - sugar-glow
           - sugar-spark
-          - candy-wish
           - sugar-wishlist
-          - candy-metrics
           - candy-mold
           - candy-mosaic
           - candy-tetris

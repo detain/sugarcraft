@@ -28,7 +28,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-wish.html"
     },
     "require": {
-        "php": ">=8.1",
+        "php": "^8.3",
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-pty": "@dev"
     },
