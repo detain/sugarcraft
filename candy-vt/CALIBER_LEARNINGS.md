@@ -156,6 +156,53 @@ to keep the most-significant byte. We also accept the CSS-style
 `#RRGGBB` shorthand. Other formats (named colors, hsl, etc.) are
 rejected — the entry is silently dropped.
 
+## Width-aware printChar: wide chars take 2 cells, zero-width chars skip (PR8)
+
+`ScreenHandler::printChar()` consults `SugarCraft\Core\Util\Width::string`
+for each rune the parser emits.
+
+- `width >= 2`: write the cell at `(row, col)` + `Cell::continuation()`
+  cells at `col+1..col+width-1`, advance cursor by `width`. CJK and
+  most emoji land here. The continuation inherits the original cell's
+  SGR + hyperlink so style spans look right.
+- `width == 1`: usual ASCII path.
+- `width == 0`: combining marks (e.g. U+0301), ZWJ (U+200D), variation
+  selectors. Currently skipped silently — they don't compose onto the
+  preceding cell's grapheme yet. ZWJ-joined emoji (👨‍👩‍👧) therefore
+  render as multiple separate emoji at the cell-grid level. Renderers
+  that want the joined glyph need to do clustering at the consumer.
+- Wide char that doesn't fit at the right edge: clamp cursor at
+  `cols - 1` without writing. Auto-wrap lands when DECSTBM margins do.
+
+## Fixtures are committed as binary `.ansi` files (PR8)
+
+`candy-vt/tests/fixtures/*.ansi` are raw byte captures of small
+realistic ANSI streams. They MUST be LF-only and MUST NOT be
+git-normalised. The dir-local `.gitattributes` (`*.ansi binary`)
+prevents CRLF rewriting on checkout.
+
+To regenerate or add fixtures, write the bytes via `printf` rather
+than an editor — most editors will silently insert/strip BOMs or
+normalise newlines. Example:
+
+```sh
+printf '\x1b[31mR\x1b[0m' > tests/fixtures/example.ansi
+```
+
+`SnapshotTest` reads each fixture with `file_get_contents()` and
+asserts specific cells/cursor/mode. Keep fixtures small (≤100 bytes
+each) — they're for the Parser/handler integration sanity check, not
+for full-frame golden images.
+
+## Fuzzer: feed() must never throw
+
+`FuzzerTest` runs a deterministic-seed RNG and pumps 100 B – 100 KB of
+random bytes through `Terminal::feed()` and `Terminal::flush()`. The
+contract is that no input — even pathologically malformed — causes an
+exception. Cursor must stay in bounds throughout. If a real-world
+input ever crashes, add a regression case using its bytes verbatim
+(or an isolated reduction) before fixing.
+
 ## Tab stops live on ScreenHandler as `array<int, bool>` (PR7)
 
 `ScreenHandler::$tabStops` is a sparse map keyed by column index.
