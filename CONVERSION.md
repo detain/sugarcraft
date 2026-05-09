@@ -28,6 +28,7 @@ and styling, `Sugar*` for components / data / forms, `Honey*` for math/physics.
 | 4 | [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) | **CandyZone** | `candy-zone/` → `sugarcraft/candy-zone` | `SugarCraft\Zone` | Mouse-zone tracker |
 | 5 | [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | **SugarBits** | `sugar-bits/` → `sugarcraft/sugar-bits` | `SugarCraft\Bits` | Pre-built components |
 | 5b | [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt) | **CandyVt** | `candy-vt/` → `sugarcraft/candy-vt` | `SugarCraft\Vt` | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state |
+| 5c | [charmbracelet/x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) | **CandyVcr** | `candy-vcr/` → `sugarcraft/candy-vcr` | `SugarCraft\Vcr` | Record + replay candy-core Program sessions into cassette files |
 | 6 | [NimbleMarkets/ntcharts](https://github.com/NimbleMarkets/ntcharts) | **SugarCharts** | `sugar-charts/` → `sugarcraft/sugar-charts` | `SugarCraft\Charts` | Line / bar / sparkline / heatmap |
 | 7 | [charmbracelet/huh](https://github.com/charmbracelet/huh) | **SugarPrompt** | `sugar-prompt/` → `sugarcraft/sugar-prompt` | `SugarCraft\Prompt` | Form library |
 | 8 | [charmbracelet/gum](https://github.com/charmbracelet/gum) | **CandyShell** | `candy-shell/` → `sugarcraft/candy-shell` | `SugarCraft\Shell` | CLI tool (composer bin) |
