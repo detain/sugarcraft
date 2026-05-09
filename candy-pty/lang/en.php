@@ -14,4 +14,6 @@ return [
     'open.unlockpt_failed'     => 'unlockpt() failed on master_fd={fd}',
     'open.ptsname_failed'      => 'ptsname_r() failed on master_fd={fd}',
     'close.failed'             => 'close(master_fd={fd}) failed (rc={rc})',
+    'spawn.proc_open_failed'   => 'proc_open() returned false for command: {cmd}',
+    'spawn.no_pid'             => 'proc_open() succeeded but proc_get_status() reported no pid for: {cmd}',
 ];
