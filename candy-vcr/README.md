@@ -18,8 +18,8 @@ roadmap.
 | PR2 | Recorder + `Program::withRecorder()` |
 | PR3 | Msg serializers — Builtin + Jsonable + Registry |
 | PR4 | Player + ByteAssertion + ReplayResult |
-| PR5 | ScreenAssertion via candy-vt (current) |
-| PR6 | YAML format |
+| PR5 | ScreenAssertion via candy-vt |
+| PR6 | YamlFormat (current) |
 | PR7 | CLI + examples + tracking |
 
 ## Use cases
