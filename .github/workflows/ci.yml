@@ -41,6 +41,7 @@ jobs:
           - candy-core
           - candy-sprinkles
           - candy-vt
+          - candy-vcr
           - honey-bounce
           - candy-zone
           - sugar-bits
@@ -233,6 +234,7 @@ jobs:
           - candy-core
           - candy-sprinkles
           - candy-vt
+          - candy-vcr
           - honey-bounce
           - candy-zone
           - sugar-bits
