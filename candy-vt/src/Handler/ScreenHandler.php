@@ -43,6 +43,9 @@ final class ScreenHandler implements Handler
     /** @var list<array{kind: string, selection: string, payload?: string}> */
     public array $clipboardEvents = [];
 
+    /** @var array<int, bool> Active tab stops, keyed by column. */
+    public array $tabStops;
+
     private ?Buffer $savedBuffer = null;
     private ?Cursor $savedCursor = null;
     private ?Sgr $savedSgr = null;
@@ -53,6 +56,7 @@ final class ScreenHandler implements Handler
     private ScrollHandler $scrollHandler;
     private ModeHandler $modeHandler;
     private OscHandler $oscHandler;
+    private TabHandler $tabHandler;
 
     public function __construct(
         Buffer $buffer,
@@ -70,6 +74,8 @@ final class ScreenHandler implements Handler
         $this->scrollHandler = new ScrollHandler();
         $this->modeHandler = new ModeHandler();
         $this->oscHandler = new OscHandler();
+        $this->tabHandler = new TabHandler();
+        $this->tabStops = TabHandler::defaults($buffer->cols);
     }
 
     public function printChar(string $rune): void
@@ -94,9 +100,10 @@ final class ScreenHandler implements Handler
             0x09 => $this->horizontalTab(),
             0x0A, 0x0B, 0x0C => $this->lineFeed(),
             0x0D => $this->carriageReturn(),
-            0x84 => $this->index(),       // IND (C1)
-            0x85 => $this->nextLine(),     // NEL (C1)
-            0x8D => $this->reverseIndex(), // RI  (C1)
+            0x84 => $this->index(),         // IND (C1)
+            0x85 => $this->nextLine(),       // NEL (C1)
+            0x88 => $this->setTabStop(),     // HTS (C1)
+            0x8D => $this->reverseIndex(),   // RI  (C1)
             default => null,
         };
     }
@@ -116,6 +123,15 @@ final class ScreenHandler implements Handler
                 return;
             case 'S': case 'T':
                 $this->scrollHandler->applyCsi($final, $params, $this->buffer);
+                return;
+            case 'I': case 'Z':
+                $this->cursor = $this->cursor->withCol(
+                    $this->tabHandler->applyCsi($final, $params, $this->cursor->col, $this->tabStops, $this->buffer->cols),
+                );
+                return;
+            case 'g':
+                $mode = $params[0] ?? -1;
+                $this->tabStops = $this->tabHandler->clear($mode === -1 ? 0 : $mode, $this->cursor->col, $this->tabStops);
                 return;
             case 'h':
                 if ($prefix === ord('?')) {
@@ -139,6 +155,7 @@ final class ScreenHandler implements Handler
             0x38 /* '8' */ => $this->cursor = $this->cursor->restore(),
             0x44 /* 'D' */ => $this->index(),
             0x45 /* 'E' */ => $this->nextLine(),
+            0x48 /* 'H' */ => $this->setTabStop(),
             0x4D /* 'M' */ => $this->reverseIndex(),
             default => null,
         };
@@ -166,9 +183,16 @@ final class ScreenHandler implements Handler
 
     private function horizontalTab(): void
     {
-        // Default tab stops every 8 columns; configurable in PR7.
-        $next = (intdiv($this->cursor->col, 8) + 1) * 8;
-        $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $next));
+        $this->cursor = $this->cursor->withCol(
+            $this->tabHandler->forward($this->cursor->col, $this->tabStops, $this->buffer->cols),
+        );
+    }
+
+    private function setTabStop(): void
+    {
+        if ($this->cursor->col >= 0 && $this->cursor->col < $this->buffer->cols) {
+            $this->tabStops[$this->cursor->col] = true;
+        }
     }
 
     private function lineFeed(): void
