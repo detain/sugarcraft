@@ -30,11 +30,12 @@ final class ScreenHandlerTest extends TestCase
         $this->assertSame(2, $h->cursor->col);
     }
 
-    public function testPrintsMultiByteUtf8AsSingleCell(): void
+    public function testPrintsWideCjkAsTwoCells(): void
     {
         $h = $this->feed("日");
         $this->assertSame('日', $h->buffer->cell(0, 0)->grapheme);
-        $this->assertSame(1, $h->cursor->col);
+        $this->assertTrue($h->buffer->cell(0, 1)->continuation);
+        $this->assertSame(2, $h->cursor->col);
     }
 
     public function testCursorClampsAtRightEdgeWithoutWrap(): void
