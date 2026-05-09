@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyVcr</title>
+<meta name="description" content="CandyVcr: record + replay candy-core terminal sessions. PHP port of charmbracelet/x/vcr.">
+<meta property="og:title" content="SugarCraft — CandyVcr">
+<meta property="og:description" content="Record + replay candy-core sessions — JSONL/YAML cassettes, byte + cell-grid assertions, CLI.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-vcr.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-vcr.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-vcr.png" alt="CandyVcr">
+      <div>
+        <h2>📼 CandyVcr</h2>
+        <p class="detail-sub">Record + replay candy-core sessions</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/vcr" style="color: inherit;">x/vcr</a></span>
+          <span class="tag-chip">cassettes</span>
+          <span class="tag-chip">jsonl + yaml</span>
+          <span class="tag-chip">replay</span>
+          <span class="tag-chip">cell-grid assert</span>
+          <span class="tag-chip">cli</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Tee every Msg + every byte a candy-core <code>Program</code> emits into a cassette file, then drive a fresh <code>Program</code> through the same cassette and assert the output matches — byte-strict via <code>ByteAssertion</code> or cell-grid-strict via <code>ScreenAssertion</code> (powered by <a href="candy-vt.html">CandyVt</a>).</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-vcr</code></pre>
+
+    <h3 style="margin-top: 32px;">Record</h3>
+    <pre class="code"><code>use SugarCraft\Core\Program;
+use SugarCraft\Vcr\Recorder;
+
+(new Program($model))
+    -&gt;withRecorder(Recorder::open('/tmp/session.cas'))
+    -&gt;run();
+// cassette is closed automatically when the loop ends.</code></pre>
+
+    <h3 style="margin-top: 32px;">Replay</h3>
+    <pre class="code"><code>use SugarCraft\Vcr\Player;
+use SugarCraft\Vcr\Assert\ScreenAssertion;
+
+$player = Player::open('/tmp/session.cas');
+$result = $player-&gt;play(
+    programFactory: fn ($input, $output, $loop) =&gt; new Program(
+        new MyModel(),
+        new ProgramOptions(input: $input, output: $output, loop: $loop, …),
+    ),
+    assertion: new ScreenAssertion(80, 24),
+);
+if (!$result-&gt;ok) {
+    echo $result-&gt;diffSummary();
+    exit(1);
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">CLI</h3>
+    <pre class="code"><code>vendor/bin/candy-vcr inspect session.cas               # list events
+vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream to stdout
+vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Cassette format</strong><span>JSONL primary (line-streamable, diff-friendly), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object.</span></div>
+      <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
+      <div class="feature"><strong>Msg serializers</strong><span>14 builtin candy-core Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusMsg, BlurMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry.</span></div>
+      <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
+      <div class="feature"><strong>ByteAssertion</strong><span>Strict byte-equality with hex+printable diff window starting at the first divergence offset.</span></div>
+      <div class="feature"><strong>ScreenAssertion</strong><span>Cell-grid equality via <a href="candy-vt.html">CandyVt</a>. Tolerates ANSI-level reordering (redundant SGR, equivalent cursor moves, partial vs full repaints) — the recommended choice for round-trip tests.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Bug repro from user reports</strong> — user runs <code>--record bug.cas</code>, ships the cassette, maintainer replays locally.</li>
+      <li><strong>Regression tests in CI</strong> — record a known-good session, replay against the current build, fail the build on cell-grid divergence.</li>
+      <li><strong>Demos &amp; documentation</strong> — alternative to VHS for headless / scriptable recordings; runs in the PHP unit-test process, no Docker.</li>
+      <li><strong>Fuzzing seeds</strong> — record real sessions, mutate Msgs, replay to find edge cases.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-vcr">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vcr/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vcr">charmbracelet/x/vcr</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/candy-vcr/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>

@@ -9,8 +9,7 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 
 ## Status
 
-🟡 **In progress** — see [`plans/x-vcr.md`](../plans/x-vcr.md) for the slice
-roadmap.
+🟢 **v1 ready** — all 7 PRs merged. See [`plans/x-vcr.md`](../plans/x-vcr.md) for the slice history.
 
 | PR | Scope |
 |----|-------|
@@ -19,8 +18,8 @@ roadmap.
 | PR3 | Msg serializers — Builtin + Jsonable + Registry |
 | PR4 | Player + ByteAssertion + ReplayResult |
 | PR5 | ScreenAssertion via candy-vt |
-| PR6 | YamlFormat (current) |
-| PR7 | CLI + examples + tracking |
+| PR6 | YamlFormat |
+| PR7 | `bin/candy-vcr` CLI + examples + tracking |
 
 ## Use cases
 
@@ -80,6 +79,27 @@ foreach ($cassette->events as $event) {
 ```
 
 The CLI lands in PR7.
+
+## CLI
+
+```sh
+vendor/bin/candy-vcr inspect session.cas               # list events
+vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream output to stdout
+vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
+```
+
+`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference.
+
+## Examples
+
+`examples/record.php`, `examples/replay.php`, `examples/inspect.php` — runnable scripts using a tiny `CounterModel`. The `examples/cassettes/counter.cas` fixture is a real recording you can play with:
+
+```sh
+php examples/record.php examples/cassettes/counter.cas
+bin/candy-vcr inspect examples/cassettes/counter.cas
+bin/candy-vcr replay  examples/cassettes/counter.cas --speed=realtime
+php examples/replay.php examples/cassettes/counter.cas
+```
 
 ### Replay (PR4)
 
