@@ -53,7 +53,7 @@ echo $out;
 | Call | What it does |
 |---|---|
 | `Pty::open(): Pty` | `posix_openpt + grantpt + unlockpt + ptsname_r`. Returns a Pty exposing `master` (readonly fd + slavePath). |
-| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24): Child` | `proc_open` with slave-path descriptors + initial TIOCSWINSZ. |
+| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors + initial TIOCSWINSZ. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
 | `$pty->write(string $bytes): int` | Returns bytes written. |
 | `$pty->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master fd. |
@@ -106,14 +106,30 @@ Alpine, custom sysroots).
 | `xpty.Pty.Size()`                 | `Pty::size()`                                            |
 | `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
 
+## Controlling terminal (Ctrl+C, job control)
+
+Pass `controllingTerminal: true` to `spawn()` when you need
+`Ctrl+C` typed at the master to deliver `SIGINT` to the child —
+required for interactive shells (`bash -i`), editors (`vim`,
+`less`), and anything else that uses tty-driven job control.
+
+```php
+$child = $pty->spawn(
+    ['/bin/bash', '-i'],
+    env: [...],
+    controllingTerminal: true,    // claim slave as the child's ctty
+);
+$pty->write("\x03");              // Ctrl+C → SIGINT to the child
+```
+
+Routes the spawn through `bin/pty-shim.php`, which does
+`setsid()` + `ioctl(0, TIOCSCTTY, 0)` + `pcntl_exec()` between
+`proc_open` and the actual cmd. Requires `ext-pcntl`. Costs ~5-50
+ms of shim startup per spawn — opt-in because non-interactive
+spawns (`echo`, `tput`, `bash -c '…'`) don't benefit.
+
 ## Known limitations
 
-- **TIOCSCTTY is NOT yet wired.** The spawned child does not claim
-  the slave PTY as its controlling terminal, so `Ctrl+C` typed at the
-  master does NOT deliver `SIGINT` to the child. Non-interactive
-  commands work cleanly; interactive shells / editors mis-handle
-  line-editing and signal-driven UI. Tracked as a hard prerequisite
-  for the candy-wish in-process SSH upgrade.
 - **Linux + macOS only.** Windows ConPTY is a separate port.
 
 ## License
