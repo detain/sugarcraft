@@ -224,15 +224,34 @@ final class Pty
             if ($timeout < 0) {
                 throw new \InvalidArgumentException("timeout must be >= 0; got {$timeout}");
             }
-            $sec  = (int) \floor($timeout);
-            $usec = (int) \round(($timeout - $sec) * 1_000_000);
-            $r = [$stream]; $w = null; $e = null;
-            $ready = @\stream_select($r, $w, $e, $sec, $usec);
-            if ($ready === false) {
-                throw new PtyException(Lang::t('read.select_failed', ['fd' => $this->master->fd]));
-            }
-            if ($ready === 0) {
-                return null;
+
+            // Deadline-based retry handles `EINTR` cleanly: a SIGWINCH
+            // (or any caught signal) interrupts `stream_select` with
+            // a `false` return; we dispatch pending pcntl handlers,
+            // recompute the remaining timeout, and retry. The loop
+            // bails out if pcntl is unavailable (can't distinguish
+            // EINTR from a real error) or the deadline elapses.
+            $deadline = \microtime(true) + $timeout;
+            while (true) {
+                $remaining = $deadline - \microtime(true);
+                if ($remaining <= 0) {
+                    return null;
+                }
+                $sec  = (int) \floor($remaining);
+                $usec = (int) \round(($remaining - $sec) * 1_000_000);
+                $r = [$stream]; $w = null; $e = null;
+                $ready = @\stream_select($r, $w, $e, $sec, $usec);
+                if ($ready === false) {
+                    if (\function_exists('pcntl_signal_dispatch')) {
+                        @\pcntl_signal_dispatch();
+                        continue;
+                    }
+                    throw new PtyException(Lang::t('read.select_failed', ['fd' => $this->master->fd]));
+                }
+                if ($ready === 0) {
+                    return null;
+                }
+                break;
             }
         }
 
