@@ -40,6 +40,7 @@ Status legend:
 | [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile) | **CandyPalette** | `candy-palette/` | `sugarcraft/candy-palette` | `SugarCraft\Palette` | 🟢 | Terminal color detection + ICC profile handling |
 | [charmbracelet/x/mosaic](https://github.com/charmbracelet/x/tree/main/mosaic) | **CandyMosaic** | `candy-mosaic/` | `sugarcraft/candy-mosaic` | `SugarCraft\Mosaic` | 🟢 | Image-to-cell renderer (Sixel, Kitty, iTerm2, Unicode half-block); Picker facade; ext-gd |
 | [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt) | **CandyVt** | `candy-vt/` | `sugarcraft/candy-vt` | `SugarCraft\Vt` | 🟡 | In-memory virtual terminal emulator; ANSI byte stream → cell grid + cursor + mode state |
+| [charmbracelet/x/vcr](https://github.com/charmbracelet/x/tree/main/vcr) | **CandyVcr** | `candy-vcr/` | `sugarcraft/candy-vcr` | `SugarCraft\Vcr` | 🟡 | Record + replay terminal sessions (cassette format, frame assertion) |
 | [treilik/bubblelister](https://github.com/treilik/bubblelister) | **CandyLister** | `candy-lister/` | `sugarcraft/candy-lister` | `SugarCraft\Lister` | 🟢 |
 | [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) | **SugarBoxer** | `sugar-boxer/` | `sugarcraft/sugar-boxer` | `SugarCraft\Boxer` | 🟢 |
 | [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) | **SugarVeil** | `sugar-veil/` | `sugarcraft/sugar-veil` | `SugarCraft\Veil` | 🟢 |
