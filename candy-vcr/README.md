@@ -15,8 +15,8 @@ roadmap.
 | PR | Scope |
 |----|-------|
 | PR1 | Cassette + Event + JsonlFormat |
-| PR2 | Recorder + `Program::withRecorder()` (current) |
-| PR3 | Msg serializers (KeyMsg, MouseMsg, WindowSizeMsg, …) |
+| PR2 | Recorder + `Program::withRecorder()` |
+| PR3 | Msg serializers — Builtin + Jsonable + Registry (current) |
 | PR4 | Player + ByteAssertion |
 | PR5 | ScreenAssertion via candy-vt |
 | PR6 | YAML format |
@@ -80,6 +80,29 @@ foreach ($cassette->events as $event) {
 ```
 
 The Player (replay-and-assert) lands in PR4; the CLI lands in PR7.
+
+### Msg serializers (PR3)
+
+`SugarCraft\Vcr\Msg\Registry::default()` is preloaded with:
+
+- **`BuiltinSerializer`** — covers 14 candy-core Msgs: `KeyMsg`,
+  `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
+  `FocusMsg`, `BlurMsg`, `PasteStartMsg / EndMsg / Msg`,
+  `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorPositionMsg`. Tag
+  is the unqualified class name.
+- **`JsonableSerializer`** — catch-all for any Msg implementing
+  `\JsonSerializable`. Tag is the FQCN; `data` is the
+  `jsonSerialize()` result. Round-trip works when the constructor's
+  parameter names match the keys returned by `jsonSerialize()`.
+
+```php
+use SugarCraft\Vcr\Msg\Registry;
+$registry = Registry::default();
+$envelope = $registry->encode($msg);  // ['@type' => 'KeyMsg', …] or null
+$decoded  = $registry->decode($envelope);  // Msg|null
+```
+
+Custom serializers slot in via `$registry->register(new MyOne())`.
 
 ## License
 
