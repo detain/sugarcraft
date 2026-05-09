@@ -17,8 +17,8 @@ roadmap.
 | PR1 | Cassette + Event + JsonlFormat |
 | PR2 | Recorder + `Program::withRecorder()` |
 | PR3 | Msg serializers — Builtin + Jsonable + Registry |
-| PR4 | Player + ByteAssertion + ReplayResult (current) |
-| PR5 | ScreenAssertion via candy-vt |
+| PR4 | Player + ByteAssertion + ReplayResult |
+| PR5 | ScreenAssertion via candy-vt (current) |
 | PR6 | YAML format |
 | PR7 | CLI + examples + tracking |
 
@@ -108,7 +108,25 @@ if (!$result->ok) {
 
 `Player::play` walks the cassette and feeds each event into the program: resize → `WindowSizeMsg`, input bytes → re-parsed via `InputReader` and dispatched, input msg envelope → decoded via the serializer registry, quit → `program->quit()`. Output events accumulate into the expected byte buffer; the program's actual output stream is captured and compared via the supplied assertion.
 
-`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. PR5 adds `ScreenAssertion` (cell-grid equality via candy-vt) which is more robust to renderer reordering.
+`ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [candy-vt](../candy-vt/)) is the recommended choice for round-trip tests:
+
+```php
+use SugarCraft\Vcr\Assert\ScreenAssertion;
+
+$result = $player->play(
+    programFactory: $factory,
+    assertion: new ScreenAssertion(cols: 80, rows: 24),
+);
+```
+
+It feeds both expected and actual byte streams into separate
+`SugarCraft\Vt\Terminal\Terminal` instances and compares the resulting
+cell grids. ANSI-level reorderings — redundant SGR re-emission,
+equivalent cursor moves, partial vs full repaints — collapse to the
+same grapheme grid, so a recording → replay round trip passes even
+when the byte streams differ. Failure messages list the first 5
+differing cells with `(row,col)` coordinates and the expected vs
+actual graphemes.
 
 ### Msg serializers (PR3)
 

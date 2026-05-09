@@ -31,7 +31,8 @@
         "sugarcraft/candy-core": "@dev"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-vt": "@dev"
     },
     "suggest": {
         "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise."
