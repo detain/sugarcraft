@@ -66,9 +66,15 @@ final class ProgramRecordingTest extends TestCase
             $this->assertGreaterThan(0, $resize->payload['cols']);
             $this->assertGreaterThan(0, $resize->payload['rows']);
 
-            // Quit event is last.
-            $last = $tape->events[count($tape->events) - 1];
-            $this->assertSame(EventKind::Quit, $last->kind);
+            // Quit event appears once. Teardown output bytes follow it
+            // in the cassette (so replay produces matching bytes via a
+            // fresh Program's own teardown), so Quit is NOT necessarily
+            // the last event.
+            $quitIndices = array_keys(array_filter(
+                $tape->events,
+                static fn($e) => $e->kind === EventKind::Quit,
+            ));
+            $this->assertCount(1, $quitIndices);
         } finally {
             @unlink($cassette);
             fclose($writer);
