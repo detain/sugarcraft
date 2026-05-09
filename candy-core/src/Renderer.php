@@ -47,6 +47,8 @@ final class Renderer
     /** @var list<string>|null */
     private ?array $lastLines = null;
 
+    private ?Recorder $recorder = null;
+
     /**
      * @param resource $out
      * @param bool     $inline    draw inline instead of taking over the screen
@@ -61,6 +63,16 @@ final class Renderer
         private readonly bool $cellDiff = false,
     ) {}
 
+    /**
+     * Tee every byte chunk this renderer emits to the given recorder
+     * (or pass null to detach). Wired by {@see Program::withRecorder()};
+     * direct callers shouldn't need this.
+     */
+    public function setRecorder(?Recorder $recorder): void
+    {
+        $this->recorder = $recorder;
+    }
+
     public function render(string $frame): void
     {
         $lines = $frame === '' ? [''] : explode("\n", $frame);
@@ -69,7 +81,7 @@ final class Renderer
             $body = $this->inline
                 ? Ansi::cursorSave() . implode("\r\n", $lines)
                 : Ansi::cursorTo(1, 1) . Ansi::eraseToEnd() . implode("\r\n", $lines);
-            fwrite($this->out, Ansi::syncBegin() . $body . Ansi::syncEnd());
+            $this->emit(Ansi::syncBegin() . $body . Ansi::syncEnd());
             $this->lastLines = $lines;
             return;
         }
@@ -80,7 +92,7 @@ final class Renderer
 
         if ($this->inline) {
             $body = Ansi::cursorRestore() . Ansi::eraseToEnd() . implode("\r\n", $lines);
-            fwrite($this->out, Ansi::syncBegin() . $body . Ansi::syncEnd());
+            $this->emit(Ansi::syncBegin() . $body . Ansi::syncEnd());
             $this->lastLines = $lines;
             return;
         }
@@ -90,7 +102,7 @@ final class Renderer
             : $this->diffLines($this->lastLines, $lines);
 
         if ($payload !== '') {
-            fwrite($this->out, Ansi::syncBegin() . $payload . Ansi::syncEnd());
+            $this->emit(Ansi::syncBegin() . $payload . Ansi::syncEnd());
         }
         $this->lastLines = $lines;
     }
@@ -98,6 +110,12 @@ final class Renderer
     public function reset(): void
     {
         $this->lastLines = null;
+    }
+
+    private function emit(string $bytes): void
+    {
+        fwrite($this->out, $bytes);
+        $this->recorder?->recordOutput($bytes);
     }
 
     /**
