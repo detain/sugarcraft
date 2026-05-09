@@ -212,6 +212,51 @@ jobs:
             vendor\bin\phpunit --colors=never
           }
 
+  # macOS test job — verifies POSIX PTY paths (candy-pty's libc FFI:
+  # posix_openpt / grantpt / unlockpt / ptsname_r / ioctl + the macOS
+  # TIOCSWINSZ / TIOCGWINSZ constants that diverge from Linux) work
+  # on Darwin. Scoped to candy-pty only — other libs would catch
+  # macOS-specific regressions on demand if/when issues surface.
+  macos-test:
+    name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
+    runs-on: macos-latest
+    concurrency:
+      group: ci-macos-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3']
+        lib:
+          - candy-pty
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring, intl, json, pcntl, ffi
+          tools: composer:v2
+          coverage: none
+          ini-values: ffi.enable=true
+
+      - name: Cache vendor/
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.lib }}/vendor
+          key: vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.lib }}
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run tests
+        working-directory: ${{ matrix.lib }}
+        run: vendor/bin/phpunit --colors=never
+
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
   # as a flag. Codecov uses the flag to surface a separate badge per

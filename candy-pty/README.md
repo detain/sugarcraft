@@ -4,13 +4,13 @@
 [![Coverage](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-pty)](https://codecov.io/gh/detain/sugarcraft)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](../LICENSE)
 
-PHP port of [`charmbracelet/x/xpty`](https://github.com/charmbracelet/x) —
-the pseudo-terminal primitive used by Charm to drive child processes
-inside a TUI. Lets you open a master/slave PTY pair, spawn a child with
-its stdio wired to the slave, and forward resizes from the host TTY
-into the child via `TIOCSWINSZ`.
+PHP port of [`charmbracelet/x/xpty`](https://github.com/charmbracelet/x/tree/main/xpty) —
+the pseudo-terminal primitive Charm uses to drive child processes
+inside their TUIs. Open a master/slave PTY pair, spawn a child with
+its stdio wired to the slave, pump bytes between the host and the
+child, and forward host resizes into the child via `TIOCSWINSZ`.
 
-**Status**: Linux + macOS only. Windows ConPTY is a separate concern
+**Status**: Linux + macOS. Windows ConPTY is a separate concern
 tracked in `plans/x-windows.md`.
 
 ## Install
@@ -20,46 +20,101 @@ composer require sugarcraft/candy-pty
 ```
 
 Requires PHP 8.1+ with `ext-ffi`. `ext-pcntl` is optional — the lib
-polls `waitpid()` when pcntl is absent.
+polls `waitpid()` when pcntl is absent and `SignalForwarder` degrades
+to a no-op.
 
 ## Quickstart
 
 ```php
 use SugarCraft\Pty\Pty;
 
-$pty = Pty::open();        // posix_openpt + grantpt + unlockpt + ptsname_r
-echo $pty->slavePath();    // /dev/pts/3 (Linux) or /dev/ttysXX (macOS)
+$pty   = Pty::open();
+$child = $pty->spawn(
+    ['/bin/bash', '-c', 'echo $TERM; uname -s; date'],
+    ['TERM' => 'xterm-256color'],
+    100, 30,                              // cols × rows
+);
+
+$pty->setBlocking(false);
+$out = '';
+while (!$child->exited()) {
+    $chunk = $pty->read(4096, 0.05);     // 50 ms timeout
+    if ($chunk === null || $chunk === '') continue;
+    $out .= $chunk;
+}
+$exit = $child->wait();
 $pty->close();
+
+echo $out;
 ```
 
-`Pty::spawn()`, `Pty::read()` / `write()`, `Pty::resize()` ship in
-follow-up PRs (PR2-PR5).
+## API at a glance
 
-## Why FFI?
+| Call | What it does |
+|---|---|
+| `Pty::open(): Pty` | `posix_openpt + grantpt + unlockpt + ptsname_r`. Returns a Pty exposing `master` (readonly fd + slavePath). |
+| `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24): Child` | `proc_open` with slave-path descriptors + initial TIOCSWINSZ. |
+| `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
+| `$pty->write(string $bytes): int` | Returns bytes written. |
+| `$pty->setBlocking(bool $blocking): void` | Toggles non-blocking mode on the master fd. |
+| `$pty->resize(int $cols, int $rows): void` | TIOCSWINSZ on the master fd. |
+| `$pty->size(): array{cols,rows,xpix,ypix}` | TIOCGWINSZ readback. |
+| `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
+| `$pty->close(): void` | Idempotent. Routes through `fclose` if `stream()` was materialised, else `close(2)` via FFI. |
+| `$child->pid: int` | OS process id. |
+| `$child->wait(): int` | Blocks via 10ms `proc_get_status` poll, returns exit code. Idempotent. |
+| `$child->exited(): bool` | Non-blocking probe. |
 
-`posix_openpt`, `grantpt`, `unlockpt`, `ptsname_r`, and `ioctl(TIOCSWINSZ)`
-are libc primitives with no PHP equivalents. Shelling out to
-`/usr/bin/script` works but provides no clean exit-code detection and
-no resize control. FFI keeps the call-graph in-process and gives us
-native errno reporting.
+## Resize forwarding
+
+```php
+use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Core\Util\Tty;
+
+SignalForwarder::attachSigwinch(
+    $pty,
+    fn () => Tty::size(),                 // returns ['cols' => N, 'rows' => N]
+);
+// Now every host SIGWINCH triggers $pty->resize($cols, $rows).
+```
+
+The forwarder defaults to `pcntl_async_signals(true)` so handlers
+fire between PHP opcodes; pass `async: false` if your event loop
+already polls `pcntl_signal_dispatch()` itself.
+
+## Examples
+
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — Run a non-interactive bash one-liner inside a PTY and stream the output back through the master end.
+- [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
+- [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
 
 ## Library lookup
 
-By default the lib loads `libc.so.6` on Linux and
-`/usr/lib/libSystem.B.dylib` on macOS. Override via the
-`SUGARCRAFT_LIBC` env var for unusual setups (musl, Alpine, custom
-sysroots).
+Defaults: `libc.so.6` on Linux, `/usr/lib/libSystem.B.dylib` on macOS.
+Override via the `SUGARCRAFT_LIBC` env var for unusual setups (musl,
+Alpine, custom sysroots).
 
 ## Mirrors
 
-| Charm symbol                 | candy-pty                            |
-|------------------------------|--------------------------------------|
-| `xpty.Open()`                | `Pty::open()` *(PR1)*                |
-| `xpty.Pty.Start(cmd)`        | `Pty::spawn(cmd, env, cols, rows)` *(PR2)* |
-| `xpty.Pty.Resize(cols, rows)`| `Pty::resize(cols, rows)` *(PR3)*    |
-| `xpty.Pty.SetReadDeadline()` | `Pty::read(len, timeout)` *(PR4)*    |
+| Charm symbol                      | candy-pty                                                |
+|-----------------------------------|----------------------------------------------------------|
+| `xpty.Open()`                     | `Pty::open()`                                            |
+| `xpty.Pty.Start(cmd)`             | `Pty::spawn(cmd, env, cols, rows)`                       |
+| `xpty.Pty.Read(buf)`              | `Pty::read($len, $timeout)`                              |
+| `xpty.Pty.Write(buf)`             | `Pty::write($bytes)`                                     |
+| `xpty.Pty.Resize(cols, rows)`     | `Pty::resize(cols, rows)`                                |
+| `xpty.Pty.Size()`                 | `Pty::size()`                                            |
+| `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
 
-See [`plans/x-xpty.md`](../plans/x-xpty.md) for the full roadmap.
+## Known limitations
+
+- **TIOCSCTTY is NOT yet wired.** The spawned child does not claim
+  the slave PTY as its controlling terminal, so `Ctrl+C` typed at the
+  master does NOT deliver `SIGINT` to the child. Non-interactive
+  commands work cleanly; interactive shells / editors mis-handle
+  line-editing and signal-driven UI. Tracked as a hard prerequisite
+  for the candy-wish in-process SSH upgrade.
+- **Linux + macOS only.** Windows ConPTY is a separate port.
 
 ## License
 
