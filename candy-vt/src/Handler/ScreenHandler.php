@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Handler;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Buffer\Buffer;
 use SugarCraft\Vt\Cell\Cell;
 use SugarCraft\Vt\Color\Color;
@@ -82,15 +83,38 @@ final class ScreenHandler implements Handler
     {
         $r = $this->cursor->row;
         $c = $this->cursor->col;
-        if ($r >= 0 && $r < $this->buffer->rows && $c >= 0 && $c < $this->buffer->cols) {
-            $this->buffer->put($r, $c, new Cell(
-                grapheme: $rune,
-                sgr: $this->sgr,
-                hyperlink: $this->currentHyperlink,
-            ));
+
+        if ($r < 0 || $r >= $this->buffer->rows) {
+            return;
         }
-        // Auto-wrap is deferred until DECSTBM margins land; clamp at the right edge.
-        $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $c + 1));
+
+        $width = Width::string($rune);
+        if ($width <= 0) {
+            // Zero-width: combining marks, ZWJ, etc. We don't compose
+            // them onto the previous cell yet — silently skip so they
+            // don't desync the column count.
+            return;
+        }
+
+        // Wide chars need room for the trailing continuation cells. If
+        // they don't fit, clamp without writing — auto-wrap lands once
+        // DECSTBM margins are wired.
+        if ($c + $width > $this->buffer->cols) {
+            $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
+            return;
+        }
+
+        $cell = new Cell(
+            grapheme: $rune,
+            sgr: $this->sgr,
+            hyperlink: $this->currentHyperlink,
+        );
+        $this->buffer->put($r, $c, $cell);
+        for ($i = 1; $i < $width; $i++) {
+            $this->buffer->put($r, $c + $i, Cell::continuation($cell));
+        }
+
+        $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $c + $width));
     }
 
     public function execute(int $byte): void

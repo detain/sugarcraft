@@ -50,6 +50,16 @@ final class Terminal
         $this->parser->feed($bytes);
     }
 
+    /**
+     * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
+     * dispatch with its current payload and reset to ground. Useful at
+     * end-of-stream when you can't wait for a real terminator byte.
+     */
+    public function flush(): void
+    {
+        $this->parser->flush();
+    }
+
     public function screen(): Screen
     {
         return Screen::fromBuffer($this->handler->buffer);
