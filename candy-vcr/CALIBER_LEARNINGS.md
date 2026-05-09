@@ -34,6 +34,25 @@ pointer). Same trap for `reset`, `next`, `prev`, `array_pop`, `array_shift`,
 The error file:line points at the line that calls the by-ref function,
 not at any assignment, which can be confusing.
 
+## Recorder is an interface in candy-core, impl in candy-vcr
+
+To avoid candy-core depending on candy-vcr (it's the other way around),
+candy-core ships a `SugarCraft\Core\Recorder` interface that
+`SugarCraft\Vcr\Recorder` implements. `Program::withRecorder()` accepts
+the interface. Other consumers — debug tap, network mirror, crash bundle
+— can implement it and slot into the same hook without pulling cassette
+plumbing.
+
+## record* methods no-op after close, never throw
+
+`Program` calls `recordQuit()` then `close()` from inside `dispatch(QuitMsg)`,
+but `teardownTerminal()` runs AFTER that and still emits output bytes
+(unicode-off, alt-screen-leave, etc.). Each of those goes through
+`writeOutput → recorder->recordOutput`. To keep the cassette clean
+(ending on the `quit` line, not on environmental teardown noise), all
+record* methods short-circuit when the recorder is closed. Throwing
+would force every call site to guard, which defeats the tee point.
+
 ## `t` is rounded to 3 decimals (ms) on write
 
 Floating-point seconds with sub-microsecond precision serialize as

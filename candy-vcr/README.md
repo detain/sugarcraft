@@ -14,8 +14,8 @@ roadmap.
 
 | PR | Scope |
 |----|-------|
-| PR1 | Cassette + Event + JsonlFormat (current) |
-| PR2 | Recorder hook in candy-core `Program` |
+| PR1 | Cassette + Event + JsonlFormat |
+| PR2 | Recorder + `Program::withRecorder()` (current) |
 | PR3 | Msg serializers (KeyMsg, MouseMsg, WindowSizeMsg, …) |
 | PR4 | Player + ByteAssertion |
 | PR5 | ScreenAssertion via candy-vt |
@@ -54,30 +54,32 @@ composer require sugarcraft/candy-vcr
   `quit`) with kind-specific payload fields.
 - `t` is seconds since cassette start (ms precision).
 
-## Quickstart (PR1 surface)
+## Quickstart
+
+Record a session:
 
 ```php
-use SugarCraft\Vcr\Cassette;
-use SugarCraft\Vcr\CassetteHeader;
-use SugarCraft\Vcr\Event;
-use SugarCraft\Vcr\EventKind;
-use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Core\Program;
+use SugarCraft\Vcr\Recorder;
 
-$cassette = new Cassette(
-    new CassetteHeader(version: 1, createdAt: '2026-05-07T10:00:00Z', cols: 80, rows: 24, runtime: 'sugarcraft/candy-core@dev'),
-    [
-        new Event(t: 0.0, kind: EventKind::Resize, payload: ['cols' => 80, 'rows' => 24]),
-        new Event(t: 0.001, kind: EventKind::Output, payload: ['b' => "\x1b[2J\x1b[H"]),
-        new Event(t: 1.201, kind: EventKind::Quit, payload: []),
-    ],
-);
-
-$format = new JsonlFormat();
-$format->write($cassette, '/tmp/session.cas');
-$loaded = $format->read('/tmp/session.cas');
+(new Program($model))
+    ->withRecorder(Recorder::open('/tmp/session.cas'))
+    ->run();
+// cassette is closed automatically on QuitMsg
 ```
 
-The runtime API (`Recorder`, `Player`, CLI) lands in subsequent PRs.
+Read a recorded cassette back:
+
+```php
+use SugarCraft\Vcr\Format\JsonlFormat;
+
+$cassette = (new JsonlFormat())->read('/tmp/session.cas');
+foreach ($cassette->events as $event) {
+    echo $event->kind->value, ' @ ', $event->t, "\n";
+}
+```
+
+The Player (replay-and-assert) lands in PR4; the CLI lands in PR7.
 
 ## License
 
