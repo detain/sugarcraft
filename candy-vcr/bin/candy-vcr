@@ -1,0 +1,27 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// Resolve the autoloader. Works when run from the lib's own
+// vendor/ (development) or from a parent project's vendor/bin/
+// (composer-installed bin shim).
+$autoload = null;
+foreach ([
+    __DIR__ . '/../vendor/autoload.php',
+    __DIR__ . '/../../../autoload.php',
+] as $candidate) {
+    if (file_exists($candidate)) {
+        $autoload = $candidate;
+        break;
+    }
+}
+if ($autoload === null) {
+    fwrite(STDERR, "candy-vcr: cannot locate vendor/autoload.php\n");
+    exit(1);
+}
+require $autoload;
+
+use SugarCraft\Vcr\Cli\Application;
+
+exit((new Application())->run($argv, STDOUT, STDERR));
