@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyVt</title>
+<meta name="description" content="CandyVt: in-memory virtual terminal emulator. PHP port of charmbracelet/x/vt.">
+<meta property="og:title" content="SugarCraft — CandyVt">
+<meta property="og:description" content="In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-vt.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-vt.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-vt.png" alt="CandyVt">
+      <div>
+        <h2>🍬 CandyVt</h2>
+        <p class="detail-sub">In-memory virtual terminal emulator</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/vt" style="color: inherit;">x/vt</a></span>
+          <span class="tag-chip">vt500-parser</span>
+          <span class="tag-chip">cell-grid</span>
+          <span class="tag-chip">snapshot-tests</span>
+          <span class="tag-chip">no-pty</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Feed an ANSI byte stream in, query a cell grid + cursor + mode state out — without ever spawning a real terminal. Built on a Paul-Williams VT500 state machine that mirrors charmbracelet/x/ansi/parser.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-vt</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Vt\Terminal\Terminal;
+
+$term = Terminal::create(cols: 80, rows: 24);
+$term-&gt;feed("\x1b[1;31mHello\x1b[0m world");
+
+$screen = $term-&gt;screen();
+$screen-&gt;cell(0, 0)-&gt;grapheme;       // 'H'
+$screen-&gt;cell(0, 0)-&gt;sgr-&gt;bold;      // true
+$screen-&gt;cell(0, 0)-&gt;foreground();   // 16-color red
+
+$term-&gt;feed("\x1b]2;Demo\x07");
+$term-&gt;windowTitle();                 // 'Demo'
+
+$term-&gt;feed("\x1b[?1049h");
+$term-&gt;mode()-&gt;altScreen;             // true</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls.</span></div>
+      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles.</span></div>
+      <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
+      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 sync.</span></div>
+      <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events.</span></div>
+      <div class="feature"><strong>Width-aware</strong><span>CJK + most emoji take 2 cells with a continuation marker. Delegates to <code>candy-core</code>'s <code>Util\Width</code> for grapheme width.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Snapshot tests</strong> — drive any TUI's <code>view()</code> through CandyVt and assert on cell-grid state instead of raw byte strings.</li>
+      <li><strong>Recording &amp; replay</strong> — capture <code>feed()</code> input and replay deterministically.</li>
+      <li><strong>Headless SSH sessions</strong> — pair with <code>candy-wish</code> to run TUIs without a real PTY.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-vt">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vt/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-vt/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/vt">charmbracelet/x/vt</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vt/.vhs/snapshot-demo.gif" alt="Feed and screenshot">
+                <h3>Feed and screenshot</h3>
+                <span class="demo-caption">An ANSI byte stream feeds into a Terminal; the cell grid prints back as a screenshot, with window title, cursor position, and hyperlink span.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/candy-vt/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
