@@ -95,4 +95,27 @@ final class Child
     {
         return $this->exitCode;
     }
+
+    /**
+     * Best-effort safety-net reap — runs only if the caller forgot to
+     * call {@see wait()} and the proc resource is still live. Never
+     * blocks: a still-running child stays running and gets reaped by
+     * the kernel when this PHP process exits. Prevents zombie
+     * accumulation on long-lived parents that spawn children eagerly.
+     */
+    public function __destruct()
+    {
+        if (!\is_resource($this->process)) {
+            return;
+        }
+        // proc_close blocks if the process is still running, which is
+        // the wrong behaviour during PHP shutdown. Probe once
+        // non-blockingly via proc_get_status — if running, leave the
+        // resource alone and let the kernel clean up at exit.
+        $status = @\proc_get_status($this->process);
+        if (\is_array($status) && ($status['running'] ?? true) === false) {
+            @\proc_close($this->process);
+            $this->process = null;
+        }
+    }
 }
