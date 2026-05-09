@@ -18,4 +18,8 @@ return [
     'spawn.no_pid'             => 'proc_open() succeeded but proc_get_status() reported no pid for: {cmd}',
     'resize.failed'            => 'TIOCSWINSZ ioctl failed on master_fd={fd} (cols={cols} rows={rows} rc={rc})',
     'size.failed'              => 'TIOCGWINSZ ioctl failed on master_fd={fd} (rc={rc})',
+    'stream.fopen_failed'      => 'php://fd/{fd} could not be opened as a stream',
+    'stream.set_blocking_failed' => 'stream_set_blocking({blocking}) failed on master_fd={fd}',
+    'write.failed'             => 'fwrite() failed on master_fd={fd} (len={len})',
+    'read.select_failed'       => 'stream_select() failed while waiting for master_fd={fd}',
 ];
