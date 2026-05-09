@@ -211,8 +211,22 @@ vendor/bin/candy-vcr diff a.cas b.cas
 
 - Drive Program from cassette events
 - Two speed modes: instant (next event ASAP), realtime (sleep until `t`)
-- `ByteAssertion` — exact-equality of output chunks per event
-- Tests: round-trip a recorded session, assert pass
+- `ByteAssertion` — exact-equality of output chunks (aggregate, not per-event)
+- Tests: structural — `Player` iterates events, program quits cleanly,
+  `ReplayResult` tally matches cassette events
+
+> **Discovered during execution:** byte-strict round-trip parity between
+> a recorded session and a replayed session is not achievable with
+> `ByteAssertion` alone. The recording captures whatever the
+> framerate-based renderer emitted during the recording loop; the
+> replay loop runs over a different timeline (Player chains events with
+> a small yield interval to let the program's render tick fire) and
+> emits a different byte stream. The two streams are *cell-grid*
+> equivalent but not byte-identical. PR5's `ScreenAssertion` (cell-grid
+> via candy-vt) is the right tool for true round-trip parity. PR4
+> ships `ByteAssertion` as the strict baseline (caller-controlled
+> timing) plus structural replay assertions; PR5 lifts round-trip
+> equality.
 
 ### PR5 — ScreenAssertion via candy-vt (~half day)
 
