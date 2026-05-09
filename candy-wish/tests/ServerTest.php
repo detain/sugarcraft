@@ -81,4 +81,58 @@ final class ServerTest extends TestCase
         Server::new()->serve($this->fakeSession());
         $this->assertTrue(true);
     }
+
+    public function testDefaultTransportIsInProcess(): void
+    {
+        $server = Server::new();
+        $this->assertInstanceOf(
+            \SugarCraft\Wish\Transport\InProcessTransport::class,
+            $server->transport(),
+        );
+    }
+
+    public function testWithTransportOverridesDefault(): void
+    {
+        $hostSshd = new \SugarCraft\Wish\Transport\HostSshdTransport();
+        $server = Server::new()->withTransport($hostSshd);
+        $this->assertSame($hostSshd, $server->transport());
+    }
+
+    public function testServeDelegatesToActiveTransport(): void
+    {
+        $log = [];
+        $captured = null;
+        $captured2 = null;
+        $transport = new class($log, $captured, $captured2) implements \SugarCraft\Wish\Transport {
+            public function __construct(
+                private array &$log,
+                private ?Session &$session,
+                private ?array &$stack,
+            ) {}
+            public function run(Session $session, array $stack): void
+            {
+                $this->log[] = 'transport-run';
+                $this->session = $session;
+                $this->stack = $stack;
+            }
+        };
+
+        $mw = new class($log) implements Middleware {
+            public function __construct(private array &$log) {}
+            public function handle(Session $s, callable $next): void
+            {
+                $this->log[] = 'mw';
+            }
+        };
+
+        $session = $this->fakeSession();
+        Server::new()
+            ->withTransport($transport)
+            ->use($mw)
+            ->serve($session);
+
+        $this->assertSame(['transport-run'], $log, 'transport must run; mw runs only if transport invokes it');
+        $this->assertSame($session, $captured, 'transport must receive the session unchanged');
+        $this->assertSame([$mw], $captured2, 'transport must receive the registered stack');
+    }
 }

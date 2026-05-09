@@ -4,32 +4,38 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish;
 
+use SugarCraft\Wish\Transport\InProcessTransport;
+
 /**
  * SSH session entry point.
  *
- * **Architecture.** Unlike upstream `charmbracelet/wish`, which
- * speaks the SSH wire protocol directly via `gliderlabs/ssh`,
- * CandyWish leans on the host's OpenSSH daemon: the operator
- * configures `sshd` to invoke a CandyWish-aware script via
+ * **Architecture.** Both transports candy-wish ships still depend on
+ * host sshd as the SSH wire-protocol front-end. The operator
+ * configures `sshd` to invoke a CandyWish-aware PHP script via
  * `ForceCommand` (in `sshd_config`) or `command="..."` (in an
  * `authorized_keys` line). Each connection spawns a fresh PHP
  * process; this class is what that process instantiates.
  *
- * That trade buys us a battle-tested SSH implementation, key /
- * host management, fail2ban hooks, audit logs, and the existing
- * sshd CI surface — at the cost of being a stdin/stdout adapter
- * rather than a full SSH library. The middleware-stack programming
- * model is unchanged.
+ * What's pluggable is the {@see Transport} — the strategy that
+ * decides HOW the middleware stack runs against the session:
+ *
+ *   - {@see Transport\InProcessTransport} (default) — PTY supervisor:
+ *     allocates a `candy-pty`, spawns the user's cmd as a subprocess
+ *     with full controlling-terminal semantics, pumps bytes between
+ *     supervisor stdio and the PTY master.
+ *   - {@see Transport\HostSshdTransport} (legacy, opt-in) — runs the
+ *     middleware chain inline against sshd's PTY directly. Mirrors
+ *     pre-PTY-upgrade behaviour for existing deployments.
  *
  * **Lifecycle.**
  *
- *   1. `Server::new()` constructs an empty stack.
- *   2. `->use($middleware)` appends middleware in registration order.
- *   3. `->serve()` builds a {@see Session} from the SSH env vars,
- *      then walks the stack: each middleware decides whether to
- *      continue to `$next` or stop. The terminal middleware is
- *      typically {@see Middleware\BubbleTea} which mounts a
- *      SugarCraft Program and runs until the user disconnects.
+ *   1. `Server::new()` constructs an empty stack with the default
+ *      InProcess transport.
+ *   2. `->withTransport($t)` overrides the transport (optional).
+ *   3. `->use($middleware)` appends middleware in registration order.
+ *   4. `->serve()` builds a {@see Session} from the SSH env vars
+ *      (or accepts an injected Session for tests), then asks the
+ *      transport to run the stack.
  *
  * **Example sshd snippet** (`/etc/ssh/sshd_config.d/wish.conf`):
  *
@@ -40,13 +46,22 @@ namespace SugarCraft\Wish;
  *     PermitTTY yes
  * ```
  *
- * **Example `server.php`** (the per-connection entry):
+ * **Example `server.php`** (in-process default):
  *
  * ```php
  * Server::new()
  *     ->use(new Logger())
- *     ->use(new Auth(['ed25519:AAAA...']))
- *     ->use(new BubbleTea(fn() => new MyApp()))
+ *     ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
+ *     ->serve();
+ * ```
+ *
+ * **Same example, host-sshd legacy:**
+ *
+ * ```php
+ * Server::new()
+ *     ->withTransport(new HostSshdTransport())
+ *     ->use(new Logger())
+ *     ->use(new BubbleTea(fn () => new MyApp()))
  *     ->serve();
  * ```
  */
@@ -54,6 +69,13 @@ final class Server
 {
     /** @var list<Middleware> */
     private array $stack = [];
+
+    private Transport $transport;
+
+    public function __construct()
+    {
+        $this->transport = new InProcessTransport();
+    }
 
     public static function new(): self
     {
@@ -67,25 +89,30 @@ final class Server
     }
 
     /**
-     * Build the {@see Session} from the current environment and
-     * run the middleware chain. Returns when the chain finishes
-     * (which, for a terminal {@see Middleware\BubbleTea}, is when
-     * the user disconnects).
+     * Override the active transport. Defaults to
+     * {@see InProcessTransport} when not called.
+     */
+    public function withTransport(Transport $t): self
+    {
+        $this->transport = $t;
+        return $this;
+    }
+
+    public function transport(): Transport
+    {
+        return $this->transport;
+    }
+
+    /**
+     * Build the {@see Session} from the current environment (or use
+     * the injected one) and ask the active transport to run the
+     * middleware chain. Returns when the chain finishes — for a
+     * terminal subprocess (Spawn / BubbleTea) that's when the
+     * inner process exits or the SSH client disconnects.
      */
     public function serve(?Session $session = null): void
     {
         $session ??= Session::fromEnvironment();
-        $this->dispatch($session, 0);
-    }
-
-    private function dispatch(Session $session, int $idx): void
-    {
-        if ($idx >= count($this->stack)) {
-            return;
-        }
-        $next = function (Session $s) use ($idx): void {
-            $this->dispatch($s, $idx + 1);
-        };
-        $this->stack[$idx]->handle($session, $next);
+        $this->transport->run($session, $this->stack);
     }
 }
