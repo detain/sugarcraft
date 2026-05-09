@@ -156,6 +156,25 @@ to keep the most-significant byte. We also accept the CSS-style
 `#RRGGBB` shorthand. Other formats (named colors, hsl, etc.) are
 rejected — the entry is silently dropped.
 
+## Tab stops live on ScreenHandler as `array<int, bool>` (PR7)
+
+`ScreenHandler::$tabStops` is a sparse map keyed by column index.
+Defaults are every 8 columns starting at column 8 (so column 0 is
+never a stop). Operations:
+
+- HT (`0x09`)        → `TabHandler::forward(col, stops, cols)`; clamps at `cols-1`
+- HTS (`ESC H` / C1 `0x88`) → set stop at current cursor column
+- TBC (`CSI g`)      → mode 0 clears stop at cursor; mode 3 clears all
+- CHT (`CSI I`)      → repeat forward N times (default 1)
+- CBT (`CSI Z`)      → repeat backward N times; clamps at 0
+- `Terminal::withTabStops($cols)` → replace the map with explicit columns
+
+Tab stops are NOT regenerated on `Terminal::resize()` — custom stops
+survive resize, and stops past a shrunken width are simply unreachable
+(harmless; HT would clamp at the new right edge before reaching them).
+If a downstream consumer needs default stops to fill in when growing,
+explicitly call `withTabStops` after resize.
+
 ## Wide-character handling
 
 CJK and emoji graphemes occupy 2 cells. The second cell is marked with
