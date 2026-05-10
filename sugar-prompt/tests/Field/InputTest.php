@@ -95,4 +95,33 @@ final class InputTest extends TestCase
         $this->assertStringContainsString('**', $f->view());
         $this->assertStringNotContainsString('ab', $f->view());
     }
+
+    public function testWithValidationShowsErrorWhenPredicateReturnsFalse(): void
+    {
+        $f = Input::new('name')->withValidation(
+            static fn (string $v): bool => !empty($v),
+            'Value is required',
+        );
+        [$f, ] = $f->focus();
+        // Validation runs on update; empty value fails
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertNull($f->getError());
+        // Backspace to empty should fail
+        [$f, ] = $f->update(new KeyMsg(KeyType::Backspace));
+        $this->assertSame('Value is required', $f->getError());
+    }
+
+    public function testWithValidationShortAlias(): void
+    {
+        $f = Input::new('name')->validation(
+            static fn (string $v): bool => strlen($v) >= 3,
+            'Must be at least 3 characters',
+        );
+        [$f, ] = $f->focus();
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame('Must be at least 3 characters', $f->getError());
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'b'));
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertNull($f->getError());
+    }
 }
