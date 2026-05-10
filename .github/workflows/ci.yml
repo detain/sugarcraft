@@ -158,12 +158,10 @@ jobs:
             vendor-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        working-directory: ${{ matrix.lib }}
-        run: composer install --prefer-dist --no-progress
+        run: composer install --prefer-dist --no-progress -n
 
       - name: Run tests
-        working-directory: ${{ matrix.lib }}
-        run: vendor/bin/phpunit --colors=never
+        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
   # Windows test job — verifies Windows-native TTY paths (FFI/kernel32 paths
   # in candy-core) pass on windows-latest. Uses a small matrix of the most
@@ -215,20 +213,18 @@ jobs:
             vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        working-directory: ${{ matrix.lib }}
-        run: composer install --prefer-dist --no-progress
+        run: composer install --prefer-dist --no-progress -n
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
       # candy-shine): run full suite — any failures there are pre-existing and
       # unrelated to the x/windows changes.
       - name: Run tests
-        working-directory: ${{ matrix.lib }}
         run: |
-          if (Test-Path tests\Util\Tty) {
-            vendor\bin\phpunit tests\Util\Tty\ --colors=never
+          if (Test-Path ${{ matrix.lib }}\tests\Util\Tty) {
+            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml ${{ matrix.lib }}\tests\Util\Tty\ --colors=never
           } else {
-            vendor\bin\phpunit --colors=never
+            php ${{ matrix.lib }}\vendor\bin\phpunit -c ${{ matrix.lib }}\phpunit.xml --colors=never
           }
 
   # macOS test job — verifies POSIX PTY paths (candy-pty's libc FFI:
@@ -273,16 +269,13 @@ jobs:
             vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        working-directory: ${{ matrix.lib }}
-        run: composer install --prefer-dist --no-progress
+        run: composer install --prefer-dist --no-progress -n
 
       - name: List Modules
-        working-directory: ${{ matrix.lib }}
         run: php -m
 
       - name: Run tests
-        working-directory: ${{ matrix.lib }}
-        run: vendor/bin/phpunit --colors=never
+        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
 
   # Coverage report — runs once on PHP 8.3 + pcov for every lib in the
   # matrix, uploads a per-lib clover XML to codecov with the lib slug
@@ -390,12 +383,10 @@ jobs:
             vendor-cov-${{ matrix.lib }}-
 
       - name: Install dependencies
-        working-directory: ${{ matrix.lib }}
-        run: composer install --prefer-dist --no-progress
+        run: composer install --prefer-dist --no-progress -n
 
       - name: Run tests with coverage
-        working-directory: ${{ matrix.lib }}
-        run: vendor/bin/phpunit --colors=never --coverage-clover=coverage.xml
+        run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
@@ -479,9 +470,7 @@ jobs:
             vendor-stan-${{ matrix.lib }}-
 
       - name: Install dependencies
-        working-directory: ${{ matrix.lib }}
-        run: composer install --prefer-dist --no-progress
+        run: composer install --prefer-dist --no-progress -n
 
       - name: Run PHPStan
-        working-directory: ${{ matrix.lib }}
-        run: vendor/bin/phpstan analyse --level=5 --no-progress
+        run: php ${{ matrix.lib }}/vendor/bin/phpstan analyse --level=5 --no-progress -c ${{ matrix.lib }}/phpstan.neon
