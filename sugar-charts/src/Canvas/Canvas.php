@@ -30,6 +30,12 @@ final class Canvas
         $this->clear();
     }
 
+    /**
+     * Write a single rune into cell ($x, $y). Out-of-range
+     * coordinates are silently dropped (no exception).
+     *
+     * @return void
+     */
     public function setCell(int $x, int $y, string $rune, ?Style $style = null): void
     {
         if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
@@ -38,6 +44,12 @@ final class Canvas
         $this->cells[$y][$x] = new Cell($rune, $style);
     }
 
+    /**
+     * Read the {@see Cell} at ($x, $y). Out-of-range coordinates
+     * return an empty placeholder Cell.
+     *
+     * @return Cell
+     */
     public function getCell(int $x, int $y): Cell
     {
         if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
@@ -49,6 +61,8 @@ final class Canvas
     /**
      * Replace a cell's style without changing its rune. Mirrors
      * ntcharts' `SetCellStyle`. Out-of-range coordinates are no-ops.
+     *
+     * @return void
      */
     public function setCellStyle(int $x, int $y, ?Style $style): void
     {
@@ -75,6 +89,7 @@ final class Canvas
      * the canvas bounds are silently dropped.
      *
      * @param iterable<string> $runes
+     * @return void
      */
     public function setRunes(int $x, int $y, iterable $runes, ?Style $style = null): void
     {
@@ -88,6 +103,8 @@ final class Canvas
     /**
      * Place a string of glyphs along row `$y` starting at column `$x`.
      * Multibyte-safe via `mb_str_split`. Mirrors ntcharts' `SetString`.
+     *
+     * @return void
      */
     public function setString(int $x, int $y, string $s, ?Style $style = null): void
     {
@@ -103,6 +120,7 @@ final class Canvas
      * {@see setString()} so the same multibyte handling applies.
      *
      * @param iterable<string> $lines
+     * @return void
      */
     public function setLines(int $x, int $y, iterable $lines, ?Style $style = null): void
     {
@@ -117,6 +135,8 @@ final class Canvas
      * Fill every cell in the rectangle `($x0..$x1, $y0..$y1)` (inclusive)
      * with `$rune` (and optional `$style`). Out-of-range coordinates
      * are clamped. Mirrors ntcharts' `Fill`.
+     *
+     * @return void
      */
     public function fill(int $x0, int $y0, int $x1, int $y1, string $rune, ?Style $style = null): void
     {
@@ -136,6 +156,8 @@ final class Canvas
     /**
      * Fill an entire row with `$rune`. Mirrors ntcharts' `FillLine`.
      * Out-of-range rows are silently ignored.
+     *
+     * @return void
      */
     public function fillLine(int $y, string $rune, ?Style $style = null): void
     {
@@ -149,6 +171,8 @@ final class Canvas
      * Shift every cell down by `$n` rows. Cells that fall off the bottom
      * are dropped; new rows at the top fill with empty cells. Mirrors
      * ntcharts' `ShiftDown`.
+     *
+     * @return void
      */
     public function shiftDown(int $n = 1): void
     {
@@ -163,6 +187,8 @@ final class Canvas
     /**
      * Shift every cell up by `$n` rows. Mirrors ntcharts' `ShiftUp`.
      * The bottom rows fill with empty cells.
+     *
+     * @return void
      */
     public function shiftUp(int $n = 1): void
     {
@@ -178,6 +204,8 @@ final class Canvas
      * Shift every row left by `$n` columns. Cells that fall off the
      * left are dropped; the right edge fills with empty cells.
      * Mirrors ntcharts' `ShiftLeft`.
+     *
+     * @return void
      */
     public function shiftLeft(int $n = 1): void
     {
@@ -200,6 +228,8 @@ final class Canvas
      * Shift every row right by `$n` columns. Cells that fall off the
      * right are dropped; the left edge fills with empty cells.
      * Mirrors ntcharts' `ShiftRight`.
+     *
+     * @return void
      */
     public function shiftRight(int $n = 1): void
     {
@@ -218,6 +248,11 @@ final class Canvas
         }
     }
 
+    /**
+     * Reset every cell to empty. Mirrors ntcharts' `Clear`.
+     *
+     * @return void
+     */
     public function clear(): void
     {
         $this->cells = [];
