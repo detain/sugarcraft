@@ -27,6 +27,7 @@ final class Theme
         public readonly string $fontFamily   = 'Hack, "JetBrains Mono", Menlo, Consolas, monospace',
         public readonly float  $fontSize     = 14.0,
         public readonly float  $lineHeight   = 1.4,
+        public readonly WindowStyle $windowStyle = WindowStyle::Macos,
     ) {}
 
     /** Default dark theme (charm-ish). */
