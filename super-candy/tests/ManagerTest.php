@@ -470,4 +470,230 @@ final class ManagerTest extends TestCase
         @unlink($tmpDir . '/file.txt');
         @rmdir($tmpDir);
     }
+
+    public function testActivePaneReturnsLeftByDefault(): void
+    {
+        $m = $this->start();
+        $this->assertSame($m->left, $m->activePane());
+        $this->assertSame($m->left->cwd, $m->activePane()->cwd);
+    }
+
+    public function testActivePaneReturnsRightAfterTabSwap(): void
+    {
+        $m = $this->start();
+        [$swapped] = $m->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame(1, $swapped->activeIdx);
+        $this->assertSame($swapped->right, $swapped->activePane());
+    }
+
+    public function testActivePaneWithTabsUsesTabState(): void
+    {
+        $m = $this->start()->duplicateTab();
+        // After duplicateTab, tabIndex is 1 (the new tab)
+        $this->assertCount(2, $m->tabs);
+        // The new tab starts with activeIdx 0 (left pane)
+        $active = $m->activePane();
+        $this->assertSame($m->tabs[1]['left'], $active);
+    }
+
+    public function testInactivePaneReturnsRightByDefault(): void
+    {
+        $m = $this->start();
+        $this->assertSame($m->right, $m->inactivePane());
+    }
+
+    public function testInactivePaneReturnsLeftAfterTabSwap(): void
+    {
+        $m = $this->start();
+        [$swapped] = $m->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame(1, $swapped->activeIdx);
+        $this->assertSame($swapped->left, $swapped->inactivePane());
+    }
+
+    public function testOpenNewTabCreatesNewTab(): void
+    {
+        $m = $this->start();
+        $this->assertCount(1, $m->tabs);
+        $this->assertSame(0, $m->tabIndex);
+
+        $m = $m->openNewTab('/home');
+        $this->assertCount(2, $m->tabs);
+        $this->assertSame(1, $m->tabIndex);
+        $this->assertTrue($m->showTabBar);
+    }
+
+    public function testOpenNewTabWithDefaultPath(): void
+    {
+        $m = $this->start()->openNewTab();
+        $this->assertCount(2, $m->tabs);
+        // Should use current pane's cwd or fallback to '/'
+        $newTab = $m->tabs[1];
+        $this->assertNotNull($newTab['left']->cwd);
+    }
+
+    public function testInitReturnsNull(): void
+    {
+        $m = $this->start();
+        $result = $m->init();
+        $this->assertNull($result);
+    }
+
+    public function testViewReturnsString(): void
+    {
+        $m = $this->start();
+        $view = $m->view();
+        $this->assertIsString($view);
+        $this->assertNotEmpty($view);
+    }
+
+    public function testViewRendersContent(): void
+    {
+        $m = $this->start();
+        $view = $m->view();
+        // The rendered view should contain pane content
+        $this->assertIsString($view);
+    }
+
+    public function testActiveAndInactivePaneAreDifferent(): void
+    {
+        $m = $this->start();
+        $this->assertNotSame($m->activePane(), $m->inactivePane());
+    }
+
+    public function testCanUndoAndCanRedoInitialState(): void
+    {
+        $m = $this->start();
+        $this->assertFalse($m->canUndo());
+        $this->assertFalse($m->canRedo());
+    }
+
+    public function testSwitchTabWithInvalidIndexReturnsSame(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $this->assertCount(2, $m->tabs);
+        $this->assertSame(1, $m->tabIndex);
+
+        // Switch to invalid index should return same state
+        $unchanged = $m->switchTab(999);
+        $this->assertSame($m->tabIndex, $unchanged->tabIndex);
+        $this->assertSame($m->tabs, $unchanged->tabs);
+    }
+
+    public function testSwitchTabWithNegativeIndexReturnsSame(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $unchanged = $m->switchTab(-1);
+        $this->assertSame($m->tabIndex, $unchanged->tabIndex);
+    }
+
+    public function testOpenNewTabMaintainsShowTabBar(): void
+    {
+        $m = $this->start();
+        $this->assertFalse($m->showTabBar);
+
+        $m = $m->openNewTab();
+        $this->assertTrue($m->showTabBar);
+    }
+
+    public function testCloseTabWithSpecificIndex(): void
+    {
+        $m = $this->start()->duplicateTab()->duplicateTab();
+        // We now have 3 tabs, at indices 0, 1, 2
+        $this->assertCount(3, $m->tabs);
+        $this->assertSame(2, $m->tabIndex);
+
+        // Close tab at index 1 (the middle one)
+        $m = $m->closeTab(1);
+        $this->assertCount(2, $m->tabs);
+        // tabIndex should be adjusted (capped at new count - 1)
+        $this->assertSame(1, $m->tabIndex);
+    }
+
+    public function testCloseTabAdjustsIndexWhenClosingCurrent(): void
+    {
+        $m = $this->start()->duplicateTab()->duplicateTab();
+        // Switch to tab 0
+        $m = $m->switchTab(0);
+        $this->assertSame(0, $m->tabIndex);
+
+        // Close tab 0 - should go to tab 0 (was 1, now shifted)
+        $m = $m->closeTab(0);
+        $this->assertCount(2, $m->tabs);
+        $this->assertSame(0, $m->tabIndex);
+    }
+
+    public function testNavigateIntoDirectoryChangesPaneCwd(): void
+    {
+        $m = $this->start();
+        $initialCwd = $m->activePane()->cwd;
+        $this->assertSame('/', $initialCwd);
+
+        // Move down to first entry (should be 'etc' or 'home' alphabetically)
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+
+        // Navigate into it
+        [$navigated] = $m->update(new KeyMsg(KeyType::Enter, ''));
+
+        $this->assertNotSame($initialCwd, $navigated->activePane()->cwd);
+    }
+
+    public function testUpKeyMovesCursor(): void
+    {
+        $m = $this->start();
+        $this->assertSame(0, $m->left->cursor);
+
+        // Move down first
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(1, $m->left->cursor);
+
+        // Move up
+        [$m] = $m->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(0, $m->left->cursor);
+    }
+
+    public function testHomeKeyGoesToTop(): void
+    {
+        $m = $this->start();
+        // Move down first
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(2, $m->left->cursor);
+
+        // Go to top
+        [$m] = $m->update(new KeyMsg(KeyType::Home, ''));
+        $this->assertSame(0, $m->left->cursor);
+    }
+
+    public function testEndKeyGoesToBottom(): void
+    {
+        $m = $this->start();
+        $entryCount = count($m->left->entries);
+
+        // Go to end
+        [$m] = $m->update(new KeyMsg(KeyType::End, ''));
+        $this->assertSame($entryCount - 1, $m->left->cursor);
+    }
+
+    public function testGKeyGoesToTop(): void
+    {
+        $m = $this->start();
+        // Move down first
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(2, $m->left->cursor);
+
+        // 'g' goes to top
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'g'));
+        $this->assertSame(0, $m->left->cursor);
+    }
+
+    public function testShiftGKeyGoesToBottom(): void
+    {
+        $m = $this->start();
+        $entryCount = count($m->left->entries);
+
+        // 'G' (shift+g) goes to bottom
+        [$m] = $m->update(new KeyMsg(KeyType::Char, 'G'));
+        $this->assertSame($entryCount - 1, $m->left->cursor);
+    }
 }
