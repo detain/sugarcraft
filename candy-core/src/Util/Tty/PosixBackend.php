@@ -17,6 +17,9 @@ final class PosixBackend implements Backend
     private $stream;
     private ?string $savedSttyState = null;
 
+    /** Saved stty state for restoreLast(). */
+    private static ?string $lastSttyState = null;
+
     /** @param resource|null $stream defaults to STDIN */
     public function __construct($stream = null)
     {
@@ -124,6 +127,23 @@ final class PosixBackend implements Backend
         // on POSIX is only wired for SIGWINCH; a fired handler means a
         // resize was detected.
         return @\pcntl_signal_dispatch() ? self::SIGNAL_RESIZE : 0;
+    }
+
+    public static function restoreLast(): void
+    {
+        if (self::$lastSttyState !== null) {
+            // Second+ call: actually restore.
+            @shell_exec('stty ' . escapeshellarg(self::$lastSttyState) . ' 2>/dev/null');
+            self::$lastSttyState = null;
+            return;
+        }
+        // First call: save current state.
+        if (is_resource(STDIN) && stream_isatty(STDIN) && self::hasStty()) {
+            $saved = @shell_exec('stty -g 2>/dev/null');
+            if (is_string($saved)) {
+                self::$lastSttyState = trim($saved);
+            }
+        }
     }
 
     private static function hasStty(): bool
