@@ -3,6 +3,7 @@
     "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) — install all 13 libraries at once.",
     "type": "metapackage",
     "license": "MIT",
+    "version": "1.0.0",
     "keywords": [
         "tui", "terminal", "cli", "console",
         "bubbletea", "lipgloss", "bubbles", "huh", "gum",
