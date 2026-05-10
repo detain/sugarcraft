@@ -25,4 +25,8 @@ return [
     'renderer.invalid_width'  => 'Width must be positive, got {width}',
     'renderer.invalid_height' => 'Height must be positive, got {height}',
     'renderer.gd_load_failed' => 'GD failed to load image',
+
+    // Chafa
+    'chafa.command_failed' => 'Chafa command failed: {error}',
+    'chafa.not_found'      => 'Chafa command not found. Install with: sudo apt install chafa',
 ];
