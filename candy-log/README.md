@@ -87,6 +87,22 @@ $styles->levels[Level::Error] = Style::new()->foreground('red')->bold();
 $log->setStyles($styles);
 ```
 
+## Panic Handlers
+
+```php
+use SugarCraft\Log\Log;
+
+// Install a panic handler that catches uncaught exceptions and fatal errors,
+// restores the terminal from altscreen mode, and prints a styled panic report.
+Log::installPanicHandler();
+
+// Restore terminal state manually (exit altscreen, show cursor).
+// Called automatically by the panic handler, but safe to call directly.
+Log::restoreTerminal();
+```
+
+The panic handler catches uncaught exceptions and fatal errors (E_ERROR, E_PARSE), restores the terminal to a usable state, and prints a colorized banner with the exception class, message, and backtrace.
+
 ## License
 
 [MIT](LICENSE)

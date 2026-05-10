@@ -8,6 +8,8 @@
  * forked this template. The Program harness (event loop, render
  * tick, signal handling, raw-mode setup, alt-screen lifecycle) is
  * production-ready out of the box — you just write the Model.
+ * Supports an opt-in panic handler via `Log::installPanicHandler()`
+ * (uncomment in bootstrap).
  */
 
 declare(strict_types=1);
@@ -23,6 +25,13 @@ declare(strict_types=1);
     fwrite(STDERR, "candy-template: cannot find composer autoload.php — did you `composer install`?\n");
     exit(1);
 })();
+
+// -----------------------------------------------------------------------
+// OPT-IN: Panic handler — uncomment to catch uncaught exceptions and
+// display a styled backtrace on crash.  Requires sugarcraft/candy-log.
+// -----------------------------------------------------------------------
+// use SugarCraft\Log\Log;
+// Log::installPanicHandler();
 
 use App\Counter;
 use SugarCraft\Core\Program;
