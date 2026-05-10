@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Bits\Viewport;
 
 use SugarCraft\Bits\Lang;
+use SugarCraft\Bits\Scrollbar\Scrollbar;
+use SugarCraft\Bits\Scrollbar\ScrollbarState;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -43,6 +45,7 @@ final class Viewport implements Model
         public readonly int $scrollTargetY = -1,
         public readonly int $scrollTargetX = -1,
         public readonly int $scrollAnimFrame = 0,
+        public readonly ?Scrollbar $verticalScrollbar = null,
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -218,6 +221,12 @@ final class Viewport implements Model
         if (!$this->showScrollbar) {
             return implode("\n", $window);
         }
+
+        // Use the injected Scrollbar component if available.
+        if ($this->verticalScrollbar !== null) {
+            return $this->renderWithScrollbarComponent($window);
+        }
+
         return $this->paintScrollbar($window);
     }
 
@@ -310,6 +319,22 @@ final class Viewport implements Model
     public function withScrollbarRunes(string $thumb, string $track): self
     {
         return $this->copy(scrollbarChar: $thumb, scrollbarTrack: $track);
+    }
+
+    /**
+     * Inject a {@see Scrollbar} component to render the vertical scrollbar.
+     *
+     * When set, the Scrollbar's {@see Scrollbar::view()} is called with a
+     * {@see ScrollbarState} derived from the current Viewport state, and
+     * the resulting column of characters is appended to each visible line.
+     *
+     * Use this to share a single Scrollbar instance across multiple
+     * Viewports or to apply custom track/thumb characters and arrow
+     * rendering.
+     */
+    public function withVerticalScrollbar(Scrollbar $scrollbar): self
+    {
+        return $this->copy(verticalScrollbar: $scrollbar);
     }
 
     /** Enable smooth scrolling for programmatic position changes. Default off. */
@@ -460,6 +485,35 @@ final class Viewport implements Model
     }
 
     /**
+     * Render the scrollbar using the injected {@see Scrollbar} component.
+     *
+     * Constructs a {@see ScrollbarState} from the current Viewport state
+     * (total lines, yOffset, visible height) and delegates rendering to
+     * the Scrollbar, then appends one scrollbar character per line.
+     *
+     * @param list<string> $window
+     */
+    private function renderWithScrollbarComponent(array $window): string
+    {
+        $state = new ScrollbarState(
+            total: $this->totalLineCount(),
+            position: $this->yOffset,
+            viewport: $this->height,
+        );
+        $scrollbarColumn = $this->verticalScrollbar->view($state, count($window));
+        $bodyWidth = max(0, $this->width - 1);
+        $out = [];
+        foreach ($window as $i => $line) {
+            $padded = $bodyWidth > 0
+                ? Width::padRight($line, $bodyWidth)
+                : $line;
+            $sb = mb_substr($scrollbarColumn, $i, 1, 'UTF-8');
+            $out[] = $padded . $sb;
+        }
+        return implode("\n", $out);
+    }
+
+    /**
      * @param list<string>|null $lines
      */
     private function copy(
@@ -478,6 +532,7 @@ final class Viewport implements Model
         ?int $scrollTargetY = null,
         ?int $scrollTargetX = null,
         ?int $scrollAnimFrame = null,
+        ?Scrollbar $verticalScrollbar = null,
     ): self {
         return new self(
             width:              $width             ?? $this->width,
@@ -495,6 +550,7 @@ final class Viewport implements Model
             scrollTargetY:      $scrollTargetY     ?? $this->scrollTargetY,
             scrollTargetX:      $scrollTargetX     ?? $this->scrollTargetX,
             scrollAnimFrame:    $scrollAnimFrame   ?? $this->scrollAnimFrame,
+            verticalScrollbar:  $verticalScrollbar ?? $this->verticalScrollbar,
         );
     }
 }
