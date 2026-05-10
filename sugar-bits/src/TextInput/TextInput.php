@@ -62,6 +62,12 @@ final class TextInput implements Model
         public readonly bool $vimNormalMode = true,
         public readonly string $prefix = '',
         public readonly string $suffix = '',
+        /** @var list<string> Command/input history for up/down arrow navigation */
+        public readonly array $history = [],
+        /** Current position in history when browsing (-1 = current input) */
+        public readonly int $historyIndex = -1,
+        /** Maximum number of history entries to keep (0 = unlimited) */
+        public readonly int $historyLimit = 0,
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -121,6 +127,8 @@ final class TextInput implements Model
         return match ($msg->type) {
             KeyType::Left      => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
             KeyType::Right     => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            KeyType::Up        => $this->historyNavigateUp(),
+            KeyType::Down      => $this->historyNavigateDown(),
             KeyType::Home      => [$this->moveCursor(0), null],
             KeyType::End       => [$this->moveCursor($this->length()), null],
             KeyType::Backspace => [$this->backspace(), null],
@@ -148,6 +156,13 @@ final class TextInput implements Model
             }
             if ($msg->type === KeyType::Right) {
                 return [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null];
+            }
+            // Up/Down arrows navigate history in vim normal mode too
+            if ($msg->type === KeyType::Up) {
+                return $this->historyNavigateUp();
+            }
+            if ($msg->type === KeyType::Down) {
+                return $this->historyNavigateDown();
             }
 
             // h key also moves left
@@ -464,6 +479,57 @@ final class TextInput implements Model
         return $this->mutate(suffix: $suffix);
     }
 
+    /**
+     * Set the input history for up/down arrow navigation.
+     * When history is set, pressing Up/Down arrows will cycle through
+     * previous entries. The most recent entry (last in array) is shown
+     * first when pressing Up.
+     *
+     * @param list<string> $history List of previous input values in chronological
+     *                              order (oldest first, newest last)
+     */
+    public function withHistory(array $history): self
+    {
+        return $this->mutate(history: array_values($history), historyIndex: -1);
+    }
+
+    /**
+     * Set the maximum number of history entries to retain.
+     * When the limit is reached, oldest entries are discarded.
+     * A limit of 0 means unlimited (default).
+     *
+     * @param int $limit Maximum entries (0 = unlimited)
+     */
+    public function withHistoryLimit(int $limit): self
+    {
+        return $this->mutate(historyLimit: max(0, $limit));
+    }
+
+    /**
+     * Add an entry to the history. Called automatically when the user
+     * presses Enter (if history is enabled). You can also call this
+     * manually to pre-populate history.
+     *
+     * New entries are added at the end (newest position) for chronological ordering.
+     * If the entry already exists, it's moved to the newest position.
+     */
+    public function addToHistory(string $entry): self
+    {
+        if ($entry === '') {
+            return $this;
+        }
+        $history = $this->history;
+        // Remove if already exists (to move to end as newest)
+        $history = array_values(array_filter($history, static fn(string $h): bool => $h !== $entry));
+        // Add at the end (newest position)
+        $history[] = $entry;
+        // Trim oldest entries if over limit
+        if ($this->historyLimit > 0 && count($history) > $this->historyLimit) {
+            $history = array_slice($history, -$this->historyLimit);
+        }
+        return $this->mutate(history: $history, historyIndex: -1);
+    }
+
     public function withCharLimit(int $n): self      { return $this->mutate(charLimit: max(0, $n)); }
     public function withWidth(int $w): self          { return $this->mutate(width: max(0, $w)); }
     public function withEchoMode(EchoMode $m): self  { return $this->mutate(echoMode: $m); }
@@ -732,6 +798,9 @@ final class TextInput implements Model
         ?bool $vimNormalMode = null,
         ?string $prefix = null,
         ?string $suffix = null,
+        ?array $history = null,
+        ?int $historyIndex = null,
+        ?int $historyLimit = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -765,6 +834,79 @@ final class TextInput implements Model
             vimNormalMode:          $vimNormalMode          ?? $this->vimNormalMode,
             prefix:                 $prefix                 ?? $this->prefix,
             suffix:                 $suffix                 ?? $this->suffix,
+            history:                $history                ?? $this->history,
+            historyIndex:           $historyIndex           ?? $this->historyIndex,
+            historyLimit:           $historyLimit           ?? $this->historyLimit,
         );
+    }
+
+    /**
+     * Navigate up in history (show older entry).
+     * History is indexed from oldest (0) to newest (n-1).
+     * UP goes from newest towards oldest.
+     *
+     * @return array{0:TextInput, 1:?\Closure}
+     */
+    private function historyNavigateUp(): array
+    {
+        if ($this->history === []) {
+            return [$this, null];
+        }
+        $count = count($this->history);
+        // historyIndex starts at -1 (not browsing). After first UP, it becomes
+        // $count - 1 (newest entry). Subsequent UP decrements towards 0 (oldest).
+        if ($this->historyIndex === -1) {
+            // First UP: go to newest (last element)
+            $nextIndex = $count - 1;
+        } else {
+            $nextIndex = $this->historyIndex - 1;
+            if ($nextIndex < 0) {
+                $nextIndex = 0; // Stay at oldest
+            }
+        }
+        $entry = $this->history[$nextIndex];
+        return [
+            $this->mutate(
+                value: $entry,
+                cursorPos: mb_strlen($entry, 'UTF-8'),
+                historyIndex: $nextIndex,
+            ),
+            null,
+        ];
+    }
+
+    /**
+     * Navigate down in history (show newer entry).
+     * DOWN goes from oldest towards newest.
+     *
+     * @return array{0:TextInput, 1:?\Closure}
+     */
+    private function historyNavigateDown(): array
+    {
+        if ($this->history === []) {
+            return [$this, null];
+        }
+        $count = count($this->history);
+        if ($this->historyIndex === -1) {
+            // Wasn't browsing history, stay at current
+            return [$this, null];
+        }
+        $nextIndex = $this->historyIndex + 1;
+        if ($nextIndex >= $count) {
+            // Past the newest - return to current input (clear the value)
+            return [
+                $this->mutate(historyIndex: -1, value: '', cursorPos: 0),
+                null,
+            ];
+        }
+        $entry = $this->history[$nextIndex];
+        return [
+            $this->mutate(
+                value: $entry,
+                cursorPos: mb_strlen($entry, 'UTF-8'),
+                historyIndex: $nextIndex,
+            ),
+            null,
+        ];
     }
 }

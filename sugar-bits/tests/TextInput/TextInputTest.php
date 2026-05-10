@@ -714,4 +714,188 @@ final class TextInputTest extends TestCase
         [$t, ] = $t->update(new KeyMsg(KeyType::Right));
         $this->assertSame(5, $t->cursorPos);
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // History navigation tests
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testWithHistorySetsHistoryAndResetsIndex(): void
+    {
+        $t = TextInput::new()->withHistory(['cmd1', 'cmd2', 'cmd3']);
+        $this->assertSame(['cmd1', 'cmd2', 'cmd3'], $t->history);
+        $this->assertSame(-1, $t->historyIndex);
+    }
+
+    public function testHistoryNavigateUpShowsOlderEntry(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withHistory(['first', 'second', 'third'])  // chronological: first=oldest, third=newest
+            ->focus();
+
+        // Navigate up - should show 'third' (newest, index 2)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('third', $t->value);
+        $this->assertSame(2, $t->historyIndex);  // At newest (index 2)
+
+        // Navigate up again - should show 'second' (index 1)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('second', $t->value);
+        $this->assertSame(1, $t->historyIndex);
+
+        // Navigate up again - should show 'first' (index 0)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('first', $t->value);
+        $this->assertSame(0, $t->historyIndex);
+
+        // At the oldest entry, should stay there
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('first', $t->value);
+        $this->assertSame(0, $t->historyIndex);
+    }
+
+    public function testHistoryNavigateDownShowsNewerEntry(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withHistory(['first', 'second', 'third'])  // chronological: first=oldest, third=newest
+            ->focus();
+
+        // DOWN from current input does nothing
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);
+        $this->assertSame(-1, $t->historyIndex);
+
+        // Go up to enter history at newest (index 2)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('third', $t->value);
+        $this->assertSame(2, $t->historyIndex);
+
+        // DOWN from newest returns to current (empty)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);
+        $this->assertSame(-1, $t->historyIndex);
+
+        // Navigate: UP to enter, UP twice to reach oldest, then DOWN toward newer
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));  // index 2 (newest)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));  // index 1
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));  // index 0 (oldest)
+        $this->assertSame('first', $t->value);
+        $this->assertSame(0, $t->historyIndex);
+
+        // DOWN from oldest goes toward newer: index 0 → 1
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('second', $t->value);
+        $this->assertSame(1, $t->historyIndex);
+
+        // DOWN from index 1 goes to newest: index 1 → 2
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('third', $t->value);
+        $this->assertSame(2, $t->historyIndex);
+
+        // DOWN from newest returns to current
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);
+        $this->assertSame(-1, $t->historyIndex);
+    }
+
+    public function testHistoryNavigateDownFromCurrentResetsToEmpty(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withHistory(['first', 'second'])
+            ->focus();
+
+        // Without navigating up first, down should stay at current (empty)
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);
+        $this->assertSame(-1, $t->historyIndex);
+    }
+
+    public function testHistoryLimitTrimsOldEntries(): void
+    {
+        $t = TextInput::new()
+            ->withHistoryLimit(2)
+            ->withHistory(['a', 'b', 'c', 'd']);
+
+        // withHistory sets exact history provided; limit only applies to addToHistory
+        $this->assertSame(['a', 'b', 'c', 'd'], $t->history);
+
+        // Adding new entry: ['a', 'b', 'c', 'd', 'e'] trimmed to last 2 = ['d', 'e']
+        $t = $t->addToHistory('e');
+        $this->assertSame(['d', 'e'], $t->history);  // 'a', 'b', 'c' removed
+
+        // Adding more: ['d', 'e', 'f'] trimmed to last 2 = ['e', 'f']
+        $t = $t->addToHistory('f');
+        $this->assertSame(['e', 'f'], $t->history);  // 'd' removed
+    }
+
+    public function testAddToHistoryDeduplicates(): void
+    {
+        $t = TextInput::new()
+            ->withHistory(['cmd1', 'cmd2'])
+            ->addToHistory('cmd3');
+
+        // addToHistory adds new entries at end (newest position)
+        $this->assertSame(['cmd1', 'cmd2', 'cmd3'], $t->history);
+
+        // Adding existing entry moves it to end (as newest)
+        $t = $t->addToHistory('cmd1');
+        $this->assertSame(['cmd2', 'cmd3', 'cmd1'], $t->history);
+    }
+
+    public function testAddToHistoryRespectsLimit(): void
+    {
+        $t = TextInput::new()
+            ->withHistoryLimit(3)
+            ->withHistory(['old1', 'old2']);
+
+        $t = $t->addToHistory('new1');
+        // new1 added at end: ['old1', 'old2', 'new1']
+        $this->assertSame(['old1', 'old2', 'new1'], $t->history);
+
+        $t = $t->addToHistory('new2');
+        // new2 added at end: ['old1', 'old2', 'new1', 'new2'] trimmed to 3 -> ['old2', 'new1', 'new2']
+        $this->assertSame(['old2', 'new1', 'new2'], $t->history);
+
+        $t = $t->addToHistory('new3');
+        // new3 added at end, old2 pushed out: ['new1', 'new2', 'new3']
+        $this->assertSame(['new1', 'new2', 'new3'], $t->history);
+    }
+
+    public function testHistoryInVimMode(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withVimMode(true)
+            ->withHistory(['vimcmd1', 'vimcmd2'])
+            ->focus();
+
+        // In vim normal mode, up arrow should navigate history
+        // History is ['vimcmd1', 'vimcmd2'], newest is 'vimcmd2' at index 1
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('vimcmd2', $t->value);
+        $this->assertSame(1, $t->historyIndex);
+
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);  // Back to current
+        $this->assertSame(-1, $t->historyIndex);
+    }
+
+    public function testEmptyHistoryDoesNothing(): void
+    {
+        [$t, ] = TextInput::new()->focus();
+
+        [$t, ] = $t->update(new KeyMsg(KeyType::Up));
+        $this->assertSame('', $t->value);
+
+        [$t, ] = $t->update(new KeyMsg(KeyType::Down));
+        $this->assertSame('', $t->value);
+    }
+
+    public function testHistoryMethodAliases(): void
+    {
+        $t = TextInput::new()
+            ->withHistory(['h1', 'h2'])
+            ->withHistoryLimit(10);
+
+        $this->assertSame(['h1', 'h2'], $t->history);
+        $this->assertSame(10, $t->historyLimit);
+    }
 }
