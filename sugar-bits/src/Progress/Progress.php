@@ -48,6 +48,7 @@ final class Progress
         public readonly string $percentFormat = '%3d%%',
         public readonly bool $showValue = false,
         public readonly string $showValueFormat = '%d/%d',
+        public readonly ProgressRenderMode $renderMode = ProgressRenderMode::Block,
         array $gradientStops = [],
         ?\Closure $colorFunc = null,
     ) {
@@ -187,6 +188,15 @@ final class Progress
     }
 
     /**
+     * Set the render mode for the progress bar.
+     * Mirrors ratatui's LineGauge render modes.
+     */
+    public function withRenderMode(ProgressRenderMode $mode): self
+    {
+        return $this->mutate(renderMode: $mode);
+    }
+
+    /**
      * Render the bar at an explicit percent without mutating state.
      * Mirrors Bubbles' `ViewAs`.
      */
@@ -198,6 +208,49 @@ final class Progress
     /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
+        // Handle Line render mode: filled ━ (U+2501), empty ─ (U+2500), no percent text.
+        if ($this->renderMode === ProgressRenderMode::Line) {
+            $filledCells = (int) round($this->percent * $this->width);
+            $emptyCells = $this->width - $filledCells;
+            $full = str_repeat("\xe2\x94\x81", $filledCells); // ━ U+2501
+            $empty = str_repeat("\xe2\x94\x80", $emptyCells); // ─ U+2500
+            if ($this->fillColor !== null) {
+                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+            }
+            if ($this->emptyColor !== null) {
+                $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
+            }
+            return $full . $empty;
+        }
+
+        // Handle Slim render mode: filled ▌, empty ▒, with percent text.
+        if ($this->renderMode === ProgressRenderMode::Slim) {
+            $pctText = $this->showPercent
+                ? sprintf($this->percentFormat, (int) round($this->percent * 100))
+                : '';
+            $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
+            $showSuffix = $this->showPercent && $this->width > $suffixCells;
+            $barWidth = $showSuffix ? $this->width - $suffixCells : $this->width;
+
+            $filledCells = (int) round($this->percent * $barWidth);
+            $emptyCells = $barWidth - $filledCells;
+
+            $full = str_repeat("\xe2\x96\x8c", $filledCells); // ▌ U+258C
+            $empty = str_repeat("\xe2\x96\x92", $emptyCells); // ▒ U+2592
+            if ($this->fillColor !== null) {
+                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+            }
+            if ($this->emptyColor !== null) {
+                $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
+            }
+
+            $bar = $full . $empty;
+            if (!$showSuffix) {
+                return $bar;
+            }
+            return $bar . ' ' . $pctText;
+        }
+
         // The percent suffix " 100%" needs ~5 cells. Rather than guess
         // the formatted suffix length, render it once and use its
         // measured width.
@@ -343,6 +396,7 @@ final class Progress
         ?string $percentFormat = null,
         ?bool $showValue = null,
         ?string $showValueFormat = null,
+        ?ProgressRenderMode $renderMode = null,
         ?array $gradientStops = null, bool $gradientStopsSet = false,
         ?\Closure $colorFunc = null, bool $colorFuncSet = false,
     ): self {
@@ -360,6 +414,7 @@ final class Progress
             percentFormat:  $percentFormat ?? $this->percentFormat,
             showValue:      $showValue     ?? $this->showValue,
             showValueFormat: $showValueFormat ?? $this->showValueFormat,
+            renderMode:     $renderMode    ?? $this->renderMode,
             gradientStops:  $gradientStopsSet ? ($gradientStops ?? []) : $this->gradientStops,
             colorFunc:      $colorFuncSet  ? $colorFunc       : $this->colorFunc,
         );
