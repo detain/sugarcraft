@@ -10,10 +10,13 @@ namespace SugarCraft\Vt\Handler;
  * Recognised modes (and their `Mode` field):
  *
  * - `25`   cursor visibility       → `cursorVisible`
+ * - `1001` X10 mouse (button only) → `mouseHighlights`
  * - `1000` X11 mouse (button only) → `mouseAny`
  * - `1002` cell-motion mouse       → `mouseCellMotion`
  * - `1003` any-motion mouse        → `mouseExtended`
+ * - `1005` highlight reporting     → `mouseHighlights`
  * - `1006` SGR mouse coordinates   → `mouseSgr`
+ * - `1015` URXVT mouse encoding    → `mouseHighlights`
  * - `1049` alt-screen + cursor save → `altScreen`, swaps Buffer + saves cursor/sgr
  * - `2004` bracketed paste         → `bracketedPaste`
  * - `2026` synchronized output     → `syncUpdate`
@@ -41,10 +44,13 @@ final class ModeHandler
     {
         match ($mode) {
             25 => $this->setCursorVisible($set, $h),
+            1001 => $h->mode = $h->mode->withMouseHighlights($set),
             1000 => $h->mode = $h->mode->withMouseAny($set),
             1002 => $h->mode = $h->mode->withMouseCellMotion($set),
             1003 => $h->mode = $h->mode->withMouseExtended($set),
+            1005 => $h->mode = $h->mode->withMouseHighlights($set),
             1006 => $h->mode = $h->mode->withMouseSgr($set),
+            1015 => $h->mode = $h->mode->withMouseHighlights($set),
             1049 => $set ? $h->enterAltScreen() : $h->leaveAltScreen(),
             2004 => $h->mode = $h->mode->withBracketedPaste($set),
             2026 => $h->mode = $h->mode->withSyncUpdate($set),
