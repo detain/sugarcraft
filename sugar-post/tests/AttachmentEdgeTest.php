@@ -1,0 +1,49 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Post\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Post\Attachment;
+
+/**
+ * Additional Attachment edge case tests.
+ */
+final class AttachmentEdgeTest extends TestCase
+{
+    public function testGetContentReturnsContentWhenNoPath(): void
+    {
+        $att = Attachment::fromContent('raw bytes here', 'data.bin', 'application/octet-stream');
+        $this->assertSame('raw bytes here', $att->getContent());
+    }
+
+    public function testGetContentReturnsEmptyStringWhenNeitherContentNorPath(): void
+    {
+        // This happens when fromPath fails to read file
+        $att = Attachment::fromContent('', 'empty.txt', 'text/plain');
+        $this->assertSame('', $att->getContent());
+    }
+
+    public function testFromPathReturnsNullContentWhenFileReadFails(): void
+    {
+        // Using a path that doesn't exist - should not throw, returns null content
+        $att = Attachment::fromPath('/nonexistent/path/file.txt');
+        $this->assertNull($att->content);
+        $this->assertSame('', $att->getContent());
+    }
+
+    public function testFromPathWithUnknownExtensionFallsBackToOctetStream(): void
+    {
+        // When mime_content_type returns application/octet-stream or false,
+        // the extension-based detection kicks in for unknown extensions
+        $att = Attachment::fromContent('data', 'file.unknown', 'application/octet-stream');
+        $this->assertSame('application/octet-stream', $att->mimeType);
+    }
+
+    public function testFromContentWithExplicitMimeType(): void
+    {
+        $att = Attachment::fromContent('{"key":"value"}', 'data.json', 'application/json');
+        $this->assertSame('application/json', $att->mimeType);
+    }
+}
