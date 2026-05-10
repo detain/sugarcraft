@@ -68,6 +68,26 @@ final class InProcessTransport implements Transport, ChildSpawner
     private $sizeProvider = null;
 
     /**
+     * Optional callback invoked in the pump loop whenever
+     * `stream_select` times out (no I/O ready). Middleware such as
+     * Keepalive use this hook to send periodic heartbeat bytes
+     * through the PTY master without busy-polling.
+     *
+     * @var callable|null
+     */
+    private $keepaliveCallback = null;
+
+    /**
+     * The active PTY for the current session. Stored here so that
+     * the keepalive callback (registered by middleware via
+     * setKeepaliveCallback at stack-walk time) can access the PTY
+     * when it fires inside the pump loop.
+     *
+     * @var Pty|null
+     */
+    private ?Pty $pty = null;
+
+    /**
      * Returns a clone of this transport with the given size
      * provider — used by SIGWINCH forwarding to query the host's
      * PTY winsize. Production code rarely needs to call this.
@@ -79,6 +99,39 @@ final class InProcessTransport implements Transport, ChildSpawner
         $clone = clone $this;
         $clone->sizeProvider = $provider;
         return $clone;
+    }
+
+    /**
+     * Register a callback to be invoked in the pump loop whenever
+     * `stream_select` reports no ready streams (idle timeout).
+     * Keepalive middleware uses this to send periodic heartbeat
+     * bytes through the PTY master.
+     *
+     * The callback receives no arguments; it is responsible for
+     * writing keepalive bytes to the PTY when appropriate.
+     *
+     * @param callable(): void $callback
+     */
+    public function setKeepaliveCallback(callable $callback): void
+    {
+        $this->keepaliveCallback = $callback;
+    }
+
+    /**
+     * Returns the active PTY for the current session.
+     *
+     * This is used by keepalive callbacks to write heartbeat bytes.
+     * Only valid while a session is actively being pumped.
+     *
+     * @return Pty
+     * @throws \RuntimeException if called outside of pump loop
+     */
+    public function getPty(): Pty
+    {
+        if ($this->pty === null) {
+            throw new \RuntimeException('getPty() called outside of active pump loop');
+        }
+        return $this->pty;
     }
 
     public function run(Session $session, array $stack): void
@@ -173,6 +226,9 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
 
             try {
+                // Store PTY reference so keepalive callbacks can write
+                // heartbeat bytes from within the pump loop.
+                $this->pty = $pty;
                 $this->pump($pty, $child, $stdin, $stdout);
 
                 // Drain any tail bytes the kernel buffered on the master
@@ -191,6 +247,10 @@ final class InProcessTransport implements Transport, ChildSpawner
                     @\fwrite($stdout, $tail);
                 }
             } finally {
+                // Clear PTY reference — keepalive callbacks must not
+                // fire after the PTY is closed.
+                $this->pty = null;
+
                 // Restore SIGWINCH default disposition before any
                 // session-specific cleanup runs. Otherwise a stale
                 // closure with this $pty captured would fire on the
@@ -269,6 +329,12 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
 
             if ($ready === 0) {
+                // No I/O ready — invoke keepalive callback if registered.
+                // This lets middleware send periodic heartbeat bytes
+                // through the PTY to keep NAT gateways / firewalls open.
+                if ($this->keepaliveCallback !== null) {
+                    ($this->keepaliveCallback)();
+                }
                 continue;
             }
 

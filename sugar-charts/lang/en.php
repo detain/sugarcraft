@@ -39,4 +39,7 @@ return [
 
     // Scatter/Scatter.php
     'scatter.dim_nonneg'       => 'scatter width/height must be >= 0',
+
+    // Chart/Chart.php
+    'chart.dim_nonneg'         => 'chart width/height must be >= 0',
 ];

@@ -39,11 +39,11 @@ to keep the static `Progress` lean).
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles | `Spinner\TickMsg` |
-| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)`) | — |
+| `Progress\Progress` | Static progress bar (gradient fill optional, `withColors(...)` / `withColorFunc(...)` / `withShowValue(...)`) | — |
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (HoneyBounce-driven) | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Elapsed-time counter; `interval()`, `withInterval(float)` | `Stopwatch\TickMsg` |
-| `TextInput\TextInput` | Single-line input with autocomplete + validators + `Styles` | — |
+| `TextInput\TextInput` | Single-line input with autocomplete + validators + vim mode + placeholder styling + prefix/suffix + `Styles` | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
@@ -121,6 +121,23 @@ $bar = AnimatedProgress::new()
 // until the bar settles within 5e-4 of the target.
 ```
 
+## Quickstart — TextInput with placeholder styling and prefix/suffix
+
+```php
+use SugarCraft\Bits\TextInput\TextInput;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Core\Util\Color;
+
+$ti = TextInput::new()
+    ->withPlaceholder('Enter command…')
+    ->withPlaceholderStyle(Style::new()->faint())           // default: dim
+    ->withPrefix('$ ')                                      // fixed prefix
+    ->withSuffix(' <');                                     // fixed suffix
+
+echo $ti->view();
+// $ Enter command… <
+```
+
 ## Test
 
 ```sh
@@ -172,6 +189,10 @@ cd sugar-bits && composer install && vendor/bin/phpunit
 ### Text input
 
 ![text-input](.vhs/text-input.gif)
+
+### Text input (enhanced)
+
+![text-input](.vhs/text-input-enhanced.gif)
 
 ### Timer
 

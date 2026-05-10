@@ -154,4 +154,76 @@ final class ProgressTest extends TestCase
             ->withPercent(1.0);
         $this->assertStringNotContainsString("\x1b[38", $p->view());
     }
+
+    public function testShowValueOnly(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withShowValue(true)
+            ->withRunes('#', '.')
+            ->withPercent(0.5);
+        // 50% of 10 = 5 cells filled, so current=5, total=10 → "5/10"
+        $this->assertSame('#####..... 5/10', $p->view());
+    }
+
+    public function testShowValueWithPercent(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(true)
+            ->withShowValue(true)
+            ->withRunes('#', '.')
+            ->withPercent(0.5);
+        // Full bar width (10 cells), then suffix with percent and value
+        // bar: 5 filled + 5 empty = 10, suffix: " 50% (5/10)"
+        $this->assertSame('#####.....  50% (5/10)', $p->view());
+    }
+
+    public function testShowValueWithCustomFormat(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withShowValue(true, '%d of %d items')
+            ->withRunes('#', '.')
+            ->withPercent(0.5);
+        // Full bar width (10 cells), filled=5, empty=5, then suffix
+        $this->assertSame('#####..... 5 of 10 items', $p->view());
+    }
+
+    public function testShowValueZeroPercent(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withShowValue(true)
+            ->withRunes('#', '.')
+            ->withPercent(0.0);
+        $this->assertSame('.......... 0/10', $p->view());
+    }
+
+    public function testShowValueFullPercent(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withShowValue(true)
+            ->withRunes('#', '.')
+            ->withPercent(1.0);
+        // 100% of 10 = 10, current=10, total=10 → "10/10"
+        $this->assertSame('########## 10/10', $p->view());
+    }
+
+    public function testShowValueDefaultFormatIsPercent(): void
+    {
+        $p = Progress::new()
+            ->withWidth(10)
+            ->withShowPercent(false)
+            ->withShowValue(true)
+            ->withRunes('#', '.')
+            ->withPercent(0.42);
+        // 42% of 10 = 4.2 → rounds to 4
+        $this->assertSame('####...... 4/10', $p->view());
+    }
 }

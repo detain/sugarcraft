@@ -9,6 +9,7 @@ use SugarCraft\Bits\TextInput\Styles;
 use SugarCraft\Bits\TextInput\TextInput;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
@@ -147,7 +148,10 @@ final class TextInputTest extends TestCase
     public function testPlaceholderShownWhenEmptyAndUnfocused(): void
     {
         $t = TextInput::new()->withPlaceholder('type here…');
-        $this->assertSame('> type here…', $t->view());
+        // Placeholder is styled with faint (dim) by default
+        $view = $t->view();
+        $this->assertStringContainsString('type here…', $view);
+        $this->assertStringContainsString("\x1b[2m", $view); // SGR 2 = faint
     }
 
     public function testPlaceholderHiddenWhenFocused(): void
@@ -325,5 +329,139 @@ final class TextInputTest extends TestCase
     {
         $t = TextInput::new();
         $this->assertSame(0, $t->currentSuggestionIndex());
+    }
+
+    // ---- placeholderStyle tests --------------------------------------------
+
+    public function testPlaceholderStyleDefaultIsFaint(): void
+    {
+        $t = TextInput::new()->withPlaceholder('type here…');
+        // Default placeholder style should render with faint (dim) ANSI code
+        $view = $t->view();
+        $this->assertStringContainsString("\x1b[2m", $view); // SGR 2 = faint
+    }
+
+    public function testWithPlaceholderStyleAppliesCustomStyle(): void
+    {
+        $t = TextInput::new()
+            ->withPlaceholder('type here')
+            ->withPlaceholderStyle(Style::new()->foreground(Color::hex('#ff0000')));
+        $view = $t->view();
+        // Should contain red color ANSI code (RGB) for true color
+        $this->assertStringContainsString("\x1b[38;2;255;0;0m", $view);
+    }
+
+    public function testPlaceholderStyleShortAlias(): void
+    {
+        $t = TextInput::new()
+            ->placeholderStyle(Style::new()->italic());
+        $this->assertSame(Style::new()->italic()->value(), null); // Style was set
+        $view = $t->withPlaceholder('test')->view();
+        $this->assertStringContainsString("\x1b[3m", $view); // SGR 3 = italic
+    }
+
+    // ---- prefix/suffix tests ------------------------------------------------
+
+    public function testPrefixRendersBeforePrompt(): void
+    {
+        $t = TextInput::new()->withPrefix('$ ');
+        $view = $t->view();
+        $this->assertStringStartsWith('$ ', $view);
+    }
+
+    public function testSuffixRendersAfterPlaceholder(): void
+    {
+        $t = TextInput::new()
+            ->withPlaceholder('type here')
+            ->withSuffix(' <');
+        $view = $t->view();
+        $this->assertStringEndsWith(' <', $view);
+    }
+
+    public function testPrefixAndSuffixWithValue(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withPrefix('> ')
+            ->withSuffix(' |')
+            ->focus();
+        $t = $t->setValue('hello');
+        $view = $t->view();
+        // Prefix should be at start, suffix at end
+        $this->assertStringStartsWith('> ', $view);
+        $this->assertStringEndsWith(' |', $view);
+        $this->assertStringContainsString('hello', $view);
+    }
+
+    public function testPrefixAndSuffixNotEditable(): void
+    {
+        [$t, ] = TextInput::new()
+            ->withPrefix('$ ')
+            ->withSuffix(' |')
+            ->focus();
+        // Type "hello" - prefix/suffix should remain unchanged
+        foreach (str_split('hello') as $char) {
+            [$t, ] = $t->update(new KeyMsg(KeyType::Char, $char));
+        }
+        $this->assertSame('hello', $t->value);
+        $view = $t->view();
+        // Check prefix/suffix appear once each
+        $this->assertSame(1, substr_count($view, '$ '));
+        $this->assertSame(1, substr_count($view, ' |'));
+    }
+
+    public function testPrefixShortAlias(): void
+    {
+        $t = TextInput::new()->prefix('$');
+        $view = $t->view();
+        $this->assertStringStartsWith('$', $view);
+    }
+
+    public function testSuffixShortAlias(): void
+    {
+        $t = TextInput::new()->suffix('%');
+        $view = $t->view();
+        $this->assertStringEndsWith('%', $view);
+    }
+
+    // ---- vim mode reset on blur --------------------------------------------
+
+    public function testVimModeResetsToNormalOnBlur(): void
+    {
+        $t = TextInput::new()->withVimMode(true);
+        $this->assertTrue($t->vimNormalMode);
+
+        // Focus and enter insert mode
+        [$t, ] = $t->focus();
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'i')); // 'i' enters insert mode
+        $this->assertFalse($t->vimNormalMode);
+
+        // Blur should reset to normal mode
+        $t = $t->blur();
+        $this->assertTrue($t->vimNormalMode);
+    }
+
+    public function testVimModeStaysNormalOnBlurWhenAlreadyNormal(): void
+    {
+        $t = TextInput::new()->withVimMode(true);
+        $this->assertTrue($t->vimNormalMode);
+
+        [$t, ] = $t->focus();
+        $this->assertTrue($t->vimNormalMode);
+
+        $t = $t->blur();
+        $this->assertTrue($t->vimNormalMode);
+    }
+
+    public function testPlaceholderShownWithPrefixSuffix(): void
+    {
+        $t = TextInput::new()
+            ->withPrefix('$ ')
+            ->withPlaceholder('amount')
+            ->withSuffix(' USD');
+        $view = $t->view();
+        // Should contain prefix, placeholder, and suffix
+        $this->assertStringContainsString('$ ', $view);
+        $this->assertStringContainsString('amount', $view);
+        $this->assertStringContainsString(' USD', $view);
     }
 }
