@@ -321,8 +321,16 @@ jobs:
           - sugar-glow
           - sugar-spark
           - sugar-wishlist
+          # PHP >=8.3 — not available on 8.1/8.2
+          - candy-wish
           - candy-mold
+          # PHP >=8.3 — not available on 8.1/8.2
+          - candy-metrics
           - candy-mosaic
+          # PHP >=8.3 — not available on 8.1/8.2
+          - candy-vcr
+          # PHP >=8.3 — not available on 8.1/8.2
+          - candy-vt
           - candy-tetris
           - super-candy
           - sugar-stash
