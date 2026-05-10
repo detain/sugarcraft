@@ -29,8 +29,15 @@ final class Game implements Model
     public const PIPE_GAP    = 6;          // open cells in each pipe pair
     public const PIPE_EVERY  = 18;         // cells between successive pipes
 
+    private const HIGH_SCORE_FILE = '.honey-flap/scores.json';
+
     /** @var \Closure(int): int */
     private \Closure $rand;
+
+    /** @var list<int> */
+    private array $highScores = [];
+
+    private string $highScoreFilePath;
 
     /**
      * @param list<Pipe> $pipes
@@ -42,8 +49,17 @@ final class Game implements Model
         public readonly bool $crashed = false,
         public readonly int $tickIndex = 0,
         ?\Closure $rand = null,
+        ?string $configDir = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
+        $this->highScoreFilePath = ($configDir ?? $this->getDefaultConfigDir()) . '/' . self::HIGH_SCORE_FILE;
+        $this->loadHighScores();
+    }
+
+    private function getDefaultConfigDir(): string
+    {
+        $home = getenv('HOME') ?: ($_SERVER['HOME'] ?? '/tmp');
+        return $home . '/.config';
     }
 
     public static function start(?\Closure $rand = null): self
@@ -58,6 +74,69 @@ final class Game implements Model
     public function rand(): \Closure
     {
         return $this->rand;
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function highScores(): array
+    {
+        return $this->highScores;
+    }
+
+    public function highScore(): int
+    {
+        if ($this->highScores === []) {
+            return 0;
+        }
+        return max($this->highScores);
+    }
+
+    /**
+     * Load high scores from JSON file. Fail fast if file exists but is unreadable.
+     */
+    private function loadHighScores(): void
+    {
+        $path = $this->highScoreFilePath;
+        if (!file_exists($path)) {
+            return;
+        }
+        $contents = file_get_contents($path);
+        if ($contents === false) {
+            throw new \RuntimeException("Cannot read high score file: {$path}");
+        }
+        $decoded = json_decode($contents, true);
+        if (!is_array($decoded)) {
+            throw new \RuntimeException("Invalid high score file format: {$path}");
+        }
+        $this->highScores = array_values(array_filter($decoded, 'is_int'));
+        sort($this->highScores, SORT_NUMERIC);
+    }
+
+    /**
+     * Save a new high score if it qualifies. Returns true if saved.
+     */
+    public function saveHighScore(int $score): bool
+    {
+        if ($score <= $this->highScore()) {
+            return false;
+        }
+        $this->highScores[] = $score;
+        sort($this->highScores, SORT_NUMERIC);
+        $this->persistHighScores();
+        return true;
+    }
+
+    private function persistHighScores(): void
+    {
+        $dir = dirname($this->highScoreFilePath);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0700, true);
+        }
+        $json = json_encode($this->highScores, JSON_PRETTY_PRINT);
+        if (file_put_contents($this->highScoreFilePath, $json) === false) {
+            throw new \RuntimeException("Cannot write high score file: {$this->highScoreFilePath}");
+        }
     }
 
     public function init(): ?\Closure
@@ -92,6 +171,10 @@ final class Game implements Model
                 return [$this, null];
             }
             $next = $this->advance();
+            // Persist high score when game ends.
+            if ($next->crashed) {
+                $next->saveHighScore($next->score);
+            }
             // Schedule the next tick — fires forever until quit.
             return [$next, Cmd::tick(0.033, static fn() => new TickMsg())];
         }
