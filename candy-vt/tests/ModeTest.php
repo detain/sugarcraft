@@ -41,6 +41,18 @@ final class ModeTest extends TestCase
         $this->assertTrue($m->mouseSgr);
     }
 
+    public function testWithMouseHighlights(): void
+    {
+        $m = (new Mode())->withMouseHighlights(true);
+        $this->assertTrue($m->mouseHighlights);
+    }
+
+    public function testWithMouseHighlightsDefaultTrue(): void
+    {
+        $m = (new Mode())->withMouseHighlights();
+        $this->assertTrue($m->mouseHighlights);
+    }
+
     public function testEquals(): void
     {
         $a = (new Mode())->withAltScreen(true)->withMouseSgr(true);

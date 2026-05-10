@@ -39,6 +39,29 @@ final class ModeHandlerTest extends TestCase
         $this->assertFalse($h->mode->mouseAny);
     }
 
+    public function testMouseHighlights1001(): void
+    {
+        $h = $this->newHandler();
+        (new ModeHandler())->apply([1001], true, $h);
+        $this->assertTrue($h->mode->mouseHighlights);
+        (new ModeHandler())->apply([1001], false, $h);
+        $this->assertFalse($h->mode->mouseHighlights);
+    }
+
+    public function testMouseHighlights1005(): void
+    {
+        $h = $this->newHandler();
+        (new ModeHandler())->apply([1005], true, $h);
+        $this->assertTrue($h->mode->mouseHighlights);
+    }
+
+    public function testMouseHighlights1015(): void
+    {
+        $h = $this->newHandler();
+        (new ModeHandler())->apply([1015], true, $h);
+        $this->assertTrue($h->mode->mouseHighlights);
+    }
+
     public function testMouseCellMotion1002(): void
     {
         $h = $this->newHandler();
