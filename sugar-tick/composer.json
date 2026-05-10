@@ -30,9 +30,9 @@
     ],
     "require": {
         "php": ">=8.1",
-        "sugarcraft/candy-core": "@dev",
-        "sugarcraft/candy-sprinkles": "@dev",
-        "sugarcraft/sugar-charts": "@dev"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-charts": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0"

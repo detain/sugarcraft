@@ -31,9 +31,9 @@
     ],
     "require": {
         "php": "^8.1",
-        "sugarcraft/candy-core": "@dev",
-        "sugarcraft/candy-shine": "@dev",
-        "sugarcraft/sugar-bits": "@dev",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-shine": "dev-master",
+        "sugarcraft/sugar-bits": "dev-master",
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {
