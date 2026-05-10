@@ -530,6 +530,7 @@ final class Width
     private static function firstCodepoint(string $g): int
     {
         if (function_exists('mb_ord')) {
+            /** @var int|false $cp */
             $cp = mb_ord($g, 'UTF-8');
             return $cp === false ? 0 : $cp;
         }
@@ -571,7 +572,8 @@ final class Width
     private static function isWide(int $cp): bool
     {
         if ($cp < 0x1100) return false;
-        return ($cp >= 0x1100 && $cp <= 0x115f)
+        // At this point we know $cp >= 0x1100
+        return ($cp <= 0x115f)
             || ($cp >= 0x2e80 && $cp <= 0x303e)
             || ($cp >= 0x3041 && $cp <= 0x33ff)
             || ($cp >= 0x3400 && $cp <= 0x4dbf)
