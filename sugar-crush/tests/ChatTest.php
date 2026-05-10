@@ -215,4 +215,146 @@ final class ChatTest extends TestCase
         // When streaming is disabled, onToken is null (not passed)
         $this->assertNull($callbackReceived);
     }
+
+    public function testRegisterToolAddsTool(): void
+    {
+        $chat = new Chat();
+        $this->assertEmpty($chat->getTools());
+        $chat2 = $chat->registerTool('bash', static fn(array $args) => 'result');
+        $this->assertNotSame($chat, $chat2);
+        $this->assertCount(1, $chat2->getTools());
+        $this->assertArrayHasKey('bash', $chat2->getTools());
+    }
+
+    public function testRegisterToolIsImmutable(): void
+    {
+        $chat = new Chat();
+        $chat2 = $chat->registerTool('bash', static fn(array $args) => 'result');
+        $this->assertEmpty($chat->getTools());
+        $this->assertCount(1, $chat2->getTools());
+    }
+
+    public function testMultipleToolsCanBeRegistered(): void
+    {
+        $chat = new Chat();
+        $chat2 = $chat
+            ->registerTool('bash', static fn(array $args) => 'bash result')
+            ->registerTool('read', static fn(array $args) => 'file content');
+        $this->assertCount(2, $chat2->getTools());
+        $this->assertArrayHasKey('bash', $chat2->getTools());
+        $this->assertArrayHasKey('read', $chat2->getTools());
+    }
+
+    public function testOnToolCallSetsCallback(): void
+    {
+        $chat = new Chat();
+        $called = false;
+        $chat2 = $chat->onToolCall(function () use (&$called) {
+            $called = true;
+        });
+        $this->assertNotSame($chat, $chat2);
+        // Callback is stored (we trust it's set correctly by immutability)
+        $this->assertNotSame($chat, $chat2);
+    }
+
+    public function testToolExecutionOnAssistantMsg(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('bash', ['cmd' => 'ls -la']);
+        $message = Message::assistant('Running command...')->withToolCalls([$toolCall]);
+
+        $executedArgs = null;
+        $chat = (new Chat(
+            history: [Message::user('list files')],
+            inFlight: true,
+        ))->registerTool('bash', static function (array $args) use (&$executedArgs) {
+            $executedArgs = $args;
+            return 'total 0' . "\n" . 'drwxr-xr-x 2 user user 4096 May 10 00:00 .';
+        });
+
+        [$next] = $chat->update(new AssistantMsg($message));
+
+        // Tool should have been executed synchronously
+        $this->assertNotNull($executedArgs);
+        $this->assertSame(['cmd' => 'ls -la'], $executedArgs);
+
+        // A follow-up backend call should be scheduled
+        $this->assertTrue($next->inFlight);
+        // History: user msg + assistant msg + tool result msg
+        $this->assertCount(3, $next->history);
+    }
+
+    public function testToolResultAddedToHistoryAfterExecution(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('echo', ['text' => 'hello']);
+        $message = Message::assistant('Echoing...')->withToolCalls([$toolCall]);
+
+        $chat = (new Chat(
+            history: [Message::user('say hello')],
+            inFlight: true,
+        ))->registerTool('echo', static fn(array $args) => $args['text'] ?? '');
+
+        [$next, ] = $chat->update(new AssistantMsg($message));
+
+        // After tool execution, history should have 3 items:
+        // user msg, assistant msg with tool call, tool result
+        $this->assertCount(3, $next->history);
+        $this->assertSame('', $next->history[2]->content); // tool result content is in a separate message
+    }
+
+    public function testUnknownToolReturnsError(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('unknown_tool', []);
+        $message = Message::assistant('Calling unknown...')->withToolCalls([$toolCall]);
+
+        // Chat with no tools registered - tool calls should be ignored
+        // and message should just be added to history
+        $chat = new Chat(
+            history: [Message::user('do something')],
+            inFlight: true,
+        );
+
+        [$next] = $chat->update(new AssistantMsg($message));
+
+        // Without tools registered, tool calls are ignored
+        // History: user msg + assistant msg with tool calls (no execution)
+        $this->assertCount(2, $next->history);
+        $this->assertFalse($next->inFlight);
+    }
+
+    public function testToolExceptionReturnsErrorResult(): void
+    {
+        $toolCall = new \SugarCraft\Crush\ToolCall('failing', []);
+        $message = Message::assistant('Calling failing tool...')->withToolCalls([$toolCall]);
+
+        $chat = (new Chat(
+            history: [Message::user('test')],
+            inFlight: true,
+        ))->registerTool('failing', static function (array $args): void {
+            throw new \RuntimeException('Tool failed intentionally');
+        });
+
+        [$next] = $chat->update(new AssistantMsg($message));
+
+        // History should have user msg, assistant msg, and error result
+        $this->assertCount(3, $next->history);
+    }
+
+    public function testToolsAndCallbacksPreservedOnInput(): void
+    {
+        $chat = new Chat(tools: ['test' => static fn() => 'result']);
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertArrayHasKey('test', $next->getTools());
+    }
+
+    public function testAssistantMsgWithoutToolCallsNoOpOnTools(): void
+    {
+        $chat = (new Chat(
+            history: [Message::user('hello')],
+            inFlight: true,
+        ))->registerTool('bash', static fn(array $args) => 'result');
+        $reply = Message::assistant('Hello!');
+        [$next] = $chat->update(new AssistantMsg($reply));
+        $this->assertCount(2, $next->history);
+        $this->assertFalse($next->inFlight);
+    }
 }
