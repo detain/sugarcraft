@@ -6,9 +6,7 @@ PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+
 
 - `MATCHUPS.md` — upstream → SugarCraft port mapping (status icons 🔴🟡🟢🚀)
 - `PROJECT_NAMES.md` — naming-decision history + prefix cheat sheet
-- `CONVERSION.md` — phase roadmap, per-lib status, v2 parity sweep
 - `LOCALES.md` — i18n locale codes + recommended set
-- `UPSTREAM_OPPORTUNITIES.md` — port-back candidates from upstream
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
 - `docs/index.html` — public website homepage tile grid
 - `media/` — shared icons, profile.png, social-preview.png used by the homepage + social share metadata
@@ -81,7 +79,6 @@ Lang files under each lib's `lang/` dir per `LOCALES.md`. Lookup: exact locale �
 [ ] .github/workflows/vhs.yml          — matrix lib: entry
 [ ] MATCHUPS.md                        — new row + status icon
 [ ] PROJECT_NAMES.md                   — naming entry
-[ ] CONVERSION.md                      — phase table entry
 [ ] README.md (root)                   — library count, table row, test-loop snippet
 [ ] docs/index.html                    — homepage tile
 [ ] media/ or docs/img/icons/          — 256-square candy-themed PNG
