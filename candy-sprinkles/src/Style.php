@@ -53,6 +53,8 @@ final class Style
         private readonly bool $faint = false,
         private readonly bool $blink = false,
         private readonly bool $reverse = false,
+        private readonly bool $overline = false,
+        private readonly bool $invisible = false,
         private readonly array $padding = [0, 0, 0, 0],
         private readonly array $margin  = [0, 0, 0, 0],
         private readonly ?int $width = null,
@@ -306,6 +308,10 @@ final class Style
     public function blink(bool $on = true): self         { return $this->with(blink: $on, propsAdded: ['blink']); }
     /** Toggle reverse video — swap fg / bg (SGR 7). */
     public function reverse(bool $on = true): self       { return $this->with(reverse: $on, propsAdded: ['reverse']); }
+    /** Toggle overline (SGR 53). */
+    public function overline(bool $on = true): self      { return $this->with(overline: $on, propsAdded: ['overline']); }
+    /** Toggle invisible / hidden text (SGR 8). */
+    public function invisible(bool $on = true): self     { return $this->with(invisible: $on, propsAdded: ['invisible']); }
 
     /** padding($all) | padding($v, $h) | padding($t, $r, $b, $l) */
     public function padding(int ...$sides): self
@@ -582,6 +588,8 @@ final class Style
     public function isFaint(): bool            { return $this->faint; }
     public function isBlink(): bool            { return $this->blink; }
     public function isReverse(): bool          { return $this->reverse; }
+    public function isOverline(): bool         { return $this->overline; }
+    public function isInvisible(): bool        { return $this->invisible; }
     public function getWidth(): ?int           { return $this->width; }
     public function getHeight(): ?int          { return $this->height; }
     public function getMaxWidth(): ?int        { return $this->maxWidth; }
@@ -616,6 +624,8 @@ final class Style
     public function unsetFaint(): self         { return $this->withUnset('faint', faint: false); }
     public function unsetBlink(): self         { return $this->withUnset('blink', blink: false); }
     public function unsetReverse(): self       { return $this->withUnset('reverse', reverse: false); }
+    public function unsetOverline(): self      { return $this->withUnset('overline', overline: false); }
+    public function unsetInvisible(): self     { return $this->withUnset('invisible', invisible: false); }
     public function unsetWidth(): self         { return $this->withUnset('width', width: null); }
     public function unsetHeight(): self        { return $this->withUnset('height', height: null); }
     public function unsetMaxWidth(): self      { return $this->withUnset('maxWidth', maxWidth: null); }
@@ -750,6 +760,8 @@ final class Style
             faint:            $has('faint')            ? $this->faint            : $parent->faint,
             blink:            $has('blink')            ? $this->blink            : $parent->blink,
             reverse:          $has('reverse')          ? $this->reverse          : $parent->reverse,
+            overline:         $has('overline')         ? $this->overline         : $parent->overline,
+            invisible:        $has('invisible')        ? $this->invisible        : $parent->invisible,
             padding:          $has('padding')          ? $this->padding          : $parent->padding,
             margin:           $has('margin')           ? $this->margin           : $parent->margin,
             width:            $has('width')            ? $this->width            : $parent->width,
@@ -1080,6 +1092,8 @@ final class Style
         if ($this->blink)     $codes[] = Ansi::BLINK;
         if ($this->reverse)   $codes[] = Ansi::REVERSE;
         if ($this->strike)    $codes[] = Ansi::STRIKE;
+        if ($this->overline)  $codes[] = Ansi::OVERLINE;
+        if ($this->invisible) $codes[] = Ansi::CONCEAL;
 
         $sgr = $codes === [] ? '' : Ansi::sgr(...$codes);
 
@@ -1163,6 +1177,8 @@ final class Style
         ?bool $faint = null,
         ?bool $blink = null,
         ?bool $reverse = null,
+        ?bool $overline = null,
+        ?bool $invisible = null,
         ?array $padding = null,
         ?array $margin = null,
         ?int $width = null, bool $widthSet = false,
@@ -1210,6 +1226,8 @@ final class Style
             faint:            $faint         ?? $this->faint,
             blink:            $blink         ?? $this->blink,
             reverse:          $reverse       ?? $this->reverse,
+            overline:         $overline      ?? $this->overline,
+            invisible:        $invisible     ?? $this->invisible,
             padding:          $padding       ?? $this->padding,
             margin:           $margin        ?? $this->margin,
             width:            $widthSet      ? $width           : $this->width,
@@ -1256,6 +1274,8 @@ final class Style
         ?bool $faint = null,
         ?bool $blink = null,
         ?bool $reverse = null,
+        ?bool $overline = null,
+        ?bool $invisible = null,
         ?int $width = null, bool $widthSet = false,
         ?int $height = null, bool $heightSet = false,
         ?int $maxWidth = null, bool $maxWidthSet = false,
@@ -1281,6 +1301,8 @@ final class Style
             faint:            $prop === 'faint'      ? false        : $next->faint,
             blink:            $prop === 'blink'      ? false        : $next->blink,
             reverse:          $prop === 'reverse'    ? false        : $next->reverse,
+            overline:         $prop === 'overline'   ? false        : $next->overline,
+            invisible:        $prop === 'invisible'  ? false        : $next->invisible,
             padding:          $next->padding,
             margin:           $next->margin,
             width:            $prop === 'width'      ? null         : $next->width,
@@ -1328,6 +1350,7 @@ final class Style
             fgComplete: $this->fgComplete, bgComplete: $this->bgComplete,
             bold: $this->bold, italic: $this->italic, underline: $this->underline,
             strike: $this->strike, faint: $this->faint, blink: $this->blink, reverse: $this->reverse,
+            overline: $this->overline, invisible: $this->invisible,
             padding: $this->padding, margin: $this->margin,
             width: $this->width, height: $this->height,
             maxWidth: $this->maxWidth, maxHeight: $this->maxHeight,

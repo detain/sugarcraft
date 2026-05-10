@@ -33,6 +33,7 @@ final class Ansi
     public const REVERSE   = 7;
     public const CONCEAL   = 8;
     public const STRIKE    = 9;
+    public const OVERLINE  = 53;
 
     // DEC private mode constants (CSI ? <n> h/l)
     public const DECCKM             = 1;  // Application cursor keys
