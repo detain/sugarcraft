@@ -35,86 +35,127 @@ flag_management:
   individual_flags:
     - name: candy-core
       paths: ["candy-core/src/**"]
+      carryforward: true
     - name: candy-sprinkles
       paths: ["candy-sprinkles/src/**"]
+      carryforward: true
     - name: honey-bounce
       paths: ["honey-bounce/src/**"]
+      carryforward: true
     - name: candy-zone
       paths: ["candy-zone/src/**"]
+      carryforward: true
     - name: sugar-bits
       paths: ["sugar-bits/src/**"]
+      carryforward: true
     - name: sugar-charts
       paths: ["sugar-charts/src/**"]
+      carryforward: true
     - name: sugar-prompt
       paths: ["sugar-prompt/src/**"]
+      carryforward: true
     - name: candy-shell
       paths: ["candy-shell/src/**"]
+      carryforward: true
     - name: candy-shine
       paths: ["candy-shine/src/**"]
+      carryforward: true
     - name: candy-kit
       paths: ["candy-kit/src/**"]
+      carryforward: true
     - name: candy-freeze
       paths: ["candy-freeze/src/**"]
+      carryforward: true
     - name: sugar-glow
       paths: ["sugar-glow/src/**"]
+      carryforward: true
     - name: sugar-spark
       paths: ["sugar-spark/src/**"]
+      carryforward: true
     - name: candy-wish
       paths: ["candy-wish/src/**"]
+      carryforward: true
     - name: sugar-wishlist
       paths: ["sugar-wishlist/src/**"]
+      carryforward: true
     - name: candy-metrics
       paths: ["candy-metrics/src/**"]
+      carryforward: true
     - name: candy-mold
       paths: ["candy-mold/src/**"]
+      carryforward: true
     - name: candy-tetris
       paths: ["candy-tetris/src/**"]
+      carryforward: true
     - name: super-candy
       paths: ["super-candy/src/**"]
+      carryforward: true
     - name: sugar-crush
       paths: ["sugar-crush/src/**"]
+      carryforward: true
     - name: sugar-stash
       paths: ["sugar-stash/src/**"]
+      carryforward: true
     - name: candy-query
       paths: ["candy-query/src/**"]
+      carryforward: true
     - name: sugar-tick
       paths: ["sugar-tick/src/**"]
+      carryforward: true
     - name: candy-mines
       paths: ["candy-mines/src/**"]
+      carryforward: true
     - name: candy-flip
       paths: ["candy-flip/src/**"]
+      carryforward: true
     - name: honey-flap
       paths: ["honey-flap/src/**"]
+      carryforward: true
     - name: candy-hermit
       paths: ["candy-hermit/src/**"]
+      carryforward: true
     - name: candy-lister
       paths: ["candy-lister/src/**"]
+      carryforward: true
     - name: candy-log
       paths: ["candy-log/src/**"]
+      carryforward: true
     - name: candy-palette
       paths: ["candy-palette/src/**"]
+      carryforward: true
     - name: candy-serve
       paths: ["candy-serve/src/**"]
+      carryforward: true
     - name: sugar-boxer
       paths: ["sugar-boxer/src/**"]
+      carryforward: true
     - name: sugar-calendar
       paths: ["sugar-calendar/src/**"]
+      carryforward: true
     - name: sugar-crumbs
       paths: ["sugar-crumbs/src/**"]
+      carryforward: true
     - name: sugar-post
       paths: ["sugar-post/src/**"]
+      carryforward: true
     - name: sugar-readline
       paths: ["sugar-readline/src/**"]
+      carryforward: true
     - name: sugar-skate
       paths: ["sugar-skate/src/**"]
+      carryforward: true
     - name: sugar-stickers
       paths: ["sugar-stickers/src/**"]
+      carryforward: true
     - name: sugar-table
       paths: ["sugar-table/src/**"]
+      carryforward: true
     - name: sugar-toast
       paths: ["sugar-toast/src/**"]
+      carryforward: true
     - name: sugar-veil
       paths: ["sugar-veil/src/**"]
+      carryforward: true
 
 # ── Components ────────────────────────────────────────────────────────────────
 # Each component links to its flag via flag_regexes.  Because both

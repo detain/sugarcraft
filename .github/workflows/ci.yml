@@ -24,10 +24,10 @@ jobs:
   # Unified test matrix — single job, four PHP versions, with per-lib include
   # overrides to skip libs that don't support certain PHP majors.
   #
-  # Lib exclusions by PHP version:
-  #   PHP 8.1  — excluded: candy-vt, candy-vcr (^8.2), candy-wish (^8.3)
-  #   PHP 8.2  — excluded: candy-wish (^8.3)
-  #   PHP 8.3+ — all libs
+    # Lib exclusions by PHP version:
+    #   PHP 8.1  — excluded: candy-vt, candy-vcr (^8.2), candy-wish (^8.3), sugar-crush (transitive ^8.3 dep)
+    #   PHP 8.2  — excluded: candy-wish (^8.3)
+    #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
@@ -57,7 +57,6 @@ jobs:
           - candy-mold
           - candy-tetris
           - super-candy
-          - sugar-crush
           - sugar-stash
           - candy-query
           - sugar-tick
@@ -97,6 +96,13 @@ jobs:
             lib: candy-wish
           - php: '8.4'
             lib: candy-wish
+          # sugar-crush — transitive ^8.3 dep (bubbletea), excluded from 8.1/8.2
+          - php: '8.2'
+            lib: sugar-crush
+          - php: '8.3'
+            lib: sugar-crush
+          - php: '8.4'
+            lib: sugar-crush
           # candy-metrics — composer.lock was stale; runs on all 8.3+ cells
           - php: '8.3'
             lib: candy-metrics
@@ -174,7 +180,7 @@ jobs:
   # TTY-sensitive libs to keep wall-clock time reasonable.
   windows-test:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
-    runs-on: windows-latest
+    runs-on: windows-2025
     # Cancel an in-progress run of the same cell when a fresh push lands.
     concurrency:
       group: ci-windows-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
@@ -317,7 +323,6 @@ jobs:
           - candy-mosaic
           - candy-tetris
           - super-candy
-          - sugar-crush
           - sugar-stash
           - candy-query
           - sugar-tick
