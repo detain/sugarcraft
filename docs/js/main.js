@@ -56,6 +56,7 @@ document.querySelectorAll('.lib-card .lib-github').forEach((pill) => {
     const overlay = document.createElement('div');
     overlay.className = 'lightbox';
     overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-label', 'Demo image viewer');
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-hidden', 'true');
     overlay.innerHTML = `
