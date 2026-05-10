@@ -17,9 +17,11 @@
 </head>
 <body>
 
-<nav class="nav">
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<nav class="nav" aria-label="Main navigation">
     <div class="nav-inner">
-        <a class="brand" href="./"><span class="logo-mark"></span>SugarCraft</a>
+        <a class="brand" href="./"><span class="logo-mark" aria-label="SugarCraft logo"></span>SugarCraft</a>
         <div class="nav-links">
             <a href="#libraries">Libraries</a>
             <a href="#apps">Apps</a>
@@ -31,6 +33,8 @@
         </div>
     </div>
 </nav>
+
+<main id="main">
 
 <header class="hero">
     <div class="container">
@@ -79,51 +83,51 @@
         </p>
 
         <div class="logo-strip">
-            <a href="lib/candy-core.html"     title="SugarCraft — TUI runtime"><img src="img/icons/candy-core.png" alt="SugarCraft"></a>
-            <a href="lib/candy-sprinkles.html" title="CandySprinkles — styling"><img src="img/icons/candy-sprinkles.png" alt="CandySprinkles"></a>
-            <a href="lib/candy-vt.html"       title="CandyVt — virtual terminal"><img src="img/icons/candy-vt.png" alt="CandyVt"></a>
-            <a href="lib/candy-vcr.html"      title="CandyVcr — record + replay sessions"><img src="img/icons/candy-vcr.png" alt="CandyVcr"></a>
-            <a href="lib/candy-pty.html"      title="CandyPty — pseudo-terminal"><img src="img/icons/candy-pty.png" alt="CandyPty"></a>
-            <a href="lib/honey-bounce.html"   title="HoneyBounce — physics"><img src="img/icons/honey-bounce.png" alt="HoneyBounce"></a>
-            <a href="lib/candy-zone.html"     title="CandyZone — mouse zones"><img src="img/icons/candy-zone.png" alt="CandyZone"></a>
-            <a href="lib/sugar-bits.html"     title="SugarBits — components"><img src="img/icons/sugar-bits.png" alt="SugarBits"></a>
-            <a href="lib/sugar-charts.html"   title="SugarCharts — charts"><img src="img/icons/sugar-charts.png" alt="SugarCharts"></a>
-            <a href="lib/sugar-prompt.html"   title="SugarPrompt — forms"><img src="img/icons/sugar-prompt.png" alt="SugarPrompt"></a>
-            <a href="lib/candy-shell.html"    title="CandyShell — CLI"><img src="img/icons/candy-shell.png" alt="CandyShell"></a>
-            <a href="lib/candy-shine.html"    title="CandyShine — markdown"><img src="img/icons/candy-shine.png" alt="CandyShine"></a>
-            <a href="lib/candy-kit.html"      title="CandyKit — CLI helpers"><img src="img/icons/candy-kit.png" alt="CandyKit"></a>
-            <a href="lib/candy-freeze.html"   title="CandyFreeze — code → SVG"><img src="img/icons/candy-freeze.png" alt="CandyFreeze"></a>
-            <a href="lib/sugar-glow.html"     title="SugarGlow — markdown viewer"><img src="img/icons/sugar-glow.png" alt="SugarGlow"></a>
-            <a href="lib/sugar-spark.html"    title="SugarSpark — ANSI inspector"><img src="img/icons/sugar-spark.png" alt="SugarSpark"></a>
-            <a href="lib/candy-wish.html"     title="CandyWish — SSH framework"><img src="img/icons/candy-wish.png" alt="CandyWish"></a>
-            <a href="lib/sugar-wishlist.html" title="SugarWishlist — SSH picker"><img src="img/icons/sugar-wishlist.png" alt="SugarWishlist"></a>
-            <a href="lib/candy-metrics.html"  title="CandyMetrics — telemetry"><img src="img/icons/candy-metrics.png" alt="CandyMetrics"></a>
-            <a href="lib/candy-mosaic.html"   title="CandyMosaic — image renderer"><img src="img/icons/candy-mosaic.png" alt="CandyMosaic"></a>
-            <a href="lib/candy-log.html"      title="CandyLog — logger"><img src="img/icons/candy-log.png" alt="CandyLog"></a>
-            <a href="lib/candy-palette.html"  title="CandyPalette — color profile"><img src="img/icons/candy-palette.png" alt="CandyPalette"></a>
-            <a href="lib/candy-lister.html"   title="CandyLister — tree/list"><img src="img/icons/candy-lister.png" alt="CandyLister"></a>
-            <a href="lib/sugar-boxer.html"    title="SugarBoxer — layout"><img src="img/icons/sugar-boxer.png" alt="SugarBoxer"></a>
-            <a href="lib/sugar-veil.html"     title="SugarVeil — overlay"><img src="img/icons/sugar-veil.png" alt="SugarVeil"></a>
-            <a href="lib/sugar-crumbs.html"   title="SugarCrumbs — breadcrumbs"><img src="img/icons/sugar-crumbs.png" alt="SugarCrumbs"></a>
-            <a href="lib/candy-hermit.html"   title="CandyHermit — fuzzy finder"><img src="img/icons/candy-hermit.png" alt="CandyHermit"></a>
-            <a href="lib/sugar-stickers.html" title="SugarStickers — flexbox"><img src="img/icons/sugar-stickers.png" alt="SugarStickers"></a>
-            <a href="lib/sugar-toast.html"    title="SugarToast — notifications"><img src="img/icons/sugar-toast.png" alt="SugarToast"></a>
-            <a href="lib/sugar-calendar.html" title="SugarCalendar — datepicker"><img src="img/icons/sugar-calendar.png" alt="SugarCalendar"></a>
-            <a href="lib/sugar-readline.html" title="SugarReadline — prompts"><img src="img/icons/sugar-readline.png" alt="SugarReadline"></a>
-            <a href="lib/sugar-table.html"    title="SugarTable — data table"><img src="img/icons/sugar-table.png" alt="SugarTable"></a>
-            <a href="lib/candy-mold.html"     title="CandyMold — starter"><img src="img/icons/candy-mold.png" alt="CandyMold"></a>
-            <a href="lib/candy-serve.html"    title="CandyServe — git server"><img src="img/icons/candy-serve.png" alt="CandyServe"></a>
-            <a href="lib/sugar-skate.html"    title="SugarSkate — kv store CLI"><img src="img/icons/sugar-skate.png" alt="SugarSkate"></a>
-            <a href="lib/sugar-post.html"     title="SugarPost — email CLI"><img src="img/icons/sugar-post.png" alt="SugarPost"></a>
-            <a href="lib/candy-tetris.html"   title="CandyTetris — game"><img src="img/icons/candy-tetris.png" alt="CandyTetris"></a>
-            <a href="lib/super-candy.html"    title="SuperCandy — file manager"><img src="img/icons/super-candy.png" alt="SuperCandy"></a>
-            <a href="lib/sugar-crush.html"    title="SugarCrush — AI chat"><img src="img/icons/sugar-crush.png" alt="SugarCrush"></a>
-            <a href="lib/sugar-stash.html"    title="SugarStash — git TUI"><img src="img/icons/sugar-stash.png" alt="SugarStash"></a>
-            <a href="lib/candy-query.html"    title="CandyQuery — SQLite browser"><img src="img/icons/candy-query.png" alt="CandyQuery"></a>
-            <a href="lib/sugar-tick.html"     title="SugarTick — time tracker"><img src="img/icons/sugar-tick.png" alt="SugarTick"></a>
-            <a href="lib/candy-mines.html"    title="CandyMines — minesweeper"><img src="img/icons/candy-mines.png" alt="CandyMines"></a>
-            <a href="lib/candy-flip.html"     title="CandyFlip — gif viewer"><img src="img/icons/candy-flip.png" alt="CandyFlip"></a>
-            <a href="lib/honey-flap.html"     title="HoneyFlap — flappy bird"><img src="img/icons/honey-flap.png" alt="HoneyFlap"></a>
+            <a href="lib/candy-core.html"     title="SugarCraft — TUI runtime"><img src="img/icons/candy-core.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-sprinkles.html" title="CandySprinkles — styling"><img src="img/icons/candy-sprinkles.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-vt.html"       title="CandyVt — virtual terminal"><img src="img/icons/candy-vt.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-vcr.html"      title="CandyVcr — record + replay sessions"><img src="img/icons/candy-vcr.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-pty.html"      title="CandyPty — pseudo-terminal"><img src="img/icons/candy-pty.png" alt="" aria-hidden="true"></a>
+            <a href="lib/honey-bounce.html"   title="HoneyBounce — physics"><img src="img/icons/honey-bounce.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-zone.html"     title="CandyZone — mouse zones"><img src="img/icons/candy-zone.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-bits.html"     title="SugarBits — components"><img src="img/icons/sugar-bits.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-charts.html"   title="SugarCharts — charts"><img src="img/icons/sugar-charts.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-prompt.html"   title="SugarPrompt — forms"><img src="img/icons/sugar-prompt.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-shell.html"    title="CandyShell — CLI"><img src="img/icons/candy-shell.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-shine.html"    title="CandyShine — markdown"><img src="img/icons/candy-shine.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-kit.html"      title="CandyKit — CLI helpers"><img src="img/icons/candy-kit.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-freeze.html"   title="CandyFreeze — code → SVG"><img src="img/icons/candy-freeze.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-glow.html"     title="SugarGlow — markdown viewer"><img src="img/icons/sugar-glow.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-spark.html"    title="SugarSpark — ANSI inspector"><img src="img/icons/sugar-spark.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-wish.html"     title="CandyWish — SSH framework"><img src="img/icons/candy-wish.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-wishlist.html" title="SugarWishlist — SSH picker"><img src="img/icons/sugar-wishlist.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-metrics.html"  title="CandyMetrics — telemetry"><img src="img/icons/candy-metrics.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-mosaic.html"   title="CandyMosaic — image renderer"><img src="img/icons/candy-mosaic.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-log.html"      title="CandyLog — logger"><img src="img/icons/candy-log.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-palette.html"  title="CandyPalette — color profile"><img src="img/icons/candy-palette.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-lister.html"   title="CandyLister — tree/list"><img src="img/icons/candy-lister.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-boxer.html"    title="SugarBoxer — layout"><img src="img/icons/sugar-boxer.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-veil.html"     title="SugarVeil — overlay"><img src="img/icons/sugar-veil.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-crumbs.html"   title="SugarCrumbs — breadcrumbs"><img src="img/icons/sugar-crumbs.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-hermit.html"   title="CandyHermit — fuzzy finder"><img src="img/icons/candy-hermit.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-stickers.html" title="SugarStickers — flexbox"><img src="img/icons/sugar-stickers.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-toast.html"    title="SugarToast — notifications"><img src="img/icons/sugar-toast.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-calendar.html" title="SugarCalendar — datepicker"><img src="img/icons/sugar-calendar.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-readline.html" title="SugarReadline — prompts"><img src="img/icons/sugar-readline.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-table.html"    title="SugarTable — data table"><img src="img/icons/sugar-table.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-mold.html"     title="CandyMold — starter"><img src="img/icons/candy-mold.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-serve.html"    title="CandyServe — git server"><img src="img/icons/candy-serve.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-skate.html"    title="SugarSkate — kv store CLI"><img src="img/icons/sugar-skate.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-post.html"     title="SugarPost — email CLI"><img src="img/icons/sugar-post.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-tetris.html"   title="CandyTetris — game"><img src="img/icons/candy-tetris.png" alt="" aria-hidden="true"></a>
+            <a href="lib/super-candy.html"    title="SuperCandy — file manager"><img src="img/icons/super-candy.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-crush.html"    title="SugarCrush — AI chat"><img src="img/icons/sugar-crush.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-stash.html"    title="SugarStash — git TUI"><img src="img/icons/sugar-stash.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-query.html"    title="CandyQuery — SQLite browser"><img src="img/icons/candy-query.png" alt="" aria-hidden="true"></a>
+            <a href="lib/sugar-tick.html"     title="SugarTick — time tracker"><img src="img/icons/sugar-tick.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-mines.html"    title="CandyMines — minesweeper"><img src="img/icons/candy-mines.png" alt="" aria-hidden="true"></a>
+            <a href="lib/candy-flip.html"     title="CandyFlip — gif viewer"><img src="img/icons/candy-flip.png" alt="" aria-hidden="true"></a>
+            <a href="lib/honey-flap.html"     title="HoneyFlap — flappy bird"><img src="img/icons/honey-flap.png" alt="" aria-hidden="true"></a>
         </div>
 
         <div class="callout">
@@ -156,7 +160,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-core/.vhs/counter.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-core.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-core.png" alt="" aria-hidden="true">
                     <h3>SugarCraft</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-core">GitHub →</span>
                 </div>
@@ -168,7 +172,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-sprinkles/.vhs/dashboard.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-sprinkles.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-sprinkles.png" alt="" aria-hidden="true">
                     <h3>CandySprinkles</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-sprinkles">GitHub →</span>
                 </div>
@@ -180,7 +184,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/honey-bounce/.vhs/spring.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/honey-bounce.png" alt="">
+                    <img class="lib-icon" src="img/icons/honey-bounce.png" alt="" aria-hidden="true">
                     <h3>HoneyBounce</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/honey-bounce">GitHub →</span>
                 </div>
@@ -192,7 +196,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-zone/.vhs/buttons.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-zone.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-zone.png" alt="" aria-hidden="true">
                     <h3>CandyZone</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-zone">GitHub →</span>
                 </div>
@@ -204,7 +208,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-bits/.vhs/spinners.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-bits.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-bits.png" alt="" aria-hidden="true">
                     <h3>SugarBits</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-bits">GitHub →</span>
                 </div>
@@ -216,7 +220,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-charts/.vhs/heatmap.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-charts.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-charts.png" alt="" aria-hidden="true">
                     <h3>SugarCharts</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-charts">GitHub →</span>
                 </div>
@@ -228,7 +232,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-prompt/.vhs/form.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-prompt.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-prompt.png" alt="" aria-hidden="true">
                     <h3>SugarPrompt</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-prompt">GitHub →</span>
                 </div>
@@ -240,7 +244,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shine/.vhs/render.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-shine.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-shine.png" alt="" aria-hidden="true">
                     <h3>CandyShine</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-shine">GitHub →</span>
                 </div>
@@ -252,7 +256,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-kit/.vhs/cli-page.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-kit.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-kit.png" alt="" aria-hidden="true">
                     <h3>CandyKit</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-kit">GitHub →</span>
                 </div>
@@ -264,7 +268,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-wish/.vhs/showcase.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-wish.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-wish.png" alt="" aria-hidden="true">
                     <h3>CandyWish</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-wish">GitHub →</span>
                 </div>
@@ -276,7 +280,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-metrics/.vhs/showcase.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-metrics.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-metrics.png" alt="" aria-hidden="true">
                     <h3>CandyMetrics</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-metrics">GitHub →</span>
                 </div>
@@ -288,7 +292,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-log/.vhs/demo.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-log.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-log.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyLog</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-log">GitHub →</span>
                 </div>
@@ -300,7 +304,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mosaic/.vhs/inline-image.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-mosaic.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-mosaic.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyMosaic</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-mosaic">GitHub →</span>
                 </div>
@@ -312,7 +316,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-palette/.vhs/detect.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-palette.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-palette.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyPalette</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-palette">GitHub →</span>
                 </div>
@@ -324,7 +328,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vt/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-vt.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-vt.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyVt</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vt">GitHub →</span>
                 </div>
@@ -336,7 +340,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vcr/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyVcr</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vcr">GitHub →</span>
                 </div>
@@ -348,7 +352,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-pty/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-pty.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-pty.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyPty</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-pty">GitHub →</span>
                 </div>
@@ -360,7 +364,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-lister/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-lister.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-lister.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyLister</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-lister">GitHub →</span>
                 </div>
@@ -372,7 +376,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-boxer/.vhs/borders.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-boxer.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-boxer.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarBoxer</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-boxer">GitHub →</span>
                 </div>
@@ -384,7 +388,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-veil/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-veil.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-veil.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarVeil</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-veil">GitHub →</span>
                 </div>
@@ -396,7 +400,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-crumbs/.vhs/navigation.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-crumbs.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-crumbs.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarCrumbs</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-crumbs">GitHub →</span>
                 </div>
@@ -408,7 +412,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-hermit/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-hermit.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-hermit.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyHermit</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-hermit">GitHub →</span>
                 </div>
@@ -420,7 +424,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stickers/.vhs/flexbox.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-stickers.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-stickers.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarStickers</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-stickers">GitHub →</span>
                 </div>
@@ -432,7 +436,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-toast/.vhs/types.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-toast.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-toast.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarToast</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-toast">GitHub →</span>
                 </div>
@@ -444,7 +448,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-calendar/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-calendar.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-calendar.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarCalendar</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-calendar">GitHub →</span>
                 </div>
@@ -456,7 +460,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-readline/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-readline.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-readline.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarReadline</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-readline">GitHub →</span>
                 </div>
@@ -468,7 +472,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-table/.vhs/features.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-table.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-table.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarTable</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-table">GitHub →</span>
                 </div>
@@ -495,7 +499,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mold/.vhs/start.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-mold.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-mold.png" alt="" aria-hidden="true">
                     <h3>CandyMold</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-mold">GitHub →</span>
                 </div>
@@ -507,7 +511,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-shell/.vhs/style.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-shell.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-shell.png" alt="" aria-hidden="true">
                     <h3>CandyShell</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-shell">GitHub →</span>
                 </div>
@@ -519,7 +523,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-freeze/.vhs/screenshot.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-freeze.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-freeze.png" alt="" aria-hidden="true">
                     <h3>CandyFreeze</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-freeze">GitHub →</span>
                 </div>
@@ -531,7 +535,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-glow/.vhs/render.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-glow.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-glow.png" alt="" aria-hidden="true">
                     <h3>SugarGlow</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-glow">GitHub →</span>
                 </div>
@@ -543,7 +547,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-spark/.vhs/inspect.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-spark.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-spark.png" alt="" aria-hidden="true">
                     <h3>SugarSpark</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-spark">GitHub →</span>
                 </div>
@@ -555,7 +559,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-wishlist/.vhs/picker.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-wishlist.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-wishlist.png" alt="" aria-hidden="true">
                     <h3>SugarWishlist</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-wishlist">GitHub →</span>
                 </div>
@@ -567,7 +571,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-skate/.vhs/basic.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-skate.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-skate.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarSkate</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-skate">GitHub →</span>
                 </div>
@@ -579,7 +583,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-post/.vhs/showcase.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-post.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/sugar-post.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>SugarPost</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-post">GitHub →</span>
                 </div>
@@ -591,7 +595,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-serve/.vhs/config.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-serve.png" alt="" onerror="this.style.display='none'">
+                    <img class="lib-icon" src="img/icons/candy-serve.png" alt="" aria-hidden="true" onerror="this.style.display='none'">
                     <h3>CandyServe</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-serve">GitHub →</span>
                 </div>
@@ -603,7 +607,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-tetris/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-tetris.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-tetris.png" alt="" aria-hidden="true">
                     <h3>CandyTetris</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-tetris">GitHub →</span>
                 </div>
@@ -615,7 +619,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/super-candy/.vhs/navigate.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/super-candy.png" alt="">
+                    <img class="lib-icon" src="img/icons/super-candy.png" alt="" aria-hidden="true">
                     <h3>SuperCandy</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/super-candy">GitHub →</span>
                 </div>
@@ -627,7 +631,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-crush/.vhs/chat.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-crush.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-crush.png" alt="" aria-hidden="true">
                     <h3>SugarCrush</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-crush">GitHub →</span>
                 </div>
@@ -639,7 +643,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-stash/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-stash.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-stash.png" alt="" aria-hidden="true">
                     <h3>SugarStash</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-stash">GitHub →</span>
                 </div>
@@ -651,7 +655,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-query/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-query.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-query.png" alt="" aria-hidden="true">
                     <h3>CandyQuery</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-query">GitHub →</span>
                 </div>
@@ -663,7 +667,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-tick/.vhs/dashboard.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/sugar-tick.png" alt="">
+                    <img class="lib-icon" src="img/icons/sugar-tick.png" alt="" aria-hidden="true">
                     <h3>SugarTick</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/sugar-tick">GitHub →</span>
                 </div>
@@ -675,7 +679,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mines/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-mines.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-mines.png" alt="" aria-hidden="true">
                     <h3>CandyMines</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-mines">GitHub →</span>
                 </div>
@@ -687,7 +691,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-flip/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/candy-flip.png" alt="">
+                    <img class="lib-icon" src="img/icons/candy-flip.png" alt="" aria-hidden="true">
                     <h3>CandyFlip</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-flip">GitHub →</span>
                 </div>
@@ -699,7 +703,7 @@
                     <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/honey-flap/.vhs/play.gif" alt="">
                 </div>
                 <div class="lib-icon-row">
-                    <img class="lib-icon" src="img/icons/honey-flap.png" alt="">
+                    <img class="lib-icon" src="img/icons/honey-flap.png" alt="" aria-hidden="true">
                     <h3>HoneyFlap</h3>
                     <span class="lib-github" data-href="https://github.com/sugarcraft/honey-flap">GitHub →</span>
                 </div>
@@ -1110,10 +1114,12 @@
     </div>
 </section>
 
+</main>
+
 <footer class="footer">
     <div class="container">
         <div>
-            <span class="logo-mark"></span>
+            <span class="logo-mark" aria-hidden="true"></span>
             <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+
         </div>
         <div>
