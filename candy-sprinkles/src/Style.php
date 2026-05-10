@@ -4,11 +4,25 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sprinkles;
 
+use SugarCraft\Sprinkles\Border\BorderTitle;
+use SugarCraft\Sprinkles\Border\TitleAnchor;
 use SugarCraft\Sprinkles\Lang;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+
+/**
+ * Horizontal alignment of a border title within its allocated space.
+ *
+ * @internal Used by Style to position titles on the border line.
+ */
+enum TitleSgr
+{
+    case Left;
+    case Center;
+    case Right;
+}
 
 /**
  * Immutable styled-text builder. Each setter returns a new Style.
@@ -1062,11 +1076,16 @@ final class Style
         [$bottomSgr, $bottomReset] = $sideSgr(2);
         [$leftSgr,   $leftReset]   = $sideSgr(3);
 
+        $titles = $b->getTitles();
+        $titleSgr = '';
+        if ($this->borderFg !== null) {
+            $titleSgr = $this->borderFg->toFg($this->profile);
+        }
+        $titleReset = $titleSgr !== '' ? Ansi::reset() : '';
+
         $out = [];
         if ($top) {
-            $line = ($left  ? $b->topLeft  : '')
-                  . str_repeat($b->top, $contentWidth)
-                  . ($right ? $b->topRight : '');
+            $line = $this->buildTopBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset);
             $out[] = $topSgr . $line . $topReset;
         }
         $leftRune  = $left  ? ($leftSgr  . $b->left  . $leftReset)  : '';
@@ -1075,12 +1094,173 @@ final class Style
             $out[] = $leftRune . $row . $rightRune;
         }
         if ($bottom) {
-            $line = ($left  ? $b->bottomLeft  : '')
-                  . str_repeat($b->bottom, $contentWidth)
-                  . ($right ? $b->bottomRight : '');
+            $line = $this->buildBottomBorderLine($b, $contentWidth, $left, $right, $titles, $titleSgr, $titleReset);
             $out[] = $bottomSgr . $line . $bottomReset;
         }
         return $out;
+    }
+
+    /**
+     * Build a top border line with optional titles at three anchor positions.
+     */
+    private function buildTopBorderLine(
+        Border $b,
+        int $contentWidth,
+        bool $left,
+        bool $right,
+        array $titles,
+        string $titleSgr,
+        string $titleReset,
+    ): string {
+        $leftAnchor  = $titles[TitleAnchor::TopLeft->name]  ?? [];
+        $centerAnchor = $titles[TitleAnchor::TopCenter->name] ?? [];
+        $rightAnchor = $titles[TitleAnchor::TopRight->name]  ?? [];
+
+        $leftTitle  = $this->renderTitlesAtAnchor($leftAnchor,  TitleSgr::Left,  $titleSgr, $titleReset);
+        $centerTitle = $this->renderTitlesAtAnchor($centerAnchor, TitleSgr::Center, $titleSgr, $titleReset);
+        $rightTitle = $this->renderTitlesAtAnchor($rightAnchor, TitleSgr::Right, $titleSgr, $titleReset);
+
+        $hasLeftTitle  = $leftTitle !== '';
+        $hasRightTitle = $rightTitle !== '';
+
+        if (!$hasLeftTitle && !$hasRightTitle && $centerTitle === '') {
+            // No titles — fast path
+            return ($left  ? $b->topLeft  : '')
+                 . str_repeat($b->top, $contentWidth)
+                 . ($right ? $b->topRight : '');
+        }
+
+        // Build the line by splitting at each title position
+        $available = $contentWidth;
+        $line = '';
+
+        // Left section: corner + left title
+        $leftSection = $left ? $b->topLeft : '';
+        $titleWidth  = Width::string($leftTitle);
+        if ($titleWidth > $available) {
+            $leftTitle = Width::truncate($leftTitle, $available);
+            $titleWidth = $available;
+        }
+        $available -= $titleWidth;
+
+        // Right section: right title + corner
+        $rightSection = $right ? $b->topRight : '';
+        $titleWidth2  = Width::string($rightTitle);
+        if ($titleWidth2 > $available) {
+            $rightTitle = Width::truncate($rightTitle, $available);
+            $titleWidth2 = $available;
+        }
+        $available -= $titleWidth2;
+
+        // Center section: center title, centered in remaining space
+        $centerTitle2 = $centerTitle;
+        if ($available > 0 && $centerTitle2 !== '') {
+            $cw = Width::string($centerTitle2);
+            if ($cw > $available) {
+                $centerTitle2 = Width::truncate($centerTitle2, $available);
+                $cw = $available;
+            }
+            $leftPad  = (int) floor(($available - $cw) / 2);
+            $rightPad = $available - $cw - $leftPad;
+            $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
+        } elseif ($available > 0) {
+            $centerTitle2 = str_repeat(' ', $available);
+        }
+
+        return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
+    }
+
+    /**
+     * Build a bottom border line with optional titles at three anchor positions.
+     */
+    private function buildBottomBorderLine(
+        Border $b,
+        int $contentWidth,
+        bool $left,
+        bool $right,
+        array $titles,
+        string $titleSgr,
+        string $titleReset,
+    ): string {
+        $leftAnchor   = $titles[TitleAnchor::BottomLeft->name]   ?? [];
+        $centerAnchor = $titles[TitleAnchor::BottomCenter->name] ?? [];
+        $rightAnchor  = $titles[TitleAnchor::BottomRight->name]  ?? [];
+
+        $leftTitle   = $this->renderTitlesAtAnchor($leftAnchor,  TitleSgr::Left,  $titleSgr, $titleReset);
+        $centerTitle = $this->renderTitlesAtAnchor($centerAnchor, TitleSgr::Center, $titleSgr, $titleReset);
+        $rightTitle  = $this->renderTitlesAtAnchor($rightAnchor, TitleSgr::Right, $titleSgr, $titleReset);
+
+        $hasLeftTitle  = $leftTitle !== '';
+        $hasRightTitle = $rightTitle !== '';
+
+        if (!$hasLeftTitle && !$hasRightTitle && $centerTitle === '') {
+            // No titles — fast path
+            return ($left  ? $b->bottomLeft  : '')
+                 . str_repeat($b->bottom, $contentWidth)
+                 . ($right ? $b->bottomRight : '');
+        }
+
+        $available = $contentWidth;
+        $line = '';
+
+        // Left section: corner + left title
+        $leftSection = $left ? $b->bottomLeft : '';
+        $titleWidth  = Width::string($leftTitle);
+        if ($titleWidth > $available) {
+            $leftTitle = Width::truncate($leftTitle, $available);
+            $titleWidth = $available;
+        }
+        $available -= $titleWidth;
+
+        // Right section: right title + corner
+        $rightSection = $right ? $b->bottomRight : '';
+        $titleWidth2  = Width::string($rightTitle);
+        if ($titleWidth2 > $available) {
+            $rightTitle = Width::truncate($rightTitle, $available);
+            $titleWidth2 = $available;
+        }
+        $available -= $titleWidth2;
+
+        // Center section: center title, centered in remaining space
+        $centerTitle2 = $centerTitle;
+        if ($available > 0 && $centerTitle2 !== '') {
+            $cw = Width::string($centerTitle2);
+            if ($cw > $available) {
+                $centerTitle2 = Width::truncate($centerTitle2, $available);
+                $cw = $available;
+            }
+            $leftPad  = (int) floor(($available - $cw) / 2);
+            $rightPad = $available - $cw - $leftPad;
+            $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
+        } elseif ($available > 0) {
+            $centerTitle2 = str_repeat(' ', $available);
+        }
+
+        return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
+    }
+
+    /**
+     * Render a list of titles at a given anchor position into a single string.
+     *
+     * @param list<BorderTitle> $titleList
+     */
+    private function renderTitlesAtAnchor(
+        array $titleList,
+        TitleSgr $position,
+        string $titleSgr,
+        string $titleReset,
+    ): string {
+        if ($titleList === []) {
+            return '';
+        }
+        $parts = [];
+        foreach ($titleList as $title) {
+            $parts[] = $titleSgr . $title->text . $titleReset;
+        }
+        $joined = implode($titleList[0]->separator ?? ' ', $parts);
+        // Strip ANSI for width measurement; the ANSI sequences are preserved
+        // in the returned string so they render in the terminal.
+        return $joined;
     }
 
     private function buildContentSgr(): string
