@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-sprinkles)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-sprinkles)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-sprinkles?label=packagist)](https://packagist.org/packages/sugarcraft/candy-sprinkles)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.2-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
