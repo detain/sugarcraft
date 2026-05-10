@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyMosaic · SugarCraft</title>
+<meta name="description" content="CandyMosaic: Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block.">
+<meta property="og:title" content="CandyMosaic · SugarCraft">
+<meta property="og:description" content="Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mosaic.png">
+<link rel="icon" type="image/png" href="../img/icons/candy-mosaic.png">
+<link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-mosaic.png" alt="CandyMosaic" onerror="this.style.display='none'">
+      <div>
+        <h2>🍬 CandyMosaic</h2>
+        <p class="detail-sub">Image-to-cell renderer</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/x/tree/main/mosaic" style="color: inherit;">x/mosaic</a></span>
+          <span class="tag-chip">image</span>
+          <span class="tag-chip">sixel</span>
+          <span class="tag-chip">kitty</span>
+          <span class="tag-chip">iterm2</span>
+          <span class="tag-chip">ext-gd</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG/JPEG/static GIF decoded via ext-gd and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, or Unicode half-block fallback.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-mosaic</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Mosaic\ImageSource;
+
+$mosaic = Mosaic::halfBlock();
+$image  = ImageSource::fromFile('cat.png');
+$ansi   = $mosaic->render($image, width: 40, height: 20);
+echo $ansi;</code></pre>
+
+    <h3 style="margin-top: 32px;">API</h3>
+    <pre class="code"><code>// Probe terminal once, pick best protocol
+$mosaic = Mosaic::probe();
+
+// Force a specific backend
+$mosaic = Mosaic::sixel();
+$mosaic = Mosaic::kitty();
+$mosaic = Mosaic::iterm2();
+$mosaic = Mosaic::halfBlock();
+
+// Render — returns ANSI bytes
+$ansi = $mosaic->render($image, width: 40, height: 20);
+
+// Builder for fine-grained control
+$mosaic = Mosaic::builder()
+    ->withRenderer(new HalfBlockRenderer())
+    ->withResize(width: 40, height: 20)
+    ->build();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Sixel renderer</strong><span>xterm, foot, mlterm, wezterm, contour support.</span></div>
+      <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
+      <div class="feature"><strong>iTerm2 inline images</strong><span>OSC 1337 support for iTerm2, wezterm, mintty.</span></div>
+      <div class="feature"><strong>Unicode half-block</strong><span>Universal fallback using ▀ + 24-bit fg/bg.</span></div>
+      <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG, static GIF via GD (imagecreatefrompng, imagecreatefromjpeg, imagecreatefromgif).</span></div>
+      <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and DA1 capability query. Cached per-process.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mosaic">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mosaic/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mosaic/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/x/tree/main/mosaic">charmbracelet/x mosaic</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mosaic/.vhs/inline-image.gif" alt="Inline Image">
+                <h3>Inline Image</h3>
+                <span class="demo-caption">Renders a PNG to the terminal via the best available protocol.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/candy-mosaic/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
