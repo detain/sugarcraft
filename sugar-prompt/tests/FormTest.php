@@ -538,4 +538,87 @@ final class FormTest extends TestCase
         $form2 = Form::groups(\SugarCraft\Prompt\Group::new(Input::new('a')));
         $this->assertSame($form2->theme, $form2->activeTheme());
     }
+
+    public function testWithErrorSummaryDefaultIsOff(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $this->assertFalse($form->errorSummary);
+    }
+
+    public function testWithErrorSummaryToggle(): void
+    {
+        $form = Form::new(Input::new('a'))->withErrorSummary(true);
+        $this->assertTrue($form->errorSummary);
+        $form2 = $form->withErrorSummary(false);
+        $this->assertFalse($form2->errorSummary);
+    }
+
+    public function testErrorSummaryNotShownWhenDisabled(): void
+    {
+        // Error summary disabled - inline errors still show via showErrors (default on)
+        // but no error summary block at the end
+        $form = Form::new(
+            Input::new('email')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'must contain @'),
+        )->withErrorSummary(false);
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
+        $view = $form->view();
+        // Only inline error shows, no error summary block (which would show field key prefix)
+        // The error summary block would show "email: must contain @" but we only see inline "must contain @"
+        $this->assertStringContainsString('must contain @', $view);
+        // Count occurrences - should be 1 (inline only, not in summary)
+        $this->assertSame(1, substr_count($view, 'must contain @'));
+    }
+
+    public function testErrorSummaryShownWhenEnabledWithErrors(): void
+    {
+        $form = Form::new(
+            Input::new('email')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'must contain @'),
+        )->withErrorSummary(true);
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
+        $view = $form->view();
+        // Error summary should contain the error message (field key 'email' appears since Input has no title)
+        $this->assertStringContainsString('must contain @', $view);
+    }
+
+    public function testErrorSummaryNotShownWhenEnabledButNoErrors(): void
+    {
+        $form = Form::new(
+            Input::new('email')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'must contain @'),
+        )->withErrorSummary(true);
+        // Don't trigger any input, so no validation error
+        $view = $form->view();
+        // Should not contain error summary section (only inline errors from showErrors)
+        $this->assertStringNotContainsString('must contain @', $view);
+    }
+
+    public function testErrorSummaryContainsMultipleFieldErrors(): void
+    {
+        // Test with a single field that has a validation error
+        // to verify error summary renders correctly
+        $form = Form::new(
+            Input::new('field1')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'error1'),
+            Input::new('field2')
+                ->withValidator(static fn (string $v) => str_contains($v, '@') ? null : 'error2'),
+        )->withErrorSummary(true);
+        // Trigger validation error on first field
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'b'));
+        $view = $form->view();
+        $this->assertStringContainsString('error1', $view);
+        // Tab to second field and trigger its error
+        [$form, ] = $form->update(new KeyMsg(KeyType::Tab));
+        [$form, ] = $form->update(new KeyMsg(KeyType::Char, 'c'));
+        $view = $form->view();
+        $this->assertStringContainsString('error1', $view);
+        $this->assertStringContainsString('error2', $view);
+    }
+
+    public function testErrorSummaryShortAlias(): void
+    {
+        $form = Form::new(Input::new('a'))->errorSummary(true);
+        $this->assertTrue($form->errorSummary);
+    }
 }

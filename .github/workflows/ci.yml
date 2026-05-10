@@ -416,3 +416,60 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
           verbose: true
+
+  # PHPStan static analysis — runs once on PHP 8.3 after tests pass,
+  # verifying type safety and catching type errors before they reach CI.
+  phpstan:
+    name: 'PHPStan'
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Compute PHP-extension cache key
+        id: ext-cache
+        uses: shivammathur/cache-extensions@v1
+        with:
+          php-version: '8.3'
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          key: php-ext-stan-v3
+
+      - name: Restore PHP extensions
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.ext-cache.outputs.dir }}
+          key: ${{ steps.ext-cache.outputs.key }}
+          restore-keys: ${{ steps.ext-cache.outputs.key }}
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          tools: composer:v2
+          coverage: none
+
+      - name: Cache composer downloads
+        uses: actions/cache@v5
+        with:
+          path: ~/.composer/cache/files
+          key: composer-stan-${{ hashFiles('**/composer.json') }}
+          restore-keys: |
+            composer-stan-
+
+      - name: Cache vendor/
+        uses: actions/cache@v5
+        with:
+          path: candy-core/vendor
+          key: vendor-stan-${{ hashFiles('candy-core/composer.json') }}
+          restore-keys: |
+            vendor-stan-
+
+      - name: Install dependencies
+        working-directory: candy-core
+        run: composer install --prefer-dist --no-progress
+
+      - name: Run PHPStan
+        working-directory: candy-core
+        run: composer analyse

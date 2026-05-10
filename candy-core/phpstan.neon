@@ -1,0 +1,13 @@
+includes:
+    - vendor/phpstan/phpstan-phpunit/extension.neon
+
+parameters:
+    level: 4
+    paths:
+        - src
+        - tests
+    excludePaths:
+        - vendor
+        - src/Util/Tty/Kernel32.php
+        - src/Util/Tty/Kernel32Interface.php
+        - src/Util/Tty/WindowsBackend.php
