@@ -113,6 +113,47 @@ Use `withTitleFunc(\Closure(): string)` / `withDescriptionFunc(...)`
 on any field to compute labels lazily — handy when the label depends
 on values from a previous group.
 
+## Validation
+
+### Field-level validation with `withValidation`
+
+`Input` and `Text` fields support `withValidation()` for predicate-based
+validation — a cleaner alternative to `withValidator`:
+
+```php
+$input = Input::new('email')
+    ->withTitle('Email address')
+    ->withPlaceholder('you@example.com')
+    ->withValidation(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL), 'Must be a valid email');
+
+$text = Text::new('bio')
+    ->withTitle('Biography')
+    ->withValidation(fn($v) => mb_strlen($v) >= 10, 'Must be at least 10 characters');
+```
+
+The predicate receives the field value and must return `true` for valid
+or `false` for invalid. The error message renders inline beneath the field
+and is collected into `Form::errors()`.
+
+### Error summary with `withErrorSummary`
+
+Enable `withErrorSummary()` on a `Form` to display all validation errors
+at the end when submission fails:
+
+```php
+$form = Form::new(
+    Input::new('name')
+        ->withTitle('Name')
+        ->withValidation(fn($v) => !empty(trim($v)), 'Name is required'),
+    Input::new('email')
+        ->withTitle('Email')
+        ->withValidation(fn($v) => filter_var($v, FILTER_VALIDATE_EMAIL), 'Must be a valid email'),
+)->withErrorSummary(true);
+```
+
+When enabled and the form is submitted with errors, an error summary
+renders above the form listing every failed field and its error message.
+
 ## Test
 
 ```sh
