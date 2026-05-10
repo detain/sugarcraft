@@ -250,7 +250,7 @@ jobs:
   # macOS-specific regressions on demand if/when issues surface.
   macos-test:
     name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
-    runs-on: macos-latest
+    runs-on: macos-26-intel
     timeout-minutes: 30
     # All pushes to the same branch share ONE concurrency group per matrix cell.
     # When a new commit arrives, any in-progress jobs from the previous commit
