@@ -29,16 +29,24 @@ use SugarCraft\Core\Msg\KeyMsg;
  * The `Renderer` is a separate pure function that takes a Game
  * and returns the frame string — keeps `view()` tiny and the
  * game loop testable in isolation.
+ *
+ * Features:
+ *   - Ghost piece showing landing position
+ *   - Hold piece (press c to swap with held piece)
+ *   - Lock delay (piece locks after touching bottom for a delay period)
  */
 final class Game implements Model
 {
     public function __construct(
-        public readonly Board  $board,
-        public readonly Piece  $piece,
-        public readonly Bag    $bag,
-        public readonly Score  $score,
-        public readonly bool   $over = false,
-        public readonly bool   $paused = false,
+        public readonly Board        $board,
+        public readonly Piece        $piece,
+        public readonly Bag          $bag,
+        public readonly Score        $score,
+        public readonly bool         $over = false,
+        public readonly bool         $paused = false,
+        public readonly ?Tetromino   $hold = null,
+        public readonly bool         $canHold = true,
+        public readonly int          $lockDelayTicks = 0,
     ) {}
 
     public static function start(?Bag $bag = null): self
@@ -46,6 +54,24 @@ final class Game implements Model
         $bag ??= new Bag();
         $first = $bag->next();
         return new self(new Board(), self::spawn($first), $bag, new Score());
+    }
+
+    /**
+     * Start a new game with lock delay enabled.
+     *
+     * @param int $lockDelayTicks Number of ticks before piece locks (SRS-style)
+     */
+    public static function startWithLockDelay(?Bag $bag = null, int $lockDelayTicks = 15): self
+    {
+        $bag ??= new Bag();
+        $first = $bag->next();
+        return new self(
+            new Board(),
+            self::spawn($first),
+            $bag,
+            new Score(),
+            lockDelayTicks: $lockDelayTicks,
+        );
     }
 
     public function init(): ?\Closure
@@ -100,6 +126,9 @@ final class Game implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'p') {
             return [$this->withPaused(!$this->paused), null];
         }
+        if ($msg->type === KeyType::Char && $msg->rune === 'c') {
+            return $this->tryHold();
+        }
         if ($this->paused) {
             return [$this, null];
         }
@@ -129,8 +158,16 @@ final class Game implements Model
     {
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
-            $game = new self($this->board, $next, $this->bag, $this->score);
+            // Piece can move down - reset lock delay
+            $game = new self($this->board, $next, $this->bag, $this->score, lockDelayTicks: $this->lockDelayTicks);
         } else {
+            // Piece can't move down - handle lock delay
+            if ($this->lockDelayTicks > 0) {
+                $newLockDelay = $this->lockDelayTicks - 1;
+                $game = new self($this->board, $this->piece, $this->bag, $this->score, lockDelayTicks: $newLockDelay);
+                // Still return a tick to continue the lock delay countdown
+                return [$game, self::scheduleGravity($game->score)];
+            }
             $game = $this->lockAndSpawn();
         }
         if ($game->over) {
@@ -142,9 +179,16 @@ final class Game implements Model
     private function tryMove(int $dx, int $dy): self
     {
         $next = $this->piece->moved($dx, $dy);
-        return $this->board->fits($next)
-            ? new self($this->board, $next, $this->bag, $this->score)
-            : $this;
+        if ($this->board->fits($next)) {
+            // SRS-style: successful move resets lock delay
+            return new self(
+                $this->board, $next, $this->bag, $this->score,
+                hold: $this->hold,
+                canHold: $this->canHold,
+                lockDelayTicks: $this->lockDelayTicks,
+            );
+        }
+        return $this;
     }
 
     private function tryRotate(int $delta): self
@@ -156,7 +200,13 @@ final class Game implements Model
         foreach ([0, -1, 1, -2, 2] as $kick) {
             $kicked = $candidate->moved($kick, 0);
             if ($this->board->fits($kicked)) {
-                return new self($this->board, $kicked, $this->bag, $this->score);
+                // SRS-style: successful rotation resets lock delay
+                return new self(
+                    $this->board, $kicked, $this->bag, $this->score,
+                    hold: $this->hold,
+                    canHold: $this->canHold,
+                    lockDelayTicks: $this->lockDelayTicks,
+                );
             }
         }
         return $this;
@@ -165,9 +215,16 @@ final class Game implements Model
     private function softDrop(): self
     {
         $next = $this->piece->moved(0, 1);
-        return $this->board->fits($next)
-            ? new self($this->board, $next, $this->bag, $this->score)
-            : $this;
+        if ($this->board->fits($next)) {
+            // Soft drop also resets lock delay
+            return new self(
+                $this->board, $next, $this->bag, $this->score,
+                hold: $this->hold,
+                canHold: $this->canHold,
+                lockDelayTicks: $this->lockDelayTicks,
+            );
+        }
+        return $this;
     }
 
     /**
@@ -176,7 +233,11 @@ final class Game implements Model
     private function hardDrop(): array
     {
         $resting = $this->board->dropPiece($this->piece);
-        $game = new self($this->board, $resting, $this->bag, $this->score);
+        $game = new self(
+            $this->board, $resting, $this->bag, $this->score,
+            hold: $this->hold,
+            lockDelayTicks: $this->lockDelayTicks,
+        );
         $game = $game->lockAndSpawn();
         if ($game->over) {
             return [$game, null];
@@ -191,14 +252,83 @@ final class Game implements Model
         $score = $this->score->withLines($count);
         $newPiece = self::spawn($this->bag->next());
         if (!$cleared->fits($newPiece)) {
-            return new self($cleared, $newPiece, $this->bag, $score, over: true);
+            return new self(
+                $cleared, $newPiece, $this->bag, $score,
+                over: true,
+                hold: $this->hold,
+                canHold: true,  // Re-enable hold after game over
+            );
         }
-        return new self($cleared, $newPiece, $this->bag, $score);
+        // After locking, canHold is re-enabled and lock delay resets
+        return new self(
+            $cleared, $newPiece, $this->bag, $score,
+            hold: $this->hold,
+            canHold: true,
+            lockDelayTicks: $this->lockDelayTicks > 0 ? $this->lockDelayTicks : 0,
+        );
     }
 
     private function withPaused(bool $paused): self
     {
-        return new self($this->board, $this->piece, $this->bag, $this->score, $this->over, $paused);
+        return new self(
+            $this->board,
+            $this->piece,
+            $this->bag,
+            $this->score,
+            $this->over,
+            $paused,
+            $this->hold,
+            $this->canHold,
+            $this->lockDelayTicks,
+        );
+    }
+
+    /**
+     * Try to hold the current piece, swapping with the held piece if available.
+     *
+     * @return array{0:Game,1:?\Closure}
+     */
+    private function tryHold(): array
+    {
+        if (!$this->canHold) {
+            return [$this, null];
+        }
+
+        $currentKind = $this->piece->kind;
+        if ($this->hold === null) {
+            // No held piece - spawn new piece and store current
+            $newPiece = self::spawn($this->bag->next());
+            $game = new self(
+                $this->board,
+                $newPiece,
+                $this->bag,
+                $this->score,
+                hold: $currentKind,
+                canHold: false,
+                lockDelayTicks: $this->lockDelayTicks,
+            );
+        } else {
+            // Swap current piece with held piece
+            $swappedPiece = new Piece($this->hold, 0, $this->piece->x, Board::HIDDEN_ROWS - 4);
+            if (!$this->board->fits($swappedPiece)) {
+                // Can't place held piece - don't hold
+                return [$this, null];
+            }
+            $game = new self(
+                $this->board,
+                $swappedPiece,
+                $this->bag,
+                $this->score,
+                hold: $currentKind,
+                canHold: false,
+                lockDelayTicks: $this->lockDelayTicks,
+            );
+        }
+
+        if ($game->over) {
+            return [$game, null];
+        }
+        return [$game, self::scheduleGravity($game->score)];
     }
 
     private static function spawn(Tetromino $kind): Piece

@@ -98,9 +98,20 @@ final class Renderer
             $game->score->lines,
             $game->score->level,
         );
-        $help = "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\np    pause\nq    quit";
+        $help = "← →  move\n↑ x  rotate cw\nz    rotate ccw\n↓    soft drop\nspc  hard drop\nc    hold\np    pause\nq    quit";
 
         $next = "next:\n" . implode("\n\n", $previews);
+
+        // Render hold piece if available
+        $hold = '';
+        if ($game->hold !== null) {
+            $hold = "hold:\n" . self::renderMini($game->hold);
+            if (!$game->canHold) {
+                $hold = Style::new()->dim(true)->render($hold);
+            }
+        } else {
+            $hold = "hold:\n" . self::renderMiniPlaceholder();
+        }
 
         $card = static fn(string $body): string => Style::new()
             ->border(Border::normal())
@@ -108,7 +119,7 @@ final class Renderer
             ->width(20)
             ->render($body);
 
-        return Layout::joinVertical(0.0, $card($next), $card($score), $card($help));
+        return Layout::joinVertical(0.0, $card($hold), $card($next), $card($score), $card($help));
     }
 
     private static function renderMini(Tetromino $kind): string
@@ -123,6 +134,11 @@ final class Renderer
             $lines[] = $line;
         }
         return implode("\n", $lines);
+    }
+
+    private static function renderMiniPlaceholder(): string
+    {
+        return "     \n     ";
     }
 
     /**
