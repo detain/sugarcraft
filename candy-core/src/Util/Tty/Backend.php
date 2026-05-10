@@ -80,4 +80,13 @@ interface Backend
      * @return int|false bitmask of dispatched signals, or false on error
      */
     public static function drainSignals(): int|false;
+
+    /**
+     * Save the current terminal state and restore it on the next call.
+     *
+     * First call saves the state; subsequent calls restore it.  Used by
+     * {@see \SugarCraft\Core\Util\Tty::restoreLast()} to implement a
+     * panic-handler restore that works outside a Program instance.
+     */
+    public static function restoreLast(): void;
 }
