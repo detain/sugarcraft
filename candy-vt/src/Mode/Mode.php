@@ -68,6 +68,21 @@ final readonly class Mode
         );
     }
 
+    public function withMouseHighlights(bool $v = true): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $v,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+        );
+    }
+
     public function withMouseAny(bool $v): self
     {
         return new self(
