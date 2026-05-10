@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Focus / blur demo — terminals with FocusReportMode enabled emit
  * an event when you switch to / away from the terminal window. The
- * runtime surfaces these as FocusMsg / BlurMsg.
+ * runtime surfaces these as FocusGainedMsg / BlurMsg.
  *
  *   php examples/focus-blur.php
  *
@@ -19,7 +19,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\BlurMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
@@ -35,7 +35,7 @@ final class FocusBlur implements Model
         return match (true) {
             $msg instanceof KeyMsg && $msg->type === KeyType::Char && $msg->rune === 'q'
                 => [$this, Cmd::quit()],
-            $msg instanceof FocusMsg => [new self(true),  null],
+            $msg instanceof FocusGainedMsg => [new self(true),  null],
             $msg instanceof BlurMsg  => [new self(false), null],
             default                  => [$this, null],
         };

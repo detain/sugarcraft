@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg\ClipboardMsg;
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
 use SugarCraft\Core\Msg\ExecMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\InterruptMsg;
 use SugarCraft\Core\Msg\ModeReportMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -36,7 +36,7 @@ final class MsgValueObjectsTest extends TestCase
 {
     public function testFocusBlurMarkers(): void
     {
-        $this->assertInstanceOf(Msg::class, new FocusMsg());
+        $this->assertInstanceOf(Msg::class, new FocusGainedMsg());
         $this->assertInstanceOf(Msg::class, new BlurMsg());
     }
 
