@@ -29,7 +29,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "ext-ffi": "*",
         "sugarcraft/candy-core": "dev-master"
     },

@@ -28,7 +28,7 @@
         "docs": "https://sugarcraft.github.io/lib/honey-bounce.html"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {

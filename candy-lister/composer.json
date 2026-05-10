@@ -24,7 +24,7 @@
         "source": "https://github.com/sugarcraft/candy-lister"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {
