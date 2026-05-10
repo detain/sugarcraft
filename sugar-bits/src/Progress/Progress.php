@@ -46,6 +46,8 @@ final class Progress
         public readonly ?Color $gradientStart = null,
         public readonly ?Color $gradientEnd   = null,
         public readonly string $percentFormat = '%3d%%',
+        public readonly bool $showValue = false,
+        public readonly string $showValueFormat = '%d/%d',
         array $gradientStops = [],
         ?\Closure $colorFunc = null,
     ) {
@@ -86,6 +88,10 @@ final class Progress
         return $this->mutate(fullChar: $full, emptyChar: $empty);
     }
     public function withShowPercent(bool $show): self { return $this->mutate(showPercent: $show); }
+    public function withShowValue(bool $show, ?string $format = null): self
+    {
+        return $this->mutate(showValue: $show, showValueFormat: $format ?? $this->showValueFormat);
+    }
     public function withFillColor(?Color $c): self    { return $this->mutate(fillColor: $c, fillColorSet: true); }
     public function withEmptyColor(?Color $c): self   { return $this->mutate(emptyColor: $c, emptyColorSet: true); }
     public function withColorProfile(ColorProfile $p): self { return $this->mutate(profile: $p); }
@@ -198,10 +204,35 @@ final class Progress
         $pctText = $this->showPercent
             ? sprintf($this->percentFormat, (int) round($this->percent * 100))
             : '';
-        $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
 
+        // Calculate value text (current/total) when showValue is enabled.
+        $valueText = '';
+        if ($this->showValue) {
+            $current = (int) round($this->percent * $this->width);
+            $valueText = sprintf($this->showValueFormat, $current, $this->width);
+        }
+
+        // Bar width is reduced only when showing percent without value.
+        // When showValue is true, the bar stays at full width and the
+        // value suffix (with optional percent in parentheses) appends after.
+        $suffixCells = $this->showPercent ? Width::string($pctText) + 1 : 0;
         $showSuffix = $this->showPercent && $this->width > $suffixCells;
-        $barWidth   = $showSuffix ? $this->width - $suffixCells : $this->width;
+        $barWidth = $this->width;
+
+        // Build the full suffix text to display.
+        $fullSuffixText = '';
+        if ($this->showPercent && $this->showValue) {
+            // Both shown: percent first, value in parentheses after.
+            $fullSuffixText = $pctText . ' (' . $valueText . ')';
+            // Don't reduce bar width when value is shown
+        } elseif ($this->showPercent) {
+            $fullSuffixText = $pctText;
+            $barWidth = $showSuffix ? $this->width - $suffixCells : $this->width;
+        } elseif ($this->showValue) {
+            // Value only: bar stays at full width, suffix appends after.
+            $fullSuffixText = $valueText;
+            $showSuffix = true;
+        }
 
         $filledCells = (int) round($this->percent * $barWidth);
         $emptyCells  = $barWidth - $filledCells;
@@ -230,7 +261,7 @@ final class Progress
         if (!$showSuffix) {
             return $bar;
         }
-        return $bar . ' ' . $pctText;
+        return $bar . ' ' . $fullSuffixText;
     }
 
     /**
@@ -310,6 +341,8 @@ final class Progress
         ?Color $gradientStart = null, bool $gradientStartSet = false,
         ?Color $gradientEnd = null, bool $gradientEndSet = false,
         ?string $percentFormat = null,
+        ?bool $showValue = null,
+        ?string $showValueFormat = null,
         ?array $gradientStops = null, bool $gradientStopsSet = false,
         ?\Closure $colorFunc = null, bool $colorFuncSet = false,
     ): self {
@@ -325,6 +358,8 @@ final class Progress
             gradientStart:  $gradientStartSet ? $gradientStart : $this->gradientStart,
             gradientEnd:    $gradientEndSet   ? $gradientEnd   : $this->gradientEnd,
             percentFormat:  $percentFormat ?? $this->percentFormat,
+            showValue:      $showValue     ?? $this->showValue,
+            showValueFormat: $showValueFormat ?? $this->showValueFormat,
             gradientStops:  $gradientStopsSet ? ($gradientStops ?? []) : $this->gradientStops,
             colorFunc:      $colorFuncSet  ? $colorFunc       : $this->colorFunc,
         );

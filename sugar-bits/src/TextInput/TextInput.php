@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Single-line text input.
@@ -42,6 +43,7 @@ final class TextInput implements Model
         public readonly string $value,
         public readonly int $cursorPos,
         public readonly string $placeholder,
+        public readonly Style $placeholderStyle,
         public readonly string $prompt,
         public readonly int $charLimit,
         public readonly int $width,
@@ -58,6 +60,8 @@ final class TextInput implements Model
         public readonly ?Styles $styles = null,
         public readonly bool $vimMode = false,
         public readonly bool $vimNormalMode = true,
+        public readonly string $prefix = '',
+        public readonly string $suffix = '',
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -67,6 +71,7 @@ final class TextInput implements Model
             value: '',
             cursorPos: 0,
             placeholder: '',
+            placeholderStyle: Style::new()->faint(),
             prompt: '> ',
             charLimit: 0,
             width: 0,
@@ -314,12 +319,15 @@ final class TextInput implements Model
     public function view(): string
     {
         $stylePrompt      = fn (string $s): string => $this->styles !== null ? $this->styles->prompt->render($s)      : $s;
-        $stylePlaceholder = fn (string $s): string => $this->styles !== null ? $this->styles->placeholder->render($s) : $s;
+        $stylePlaceholder = fn (string $s): string => $this->styles !== null ? $this->styles->placeholder->render($s) : $this->placeholderStyle->render($s);
         $styleText        = fn (string $s): string => $this->styles !== null ? $this->styles->text->render($s)        : $s;
+
+        $prefixStr = $this->prefix !== '' ? $this->prefix : '';
+        $suffixStr = $this->suffix !== '' ? $this->suffix : '';
 
         // Empty + unfocused with a placeholder: show the placeholder.
         if ($this->value === '' && !$this->focused && $this->placeholder !== '') {
-            return $stylePrompt($this->prompt) . $stylePlaceholder($this->placeholder);
+            return $prefixStr . $stylePrompt($this->prompt) . $stylePlaceholder($this->placeholder) . $suffixStr;
         }
 
         $display = $this->displayedValue();
@@ -345,7 +353,7 @@ final class TextInput implements Model
         $relPos   = $pos - $start;
 
         if (!$this->focused) {
-            return $stylePrompt($this->prompt) . $styleText($slice);
+            return $prefixStr . $stylePrompt($this->prompt) . $styleText($slice) . $suffixStr;
         }
 
         $sliceLenActual = mb_strlen($slice, 'UTF-8');
@@ -354,7 +362,7 @@ final class TextInput implements Model
         $after  = $relPos < $sliceLenActual ? mb_substr($slice, $relPos + 1, null, 'UTF-8') : '';
 
         $cursorView = $this->cursor->setChar($charAt)->view();
-        return $stylePrompt($this->prompt) . $styleText($before) . $cursorView . $styleText($after);
+        return $prefixStr . $stylePrompt($this->prompt) . $styleText($before) . $cursorView . $styleText($after) . $suffixStr;
     }
 
     // ---- focus + setters ------------------------------------------------
@@ -371,7 +379,10 @@ final class TextInput implements Model
     /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
-        return $this->withCursor($this->cursor->blur())->withFocused(false);
+        // Reset vim mode to normal when losing focus
+        return $this->withCursor($this->cursor->blur())
+            ->withFocused(false)
+            ->mutate(vimNormalMode: true);
     }
 
     public function setValue(string $v): self
@@ -425,6 +436,34 @@ final class TextInput implements Model
     }
 
     public function getStyles(): ?Styles { return $this->styles; }
+
+    /**
+     * Set the style used to render placeholder text when the input is empty.
+     * Defaults to a faint (dim) style.
+     */
+    public function withPlaceholderStyle(Style $style): self
+    {
+        return $this->mutate(placeholderStyle: $style);
+    }
+
+    /**
+     * Set a fixed prefix string rendered before the input text.
+     * The prefix is not editable and is not part of the value.
+     */
+    public function withPrefix(string $prefix): self
+    {
+        return $this->mutate(prefix: $prefix);
+    }
+
+    /**
+     * Set a fixed suffix string rendered after the input text.
+     * The suffix is not editable and is not part of the value.
+     */
+    public function withSuffix(string $suffix): self
+    {
+        return $this->mutate(suffix: $suffix);
+    }
+
     public function withCharLimit(int $n): self      { return $this->mutate(charLimit: max(0, $n)); }
     public function withWidth(int $w): self          { return $this->mutate(width: max(0, $w)); }
     public function withEchoMode(EchoMode $m): self  { return $this->mutate(echoMode: $m); }
@@ -535,6 +574,9 @@ final class TextInput implements Model
     public function suggest(array $candidates): self { return $this->withSuggestions($candidates); }
     public function validator(?\Closure $fn): self   { return $this->withValidator($fn); }
     public function styles(?Styles $styles): self    { return $this->withStyles($styles); }
+    public function prefix(string $p): self          { return $this->withPrefix($p); }
+    public function suffix(string $s): self          { return $this->withSuffix($s); }
+    public function placeholderStyle(Style $s): self { return $this->withPlaceholderStyle($s); }
 
     /** Latest validator error or null. */
     public function err(): ?string
@@ -671,6 +713,7 @@ final class TextInput implements Model
         ?string $value = null,
         ?int $cursorPos = null,
         ?string $placeholder = null,
+        ?Style $placeholderStyle = null,
         ?string $prompt = null,
         ?int $charLimit = null,
         ?int $width = null,
@@ -687,6 +730,8 @@ final class TextInput implements Model
         ?Styles $styles = null, bool $stylesSet = false,
         ?bool $vimMode = null,
         ?bool $vimNormalMode = null,
+        ?string $prefix = null,
+        ?string $suffix = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -701,6 +746,7 @@ final class TextInput implements Model
             value:                  $newValue,
             cursorPos:              $cursorPos              ?? $this->cursorPos,
             placeholder:            $placeholder            ?? $this->placeholder,
+            placeholderStyle:       $placeholderStyle       ?? $this->placeholderStyle,
             prompt:                 $prompt                 ?? $this->prompt,
             charLimit:              $charLimit              ?? $this->charLimit,
             width:                  $width                  ?? $this->width,
@@ -717,6 +763,8 @@ final class TextInput implements Model
             styles:                 $stylesSet ? $styles : $this->styles,
             vimMode:                $vimMode                ?? $this->vimMode,
             vimNormalMode:          $vimNormalMode          ?? $this->vimNormalMode,
+            prefix:                 $prefix                 ?? $this->prefix,
+            suffix:                 $suffix                 ?? $this->suffix,
         );
     }
 }
