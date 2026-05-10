@@ -26,4 +26,7 @@ return [
     'progress.width_nonneg'      => 'progress width must be >= 0',
     'tree.dim_nonneg'            => 'tree width/height must be >= 0',
     'help.width_nonneg'          => 'help width must be >= 0',
+    'scrollbar.total_nonneg'     => 'scrollbar total must be >= 0',
+    'scrollbar.viewport_nonneg'  => 'scrollbar viewport must be >= 0',
+    'scrollbar.position_range'   => 'scrollbar position must be in range [0, max(0, total - viewport)]',
 ];
