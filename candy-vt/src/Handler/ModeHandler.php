@@ -17,7 +17,10 @@ namespace SugarCraft\Vt\Handler;
  * - `1005` highlight reporting     → `mouseHighlights`
  * - `1006` SGR mouse coordinates   → `mouseSgr`
  * - `1015` URXVT mouse encoding    → `mouseHighlights`
- * - `1049` alt-screen + cursor save → `altScreen`, swaps Buffer + saves cursor/sgr
+ * - `47`   alt-screen (no save)    → `altScreenVariant ALT_NO_SAVE`, swaps Buffer only
+ * - `1047` alt-screen (no save)    → `altScreenVariant ALT_NO_SAVE`, swaps Buffer only
+ * - `1048` alt-screen (cursor save) → `altScreenVariant ALT_CURSOR_ONLY`, saves cursor only
+ * - `1049` alt-screen + full save  → `altScreenVariant ALT_FULL`, swaps Buffer + saves cursor/sgr
  * - `2004` bracketed paste         → `bracketedPaste`
  * - `2026` synchronized output     → `syncUpdate`
  *
@@ -51,6 +54,9 @@ final class ModeHandler
             1005 => $h->mode = $h->mode->withMouseHighlights($set),
             1006 => $h->mode = $h->mode->withMouseSgr($set),
             1015 => $h->mode = $h->mode->withMouseHighlights($set),
+            47 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
+            1047 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
+            1048 => $set ? $h->enterAltScreenCursorOnly() : $h->leaveAltScreenCursorOnly(),
             1049 => $set ? $h->enterAltScreen() : $h->leaveAltScreen(),
             2004 => $h->mode = $h->mode->withBracketedPaste($set),
             2026 => $h->mode = $h->mode->withSyncUpdate($set),

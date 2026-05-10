@@ -10,6 +10,7 @@ use SugarCraft\Vt\Cell\Cell;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Handler\ModeHandler;
 use SugarCraft\Vt\Handler\ScreenHandler;
+use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Sgr\Sgr;
 
 final class ModeHandlerTest extends TestCase
@@ -192,5 +193,158 @@ final class ModeHandlerTest extends TestCase
         (new ModeHandler())->apply([1049], false, $h);
         $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
         $this->assertTrue($h->mode->equals($before));
+    }
+
+    // ─── Alt screen modes 47 and 1047 (no save) ─────────────────────────────
+
+    public function testAltScreenMode47NoSaveEnterSavesBufferOnly(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 1, col: 2);
+        $h->sgr = Sgr::empty()->withBold(true);
+
+        (new ModeHandler())->apply([47], true, $h);
+
+        $this->assertTrue($h->mode->isAltScreen());
+        $this->assertSame(Mode::ALT_NO_SAVE, $h->mode->altScreenVariant);
+        // Active buffer is fresh and blank.
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
+        // Cursor and SGR are NOT saved (not reset).
+        $this->assertSame(1, $h->cursor->row);
+        $this->assertSame(2, $h->cursor->col);
+        $this->assertTrue($h->sgr->bold);
+    }
+
+    public function testAltScreenMode47NoSaveLeaveRestoresBufferOnly(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 1, col: 2);
+        $h->sgr = Sgr::empty()->withItalic(true);
+
+        $mh = new ModeHandler();
+        $mh->apply([47], true, $h);
+        // Mutate alt screen.
+        $h->buffer->put(0, 0, new Cell(grapheme: 'Z'));
+        $h->cursor = new Cursor(row: 2, col: 4);
+        $h->sgr = Sgr::empty()->withReverse(true);
+
+        $mh->apply([47], false, $h);
+
+        $this->assertFalse($h->mode->isAltScreen());
+        // Buffer is restored.
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+        // Cursor is NOT restored (wasn't saved).
+        $this->assertSame(2, $h->cursor->row);
+        $this->assertSame(4, $h->cursor->col);
+        // SGR is NOT restored (wasn't saved).
+        $this->assertTrue($h->sgr->reverse);
+        $this->assertFalse($h->sgr->italic);
+    }
+
+    public function testAltScreenMode1047NoSaveSameAsMode47(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+
+        $mh = new ModeHandler();
+        $mh->apply([1047], true, $h);
+
+        $this->assertTrue($h->mode->isAltScreen());
+        $this->assertSame(Mode::ALT_NO_SAVE, $h->mode->altScreenVariant);
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
+
+        $mh->apply([1047], false, $h);
+        $this->assertFalse($h->mode->isAltScreen());
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+    }
+
+    public function testAltScreenMode47ReentryIsNoOp(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+
+        $mh = new ModeHandler();
+        $mh->apply([47], true, $h);
+        // Write 'X' into alt buffer, then re-set 47.
+        $h->buffer->put(0, 0, new Cell(grapheme: 'X'));
+        $mh->apply([47], true, $h);
+
+        // Alt buffer should still have 'X'.
+        $this->assertSame('X', $h->buffer->cell(0, 0)->grapheme);
+
+        // Leaving once gets back to original 'A'.
+        $mh->apply([47], false, $h);
+        $this->assertSame('A', $h->buffer->cell(0, 0)->grapheme);
+    }
+
+    // ─── Alt screen mode 1048 (cursor save only) ────────────────────────────
+
+    public function testAltScreenMode1048CursorOnlyEnterSavesCursorOnly(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 1, col: 2);
+        $h->sgr = Sgr::empty()->withBold(true);
+
+        (new ModeHandler())->apply([1048], true, $h);
+
+        $this->assertTrue($h->mode->isAltScreen());
+        $this->assertSame(Mode::ALT_CURSOR_ONLY, $h->mode->altScreenVariant);
+        // Active buffer is fresh and blank.
+        $this->assertSame(' ', $h->buffer->cell(0, 0)->grapheme);
+        // Cursor is reset in new buffer.
+        $this->assertSame(0, $h->cursor->row);
+        $this->assertSame(0, $h->cursor->col);
+        // SGR is NOT reset (wasn't saved).
+        $this->assertTrue($h->sgr->bold);
+    }
+
+    public function testAltScreenMode1048CursorOnlyLeaveRestoresCursorOnly(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 1, col: 2);
+        $h->sgr = Sgr::empty()->withItalic(true);
+
+        $mh = new ModeHandler();
+        $mh->apply([1048], true, $h);
+        // Mutate alt screen.
+        $h->buffer->put(0, 0, new Cell(grapheme: 'Z'));
+        $h->cursor = new Cursor(row: 2, col: 4);
+        $h->sgr = Sgr::empty()->withReverse(true);
+
+        $mh->apply([1048], false, $h);
+
+        $this->assertFalse($h->mode->isAltScreen());
+        // Buffer is NOT restored (wasn't saved) — still has 'Z'.
+        $this->assertSame('Z', $h->buffer->cell(0, 0)->grapheme);
+        // Cursor IS restored.
+        $this->assertSame(1, $h->cursor->row);
+        $this->assertSame(2, $h->cursor->col);
+        // SGR is NOT restored (wasn't saved).
+        $this->assertTrue($h->sgr->reverse);
+        $this->assertFalse($h->sgr->italic);
+    }
+
+    public function testAltScreenMode1048ReentryIsNoOp(): void
+    {
+        $h = $this->newHandler(cols: 5, rows: 3);
+        $h->buffer->put(0, 0, new Cell(grapheme: 'A'));
+        $h->cursor = new Cursor(row: 0, col: 0);
+
+        $mh = new ModeHandler();
+        $mh->apply([1048], true, $h);
+        // Write 'X' into alt buffer, then re-set 1048.
+        $h->buffer->put(0, 0, new Cell(grapheme: 'X'));
+        $h->cursor = new Cursor(row: 2, col: 4);
+        $mh->apply([1048], true, $h);
+
+        // Alt buffer should still have 'X'.
+        $this->assertSame('X', $h->buffer->cell(0, 0)->grapheme);
+        // Cursor should still be 2,4.
+        $this->assertSame(2, $h->cursor->row);
+        $this->assertSame(4, $h->cursor->col);
     }
 }

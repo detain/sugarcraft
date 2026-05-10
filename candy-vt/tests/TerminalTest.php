@@ -320,4 +320,62 @@ final class TerminalTest extends TestCase
         $this->assertNull($term->windowTitle());
         $this->assertSame('My Title', $newTerm->windowTitle());
     }
+
+    // ─── Alt screen convenience methods ─────────────────────────────────────
+
+    public function testIsAltScreenDefaultFalse(): void
+    {
+        $term = Terminal::create();
+        $this->assertFalse($term->isAltScreen());
+    }
+
+    public function testEnableAltScreenEntersFullAltScreen(): void
+    {
+        $term = Terminal::create(cols: 5, rows: 3);
+        $term->feed("Main");
+        $this->assertFalse($term->isAltScreen());
+
+        $term->enableAltScreen();
+        $this->assertTrue($term->isAltScreen());
+        // Alt buffer is fresh.
+        $this->assertSame(' ', $term->screen()->cell(0, 0)->grapheme);
+    }
+
+    public function testDisableAltScreenLeavesAndRestores(): void
+    {
+        $term = Terminal::create(cols: 5, rows: 3);
+        $term->feed("Main");
+        $term->enableAltScreen();
+        $term->feed("Alt");
+        $term->disableAltScreen();
+
+        $this->assertFalse($term->isAltScreen());
+        // Main content is restored.
+        $this->assertSame('M', $term->screen()->cell(0, 0)->grapheme);
+        $this->assertSame('a', $term->screen()->cell(0, 1)->grapheme);
+    }
+
+    public function testEnableDisableMultipleTimes(): void
+    {
+        $term = Terminal::create(cols: 5, rows: 3);
+        $term->feed("First");
+
+        $term->enableAltScreen();
+        $term->feed("Second");
+        $this->assertTrue($term->isAltScreen());
+
+        $term->disableAltScreen();
+        $this->assertFalse($term->isAltScreen());
+        $this->assertSame('F', $term->screen()->cell(0, 0)->grapheme);
+
+        $term->enableAltScreen();
+        $term->feed("Third");
+        $this->assertTrue($term->isAltScreen());
+
+        $term->disableAltScreen();
+        $this->assertFalse($term->isAltScreen());
+        // Should be back to "First" content.
+        $this->assertSame('F', $term->screen()->cell(0, 0)->grapheme);
+        $this->assertSame('i', $term->screen()->cell(0, 1)->grapheme);
+    }
 }

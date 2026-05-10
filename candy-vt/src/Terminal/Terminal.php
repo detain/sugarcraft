@@ -166,4 +166,30 @@ final class Terminal
         $clone->handler->tabStops = $stops;
         return $clone;
     }
+
+    /**
+     * Programmatically enter the alternate screen buffer (DEC 1049 mode).
+     * Saves the main screen buffer, cursor, and SGR state.
+     */
+    public function enableAltScreen(): void
+    {
+        $this->handler->enterAltScreen();
+    }
+
+    /**
+     * Programmatically leave the alternate screen buffer.
+     * Restores the main screen buffer, cursor, and SGR state.
+     */
+    public function disableAltScreen(): void
+    {
+        $this->handler->leaveAltScreen();
+    }
+
+    /**
+     * Returns true if the alternate screen buffer is currently active.
+     */
+    public function isAltScreen(): bool
+    {
+        return $this->handler->mode->isAltScreen();
+    }
 }
