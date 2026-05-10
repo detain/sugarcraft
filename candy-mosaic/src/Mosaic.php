@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use SugarCraft\Mosaic\Renderer\ChafaRenderer;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\KittyRenderer;
@@ -111,6 +112,31 @@ final class Mosaic
     }
 
     /**
+     * Force the Chafa renderer with optional CLI options.
+     *
+     * ```php
+     * $mosaic = Mosaic::chafa();                        // 256 colors (default)
+     * $mosaic = Mosaic::chafa('--colors=16', '--work=n'); // custom options
+     * ```
+     *
+     * @param string ...$options  Chafa CLI options
+     */
+    public static function chafa(string ...$options): self
+    {
+        if ($options === []) {
+            $options = ['--colors=256'];
+        }
+
+        return new self(
+            new ChafaRenderer($options),
+            Capability::universal(),
+            null,
+            null,
+            null,
+        );
+    }
+
+    /**
      * Return a new Mosaic with a different dither algorithm.
      * Only meaningful when the current renderer is a SixelRenderer;
      * returns the same instance otherwise.
@@ -132,7 +158,7 @@ final class Mosaic
     }
 
     /**
-     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock'.
+     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'chafa'.
      */
     public function protocol(): string
     {
@@ -251,7 +277,7 @@ final class Mosaic
 
     /**
      * Pick the best available renderer for the given capability snapshot.
-     * Precedence: Kitty > iTerm2 > Sixel > HalfBlock.
+     * Precedence: Kitty > iTerm2 > Sixel > Chafa > HalfBlock.
      *
      * PR4 swaps Sixel renderer in.
      */
@@ -265,6 +291,9 @@ final class Mosaic
         }
         if ($cap->sixel) {
             return new SixelRenderer();
+        }
+        if ($cap->chafa) {
+            return new ChafaRenderer();
         }
 
         return new HalfBlockRenderer();
