@@ -15,6 +15,7 @@ final class Capability
         public readonly bool $kitty,
         public readonly bool $iterm2,
         public readonly bool $halfblock,
+        public readonly bool $chafa,
         /** Cell pixel dimensions if probed, null otherwise. */
         public readonly ?CellSize $cellSize,
         /** True when TMUX env var is set (requires allow-passthrough on). */
@@ -27,25 +28,25 @@ final class Capability
      */
     public static function universal(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(true, true, true, true, $cellSize, $inTmux);
+        return new self(true, true, true, true, true, $cellSize, $inTmux);
     }
 
     /** Kitty-only capability (other protocols unknown until DA1 probing). */
     public static function kitty(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, true, false, true, $cellSize, $inTmux);
+        return new self(false, true, false, true, false, $cellSize, $inTmux);
     }
 
     /** iTerm2-only capability. */
     public static function iterm2(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, false, true, true, $cellSize, $inTmux);
+        return new self(false, false, true, true, false, $cellSize, $inTmux);
     }
 
     /** Sixel-only capability. */
     public static function sixel(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(true, false, false, true, $cellSize, $inTmux);
+        return new self(true, false, false, true, false, $cellSize, $inTmux);
     }
 
     /**
@@ -53,7 +54,7 @@ final class Capability
      */
     public static function unknown(?CellSize $cellSize = null, bool $inTmux = false): self
     {
-        return new self(false, false, false, true, $cellSize, $inTmux);
+        return new self(false, false, false, true, false, $cellSize, $inTmux);
     }
 
     /**
@@ -68,6 +69,7 @@ final class Capability
             $this->kitty,
             $this->iterm2,
             $this->halfblock,
+            $this->chafa,
             $cellSize,
             $this->inTmux,
         );
