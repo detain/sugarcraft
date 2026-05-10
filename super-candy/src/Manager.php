@@ -34,6 +34,8 @@ final class Manager implements Model
     /**
      * @param \Closure(string): list<Entry> $lister
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
+     * @param list<UndoAction> $undoStack Stack of undoable actions
+     * @param list<UndoAction> $redoStack Stack of redoable actions (cleared on new action)
      */
     public function __construct(
         public readonly Pane $left,
@@ -48,6 +50,8 @@ final class Manager implements Model
         public readonly array $tabs = [],
         public readonly int $tabIndex = 0,
         public readonly bool $showTabBar = false,
+        public readonly array $undoStack = [],
+        public readonly array $redoStack = [],
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -73,6 +77,8 @@ final class Manager implements Model
             tabs: [$initialTab],
             tabIndex: 0,
             showTabBar: false,
+            undoStack: [],
+            redoStack: [],
         );
     }
 
@@ -161,6 +167,10 @@ final class Manager implements Model
                 => $this->armDelete(),
             $msg->type === KeyType::Char && $msg->rune === 'r'
                 => $this->refresh(),
+            $msg->type === KeyType::Char && $msg->rune === 'u'
+                => $this->undo(),
+            $msg->ctrl && $msg->rune === 'z'
+                => $this->undo(),
             // Tab management: t duplicates, Ctrl+w closes, Ctrl+Tab/Ctrl+Shift+Tab cycles
             $msg->ctrl && $msg->rune === 'w'
                 => $this->closeTab(),
@@ -185,13 +195,15 @@ final class Manager implements Model
             return new self(
                 $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $newTabs, $this->tabIndex, $this->showTabBar
+                $newTabs, $this->tabIndex, $this->showTabBar,
+                $this->undoStack, $this->redoStack
             );
         }
         return new self(
             $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -216,20 +228,23 @@ final class Manager implements Model
             return new self(
                 $newLeft, $newRight, $this->activeIdx, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $newTabs, $this->tabIndex, $this->showTabBar
+                $newTabs, $this->tabIndex, $this->showTabBar,
+                $this->undoStack, $this->redoStack
             );
         }
         if ($this->activeIdx === 0) {
             return new self(
                 $fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
-                $this->tabs, $this->tabIndex, $this->showTabBar
+                $this->tabs, $this->tabIndex, $this->showTabBar,
+                $this->undoStack, $this->redoStack
             );
         }
         return new self(
             $this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -286,11 +301,19 @@ final class Manager implements Model
             ? array_keys($pane->selected)
             : [$pane->currentEntry()?->name];
         $errors = 0;
+        $deletedItems = [];
         foreach ($names as $name) {
             if ($name === null || $name === '..' || $name === '') {
                 continue;
             }
             $full = Pane::join($pane->cwd, $name);
+            // Capture info before deletion for undo
+            $deletedItems[] = [
+                'path' => $full,
+                'isDir' => is_dir($full),
+                'content' => is_file($full) ? @file_get_contents($full) : null,
+                'stat' => @stat($full) ?: [],
+            ];
             if (!self::removePath($full)) {
                 $errors++;
             }
@@ -298,9 +321,15 @@ final class Manager implements Model
         $msg = $errors === 0
             ? 'deleted ' . count($names) . ' entries'
             : "deleted with {$errors} errors";
+        // Build new undo stack with this deletion
+        $newUndoStack = $this->undoStack;
+        if ($deletedItems !== []) {
+            $newUndoStack[] = UndoAction::delete($deletedItems);
+        }
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-            ->withConfirm(ConfirmState::None, $msg);
+            ->withConfirm(ConfirmState::None, $msg)
+            ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
     }
 
     private function withConfirm(ConfirmState $state, string $status): self
@@ -308,7 +337,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $status, $state, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -317,7 +347,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -380,7 +411,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm,
             $this->lister, $query, $results, $cursor,
-            $this->tabs, $this->tabIndex, $this->showTabBar
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -468,7 +500,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, count($newTabs) - 1, $newTabs !== []
+            $newTabs, count($newTabs) - 1, $newTabs !== [],
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -485,7 +518,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, $newIndex, $newTabs !== []
+            $newTabs, $newIndex, $newTabs !== [],
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -498,7 +532,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $this->tabs, $index, $this->showTabBar
+            $this->tabs, $index, $this->showTabBar,
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -518,7 +553,8 @@ final class Manager implements Model
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
-            $newTabs, count($newTabs) - 1, $newTabs !== []
+            $newTabs, count($newTabs) - 1, $newTabs !== [],
+            $this->undoStack, $this->redoStack
         );
     }
 
@@ -526,5 +562,81 @@ final class Manager implements Model
     private function currentTabs(): ?array
     {
         return $this->tabs[$this->tabIndex] ?? null;
+    }
+
+    /** Create a new Manager with modified undo/redo stacks */
+    private function withUndoRedoStacks(array $undoStack, array $redoStack): self
+    {
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $undoStack, $redoStack
+        );
+    }
+
+    /** Undo the last operation */
+    public function undo(): self
+    {
+        if ($this->undoStack === []) {
+            return $this->withStatus('nothing to undo');
+        }
+        $newUndoStack = $this->undoStack;
+        $action = array_pop($newUndoStack);
+        if ($action === null) {
+            return $this->withStatus('nothing to undo');
+        }
+        $errors = $this->reverseAction($action);
+        $msg = $errors === 0
+            ? "undone: {$action->description}"
+            : "undo {$action->description} with {$errors} error(s)";
+        // Push to redo stack
+        $newRedoStack = [...$this->redoStack, $action];
+        return $this
+            ->refresh()
+            ->withStatus($msg)
+            ->withUndoRedoStacks($newUndoStack, $newRedoStack);
+    }
+
+    /** Reverse an undo action (for restore on redo) */
+    private function reverseAction(UndoAction $action): int
+    {
+        $errors = 0;
+        // For delete actions, restore the items
+        foreach ($action->items as $item) {
+            if (!isset($item['path'])) {
+                continue;
+            }
+            $path = $item['path'];
+            if (isset($item['isDir']) && $item['isDir']) {
+                // Restore directory
+                if (!is_dir($path) && !@mkdir($path, 0755, true)) {
+                    $errors++;
+                }
+            } elseif (isset($item['content']) && $item['content'] !== null) {
+                // Restore file
+                $dir = dirname($path);
+                if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+                    $errors++;
+                    continue;
+                }
+                if (@file_put_contents($path, $item['content']) === false) {
+                    $errors++;
+                }
+            }
+        }
+        return $errors;
+    }
+
+    /** Check if undo is available */
+    public function canUndo(): bool
+    {
+        return $this->undoStack !== [];
+    }
+
+    /** Check if redo is available */
+    public function canRedo(): bool
+    {
+        return $this->redoStack !== [];
     }
 }
