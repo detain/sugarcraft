@@ -31,6 +31,9 @@
         "sugarcraft/candy-sprinkles": "@dev",
         "sugarcraft/candy-shine": "@dev"
     },
+    "suggest": {
+        "ext-gd": "Required for PNG output in PngRenderer"
+    },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
