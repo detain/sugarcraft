@@ -222,7 +222,7 @@ jobs:
             vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
