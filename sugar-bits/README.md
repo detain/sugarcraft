@@ -50,6 +50,7 @@ to keep the static `Progress` lean).
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Mirrors upstream Bubbles #233. | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav | — |
+| `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes | — |
 
 ### Msg routing cheat-sheet
@@ -177,6 +178,10 @@ cd sugar-bits && composer install && vendor/bin/phpunit
 ### Stopwatch
 
 ![stopwatch](.vhs/stopwatch.gif)
+
+### Tabs
+
+![tabs](.vhs/tabs.gif)
 
 ### Table
 
