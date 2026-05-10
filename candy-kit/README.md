@@ -45,6 +45,9 @@ echo StatusLine::error('connection refused'), "\n";
   theme.
 - **`Banner`** — render a bordered title block with optional subtitle,
   rounded by default. Useful for app intros / `--version` output.
+- **`Logo`** — ASCII-art logo renderer with `Logo::sugarcraft()` built-in
+  preset and `Logo::fromAscii($art)` for custom art. Chain
+  `->withColor($hex)` to apply foreground color.
 
 ## Test
 
