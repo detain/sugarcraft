@@ -24,6 +24,13 @@ use SugarCraft\Core\Msg\KeyMsg;
  * `Cmd::tick`. The parent Model is responsible for deciding what an
  * {@see KeyType::Enter} press means — TextInput simply leaves the value
  * unchanged on Enter.
+ *
+ * Vim Mode:
+ * When enabled via `withVimMode(true)`, the input supports vim-style
+ * keybindings in two modes:
+ * - Normal mode: `h/l` move, `w/b` word navigation, `0/$` line boundaries,
+ *   `i/a/A/I` enter insert mode, `x` delete character
+ * - Insert mode: standard editing behavior, Escape returns to normal mode
  */
 final class TextInput implements Model
 {
@@ -49,6 +56,8 @@ final class TextInput implements Model
         public readonly ?\Closure $validate = null,
         public readonly ?string $err = null,
         public readonly ?Styles $styles = null,
+        public readonly bool $vimMode = false,
+        public readonly bool $vimNormalMode = true,
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -88,7 +97,119 @@ final class TextInput implements Model
             return [$this, null];
         }
 
+        // Vim mode handling
+        if ($this->vimMode) {
+            return $this->vimUpdate($msg);
+        }
+
         // Cursor movement / line edits.
+        if ($msg->ctrl) {
+            return match ($msg->rune) {
+                'a'     => [$this->moveCursor(0), null],
+                'e'     => [$this->moveCursor($this->length()), null],
+                'u'     => [$this->deleteToStart(), null],
+                'k'     => [$this->deleteToEnd(), null],
+                default => [$this, null],
+            };
+        }
+
+        return match ($msg->type) {
+            KeyType::Left      => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
+            KeyType::Right     => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+            KeyType::Home      => [$this->moveCursor(0), null],
+            KeyType::End       => [$this->moveCursor($this->length()), null],
+            KeyType::Backspace => [$this->backspace(), null],
+            KeyType::Delete    => [$this->deleteForward(), null],
+            KeyType::Space     => [$this->insert(' '), null],
+            KeyType::Char      => [$this->insert($msg->rune), null],
+            KeyType::Escape    => [$this, null],
+            default            => [$this, null],
+        };
+    }
+
+    /**
+     * Handle vim mode key events.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdate(KeyMsg $msg): array
+    {
+        // In normal mode, handle vim navigation and commands
+        if ($this->vimNormalMode) {
+            // Escape does nothing in normal mode (already there)
+            // Arrow keys work in both modes
+            if ($msg->type === KeyType::Left) {
+                return [$this->moveCursor(max(0, $this->cursorPos - 1)), null];
+            }
+            if ($msg->type === KeyType::Right) {
+                return [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null];
+            }
+
+            // h key also moves left
+            if ($msg->type === KeyType::Char && $msg->rune === 'h' && !$msg->ctrl) {
+                return [$this->moveCursor(max(0, $this->cursorPos - 1)), null];
+            }
+            // l key also moves right
+            if ($msg->type === KeyType::Char && $msg->rune === 'l' && !$msg->ctrl) {
+                return [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null];
+            }
+            // w = word forward
+            if ($msg->type === KeyType::Char && $msg->rune === 'w' && !$msg->ctrl) {
+                return [$this->vimWordForward(), null];
+            }
+            // b = word backward
+            if ($msg->type === KeyType::Char && $msg->rune === 'b' && !$msg->ctrl) {
+                return [$this->vimWordBackward(), null];
+            }
+            // 0 = beginning of line
+            if ($msg->type === KeyType::Char && $msg->rune === '0' && !$msg->ctrl) {
+                return [$this->moveCursor(0), null];
+            }
+            // $ = end of line
+            if ($msg->type === KeyType::Char && $msg->rune === '$' && !$msg->ctrl) {
+                return [$this->moveCursor($this->length()), null];
+            }
+            // x = delete character under cursor (like vim)
+            if ($msg->type === KeyType::Char && $msg->rune === 'x' && !$msg->ctrl) {
+                return [$this->vimDeleteChar(), null];
+            }
+            // i = enter insert mode
+            if ($msg->type === KeyType::Char && $msg->rune === 'i' && !$msg->ctrl) {
+                return [$this->mutate(vimNormalMode: false), null];
+            }
+            // a = append (move cursor right, enter insert mode)
+            if ($msg->type === KeyType::Char && $msg->rune === 'a' && !$msg->ctrl) {
+                $nextPos = min($this->length(), $this->cursorPos + 1);
+                return [$this->mutate(cursorPos: $nextPos, vimNormalMode: false), null];
+            }
+            // A = append at end of line, enter insert mode
+            if ($msg->type === KeyType::Char && $msg->rune === 'A' && !$msg->ctrl) {
+                return [$this->mutate(cursorPos: $this->length(), vimNormalMode: false), null];
+            }
+            // I = insert at beginning of line, enter insert mode
+            if ($msg->type === KeyType::Char && $msg->rune === 'I' && !$msg->ctrl) {
+                return [$this->mutate(cursorPos: 0, vimNormalMode: false), null];
+            }
+            // u = undo (basic implementation)
+            if ($msg->type === KeyType::Char && $msg->rune === 'u' && !$msg->ctrl) {
+                // TODO: implement undo functionality
+                return [$this, null];
+            }
+            // Ctrl+r = redo
+            if ($msg->ctrl && $msg->rune === 'r') {
+                // TODO: implement redo functionality
+                return [$this, null];
+            }
+
+            return [$this, null];
+        }
+
+        // In insert mode, behave like normal but watch for Escape
+        if ($msg->type === KeyType::Escape) {
+            return [$this->mutate(vimNormalMode: true), null];
+        }
+
+        // Handle Ctrl combos in insert mode
         if ($msg->ctrl) {
             return match ($msg->rune) {
                 'a'     => [$this->moveCursor(0), null],
@@ -110,6 +231,83 @@ final class TextInput implements Model
             KeyType::Char      => [$this->insert($msg->rune), null],
             default            => [$this, null],
         };
+    }
+
+    /**
+     * Move cursor to the start of the next word (vim w).
+     */
+    private function vimWordForward(): self
+    {
+        $len = $this->length();
+        $pos = $this->cursorPos;
+
+        if ($pos >= $len) {
+            return $this;
+        }
+
+        // Skip current word characters
+        while ($pos < $len && $this->isWordChar($pos)) {
+            $pos++;
+        }
+        // Skip non-word characters
+        while ($pos < $len && !$this->isWordChar($pos)) {
+            $pos++;
+        }
+
+        return $this->moveCursor($pos);
+    }
+
+    /**
+     * Move cursor to the start of the previous word (vim b).
+     */
+    private function vimWordBackward(): self
+    {
+        $pos = $this->cursorPos;
+
+        if ($pos <= 0) {
+            return $this;
+        }
+
+        $pos--; // Move back one from current position
+
+        // Skip non-word characters
+        while ($pos > 0 && !$this->isWordChar($pos)) {
+            $pos--;
+        }
+        // Skip word characters
+        while ($pos > 0 && $this->isWordChar($pos - 1)) {
+            $pos--;
+        }
+
+        return $this->moveCursor($pos);
+    }
+
+    /**
+     * Check if character at position is a word character (alphanumeric or underscore).
+     */
+    private function isWordChar(int $pos): bool
+    {
+        if ($pos < 0 || $pos >= $this->length()) {
+            return false;
+        }
+        $char = mb_substr($this->value, $pos, 1, 'UTF-8');
+        return $char !== '' && preg_match('/[a-zA-Z0-9_]/', $char) === 1;
+    }
+
+    /**
+     * Delete character under cursor (vim x).
+     */
+    private function vimDeleteChar(): self
+    {
+        $len = $this->length();
+        if ($len === 0 || $this->cursorPos >= $len) {
+            return $this;
+        }
+
+        $before = mb_substr($this->value, 0, $this->cursorPos, 'UTF-8');
+        $after = mb_substr($this->value, $this->cursorPos + 1, null, 'UTF-8');
+
+        return $this->mutate(value: $before . $after);
     }
 
     /** Render the component as a multi-line ANSI string. */
@@ -231,6 +429,30 @@ final class TextInput implements Model
     public function withWidth(int $w): self          { return $this->mutate(width: max(0, $w)); }
     public function withEchoMode(EchoMode $m): self  { return $this->mutate(echoMode: $m); }
     public function withEchoChar(string $c): self    { return $this->mutate(echoChar: $c); }
+
+    /**
+     * Enable or disable vim keybindings mode.
+     *
+     * When enabled, the input starts in normal mode with vim-style navigation:
+     * - `h/l` or arrows: move left/right
+     * - `w/b`: word forward/backward
+     * - `0/$`: beginning/end of line
+     * - `i/a/A/I`: enter insert mode
+     * - `x`: delete character under cursor
+     * - `Escape`: return to normal mode
+     */
+    public function withVimMode(bool $enabled = true): self
+    {
+        return $this->mutate(vimMode: $enabled, vimNormalMode: true);
+    }
+
+    /**
+     * Short-form alias for withVimMode.
+     */
+    public function vimMode(bool $enabled = true): self
+    {
+        return $this->withVimMode($enabled);
+    }
 
     /**
      * Replace the suggestion pool. Call {@see showSuggestions()} to
@@ -463,6 +685,8 @@ final class TextInput implements Model
         ?\Closure $validate = null, bool $validateSet = false,
         ?string $err = null, bool $errSet = false,
         ?Styles $styles = null, bool $stylesSet = false,
+        ?bool $vimMode = null,
+        ?bool $vimNormalMode = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
@@ -491,6 +715,8 @@ final class TextInput implements Model
             validate:               $resolvedValidate,
             err:                    $err,
             styles:                 $stylesSet ? $styles : $this->styles,
+            vimMode:                $vimMode                ?? $this->vimMode,
+            vimNormalMode:          $vimNormalMode          ?? $this->vimNormalMode,
         );
     }
 }
