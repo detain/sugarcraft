@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\BarChart;
 
+use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Charts\Legend\Legend;
 
 /**
  * Vertical bar chart drawn with `█` blocks. Bars are spaced one column
@@ -15,10 +17,24 @@ use SugarCraft\Charts\Lang;
  * ```php
  * echo BarChart::new([['cpu', 0.7], ['mem', 0.4], ['disk', 0.9]], width: 12, height: 5)->view();
  * ```
+ *
+ * Axis labels and legend are supported:
+ *
+ * ```php
+ * echo BarChart::new([['cpu', 0.7], ['mem', 0.4]], width: 20, height: 6)
+ *     ->withXLabel('Resource')
+ *     ->withYLabel('Usage %')
+ *     ->withLegend(true)
+ *     ->withLegendPosition(Position::Bottom)
+ *     ->view();
+ * ```
  */
 final class BarChart
 {
-    /** @param list<Bar> $bars */
+    /**
+     * @param list<Bar>                        $bars
+     * @param list<array{label: string, color: string}> $legendItems
+     */
     private function __construct(
         public readonly array $bars,
         public readonly int $width,
@@ -30,6 +46,14 @@ final class BarChart
         public readonly bool $showAxis   = false,
         public readonly ?int $barWidth   = null,
         public readonly ?int $barGap     = null,
+        public readonly bool $showLegend = false,
+        public readonly Position $legendPosition = Position::Right,
+        public readonly ?string $legendIndicatorChar = null,
+        public readonly ?string $title = null,
+        public readonly Position $titlePosition = Position::Top,
+        public readonly ?string $xLabel = null,
+        public readonly ?string $yLabel = null,
+        private readonly array $legendItems = [],
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.dim_nonneg'));
@@ -56,7 +80,7 @@ final class BarChart
     /** @param iterable<mixed> $bars */
     public function withBars(iterable $bars): self
     {
-        return new self(self::coerceBars($bars), $this->width, $this->height, $this->min, $this->max, $this->showLabels);
+        return $this->copy(bars: self::coerceBars($bars));
     }
 
     /**
@@ -67,8 +91,7 @@ final class BarChart
      */
     public function push(Bar|array $bar): self
     {
-        $next = [...$this->bars, ...self::coerceBars([$bar])];
-        return new self($next, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+        return $this->copy(bars: [...$this->bars, ...self::coerceBars([$bar])]);
     }
 
     /**
@@ -83,14 +106,13 @@ final class BarChart
         if ($appended === []) {
             return $this;
         }
-        $next = [...$this->bars, ...$appended];
-        return new self($next, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+        return $this->copy(bars: [...$this->bars, ...$appended]);
     }
 
     /** Drop every bar. Mirrors ntcharts' `Clear`. */
     public function clear(): self
     {
-        return new self([], $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis);
+        return $this->copy(bars: []);
     }
 
     public function withSize(int $w, int $h): self
@@ -98,12 +120,12 @@ final class BarChart
         if ($w < 0 || $h < 0) {
             throw new \InvalidArgumentException(Lang::t('barchart.dim_nonneg'));
         }
-        return new self($this->bars, $w, $h, $this->min, $this->max, $this->showLabels);
+        return $this->copy(width: $w, height: $h);
     }
 
-    public function withMin(?float $m): self        { return new self($this->bars, $this->width, $this->height, $m, $this->max, $this->showLabels, $this->horizontal, $this->showAxis); }
-    public function withMax(?float $m): self        { return new self($this->bars, $this->width, $this->height, $this->min, $m, $this->showLabels, $this->horizontal, $this->showAxis); }
-    public function withShowLabels(bool $on): self  { return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $on, $this->horizontal, $this->showAxis); }
+    public function withMin(?float $m): self       { return $this->copy(min: $m); }
+    public function withMax(?float $m): self       { return $this->copy(max: $m); }
+    public function withShowLabels(bool $on): self { return $this->copy(showLabels: $on); }
 
     /**
      * Render bars left-to-right instead of bottom-to-top. Each bar
@@ -112,7 +134,7 @@ final class BarChart
      */
     public function withHorizontal(bool $on = true): self
     {
-        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $on, $this->showAxis);
+        return $this->copy(horizontal: $on);
     }
 
     /**
@@ -122,7 +144,7 @@ final class BarChart
      */
     public function withShowAxis(bool $on = true): self
     {
-        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $on, $this->barWidth, $this->barGap);
+        return $this->copy(showAxis: $on);
     }
 
     /**
@@ -132,7 +154,7 @@ final class BarChart
      */
     public function withBarWidth(?int $width): self
     {
-        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis, $width, $this->barGap);
+        return $this->barWidthCopy(barWidth: $width, barWidthSet: true);
     }
 
     /**
@@ -142,7 +164,7 @@ final class BarChart
      */
     public function withBarGap(?int $gap): self
     {
-        return new self($this->bars, $this->width, $this->height, $this->min, $this->max, $this->showLabels, $this->horizontal, $this->showAxis, $this->barWidth, $gap);
+        return $this->copy(barGap: $gap);
     }
 
     /**
@@ -153,28 +175,223 @@ final class BarChart
      */
     public function withNoAutoBarWidth(bool $on = true): self
     {
-        // Pure parity-shim: the override semantics are already on
-        // withBarWidth(). When `$on` is false and a width is pinned,
-        // unset it so auto kicks back in.
         if (!$on) {
-            return $this->withBarWidth(null);
+            return $this->barWidthCopy(barWidth: null, barWidthSet: true);
         }
         return $this;
     }
 
-    // Short-form aliases.
+    // ─── Legend & Label Configuration ──────────────────────────────────
+
+    /** Enable or disable the legend. */
+    public function withLegend(bool $show = true): self
+    {
+        return $this->copy(showLegend: $show);
+    }
+
+    /** Set the legend position. */
+    public function withLegendPosition(Position $position): self
+    {
+        return $this->copy(legendPosition: $position);
+    }
+
+    /** Customize legend indicator character. */
+    public function withLegendStyle(?string $indicatorChar = null): self
+    {
+        return $this->copy(legendIndicatorChar: $indicatorChar);
+    }
+
+    /** Set the chart title. */
+    public function withTitle(string $title, Position $position = Position::Top): self
+    {
+        return $this->copy(title: $title, titlePosition: $position);
+    }
+
+    /** Set the title position separately. */
+    public function withTitlePosition(Position $position): self
+    {
+        return $this->copy(titlePosition: $position);
+    }
+
+    /** Set the X-axis label (rendered at bottom). */
+    public function withXLabel(string $label): self
+    {
+        return $this->copy(xLabel: $label);
+    }
+
+    /** Set the Y-axis label (prepended to each line). */
+    public function withYLabel(string $label): self
+    {
+        return $this->copy(yLabel: $label);
+    }
+
+    /**
+     * Set legend items directly (label + color pairs).
+     *
+     * @param list<array{label: string, color: string}> $items
+     */
+    public function withLegendItems(array $items): self
+    {
+        return $this->copy(legendItems: $items);
+    }
+
+    // ─── Short-form Aliases ─────────────────────────────────────────────
+
     /** @param iterable<Bar|array{string,float|int}> $bars */
-    public function bars(iterable $bars): self    { return $this->withBars($bars); }
-    public function size(int $w, int $h): self    { return $this->withSize($w, $h); }
-    public function min(?float $m): self          { return $this->withMin($m); }
-    public function max(?float $m): self          { return $this->withMax($m); }
+    public function bars(iterable $bars): self        { return $this->withBars($bars); }
+    public function size(int $w, int $h): self        { return $this->withSize($w, $h); }
+    public function min(?float $m): self              { return $this->withMin($m); }
+    public function max(?float $m): self              { return $this->withMax($m); }
     public function showLabels(bool $on = true): self { return $this->withShowLabels($on); }
     public function horizontal(bool $on = true): self { return $this->withHorizontal($on); }
     public function showAxis(bool $on = true): self   { return $this->withShowAxis($on); }
-    public function barWidth(?int $width): self   { return $this->withBarWidth($width); }
-    public function barGap(?int $gap): self       { return $this->withBarGap($gap); }
+    public function barWidth(?int $width): self       { return $this->withBarWidth($width); }
+    public function barGap(?int $gap): self           { return $this->withBarGap($gap); }
+    public function legend(bool $on = true): self     { return $this->withLegend($on); }
+    public function legendPos(Position $pos): self    { return $this->withLegendPosition($pos); }
+    public function legendStyle(?string $char): self  { return $this->withLegendStyle($char); }
+    public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    public function xLabel(string $label): self       { return $this->withXLabel($label); }
+    public function yLabel(string $label): self       { return $this->withYLabel($label); }
+    /** @param list<array{label: string, color: string}> $items */
+    public function legendItems(array $items): self   { return $this->withLegendItems($items); }
+
+    // ─── Rendering ──────────────────────────────────────────────────────
 
     public function view(): string
+    {
+        if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
+            return '';
+        }
+
+        $chart = $this->renderChart();
+
+        if (!$this->showLegend && $this->title === null && $this->xLabel === null && $this->yLabel === null) {
+            return $chart;
+        }
+
+        return $this->buildChartWithExtras($chart);
+    }
+
+    /**
+     * Compose chart output with legend, title, and axis labels.
+     */
+    private function buildChartWithExtras(string $chart): string
+    {
+        $lines = $chart !== '' ? explode("\n", $chart) : [];
+
+        if ($this->showLegend && $this->legendItems !== []) {
+            $legend = $this->buildLegend();
+            $lines = $this->mergeLegend($lines, $legend);
+        }
+
+        if ($this->title !== null) {
+            $lines = $this->addTitle($lines);
+        }
+
+        if ($this->yLabel !== null) {
+            $lines = $this->addYLabel($lines);
+        }
+
+        if ($this->xLabel !== null) {
+            $lines[] = $this->xLabel;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function buildLegend(): Legend
+    {
+        $legend = Legend::new($this->legendItems)
+            ->withPosition($this->legendPosition);
+
+        if ($this->legendIndicatorChar !== null) {
+            $legend = $legend->withIndicatorChar($this->legendIndicatorChar);
+        }
+
+        return $legend;
+    }
+
+    /**
+     * @param list<string> $chartLines
+     * @param list<string> $legendLines
+     * @return list<string>
+     */
+    private function mergeLegend(array $chartLines, Legend $legend): array
+    {
+        $legendLines = explode("\n", $legend->view());
+        $chartHeight = count($chartLines);
+        $legendHeight = count($legendLines);
+
+        return match ($this->legendPosition) {
+            Position::Top    => [...$legendLines, ...$chartLines],
+            Position::Bottom => [...$chartLines, ...$legendLines],
+            Position::Left   => $this->mergeLegendLeftRight($chartLines, $legendLines),
+            Position::Right  => $this->mergeLegendLeftRight($chartLines, $legendLines, true),
+        };
+    }
+
+    /**
+     * @param list<string> $chartLines
+     * @param list<string> $legendLines
+     * @return list<string>
+     */
+    private function mergeLegendLeftRight(array $chartLines, array $legendLines, bool $legendOnRight = false): array
+    {
+        $maxHeight = max(count($chartLines), count($legendLines));
+        $result = [];
+
+        for ($i = 0; $i < $maxHeight; $i++) {
+            $chartLine = $chartLines[$i] ?? '';
+            $legendLine = $legendLines[$i] ?? '';
+
+            if ($legendOnRight) {
+                $result[] = str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT) . ' ' . $legendLine;
+            } else {
+                $result[] = $legendLine . ' ' . str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function addTitle(array $lines): array
+    {
+        $titleLen = mb_strlen($this->title, 'UTF-8');
+        $centered = str_pad($this->title, $this->width, ' ', STR_PAD_BOTH);
+
+        return match ($this->titlePosition) {
+            Position::Top    => [$centered, ...$lines],
+            Position::Bottom => [...$lines, $centered],
+            Position::Left, Position::Right => $lines,
+        };
+    }
+
+    /**
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function addYLabel(array $lines): array
+    {
+        return array_map(
+            fn(string $line) => $this->yLabel . ' ' . $line,
+            $lines,
+        );
+    }
+
+    public function __toString(): string
+    {
+        return $this->view();
+    }
+
+    /**
+     * Render the raw bar chart without legend, title, or labels.
+     */
+    private function renderChart(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
             return '';
@@ -183,12 +400,7 @@ final class BarChart
             return $this->renderHorizontal();
         }
 
-        // Drop trailing bars that don't fit the width budget. With
-        // colW=1 + gap=1, at most `(width + 1) / 2` bars fit; without a
-        // gap, at most `width` bars fit. Prefer keeping every bar when
-        // gaps fit, otherwise fall back to packing as many as `width`
-        // allows so the rendered output never exceeds the requested
-        // width.
+        // Drop trailing bars that don't fit the width budget.
         $bars       = $this->bars;
         $count      = count($bars);
         $withGapMax = intdiv($this->width + 1, 2);
@@ -210,11 +422,6 @@ final class BarChart
             $max = $min + 1.0;
         }
 
-        // Distribute available width across the surviving bars; reserve a
-        // 1-cell gap when there's room. Bars expand to fill the remainder
-        // so labels can render in full when possible. Caller-pinned
-        // barWidth / barGap (via withBarWidth / withBarGap) override the
-        // auto-fit calculation.
         if ($this->barGap !== null) {
             $gap = $this->barGap;
         } else {
@@ -227,9 +434,6 @@ final class BarChart
             $colW  = max(1, intdiv($avail, max(1, $count)));
         }
 
-        // Reserve one row for labels only if the chart is tall enough to
-        // also contain a body. height=1 + showLabels would otherwise emit
-        // 2 rows and overflow the requested height.
         $renderLabels = $this->showLabels && $this->height >= 2;
         $bodyHeight   = $renderLabels ? $this->height - 1 : $this->height;
         $heights = [];
@@ -251,7 +455,6 @@ final class BarChart
             $rows[] = rtrim($line);
         }
         if ($this->showAxis) {
-            // X axis just below the bars (replaces the spacing row).
             $axisLine = '└' . str_repeat('─', max(0, $this->width));
             $rows[] = $axisLine;
         }
@@ -271,15 +474,8 @@ final class BarChart
         return implode("\n", $rows);
     }
 
-    public function __toString(): string
-    {
-        return $this->view();
-    }
-
     /**
-     * Bars run left-to-right; one row per bar. The label occupies the
-     * leftmost column (truncated to fit), then the filled portion of
-     * the bar fills the rest of the available width.
+     * Bars run left-to-right; one row per bar.
      */
     private function renderHorizontal(): string
     {
@@ -297,7 +493,6 @@ final class BarChart
             $max = $min + 1.0;
         }
 
-        // Reserve label gutter when labels are on.
         $labelGutter = 0;
         if ($this->showLabels) {
             foreach ($bars as $b) {
@@ -327,6 +522,8 @@ final class BarChart
         return implode("\n", $rows);
     }
 
+    // ─── Helpers ────────────────────────────────────────────────────────
+
     /**
      * @param iterable<mixed> $bars
      * @return list<Bar>
@@ -343,7 +540,6 @@ final class BarChart
                 $out[] = new Bar((string) $value[0], (float) $value[1]);
                 continue;
             }
-            // Treat as $key => $value when the key is a string label.
             if (is_string($key)) {
                 $out[] = new Bar($key, (float) $value);
                 continue;
@@ -362,5 +558,82 @@ final class BarChart
             return $s;
         }
         return mb_substr($s, 0, $max, 'UTF-8');
+    }
+
+    /**
+     * Internal copy-with-overrides helper.
+     * Uses flag parameters to distinguish "not passed" from "passed as null".
+     *
+     * @param list<Bar>                        $bars
+     * @param list<array{label: string, color: string}> $legendItems
+     */
+    private function copy(
+        ?array $bars = null,
+        ?int $width = null,
+        ?int $height = null,
+        ?float $min = null,
+        ?float $max = null,
+        ?bool $showLabels = null,
+        ?bool $horizontal = null,
+        ?bool $showAxis = null,
+        ?int $barWidth = null,
+        bool $barWidthSet = false,
+        ?int $barGap = null,
+        ?bool $showLegend = null,
+        ?Position $legendPosition = null,
+        ?string $legendIndicatorChar = null,
+        ?string $title = null,
+        ?Position $titlePosition = null,
+        ?string $xLabel = null,
+        ?string $yLabel = null,
+        ?array $legendItems = null,
+    ): self {
+        return new self(
+            bars:               $bars               ?? $this->bars,
+            width:              $width              ?? $this->width,
+            height:             $height             ?? $this->height,
+            min:                $min                ?? $this->min,
+            max:                $max                ?? $this->max,
+            showLabels:         $showLabels         ?? $this->showLabels,
+            horizontal:         $horizontal         ?? $this->horizontal,
+            showAxis:           $showAxis           ?? $this->showAxis,
+            barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
+            barGap:             $barGap             ?? $this->barGap,
+            showLegend:         $showLegend         ?? $this->showLegend,
+            legendPosition:     $legendPosition     ?? $this->legendPosition,
+            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
+            title:              $title              ?? $this->title,
+            titlePosition:      $titlePosition      ?? $this->titlePosition,
+            xLabel:             $xLabel             ?? $this->xLabel,
+            yLabel:             $yLabel             ?? $this->yLabel,
+            legendItems:        $legendItems        ?? $this->legendItems,
+        );
+    }
+
+    /**
+     * Specialized copy for barWidth to handle explicit null.
+     */
+    private function barWidthCopy(?int $barWidth, bool $barWidthSet): self
+    {
+        return new self(
+            bars:               $this->bars,
+            width:              $this->width,
+            height:             $this->height,
+            min:                $this->min,
+            max:                $this->max,
+            showLabels:         $this->showLabels,
+            horizontal:         $this->horizontal,
+            showAxis:           $this->showAxis,
+            barWidth:           $barWidthSet ? $barWidth : ($barWidth ?? $this->barWidth),
+            barGap:             $this->barGap,
+            showLegend:         $this->showLegend,
+            legendPosition:     $this->legendPosition,
+            legendIndicatorChar:$this->legendIndicatorChar,
+            title:              $this->title,
+            titlePosition:      $this->titlePosition,
+            xLabel:             $this->xLabel,
+            yLabel:             $this->yLabel,
+            legendItems:        $this->legendItems,
+        );
     }
 }
