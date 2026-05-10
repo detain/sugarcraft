@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Tests\Model;
 
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Shell\Model\FileModel;
 use PHPUnit\Framework\TestCase;
 
@@ -55,5 +57,60 @@ final class FileModelTest extends TestCase
     {
         $model = FileModel::newPrompt(cwd: $this->tmp, showSize: true);
         $this->assertTrue($model->picker->showSize);
+    }
+
+    public function testInitReturnsNull(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        $this->assertNull($model->init());
+    }
+
+    public function testViewReturnsString(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        $this->assertIsString($model->view());
+    }
+
+    public function testSelectedReturnsNullWhenNoSelection(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        $this->assertNull($model->selected());
+    }
+
+    public function testIsAbortedIsFalseInitially(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        $this->assertFalse($model->isAborted());
+    }
+
+    public function testIsSubmittedIsFalseInitially(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        $this->assertFalse($model->isSubmitted());
+    }
+
+    public function testEscapeSetsAborted(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        [$next, $cmd] = $model->update(new KeyMsg(KeyType::Escape));
+        $this->assertTrue($next->isAborted());
+        $this->assertNotNull($cmd);
+    }
+
+    public function testCtrlCAborts(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        [$next, $cmd] = $model->update(new KeyMsg(KeyType::Char, 'c', ctrl: true));
+        $this->assertTrue($next->isAborted());
+        $this->assertNotNull($cmd);
+    }
+
+    public function testUpdateWhenAlreadyAbortedReturnsSelf(): void
+    {
+        $model = FileModel::newPrompt(cwd: $this->tmp);
+        [$aborted, ] = $model->update(new KeyMsg(KeyType::Escape));
+        [$again, $cmd] = $aborted->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame($aborted, $again);
+        $this->assertNull($cmd);
     }
 }
