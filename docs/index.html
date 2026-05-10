@@ -4,9 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>SugarCraft — terminal UIs for PHP</title>
-    <meta name="description" content="SugarCraft is the PHP port of the Charmbracelet TUI ecosystem — forty-one composer-installable libraries and apps for building beautiful, fast, fiber-driven terminal user interfaces in PHP 8.1+.">
+    <meta name="description" content="SugarCraft is the PHP port of the Charmbracelet TUI ecosystem — forty-five composer-installable libraries and apps for building beautiful, fast, fiber-driven terminal user interfaces in PHP 8.1+.">
     <meta property="og:title" content="SugarCraft — terminal UIs for PHP">
-    <meta property="og:description" content="Forty-one PHP libraries + apps for building beautiful terminal user interfaces. Composer-installable. PHP 8.1+. Async on ReactPHP.">
+    <meta property="og:description" content="Forty-five PHP libraries + apps for building beautiful terminal user interfaces. Composer-installable. PHP 8.1+. Async on ReactPHP.">
     <meta property="og:type" content="website">
     <meta property="og:image" content="https://sugarcraft.github.io/img/social-preview.png">
     <meta name="twitter:card" content="summary_large_image">
@@ -38,7 +38,7 @@
         <h1>Terminal UIs that taste like candy.</h1>
         <p class="tag">
             SugarCraft is the PHP port of the
-            <a href="https://charm.sh">Charmbracelet</a> TUI ecosystem — twenty-three
+            <a href="https://charm.sh">Charmbracelet</a> TUI ecosystem — twenty-seven
             libraries and eighteen apps. Elm-architecture runtime,
             declarative styling, animation, charts, forms, SSH-served apps,
             telemetry, file managers, an AI chat shell. Composer-installable,
@@ -60,7 +60,7 @@
         </div>
 
         <div class="stats">
-            <div class="stat"><span class="num">23</span><span class="label">libraries</span></div>
+            <div class="stat"><span class="num">27</span><span class="label">libraries</span></div>
             <div class="stat"><span class="num">18</span><span class="label">apps</span></div>
             <div class="stat"><span class="num">110</span><span class="label">VHS demos</span></div>
             <div class="stat"><span class="num">PHP 8.1+</span><span class="label">fibers / ReactPHP</span></div>
@@ -142,7 +142,7 @@
 
 <section class="section" id="libraries" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
-        <h2>Twenty-three libraries, one ecosystem.</h2>
+        <h2>Twenty-seven libraries, one ecosystem.</h2>
         <p class="lede">
             Each library has its own composer package, README, examples, and
             PHPUnit suite. Pull just the ones you need — or grab the umbrella
@@ -305,6 +305,54 @@
                     <span class="lib-github" data-href="https://github.com/sugarcraft/candy-palette">GitHub →</span>
                 </div>
                 <p class="summary">Terminal color profile detection + ANSI / ANSI256 / TrueColor conversion. StandardColors and ProfileWriter.</p>
+            </a>
+
+            <a class="lib-card" href="lib/candy-mosaic.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mosaic/.vhs/inline-image.gif" alt="">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-mosaic.png" alt="" onerror="this.style.display='none'">
+                    <h3>CandyMosaic</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-mosaic">GitHub →</span>
+                </div>
+                <p class="summary">Image-to-cell renderer — Sixel, Kitty, iTerm2, Unicode half-block; Picker facade; ext-gd.</p>
+            </a>
+
+            <a class="lib-card" href="lib/candy-vt.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vt/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-vt.png" alt="" onerror="this.style.display='none'">
+                    <h3>CandyVt</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vt">GitHub →</span>
+                </div>
+                <p class="summary">In-memory virtual terminal emulator. ANSI byte stream → cell grid + cursor + mode state.</p>
+            </a>
+
+            <a class="lib-card" href="lib/candy-vcr.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-vcr/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-vcr.png" alt="" onerror="this.style.display='none'">
+                    <h3>CandyVcr</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-vcr">GitHub →</span>
+                </div>
+                <p class="summary">Record + replay candy-core sessions — JSONL/YAML cassettes, Recorder hook, Player + Byte/Screen assertions, CLI.</p>
+            </a>
+
+            <a class="lib-card" href="lib/candy-pty.html">
+                <div class="lib-card-preview">
+                    <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-pty/.vhs/demo.gif" alt="" onerror="this.style.display='none'">
+                </div>
+                <div class="lib-icon-row">
+                    <img class="lib-icon" src="img/icons/candy-pty.png" alt="" onerror="this.style.display='none'">
+                    <h3>CandyPty</h3>
+                    <span class="lib-github" data-href="https://github.com/sugarcraft/candy-pty">GitHub →</span>
+                </div>
+                <p class="summary">PTY primitive for Linux + macOS — open / spawn / read / write / resize / size / setBlocking, Child lifecycle, SignalForwarder (SIGWINCH → resize).</p>
             </a>
 
             <a class="lib-card" href="lib/candy-lister.html">
