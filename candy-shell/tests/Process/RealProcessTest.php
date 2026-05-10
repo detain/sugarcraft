@@ -67,4 +67,66 @@ final class RealProcessTest extends TestCase
         $proc->terminate();
         $this->assertSame(0, $proc->close());
     }
+
+    public function testSpawnWithCapturedStdout(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'echo hello world'],
+            captureStdout: true,
+            captureStderr: false,
+        );
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame("hello world\n", $proc->stdout());
+        $this->assertSame('', $proc->stderr());
+        $proc->close();
+    }
+
+    public function testSpawnWithCapturedStderr(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'echo error >&2'],
+            captureStdout: false,
+            captureStderr: true,
+        );
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame('', $proc->stdout());
+        $this->assertSame("error\n", $proc->stderr());
+        $proc->close();
+    }
+
+    public function testSpawnWithBothCaptured(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'echo out; echo err >&2'],
+            captureStdout: true,
+            captureStderr: true,
+        );
+        for ($i = 0; $i < 50 && $proc->exitCode() === null; $i++) {
+            usleep(10_000);
+        }
+        $this->assertSame(0, $proc->exitCode());
+        $this->assertSame("out\n", $proc->stdout());
+        $this->assertSame("err\n", $proc->stderr());
+        $proc->close();
+    }
+
+    public function testTerminateWhenRunning(): void
+    {
+        $proc = RealProcess::spawn(
+            ['/bin/sh', '-c', 'sleep 60'],
+            captureStdout: false,
+            captureStderr: false,
+        );
+        // Process should be running at this point
+        $this->assertNull($proc->exitCode());
+        $proc->terminate();
+        // terminate() should not crash and should allow close
+        $proc->close();
+    }
 }
