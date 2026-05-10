@@ -20,8 +20,9 @@ final class Renderer
         $right = self::renderPane($m->right, $m->activeIdx === 1);
         $body  = Layout::joinHorizontal(0.0, $left, '  ', $right);
 
+        $search = self::renderSearch($m);
         $status = $m->status === '' ? self::keyHelp() : $m->status;
-        return $body . "\n" . self::statusBar($status);
+        return $search . $body . "\n" . self::statusBar($status);
     }
 
     private static function renderPane(Pane $pane, bool $active): string
@@ -60,7 +61,30 @@ final class Renderer
 
     private static function keyHelp(): string
     {
-        return 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit';
+        return 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search';
+    }
+
+    private static function renderSearch(Manager $m): string
+    {
+        if ($m->searchQuery === null) {
+            return '';
+        }
+        $lines = [];
+        $lines[] = "\x1b[1mSearch: {$m->searchQuery}\x1b[0m";
+        $lines[] = '';
+        $total = count($m->searchResults);
+        foreach ($m->searchResults as $i => $entry) {
+            $prefix = $i === $m->searchCursor ? '> ' : '  ';
+            $type = $entry->isDir ? '[DIR]' : '[FILE]';
+            $lines[] = "{$prefix}{$type} {$entry->name}";
+        }
+        if ($total === 0) {
+            $lines[] = '  (no matches)';
+        } else {
+            $current = $m->searchCursor + 1;
+            $lines[] = "  ({$current}/{$total})";
+        }
+        return implode("\n", $lines) . "\n\n";
     }
 
     private static function truncate(string $s, int $n): string
