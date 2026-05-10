@@ -58,6 +58,18 @@ final class Text implements Field
         return new self($this->key, $this->area, $this->title, $this->description, $this->error, $fn);
     }
 
+    /**
+     * Attach a validation rule using a predicate + error message.
+     * The predicate receives the current value and returns true if valid,
+     * false if invalid. When invalid the $errorMessage is displayed.
+     */
+    public function withValidation(callable $predicate, string $errorMessage): self
+    {
+        return $this->withValidator(
+            static fn (string $value): ?string => $predicate($value) ? null : $errorMessage,
+        );
+    }
+
     // Short-form aliases.
     public function title(string $t): self        { return $this->withTitle($t); }
     public function desc(string $d): self         { return $this->withDescription($d); }
@@ -66,6 +78,7 @@ final class Text implements Field
     public function width(int $w): self           { return $this->withWidth($w); }
     public function height(int $h): self          { return $this->withHeight($h); }
     public function validator(\Closure $fn): self { return $this->withValidator($fn); }
+    public function validation(callable $predicate, string $errorMessage): self { return $this->withValidation($predicate, $errorMessage); }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed { return $this->area->value(); }
