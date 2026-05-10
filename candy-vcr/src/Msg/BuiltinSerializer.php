@@ -11,7 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -30,7 +30,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * - KeyMsg
  * - MouseClickMsg / MouseMotionMsg / MouseWheelMsg / MouseReleaseMsg
  * - WindowSizeMsg
- * - FocusMsg / BlurMsg
+ * - FocusGainedMsg / BlurMsg
  * - PasteStartMsg / PasteEndMsg / PasteMsg
  * - BackgroundColorMsg / ForegroundColorMsg
  * - CursorPositionMsg
@@ -85,9 +85,9 @@ final class BuiltinSerializer implements MsgSerializer
                     rows: (int) $e['rows'],
                 ),
             ],
-            FocusMsg::class => [
-                'encode' => static fn(FocusMsg $m): array => ['@type' => 'FocusMsg'],
-                'decode' => static fn(array $e): FocusMsg => new FocusMsg(),
+            FocusGainedMsg::class => [
+                'encode' => static fn(FocusGainedMsg $m): array => ['@type' => 'FocusGainedMsg'],
+                'decode' => static fn(array $e): FocusGainedMsg => new FocusGainedMsg(),
             ],
             BlurMsg::class => [
                 'encode' => static fn(BlurMsg $m): array => ['@type' => 'BlurMsg'],
@@ -181,7 +181,7 @@ final class BuiltinSerializer implements MsgSerializer
             'KeyMsg',
             'MouseClickMsg', 'MouseMotionMsg', 'MouseWheelMsg', 'MouseReleaseMsg',
             'WindowSizeMsg',
-            'FocusMsg', 'BlurMsg',
+            'FocusGainedMsg', 'BlurMsg',
             'PasteStartMsg', 'PasteEndMsg', 'PasteMsg',
             'BackgroundColorMsg', 'ForegroundColorMsg',
             'CursorPositionMsg',
@@ -198,7 +198,7 @@ final class BuiltinSerializer implements MsgSerializer
             'MouseWheelMsg' => MouseWheelMsg::class,
             'MouseReleaseMsg' => MouseReleaseMsg::class,
             'WindowSizeMsg' => WindowSizeMsg::class,
-            'FocusMsg' => FocusMsg::class,
+            'FocusGainedMsg' => FocusGainedMsg::class,
             'BlurMsg' => BlurMsg::class,
             'PasteStartMsg' => PasteStartMsg::class,
             'PasteEndMsg' => PasteEndMsg::class,

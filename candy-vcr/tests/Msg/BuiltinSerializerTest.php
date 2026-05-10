@@ -12,7 +12,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -119,7 +119,7 @@ final class BuiltinSerializerTest extends TestCase
     public static function stateMsgs(): array
     {
         return [
-            'focus' => ['FocusMsg', new FocusMsg()],
+            'focus' => ['FocusGainedMsg', new FocusGainedMsg()],
             'blur' => ['BlurMsg', new BlurMsg()],
             'paste-start' => ['PasteStartMsg', new PasteStartMsg()],
             'paste-end' => ['PasteEndMsg', new PasteEndMsg()],
@@ -173,7 +173,7 @@ final class BuiltinSerializerTest extends TestCase
         $s = new BuiltinSerializer();
         $this->assertTrue($s->canEncode(new KeyMsg(KeyType::Tab)));
         $this->assertTrue($s->canEncode(new WindowSizeMsg(80, 24)));
-        $this->assertTrue($s->canEncode(new FocusMsg()));
+        $this->assertTrue($s->canEncode(new FocusGainedMsg()));
     }
 
     public function testCannotEncodeUnknownTypes(): void
@@ -187,7 +187,7 @@ final class BuiltinSerializerTest extends TestCase
         $s = new BuiltinSerializer();
         $this->assertTrue($s->canDecode(['@type' => 'KeyMsg']));
         $this->assertTrue($s->canDecode(['@type' => 'WindowSizeMsg']));
-        $this->assertTrue($s->canDecode(['@type' => 'FocusMsg']));
+        $this->assertTrue($s->canDecode(['@type' => 'FocusGainedMsg']));
     }
 
     public function testCannotDecodeUnknownTags(): void
@@ -219,7 +219,7 @@ final class BuiltinSerializerTest extends TestCase
         $this->assertContains('MouseWheelMsg', $tags);
         $this->assertContains('MouseReleaseMsg', $tags);
         $this->assertContains('WindowSizeMsg', $tags);
-        $this->assertContains('FocusMsg', $tags);
+            $this->assertContains('FocusGainedMsg', $tags);
         $this->assertContains('BlurMsg', $tags);
         $this->assertContains('PasteStartMsg', $tags);
         $this->assertContains('PasteEndMsg', $tags);

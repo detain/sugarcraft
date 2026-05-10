@@ -15,7 +15,7 @@ use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\ClipboardMsg;
 use SugarCraft\Core\Msg\CursorColorMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -158,7 +158,7 @@ final class InputReaderTest extends TestCase
     {
         $msgs = (new InputReader())->parse("\x1b[I");
         $this->assertCount(1, $msgs);
-        $this->assertInstanceOf(FocusMsg::class, $msgs[0]);
+        $this->assertInstanceOf(FocusGainedMsg::class, $msgs[0]);
     }
 
     public function testFocusOut(): void
