@@ -42,6 +42,8 @@ final class Chat implements Model
         public readonly string $inputBuf = '',
         public readonly bool $inFlight = false,
         ?Backend $backend = null,
+        private readonly bool $streaming = false,
+        private readonly ?\Closure $onToken = null,
     ) {
         $this->backend = $backend ?? new Backend\EchoBackend();
     }
@@ -59,6 +61,8 @@ final class Chat implements Model
                 inputBuf: $this->inputBuf,
                 inFlight: false,
                 backend: $this->backend,
+                streaming: $this->streaming,
+                onToken: $this->onToken,
             ), null];
         }
         if (!$msg instanceof KeyMsg) {
@@ -99,6 +103,35 @@ final class Chat implements Model
         return $this->backend;
     }
 
+    public function withStreaming(bool $enable): self
+    {
+        return new self(
+            history: $this->history,
+            inputBuf: $this->inputBuf,
+            inFlight: $this->inFlight,
+            backend: $this->backend,
+            streaming: $enable,
+            onToken: $this->onToken,
+        );
+    }
+
+    public function onToken(callable $callback): self
+    {
+        return new self(
+            history: $this->history,
+            inputBuf: $this->inputBuf,
+            inFlight: $this->inFlight,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $callback instanceof \Closure ? $callback : \Closure::fromCallable($callback),
+        );
+    }
+
+    public function isStreaming(): bool
+    {
+        return $this->streaming;
+    }
+
     /**
      * @return array{0:Chat,1:?\Closure}
      */
@@ -113,16 +146,26 @@ final class Chat implements Model
             inputBuf: '',
             inFlight: true,
             backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
         );
         $backend = $this->backend;
         $history = $next->history;
-        $cmd = static fn(): Msg => new AssistantMsg($backend->complete($history));
+        $onToken = $this->streaming ? $this->onToken : null;
+        $cmd = static fn(): Msg => new AssistantMsg($backend->complete($history, $onToken));
         return [$next, $cmd];
     }
 
     private function withInputBuf(string $buf): self
     {
-        return new self($this->history, $buf, $this->inFlight, $this->backend);
+        return new self(
+            history: $this->history,
+            inputBuf: $buf,
+            inFlight: $this->inFlight,
+            backend: $this->backend,
+            streaming: $this->streaming,
+            onToken: $this->onToken,
+        );
     }
 
     /**

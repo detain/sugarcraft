@@ -16,10 +16,14 @@ namespace SugarCraft\Crush;
  */
 final class Message
 {
+    /**
+     * @param list<Attachment> $attachments
+     */
     public function __construct(
         public readonly Role  $role,
         public readonly string $content,
         public readonly int   $createdAt,
+        public readonly array $attachments = [],
     ) {}
 
     public static function user(string $content, ?int $now = null): self
@@ -37,15 +41,42 @@ final class Message
         return new self(Role::System, $content, $now ?? time());
     }
 
+    public function attachFile(string $path): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: [...$this->attachments, new Attachment($path, AttachmentType::File)],
+        );
+    }
+
+    public function attachImage(string $path): self
+    {
+        return new self(
+            role: $this->role,
+            content: $this->content,
+            createdAt: $this->createdAt,
+            attachments: [...$this->attachments, new Attachment($path, AttachmentType::Image)],
+        );
+    }
+
     /**
      * Wire-format dict used by every HTTP backend adapter. Caller
      * decides whether to filter system messages out (some APIs
      * don't accept them in the messages list).
      *
-     * @return array{role:string,content:string}
+     * @return array{role:string,content:string,attachments?:list<array{type:string,path:string}>}
      */
     public function toWire(): array
     {
-        return ['role' => $this->role->value, 'content' => $this->content];
+        $wire = ['role' => $this->role->value, 'content' => $this->content];
+        if ($this->attachments !== []) {
+            $wire['attachments'] = array_map(
+                static fn(Attachment $a) => ['type' => $a->type->name, 'path' => $a->path],
+                $this->attachments,
+            );
+        }
+        return $wire;
     }
 }

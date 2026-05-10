@@ -117,4 +117,102 @@ final class ChatTest extends TestCase
         $this->assertSame($chat, $next);
         $this->assertNull($cmd);
     }
+
+    public function testWithStreamingEnablesFlag(): void
+    {
+        $chat = new Chat();
+        $this->assertFalse($chat->isStreaming());
+        $chat2 = $chat->withStreaming(true);
+        $this->assertNotSame($chat, $chat2);
+        $this->assertTrue($chat2->isStreaming());
+    }
+
+    public function testWithStreamingCanDisable(): void
+    {
+        $chat = new Chat();
+        $chat2 = $chat->withStreaming(true);
+        $chat3 = $chat2->withStreaming(false);
+        $this->assertFalse($chat3->isStreaming());
+    }
+
+    public function testOnTokenSetsCallback(): void
+    {
+        $chat = new Chat();
+        $called = false;
+        $chat2 = $chat->onToken(function () use (&$called) {
+            $called = true;
+        });
+        $this->assertNotSame($chat, $chat2);
+    }
+
+    public function testStreamingStatePreservedOnInput(): void
+    {
+        $chat = new Chat(inputBuf: '', streaming: true, onToken: static fn() => null);
+        [$next] = $chat->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertTrue($next->isStreaming());
+    }
+
+    public function testStreamingStatePreservedOnAssistantMsg(): void
+    {
+        $chat = new Chat(
+            history: [Message::user('hi')],
+            inFlight: true,
+            streaming: true,
+            onToken: static fn() => null,
+        );
+        $reply = Message::assistant('hello!');
+        [$next] = $chat->update(new AssistantMsg($reply));
+        $this->assertTrue($next->isStreaming());
+    }
+
+    public function testStreamingCallbackPassedToBackend(): void
+    {
+        $tokens = [];
+        $chat = new Chat(
+            backend: new class implements \SugarCraft\Crush\Backend {
+                public function complete(array $history, callable $onToken = null): Message
+                {
+                    if ($onToken !== null) {
+                        $onToken('token1');
+                        $onToken('token2');
+                        $onToken('token3');
+                    }
+                    return \SugarCraft\Crush\Message::assistant('streaming reply');
+                }
+            },
+            inputBuf: 'hello',
+            streaming: true,
+            onToken: static function (string $token) use (&$tokens) {
+                $tokens[] = $token;
+            },
+        );
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertInstanceOf(\Closure::class, $cmd);
+        // Execute the command to trigger the backend
+        $msg = $cmd();
+        $this->assertCount(3, $tokens);
+        $this->assertSame(['token1', 'token2', 'token3'], $tokens);
+    }
+
+    public function testStreamingCallbackNotPassedWhenDisabled(): void
+    {
+        $callbackReceived = null;
+        $chat = new Chat(
+            backend: new class implements \SugarCraft\Crush\Backend {
+                public function complete(array $history, callable $onToken = null): Message
+                {
+                    return \SugarCraft\Crush\Message::assistant('reply');
+                }
+            },
+            inputBuf: 'hello',
+            streaming: false,
+            onToken: static function (string $token) use (&$callbackReceived) {
+                $callbackReceived = $token;
+            },
+        );
+        [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
+        $msg = $cmd();
+        // When streaming is disabled, onToken is null (not passed)
+        $this->assertNull($callbackReceived);
+    }
 }

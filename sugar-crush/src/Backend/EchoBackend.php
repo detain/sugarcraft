@@ -16,7 +16,7 @@ use SugarCraft\Crush\Role;
  */
 final class EchoBackend implements Backend
 {
-    public function complete(array $history): Message
+    public function complete(array $history, callable $onToken = null): Message
     {
         $lastUser = null;
         foreach (array_reverse($history) as $m) {

@@ -45,7 +45,7 @@ final class CommandBackend implements Backend
     public function __construct(private readonly string|array $command)
     {}
 
-    public function complete(array $history): Message
+    public function complete(array $history, callable $onToken = null): Message
     {
         $payload = json_encode(
             array_map(static fn(Message $m) => $m->toWire(), $history),
