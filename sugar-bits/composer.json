@@ -37,6 +37,7 @@
         "php": "^8.1",
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
+        "sugarcraft/candy-zone": "@dev",
         "sugarcraft/honey-bounce": "@dev"
     },
     "require-dev": {

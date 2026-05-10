@@ -12,9 +12,9 @@ use SugarCraft\Core\Msg\KeyMsg;
 
 final class TabsTest extends TestCase
 {
-    private function tabs(): Tabs
+    private function tabs(array $labels = []): Tabs
     {
-        return Tabs::new(['Home', 'Profile', 'Settings']);
+        return Tabs::new($labels ?: ['Home', 'Profile', 'Settings']);
     }
 
     private function focused(Tabs $t = null): Tabs
@@ -277,7 +277,9 @@ final class TabsTest extends TestCase
             focused: false,
             wrap: true,
             width: 80,
+            zoneManager: null,
             labels: ['Home', 'Profile'],
+            scrollOffset: 0,
         );
     }
 
@@ -293,7 +295,9 @@ final class TabsTest extends TestCase
             focused: false,
             wrap: true,
             width: 80,
+            zoneManager: null,
             labels: ['Home', 'Profile'],
+            scrollOffset: 0,
         );
     }
 
@@ -309,7 +313,9 @@ final class TabsTest extends TestCase
             focused: false,
             wrap: true,
             width: 80,
+            zoneManager: null,
             labels: [],
+            scrollOffset: 0,
         );
         $this->assertSame([], $t->labels());
     }
@@ -350,5 +356,140 @@ final class TabsTest extends TestCase
         $km = TabsKeyMap::default();
         $help = $km->fullHelp();
         $this->assertNotEmpty($help);
+    }
+
+    // ── Zone / mouse support ─────────────────────────────────────────────────
+
+    public function testViewContainsZoneMarkersWhenManagerIsSet(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $t = $this->tabs()->withWidth(200)->withZoneManager($manager);
+        $view = $t->view();
+        // Zone markers are APC sequences: ESC _ "candyzone:S:prefix:id" ESC \
+        // Prefix is concatenated directly, so "test" + "tab-0" = "testtab-0".
+        $this->assertStringContainsString("\x1b_", $view);
+        $this->assertStringContainsString('candyzone:S:testtab-0', $view);
+        $this->assertStringContainsString('candyzone:S:testtab-1', $view);
+    }
+
+    public function testViewWithoutManagerHasNoZoneMarkers(): void
+    {
+        $t = $this->tabs();
+        $view = $t->view();
+        $this->assertStringNotContainsString('candyzone:', $view);
+    }
+
+    public function testMsgZoneInBoundsActivatesMatchingTab(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $t = $this->tabs()->withZoneManager($manager);
+        [$t, ] = $t->focus();
+
+        // Click on tab-1 (Profile).
+        $zone = new \SugarCraft\Zone\Zone('test-tab-1', 7, 1, 14, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        [$t, ] = $t->update($msg);
+
+        $this->assertSame(1, $t->active());
+    }
+
+    public function testMsgZoneInBoundsIgnoredWhenUnfocused(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        $t = $this->tabs()->withZoneManager($manager);
+        // Not focused.
+
+        $zone = new \SugarCraft\Zone\Zone('test-tab-1', 7, 1, 14, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        [$t, ] = $t->update($msg);
+
+        $this->assertSame(0, $t->active()); // unchanged
+    }
+
+    public function testMsgZoneInBoundsOutsideVisibleRangeIgnored(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newPrefix('test');
+        // Tab 2 is outside the default scroll window when width is small.
+        $t = $this->tabs()->withWidth(15)->withZoneManager($manager);
+        [$t, ] = $t->focus();
+
+        $zone = new \SugarCraft\Zone\Zone('test-tab-2', 30, 1, 38, 1);
+        $mouse = new \SugarCraft\Core\Msg\MouseMsg(35, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press);
+        $msg = new \SugarCraft\Zone\MsgZoneInBounds($zone, $mouse);
+        [$t, ] = $t->update($msg);
+
+        $this->assertSame(0, $t->active()); // unchanged — tab-2 not visible
+    }
+
+    public function testWithZoneManagerReturnsNewInstance(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newPrefix('x');
+        $t1 = $this->tabs();
+        $t2 = $t1->withZoneManager($manager);
+        $this->assertNotSame($t1, $t2);
+        $this->assertNull($t1->zoneManager);
+        $this->assertNotNull($t2->zoneManager);
+    }
+
+    // ── Scroll / overflow ────────────────────────────────────────────────────
+
+    public function testViewShowsRightEllipsisWhenTabsExceedWidth(): void
+    {
+        $t = $this->tabs()->withWidth(20); // " Home  │  Profile  │  Settings " won't fit
+        $view = $t->view();
+        $this->assertStringContainsString('…', $view);
+    }
+
+    public function testViewShowsLeftEllipsisWhenScrolledRight(): void
+    {
+        $t = $this->tabs()->withWidth(15)->withScrollOffset(1);
+        $view = $t->view();
+        $this->assertStringContainsString('…', $view);
+    }
+
+    public function testViewNoEllipsisWhenAllTabsFit(): void
+    {
+        $t = $this->tabs()->withWidth(80);
+        $view = $t->view();
+        $this->assertStringNotContainsString('…', $view);
+    }
+
+    public function testWithScrollOffsetReturnsNewInstance(): void
+    {
+        $t1 = $this->tabs();
+        $t2 = $t1->withScrollOffset(1);
+        $this->assertNotSame($t1, $t2);
+        $this->assertSame(0, $t1->scrollOffset);
+        $this->assertSame(1, $t2->scrollOffset);
+    }
+
+    public function testAdjustScrollBringsActiveTabIntoView(): void
+    {
+        $t = $this->tabs()
+            ->withWidth(15)
+            ->withScrollOffset(0)
+            ->withActive(2);
+        // Tab 2 is beyond visible range for width=15; activating it should auto-scroll.
+        $this->assertGreaterThanOrEqual(2, $t->scrollOffset);
+    }
+
+    public function testTabNavigationAdjustsScrollToKeepActiveVisible(): void
+    {
+        $t = $this->tabs(['A', 'B', 'C', 'D', 'E'])
+            ->withWidth(10)
+            ->withScrollOffset(0)
+            ->focus()[0];
+
+        // With width=10 and labels ['A','B','C','D','E'], each ' A ' = 3 cells.
+        // At scrollOffset=0: only tab A fits (cursor=3), tab B needs 9 total (fits),
+        // tab C needs 15 (> 10), so scrollEnd=1. Tab 3 is outside [0,1].
+        $this->assertSame(1, $t->scrollEnd, 'Sanity: scrollEnd=1 at offset=0, width=10');
+
+        // Activate tab 3, which is outside the visible window.
+        $t = $t->withActive(3);
+        // scrollOffset should auto-adjust to bring tab 3 into view.
+        $this->assertGreaterThanOrEqual(3, $t->scrollOffset);
     }
 }
