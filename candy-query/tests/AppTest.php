@@ -133,4 +133,134 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Backspace, ''));
         $this->assertSame('ab', $a->queryBuf);
     }
+
+    public function testUpArrowNavigatesHistory(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type and run first query
+        foreach (str_split('SELECT 1') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertSame(['SELECT 1'], $a->queryHistory);
+        $this->assertSame(-1, $a->historyIndex);
+        // Type and run second query
+        foreach (str_split('SELECT 2') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertSame(['SELECT 2', 'SELECT 1'], $a->queryHistory);
+        // Press Up arrow - should navigate to older query (SELECT 1 at index 1)
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame('SELECT 1', $a->queryBuf);
+        $this->assertSame(1, $a->historyIndex);
+    }
+
+    public function testDownArrowNavigatesHistory(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type and run a query
+        foreach (str_split('SELECT 1') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $originalBuf = $a->queryBuf;
+        // Press Up to go into history
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame('SELECT 1', $a->queryBuf);
+        // Press Down to go back to current buffer
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame($originalBuf, $a->queryBuf);
+        $this->assertSame(-1, $a->historyIndex);
+    }
+
+    public function testCtrlFFavoritesQuery(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type a query
+        foreach (str_split('SELECT 42') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        // Ctrl+F to favorite
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true));
+        $this->assertContains('SELECT 42', $a->queryFavorites);
+    }
+
+    public function testCtrlShiftFUnfavoritesQuery(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type a query
+        foreach (str_split('SELECT 42') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        // Ctrl+F to favorite
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true));
+        $this->assertContains('SELECT 42', $a->queryFavorites);
+        // Ctrl+Shift+F to unfavorite
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f', ctrl: true, shift: true));
+        $this->assertNotContains('SELECT 42', $a->queryFavorites);
+    }
+
+    public function testHistoryNotDuplicatedOnMultipleRuns(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type and run same query twice
+        foreach (str_split('SELECT 1') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        // Modify and run again (add nothing - just run same)
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        // Should only have one entry
+        $this->assertCount(1, $a->queryHistory);
+        $this->assertSame('SELECT 1', $a->queryHistory[0]);
+    }
+
+    public function testHistoryIndexResetOnNewQuery(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        // Type and run first query
+        foreach (str_split('SELECT 1') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        // Navigate up into history
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(0, $a->historyIndex);
+        // Type and run a new query
+        foreach (str_split('SELECT 2') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        // History index should be reset to -1
+        $this->assertSame(-1, $a->historyIndex);
+    }
 }
