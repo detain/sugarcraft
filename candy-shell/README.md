@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-shell)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-shell)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-shell?label=packagist)](https://packagist.org/packages/sugarcraft/candy-shell)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -218,4 +218,9 @@ cd candy-shell && composer install && vendor/bin/phpunit
 ### write
 
 ![write](.vhs/write.gif)
+
+## Related
+
+- [SugarCraft monorepo](https://github.com/detain/sugarcraft)
+- Upstream: [charmbracelet/gum](https://github.com/charmbracelet/gum)
 
