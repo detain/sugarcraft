@@ -44,7 +44,7 @@ final class Renderer
             ->padding(0, 1)
             ->render($grid);
 
-        $status = self::status($b);
+        $status = self::status($b, $g->elapsed());
         $help   = "↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit";
         return $framed . "\n " . $status . "\n " .
                Style::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
@@ -80,7 +80,7 @@ final class Renderer
         return $style->render($glyph);
     }
 
-    private static function status(Board $b): string
+    private static function status(Board $b, ?int $elapsed): string
     {
         if ($b->exploded) {
             return Style::new()->foreground(Color::hex('#ff5f87'))->bold()
@@ -91,7 +91,15 @@ final class Renderer
                 ->render('★ cleared — press r to play again');
         }
         $remaining = max(0, $b->mineCount - $b->flagCount());
+        $time = $elapsed !== null ? self::formatTime($elapsed) : '0:00';
         return Style::new()->foreground(Color::hex('#a78bfa'))
-            ->render("mines: {$b->mineCount}  ·  flags: {$b->flagCount()}  ·  remaining: {$remaining}");
+            ->render("mines: {$b->mineCount}  ·  flags: {$b->flagCount()}  ·  remaining: {$remaining}  ·  time: {$time}");
+    }
+
+    private static function formatTime(int $seconds): string
+    {
+        $mins = intdiv($seconds, 60);
+        $secs = $seconds % 60;
+        return sprintf('%d:%02d', $mins, $secs);
     }
 }
