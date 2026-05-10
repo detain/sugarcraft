@@ -790,6 +790,52 @@ final class ProgramTest extends TestCase
         fclose($out);
     }
 
+    public function testEnableBracketedPasteWritesAnsiSequence(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->enableBracketedPaste());
+        $loop->addTimer(0.10, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString(Ansi::bracketedPasteOn(), $written);
+        // Since we enabled it, teardown will also write the disable sequence.
+        $this->assertStringContainsString(Ansi::bracketedPasteOff(), $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
+    public function testDisableBracketedPasteWritesAnsiSequence(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $model = new RecordingModel(quitAfter: PHP_INT_MAX);
+        $program = new Program($model, $this->makeOptions($in, $out, $loop));
+        $loop->addTimer(0.05, static fn() => $program->disableBracketedPaste());
+        $loop->addTimer(0.10, static fn() => $program->quit());
+        $loop->addTimer(2.0,  static fn() => $loop->stop());
+
+        $program->run();
+
+        rewind($out);
+        $written = (string) stream_get_contents($out);
+        $this->assertStringContainsString(Ansi::bracketedPasteOff(), $written);
+
+        fclose($writer);
+        fclose($in);
+        fclose($out);
+    }
+
     public function testReleaseAndRestoreTerminalAreReentrant(): void
     {
         [$in, $out, $writer] = $this->pipes();
