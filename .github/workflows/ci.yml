@@ -25,20 +25,21 @@ jobs:
   # overrides to skip libs that don't support certain PHP majors.
   #
     # Lib exclusions by PHP version:
-    #   PHP 8.1  — excluded: candy-vt, candy-vcr (^8.2), candy-wish (^8.3), sugar-crush (transitive ^8.3 dep),
-    #              candy-core, candy-sprinkles, sugar-bits (readonly class, PHP 8.2+)
     #   PHP 8.2  — excluded: candy-wish (^8.3)
     #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
+    # All pushes to the same branch share ONE concurrency group per matrix cell.
+    # When a new commit arrives, any in-progress jobs from the previous commit
+    # are cancelled immediately — no waiting for the old run to finish.
     concurrency:
-      group: ci-test-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      group: ci-test-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.2', '8.3', '8.4']
+        php: ['8.2', '8.3', '8.4']
         lib:
           - candy-core
           - candy-sprinkles
@@ -92,37 +93,18 @@ jobs:
             lib: candy-vcr
           - php: '8.4'
             lib: candy-vcr
-          # candy-wish — PHP ^8.3, not 8.1 or 8.2
+          # candy-wish — PHP ^8.3, not 8.2
           - php: '8.3'
             lib: candy-wish
           - php: '8.4'
             lib: candy-wish
-          # sugar-crush — transitive ^8.3 dep (bubbletea), excluded from 8.1/8.2
+          # sugar-crush — transitive ^8.3 dep (bubbletea), excluded from 8.2
           - php: '8.2'
             lib: sugar-crush
           - php: '8.3'
             lib: sugar-crush
           - php: '8.4'
             lib: sugar-crush
-          # candy-core / candy-sprinkles / sugar-bits — readonly class (PHP 8.2+), excluded from 8.1
-          - php: '8.2'
-            lib: candy-core
-          - php: '8.3'
-            lib: candy-core
-          - php: '8.4'
-            lib: candy-core
-          - php: '8.2'
-            lib: candy-sprinkles
-          - php: '8.3'
-            lib: candy-sprinkles
-          - php: '8.4'
-            lib: candy-sprinkles
-          - php: '8.2'
-            lib: sugar-bits
-          - php: '8.3'
-            lib: sugar-bits
-          - php: '8.4'
-            lib: sugar-bits
           # candy-metrics — composer.lock was stale; runs on all 8.3+ cells
           - php: '8.3'
             lib: candy-metrics
@@ -201,14 +183,16 @@ jobs:
   windows-test:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: windows-2025
-    # Cancel an in-progress run of the same cell when a fresh push lands.
+    # All pushes to the same branch share ONE concurrency group per matrix cell.
+    # When a new commit arrives, any in-progress jobs from the previous commit
+    # are cancelled immediately — no waiting for the old run to finish.
     concurrency:
-      group: ci-windows-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      group: ci-windows-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3']
+        php: ['8.2', '8.3', '8.4']
         lib:
           - candy-core
           - sugar-prompt
@@ -267,9 +251,13 @@ jobs:
   macos-test:
     name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: macos-latest
+    timeout-minutes: 30
+    # All pushes to the same branch share ONE concurrency group per matrix cell.
+    # When a new commit arrives, any in-progress jobs from the previous commit
+    # are cancelled immediately — no waiting for the old run to finish.
     concurrency:
-      group: ci-macos-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      group: ci-macos-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
@@ -446,12 +434,12 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
     concurrency:
-      group: ci-phpstan-${{ github.event_name }}-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
-      cancel-in-progress: ${{ github.event_name == 'push' }}
+      group: ci-phpstan-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.1', '8.2', '8.3', '8.4']
+        php: ['8.2', '8.3', '8.4']
         lib:
           - candy-core  # has phpstan.neon
     steps:
