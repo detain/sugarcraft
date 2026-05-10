@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\OHLC;
 
+use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Charts\Legend\Legend;
 
 /**
  * OHLC / candlestick chart drawn onto a {@see Canvas}. Each bar gets
@@ -27,10 +29,24 @@ use SugarCraft\Sprinkles\Style;
  * ];
  * echo OHLCChart::new($bars, 30, 10)->view();
  * ```
+ *
+ * Axis labels and legend are supported:
+ *
+ * ```php
+ * echo OHLCChart::new($bars, 30, 10)
+ *     ->withXLabel('Trading Day')
+ *     ->withYLabel('Price $')
+ *     ->withLegend(true)
+ *     ->withLegendPosition(Position::Right)
+ *     ->view();
+ * ```
  */
 final class OHLCChart
 {
-    /** @param list<Bar> $bars */
+    /**
+     * @param list<Bar>                            $bars
+     * @param list<array{label: string, color: string}> $legendItems
+     */
     private function __construct(
         public readonly array $bars,
         public readonly int $width,
@@ -42,6 +58,14 @@ final class OHLCChart
         public readonly string $wick,
         public readonly ?Color $bullishColor,
         public readonly ?Color $bearishColor,
+        public readonly bool $showLegend = false,
+        public readonly Position $legendPosition = Position::Right,
+        public readonly ?string $legendIndicatorChar = null,
+        public readonly ?string $title = null,
+        public readonly Position $titlePosition = Position::Top,
+        public readonly ?string $xLabel = null,
+        public readonly ?string $yLabel = null,
+        private readonly array $legendItems = [],
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('ohlc.dim_nonneg'));
@@ -84,8 +108,8 @@ final class OHLCChart
         return $this->copy(width: $w, height: $h);
     }
 
-    public function withMin(?float $m): self  { return $this->copy(min: $m, minSet: true); }
-    public function withMax(?float $m): self  { return $this->copy(max: $m, maxSet: true); }
+    public function withMin(?float $m): self  { return $this->copy(min: $m); }
+    public function withMax(?float $m): self  { return $this->copy(max: $m); }
     public function withBodyRunes(string $bull, string $bear): self
     {
         return $this->copy(bodyBullish: $bull, bodyBearish: $bear);
@@ -96,14 +120,98 @@ final class OHLCChart
     }
     public function withColors(?Color $bullish, ?Color $bearish): self
     {
-        return $this->copy(bullishColor: $bullish, bullishColorSet: true, bearishColor: $bearish, bearishColorSet: true);
+        return $this->copy(bullishColor: $bullish, bearishColor: $bearish);
     }
+
+    // ─── Legend & Label Configuration ──────────────────────────────────
+
+    /** Enable or disable the legend. */
+    public function withLegend(bool $show = true): self
+    {
+        return $this->copy(showLegend: $show);
+    }
+
+    /** Set the legend position. */
+    public function withLegendPosition(Position $position): self
+    {
+        return $this->copy(legendPosition: $position);
+    }
+
+    /** Customize legend indicator character. */
+    public function withLegendStyle(?string $indicatorChar = null): self
+    {
+        return $this->copy(legendIndicatorChar: $indicatorChar);
+    }
+
+    /** Set the chart title. */
+    public function withTitle(string $title, Position $position = Position::Top): self
+    {
+        return $this->copy(title: $title, titlePosition: $position);
+    }
+
+    /** Set the X-axis label (rendered at bottom). */
+    public function withXLabel(string $label): self
+    {
+        return $this->copy(xLabel: $label);
+    }
+
+    /** Set the Y-axis label (prepended to each line). */
+    public function withYLabel(string $label): self
+    {
+        return $this->copy(yLabel: $label);
+    }
+
+    /**
+     * Set legend items directly (label + color pairs).
+     *
+     * @param list<array{label: string, color: string}> $items
+     */
+    public function withLegendItems(array $items): self
+    {
+        return $this->copy(legendItems: $items);
+    }
+
+    // ─── Short-form Aliases ─────────────────────────────────────────────
+
+    /** @param list<Bar> $bars */
+    public function bars(array $bars): self                    { return $this->withBars($bars); }
+    public function size(int $w, int $h): self                 { return $this->withSize($w, $h); }
+    public function min(?float $m): self                       { return $this->withMin($m); }
+    public function max(?float $m): self                       { return $this->withMax($m); }
+    public function bodyRunes(string $bull, string $bear): self { return $this->withBodyRunes($bull, $bear); }
+    public function wickRune(string $rune): self               { return $this->withWickRune($rune); }
+    public function colors(?Color $bullish, ?Color $bearish): self { return $this->withColors($bullish, $bearish); }
+    public function legend(bool $on = true): self              { return $this->withLegend($on); }
+    public function legendPos(Position $pos): self             { return $this->withLegendPosition($pos); }
+    public function legendStyle(?string $char): self           { return $this->withLegendStyle($char); }
+    public function title(string $t, Position $p = Position::Top): self { return $this->withTitle($t, $p); }
+    public function xLabel(string $label): self                { return $this->withXLabel($label); }
+    public function yLabel(string $label): self                { return $this->withYLabel($label); }
+    /** @param list<array{label: string, color: string}> $items */
+    public function legendItems(array $items): self            { return $this->withLegendItems($items); }
+
+    // ─── Rendering ──────────────────────────────────────────────────────
 
     public function view(): string
     {
         if ($this->bars === [] || $this->width === 0 || $this->height === 0) {
             return (new Canvas($this->width, $this->height))->view();
         }
+
+        $chart = $this->renderChart();
+
+        if (!$this->showLegend && $this->title === null && $this->xLabel === null && $this->yLabel === null) {
+            return $chart;
+        }
+
+        return $this->buildChartWithExtras($chart);
+    }
+
+    /**
+     * Render the raw OHLC chart without legend, title, or labels.
+     */
+    private function renderChart(): string
+    {
         $bars = $this->bars;
         if (count($bars) > $this->width) {
             $bars = array_slice($bars, -$this->width);
@@ -151,31 +259,163 @@ final class OHLCChart
         return $canvas->view();
     }
 
+    /**
+     * Compose chart output with legend, title, and axis labels.
+     */
+    private function buildChartWithExtras(string $chart): string
+    {
+        $lines = $chart !== '' ? explode("\n", $chart) : [];
+
+        if ($this->showLegend && $this->legendItems !== []) {
+            $legend = $this->buildLegend();
+            $lines = $this->mergeLegend($lines, $legend);
+        }
+
+        if ($this->title !== null) {
+            $lines = $this->addTitle($lines);
+        }
+
+        if ($this->yLabel !== null) {
+            $lines = $this->addYLabel($lines);
+        }
+
+        if ($this->xLabel !== null) {
+            $lines[] = $this->xLabel;
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function buildLegend(): Legend
+    {
+        $legend = Legend::new($this->legendItems)
+            ->withPosition($this->legendPosition);
+
+        if ($this->legendIndicatorChar !== null) {
+            $legend = $legend->withIndicatorChar($this->legendIndicatorChar);
+        }
+
+        return $legend;
+    }
+
+    /**
+     * @param list<string> $chartLines
+     * @param list<string> $legendLines
+     * @return list<string>
+     */
+    private function mergeLegend(array $chartLines, Legend $legend): array
+    {
+        $legendLines = explode("\n", $legend->view());
+        $chartHeight = count($chartLines);
+        $legendHeight = count($legendLines);
+
+        return match ($this->legendPosition) {
+            Position::Top    => [...$legendLines, ...$chartLines],
+            Position::Bottom => [...$chartLines, ...$legendLines],
+            Position::Left   => $this->mergeLegendLeftRight($chartLines, $legendLines),
+            Position::Right  => $this->mergeLegendLeftRight($chartLines, $legendLines, true),
+        };
+    }
+
+    /**
+     * @param list<string> $chartLines
+     * @param list<string> $legendLines
+     * @return list<string>
+     */
+    private function mergeLegendLeftRight(array $chartLines, array $legendLines, bool $legendOnRight = false): array
+    {
+        $maxHeight = max(count($chartLines), count($legendLines));
+        $result = [];
+
+        for ($i = 0; $i < $maxHeight; $i++) {
+            $chartLine = $chartLines[$i] ?? '';
+            $legendLine = $legendLines[$i] ?? '';
+
+            if ($legendOnRight) {
+                $result[] = str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT) . ' ' . $legendLine;
+            } else {
+                $result[] = $legendLine . ' ' . str_pad($chartLine, $this->width, ' ', STR_PAD_RIGHT);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function addTitle(array $lines): array
+    {
+        $titleLen = mb_strlen($this->title, 'UTF-8');
+        $centered = str_pad($this->title, $this->width, ' ', STR_PAD_BOTH);
+
+        return match ($this->titlePosition) {
+            Position::Top    => [$centered, ...$lines],
+            Position::Bottom => [...$lines, $centered],
+            Position::Left, Position::Right => $lines,
+        };
+    }
+
+    /**
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function addYLabel(array $lines): array
+    {
+        return array_map(
+            fn(string $line) => $this->yLabel . ' ' . $line,
+            $lines,
+        );
+    }
+
     public function __toString(): string { return $this->view(); }
 
+    /**
+     * Internal copy-with-overrides helper.
+     *
+     * @param list<Bar>                            $bars
+     * @param list<array{label: string, color: string}> $legendItems
+     */
     private function copy(
         ?array $bars = null,
         ?int $width = null,
         ?int $height = null,
-        ?float $min = null, bool $minSet = false,
-        ?float $max = null, bool $maxSet = false,
+        ?float $min = null,
+        ?float $max = null,
         ?string $bodyBullish = null,
         ?string $bodyBearish = null,
         ?string $wick = null,
-        ?Color $bullishColor = null, bool $bullishColorSet = false,
-        ?Color $bearishColor = null, bool $bearishColorSet = false,
+        ?Color $bullishColor = null,
+        ?Color $bearishColor = null,
+        ?bool $showLegend = null,
+        ?Position $legendPosition = null,
+        ?string $legendIndicatorChar = null,
+        ?string $title = null,
+        ?Position $titlePosition = null,
+        ?string $xLabel = null,
+        ?string $yLabel = null,
+        ?array $legendItems = null,
     ): self {
         return new self(
-            bars:         $bars         ?? $this->bars,
-            width:        $width        ?? $this->width,
-            height:       $height       ?? $this->height,
-            min:          $minSet ? $min : $this->min,
-            max:          $maxSet ? $max : $this->max,
-            bodyBullish:  $bodyBullish  ?? $this->bodyBullish,
-            bodyBearish:  $bodyBearish  ?? $this->bodyBearish,
-            wick:         $wick         ?? $this->wick,
-            bullishColor: $bullishColorSet ? $bullishColor : $this->bullishColor,
-            bearishColor: $bearishColorSet ? $bearishColor : $this->bearishColor,
+            bars:               $bars               ?? $this->bars,
+            width:              $width              ?? $this->width,
+            height:             $height             ?? $this->height,
+            min:                $min                ?? $this->min,
+            max:                $max                ?? $this->max,
+            bodyBullish:        $bodyBullish        ?? $this->bodyBullish,
+            bodyBearish:        $bodyBearish        ?? $this->bodyBearish,
+            wick:               $wick               ?? $this->wick,
+            bullishColor:       $bullishColor       ?? $this->bullishColor,
+            bearishColor:       $bearishColor       ?? $this->bearishColor,
+            showLegend:         $showLegend         ?? $this->showLegend,
+            legendPosition:     $legendPosition     ?? $this->legendPosition,
+            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
+            title:              $title              ?? $this->title,
+            titlePosition:      $titlePosition      ?? $this->titlePosition,
+            xLabel:             $xLabel             ?? $this->xLabel,
+            yLabel:             $yLabel             ?? $this->yLabel,
+            legendItems:        $legendItems        ?? $this->legendItems,
         );
     }
 }
