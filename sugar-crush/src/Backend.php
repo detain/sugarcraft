@@ -14,13 +14,12 @@ namespace SugarCraft\Crush;
  * adapter is responsible for whatever HTTP / IPC / streaming the
  * backend requires.
  *
- * **Why no streaming on the interface?** The current chat shell
- * paints the assistant turn as a single Markdown block once it
- * lands. Streaming token-by-token would require either a
- * generator return type or a callback parameter, both of which
- * leak backend mechanics into the model layer. v0 keeps it
- * synchronous; a `StreamingBackend` extension is the obvious
- * follow-up.
+ * **Streaming:** Pass an optional `$onToken` callback. If provided
+ * and streaming is enabled on the chat, the backend SHOULD call
+ * it for each token as it arrives, then return the complete
+ * Message. If `$onToken` is null or the backend doesn't support
+ * streaming, it must still return a valid Message (synchronous
+ * fallback).
  *
  * @see Backend\EchoBackend  for the default offline / test impl
  */
@@ -30,6 +29,10 @@ interface Backend
      * @param list<Message> $history full conversation so far,
      *                                including the user turn we
      *                                want a reply to.
+     * @param callable|null $onToken optional callback receiving
+     *                                each token as it arrives when
+     *                                streaming is enabled. Signature:
+     *                                `function(string $token): void`
      */
-    public function complete(array $history): Message;
+    public function complete(array $history, callable $onToken = null): Message;
 }
