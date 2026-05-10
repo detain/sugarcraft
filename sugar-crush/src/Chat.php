@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -147,7 +148,12 @@ final class Chat implements Model
         $backend = $this->backend;
         $history = $next->history;
         $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = static fn(): Msg => new AssistantMsg($backend->complete($history, $onToken));
+        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
+            return $backend->completeAsync($history, $onToken)->then(
+                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
+                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+            );
+        });
 
         return [$next, $cmd];
     }
@@ -295,7 +301,12 @@ final class Chat implements Model
         $backend = $this->backend;
         $history = $next->history;
         $onToken = $this->streaming ? $this->onToken : null;
-        $cmd = static fn(): Msg => new AssistantMsg($backend->complete($history, $onToken));
+        $cmd = Cmd::promise(static function () use ($backend, $history, $onToken): PromiseInterface {
+            return $backend->completeAsync($history, $onToken)->then(
+                static fn(Message $msg): ?Msg => new AssistantMsg($msg),
+                static fn(\Throwable $e): ?Msg => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')),
+            );
+        });
         return [$next, $cmd];
     }
 

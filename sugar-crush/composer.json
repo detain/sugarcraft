@@ -33,6 +33,7 @@
     ],
     "require": {
         "php": ">=8.1",
+        "react/promise": "^2.10",
         "sugarcraft/candy-core": "@dev",
         "sugarcraft/candy-sprinkles": "@dev",
         "sugarcraft/candy-shine": "@dev"

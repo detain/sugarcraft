@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Backend;
 
+use React\EventLoop\Loop;
+use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
 
@@ -140,5 +142,19 @@ final class StreamingCommandBackend implements Backend
 
         $body = implode('', $tokens);
         return Message::assistant(trim($body));
+    }
+
+    public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+    {
+        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
+            Loop::futureTick(function () use ($history, $onToken, $resolve, $reject): void {
+                try {
+                    $message = $this->complete($history, $onToken);
+                    $resolve($message);
+                } catch (\Throwable $e) {
+                    $reject($e);
+                }
+            });
+        });
     }
 }

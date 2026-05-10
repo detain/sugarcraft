@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Backend;
 
+use React\Promise\PromiseInterface;
 use SugarCraft\Crush\Backend;
 use SugarCraft\Crush\Message;
 
@@ -79,5 +80,17 @@ final class CommandBackend implements Backend
             return Message::assistant("_[error: backend exited {$exit}]_{$hint}");
         }
         return Message::assistant(trim($stdout));
+    }
+
+    public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+    {
+        return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
+            try {
+                $message = $this->complete($history, $onToken);
+                $resolve($message);
+            } catch (\Throwable $e) {
+                $reject($e);
+            }
+        });
     }
 }
