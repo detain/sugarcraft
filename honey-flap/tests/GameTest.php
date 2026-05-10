@@ -90,4 +90,80 @@ final class GameTest extends TestCase
             $this->assertSame($pipe->gapY, $b->pipes[$i]->gapY);
         }
     }
+
+    public function testHighScoreReturnsZeroWhenNoScores(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            configDir: $tmp,
+        );
+        $this->assertSame(0, $g->highScore());
+        // Clean up.
+        @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
+
+    public function testSaveHighScoreOnlySavesWhenHigher(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            configDir: $tmp,
+        );
+        // Score of 5 should be saved.
+        $this->assertTrue($g->saveHighScore(5));
+        $this->assertSame(5, $g->highScore());
+        // Score of 3 should NOT be saved (lower than current high).
+        $this->assertFalse($g->saveHighScore(3));
+        $this->assertSame(5, $g->highScore());
+        // Score of 10 should be saved (new high).
+        $this->assertTrue($g->saveHighScore(10));
+        $this->assertSame(10, $g->highScore());
+        // Clean up.
+        unlink($tmp . '/.honey-flap/scores.json');
+        @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
+
+    public function testHighScoresReturnsSortedList(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            configDir: $tmp,
+        );
+        $g->saveHighScore(5);
+        $g->saveHighScore(15);
+        $g->saveHighScore(10);  // 10 is NOT a new high (15 > 10), so not saved
+        $scores = $g->highScores();
+        $this->assertSame([5, 15], $scores);
+        // Clean up.
+        unlink($tmp . '/.honey-flap/scores.json');
+        @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
+
+    public function testLoadHighScoresOnConstruction(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        file_put_contents($tmp . '/.honey-flap/scores.json', json_encode([3, 7, 5]));
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            configDir: $tmp,
+        );
+        $this->assertSame(7, $g->highScore());
+        $this->assertSame([3, 5, 7], $g->highScores());
+        // Clean up.
+        unlink($tmp . '/.honey-flap/scores.json');
+        @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
 }

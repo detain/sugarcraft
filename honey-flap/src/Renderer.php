@@ -39,13 +39,22 @@ final class Renderer
 
         $score = Style::new()->bold()->foreground(Color::hex('#fde68a'))
             ->render("score: {$g->score}");
+        $highScore = $g->highScore();
         if ($g->crashed) {
+            $highScoreLine = '';
+            if ($g->score >= $highScore && $highScore > 0) {
+                $highScoreLine = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))
+                    ->render(" 🏆 NEW HIGH SCORE: {$highScore}") . '   ';
+            } elseif ($highScore > 0) {
+                $highScoreLine = Style::new()->foreground(Color::hex('#7d6e98'))
+                    ->render(" best: {$highScore}") . '   ';
+            }
             $hint = Style::new()->foreground(Color::hex('#ff5f87'))->bold()
                 ->render('💥 splat — press r to flap again, q to quit');
-        } else {
-            $hint = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('space / ↑ / w  flap   ·   q  quit');
+            return $framed . "\n " . $score . $highScoreLine . "    " . $hint . "\n";
         }
+        $hint = Style::new()->foreground(Color::hex('#7d6e98'))
+            ->render('space / ↑ / w  flap   ·   q  quit');
 
         return $framed . "\n " . $score . "    " . $hint . "\n";
     }
