@@ -249,4 +249,422 @@ final class InspectorTest extends TestCase
         $seg = Inspector::parse("\x1b[6n")[0];
         $this->assertStringContainsString('request cursor position', $seg->describe());
     }
+
+    // --- describeCsi branches ---
+
+    public function testDecrpmReply(): void
+    {
+        // DECRPM (mode-state reply): CSI ?mode;state $y
+        $seg = Inspector::parse("\x1b[?1;1" . '$y')[0];
+        $this->assertStringContainsString('mode report (DECRPM)', $seg->describe());
+    }
+
+    public function testDecrqmQuery(): void
+    {
+        // DECRQM (mode-state query): CSI ?mode $p
+        $seg = Inspector::parse("\x1b[?1" . '$p')[0];
+        $this->assertStringContainsString('DEC private mode query (DECRQM)', $seg->describe());
+
+        $seg2 = Inspector::parse("\x1b[1" . '$p')[0];
+        $this->assertStringContainsString('mode query', $seg2->describe());
+    }
+
+    public function testXtversionRequest(): void
+    {
+        // XTVERSION request: CSI > 0 q
+        $seg = Inspector::parse("\x1b[>0q")[0];
+        $this->assertStringContainsString('request terminal version (XTVERSION)', $seg->describe());
+    }
+
+    public function testCursorShapes(): void
+    {
+        // Blinking underline
+        $seg = Inspector::parse("\x1b[3 q")[0];
+        $this->assertStringContainsString('blinking underline', $seg->describe());
+
+        // Steady underline
+        $seg = Inspector::parse("\x1b[4 q")[0];
+        $this->assertStringContainsString('steady underline', $seg->describe());
+
+        // Blinking bar
+        $seg = Inspector::parse("\x1b[5 q")[0];
+        $this->assertStringContainsString('blinking bar', $seg->describe());
+
+        // Steady bar
+        $seg = Inspector::parse("\x1b[6 q")[0];
+        $this->assertStringContainsString('steady bar', $seg->describe());
+
+        // Unknown shape
+        $seg = Inspector::parse("\x1b[99 q")[0];
+        $this->assertStringContainsString('shape 99', $seg->describe());
+    }
+
+    public function testKittyKeyboardFlags(): void
+    {
+        // Kitty keyboard reply with flags
+        $seg = Inspector::parse("\x1b[?123u")[0];
+        $this->assertStringContainsString('kitty keyboard reply, flags=123', $seg->describe());
+
+        // Push kitty keyboard flags
+        $seg = Inspector::parse("\x1b[>5u")[0];
+        $this->assertStringContainsString('push kitty keyboard flags 5', $seg->describe());
+
+        // Pop kitty keyboard layers
+        $seg = Inspector::parse("\x1b[<3u")[0];
+        $this->assertStringContainsString('pop kitty keyboard layers 3', $seg->describe());
+    }
+
+    public function testInsertChars(): void
+    {
+        $seg = Inspector::parse("\x1b[5@")[0];
+        $this->assertStringContainsString('insert chars 5', $seg->describe());
+    }
+
+    public function testTabBackward(): void
+    {
+        $seg = Inspector::parse("\x1b[3Z")[0];
+        $this->assertStringContainsString('tab backward 3', $seg->describe());
+    }
+
+    public function testClearTabStop(): void
+    {
+        // Clear single tab stop (not 3, which is "clear all")
+        $seg = Inspector::parse("\x1b[0g")[0];
+        $this->assertStringContainsString('clear tab stop', $seg->describe());
+    }
+
+    public function testScrollDown(): void
+    {
+        $seg = Inspector::parse("\x1b[2T")[0];
+        $this->assertStringContainsString('scroll down 2', $seg->describe());
+    }
+
+    public function testRepeatChar(): void
+    {
+        $seg = Inspector::parse("\x1b[5b")[0];
+        $this->assertStringContainsString('repeat preceding character 5', $seg->describe());
+    }
+
+    public function testCursorNextPrevLine(): void
+    {
+        $seg = Inspector::parse("\x1b[2E")[0];
+        $this->assertStringContainsString('cursor next line 2', $seg->describe());
+
+        $seg = Inspector::parse("\x1b[1F")[0];
+        $this->assertStringContainsString('cursor prev line 1', $seg->describe());
+    }
+
+    public function testSaveRestoreCursor(): void
+    {
+        $seg = Inspector::parse("\x1b[s")[0];
+        $this->assertStringContainsString('save cursor', $seg->describe());
+
+        $seg = Inspector::parse("\x1b[u")[0];
+        $this->assertStringContainsString('restore cursor', $seg->describe());
+    }
+
+    public function testDeleteLines(): void
+    {
+        $seg = Inspector::parse("\x1b[3M")[0];
+        $this->assertStringContainsString('delete lines 3', $seg->describe());
+    }
+
+    public function testInsertLines(): void
+    {
+        $seg = Inspector::parse("\x1b[2L")[0];
+        $this->assertStringContainsString('insert lines 2', $seg->describe());
+    }
+
+    public function testDeleteChars(): void
+    {
+        $seg = Inspector::parse("\x1b[3P")[0];
+        $this->assertStringContainsString('F1', $seg->describe());
+    }
+
+    public function testCursorColumn(): void
+    {
+        $seg = Inspector::parse("\x1b[5G")[0];
+        $this->assertStringContainsString('cursor column 5', $seg->describe());
+    }
+
+    public function testUnknownFinalByte(): void
+    {
+        // CSI with unhandled final byte falls to default
+        $seg = Inspector::parse("\x1b[1;2X")[0];
+        $this->assertStringContainsString('CSI', $seg->describe());
+    }
+
+    // --- describeTilde branches ---
+
+    public function testDescribeTildeHome(): void
+    {
+        $seg = Inspector::parse("\x1b[1~")[0];
+        $this->assertStringContainsString('Home', $seg->describe());
+    }
+
+    public function testDescribeTildeEnd(): void
+    {
+        $seg = Inspector::parse("\x1b[4~")[0];
+        $this->assertStringContainsString('End', $seg->describe());
+    }
+
+    public function testDescribeTildeDelete(): void
+    {
+        $seg = Inspector::parse("\x1b[3~")[0];
+        $this->assertStringContainsString('Delete', $seg->describe());
+    }
+
+    public function testDescribeTildePageUp(): void
+    {
+        $seg = Inspector::parse("\x1b[5~")[0];
+        $this->assertStringContainsString('PageUp', $seg->describe());
+    }
+
+    public function testDescribeTildePageDown(): void
+    {
+        $seg = Inspector::parse("\x1b[6~")[0];
+        $this->assertStringContainsString('PageDown', $seg->describe());
+    }
+
+    public function testDescribeTildeFunctionKeys(): void
+    {
+        $this->assertStringContainsString('F3',  Inspector::parse("\x1b[13~")[0]->describe());
+        $this->assertStringContainsString('F4',  Inspector::parse("\x1b[14~")[0]->describe());
+        $this->assertStringContainsString('F5',  Inspector::parse("\x1b[15~")[0]->describe());
+        $this->assertStringContainsString('F6',  Inspector::parse("\x1b[17~")[0]->describe());
+        $this->assertStringContainsString('F7',  Inspector::parse("\x1b[18~")[0]->describe());
+        $this->assertStringContainsString('F8',  Inspector::parse("\x1b[19~")[0]->describe());
+        $this->assertStringContainsString('F9',  Inspector::parse("\x1b[20~")[0]->describe());
+        $this->assertStringContainsString('F10', Inspector::parse("\x1b[21~")[0]->describe());
+        $this->assertStringContainsString('F11', Inspector::parse("\x1b[23~")[0]->describe());
+        $this->assertStringContainsString('F12', Inspector::parse("\x1b[24~")[0]->describe());
+    }
+
+    public function testDescribeTildeUnknown(): void
+    {
+        $seg = Inspector::parse("\x1b[99~")[0];
+        $this->assertStringContainsString('CSI 99~', $seg->describe());
+    }
+
+    // --- decPrivateName branches ---
+
+    public function testDecPrivateNames(): void
+    {
+        $this->assertStringContainsString('auto wrap', Inspector::parse("\x1b[?7h")[0]->describe());
+        $this->assertStringContainsString('cursor blink', Inspector::parse("\x1b[?12h")[0]->describe());
+        $this->assertStringContainsString('cursor visibility', Inspector::parse("\x1b[?25h")[0]->describe());
+        $this->assertStringContainsString('alternate screen (legacy)', Inspector::parse("\x1b[?47h")[0]->describe());
+        $this->assertStringContainsString('focus reporting', Inspector::parse("\x1b[?1004h")[0]->describe());
+        $this->assertStringContainsString('mouse SGR encoding', Inspector::parse("\x1b[?1006h")[0]->describe());
+        $this->assertStringContainsString('mouse urxvt encoding', Inspector::parse("\x1b[?1015h")[0]->describe());
+        $this->assertStringContainsString('save/restore cursor', Inspector::parse("\x1b[?1048h")[0]->describe());
+        $this->assertStringContainsString('bracketed paste', Inspector::parse("\x1b[?2004h")[0]->describe());
+    }
+
+    public function testDecPrivateUnknown(): void
+    {
+        $seg = Inspector::parse("\x1b[?9999h")[0];
+        $this->assertStringContainsString('DEC ?9999', $seg->describe());
+    }
+
+    // --- describeOsc branches ---
+
+    public function testOscIconName(): void
+    {
+        $seg = Inspector::parse("\x1b]1;myicon\x07")[0];
+        $this->assertStringContainsString('set icon name to "myicon"', $seg->describe());
+    }
+
+    public function testOscCwd(): void
+    {
+        $seg = Inspector::parse("\x1b]7;file:///home/user\x07")[0];
+        $this->assertStringContainsString('cwd file:///home/user', $seg->describe());
+    }
+
+    public function testOscClipboard(): void
+    {
+        $seg = Inspector::parse("\x1b]52;c;base64data\x07")[0];
+        $this->assertStringContainsString('clipboard c;base64data', $seg->describe());
+    }
+
+    public function testOscResetColour(): void
+    {
+        $seg = Inspector::parse("\x1b]111\x1b\\")[0];
+        $this->assertStringContainsString('reset background colour', $seg->describe());
+
+        $seg = Inspector::parse("\x1b]112\x1b\\")[0];
+        $this->assertStringContainsString('reset cursor colour', $seg->describe());
+    }
+
+    public function testOscUnknown(): void
+    {
+        $seg = Inspector::parse("\x1b]999;payload\x07")[0];
+        $this->assertStringContainsString('OSC 999;payload', $seg->describe());
+    }
+
+    // --- describeDcs branches ---
+
+    public function testDcsDecrpssReply(): void
+    {
+        $seg = Inspector::parse("\x1bP1" . '$r0' . '$p' . "\x1b\\")[0];
+        $this->assertStringContainsString('DECRPSS reply', $seg->describe());
+
+        $seg = Inspector::parse("\x1bP0" . '$r1' . '$r' . "\x1b\\")[0];
+        $this->assertStringContainsString('DECRPSS reply', $seg->describe());
+    }
+
+    public function testDcsSixel(): void
+    {
+        $seg = Inspector::parse("\x1bPq...sixeldata...\x1b\\")[0];
+        $this->assertStringContainsString('sixel image', $seg->describe());
+    }
+
+    public function testDcsUnknown(): void
+    {
+        $seg = Inspector::parse("\x1bPtestpayload\x1b\\")[0];
+        $this->assertStringContainsString('DCS testpayload', $seg->describe());
+    }
+
+    // --- describeSs3 branches ---
+
+    public function testSs3CursorKeys(): void
+    {
+        $seg = Inspector::parse("\x1bOA")[0];
+        $this->assertStringContainsString('cursor up', $seg->describe());
+
+        $seg = Inspector::parse("\x1bOB")[0];
+        $this->assertStringContainsString('cursor down', $seg->describe());
+
+        $seg = Inspector::parse("\x1bOC")[0];
+        $this->assertStringContainsString('cursor right', $seg->describe());
+
+        $seg = Inspector::parse("\x1bOD")[0];
+        $this->assertStringContainsString('cursor left', $seg->describe());
+
+        $seg = Inspector::parse("\x1bOH")[0];
+        $this->assertStringContainsString('Home', $seg->describe());
+
+        $seg = Inspector::parse("\x1bOF")[0];
+        $this->assertStringContainsString('End', $seg->describe());
+    }
+
+    public function testSs3Unknown(): void
+    {
+        $seg = Inspector::parse("\x1bOX")[0];
+        $this->assertStringContainsString('SS3 X', $seg->describe());
+    }
+
+    // --- describeEsc branches ---
+
+    public function testEscKeypadModes(): void
+    {
+        // Application keypad mode
+        $seg = Inspector::parse("\x1b=")[0];
+        $this->assertStringContainsString('application keypad mode', $seg->describe());
+
+        // Normal keypad mode
+        $seg = Inspector::parse("\x1b>")[0];
+        $this->assertStringContainsString('normal keypad mode', $seg->describe());
+    }
+
+    public function testEscIndex(): void
+    {
+        // Index (move cursor down)
+        $seg = Inspector::parse("\x1bD")[0];
+        $this->assertStringContainsString('index (move cursor down)', $seg->describe());
+    }
+
+    public function testEscReverseIndex(): void
+    {
+        // Reverse index (move cursor up)
+        $seg = Inspector::parse("\x1bM")[0];
+        $this->assertStringContainsString('reverse index (move cursor up)', $seg->describe());
+    }
+
+    public function testEscNextLine(): void
+    {
+        $seg = Inspector::parse("\x1bE")[0];
+        $this->assertStringContainsString('next line', $seg->describe());
+    }
+
+    public function testEscResetToInitialState(): void
+    {
+        $seg = Inspector::parse("\x1bc")[0];
+        $this->assertStringContainsString('reset to initial state', $seg->describe());
+    }
+
+    public function testEscUnknown(): void
+    {
+        $seg = Inspector::parse("\x1bZ")[0];
+        $this->assertStringContainsString('ESC Z', $seg->describe());
+    }
+
+    // --- describeSgr branches ---
+
+    public function testDescribeSgrForegroundBasic(): void
+    {
+        // Test all 8 basic foreground colors
+        foreach (['30', '31', '32', '33', '34', '35', '36', '37'] as $code) {
+            $seg = Inspector::parse("\x1b[{$code}m")[0];
+            $this->assertStringContainsString('foreground', $seg->describe());
+        }
+    }
+
+    public function testDescribeSgrBackgroundBasic(): void
+    {
+        // Test all 8 basic background colors
+        foreach (['40', '41', '42', '43', '44', '45', '46', '47'] as $code) {
+            $seg = Inspector::parse("\x1b[{$code}m")[0];
+            $this->assertStringContainsString('background', $seg->describe());
+        }
+    }
+
+    public function testDescribeSgrAttributes(): void
+    {
+        $testCases = [
+            ['2', 'faint'],
+            ['3', 'italic'],
+            ['4', 'underline'],
+            ['5', 'blink'],
+            ['7', 'reverse'],
+            ['8', 'conceal'],
+            ['9', 'strikethrough'],
+            ['22', 'no bold/faint'],
+            ['23', 'no italic'],
+            ['24', 'no underline'],
+            ['25', 'no blink'],
+            ['27', 'no reverse'],
+            ['28', 'no conceal'],
+            ['29', 'no strikethrough'],
+        ];
+        foreach ($testCases as [$code, $expected]) {
+            $seg = Inspector::parse("\x1b[{$code}m")[0];
+            $this->assertStringContainsString($expected, $seg->describe());
+        }
+    }
+
+    public function testDescribeSgrDefaults(): void
+    {
+        $seg = Inspector::parse("\x1b[39m")[0];
+        $this->assertStringContainsString('foreground default', $seg->describe());
+
+        $seg = Inspector::parse("\x1b[49m")[0];
+        $this->assertStringContainsString('background default', $seg->describe());
+    }
+
+    public function testDescribeSgr256Unknown(): void
+    {
+        // 38;5;n with unknown sub-mode
+        $seg = Inspector::parse("\x1b[38;5;255m")[0];
+        $this->assertStringContainsString('foreground 256-color 255', $seg->describe());
+    }
+
+    // --- ansiName edge case ---
+
+    public function testAnsiNameUnknownIndex(): void
+    {
+        // Trigger unknown ANSI color name (index out of range)
+        $seg = Inspector::parse("\x1b[90m")[0];  // foreground bright + 0 = black
+        $this->assertStringContainsString('foreground bright black', $seg->describe());
+    }
 }
