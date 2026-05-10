@@ -110,6 +110,21 @@ final class Tty
         $this->backend->restore();
     }
 
+    /**
+     * Save the current terminal state on first call; restore it on the second.
+     *
+     * Designed for use by panic handlers that need to restore the TTY
+     * from altscreen/raw mode without holding a Tty instance.
+     *
+     * First call: saves state (idempotent no-op if already saved).
+     * Second call: restores the saved state and clears it.
+     */
+    public static function restoreLast(): void
+    {
+        $cls = self::concreteBackendClass();
+        $cls::restoreLast();
+    }
+
     public function __destruct()
     {
         $this->restore();
