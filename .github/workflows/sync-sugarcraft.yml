@@ -52,10 +52,11 @@ jobs:
           set -euo pipefail
           libs=(
             candy-core candy-sprinkles honey-bounce candy-zone
+            candy-pty candy-vcr
             sugar-bits sugar-charts sugar-prompt candy-shell
             candy-shine candy-kit candy-freeze sugar-glow sugar-spark
-            candy-wish sugar-wishlist candy-metrics
-            candy-mold candy-tetris super-candy sugar-crush
+            sugar-wishlist candy-metrics
+            candy-mold candy-mosaic candy-tetris super-candy sugar-crush
             sugar-stash candy-query sugar-tick
             candy-mines candy-flip honey-flap
             candy-log candy-palette candy-lister sugar-boxer
