@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-bits)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-bits)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-bits?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-bits)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.2-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -206,4 +206,9 @@ cd sugar-bits && composer install && vendor/bin/phpunit
 ### Viewport
 
 ![viewport](.vhs/viewport.gif)
+
+## Related
+
+- [SugarCraft monorepo](https://github.com/detain/sugarcraft)
+- Upstream: [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles)
 
