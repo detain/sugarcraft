@@ -304,6 +304,8 @@ final class Style
     public function strikethrough(bool $on = true): self { return $this->with(strike: $on, propsAdded: ['strike']); }
     /** Toggle faint / dim (SGR 2). */
     public function faint(bool $on = true): self         { return $this->with(faint: $on, propsAdded: ['faint']); }
+    /** Alias for {@see faint()} (SGR 2). Mirrors lipgloss's `Dim`. */
+    public function dim(bool $on = true): self           { return $this->faint($on); }
     /** Toggle blink (SGR 5) — terminal-dependent; many emulators ignore it. */
     public function blink(bool $on = true): self         { return $this->with(blink: $on, propsAdded: ['blink']); }
     /** Toggle reverse video — swap fg / bg (SGR 7). */
@@ -622,6 +624,8 @@ final class Style
     public function unsetUnderline(): self     { return $this->withUnset('underline', underline: false); }
     public function unsetStrikethrough(): self { return $this->withUnset('strike', strike: false); }
     public function unsetFaint(): self         { return $this->withUnset('faint', faint: false); }
+    /** Alias for {@see unsetFaint()}. */
+    public function unsetDim(): self           { return $this->unsetFaint(); }
     public function unsetBlink(): self         { return $this->withUnset('blink', blink: false); }
     public function unsetReverse(): self       { return $this->withUnset('reverse', reverse: false); }
     public function unsetOverline(): self      { return $this->withUnset('overline', overline: false); }
