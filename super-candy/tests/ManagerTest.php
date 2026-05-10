@@ -149,4 +149,156 @@ final class ManagerTest extends TestCase
         $this->assertSame($m, $next);
         $this->assertNull($cmd);
     }
+
+    public function testSearchFindsMatchingFiles(): void
+    {
+        $m = $this->start();
+        $this->assertNull($m->searchQuery);
+        $this->assertSame([], $m->searchResults);
+
+        // Start search with empty query
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertNotNull($searching->searchQuery);
+        $this->assertNotSame([], $searching->searchResults);
+
+        // Type to filter - search for 'readme'
+        [$filtered] = $searching->update(new KeyMsg(KeyType::Char, 'r'));
+        $this->assertSame('r', $filtered->searchQuery);
+        $readmeResults = array_filter(
+            $filtered->searchResults,
+            fn(Entry $e) => str_contains($e->name, 'readme')
+        );
+        $this->assertNotEmpty($readmeResults);
+    }
+
+    public function testSearchIsCaseInsensitive(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Search for 'HOME' (uppercase)
+        [$upper] = $searching->update(new KeyMsg(KeyType::Char, 'H'));
+        [$upper] = $upper->update(new KeyMsg(KeyType::Char, 'O'));
+        [$upper] = $upper->update(new KeyMsg(KeyType::Char, 'M'));
+        [$upper] = $upper->update(new KeyMsg(KeyType::Char, 'E'));
+
+        // Should find 'home' regardless of case
+        $homeResults = array_filter(
+            $upper->searchResults,
+            fn(Entry $e) => strtolower($e->name) === 'home'
+        );
+        $this->assertNotEmpty($homeResults);
+    }
+
+    public function testSearchNavigateResults(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Initially at first result
+        $this->assertSame(0, $searching->searchCursor);
+
+        // Move down with j
+        [$down] = $searching->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(1, $down->searchCursor);
+
+        // Move down again
+        [$down] = $down->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertSame(2, $down->searchCursor);
+
+        // Move up with k
+        [$up] = $down->update(new KeyMsg(KeyType::Char, 'k'));
+        $this->assertSame(1, $up->searchCursor);
+
+        // Move up with arrow
+        [$up] = $up->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(0, $up->searchCursor);
+
+        // Move down with arrow
+        [$down] = $up->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(1, $down->searchCursor);
+    }
+
+    public function testSearchEnterOpensResult(): void
+    {
+        $tree = [
+            '/' => [
+                new Entry('home',   true,  0, 0),
+                new Entry('etc',    true,  0, 0),
+                new Entry('readme', false, 100, 0),
+            ],
+            '/home' => [
+                new Entry('documents', true, 0, 0),
+            ],
+        ];
+        $lister = static fn(string $path): array => $tree[$path] ?? [];
+
+        $m = Manager::start('/', '/home', $lister);
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Search for 'home'
+        [$filtered] = $searching->update(new KeyMsg(KeyType::Char, 'h'));
+        [$filtered] = $filtered->update(new KeyMsg(KeyType::Char, 'o'));
+        [$filtered] = $filtered->update(new KeyMsg(KeyType::Char, 'm'));
+        [$filtered] = $filtered->update(new KeyMsg(KeyType::Char, 'e'));
+
+        // Enter should open the directory
+        [$opened] = $filtered->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('/home', $opened->activePane()->cwd);
+        $this->assertNull($opened->searchQuery);
+    }
+
+    public function testSearchEscapeExits(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        $this->assertNotNull($searching->searchQuery);
+
+        [$exited] = $searching->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($exited->searchQuery);
+        $this->assertSame([], $exited->searchResults);
+        $this->assertSame(0, $exited->searchCursor);
+    }
+
+    public function testSearchBackspaceRemovesChars(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+        [$searching] = $searching->update(new KeyMsg(KeyType::Char, 'h'));
+        [$searching] = $searching->update(new KeyMsg(KeyType::Char, 'o'));
+        $this->assertSame('ho', $searching->searchQuery);
+
+        // Backspace removes last char
+        [$backspaced] = $searching->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertSame('h', $backspaced->searchQuery);
+
+        // Another backspace removes 'h', should exit search
+        [$exited] = $backspaced->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertNull($exited->searchQuery);
+    }
+
+    public function testSearchEmptyQueryExits(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Press backspace on empty query should exit
+        [$exited] = $searching->update(new KeyMsg(KeyType::Backspace, ''));
+        $this->assertNull($exited->searchQuery);
+    }
+
+    public function testSearchNoMatches(): void
+    {
+        $m = $this->start();
+        [$searching] = $m->update(new KeyMsg(KeyType::Char, '/'));
+
+        // Search for something that doesn't exist
+        [$filtered] = $searching->update(new KeyMsg(KeyType::Char, 'x'));
+        [$filtered] = $filtered->update(new KeyMsg(KeyType::Char, 'y'));
+        [$filtered] = $filtered->update(new KeyMsg(KeyType::Char, 'z'));
+
+        $this->assertSame('xyz', $filtered->searchQuery);
+        $this->assertSame([], $filtered->searchResults);
+        $this->assertSame(0, $filtered->searchCursor);
+    }
 }
