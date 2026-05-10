@@ -21,12 +21,20 @@ use SugarCraft\Core\Msg\KeyMsg;
  *
  * Tab cycles focus; j/k or arrows move the cursor in list panes;
  * `q` quits.
+ *
+ * Query history:
+ *   - Up/Down arrows in Query pane cycle through history
+ *   - Ctrl+F favorites the current query
+ *   - Ctrl+Shift+F unfavorites
  */
 final class App implements Model
 {
     /**
      * @param list<string> $tables
      * @param list<array<string,mixed>> $rows
+     * @param list<string> $queryHistory Recently executed queries (newest first)
+     * @param list<string> $queryFavorites Saved/favorited queries
+     * @param string|null $savedBuf Buffer saved when navigating into history (restored on historyDown from 0)
      */
     public function __construct(
         public readonly Database $db,
@@ -39,6 +47,10 @@ final class App implements Model
         public readonly Pane $pane = Pane::Tables,
         public readonly ?string $error = null,
         public readonly ?string $status = null,
+        public readonly array $queryHistory = [],
+        public readonly array $queryFavorites = [],
+        public readonly int $historyIndex = -1,  // -1 means current buffer, 0 = most recent
+        public readonly ?string $savedBuf = null,  // temp storage for current buffer when navigating history
     ) {}
 
     public static function start(Database $db): self
@@ -111,6 +123,8 @@ final class App implements Model
                 rowCursor: max(0, $this->rowCursor - 1),
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: $this->error, status: $this->status,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             );
         }
         if ($msg->type === KeyType::Down
@@ -121,6 +135,8 @@ final class App implements Model
                 rowCursor: min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: $this->error, status: $this->status,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             );
         }
         return $this;
@@ -128,6 +144,22 @@ final class App implements Model
 
     private function editQuery(KeyMsg $msg): self
     {
+        // Up arrow: navigate to older query in history
+        if ($msg->type === KeyType::Up) {
+            return $this->historyUp();
+        }
+        // Down arrow: navigate to newer query in history
+        if ($msg->type === KeyType::Down) {
+            return $this->historyDown();
+        }
+        // Ctrl+F: favorite the current query
+        if ($msg->ctrl && !$msg->shift && $msg->rune === 'f') {
+            return $this->favoriteQuery();
+        }
+        // Ctrl+Shift+F: unfavorite the current query
+        if ($msg->ctrl && $msg->shift && $msg->rune === 'f') {
+            return $this->unfavoriteQuery();
+        }
         if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
             || ($msg->type === KeyType::Enter && $msg->ctrl)) {
             return $this->runQuery();
@@ -149,16 +181,25 @@ final class App implements Model
 
     private function runQuery(): self
     {
-        if (trim($this->queryBuf) === '') {
+        $trimmed = trim($this->queryBuf);
+        if ($trimmed === '') {
             return $this;
         }
+        // Add to history (front = newest), reset historyIndex, clear buffer
+        $history = $this->queryHistory;
+        if (($history[0] ?? '') !== $trimmed) {
+            array_unshift($history, $trimmed);
+        }
+        $newHistoryIndex = -1;
         try {
             $rows = $this->db->query($this->queryBuf);
             return new self(
                 db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: '(query)', rows: $rows, rowCursor: 0,
-                queryBuf: $this->queryBuf, pane: $this->pane,
+                queryBuf: '', pane: $this->pane,
                 error: null, status: count($rows) . ' rows',
+                queryHistory: $history, queryFavorites: $this->queryFavorites,
+                historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -167,6 +208,8 @@ final class App implements Model
                 rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
                 pane: $this->pane,
                 error: $e->getMessage(), status: null,
+                queryHistory: $history, queryFavorites: $this->queryFavorites,
+                historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
             );
         }
     }
@@ -181,6 +224,8 @@ final class App implements Model
                 selectedTable: $name, rows: $rows, rowCursor: 0,
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: null, status: count($rows) . ' rows',
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -189,6 +234,8 @@ final class App implements Model
                 rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
                 pane: $this->pane,
                 error: $e->getMessage(), status: null,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             );
         }
     }
@@ -203,6 +250,8 @@ final class App implements Model
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $this->pane, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
         );
     }
 
@@ -213,6 +262,8 @@ final class App implements Model
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $p, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
         );
     }
 
@@ -223,6 +274,127 @@ final class App implements Model
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $buf,
             pane: $this->pane, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+        );
+    }
+
+    private function historyUp(): self
+    {
+        // If history is empty, no-op
+        if ($this->queryHistory === []) {
+            return $this;
+        }
+        $historySize = count($this->queryHistory);
+        // If historyIndex is -1 (at current buffer), save current buffer and go to older (index 1 if exists)
+        if ($this->historyIndex === -1) {
+            if ($historySize >= 2) {
+                return new self(
+                    db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                    selectedTable: $this->selectedTable, rows: $this->rows,
+                    rowCursor: $this->rowCursor,
+                    queryBuf: $this->queryHistory[1],
+                    pane: $this->pane, error: $this->error, status: $this->status,
+                    queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                    historyIndex: 1,
+                    savedBuf: $this->queryBuf,
+                );
+            }
+            // Only one item, go to index 0
+            return new self(
+                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                selectedTable: $this->selectedTable, rows: $this->rows,
+                rowCursor: $this->rowCursor,
+                queryBuf: $this->queryHistory[0],
+                pane: $this->pane, error: $this->error, status: $this->status,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: 0,
+                savedBuf: $this->queryBuf,
+            );
+        }
+        // If historyIndex > 0, decrement index (going toward older)
+        if ($this->historyIndex > 0) {
+            $newIndex = $this->historyIndex - 1;
+            return new self(
+                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                selectedTable: $this->selectedTable, rows: $this->rows,
+                rowCursor: $this->rowCursor,
+                queryBuf: $this->queryHistory[$newIndex],
+                pane: $this->pane, error: $this->error, status: $this->status,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $newIndex,
+                savedBuf: $this->savedBuf,
+            );
+        }
+        return $this;
+    }
+
+    private function historyDown(): self
+    {
+        // If historyIndex is -1 (at current buffer), no-op
+        if ($this->historyIndex === -1) {
+            return $this;
+        }
+        // If historyIndex > 0, decrement index (going toward newer/most recent)
+        if ($this->historyIndex > 0) {
+            $newIndex = $this->historyIndex - 1;
+            return new self(
+                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                selectedTable: $this->selectedTable, rows: $this->rows,
+                rowCursor: $this->rowCursor,
+                queryBuf: $this->queryHistory[$newIndex],
+                pane: $this->pane, error: $this->error, status: $this->status,
+                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+                historyIndex: $newIndex,
+                savedBuf: $this->savedBuf,
+            );
+        }
+        // If at index 0 (newest), go back to -1 and restore savedBuf
+        return new self(
+            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows,
+            rowCursor: $this->rowCursor,
+            queryBuf: $this->savedBuf ?? '',
+            pane: $this->pane, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: -1,
+            savedBuf: null,
+        );
+    }
+
+    private function favoriteQuery(): self
+    {
+        $trimmed = trim($this->queryBuf);
+        // If queryBuf is empty or already in favorites, return $this
+        if ($trimmed === '' || in_array($trimmed, $this->queryFavorites, true)) {
+            return $this;
+        }
+        $favorites = $this->queryFavorites;
+        array_unshift($favorites, $trimmed);
+        return new self(
+            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows,
+            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
+            pane: $this->pane, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $favorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+        );
+    }
+
+    private function unfavoriteQuery(): self
+    {
+        $trimmed = trim($this->queryBuf);
+        $favorites = array_values(array_filter(
+            $this->queryFavorites,
+            fn(string $f) => $f !== $trimmed
+        ));
+        return new self(
+            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows,
+            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
+            pane: $this->pane, error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $favorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
         );
     }
 
