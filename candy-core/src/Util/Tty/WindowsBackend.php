@@ -415,6 +415,54 @@ final class WindowsBackend implements Backend
         return $signals ?: false;
     }
 
+    // ─── Static last-resort restore ─────────────────────────────────────────
+
+    /** Saved input mode for restoreLast(). */
+    private static ?int $lastInputMode = null;
+
+    /** Saved output mode for restoreLast(). */
+    private static ?int $lastOutputMode = null;
+
+    /** Saved input codepage for restoreLast(). */
+    private static ?int $lastInputCp = null;
+
+    /** Saved output codepage for restoreLast(). */
+    private static ?int $lastOutputCp = null;
+
+    public static function restoreLast(): void
+    {
+        if (self::$lastInputMode !== null) {
+            // Second+ call: actually restore.
+            try {
+                $k = self::kernel32();
+                $k->setConsoleMode($k->stdIn(),  self::$lastInputMode);
+                $k->setConsoleMode($k->stdOut(), self::$lastOutputMode);
+                $k->setConsoleCP(self::$lastInputCp);
+                $k->setConsoleOutputCP(self::$lastOutputCp);
+            } catch (\Throwable) {
+                // Best-effort.
+            } finally {
+                self::$lastInputMode  = null;
+                self::$lastOutputMode = null;
+                self::$lastInputCp    = null;
+                self::$lastOutputCp   = null;
+            }
+            return;
+        }
+        // First call: save current state.
+        try {
+            $k = self::kernel32();
+            $stdin  = $k->stdIn();
+            $stdout = $k->stdOut();
+            self::$lastInputMode  = $k->getConsoleMode($stdin) ?? 0;
+            self::$lastOutputMode = $k->getConsoleMode($stdout) ?? 0;
+            self::$lastInputCp    = $k->getConsoleCP();
+            self::$lastOutputCp   = $k->getConsoleOutputCP();
+        } catch (\Throwable) {
+            // Best-effort.
+        }
+    }
+
     // ─── Interrupt flag cleanup ──────────────────────────────────────────────
 
     /**
