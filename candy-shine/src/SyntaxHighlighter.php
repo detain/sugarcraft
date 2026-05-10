@@ -82,7 +82,11 @@ final class SyntaxHighlighter
         'jsonc'      => 'json',
     ];
 
-    public static function highlight(string $code, string $language, Theme $theme): string
+    /**
+     * @param bool $lineNumbers When true, each line is prefixed with its 1-based
+     *                          line number styled using the theme's comment slot.
+     */
+    public static function highlight(string $code, string $language, Theme $theme, bool $lineNumbers = false): string
     {
         $lang = strtolower(trim($language));
         $lang = self::ALIASES[$lang] ?? $lang;
@@ -90,14 +94,29 @@ final class SyntaxHighlighter
         // JSON has no keywords (everything is data); just colour
         // strings + numbers + literals.
         if ($lang === 'json') {
-            return self::tokenise($code, $theme, keywords: ['true', 'false', 'null']);
+            $highlighted = self::tokenise($code, $theme, keywords: ['true', 'false', 'null']);
+        } elseif (!isset(self::KEYWORDS[$lang])) {
+            $highlighted = $theme->codeBlock?->render($code) ?? $code;
+        } else {
+            $highlighted = self::tokenise($code, $theme, keywords: self::KEYWORDS[$lang]);
         }
 
-        if (!isset(self::KEYWORDS[$lang])) {
-            return $theme->codeBlock?->render($code) ?? $code;
+        if (!$lineNumbers) {
+            return $highlighted;
         }
 
-        return self::tokenise($code, $theme, keywords: self::KEYWORDS[$lang]);
+        $commentStyle = $theme->comment;
+        $lines = explode("\n", $highlighted);
+        $paddedWidth = strlen((string) count($lines));
+
+        foreach ($lines as $index => &$line) {
+            $lineNum = $index + 1;
+            $padded  = str_pad((string) $lineNum, $paddedWidth, ' ', STR_PAD_LEFT);
+            $styled  = $commentStyle?->render($padded) ?? $padded;
+            $line    = $styled . "\t" . $line;
+        }
+
+        return implode("\n", $lines);
     }
 
     /**
