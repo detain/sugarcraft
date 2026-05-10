@@ -301,4 +301,100 @@ final class ManagerTest extends TestCase
         $this->assertSame([], $filtered->searchResults);
         $this->assertSame(0, $filtered->searchCursor);
     }
+
+    public function testDuplicateTabOpensNewTab(): void
+    {
+        $m = $this->start();
+        $this->assertCount(1, $m->tabs);
+        $this->assertSame(0, $m->tabIndex);
+        $m = $m->duplicateTab();
+        $this->assertCount(2, $m->tabs);
+        $this->assertSame(1, $m->tabIndex);
+        $this->assertTrue($m->showTabBar);
+    }
+
+    public function testCloseTabReducesCount(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $this->assertCount(2, $m->tabs);
+        $m = $m->closeTab();
+        $this->assertCount(1, $m->tabs);
+        $this->assertSame(0, $m->tabIndex);
+    }
+
+    public function testCloseLastTabShowsError(): void
+    {
+        $m = $this->start();
+        $m = $m->closeTab();
+        $this->assertSame('Cannot close last tab', $m->status);
+    }
+
+    public function testSwitchTabChangesIndex(): void
+    {
+        $m = $this->start()->duplicateTab()->duplicateTab();
+        // start: 1 tab, index 0; dup1: 2 tabs, index 1; dup2: 3 tabs, index 2
+        $this->assertCount(3, $m->tabs);
+        $this->assertSame(2, $m->tabIndex);
+        $m = $m->switchTab(0);
+        $this->assertSame(0, $m->tabIndex);
+    }
+
+    public function testTabsModeDetectedWhenMultipleTabs(): void
+    {
+        $m = $this->start();
+        $this->assertFalse($m->showTabBar);
+        $m = $m->duplicateTab();
+        $this->assertTrue($m->showTabBar);
+    }
+
+    public function testCtrlTabDuplicatesFirstTab(): void
+    {
+        $m = $this->start();
+        $this->assertCount(1, $m->tabs);
+        // Ctrl+Tab with existing tabs should switch to next tab
+        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: false);
+        [$next] = $m->update($msg);
+        // From tab 0, Ctrl+Tab wraps to tab 0 (only 1 tab)
+        $this->assertCount(1, $next->tabs);
+        $this->assertSame(0, $next->tabIndex);
+    }
+
+    public function testCtrlTabCyclesToNextTab(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $this->assertSame(1, $m->tabIndex);
+        // Ctrl+Tab should cycle to next (which wraps to 0)
+        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: false);
+        [$next] = $m->update($msg);
+        $this->assertSame(0, $next->tabIndex);
+    }
+
+    public function testCtrlShiftTabGoesToPreviousTab(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $this->assertSame(1, $m->tabIndex);
+        // Ctrl+Shift+Tab should go to previous (0)
+        $msg = new KeyMsg(KeyType::Char, "\t", ctrl: true, shift: true);
+        [$next] = $m->update($msg);
+        $this->assertSame(0, $next->tabIndex);
+    }
+
+    public function testTCreatesNewTab(): void
+    {
+        $m = $this->start();
+        $this->assertCount(1, $m->tabs);
+        [$next] = $m->update(new KeyMsg(KeyType::Char, 't'));
+        $this->assertCount(2, $next->tabs);
+        $this->assertSame(1, $next->tabIndex);
+    }
+
+    public function testCtrlWClosesTab(): void
+    {
+        $m = $this->start()->duplicateTab();
+        $this->assertCount(2, $m->tabs);
+        $msg = new KeyMsg(KeyType::Char, 'w', ctrl: true);
+        [$next] = $m->update($msg);
+        $this->assertCount(1, $next->tabs);
+        $this->assertSame(0, $next->tabIndex);
+    }
 }
