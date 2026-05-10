@@ -31,6 +31,9 @@ final class Game implements Model
         public readonly int $cursorX = 0,
         public readonly int $cursorY = 0,
         ?\Closure $rand = null,
+        public readonly ?int $startedAt = null,
+        public readonly ?int $elapsedSeconds = null,
+        public readonly ?Stats $stats = null,
     ) {
         $this->rand = $rand ?? static fn(int $max): int => random_int(0, $max);
     }
@@ -43,9 +46,33 @@ final class Game implements Model
         );
     }
 
+    public static function withDifficulty(Difficulty $d, ?\Closure $rand = null): self
+    {
+        return self::start($d->width(), $d->height(), $d->mines(), $rand);
+    }
+
+    public static function withCustom(int $width, int $height, int $mines, ?\Closure $rand = null): self
+    {
+        return self::start($width, $height, $mines, $rand);
+    }
+
+    public function difficulty(): ?Difficulty
+    {
+        return Difficulty::fromDimensions(
+            $this->board->width,
+            $this->board->height,
+            $this->board->mineCount,
+        );
+    }
+
     public function rand(): \Closure
     {
         return $this->rand;
+    }
+
+    public function stats(): Stats
+    {
+        return $this->stats ?? new Stats();
     }
 
     public function init(): ?\Closure
@@ -64,7 +91,7 @@ final class Game implements Model
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
-            return [self::start(
+            return [self::withCustom(
                 $this->board->width, $this->board->height, $this->board->mineCount, $this->rand,
             ), null];
         }
@@ -98,26 +125,76 @@ final class Game implements Model
     private function moveCursor(int $dx, int $dy): self
     {
         return new self(
-            $this->board,
-            max(0, min($this->board->width  - 1, $this->cursorX + $dx)),
-            max(0, min($this->board->height - 1, $this->cursorY + $dy)),
-            $this->rand,
+            board: $this->board,
+            cursorX: max(0, min($this->board->width  - 1, $this->cursorX + $dx)),
+            cursorY: max(0, min($this->board->height - 1, $this->cursorY + $dy)),
+            rand: $this->rand,
+            startedAt: $this->startedAt,
+            elapsedSeconds: $this->elapsedSeconds,
+            stats: $this->stats,
         );
     }
 
     private function reveal(): self
     {
+        $now = $this->startedAt ?? time();
         return new self(
-            $this->board->reveal($this->cursorX, $this->cursorY, $this->rand),
-            $this->cursorX, $this->cursorY, $this->rand,
+            board: $this->board->reveal($this->cursorX, $this->cursorY, $this->rand),
+            cursorX: $this->cursorX,
+            cursorY: $this->cursorY,
+            rand: $this->rand,
+            startedAt: $now,
+            elapsedSeconds: null,
+            stats: $this->stats,
         );
     }
 
     private function flag(): self
     {
         return new self(
-            $this->board->toggleFlag($this->cursorX, $this->cursorY),
-            $this->cursorX, $this->cursorY, $this->rand,
+            board: $this->board->toggleFlag($this->cursorX, $this->cursorY),
+            cursorX: $this->cursorX,
+            cursorY: $this->cursorY,
+            rand: $this->rand,
+            startedAt: $this->startedAt,
+            elapsedSeconds: $this->elapsedSeconds,
+            stats: $this->stats,
+        );
+    }
+
+    /**
+     * Returns the elapsed time in seconds if the game is in progress.
+     */
+    public function elapsed(): ?int
+    {
+        if ($this->startedAt === null) {
+            return null;
+        }
+        if ($this->board->exploded || $this->board->isWon()) {
+            return $this->elapsedSeconds;
+        }
+        return time() - $this->startedAt;
+    }
+
+    /**
+     * Record the result of this game and return a new Game with updated stats.
+     * The returned Game has the same board state but updated stats.
+     */
+    public function recordResult(?int $elapsed): self
+    {
+        $difficulty = $this->difficulty();
+        if ($difficulty === null) {
+            return $this;
+        }
+        $won = $this->board->isWon();
+        return new self(
+            board: $this->board,
+            cursorX: $this->cursorX,
+            cursorY: $this->cursorY,
+            rand: $this->rand,
+            startedAt: $this->startedAt,
+            elapsedSeconds: $this->elapsedSeconds,
+            stats: $this->stats()->withGame($difficulty, $won, $elapsed),
         );
     }
 }
