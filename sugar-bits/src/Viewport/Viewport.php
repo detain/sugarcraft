@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Bits\Viewport;
 
 use SugarCraft\Bits\Lang;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseWheelMsg;
-use SugarCraft\Core\MouseAction;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -37,6 +39,10 @@ final class Viewport implements Model
         public readonly bool $showScrollbar = false,
         public readonly string $scrollbarChar = '█',
         public readonly string $scrollbarTrack = '│',
+        public readonly bool $smoothScroll = false,
+        public readonly int $scrollTargetY = -1,
+        public readonly int $scrollTargetX = -1,
+        public readonly int $scrollAnimFrame = 0,
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -59,18 +65,32 @@ final class Viewport implements Model
      */
     public function update(Msg $msg): array
     {
+        // Continue smooth scroll animation if active.
+        if ($msg instanceof ViewportTickMsg && $this->scrollAnimFrame > 0) {
+            $updated = $this->advanceAnimation();
+            if ($updated->scrollAnimFrame > 0) {
+                return [$updated, $updated->tick()];
+            }
+            return [$updated, null];
+        }
+
         if ($msg instanceof MouseWheelMsg && $this->mouseWheelEnabled) {
-            // SGR mouse: action carries WheelUp/WheelDown semantics.
-            return match ($msg->action) {
-                MouseAction::WheelUp   => [$this->lineUp($this->mouseWheelDelta),   null],
-                MouseAction::WheelDown => [$this->lineDown($this->mouseWheelDelta), null],
-                default                => [$this, null],
+            // Mouse wheel bypasses smooth scroll - instant jump, no animation.
+            // Wheel direction is in the button field, not action.
+            return match ($msg->button) {
+                MouseButton::WheelUp   => [$this->lineUp($this->mouseWheelDelta),   null],
+                MouseButton::WheelDown => [$this->lineDown($this->mouseWheelDelta), null],
             };
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
-        return match (true) {
+
+        // Capture current offsets before navigation for smooth scroll comparison.
+        $oldY = $this->yOffset;
+        $oldX = $this->xOffset;
+
+        $result = match (true) {
             $msg->type === KeyType::Up
                 || ($msg->type === KeyType::Char && $msg->rune === 'k')
                 => [$this->lineUp(1), null],
@@ -102,6 +122,86 @@ final class Viewport implements Model
                 => [$this->gotoBottom(), null],
             default => [$this, null],
         };
+
+        /** @var Viewport $newVp */
+        $newVp = $result[0];
+
+        // Initiate smooth scroll animation if enabled and position changed programmatically.
+        if ($this->smoothScroll && ($newVp->yOffset !== $oldY || $newVp->xOffset !== $oldX)) {
+            // When already animating, the target already accounts for previous navigations.
+            // The new target should be the existing target plus the new delta.
+            if ($this->scrollAnimFrame > 0 && $this->scrollTargetY >= 0) {
+                $deltaY = $newVp->yOffset - $oldY;
+                $deltaX = $newVp->xOffset - $oldX;
+                $trueTargetY = $this->scrollTargetY + $deltaY;
+                $trueTargetX = $this->scrollTargetX >= 0 ? $this->scrollTargetX + $deltaX : $this->xOffset + $deltaX;
+
+                $animated = $newVp->copy(
+                    scrollTargetY: $trueTargetY,
+                    scrollTargetX: $trueTargetX,
+                    scrollAnimFrame: 10,
+                );
+                // Stay at current animation position while animating.
+                $animated = $animated->copy(yOffset: $this->yOffset, xOffset: $this->xOffset);
+                return [$animated, $animated->tick()];
+            }
+
+            // Normal case: no active animation, compute from scratch.
+            $animated = $newVp->copy(
+                scrollTargetY: $newVp->yOffset,
+                scrollTargetX: $newVp->xOffset,
+                scrollAnimFrame: 10,
+            );
+            $animated = $animated->copy(yOffset: $oldY, xOffset: $oldX);
+            return [$animated, $animated->tick()];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Schedule the next animation tick for smooth scroll.
+     * Uses 20ms interval (~50fps) for smooth animation.
+     */
+    private function tick(): \Closure
+    {
+        return Cmd::tick(0.02, static fn(): Msg => new ViewportTickMsg());
+    }
+
+    /**
+     * Advance the smooth scroll animation by one frame.
+     * Uses lerp to interpolate toward the target position.
+     */
+    private function advanceAnimation(): self
+    {
+        $frame = $this->scrollAnimFrame - 1;
+        $t = 0.15; // Lerp factor per frame - completes in ~10 frames for smooth ~200ms effect.
+
+        $newY = $this->yOffset;
+        $newX = $this->xOffset;
+
+        if ($this->scrollTargetY >= 0) {
+            $newY = (int) round($this->yOffset + ($this->scrollTargetY - $this->yOffset) * $t);
+            // Snap on final frame.
+            if ($frame <= 0) {
+                $newY = $this->scrollTargetY;
+            }
+        }
+
+        if ($this->scrollTargetX >= 0) {
+            $newX = (int) round($this->xOffset + ($this->scrollTargetX - $this->xOffset) * $t);
+            if ($frame <= 0) {
+                $newX = $this->scrollTargetX;
+            }
+        }
+
+        return $this->copy(
+            yOffset: $newY,
+            xOffset: $newX,
+            scrollAnimFrame: $frame,
+            scrollTargetY: $frame > 0 ? $this->scrollTargetY : -1,
+            scrollTargetX: $frame > 0 ? $this->scrollTargetX : -1,
+        );
     }
 
     /** Render the component as a multi-line ANSI string. */
@@ -210,6 +310,12 @@ final class Viewport implements Model
     public function withScrollbarRunes(string $thumb, string $track): self
     {
         return $this->copy(scrollbarChar: $thumb, scrollbarTrack: $track);
+    }
+
+    /** Enable smooth scrolling for programmatic position changes. Default off. */
+    public function withSmoothScroll(bool $enable = true): self
+    {
+        return $this->copy(smoothScroll: $enable);
     }
 
     // ---- navigation --------------------------------------------------
@@ -368,6 +474,10 @@ final class Viewport implements Model
         ?bool $showScrollbar = null,
         ?string $scrollbarChar = null,
         ?string $scrollbarTrack = null,
+        ?bool $smoothScroll = null,
+        ?int $scrollTargetY = null,
+        ?int $scrollTargetX = null,
+        ?int $scrollAnimFrame = null,
     ): self {
         return new self(
             width:              $width             ?? $this->width,
@@ -381,6 +491,10 @@ final class Viewport implements Model
             showScrollbar:      $showScrollbar     ?? $this->showScrollbar,
             scrollbarChar:      $scrollbarChar     ?? $this->scrollbarChar,
             scrollbarTrack:     $scrollbarTrack    ?? $this->scrollbarTrack,
+            smoothScroll:       $smoothScroll      ?? $this->smoothScroll,
+            scrollTargetY:      $scrollTargetY     ?? $this->scrollTargetY,
+            scrollTargetX:      $scrollTargetX     ?? $this->scrollTargetX,
+            scrollAnimFrame:    $scrollAnimFrame   ?? $this->scrollAnimFrame,
         );
     }
 }
