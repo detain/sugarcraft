@@ -46,4 +46,34 @@ abstract class Constraint
     {
         return new Fill($weight);
     }
+
+    /**
+     * Proportional size as a percentage (0-100) of the available area.
+     *
+     * Mirrors ratatui `Constraint::Percentage(n)`.
+     */
+    public static function percentage(int $n): Percentage
+    {
+        return new Percentage($n);
+    }
+
+    /**
+     * Proportional size based on a ratio (numerator / denominator).
+     *
+     * Mirrors ratatui `Constraint::Ratio(n, d)`.
+     */
+    public static function ratio(int $numerator, int $denominator): Ratio
+    {
+        return new Ratio($numerator, $denominator);
+    }
+
+    /**
+     * Upper-bound size cap; takes less if space is insufficient.
+     *
+     * Mirrors ratatui `Constraint::Max(n)`.
+     */
+    public static function max(int $n): Max
+    {
+        return new Max($n);
+    }
 }
