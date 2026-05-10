@@ -75,6 +75,17 @@ vendor/bin/phpunit
 
 The included `tests/CounterTest.php` shows how to test `update()` deterministically by constructing `Msg` objects directly. No event loop, no terminal, no mocking — just call methods and assert the returned tuple.
 
+## Panic Handler (Optional)
+
+SugarCraft supports an opt-in panic handler that catches uncaught exceptions and displays a styled backtrace when the app crashes. To enable it, uncomment the panic handler block in `bin/start`:
+
+```php
+// use SugarCraft\Log\Log;
+// Log::installPanicHandler();
+```
+
+This feature requires `sugarcraft/candy-log` as a dependency.
+
 ## License
 
 MIT.
