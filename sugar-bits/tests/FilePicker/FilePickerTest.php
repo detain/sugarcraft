@@ -178,4 +178,31 @@ final class FilePickerTest extends TestCase
             @rmdir($emptyDir);
         }
     }
+
+    public function testDirectoryFirstEnabledByDefault(): void
+    {
+        $p = FilePicker::new($this->root);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        // 'sub' is a directory, should appear before files even though 'a' < 's' alphabetically
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
+
+    public function testDirectoryFirstCanBeDisabled(): void
+    {
+        $p = FilePicker::new($this->root)->withDirectoryFirst(false);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        // With directory-first disabled, alphabetical ordering applies
+        $this->assertSame(['a.txt', 'b.md', 'sub'], $names);
+    }
+
+    public function testDirectoryFirstToggleRestoresOrder(): void
+    {
+        $p = FilePicker::new($this->root)->withDirectoryFirst(false);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        $this->assertSame(['a.txt', 'b.md', 'sub'], $names);
+
+        $p = $p->withDirectoryFirst(true);
+        $names = array_map(static fn(Entry $e) => $e->name, $p->entries);
+        $this->assertSame(['sub', 'a.txt', 'b.md'], $names);
+    }
 }
