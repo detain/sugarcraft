@@ -158,7 +158,7 @@ jobs:
             vendor-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
       - name: Run tests
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never
@@ -269,7 +269,7 @@ jobs:
             vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
       - name: List Modules
         run: php -m
@@ -383,7 +383,7 @@ jobs:
             vendor-cov-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
       - name: Run tests with coverage
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
@@ -470,7 +470,7 @@ jobs:
             vendor-stan-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
 
       - name: Run PHPStan
         run: php ${{ matrix.lib }}/vendor/bin/phpstan analyse --level=5 --no-progress -c ${{ matrix.lib }}/phpstan.neon
