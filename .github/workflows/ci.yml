@@ -25,7 +25,7 @@ jobs:
   # overrides to skip libs that don't support certain PHP majors.
   #
     # Lib exclusions by PHP version:
-    #   PHP 8.3  — excluded: candy-metrics candy-vcr vandy-vt candy-wish (^8.4)
+    #   PHP 8.3  — excluded: candy-metrics candy-vcr candy-vt candy-wish (^8.4)
     #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
@@ -213,7 +213,7 @@ jobs:
             vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: composer install --prefer-dist --no-progress -n
+        run: composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
