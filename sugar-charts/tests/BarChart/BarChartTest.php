@@ -6,6 +6,7 @@ namespace SugarCraft\Charts\Tests\BarChart;
 
 use SugarCraft\Charts\BarChart\Bar;
 use SugarCraft\Charts\BarChart\BarChart;
+use SugarCraft\Charts\Chart\Position;
 use PHPUnit\Framework\TestCase;
 
 final class BarChartTest extends TestCase
@@ -216,5 +217,179 @@ final class BarChartTest extends TestCase
             ->withBarWidth(2)
             ->withNoAutoBarWidth(false);
         $this->assertNull($chart->barWidth);
+    }
+
+    // ─── Axis Label Tests ────────────────────────────────────────────────
+
+    public function testWithXLabelAddsLabelAtBottom(): void
+    {
+        $out = BarChart::new([['a', 0.5], ['b', 1.0]], 10, 3)
+            ->withShowLabels(false)
+            ->withXLabel('Time')
+            ->view();
+        $this->assertStringEndsWith("\nTime", $out);
+    }
+
+    public function testWithYLabelPrependsToEachLine(): void
+    {
+        $out = BarChart::new([['a', 0.5], ['b', 1.0]], 10, 3)
+            ->withShowLabels(false)
+            ->withYLabel('Usage')
+            ->view();
+        $lines = explode("\n", $out);
+        foreach ($lines as $line) {
+            $this->assertStringStartsWith('Usage ', $line);
+        }
+    }
+
+    public function testXLabelAndYLabelCanBeCombined(): void
+    {
+        $out = BarChart::new([['a', 0.5]], 8, 3)
+            ->withShowLabels(false)
+            ->withXLabel('X axis')
+            ->withYLabel('Y axis')
+            ->view();
+        $this->assertStringContainsString('Y axis ', $out);
+        $this->assertStringEndsWith("\nX axis", $out);
+    }
+
+    // ─── Legend Tests ────────────────────────────────────────────────────
+
+    public function testWithLegendShowsLegendWhenEnabled(): void
+    {
+        $chart = BarChart::new([['a', 0.5], ['b', 1.0]], 10, 3)
+            ->withShowLabels(false)
+            ->withLegend(true)
+            ->withLegendItems([['label' => 'Series A', 'color' => 'red']]);
+        $this->assertTrue($chart->showLegend);
+    }
+
+    public function testWithLegendFalseDisablesLegend(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withLegend(true)
+            ->withLegend(false);
+        $this->assertFalse($chart->showLegend);
+    }
+
+    public function testWithLegendPositionChangesPosition(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withLegend(true)
+            ->withLegendPosition(Position::Bottom);
+        $this->assertSame(Position::Bottom, $chart->legendPosition);
+    }
+
+    public function testWithLegendStyleCustomizesIndicator(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withLegend(true)
+            ->withLegendStyle('◆');
+        $this->assertSame('◆', $chart->legendIndicatorChar);
+    }
+
+    public function testLegendShortFormAlias(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->legend(true)
+            ->legendPos(Position::Left)
+            ->legendStyle('●');
+        $this->assertTrue($chart->showLegend);
+        $this->assertSame(Position::Left, $chart->legendPosition);
+        $this->assertSame('●', $chart->legendIndicatorChar);
+    }
+
+    public function testXLabelShortFormAlias(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)->xLabel('Months');
+        $this->assertSame('Months', $chart->xLabel);
+    }
+
+    public function testYLabelShortFormAlias(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)->yLabel('Values');
+        $this->assertSame('Values', $chart->yLabel);
+    }
+
+    // ─── Title Tests ─────────────────────────────────────────────────────
+
+    public function testWithTitleSetsTitle(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withTitle('My Chart');
+        $this->assertSame('My Chart', $chart->title);
+    }
+
+    public function testWithTitleAndPosition(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withTitle('Bottom Title', Position::Bottom);
+        $this->assertSame('Bottom Title', $chart->title);
+        $this->assertSame(Position::Bottom, $chart->titlePosition);
+    }
+
+    public function testTitleShortFormAlias(): void
+    {
+        $chart = BarChart::new([['a', 0.5]], 10, 3)->title('Test Title', Position::Top);
+        $this->assertSame('Test Title', $chart->title);
+    }
+
+    // ─── Fluent Interface Tests ──────────────────────────────────────────
+
+    public function testFluentInterfaceChaining(): void
+    {
+        $chart = BarChart::new([['a', 0.5], ['b', 1.0]], 20, 6)
+            ->withXLabel('X Axis')
+            ->withYLabel('Y Axis')
+            ->withLegend(true)
+            ->withLegendPosition(Position::Right)
+            ->withLegendStyle('█')
+            ->withTitle('My Bar Chart')
+            ->withTitlePosition(Position::Top);
+
+        $this->assertSame('X Axis', $chart->xLabel);
+        $this->assertSame('Y Axis', $chart->yLabel);
+        $this->assertTrue($chart->showLegend);
+        $this->assertSame(Position::Right, $chart->legendPosition);
+        $this->assertSame('█', $chart->legendIndicatorChar);
+        $this->assertSame('My Bar Chart', $chart->title);
+        $this->assertSame(Position::Top, $chart->titlePosition);
+    }
+
+    public function testLegendItemsSetsItems(): void
+    {
+        $items = [
+            ['label' => 'Alpha', 'color' => 'red'],
+            ['label' => 'Beta', 'color' => 'blue'],
+        ];
+        $chart = BarChart::new([['a', 0.5]], 10, 3)
+            ->withLegend(true)
+            ->withLegendItems($items);
+
+        $out = $chart->view();
+        $this->assertStringContainsString('Alpha', $out);
+        $this->assertStringContainsString('Beta', $out);
+    }
+
+    // ─── Edge Cases ──────────────────────────────────────────────────────
+
+    public function testEmptyChartWithLabelsStillEmpty(): void
+    {
+        $out = BarChart::new([], 10, 5)
+            ->withXLabel('X')
+            ->withYLabel('Y')
+            ->withLegend(true)
+            ->view();
+        $this->assertSame('', $out);
+    }
+
+    public function testAllExtrasDisabledReturnsPlainChart(): void
+    {
+        $out = BarChart::new([['a', 0.5]], 10, 3)
+            ->withShowLabels(false)
+            ->view();
+        $this->assertStringNotContainsString('X Axis', $out);
+        $this->assertStringNotContainsString('Y Axis', $out);
+        $this->assertStringNotContainsString('Title', $out);
     }
 }
