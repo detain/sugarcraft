@@ -8,6 +8,10 @@
 <meta property="og:title" content="CandyQuery — SugarCraft">
 <meta property="og:description" content="Terminal SQLite browser. Port of lazysql.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-query.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-query.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-query.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-query.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -80,6 +84,16 @@ $db = Database::open('app.sqlite');
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Database</td><td>open(path)</td><td>Open SQLite database</td></tr>
+<tr><td>Database</td><td>tables()</td><td>List all tables</td></tr>
+<tr><td>Database</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
+<tr><td>Database</td><td>query(sql)</td><td>Execute SQL query</td></tr>
+<tr><td>App</td><td>start(database)</td><td>Create the app model</td></tr>
+</table>
   </div>
 </section>
 
@@ -102,7 +116,9 @@ $db = Database::open('app.sqlite');
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-query">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-query/issues">Issues</a>
         </div>
     </div>

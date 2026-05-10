@@ -8,6 +8,10 @@
 <meta property="og:title" content="CandyShine — SugarCraft">
 <meta property="og:description" content="Markdown → ANSI renderer. Port of glamour.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-shine.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-shine.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-shine.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-shine.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -96,6 +100,15 @@ echo (new Renderer($theme))-&gt;render($markdown);</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Renderer</td><td>new(?Theme)</td><td>Create renderer with optional theme</td></tr>
+<tr><td>Renderer</td><td>render(markdown)</td><td>Render markdown to ANSI string</td></tr>
+<tr><td>Theme</td><td>fromJson(path)</td><td>Load theme from JSON file</td></tr>
+<tr><td>Theme</td><td>ansi(), dark(), light(), dracula()</td><td>Built-in theme presets</td></tr>
+</table>
   </div>
 </section>
 

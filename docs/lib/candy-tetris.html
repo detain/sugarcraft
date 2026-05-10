@@ -8,6 +8,10 @@
 <meta property="og:title" content="CandyTetris — SugarCraft">
 <meta property="og:description" content="Tetris on the SugarCraft stack. Port of tetrigo.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-tetris.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-tetris.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-tetris.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-tetris.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -81,6 +85,21 @@
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Tetromino</td><td>new(type)</td><td>Create a tetromino piece</td></tr>
+<tr><td>Piece</td><td>rotate(direction)</td><td>Rotate piece</td></tr>
+<tr><td>Piece</td><td>move(dx, dy)</td><td>Move piece</td></tr>
+<tr><td>Board</td><td>new(width, height)</td><td>Create game board</td></tr>
+<tr><td>Board</td><td>lock(piece)</td><td>Lock piece into board</td></tr>
+<tr><td>Board</td><td>clearLines()</td><td>Clear completed lines</td></tr>
+<tr><td>Bag</td><td>next()</td><td>Get next piece from bag</td></tr>
+<tr><td>Score</td><td>add(lines, level)</td><td>Add score for lines cleared</td></tr>
+<tr><td>Game</td><td>tick()</td><td>Process game tick</td></tr>
+<tr><td>Game</td><td>state()</td><td>Get current game state</td></tr>
+</table>
   </div>
 </section>
 
@@ -103,7 +122,9 @@
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-tetris">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-tetris/issues">Issues</a>
         </div>
     </div>
