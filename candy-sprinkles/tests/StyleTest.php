@@ -840,4 +840,61 @@ final class StyleTest extends TestCase
         $this->assertSame('|', $b->topLeft);
         $this->assertSame('|', $b->middle);
     }
+
+    // ─── overline / invisible ─────────────────────────────────────────
+
+    public function testOverlineEmitsSgr53(): void
+    {
+        $this->assertSame("\x1b[53mhello\x1b[0m", Style::new()->overline()->render('hello'));
+    }
+
+    public function testInvisibleEmitsSgr8(): void
+    {
+        $this->assertSame("\x1b[8mhello\x1b[0m", Style::new()->invisible()->render('hello'));
+    }
+
+    public function testOverlineCombinesWithOtherAttributes(): void
+    {
+        $out = Style::new()->bold()->overline()->italic()->render('x');
+        // Bold (1) + Italic (3) + Overline (53) combined into one SGR
+        $this->assertStringContainsString("\x1b[1;3;53m", $out);
+    }
+
+    public function testUnsetOverlineClearsOverline(): void
+    {
+        $s = Style::new()->overline();
+        $cleared = $s->unsetOverline();
+        $this->assertFalse($cleared->isOverline());
+        $this->assertSame('hello', $cleared->render('hello'));
+    }
+
+    public function testUnsetInvisibleClearsInvisible(): void
+    {
+        $s = Style::new()->invisible();
+        $cleared = $s->unsetInvisible();
+        $this->assertFalse($cleared->isInvisible());
+        $this->assertSame('hello', $cleared->render('hello'));
+    }
+
+    public function testOverlineAndInvisibleGetters(): void
+    {
+        $s = Style::new()->overline()->invisible();
+        $this->assertTrue($s->isOverline());
+        $this->assertTrue($s->isInvisible());
+        $this->assertFalse(Style::new()->isOverline());
+        $this->assertFalse(Style::new()->isInvisible());
+    }
+
+    public function testOverlineAndInvisibleImmutability(): void
+    {
+        $a = Style::new();
+        $b = $a->overline();
+        $c = $b->invisible();
+        $this->assertFalse($a->isOverline());
+        $this->assertFalse($a->isInvisible());
+        $this->assertTrue($b->isOverline());
+        $this->assertFalse($b->isInvisible());
+        $this->assertTrue($c->isOverline());
+        $this->assertTrue($c->isInvisible());
+    }
 }
