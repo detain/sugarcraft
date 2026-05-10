@@ -19,8 +19,8 @@ use SugarCraft\Charts\Lang;
 abstract class Chart
 {
     protected function __construct(
-        public readonly int $width,
-        public readonly int $height,
+        protected int $width,
+        protected int $height,
         public readonly bool $showLegend,
         public readonly Position $legendPosition,
         public readonly ?string $legendIndicatorChar,
@@ -31,7 +31,7 @@ abstract class Chart
         public readonly bool $showDataLabels,
         public readonly ?\Closure $dataLabelFormatter,
         /** @var list<array{label: string, color: string}> */
-        public readonly array $legendItems = [],
+        protected array $legendItems = [],
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('chart.dim_nonneg'));

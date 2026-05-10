@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Tests\LineChart;
 
+use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\LineChart\LineChart;
 use PHPUnit\Framework\TestCase;
 
@@ -136,5 +137,160 @@ final class LineChartTest extends TestCase
         $out = $chart->view();
         $this->assertStringContainsString('t0', $out);
         $this->assertStringContainsString('t4', $out);
+    }
+
+    // ─── Legend Tests ──────────────────────────────────────────────────
+
+    public function testWithLegendEnablesLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true);
+        $out = $chart->view();
+        // Legend should contain the dataset label
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testWithLegendFalseDisablesLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Should Not Appear', [3, 2, 1])
+            ->withLegend(false);
+        $out = $chart->view();
+        // Legend should not appear when disabled
+        $this->assertStringNotContainsString('Should Not Appear', $out);
+    }
+
+    public function testWithDatasetAutoAddsLegendItems(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withDataset('Series B', [1, 2, 3])
+            ->withLegend(true);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('Series B', $out);
+    }
+
+    public function testWithLegendPositionBottom(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withLegendPosition(Position::Bottom);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testWithLegendPositionRight(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withLegendPosition(Position::Right);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testWithLegendPositionTop(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withLegendPosition(Position::Top);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testWithLegendPositionLeft(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withLegendPosition(Position::Left);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testLegendShortFormAlias(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->legend(true)
+            ->legendPos(Position::Bottom);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testMultipleDatasetsWithCyclingColors(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withDataset('Series B', [1, 2, 3])
+            ->withDataset('Series C', [2, 3, 1])
+            ->withLegend(true);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('Series B', $out);
+        $this->assertStringContainsString('Series C', $out);
+    }
+
+    public function testFullLegendExampleFromDocumentation(): void
+    {
+        $dataA = [1, 3, 2, 4, 3, 5];
+        $dataB = [5, 2, 4, 1, 3, 2];
+        $chart = LineChart::new()
+            ->withDataset('Series A', $dataA)
+            ->withDataset('Series B', $dataB)
+            ->withLegend(true)
+            ->withLegendPosition(Position::Right);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('Series B', $out);
+    }
+
+    public function testWithSizePreservesLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withSize(30, 8);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+    }
+
+    public function testWithAxesPreservesLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 8)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withAxes(true);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('└', $out);
+    }
+
+    public function testWithTitleAndLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withLegend(true)
+            ->withTitle('My Chart');
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('My Chart', $out);
+    }
+
+    public function testFluentChainingWithLegend(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 5)
+            ->withDataset('Series A', [3, 2, 1])
+            ->withDataset('Series B', [1, 2, 3])
+            ->legend(true)
+            ->legendPos(Position::Top)
+            ->axes(true);
+        $out = $chart->view();
+        $this->assertStringContainsString('Series A', $out);
+        $this->assertStringContainsString('Series B', $out);
     }
 }
