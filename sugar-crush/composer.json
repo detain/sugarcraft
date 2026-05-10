@@ -33,7 +33,7 @@
     ],
     "require": {
         "php": ">=8.2",
-        "react/promise": "^2.10",
+        "react/promise": "^3.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-shine": "dev-master"
@@ -55,6 +55,21 @@
         }
     },
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": { "symlink": true }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": { "symlink": true }
+        },
+        {
+            "type": "path",
+            "url": "../candy-shine",
+            "options": { "symlink": true }
+        },
         {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/candy-core"

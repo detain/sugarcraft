@@ -40,6 +40,21 @@
     },
     "repositories": [
         {
+            "type": "path",
+            "url": "../candy-core",
+            "options": { "symlink": true }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": { "symlink": true }
+        },
+        {
+            "type": "path",
+            "url": "../candy-shine",
+            "options": { "symlink": true }
+        },
+        {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/candy-core"
         },
