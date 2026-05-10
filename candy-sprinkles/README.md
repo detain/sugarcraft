@@ -67,6 +67,45 @@ echo Layout::joinVertical(Position::LEFT, $header, $body, $footer);
 echo Layout::place(40, 10, Position::CENTER, Position::CENTER, 'centered text');
 ```
 
+## Constraint-based layout
+
+The `Layout` sub-namespace provides a ratatui-inspired constraint solver
+that partitions a terminal region into rows or columns:
+
+```php
+use SugarCraft\Sprinkles\Layout\Constraint;
+use SugarCraft\Sprinkles\Layout\Layout;
+use SugarCraft\Sprinkles\Layout\Rect;
+
+// Split a 80×24 area into 3 horizontal rows
+$rows = Layout::vertical([
+    Constraint::length(3),   // header — fixed 3 rows
+    Constraint::min(15),     // body   — at least 15 rows, grows with slack
+    Constraint::length(1),   // footer — fixed 1 row
+])->split(Rect::fromSize(80, 24));
+
+// Further split the body row into 3 columns
+$cols = Layout::horizontal([
+    Constraint::length(20),     // sidebar — fixed 20 cols
+    Constraint::percentage(60), // main    — 60% of remaining
+    Constraint::fill(1),        // extra   — absorbs the rest
+])->split($rows[1]);
+```
+
+Available constraints mirror ratatui:
+
+| Constraint | Behaviour |
+|---|---|
+| `Constraint::length($n)` | Fixed character-cell count |
+| `Constraint::min($n)` | At least `$n` cells; takes more if space is available |
+| `Constraint::max($n)` | Upper-bound cap; reclaimed space redistributed to other constraints |
+| `Constraint::percentage($n)` | `$n`% of the total area (0–100) |
+| `Constraint::ratio($num, $denom)` | Proportional size as `$num/$denom` of the area |
+| `Constraint::fill($weight)` | Fills all remaining space; weight controls distribution |
+
+The solver handles all combinations of constraints in a single pass.
+See `examples/constraint-dashboard.php` for a full 3-pane dashboard demo.
+
 ## Tables
 
 ```php
@@ -123,6 +162,11 @@ echo Tree::new()
   package-level layout primitives from lipgloss).
 - **`Position`** — `TOP / LEFT / CENTER / RIGHT / BOTTOM` floats for layout
   anchors.
+- **`Layout`** (sub-namespace) — ratatui-inspired constraint solver:
+  `Layout::horizontal($constraints)->split($area)` and
+  `Layout::vertical($constraints)->split($area)` return `Rect[]`.
+  Constraints: `Constraint::length/min/max/percentage/ratio/fill`.
+  State: `Rect` (x, y, width, height) + `Direction` (Horizontal/Vertical).
 - **`Listing\ItemList`** + **`Listing\Enumerator`** — bullet, dash, asterisk,
   arabic, alphabet, roman, romanUpper, decimal, none. Nested sublists +
   per-item style hooks.
@@ -286,6 +330,10 @@ cd candy-sprinkles && composer install && vendor/bin/phpunit
 ### Layout dashboard
 
 ![dashboard](.vhs/dashboard.gif)
+
+### Constraint-based layout dashboard
+
+![constraint-dashboard](.vhs/constraint-dashboard.gif)
 
 ### List
 
