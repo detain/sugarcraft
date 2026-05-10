@@ -8,6 +8,10 @@
 <meta property="og:title" content="HoneyBounce — SugarCraft">
 <meta property="og:description" content="Damped spring physics + Newtonian projectile sim. Port of harmonica.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/honey-bounce.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/honey-bounce.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/honey-bounce.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/honey-bounce.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -91,6 +95,19 @@ for ($i = 0; $i &lt; 60; $i++) {
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Spring</td><td>new(deltaTime, angularFrequency, dampingRatio)</td><td>Create a spring physics instance</td></tr>
+<tr><td>Spring</td><td>update(pos, vel, target)</td><td>Step the spring simulation</td></tr>
+<tr><td>Spring</td><td>fps($fps)</td><td>Create deltaTime for given FPS</td></tr>
+<tr><td>Projectile</td><td>new(deltaTime, position, velocity, acceleration)</td><td>Create a projectile</td></tr>
+<tr><td>Projectile</td><td>update()</td><td>Step the projectile simulation</td></tr>
+<tr><td>Projectile</td><td>gravity()</td><td>Standard gravity acceleration</td></tr>
+<tr><td>Point</td><td>zero()</td><td>Create point at origin</td></tr>
+<tr><td>Vector</td><td>new(x, y)</td><td>Create a 2D vector</td></tr>
+</table>
   </div>
 </section>
 
@@ -118,7 +135,9 @@ for ($i = 0; $i &lt; 60; $i++) {
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/honey-bounce">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/honey-bounce/issues">Issues</a>
         </div>
     </div>

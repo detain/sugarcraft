@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarTable — SugarCraft">
 <meta property="og:description" content="Full-featured interactive data table. Port of Evertras/bubble-table.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-table.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-table.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-table.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/sugar-table.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -82,6 +86,19 @@ echo $table-&gt;render();</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Table</td><td>withColumns(columns)</td><td>Set table columns</td></tr>
+<tr><td>Table</td><td>withRows(rows)</td><td>Set table rows</td></tr>
+<tr><td>Table</td><td>withPagination(size)</td><td>Enable pagination</td></tr>
+<tr><td>Table</td><td>render()</td><td>Render the table</td></tr>
+<tr><td>Column</td><td>make(name, width)</td><td>Create a column</td></tr>
+<tr><td>Column</td><td>withAlignment(align)</td><td>Set column alignment</td></tr>
+<tr><td>Row</td><td>new(cells)</td><td>Create a row</td></tr>
+<tr><td>StyledCell</td><td>new(content)</td><td>Create styled cell</td></tr>
+</table>
   </div>
 </section>
 
@@ -110,7 +127,10 @@ echo $table-&gt;render();</code></pre>
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
-            <a href="https://www.interserver.net/">InterServer</a>
+            <a href="https://packagist.org/packages/sugarcraft/sugar-table">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-table/issues">Issues</a>
         </div>
     </div>
 </footer>

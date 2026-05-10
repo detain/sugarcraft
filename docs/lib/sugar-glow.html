@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarGlow — SugarCraft">
 <meta property="og:description" content="Markdown CLI viewer + pager. Port of glow.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-glow.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-glow.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-glow.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/sugar-glow.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -81,6 +85,15 @@ sugarglow --theme-config ./my-theme.json README.md</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Glow</td><td>render(markdown, ?Theme)</td><td>Render markdown to stdout</td></tr>
+<tr><td>Glow</td><td>pager(markdown, ?Theme)</td><td>Open markdown in fullscreen pager</td></tr>
+<tr><td>Glow</td><td>setTheme(name)</td><td>Set the color theme</td></tr>
+<tr><td>Glow</td><td>setWidth(columns)</td><td>Set word-wrap column width</td></tr>
+</table>
   </div>
 </section>
 

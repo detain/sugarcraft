@@ -8,6 +8,10 @@
 <meta property="og:title" content="CandySprinkles — SugarCraft">
 <meta property="og:description" content="Declarative styling + layout. Port of lipgloss.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-sprinkles.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-sprinkles.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-sprinkles.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-sprinkles.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -89,6 +93,22 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Style</td><td>new()</td><td>Create a new style</td></tr>
+<tr><td>Style</td><td>foreground(color)</td><td>Set foreground color</td></tr>
+<tr><td>Style</td><td>background(color)</td><td>Set background color</td></tr>
+<tr><td>Style</td><td>bold(), italic(), underline()</td><td>Text effects</td></tr>
+<tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
+<tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
+<tr><td>Border</td><td>rounded(), thick(), double(), hidden()</td><td>Border style presets</td></tr>
+<tr><td>Table</td><td>new()</td><td>Create a table</td></tr>
+<tr><td>Table</td><td>headers(...), row(...)</td><td>Add table content</td></tr>
+<tr><td>Layout</td><td>joinVertical(), joinHorizontal()</td><td>Join layouts</td></tr>
+<tr><td>Canvas</td><td>new()</td><td>Create multi-layer canvas</td></tr>
+</table>
   </div>
 </section>
 
@@ -141,7 +161,9 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-sprinkles">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-sprinkles/issues">Issues</a>
         </div>
     </div>
