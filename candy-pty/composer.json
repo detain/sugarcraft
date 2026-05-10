@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-pty",
-    "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+    "description": "PHP port of charmbracelet/x/xpty \u2014 pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -41,11 +41,8 @@
     },
     "repositories": [
         {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-core"
         }
     ],
     "autoload": {

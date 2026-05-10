@@ -1,12 +1,24 @@
 {
     "name": "sugarcraft/sugar-readline",
-    "description": "PHP port of erikgeiser/promptkit — interactive line-editing prompt library. Supports text input with validation/completion/hidden-password mode, selection prompts with filtering/pagination/cursor navigation, confirmation prompts, and textarea multi-line input.",
+    "description": "PHP port of erikgeiser/promptkit \u2014 interactive line-editing prompt library. Supports text input with validation/completion/hidden-password mode, selection prompts with filtering/pagination/cursor navigation, confirmation prompts, and textarea multi-line input.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["tui", "prompt", "readline", "input", "selection", "interactive", "sugarcraft"],
+    "keywords": [
+        "tui",
+        "prompt",
+        "readline",
+        "input",
+        "selection",
+        "interactive",
+        "sugarcraft"
+    ],
     "homepage": "https://github.com/sugarcraft/sugar-readline",
     "authors": [
-        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
     ],
     "support": {
         "issues": "https://github.com/sugarcraft/sugar-readline/issues",
@@ -19,44 +31,144 @@
         "phpunit/phpunit": "^10.5"
     },
     "repositories": [
-        { "type": "path", "url": "../candy-core",      "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-sprinkles", "options": { "symlink": true } },
-        { "type": "path", "url": "../honey-bounce",    "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-zone",      "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-bits",      "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-charts",    "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-prompt",    "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-shell",     "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-shine",     "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-kit",       "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-freeze",    "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-glow",      "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-spark",     "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-wish",      "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-wishlist",  "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-metrics",   "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-mold",      "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-tetris",    "options": { "symlink": true } },
-        { "type": "path", "url": "../super-candy",     "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-crush",     "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-log",       "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-palette",   "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-skate",     "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-post",      "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-lister",    "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-boxer",     "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-veil",      "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-crumbs",    "options": { "symlink": true } },
-        { "type": "path", "url": "../candy-hermit",    "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-stickers",  "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-toast",     "options": { "symlink": true } },
-        { "type": "path", "url": "../sugar-calendar",  "options": { "symlink": true } }
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-core"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-sprinkles"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/honey-bounce"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-zone"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-bits"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-charts"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-prompt"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-shell"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-shine"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-kit"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-freeze"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-glow"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-spark"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-wish"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-wishlist"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-metrics"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-mold"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-tetris"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/super-candy"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-crush"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-log"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-palette"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-skate"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-post"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-lister"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-boxer"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-veil"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-crumbs"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-hermit"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-stickers"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-toast"
+        },
+        {
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-calendar"
+        }
     ],
     "autoload": {
-        "psr-4": { "SugarCraft\\Readline\\": "src/" }
+        "psr-4": {
+            "SugarCraft\\Readline\\": "src/"
+        }
     },
     "autoload-dev": {
-        "psr-4": { "SugarCraft\\Readline\\Tests\\": "tests/" }
+        "psr-4": {
+            "SugarCraft\\Readline\\Tests\\": "tests/"
+        }
     },
     "minimum-stability": "dev",
     "prefer-stable": true

@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-shell",
-    "description": "PHP port of charmbracelet/gum — composer-installable CLI of SugarCraft TUI primitives. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
+    "description": "PHP port of charmbracelet/gum \u2014 composer-installable CLI of SugarCraft TUI primitives. 13 subcommands: choose, confirm, file, filter, format, input, join, log, pager, spin, style, table, write.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -47,137 +47,80 @@
     },
     "repositories": [
         {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-core"
         },
         {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-sprinkles"
         },
         {
-            "type": "path",
-            "url": "../honey-bounce",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/honey-bounce"
         },
         {
-            "type": "path",
-            "url": "../candy-zone",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-zone"
         },
         {
-            "type": "path",
-            "url": "../sugar-bits",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-bits"
         },
         {
-            "type": "path",
-            "url": "../sugar-charts",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-charts"
         },
         {
-            "type": "path",
-            "url": "../sugar-prompt",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-prompt"
         },
         {
-            "type": "path",
-            "url": "../candy-shine",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-shine"
         },
         {
-            "type": "path",
-            "url": "../candy-kit",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-kit"
         },
         {
-            "type": "path",
-            "url": "../candy-freeze",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-freeze"
         },
         {
-            "type": "path",
-            "url": "../sugar-glow",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-glow"
         },
         {
-            "type": "path",
-            "url": "../sugar-spark",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-spark"
         },
         {
-            "type": "path",
-            "url": "../candy-wish",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-wish"
         },
         {
-            "type": "path",
-            "url": "../sugar-wishlist",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-wishlist"
         },
         {
-            "type": "path",
-            "url": "../candy-metrics",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-metrics"
         },
         {
-            "type": "path",
-            "url": "../candy-mold",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-mold"
         },
         {
-            "type": "path",
-            "url": "../candy-tetris",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-tetris"
         },
         {
-            "type": "path",
-            "url": "../super-candy",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/super-candy"
         },
         {
-            "type": "path",
-            "url": "../sugar-crush",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/sugar-crush"
         }
     ],
     "autoload": {
