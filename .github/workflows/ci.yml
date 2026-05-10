@@ -25,7 +25,7 @@ jobs:
   # overrides to skip libs that don't support certain PHP majors.
   #
     # Lib exclusions by PHP version:
-    #   PHP 8.2  — excluded: candy-wish (^8.3)
+    #   PHP 8.2  — excluded: candy-metrics candy-vcr vandy-vt candy-wish (^8.3)
     #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
@@ -79,33 +79,21 @@ jobs:
           - sugar-table
           - sugar-toast
           - sugar-veil
+          - sugar-crush
         include:
-          # candy-vt / candy-vcr — PHP ^8.2, not 8.1
-          - php: '8.2'
-            lib: candy-vt
+          # candy-metrics / candy-wish / candy-vt / candy-vcr — PHP ^8.3, not 8.2
           - php: '8.3'
             lib: candy-vt
           - php: '8.4'
             lib: candy-vt
-          - php: '8.2'
-            lib: candy-vcr
           - php: '8.3'
             lib: candy-vcr
           - php: '8.4'
             lib: candy-vcr
-          # candy-wish — PHP ^8.3, not 8.2
           - php: '8.3'
             lib: candy-wish
           - php: '8.4'
             lib: candy-wish
-          # sugar-crush — transitive ^8.3 dep (bubbletea), excluded from 8.2
-          - php: '8.2'
-            lib: sugar-crush
-          - php: '8.3'
-            lib: sugar-crush
-          - php: '8.4'
-            lib: sugar-crush
-          # candy-metrics — composer.lock was stale; runs on all 8.3+ cells
           - php: '8.3'
             lib: candy-metrics
           - php: '8.4'
@@ -271,7 +259,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, intl, json, pcntl, ffi
+          extensions: mbstring, intl, json, pcntl, ffi, :xdebug
           tools: composer:v2
           coverage: none
           ini-values: ffi.enable=true
@@ -287,6 +275,10 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
+
+      - name: List Modules
+        working-directory: ${{ matrix.lib }}
+        run: php -m
 
       - name: Run tests
         working-directory: ${{ matrix.lib }}

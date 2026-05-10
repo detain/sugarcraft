@@ -27,7 +27,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-vcr.html"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {
