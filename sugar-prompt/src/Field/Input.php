@@ -66,6 +66,7 @@ final class Input implements Field
     public function password(bool $on = true, string $echoChar = '*'): self { return $this->withPassword($on, $echoChar); }
     public function suggest(array $candidates): self { return $this->withSuggestions($candidates); }
     public function validator(\Closure $fn): self { return $this->withValidator($fn); }
+    public function validation(callable $predicate, string $errorMessage): self { return $this->withValidation($predicate, $errorMessage); }
 
     /**
      * Mask the rendered value with a fixed echo character. Mirrors huh's
@@ -131,6 +132,18 @@ final class Input implements Field
             $this->error,
             $fn,
             $this->suggestionsFunc,
+        );
+    }
+
+    /**
+     * Attach a validation rule using a predicate + error message.
+     * The predicate receives the current value and returns true if valid,
+     * false if invalid. When invalid the $errorMessage is displayed.
+     */
+    public function withValidation(callable $predicate, string $errorMessage): self
+    {
+        return $this->withValidator(
+            static fn (string $value): ?string => $predicate($value) ? null : $errorMessage,
         );
     }
 

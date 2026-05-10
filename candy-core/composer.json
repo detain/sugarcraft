@@ -34,7 +34,12 @@
         "react/event-loop": "^1.6"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-phpunit": "^2.0"
+    },
+    "scripts": {
+        "analyse": "vendor/bin/phpstan analyse src --no-progress"
     },
     "autoload": {
         "psr-4": {

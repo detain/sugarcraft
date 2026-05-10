@@ -39,6 +39,7 @@ final class Form implements Model
         private readonly ?\Closure $initCmd = null,
         public readonly bool $showHelp = true,
         public readonly bool $showErrors = true,
+        public readonly bool $errorSummary = false,
         public readonly int $width = 0,
         public readonly int $height = 0,
         public readonly int $timeoutMs = 0,
@@ -141,6 +142,17 @@ final class Form implements Model
     }
 
     /**
+     * Show / hide an error summary at the end of the form after all
+     * fields are rendered. When enabled and validation errors exist,
+     * displays a list of field titles with their error messages.
+     * Default off. Mirrors huh's `WithErrorSummary`.
+     */
+    public function withErrorSummary(bool $on = true): self
+    {
+        return $this->mutate(errorSummary: $on);
+    }
+
+    /**
      * Pin the rendered width to `$cells` cells (clamped to 0). The
      * field views are wrapped at this budget when they support
      * width caps. Default 0 = no cap. Mirrors huh's `WithWidth`.
@@ -195,6 +207,7 @@ final class Form implements Model
     public function accessible(bool $on = true): self { return $this->withAccessible($on); }
     public function showHelp(bool $on = true): self   { return $this->withShowHelp($on); }
     public function showErrors(bool $on = true): self { return $this->withShowErrors($on); }
+    public function errorSummary(bool $on = true): self { return $this->withErrorSummary($on); }
     public function width(int $cells): self        { return $this->withWidth($cells); }
     public function height(int $rows): self        { return $this->withHeight($rows); }
     public function timeout(int $ms): self         { return $this->withTimeout($ms); }
@@ -343,6 +356,9 @@ final class Form implements Model
                 sprintf('Step %d of %d', $this->groupIndex + 1, count($this->groups))
             );
         }
+        if ($this->errorSummary && $this->hasErrors()) {
+            $blocks[] = $this->renderErrorSummary($theme);
+        }
         $body = implode("\n\n", $blocks);
         if ($this->submitted) {
             return $body . "\n\n[submitted]";
@@ -365,6 +381,36 @@ final class Form implements Model
         $err   = $field->getError();
         $line  = $title === '' ? $value : ($title . ': ' . $value);
         return $err !== null ? $line . "\n! " . $err : $line;
+    }
+
+    /**
+     * Render error summary as a formatted block using the theme's
+     * error styling for each entry.
+     */
+    private function renderErrorSummary(Theme $theme): string
+    {
+        $lines = [];
+        foreach ($this->errors() as $key => $error) {
+            $field = $this->findFieldByKey($key);
+            $title = $field !== null ? $field->getTitle() : $key;
+            $lines[] = $theme->error->render($title . ': ' . $error);
+        }
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Find a field by its key across all groups.
+     */
+    private function findFieldByKey(string $key): ?Field
+    {
+        foreach ($this->fieldsByGroup as $fields) {
+            foreach ($fields as $f) {
+                if ($f->key() === $key) {
+                    return $f;
+                }
+            }
+        }
+        return null;
     }
 
     /**
@@ -740,6 +786,7 @@ final class Form implements Model
         ?bool $accessible = null,
         ?bool $showHelp = null,
         ?bool $showErrors = null,
+        ?bool $errorSummary = null,
         ?int $width = null,
         ?int $height = null,
         ?int $timeoutMs = null,
@@ -757,6 +804,7 @@ final class Form implements Model
             initCmd:        null,
             showHelp:       $showHelp       ?? $this->showHelp,
             showErrors:     $showErrors     ?? $this->showErrors,
+            errorSummary:   $errorSummary   ?? $this->errorSummary,
             width:          $width          ?? $this->width,
             height:         $height         ?? $this->height,
             timeoutMs:      $timeoutMs      ?? $this->timeoutMs,
