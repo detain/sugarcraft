@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarVeil — SugarCraft">
 <meta property="og:description" content="Terminal overlay compositor. Port of rmhubbert/bubbletea-overlay.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-veil.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-veil.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-veil.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/sugar-veil.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -73,6 +77,15 @@ echo $veil-&gt;render($baseView);</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Veil</td><td>new()</td><td>Create a new veil</td></tr>
+<tr><td>Veil</td><td>push(view, position)</td><td>Push overlay onto stack</td></tr>
+<tr><td>Veil</td><td>pop()</td><td>Pop top overlay</td></tr>
+<tr><td>Veil</td><td>render(baseView)</td><td>Composite all overlays</td></tr>
+</table>
   </div>
 </section>
 
@@ -101,7 +114,10 @@ echo $veil-&gt;render($baseView);</code></pre>
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
-            <a href="https://www.interserver.net/">InterServer</a>
+            <a href="https://packagist.org/packages/sugarcraft/sugar-veil">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-veil/issues">Issues</a>
         </div>
     </div>
 </footer>

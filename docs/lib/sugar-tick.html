@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarTick — SugarCraft">
 <meta property="og:description" content="Privacy-first coding-time tracker. Port of TakaTime.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-tick.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-tick.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-tick.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/sugar-tick.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -78,6 +82,15 @@ SUGARTICK_DIR=/var/data/tick sugar-tick</code></pre>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">Key Classes</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Stats</td><td>compute(heartbeats)</td><td>Compute statistics from heartbeats</td></tr>
+<tr><td>Heartbeat</td><td>new(time, project, language, file, duration)</td><td>Create a heartbeat</td></tr>
+<tr><td>Dashboard</td><td>new(stats)</td><td>Create dashboard view</td></tr>
+<tr><td>App</td><td>start()</td><td>Create the app model</td></tr>
+</table>
   </div>
 </section>
 
@@ -100,7 +113,9 @@ SUGARTICK_DIR=/var/data/tick sugar-tick</code></pre>
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-tick">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/sugar-tick/issues">Issues</a>
         </div>
     </div>

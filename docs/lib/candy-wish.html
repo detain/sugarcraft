@@ -8,6 +8,10 @@
 <meta property="og:title" content="CandyWish — SugarCraft">
 <meta property="og:description" content="SSH server middleware framework. Port of wish.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-wish.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-wish.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-wish.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-wish.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -106,6 +110,20 @@ Server::new()
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Server</td><td>new()</td><td>Create a new SSH server</td></tr>
+<tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
+<tr><td>Server</td><td>serve()</td><td>Start the server</td></tr>
+<tr><td>Session</td><td>term, user, cols, rows</td><td>Session metadata</td></tr>
+<tr><td>Spawn</td><td>new(factory)</td><td>Terminal middleware for subprocess spawning</td></tr>
+<tr><td>BubbleTea</td><td>new(factory)</td><td>Terminal middleware for Program mount</td></tr>
+<tr><td>Auth</td><td>new(users)</td><td>Authentication middleware</td></tr>
+<tr><td>RateLimit</td><td>new(limit, window)</td><td>Rate limiting middleware</td></tr>
+<tr><td>Logger</td><td>new(path)</td><td>Request logging middleware</td></tr>
+</table>
   </div>
 </section>
 
@@ -134,7 +152,9 @@ Server::new()
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-wish">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-wish/issues">Issues</a>
         </div>
     </div>
