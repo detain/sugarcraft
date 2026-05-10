@@ -252,4 +252,88 @@ final class StickersTest extends TestCase
         $this->assertSame('Alice', $t->currentCell(0));
         $this->assertSame('NYC', $t->currentCell(1));
     }
+
+    public function testTableWithCursorStyle(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->addRow(['Bob'])
+            ->setCursor(0)
+            ->withCursorStyle('7');  // reverse video
+
+        $result = $t->render();
+        $this->assertIsString($result);
+        // ANSI escape sequence should be present when cursor style is applied
+        $this->assertStringContainsString("\x1b[7m", $result);
+        $this->assertStringContainsString('Alice', $result);
+    }
+
+    public function testTableWithHeaderStyle(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->withHeaderStyle('1');  // bold
+
+        $result = $t->render();
+        $this->assertIsString($result);
+        // ANSI escape sequence should be present for bold header
+        $this->assertStringContainsString("\x1b[1m", $result);
+        $this->assertStringContainsString('Name', $result);
+    }
+
+    public function testTableWithSeparator(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('A', 5))
+            ->addColumn(Column::make('B', 5))
+            ->addRow(['x', 'y'])
+            ->withSeparator(' || ');
+
+        $result = $t->render();
+        $this->assertIsString($result);
+        // Custom separator should appear in output between columns
+        $this->assertStringContainsString(' || ', $result);
+    }
+
+    public function testTableCurrentRowReturnsNullWhenOutOfBounds(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->setCursor(99);  // beyond row count
+
+        $this->assertNull($t->currentRow());
+    }
+
+    public function testTableCurrentCellReturnsNullWhenNoCurrentRow(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->setCursor(99);  // beyond row count
+
+        $this->assertNull($t->currentCell(0));
+    }
+
+    public function testTableRenderEmptyWithoutColumns(): void
+    {
+        $t = new Table();
+        $this->assertSame('', $t->render());
+    }
+
+    public function testTableImmutability(): void
+    {
+        $t1 = (new Table())
+            ->addColumn(Column::make('A', 5))
+            ->addColumn(Column::make('B', 5))
+            ->addRow(['x', 'y']);
+        $t2 = $t1->withSeparator(' | ');
+
+        // Original should be unchanged - uses default separator
+        $this->assertStringContainsString(' │ ', $t1->render());
+        // New instance should use custom separator
+        $this->assertStringContainsString(' | ', $t2->render());
+    }
 }
