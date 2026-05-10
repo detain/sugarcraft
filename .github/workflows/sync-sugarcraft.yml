@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   sync-libs:
-    name: Subtree-push 20 lib/app subdirs to sugarcraft/<lib>
+    name: Subtree-push 44 lib/app subdirs to sugarcraft/<lib>
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           libs=(
             candy-core candy-sprinkles honey-bounce candy-zone
-            candy-pty candy-vcr
+            candy-pty candy-vcr candy-vt candy-wish
             sugar-bits sugar-charts sugar-prompt candy-shell
             candy-shine candy-kit candy-freeze sugar-glow sugar-spark
             sugar-wishlist candy-metrics
