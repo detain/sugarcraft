@@ -464,4 +464,254 @@ final class TextInputTest extends TestCase
         $this->assertStringContainsString('amount', $view);
         $this->assertStringContainsString(' USD', $view);
     }
+
+    // ---- vim mode tests ----------------------------------------------------
+
+    public function testVimModeHKeyMovesLeft(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        // In normal mode, 'h' should move left
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'h'));
+        $this->assertSame(4, $t->cursorPos);
+    }
+
+    public function testVimModeLKeyMovesRight(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(0); // Go to start
+        // In normal mode, 'l' should move right
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'l'));
+        $this->assertSame(1, $t->cursorPos);
+    }
+
+    public function testVimModeZeroKeyGoesToStart(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(5); // Go to end
+        // In normal mode, '0' should go to start
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, '0'));
+        $this->assertSame(0, $t->cursorPos);
+    }
+
+    public function testVimModeDollarKeyGoesToEnd(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        // In normal mode, '$' should go to end
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, '$'));
+        $this->assertSame(5, $t->cursorPos);
+    }
+
+    public function testVimModeIKeyEntersInsertMode(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $this->assertTrue($t->vimNormalMode);
+        // 'i' enters insert mode
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertFalse($t->vimNormalMode);
+    }
+
+    public function testVimModeEscapeReturnsToNormalMode(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        // Enter insert mode first
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertFalse($t->vimNormalMode);
+        // Escape returns to normal mode
+        [$t, ] = $t->update(new KeyMsg(KeyType::Escape));
+        $this->assertTrue($t->vimNormalMode);
+    }
+
+    public function testVimModeAKeyAppendsAndEntersInsertMode(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(2); // cursor at 'l'
+        // 'a' moves cursor right and enters insert mode
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(3, $t->cursorPos); // Cursor moved right
+        $this->assertFalse($t->vimNormalMode); // Now in insert mode
+    }
+
+    public function testVimModeAKeyAtEndStaysAtEnd(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(5); // At end
+        // 'a' at end stays at end
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame(5, $t->cursorPos);
+        $this->assertFalse($t->vimNormalMode);
+    }
+
+    public function testVimModeIKeyInsertsAtPosition(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hllo');
+        $t = $t->setCursor(1); // cursor at 'l'
+        // 'i' enters insert mode at current position
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'i'));
+        // Type 'e' to insert
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame('hello', $t->value);
+        $this->assertSame(2, $t->cursorPos);
+    }
+
+    public function testVimModeIKeyAtStart(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(0); // At start
+        // 'I' inserts at start of line
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'I'));
+        $this->assertSame(0, $t->cursorPos);
+        $this->assertFalse($t->vimNormalMode);
+    }
+
+    public function testVimModeAKeyAppendsAfterCursor(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hell');
+        $t = $t->setCursor(4); // At end
+        // 'A' appends at end of line and enters insert mode
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'A'));
+        // Type 'o' to append
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'o'));
+        $this->assertSame('hello', $t->value);
+    }
+
+    public function testVimModeXKeyDeletesCharUnderCursor(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(1); // cursor at 'e'
+        // 'x' deletes character under cursor
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('hllo', $t->value);
+        $this->assertSame(1, $t->cursorPos);
+    }
+
+    public function testVimModeXKeyAtStart(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(0); // At start
+        // 'x' deletes character at cursor
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('ello', $t->value);
+        $this->assertSame(0, $t->cursorPos);
+    }
+
+    public function testVimModeXKeyAtEndOfSingleChar(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('a');
+        $t = $t->setCursor(0); // At start
+        // 'x' on first character
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('', $t->value);
+        $this->assertSame(0, $t->cursorPos);
+    }
+
+    public function testVimModeWKeyMovesWordForward(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello world');
+        $t = $t->setCursor(0);
+        // 'w' moves to start of next word
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame(6, $t->cursorPos); // at 'w'
+    }
+
+    public function testVimModeBKeyMovesWordBackward(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello world');
+        $t = $t->setCursor(7); // at 'w'
+        // 'b' moves to start of previous word
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame(6, $t->cursorPos); // at 'w' of 'world'
+    }
+
+    public function testVimModeWKeyAtEndNoOp(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(5); // At end
+        // 'w' at end of line
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame(5, $t->cursorPos);
+    }
+
+    public function testVimModeBKeyAtStartNoOp(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(0); // At start
+        // 'b' at start of line
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame(0, $t->cursorPos);
+    }
+
+    public function testVimModeDisabledDoesNotProcessVimKeys(): void
+    {
+        [$t, ] = TextInput::new()->focus(); // vim mode disabled by default
+        $t = $t->setValue('hello');
+        $t = $t->setCursor(2);
+        // 'h' should be inserted when vim mode is off (not move left)
+        // Insert at position 2 (between 'e' and 'l') gives 'hehllo'
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'h'));
+        $this->assertSame(3, $t->cursorPos); // cursor moved right after insert
+        $this->assertSame('hehllo', $t->value); // 'h' was inserted between 'e' and 'l'
+    }
+
+    public function testVimModeShortAlias(): void
+    {
+        $t = TextInput::new()->vimMode(true);
+        $this->assertTrue($t->vimMode);
+    }
+
+    public function testVimModeWithVimModeTrue(): void
+    {
+        $t = TextInput::new()->withVimMode(true);
+        $this->assertTrue($t->vimMode);
+        $this->assertTrue($t->vimNormalMode);
+    }
+
+    public function testVimModeWordBoundary(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello   world');
+        $t = $t->setCursor(0);
+        // Skip word (hello), skip non-word (spaces), land on 'world'
+        // h=0,e=1,l=2,l=3,o=4,space=5,space=6,space=7,w=8,...
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame(8, $t->cursorPos); // at 'w' of 'world'
+    }
+
+    public function testVimModeMultipleWPresses(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('one two three');
+        $t = $t->setCursor(0);
+        // 'w' multiple times
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame(4, $t->cursorPos); // at 't' of 'two'
+        [$t, ] = $t->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertSame(8, $t->cursorPos); // at 't' of 'three'
+    }
+
+    public function testVimModeNormalModeArrowKeysWork(): void
+    {
+        [$t, ] = TextInput::new()->withVimMode(true)->focus();
+        $t = $t->setValue('hello');
+        // In normal mode, arrow keys should still work
+        [$t, ] = $t->update(new KeyMsg(KeyType::Left));
+        $this->assertSame(4, $t->cursorPos);
+        [$t, ] = $t->update(new KeyMsg(KeyType::Right));
+        $this->assertSame(5, $t->cursorPos);
+    }
 }
