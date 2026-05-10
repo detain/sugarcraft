@@ -251,7 +251,7 @@ final class ScreenHandler implements Handler
      */
     public function enterAltScreen(): void
     {
-        if ($this->mode->altScreen) {
+        if ($this->mode->isAltScreen()) {
             return;
         }
         $this->savedBuffer = $this->buffer;
@@ -260,7 +260,7 @@ final class ScreenHandler implements Handler
         $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
         $this->cursor = new Cursor(visible: $this->cursor->visible);
         $this->sgr = Sgr::empty();
-        $this->mode = $this->mode->withAltScreen(true);
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_FULL);
     }
 
     /**
@@ -269,7 +269,7 @@ final class ScreenHandler implements Handler
      */
     public function leaveAltScreen(): void
     {
-        if (!$this->mode->altScreen || $this->savedBuffer === null) {
+        if ($this->mode->altScreenVariant !== Mode::ALT_FULL || $this->savedBuffer === null) {
             return;
         }
         $this->buffer = $this->savedBuffer;
@@ -278,6 +278,69 @@ final class ScreenHandler implements Handler
         $this->savedBuffer = null;
         $this->savedCursor = null;
         $this->savedSgr = null;
-        $this->mode = $this->mode->withAltScreen(false);
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
+    }
+
+    /**
+     * Enter the alt screen without saving cursor or SGR (DECSET 47, 1047).
+     * Only swaps the buffer — cursor visibility is preserved.
+     * Idempotent within the same variant.
+     */
+    public function enterAltScreenNoSave(): void
+    {
+        if ($this->mode->altScreenVariant === Mode::ALT_NO_SAVE) {
+            return;
+        }
+        $this->savedBuffer = $this->buffer;
+        // Do NOT save cursor or SGR
+        $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NO_SAVE);
+    }
+
+    /**
+     * Leave the alt screen (DECSET 47, 1047 reset). Restores the saved Buffer
+     * only. Cursor and SGR are NOT restored (they were not saved).
+     */
+    public function leaveAltScreenNoSave(): void
+    {
+        if ($this->mode->altScreenVariant !== Mode::ALT_NO_SAVE || $this->savedBuffer === null) {
+            return;
+        }
+        $this->buffer = $this->savedBuffer;
+        $this->savedBuffer = null;
+        // Do NOT restore cursor or SGR
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
+    }
+
+    /**
+     * Enter the alt screen with cursor save only (DECSET 1048).
+     * Saves cursor position but NOT buffer or SGR. The buffer is swapped
+     * to a fresh blank one and cursor is reset to origin. On exit, only
+     * the cursor is restored.
+     */
+    public function enterAltScreenCursorOnly(): void
+    {
+        if ($this->mode->altScreenVariant === Mode::ALT_CURSOR_ONLY) {
+            return;
+        }
+        $this->savedCursor = $this->cursor;
+        $this->buffer = new Buffer($this->buffer->cols, $this->buffer->rows);
+        $this->cursor = new Cursor(visible: $this->cursor->visible);
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_CURSOR_ONLY);
+    }
+
+    /**
+     * Leave the alt screen (DECSET 1048 reset). Restores cursor position only.
+     * Buffer and SGR are NOT restored (they were not saved).
+     */
+    public function leaveAltScreenCursorOnly(): void
+    {
+        if ($this->mode->altScreenVariant !== Mode::ALT_CURSOR_ONLY || $this->savedCursor === null) {
+            return;
+        }
+        $this->cursor = $this->savedCursor;
+        $this->savedCursor = null;
+        // Do NOT restore buffer or SGR
+        $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
     }
 }
