@@ -32,6 +32,10 @@ abstract class Chart
         public readonly ?\Closure $dataLabelFormatter,
         /** @var list<array{label: string, color: string}> */
         protected array $legendItems = [],
+        /** @var float Animation progress 0.0-1.0 (1.0 = fully rendered) */
+        private float $animationProgress = 1.0,
+        /** @var int Animation duration in milliseconds (0 = instant) */
+        private int $animationDuration = 0,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('chart.dim_nonneg'));
@@ -241,6 +245,35 @@ abstract class Chart
     public function dataLabels(bool $on = true): self { return $this->withDataLabels($on); }
     public function dataLabelFormat(\Closure $fn): self { return $this->withDataLabelFormatter($fn); }
 
+    // ─── Animation Support ──────────────────────────────────────────────
+
+    /**
+     * Set animation progress (0.0 = nothing rendered, 1.0 = fully rendered).
+     * Values outside [0,1] are clamped to the nearest valid bound.
+     */
+    public function withAnimationProgress(float $progress): self
+    {
+        return $this->copy(animationProgress: $progress);
+    }
+
+    /** Set animation duration in milliseconds (0 = instant, no animation). */
+    public function withAnimationDuration(int $durationMs): self
+    {
+        return $this->copy(animationDuration: $durationMs);
+    }
+
+    /** Returns current animation progress (0.0 to 1.0). */
+    public function getAnimationProgress(): float
+    {
+        return $this->animationProgress;
+    }
+
+    /** Returns animation duration in milliseconds. */
+    public function getAnimationDuration(): int
+    {
+        return $this->animationDuration;
+    }
+
     /**
      * Internal copy-with-overrides helper.
      *
@@ -260,6 +293,8 @@ abstract class Chart
         ?bool $showDataLabels = null,
         ?\Closure $dataLabelFormatter = null,
         ?array $legendItems = null,
+        ?float $animationProgress = null,
+        ?int $animationDuration = null,
     ): self {
         return new static(
             width:              $width              ?? $this->width,
@@ -274,6 +309,8 @@ abstract class Chart
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
             dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
             legendItems:        $legendItems        ?? $this->legendItems,
+            animationProgress:  $animationProgress  ?? $this->animationProgress,
+            animationDuration:  $animationDuration  ?? $this->animationDuration,
         );
     }
 }

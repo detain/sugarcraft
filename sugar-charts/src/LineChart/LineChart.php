@@ -60,6 +60,8 @@ final class LineChart extends Chart
         bool $showDataLabels = false,
         ?\Closure $dataLabelFormatter = null,
         array $legendItems = [],
+        float $animationProgress = 1.0,
+        int $animationDuration = 0,
     ) {
         parent::__construct(
             width: $width,
@@ -74,6 +76,8 @@ final class LineChart extends Chart
             showDataLabels: $showDataLabels,
             dataLabelFormatter: $dataLabelFormatter,
             legendItems: $legendItems,
+            animationProgress: $animationProgress,
+            animationDuration: $animationDuration,
         );
 
         if ($width < 0 || $height < 0) {
@@ -293,12 +297,35 @@ final class LineChart extends Chart
         return $this->lineChartCopy(title: $title, titlePosition: $position);
     }
 
+    // ─── Animation Support ──────────────────────────────────────────────
+
+    /**
+     * Set animation progress (0.0 = nothing rendered, 1.0 = fully rendered).
+     * Values outside [0,1] are clamped to the nearest valid bound.
+     */
+    public function withAnimationProgress(float $progress): self
+    {
+        return $this->lineChartCopy(animationProgress: $progress);
+    }
+
+    /** Set animation duration in milliseconds (0 = instant, no animation). */
+    public function withAnimationDuration(int $durationMs): self
+    {
+        return $this->lineChartCopy(animationDuration: $durationMs);
+    }
+
     /**
      * Render the raw line chart without legend, title, or labels.
      */
     protected function renderChart(): string
     {
         if ($this->width === 0 || $this->height === 0 || ($this->data === [] && $this->datasets === [])) {
+            return (new Canvas($this->width, $this->height))->view();
+        }
+
+        // Handle animation progress - return empty canvas if progress <= 0
+        $progress = $this->getAnimationProgress();
+        if ($progress <= 0.0) {
             return (new Canvas($this->width, $this->height))->view();
         }
 
@@ -351,6 +378,10 @@ final class LineChart extends Chart
                 ? $this->point
                 : ($this->datasetPoints[$name] ?? $this->point);
 
+            // Compute max point index based on animation progress
+            // Clamp to [0, count] to ensure we don't try to access beyond array bounds
+            $maxPointIndex = min($count, max(0, (int) floor($count * $progress)));
+
             $coords = [];
             foreach ($points as $i => $v) {
                 $col = $gutterLeft + ($count <= 1
@@ -361,10 +392,15 @@ final class LineChart extends Chart
                 $row = (int) round((1.0 - $norm) * ($plotH - 1));
                 $coords[] = [$col, $row];
             }
+            // Only render up to maxPointIndex points (and connectors between them)
             for ($i = 0; $i < $count; $i++) {
+                if ($i >= $maxPointIndex) {
+                    break;
+                }
                 [$x, $y] = $coords[$i];
                 $canvas->setCell($x, $y, $rune);
-                if ($i + 1 < $count) {
+                // Draw connector to next point if within animation bounds
+                if ($i + 1 < $maxPointIndex) {
                     [$x2, $y2] = $coords[$i + 1];
                     self::drawConnector($canvas, $x, $y, $x2, $y2, $rune);
                 }
@@ -476,6 +512,8 @@ final class LineChart extends Chart
         ?bool $showDataLabels = null,
         ?\Closure $dataLabelFormatter = null,
         ?array $legendItems = null,
+        ?float $animationProgress = null,
+        ?int $animationDuration = null,
     ): self {
         return new self(
             data:               $data               ?? $this->data,
@@ -505,6 +543,8 @@ final class LineChart extends Chart
             showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
             dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
             legendItems:        $legendItems        ?? $this->legendItems,
+            animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
+            animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
         );
     }
 
