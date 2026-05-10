@@ -36,4 +36,35 @@ final class LauncherTest extends TestCase
         $launcher->dispatch($e, '/usr/local/bin/ssh');
         $this->assertSame('/usr/local/bin/ssh', $captured);
     }
+
+    public function testConstructorWithNullExecutorUsesDefault(): void
+    {
+        $launcher = new Launcher(null);
+        $this->assertInstanceOf(Launcher::class, $launcher);
+    }
+
+    public function testDispatchWithDefaultPort22OmitsPortFlag(): void
+    {
+        $captured = null;
+        $launcher = new Launcher(function (string $bin, array $args) use (&$captured): void {
+            $captured = $args;
+        });
+        $e = new Endpoint(name: 'prod', host: 'prod.test', port: 22, user: 'admin');
+        $launcher->dispatch($e);
+
+        // Port 22 is default, so -p should not be in args
+        $this->assertSame(['admin@prod.test'], $captured);
+    }
+
+    public function testDispatchWithoutUserDefaultsToHostOnly(): void
+    {
+        $captured = null;
+        $launcher = new Launcher(function (string $bin, array $args) use (&$captured): void {
+            $captured = $args;
+        });
+        $e = new Endpoint(name: 'bare', host: 'just-a-host.example.com');
+        $launcher->dispatch($e);
+
+        $this->assertSame(['just-a-host.example.com'], $captured);
+    }
 }
