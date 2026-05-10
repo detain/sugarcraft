@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use React\Promise\PromiseInterface;
+
 /**
  * Pluggable assistant backend.
  *
@@ -35,4 +37,13 @@ interface Backend
      *                                `function(string $token): void`
      */
     public function complete(array $history, callable $onToken = null): Message;
+
+    /**
+     * Async version of {@see complete()}. Returns a promise that
+     * resolves to the assistant's reply Message.
+     *
+     * Default implementation wraps the sync {@see complete()} call
+     * in a promise. Backends with native async can override.
+     */
+    public function completeAsync(array $history, callable $onToken = null): PromiseInterface;
 }

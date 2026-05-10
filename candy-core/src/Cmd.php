@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core;
 
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\Msg\InterruptMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\SuspendMsg;
@@ -119,6 +120,19 @@ final class Cmd
     public static function tick(float $seconds, \Closure $produce): \Closure
     {
         return static fn(): Msg => new TickRequest($seconds, $produce);
+    }
+
+    /**
+     * Wrap an async operation in a Cmd. The $factory should return a
+     * PromiseInterface<?Msg>. The promise's resolved Msg (if any) will
+     * be dispatched to update(). Rejected promises dispatch ExceptionMsg.
+     *
+     * @param \Closure(): PromiseInterface<?Msg> $factory
+     * @return \Closure(): AsyncCmd
+     */
+    public static function promise(\Closure $factory): \Closure
+    {
+        return static fn(): AsyncCmd => new AsyncCmd($factory());
     }
 
     /**

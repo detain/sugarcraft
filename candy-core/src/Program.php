@@ -6,6 +6,7 @@ namespace SugarCraft\Core;
 
 use SugarCraft\Core\Msg\ColorProfileMsg;
 use SugarCraft\Core\Msg\EnvMsg;
+use SugarCraft\Core\Msg\ExceptionMsg;
 use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\InterruptMsg;
 use SugarCraft\Core\Msg\QuitMsg;
@@ -398,6 +399,16 @@ final class Program
             // Recorded for both the startup dispatch and SIGWINCH-driven
             // updates; the model still receives the Msg via update() below.
             $this->recorder?->recordResize($msg->cols, $msg->rows);
+        }
+        if ($msg instanceof AsyncCmd) {
+            $msg->promise->then(function (?Msg $resolvedMsg): void {
+                if ($resolvedMsg !== null) {
+                    $this->dispatch($resolvedMsg);
+                }
+            })->otherwise(function (\Throwable $e): void {
+                $this->dispatch(new ExceptionMsg($e));
+            });
+            return;
         }
 
         // WithFilter pre-processor.

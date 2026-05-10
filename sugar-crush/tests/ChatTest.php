@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tests;
 
+use React\Promise\Promise;
+use React\Promise\PromiseInterface;
+use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Crush\AssistantMsg;
@@ -95,10 +98,20 @@ final class ChatTest extends TestCase
     {
         $chat = new Chat(backend: new EchoBackend(), inputBuf: 'ping');
         [$next, $cmd] = $chat->update(new KeyMsg(KeyType::Enter, ''));
-        // Run the Cmd → AssistantMsg, dispatch.
-        $msg = $cmd();
-        $this->assertInstanceOf(AssistantMsg::class, $msg);
-        [$final] = $next->update($msg);
+
+        // Run the Cmd → AsyncCmd (async), not AssistantMsg (sync)
+        $asyncCmd = $cmd();
+        $this->assertInstanceOf(AsyncCmd::class, $asyncCmd);
+
+        // Wait for the promise to resolve (EchoBackend resolves synchronously)
+        $resolved = null;
+        $asyncCmd->promise->then(function ($msg) use (&$resolved) {
+            $resolved = $msg;
+        });
+
+        // Dispatch the resolved AssistantMsg
+        $this->assertInstanceOf(AssistantMsg::class, $resolved);
+        [$final] = $next->update($resolved);
         $this->assertCount(2, $final->history);
         $this->assertSame(Role::Assistant, $final->history[1]->role);
         $this->assertStringContainsString('ping', $final->history[1]->content);
@@ -179,6 +192,16 @@ final class ChatTest extends TestCase
                     }
                     return \SugarCraft\Crush\Message::assistant('streaming reply');
                 }
+                public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+                {
+                    return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
+                        try {
+                            $resolve($this->complete($history, $onToken));
+                        } catch (\Throwable $e) {
+                            $reject($e);
+                        }
+                    });
+                }
             },
             inputBuf: 'hello',
             streaming: true,
@@ -202,6 +225,16 @@ final class ChatTest extends TestCase
                 public function complete(array $history, callable $onToken = null): Message
                 {
                     return \SugarCraft\Crush\Message::assistant('reply');
+                }
+                public function completeAsync(array $history, callable $onToken = null): PromiseInterface
+                {
+                    return new \React\Promise\Promise(function (callable $resolve, callable $reject) use ($history, $onToken): void {
+                        try {
+                            $resolve($this->complete($history, $onToken));
+                        } catch (\Throwable $e) {
+                            $reject($e);
+                        }
+                    });
                 }
             },
             inputBuf: 'hello',
