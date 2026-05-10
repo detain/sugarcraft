@@ -291,6 +291,32 @@ final class Program
         $this->send(new PrintMsg(sprintf($format, ...$args)));
     }
 
+    /**
+     * Enable bracketed paste mode at runtime.
+     *
+     * Writes Ansi::bracketedPasteOn() to the output and sets
+     * $activeBracketedPaste to true. Returns true on success.
+     */
+    public function enableBracketedPaste(): bool
+    {
+        $this->writeOutput(Ansi::bracketedPasteOn());
+        $this->activeBracketedPaste = true;
+        return true;
+    }
+
+    /**
+     * Disable bracketed paste mode at runtime.
+     *
+     * Writes Ansi::bracketedPasteOff() to the output and sets
+     * $activeBracketedPaste to false. Returns true on success.
+     */
+    public function disableBracketedPaste(): bool
+    {
+        $this->writeOutput(Ansi::bracketedPasteOff());
+        $this->activeBracketedPaste = false;
+        return true;
+    }
+
     private function dispatch(Msg $msg): void
     {
         if ($msg instanceof BatchMsg) {
