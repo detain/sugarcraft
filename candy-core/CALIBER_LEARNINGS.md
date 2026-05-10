@@ -23,4 +23,10 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[gotcha:trigger-warning]** PHPUnit with `failOnWarning=true` in `phpunit.xml` aborts the entire suite on any `E_USER_WARNING`. Every `trigger_error` in production code that may run during suite load must be suppressed with `@trigger_error(...)` to prevent silent suite aborts.
 
-- **[pattern:async-cmd]** When implementing async commands via `Cmd::promise()` and `AsyncCmd`, rejected promises are automatically converted to `ExceptionMsg` by the `Program::dispatch()` method. However, for consistency with sync backends (which return error messages as `Message::assistant('_[error: ...]_')`), consumers should handle errors in the promise chain itself rather than relying on `ExceptionMsg`. Example: `$backend->completeAsync(...)->then(fn(Message $m) => new AssistantMsg($m), fn(\\Throwable $e) => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')));`
+ - **[pattern:async-cmd]** When implementing async commands via `Cmd::promise()` and `AsyncCmd`, rejected promises are automatically converted to `ExceptionMsg` by the `Program::dispatch()` method. However, for consistency with sync backends (which return error messages as `Message::assistant('_[error: ...]_')`), consumers should handle errors in the promise chain itself rather than relying on `ExceptionMsg`. Example: `$backend->completeAsync(...)->then(fn(Message $m) => new AssistantMsg($m), fn(\\Throwable $e) => new AssistantMsg(Message::assistant('_[error: ' . $e->getMessage() . ']_')));`
+
+- **[coverage:kernel32]** `Kernel32` class line coverage is fundamentally limited on Linux. All instance methods call `ffi()` which loads kernel32.dll via FFI - this throws `FFI\Exception` on non-Windows platforms. The only testable surface on Linux is:
+  - `self()` static factory (doesn't call `ffi()`)
+  - Interface constants defined in `Kernel32Interface` (don't require instantiation)
+  - The actual Windows console integration is tested via `FakeKernel32` in `WindowsBackendTest` which provides a test double implementing the interface without FFI.
+  - On a real Windows box with kernel32.dll, the full suite could be run for true coverage.
