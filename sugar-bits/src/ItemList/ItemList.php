@@ -52,6 +52,7 @@ final class ItemList implements Model
         public readonly float $statusMessageLifetime = 1.0,
         public readonly string $cursorPrefix     = '> ',
         public readonly string $unselectedPrefix = '  ',
+        public readonly bool $keepFilter = false,
     ) {}
 
     /**
@@ -73,6 +74,7 @@ final class ItemList implements Model
             filtering: false,
             filterText: '',
             showDescription: true,
+            keepFilter: false,
         );
     }
 
@@ -369,6 +371,7 @@ final class ItemList implements Model
     public function withShowHelp(bool $on): self         { return $this->mutate(showHelp: $on); }
     public function withShowFilter(bool $on): self       { return $this->mutate(showFilter: $on); }
     public function withInfiniteScrolling(bool $on): self { return $this->mutate(infiniteScrolling: $on); }
+    public function withKeepFilter(bool $on): self       { return $this->mutate(keepFilter: $on); }
 
     /**
      * Glyph rendered before the highlighted (cursor) item. Default '> '
@@ -451,7 +454,9 @@ final class ItemList implements Model
             $msg->type === KeyType::Escape
                 => $this->clearFilter(),
             $msg->type === KeyType::Enter
-                => $this->mutate(filtering: false),
+                => $this->keepFilter
+                    ? $this->mutate(filtering: false)
+                    : $this->clearFilter(),
             $msg->type === KeyType::Up
                 => $this->moveCursor($this->cursor - 1),
             $msg->type === KeyType::Down
@@ -527,6 +532,7 @@ final class ItemList implements Model
         ?float $statusMessageLifetime = null,
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
+        ?bool $keepFilter = null,
     ): self {
         return new self(
             items:                  $items                  ?? $this->items,
@@ -548,6 +554,7 @@ final class ItemList implements Model
             statusMessageLifetime:  $statusMessageLifetime  ?? $this->statusMessageLifetime,
             cursorPrefix:           $cursorPrefix           ?? $this->cursorPrefix,
             unselectedPrefix:       $unselectedPrefix       ?? $this->unselectedPrefix,
+            keepFilter:             $keepFilter             ?? $this->keepFilter,
         );
     }
 }

@@ -101,14 +101,40 @@ final class ItemListTest extends TestCase
         $this->assertSame(['apple', 'banana', 'date'], $titles);
     }
 
-    public function testFilterEnterExitsFilteringKeepsResults(): void
+    public function testFilterEnterExitsFilteringAndClearsFilterByDefault(): void
     {
         $l = $this->focused();
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
         [$l, ] = $l->update(new KeyMsg(KeyType::Enter));
         $this->assertFalse($l->isFiltering());
+        $this->assertFalse($l->isFiltered());
+        $this->assertSame(4, count($l->visibleItems()));
+    }
+
+    public function testFilterEnterKeepsFilterWhenKeepFilterEnabled(): void
+    {
+        $l = $this->focused()->withKeepFilter(true);
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Enter));
+        $this->assertFalse($l->isFiltering());
+        $this->assertTrue($l->isFiltered());
+        $this->assertSame('a', $l->filterValue());
         $this->assertSame(3, count($l->visibleItems()));
+    }
+
+    public function testKeepFilterAllowsReenteringFilterWithTextPreserved(): void
+    {
+        $l = $this->focused()->withKeepFilter(true);
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, '/'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
+        [$l, ] = $l->update(new KeyMsg(KeyType::Enter));
+        $this->assertSame('a', $l->filterValue());
+        // Note: pressing '/' again clears filterText (keepFilter only affects Enter)
+        // But the filterText 'a' is still accessible via filterValue() since we didn't clear
+        $this->assertFalse($l->isFiltering());
+        $this->assertTrue($l->isFiltered());
     }
 
     public function testFilterEscapeClears(): void
@@ -325,7 +351,7 @@ final class ItemListTest extends TestCase
         [$l, ] = $l->update(new KeyMsg(KeyType::Char, 'a'));
         [$l, ] = $l->update(new KeyMsg(KeyType::Enter));
         $this->assertFalse($l->settingFilter());
-        $this->assertTrue($l->isFiltered());
+        $this->assertFalse($l->isFiltered());  // default: Enter clears filter
     }
 
     public function testCursorPrefixDefault(): void
