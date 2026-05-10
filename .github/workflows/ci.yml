@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.3', '8.4']
+        php: ['8.1', '8.2', '8.3', '8.4']
         lib:
           - candy-core
           - candy-sprinkles
@@ -81,7 +81,8 @@ jobs:
           - sugar-veil
           - sugar-crush
         include:
-          # candy-metrics / candy-wish / candy-vt / candy-vcr — PHP ^8.4, not 8.3
+          # candy-metrics / candy-wish / candy-vt / candy-vcr / candy-mines / candy-flip
+          # — PHP >=8.3, not 8.1/8.2
           - php: '8.3'
             lib: candy-vt
           - php: '8.4'
@@ -98,6 +99,14 @@ jobs:
             lib: candy-metrics
           - php: '8.4'
             lib: candy-metrics
+          - php: '8.3'
+            lib: candy-mines
+          - php: '8.4'
+            lib: candy-mines
+          - php: '8.3'
+            lib: candy-flip
+          - php: '8.4'
+            lib: candy-flip
 
     steps:
       - uses: actions/checkout@v5
@@ -337,6 +346,7 @@ jobs:
           - sugar-table
           - sugar-toast
           - sugar-veil
+          - sugar-crush
     steps:
       - uses: actions/checkout@v5
 
