@@ -33,6 +33,7 @@ final class Manager implements Model
 
     /**
      * @param \Closure(string): list<Entry> $lister
+     * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
      */
     public function __construct(
         public readonly Pane $left,
@@ -44,6 +45,9 @@ final class Manager implements Model
         public readonly ?string $searchQuery = null,
         public readonly array $searchResults = [],
         public readonly int $searchCursor = 0,
+        public readonly array $tabs = [],
+        public readonly int $tabIndex = 0,
+        public readonly bool $showTabBar = false,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -54,10 +58,21 @@ final class Manager implements Model
     public static function start(string $leftCwd, string $rightCwd, ?\Closure $lister = null): self
     {
         $lister ??= FsLister::lister();
+        $left = Pane::open($leftCwd, $lister);
+        $right = Pane::open($rightCwd, $lister);
+        // Initialize with 1 tab containing the dual panes
+        $initialTab = [
+            'left' => $left,
+            'right' => $right,
+            'activeIdx' => 0,
+        ];
         return new self(
-            Pane::open($leftCwd, $lister),
-            Pane::open($rightCwd, $lister),
+            $left,
+            $right,
             lister: $lister,
+            tabs: [$initialTab],
+            tabIndex: 0,
+            showTabBar: false,
         );
     }
 
@@ -96,11 +111,17 @@ final class Manager implements Model
 
     public function activePane(): Pane
     {
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            return $tab['activeIdx'] === 0 ? $tab['left'] : $tab['right'];
+        }
         return $this->activeIdx === 0 ? $this->left : $this->right;
     }
 
     public function inactivePane(): Pane
     {
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            return $tab['activeIdx'] === 0 ? $tab['right'] : $tab['left'];
+        }
         return $this->activeIdx === 0 ? $this->right : $this->left;
     }
 
@@ -140,15 +161,37 @@ final class Manager implements Model
                 => $this->armDelete(),
             $msg->type === KeyType::Char && $msg->rune === 'r'
                 => $this->refresh(),
+            // Tab management: t duplicates, Ctrl+w closes, Ctrl+Tab/Ctrl+Shift+Tab cycles
+            $msg->ctrl && $msg->rune === 'w'
+                => $this->closeTab(),
+            $msg->ctrl && $msg->shift && $msg->rune === "\t"
+                => $this->tabs === [] ? $this : $this->switchTab(($this->tabIndex - 1 + count($this->tabs)) % count($this->tabs)),
+            $msg->ctrl && !$msg->shift && $msg->rune === "\t"
+                => $this->tabs === []
+                    ? $this->duplicateTab()
+                    : $this->switchTab(($this->tabIndex + 1) % count($this->tabs)),
+            $msg->type === KeyType::Char && $msg->rune === 't'
+                => $this->duplicateTab(),
             default => $this,
         };
     }
 
     private function withActive(int $idx): self
     {
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            $newTab = ['left' => $tab['left'], 'right' => $tab['right'], 'activeIdx' => $idx];
+            $newTabs = $this->tabs;
+            $newTabs[$this->tabIndex] = $newTab;
+            return new self(
+                $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
+                $this->searchQuery, $this->searchResults, $this->searchCursor,
+                $newTabs, $this->tabIndex, $this->showTabBar
+            );
+        }
         return new self(
             $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar
         );
     }
 
@@ -157,15 +200,36 @@ final class Manager implements Model
      */
     private function withActivePane(\Closure $fn): self
     {
+        if ($this->tabs !== [] && ($tab = $this->tabs[$this->tabIndex] ?? null) !== null) {
+            if ($tab['activeIdx'] === 0) {
+                $newPane = $fn($tab['left']);
+                $newTab = ['left' => $newPane, 'right' => $tab['right'], 'activeIdx' => 0];
+            } else {
+                $newPane = $fn($tab['right']);
+                $newTab = ['left' => $tab['left'], 'right' => $newPane, 'activeIdx' => 1];
+            }
+            $newTabs = $this->tabs;
+            $newTabs[$this->tabIndex] = $newTab;
+            // Keep $this->left/$this->right in sync with the active tab's panes
+            $newLeft = $this->tabIndex === 0 ? $newTab['left'] : ($this->tabs[0]['left'] ?? $this->left);
+            $newRight = $this->tabIndex === 0 ? $newTab['right'] : ($this->tabs[0]['right'] ?? $this->right);
+            return new self(
+                $newLeft, $newRight, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+                $this->searchQuery, $this->searchResults, $this->searchCursor,
+                $newTabs, $this->tabIndex, $this->showTabBar
+            );
+        }
         if ($this->activeIdx === 0) {
             return new self(
                 $fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister,
-                $this->searchQuery, $this->searchResults, $this->searchCursor
+                $this->searchQuery, $this->searchResults, $this->searchCursor,
+                $this->tabs, $this->tabIndex, $this->showTabBar
             );
         }
         return new self(
             $this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar
         );
     }
 
@@ -243,7 +307,8 @@ final class Manager implements Model
     {
         return new self(
             $this->left, $this->right, $this->activeIdx, $status, $state, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar
         );
     }
 
@@ -251,7 +316,8 @@ final class Manager implements Model
     {
         return new self(
             $this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister,
-            $this->searchQuery, $this->searchResults, $this->searchCursor
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar
         );
     }
 
@@ -313,10 +379,8 @@ final class Manager implements Model
     {
         return new self(
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm,
-            $this->lister,
-            searchQuery: $query,
-            searchResults: $results,
-            searchCursor: $cursor
+            $this->lister, $query, $results, $cursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar
         );
     }
 
@@ -386,5 +450,81 @@ final class Manager implements Model
             }
         }
         return @rmdir($path);
+    }
+
+    /** Open a new tab with a given directory path */
+    public function openNewTab(string $path = '/'): self
+    {
+        $current = $this->currentTabs();
+        $cwd = $current !== null
+            ? ($this->tabs[$this->tabIndex]['left']->cwd ?? $path)
+            : ($this->left->cwd ?? $path);
+        $newTab = [
+            'left' => Pane::open($cwd, $this->lister),
+            'right' => Pane::open($cwd, $this->lister),
+            'activeIdx' => 0,
+        ];
+        $newTabs = [...$this->tabs, $newTab];
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $newTabs, count($newTabs) - 1, $newTabs !== []
+        );
+    }
+
+    /** Close the tab at index, unless it's the last tab */
+    public function closeTab(?int $index = null): self
+    {
+        $index ??= $this->tabIndex;
+        if ($this->tabs === [] || count($this->tabs) <= 1) {
+            return $this->withStatus('Cannot close last tab');
+        }
+        $newTabs = $this->tabs;
+        array_splice($newTabs, $index, 1);
+        $newIndex = min($this->tabIndex, count($newTabs) - 1);
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $newTabs, $newIndex, $newTabs !== []
+        );
+    }
+
+    /** Switch to tab at index */
+    public function switchTab(int $index): self
+    {
+        if ($this->tabs === [] || $index < 0 || $index >= count($this->tabs)) {
+            return $this;
+        }
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $index, $this->showTabBar
+        );
+    }
+
+    /** Open a new tab with current pane's directory */
+    public function duplicateTab(): self
+    {
+        $current = $this->currentTabs();
+        $cwd = $current !== null
+            ? ($this->tabs[$this->tabIndex]['left']->cwd ?? '/')
+            : ($this->left->cwd ?? '/');
+        $newTab = [
+            'left' => Pane::open($cwd, $this->lister),
+            'right' => Pane::open($cwd, $this->lister),
+            'activeIdx' => 0,
+        ];
+        $newTabs = [...$this->tabs, $newTab];
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $newTabs, count($newTabs) - 1, $newTabs !== []
+        );
+    }
+
+    /** @return array{left:Pane,right:Pane,activeIdx:int}|null */
+    private function currentTabs(): ?array
+    {
+        return $this->tabs[$this->tabIndex] ?? null;
     }
 }
