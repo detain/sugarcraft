@@ -11,7 +11,7 @@ Each lib at its own directory shares the same skeleton: `composer.json` · `READ
 
 **Libs**: `candy-core` `candy-sprinkles` `candy-shell` `candy-shine` `candy-kit` `candy-freeze` `candy-wish` `candy-zone` `candy-metrics` `candy-mold` `candy-tetris` `candy-log` `candy-palette` `candy-lister` `candy-hermit` `candy-mines` `candy-mosaic` `candy-flip` `candy-query` `candy-serve` `candy-vt` `candy-vcr` `candy-pty` `honey-bounce` `honey-flap` `sugar-bits` `sugar-charts` `sugar-prompt` `sugar-glow` `sugar-spark` `sugar-skate` `sugar-stash` `sugar-table` `sugar-tick` `sugar-toast` `sugar-veil` `sugar-crumbs` `sugar-readline` `sugar-stickers` `sugar-calendar` `sugar-boxer` `sugar-post` `sugar-wishlist` `sugar-crush` `super-candy`.
 
-**Cross-cuts**: `MATCHUPS.md` (upstream→port), `PROJECT_NAMES.md` (naming), `CONVERSION.md` (phase roadmap), `LOCALES.md` (i18n codes), `UPSTREAM_OPPORTUNITIES.md` (port-back candidates), `CALIBER_LEARNINGS.md` (gotchas), `docs/index.html` (website), `media/` (shared icons + social-preview.png + profile.png), `scripts/` (Dockerfile, bootstrap-org-repos.sh).
+**Cross-cuts**: `MATCHUPS.md` (upstream→port), `PROJECT_NAMES.md` (naming), `LOCALES.md` (i18n codes), `CALIBER_LEARNINGS.md` (gotchas), `docs/index.html` (website), `media/` (shared icons + social-preview.png + profile.png), `scripts/` (Dockerfile, bootstrap-org-repos.sh).
 
 ## Commands
 
@@ -54,7 +54,7 @@ docker build -f scripts/Dockerfile -t sugarcraft-ci .
 
 ## Adding a library
 
-Follow `@./AGENTS.md` end-to-end. In short: name (`Candy-`/`Sugar-`/`Honey-` per `PROJECT_NAMES.md`) → scaffold the lib dir → wire root `composer.json` (`require` + `repositories`) → update `MATCHUPS.md`, `CONVERSION.md`, `README.md` table → add CI matrix entry in BOTH `.github/workflows/ci.yml` AND `.github/workflows/vhs.yml` (hand-maintained, not glob-driven) → website tile in `docs/index.html` plus per-lib detail page under `docs/` plus icon under `media/` (or `docs/img/icons/`).
+Follow `@./AGENTS.md` end-to-end. In short: name (`Candy-`/`Sugar-`/`Honey-` per `PROJECT_NAMES.md`) → scaffold the lib dir → wire root `composer.json` (`require` + `repositories`) → update `MATCHUPS.md`, `README.md` table → add CI matrix entry in BOTH `.github/workflows/ci.yml` AND `.github/workflows/vhs.yml` (hand-maintained, not glob-driven) → website tile in `docs/index.html` plus per-lib detail page under `docs/` plus icon under `media/` (or `docs/img/icons/`).
 
 ## i18n
 
