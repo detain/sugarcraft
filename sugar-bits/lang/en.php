@@ -9,6 +9,8 @@
 declare(strict_types=1);
 
 return [
+    'tabs.bad_index'             => 'tab index out of range',
+    'tabs.neg_width'             => 'tabs width must be >= 0',
     'column.width_nonneg'        => 'Column width must be >= 0',
     'viewport.dim_nonneg'        => 'viewport width/height must be >= 0',
     'viewport.width_nonneg'      => 'viewport width must be >= 0',
