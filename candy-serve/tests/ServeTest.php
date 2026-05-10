@@ -204,4 +204,92 @@ final class ServeTest extends TestCase
         $this->assertFalse($ac->canCreateRepos($user));
         $this->assertFalse($ac->canCreateRepos(null));
     }
+
+    // ---- LFS Storage Backend tests ----
+
+    public function testLocalStorageBackendExists(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/lfs-test-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        $backend = new \SugarCraft\Serve\LFS\LocalStorageBackend($tmpDir);
+        $this->assertFalse($backend->exists('abc123'));
+
+        // Clean up
+        @rmdir($tmpDir);
+    }
+
+    public function testLocalStorageBackendWriteAndRead(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/lfs-test-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        $backend = new \SugarCraft\Serve\LFS\LocalStorageBackend($tmpDir);
+        $oid = 'abc123def456789';
+
+        // Write content
+        $stream = fopen('data://text/plain;base64,' . base64_encode('Hello World'), 'r');
+        $backend->write($oid, $stream);
+        fclose($stream);
+
+        $this->assertTrue($backend->exists($oid));
+        $this->assertSame('Hello World', file_get_contents($backend->path($oid)));
+
+        // Clean up
+        @unlink($backend->path($oid));
+        @rmdir($tmpDir . '/' . substr($oid, 0, 2));
+        @rmdir($tmpDir);
+    }
+
+    public function testLocalStorageBackendDelete(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/lfs-test-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        $backend = new \SugarCraft\Serve\LFS\LocalStorageBackend($tmpDir);
+        $oid = 'abc123def456789';
+
+        // Write then delete
+        $stream = fopen('data://text/plain;base64,' . base64_encode('Content'), 'r');
+        $backend->write($oid, $stream);
+        fclose($stream);
+
+        $this->assertTrue($backend->exists($oid));
+
+        $backend->delete($oid);
+        $this->assertFalse($backend->exists($oid));
+
+        // Clean up
+        @rmdir($tmpDir . '/' . substr($oid, 0, 2));
+        @rmdir($tmpDir);
+    }
+
+    public function testLFSHandlerWithStorageBackend(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/lfs-test-' . uniqid();
+        mkdir($tmpDir, 0755, true);
+
+        $backend = new \SugarCraft\Serve\LFS\LocalStorageBackend($tmpDir);
+        $repo = Repo::new('test', '/tmp/test');
+        $user = User::new('alice');
+
+        $handler = new \SugarCraft\Serve\LFS\LFSHandler($repo, $user, $tmpDir, $backend, 2);
+        $this->assertSame($backend, $handler->storageBackend());
+        $this->assertSame(2, $handler->concurrentTransfers());
+
+        // Clean up
+        @rmdir($tmpDir);
+    }
+
+    public function testLFSHandlerWithConcurrentTransfers(): void
+    {
+        $repo = Repo::new('test', '/tmp/test');
+        $user = User::new('alice');
+        $tmpDir = '/tmp/lfs';
+
+        $handler = new \SugarCraft\Serve\LFS\LFSHandler($repo, $user, $tmpDir);
+        $handler2 = $handler->withConcurrentTransfers(8);
+        $this->assertSame(4, $handler->concurrentTransfers());
+        $this->assertSame(8, $handler2->concurrentTransfers());
+    }
 }
