@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-vcr",
-    "description": "Record and replay candy-core Program sessions into cassettes — bug-repro / regression / fuzzing.",
+    "description": "Record and replay candy-core Program sessions into cassettes \u2014 bug-repro / regression / fuzzing.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -41,39 +41,24 @@
     },
     "repositories": [
         {
-            "type": "path",
-            "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-core"
         },
         {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-sprinkles"
         },
         {
-            "type": "path",
-            "url": "../candy-vt",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-vt"
         },
         {
-            "type": "path",
-            "url": "../honey-bounce",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/honey-bounce"
         },
         {
-            "type": "path",
-            "url": "../candy-zone",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-zone"
         }
     ],
     "autoload": {
@@ -81,7 +66,9 @@
             "SugarCraft\\Vcr\\": "src/"
         }
     },
-    "bin": ["bin/candy-vcr"],
+    "bin": [
+        "bin/candy-vcr"
+    ],
     "autoload-dev": {
         "psr-4": {
             "SugarCraft\\Vcr\\Tests\\": "tests/"
