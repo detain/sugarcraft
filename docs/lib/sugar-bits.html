@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarBits — SugarCraft">
 <meta property="og:description" content="Fifteen pre-built TUI components. Port of bubbles.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-bits.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-bits.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-bits.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/sugar-bits.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -100,6 +104,22 @@ final class Search implements Model {
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>TextInput</td><td>new()</td><td>Create a new text input instance</td></tr>
+<tr><td>TextInput</td><td>update(Msg)</td><td>Handle input events</td></tr>
+<tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area</td></tr>
+<tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style</td></tr>
+<tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
+<tr><td>Table</td><td>new(headers, rows)</td><td>Create data table</td></tr>
+<tr><td>Tree</td><td>new(root)</td><td>Create tree view</td></tr>
+<tr><td>Viewport</td><td>new(content)</td><td>Create scrollable viewport</td></tr>
+<tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar</td></tr>
+<tr><td>FilePicker</td><td>new(directory)</td><td>Create file picker</td></tr>
+<tr><td>ItemList</td><td>new(items)</td><td>Create selectable item list</td></tr>
+</table>
   </div>
 </section>
 
@@ -187,7 +207,9 @@ final class Search implements Model {
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-bits">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/sugar-bits/issues">Issues</a>
         </div>
     </div>

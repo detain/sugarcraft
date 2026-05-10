@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarCraft — CandyVcr">
 <meta property="og:description" content="Record + replay candy-core sessions — JSONL/YAML cassettes, byte + cell-grid assertions, CLI.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-vcr.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-vcr.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-vcr.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-vcr.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -108,6 +112,18 @@ vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff</code><
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Recorder</td><td>open(path)</td><td>Open cassette for recording</td></tr>
+<tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
+<tr><td>Player</td><td>open(path)</td><td>Open cassette for replay</td></tr>
+<tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
+<tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
+<tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
+<tr><td>Cassette</td><td>events()</td><td>Iterate recorded events</td></tr>
+</table>
   </div>
 </section>
 
@@ -116,7 +132,9 @@ vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff</code><
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-vcr">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-vcr/issues">Issues</a>
         </div>
     </div>

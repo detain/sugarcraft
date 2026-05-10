@@ -8,6 +8,10 @@
 <meta property="og:title" content="SugarCraft — CandyPty">
 <meta property="og:description" content="Pseudo-terminal primitive — spawn child processes wired to a controlled PTY, with resize forwarding and non-blocking I/O.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-pty.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-pty.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-pty.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/candy-pty.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -123,6 +127,21 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Pty</td><td>open()</td><td>Allocate master/slave PTY pair</td></tr>
+<tr><td>Pty</td><td>spawn(cmd, env, cols, rows)</td><td>Spawn child process with PTY</td></tr>
+<tr><td>Pty</td><td>read(len, timeout)</td><td>Read bytes from PTY</td></tr>
+<tr><td>Pty</td><td>write(data)</td><td>Write bytes to PTY</td></tr>
+<tr><td>Pty</td><td>resize(cols, rows)</td><td>Resize terminal window</td></tr>
+<tr><td>Pty</td><td>size()</td><td>Get current terminal size</td></tr>
+<tr><td>Pty</td><td>close()</td><td>Close the PTY</td></tr>
+<tr><td>SignalForwarder</td><td>attachSigwinch(pty, provider)</td><td>Forward SIGWINCH to PTY resize</td></tr>
+<tr><td>Child</td><td>pid</td><td>Child process ID</td></tr>
+<tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit</td></tr>
+</table>
   </div>
 </section>
 
@@ -131,7 +150,9 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-pty">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/candy-pty/issues">Issues</a>
         </div>
     </div>

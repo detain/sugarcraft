@@ -8,6 +8,10 @@
 <meta property="og:title" content="SuperCandy — SugarCraft">
 <meta property="og:description" content="Dual-pane terminal file manager. Port of superfile.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/super-candy.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/super-candy.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/super-candy.html">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" type="image/png" href="../img/icons/super-candy.png">
 <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -88,6 +92,16 @@
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">Key Classes</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Pane</td><td>new(path)</td><td>Create file pane</td></tr>
+<tr><td>Pane</td><td>cd(path)</td><td>Change directory</td></tr>
+<tr><td>Pane</td><td>entries()</td><td>List directory entries</td></tr>
+<tr><td>Model</td><td>update(msg)</td><td>Handle update messages</td></tr>
+<tr><td>Model</td><td>view()</td><td>Render the file manager</td></tr>
+</table>
   </div>
 </section>
 
@@ -110,7 +124,9 @@
         <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/super-candy">Packagist</a> ·
             <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
             <a href="https://github.com/sugarcraft/super-candy/issues">Issues</a>
         </div>
     </div>
