@@ -28,11 +28,11 @@
     },
     "require": {
         "php": "^8.2",
-        "sugarcraft/candy-core": "@dev"
+        "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
-        "sugarcraft/candy-vt": "@dev",
+        "sugarcraft/candy-vt": "dev-master",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {

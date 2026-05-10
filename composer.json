@@ -30,7 +30,7 @@
         "sugarcraft/candy-pty":       "@dev",
         "sugarcraft/candy-shell":     "@dev",
         "sugarcraft/candy-shine":     "@dev",
-        "sugarcraft/candy-sprinkles": "@dev",
+        "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-wish":      "@dev",
         "sugarcraft/candy-zone":      "@dev",
         "sugarcraft/honey-bounce":    "@dev",
