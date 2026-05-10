@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\LineChart;
 
+use SugarCraft\Charts\Chart\Chart;
+use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
@@ -19,8 +21,10 @@ use SugarCraft\Charts\Canvas\Graph;
  * echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view();
  * ```
  */
-final class LineChart
+final class LineChart extends Chart
 {
+    private const DATASET_COLORS = ['red', 'green', 'yellow', 'blue', 'magenta', 'cyan'];
+
     /**
      * @param list<int|float>            $data
      * @param array<string,list<int|float>> $datasets  named multi-series
@@ -30,8 +34,8 @@ final class LineChart
      */
     private function __construct(
         public readonly array $data,
-        public readonly int $width,
-        public readonly int $height,
+        int $width,
+        int $height,
         public readonly ?float $min,
         public readonly ?float $max,
         public readonly string $point,
@@ -46,7 +50,32 @@ final class LineChart
         public readonly ?\Closure $yLabelFormatter = null,
         public readonly int $xLabelTicks   = 0,
         public readonly int $yLabelTicks   = 0,
+        bool $showLegend = false,
+        Position $legendPosition = Position::Right,
+        ?string $legendIndicatorChar = null,
+        ?string $title = null,
+        Position $titlePosition = Position::Top,
+        ?string $xLabel = null,
+        ?string $yLabel = null,
+        bool $showDataLabels = false,
+        ?\Closure $dataLabelFormatter = null,
+        array $legendItems = [],
     ) {
+        parent::__construct(
+            width: $width,
+            height: $height,
+            showLegend: $showLegend,
+            legendPosition: $legendPosition,
+            legendIndicatorChar: $legendIndicatorChar,
+            title: $title,
+            titlePosition: $titlePosition,
+            xLabel: $xLabel,
+            yLabel: $yLabel,
+            showDataLabels: $showDataLabels,
+            dataLabelFormatter: $dataLabelFormatter,
+            legendItems: $legendItems,
+        );
+
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('linechart.dim_nonneg'));
         }
@@ -61,7 +90,7 @@ final class LineChart
     /** @param list<int|float> $data */
     public function withData(array $data): self
     {
-        return $this->copy(data: array_values($data));
+        return $this->lineChartCopy(data: array_values($data));
     }
 
     public function withSize(int $w, int $h): self
@@ -69,12 +98,12 @@ final class LineChart
         if ($w < 0 || $h < 0) {
             throw new \InvalidArgumentException(Lang::t('linechart.dim_nonneg'));
         }
-        return $this->copy(width: $w, height: $h);
+        return $this->lineChartCopy(width: $w, height: $h);
     }
 
-    public function withMin(?float $m): self        { return $this->copy(min: $m, minSet: true); }
-    public function withMax(?float $m): self        { return $this->copy(max: $m, maxSet: true); }
-    public function withPoint(string $rune): self   { return $this->copy(point: $rune); }
+    public function withMin(?float $m): self        { return $this->lineChartCopy(min: $m, minSet: true); }
+    public function withMax(?float $m): self        { return $this->lineChartCopy(max: $m, maxSet: true); }
+    public function withPoint(string $rune): self   { return $this->lineChartCopy(point: $rune); }
 
     /**
      * Y-axis data range as a `[min, max]` pair. Equivalent to chaining
@@ -82,7 +111,7 @@ final class LineChart
      */
     public function withYRange(?float $min, ?float $max): self
     {
-        return $this->copy(min: $min, minSet: true, max: $max, maxSet: true);
+        return $this->lineChartCopy(min: $min, minSet: true, max: $max, maxSet: true);
     }
 
     /**
@@ -93,7 +122,7 @@ final class LineChart
      */
     public function withXRange(?float $min, ?float $max): self
     {
-        return $this->copy(xMin: $min, xMinSet: true, xMax: $max, xMaxSet: true);
+        return $this->lineChartCopy(xMin: $min, xMinSet: true, xMax: $max, xMaxSet: true);
     }
 
     /**
@@ -111,7 +140,7 @@ final class LineChart
      */
     public function autoAdjustRange(): self
     {
-        return $this->copy(
+        return $this->lineChartCopy(
             min: null, minSet: true, max: null, maxSet: true,
             xMin: null, xMinSet: true, xMax: null, xMaxSet: true,
         );
@@ -125,7 +154,7 @@ final class LineChart
      */
     public function withXLabelFormatter(\Closure $fn, int $ticks = 0): self
     {
-        return $this->copy(xLabelFormatter: $fn, xLabelFormatterSet: true, xLabelTicks: max(0, $ticks));
+        return $this->lineChartCopy(xLabelFormatter: $fn, xLabelFormatterSet: true, xLabelTicks: max(0, $ticks));
     }
 
     /**
@@ -134,13 +163,12 @@ final class LineChart
      */
     public function withYLabelFormatter(\Closure $fn, int $ticks = 0): self
     {
-        return $this->copy(yLabelFormatter: $fn, yLabelFormatterSet: true, yLabelTicks: max(0, $ticks));
+        return $this->lineChartCopy(yLabelFormatter: $fn, yLabelFormatterSet: true, yLabelTicks: max(0, $ticks));
     }
 
     /**
-     * Add or replace a named series. Series share the same axes as the
-     * primary `data`. Use {@see withDatasetPoint()} to give each series
-     * a distinct rune.
+     * Add or replace a named series. Automatically adds a legend item
+     * with an auto-assigned color.
      *
      * @param list<int|float> $values
      */
@@ -148,7 +176,13 @@ final class LineChart
     {
         $sets = $this->datasets;
         $sets[$name] = array_values($values);
-        return $this->copy(datasets: $sets);
+
+        // Auto-add legend item with cycling colors
+        $colorIndex = count($this->datasets) % count(self::DATASET_COLORS);
+        $legendItems = $this->legendItems;
+        $legendItems[] = ['label' => $name, 'color' => self::DATASET_COLORS[$colorIndex]];
+
+        return $this->lineChartCopy(datasets: $sets, legendItems: $legendItems);
     }
 
     /** Per-series rune override for {@see view()}. */
@@ -156,13 +190,13 @@ final class LineChart
     {
         $points = $this->datasetPoints;
         $points[$name] = $rune;
-        return $this->copy(datasetPoints: $points);
+        return $this->lineChartCopy(datasetPoints: $points);
     }
 
     /** Render an X / Y axis frame around the plot area. Default off. */
     public function withAxes(bool $on = true): self
     {
-        return $this->copy(showAxes: $on);
+        return $this->lineChartCopy(showAxes: $on);
     }
 
     /**
@@ -171,7 +205,7 @@ final class LineChart
      */
     public function withXLabels(array $labels): self
     {
-        return $this->copy(xLabels: array_values($labels));
+        return $this->lineChartCopy(xLabels: array_values($labels));
     }
 
     /**
@@ -181,7 +215,7 @@ final class LineChart
      */
     public function withYLabels(array $labels): self
     {
-        return $this->copy(yLabels: array_values($labels));
+        return $this->lineChartCopy(yLabels: array_values($labels));
     }
 
     // Short-form aliases.
@@ -202,7 +236,67 @@ final class LineChart
     /** @param list<string> $labels */
     public function yLabels(array $labels): self     { return $this->withYLabels($labels); }
 
-    public function view(): string
+    // ─── Chart Property Overrides ───────────────────────────────────────
+    // Override Chart's methods to use lineChartCopy() so LineChart properties are preserved
+
+    /** Enable or disable the legend. */
+    public function withLegend(bool $show = true): self
+    {
+        return $this->lineChartCopy(showLegend: $show);
+    }
+
+    /** Set the legend position. */
+    public function withLegendPosition(Position $position): self
+    {
+        return $this->lineChartCopy(legendPosition: $position);
+    }
+
+    /** Customize legend styling. */
+    public function withLegendStyle(?string $indicatorChar = null): self
+    {
+        return $this->lineChartCopy(legendIndicatorChar: $indicatorChar);
+    }
+
+    /** Set the X-axis label (rendered at bottom). */
+    public function withXLabel(string $label): self
+    {
+        return $this->lineChartCopy(xLabel: $label);
+    }
+
+    /** Set the Y-axis label (rendered at left). */
+    public function withYLabel(string $label): self
+    {
+        return $this->lineChartCopy(yLabel: $label);
+    }
+
+    /** Enable or disable data point labels. */
+    public function withDataLabels(bool $show = true): self
+    {
+        return $this->lineChartCopy(showDataLabels: $show);
+    }
+
+    /** Set a custom formatter for data point labels. */
+    public function withDataLabelFormatter(\Closure $formatter): self
+    {
+        return $this->lineChartCopy(dataLabelFormatter: $formatter);
+    }
+
+    /**
+     * Set the chart title.
+     *
+     * @param Position $position Where to render the title (Top or Bottom).
+     *                           Left/Right positions are accepted but
+     *                           rendered at Top for simplicity.
+     */
+    public function withTitle(string $title, Position $position = Position::Top): self
+    {
+        return $this->lineChartCopy(title: $title, titlePosition: $position);
+    }
+
+    /**
+     * Render the raw line chart without legend, title, or labels.
+     */
+    protected function renderChart(): string
     {
         if ($this->width === 0 || $this->height === 0 || ($this->data === [] && $this->datasets === [])) {
             return (new Canvas($this->width, $this->height))->view();
@@ -348,43 +442,69 @@ final class LineChart
     }
 
     /** Internal copy-with-overrides helper. */
-    private function copy(
+    private function lineChartCopy(
         ?array $data = null,
         ?int $width = null,
         ?int $height = null,
-        ?float $min = null, bool $minSet = false,
-        ?float $max = null, bool $maxSet = false,
+        ?float $min = null,
+        bool $minSet = false,
+        ?float $max = null,
+        bool $maxSet = false,
         ?string $point = null,
         ?array $datasets = null,
         ?array $datasetPoints = null,
         ?bool $showAxes = null,
         ?array $xLabels = null,
         ?array $yLabels = null,
-        ?float $xMin = null, bool $xMinSet = false,
-        ?float $xMax = null, bool $xMaxSet = false,
-        ?\Closure $xLabelFormatter = null, bool $xLabelFormatterSet = false,
-        ?\Closure $yLabelFormatter = null, bool $yLabelFormatterSet = false,
+        ?float $xMin = null,
+        bool $xMinSet = false,
+        ?float $xMax = null,
+        bool $xMaxSet = false,
+        ?\Closure $xLabelFormatter = null,
+        bool $xLabelFormatterSet = false,
+        ?\Closure $yLabelFormatter = null,
+        bool $yLabelFormatterSet = false,
         ?int $xLabelTicks = null,
         ?int $yLabelTicks = null,
+        ?bool $showLegend = null,
+        ?Position $legendPosition = null,
+        ?string $legendIndicatorChar = null,
+        ?string $title = null,
+        ?Position $titlePosition = null,
+        ?string $xLabel = null,
+        ?string $yLabel = null,
+        ?bool $showDataLabels = null,
+        ?\Closure $dataLabelFormatter = null,
+        ?array $legendItems = null,
     ): self {
         return new self(
-            data:            $data         ?? $this->data,
-            width:           $width        ?? $this->width,
-            height:          $height       ?? $this->height,
-            min:             $minSet ? $min : $this->min,
-            max:             $maxSet ? $max : $this->max,
-            point:           $point        ?? $this->point,
-            datasets:        $datasets     ?? $this->datasets,
-            datasetPoints:   $datasetPoints?? $this->datasetPoints,
-            showAxes:        $showAxes     ?? $this->showAxes,
-            xLabels:         $xLabels      ?? $this->xLabels,
-            yLabels:         $yLabels      ?? $this->yLabels,
-            xMin:            $xMinSet ? $xMin : $this->xMin,
-            xMax:            $xMaxSet ? $xMax : $this->xMax,
-            xLabelFormatter: $xLabelFormatterSet ? $xLabelFormatter : $this->xLabelFormatter,
-            yLabelFormatter: $yLabelFormatterSet ? $yLabelFormatter : $this->yLabelFormatter,
-            xLabelTicks:     $xLabelTicks  ?? $this->xLabelTicks,
-            yLabelTicks:     $yLabelTicks  ?? $this->yLabelTicks,
+            data:               $data               ?? $this->data,
+            width:              $width              ?? $this->width,
+            height:             $height             ?? $this->height,
+            min:                $minSet ? $min : $this->min,
+            max:                $maxSet ? $max : $this->max,
+            point:              $point              ?? $this->point,
+            datasets:           $datasets           ?? $this->datasets,
+            datasetPoints:      $datasetPoints      ?? $this->datasetPoints,
+            showAxes:           $showAxes           ?? $this->showAxes,
+            xLabels:            $xLabels            ?? $this->xLabels,
+            yLabels:            $yLabels            ?? $this->yLabels,
+            xMin:               $xMinSet ? $xMin : $this->xMin,
+            xMax:               $xMaxSet ? $xMax : $this->xMax,
+            xLabelFormatter:    $xLabelFormatterSet ? $xLabelFormatter : $this->xLabelFormatter,
+            yLabelFormatter:    $yLabelFormatterSet ? $yLabelFormatter : $this->yLabelFormatter,
+            xLabelTicks:        $xLabelTicks        ?? $this->xLabelTicks,
+            yLabelTicks:        $yLabelTicks        ?? $this->yLabelTicks,
+            showLegend:         $showLegend         ?? $this->showLegend,
+            legendPosition:     $legendPosition     ?? $this->legendPosition,
+            legendIndicatorChar:$legendIndicatorChar ?? $this->legendIndicatorChar,
+            title:              $title              ?? $this->title,
+            titlePosition:      $titlePosition      ?? $this->titlePosition,
+            xLabel:             $xLabel             ?? $this->xLabel,
+            yLabel:             $yLabel             ?? $this->yLabel,
+            showDataLabels:     $showDataLabels     ?? $this->showDataLabels,
+            dataLabelFormatter: $dataLabelFormatter ?? $this->dataLabelFormatter,
+            legendItems:        $legendItems        ?? $this->legendItems,
         );
     }
 
