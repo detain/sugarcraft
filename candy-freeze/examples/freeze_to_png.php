@@ -11,6 +11,7 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Freeze\PngRenderer;
+use SugarCraft\Freeze\WindowStyle;
 
 $code = <<<'PHP'
 <?php
@@ -52,3 +53,12 @@ $ansi = (new PngRenderer())
 
 file_put_contents("$out/ansi_demo.png", $ansi);
 echo "wrote $out/ansi_demo.png\n";
+
+// Demonstrate different window styles.
+foreach (WindowStyle::cases() as $style) {
+    $png = PngRenderer::dark()
+        ->withWindowStyle($style)
+        ->render($code);
+    file_put_contents("$out/window_style_{$style->value}.png", $png);
+    echo "wrote $out/window_style_{$style->value}.png\n";
+}

@@ -55,6 +55,7 @@ final class PngRenderer
         public readonly bool $border       = true,
         public readonly bool $lineNumbers  = false,
         public readonly int $borderRadius  = 8,
+        public readonly WindowStyle $windowStyle = WindowStyle::Macos,
     ) {}
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
@@ -70,6 +71,11 @@ final class PngRenderer
     public function withBorder(bool $on):      self { return $this->copy(border: $on); }
     public function withLineNumbers(bool $on): self { return $this->copy(lineNumbers: $on); }
     public function withBorderRadius(int $r):  self { return $this->copy(borderRadius: max(0, $r)); }
+    public function withWindowStyle(WindowStyle|string $style): self
+    {
+        $style = $style instanceof WindowStyle ? $style : WindowStyle::from($style);
+        return $this->copy(windowStyle: $style);
+    }
 
     /**
      * Render `$text` (which may contain ANSI escape sequences) to a
@@ -176,7 +182,7 @@ final class PngRenderer
 
         // Draw window controls.
         if ($this->window) {
-            $this->renderWindowControls($img, $shadowMargin);
+            $this->buildWindowChrome($img, $shadowMargin, $frameWidth);
         }
 
         // Draw text.
@@ -245,7 +251,18 @@ final class PngRenderer
         return $color;
     }
 
-    private function renderWindowControls(\GdImage $img, int $shadowMargin): void
+    private function buildWindowChrome(\GdImage $img, int $shadowMargin, int $frameWidth): void
+    {
+        match ($this->windowStyle) {
+            WindowStyle::Macos => $this->buildMacosWindow($img, $shadowMargin),
+            WindowStyle::WindowsTerminal => $this->buildWindowsTerminalWindow($img, $shadowMargin, $frameWidth),
+            WindowStyle::ITerm2 => $this->buildITerm2Window($img, $shadowMargin),
+            WindowStyle::Hyper => $this->buildHyperWindow($img, $shadowMargin, $frameWidth),
+            WindowStyle::None => '',
+        };
+    }
+
+    private function buildMacosWindow(\GdImage $img, int $shadowMargin): void
     {
         $cy  = $shadowMargin + 18;
         $cx  = $shadowMargin + 18;
@@ -262,6 +279,76 @@ final class PngRenderer
         }
     }
 
+    private function buildWindowsTerminalWindow(\GdImage $img, int $shadowMargin, int $frameWidth): void
+    {
+        $titleBarHeight = 28;
+        $buttonSize = 14;
+        $buttonGap = 8;
+        $rightEdge = $shadowMargin + $frameWidth - 12;
+        $titleBarY = $shadowMargin;
+
+        // Title bar background (dark)
+        $titleBarBg = $this->allocateColor($img, '#1e1e1e');
+        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBg);
+
+        // Title bar border
+        $titleBarBorder = $this->allocateColor($img, '#303030');
+        imagerectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBorder);
+
+        // Windows-style buttons
+        $buttonColors = ['#444444', '#444444', '#444444'];
+        $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
+
+        foreach ([0, 1, 2] as $i) {
+            $bx = $rightEdge - ($buttonSize + $buttonGap) * (3 - $i);
+            $btnColor = $this->allocateColor($img, $buttonColors[$i]);
+            imagefilledrectangle($img, $bx, $buttonY, $bx + $buttonSize - 1, $buttonY + $buttonSize - 1, $btnColor);
+        }
+    }
+
+    private function buildITerm2Window(\GdImage $img, int $shadowMargin): void
+    {
+        // iTerm2 style: smaller traffic lights
+        $cy  = $shadowMargin + 14;
+        $cx  = $shadowMargin + 14;
+        $r   = 4;
+        $gap = 14;
+
+        $red    = $this->allocateColor($img, $this->theme->windowRed);
+        $yellow = $this->allocateColor($img, $this->theme->windowYellow);
+        $green  = $this->allocateColor($img, $this->theme->windowGreen);
+
+        $colors = [$red, $yellow, $green];
+        foreach ($colors as $i => $color) {
+            imagefilledellipse($img, $cx + $i * $gap, $cy, $r * 2, $r * 2, $color);
+        }
+    }
+
+    private function buildHyperWindow(\GdImage $img, int $shadowMargin, int $frameWidth): void
+    {
+        $titleBarHeight = 24;
+        $titleBarY = $shadowMargin;
+        $r = 5;
+        $gap = 16;
+
+        // Title bar background
+        $titleBarBg = $this->allocateColor($img, $this->theme->border);
+        imagefilledrectangle($img, $shadowMargin, $titleBarY, $shadowMargin + $frameWidth - 1, $titleBarY + $titleBarHeight - 1, $titleBarBg);
+
+        // Traffic lights
+        $cy = $titleBarY + ($titleBarHeight - $r * 2) / 2;
+        $base = $shadowMargin + 12;
+
+        $red    = $this->allocateColor($img, $this->theme->windowRed);
+        $yellow = $this->allocateColor($img, $this->theme->windowYellow);
+        $green  = $this->allocateColor($img, $this->theme->windowGreen);
+
+        $colors = [$red, $yellow, $green];
+        foreach ($colors as $i => $color) {
+            imagefilledellipse($img, $base + $i * $gap, $cy, $r * 2, $r * 2, $color);
+        }
+    }
+
     private function copy(
         ?Theme $theme = null,
         ?int $padding = null,
@@ -270,6 +357,7 @@ final class PngRenderer
         ?bool $border = null,
         ?bool $lineNumbers = null,
         ?int $borderRadius = null,
+        ?WindowStyle $windowStyle = null,
     ): self {
         return new self(
             theme:        $theme        ?? $this->theme,
@@ -279,6 +367,7 @@ final class PngRenderer
             border:       $border       ?? $this->border,
             lineNumbers:  $lineNumbers  ?? $this->lineNumbers,
             borderRadius: $borderRadius ?? $this->borderRadius,
+            windowStyle:  $windowStyle  ?? $this->windowStyle,
         );
     }
 }

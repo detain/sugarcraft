@@ -46,6 +46,7 @@ final class SvgRenderer
         public readonly bool $border       = true,
         public readonly bool $lineNumbers  = false,
         public readonly int $borderRadius  = 8,
+        public readonly WindowStyle $windowStyle = WindowStyle::Macos,
     ) {}
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
@@ -61,6 +62,11 @@ final class SvgRenderer
     public function withBorder(bool $on):    self { return $this->copy(border: $on); }
     public function withLineNumbers(bool $on): self { return $this->copy(lineNumbers: $on); }
     public function withBorderRadius(int $r): self { return $this->copy(borderRadius: max(0, $r)); }
+    public function withWindowStyle(WindowStyle|string $style): self
+    {
+        $style = $style instanceof WindowStyle ? $style : WindowStyle::from($style);
+        return $this->copy(windowStyle: $style);
+    }
 
     /**
      * Render `$text` (which may contain ANSI escape sequences) to an
@@ -125,7 +131,7 @@ final class SvgRenderer
         $svg .= '<rect ' . $frameAttrs . ' />' . "\n";
 
         if ($this->window) {
-            $svg .= $this->renderWindowControls($shadowMargin);
+            $svg .= $this->buildWindowChrome($shadowMargin, $svgWidth);
         }
 
         $textY0 = $shadowMargin + $this->padding + $headerHeight + $this->theme->fontSize;
@@ -169,7 +175,18 @@ final class SvgRenderer
         return $svg;
     }
 
-    private function renderWindowControls(int $shadowMargin): string
+    private function buildWindowChrome(int $shadowMargin, int $contentWidth): string
+    {
+        return match ($this->windowStyle) {
+            WindowStyle::Macos => $this->buildMacosWindow($shadowMargin),
+            WindowStyle::WindowsTerminal => $this->buildWindowsTerminalWindow($shadowMargin, $contentWidth),
+            WindowStyle::ITerm2 => $this->buildITerm2Window($shadowMargin),
+            WindowStyle::Hyper => $this->buildHyperWindow($shadowMargin, $contentWidth),
+            WindowStyle::None => '',
+        };
+    }
+
+    private function buildMacosWindow(int $shadowMargin): string
     {
         $cy = $shadowMargin + 18;
         $base = $shadowMargin + 18;
@@ -186,6 +203,103 @@ final class SvgRenderer
         return $svg;
     }
 
+    private function buildWindowsTerminalWindow(int $shadowMargin, int $contentWidth): string
+    {
+        $titleBarHeight = 28;
+        $buttonSize = 14;
+        $buttonGap = 8;
+        $rightEdge = $shadowMargin + $contentWidth - 12;
+        $titleBarY = $shadowMargin;
+
+        $svg = '';
+
+        // Title bar background (dark)
+        $svg .= sprintf(
+            '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
+            $shadowMargin,
+            $titleBarY,
+            $contentWidth,
+            $titleBarHeight,
+            self::xmlEscape('#1e1e1e'),
+        );
+
+        // Title bar border
+        $svg .= sprintf(
+            '<rect x="%d" y="%d" width="%d" height="%d" fill="none" stroke="%s" stroke-width="1" />' . "\n",
+            $shadowMargin,
+            $titleBarY,
+            $contentWidth,
+            $titleBarHeight,
+            self::xmlEscape('#303030'),
+        );
+
+        // Windows-style buttons (minimize, maximize, close)
+        $buttonColors = ['#444444', '#444444', '#444444'];
+        $buttonHoverColors = ['#555555', '#555555', '#e81123'];
+        $buttonY = $titleBarY + ($titleBarHeight - $buttonSize) / 2;
+
+        foreach ([0, 1, 2] as $i) {
+            $bx = $rightEdge - ($buttonSize + $buttonGap) * (3 - $i);
+            $svg .= sprintf(
+                '<rect x="%d" y="%d" width="%d" height="%d" rx="1" fill="%s" />' . "\n",
+                $bx, $buttonY, $buttonSize, $buttonSize, $buttonColors[$i],
+            );
+        }
+
+        return $svg;
+    }
+
+    private function buildITerm2Window(int $shadowMargin): string
+    {
+        // iTerm2 style: smaller traffic lights, no outer border effect visible
+        $cy = $shadowMargin + 14;
+        $base = $shadowMargin + 14;
+        $r = 4; // smaller radius
+        $gap = 14; // tighter spacing
+        $colors = [$this->theme->windowRed, $this->theme->windowYellow, $this->theme->windowGreen];
+        $svg = '';
+        foreach ($colors as $i => $c) {
+            $svg .= sprintf(
+                '<circle cx="%d" cy="%d" r="%d" fill="%s" />' . "\n",
+                $base + $i * $gap, $cy, $r, self::xmlEscape($c),
+            );
+        }
+        return $svg;
+    }
+
+    private function buildHyperWindow(int $shadowMargin, int $contentWidth): string
+    {
+        $titleBarHeight = 24;
+        $titleBarY = $shadowMargin;
+        $r = 5;
+        $gap = 16;
+        $colors = [$this->theme->windowRed, $this->theme->windowYellow, $this->theme->windowGreen];
+
+        $svg = '';
+
+        // Thin title bar background
+        $svg .= sprintf(
+            '<rect x="%d" y="%d" width="%d" height="%d" fill="%s" />' . "\n",
+            $shadowMargin,
+            $titleBarY,
+            $contentWidth,
+            $titleBarHeight,
+            self::xmlEscape($this->theme->border),
+        );
+
+        // Traffic lights in title bar
+        $cy = $titleBarY + ($titleBarHeight - $r * 2) / 2;
+        $base = $shadowMargin + 12;
+        foreach ($colors as $i => $c) {
+            $svg .= sprintf(
+                '<circle cx="%d" cy="%d" r="%d" fill="%s" />' . "\n",
+                $base + $i * $gap, $cy, $r, self::xmlEscape($c),
+            );
+        }
+
+        return $svg;
+    }
+
     private static function xmlEscape(string $s): string
     {
         return htmlspecialchars($s, ENT_XML1 | ENT_QUOTES, 'UTF-8');
@@ -199,6 +313,7 @@ final class SvgRenderer
         ?bool $border = null,
         ?bool $lineNumbers = null,
         ?int $borderRadius = null,
+        ?WindowStyle $windowStyle = null,
     ): self {
         return new self(
             theme:        $theme        ?? $this->theme,
@@ -208,6 +323,7 @@ final class SvgRenderer
             border:       $border       ?? $this->border,
             lineNumbers:  $lineNumbers  ?? $this->lineNumbers,
             borderRadius: $borderRadius ?? $this->borderRadius,
+            windowStyle:  $windowStyle  ?? $this->windowStyle,
         );
     }
 }
