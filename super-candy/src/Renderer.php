@@ -16,13 +16,32 @@ final class Renderer
 {
     public static function render(Manager $m): string
     {
-        $left  = self::renderPane($m->left,  $m->activeIdx === 0);
-        $right = self::renderPane($m->right, $m->activeIdx === 1);
+        $left  = self::renderPane($m->tabs === [] ? $m->left : ($m->tabs[$m->tabIndex]['left'] ?? $m->left),  $m->tabs === [] ? ($m->activeIdx === 0) : ($m->tabs[$m->tabIndex]['activeIdx'] ?? 0) === 0);
+        $right = self::renderPane($m->tabs === [] ? $m->right : ($m->tabs[$m->tabIndex]['right'] ?? $m->right), $m->tabs === [] ? ($m->activeIdx === 1) : ($m->tabs[$m->tabIndex]['activeIdx'] ?? 0) === 1);
         $body  = Layout::joinHorizontal(0.0, $left, '  ', $right);
 
+        $tabBar = self::renderTabBar($m);
         $search = self::renderSearch($m);
         $status = $m->status === '' ? self::keyHelp() : $m->status;
-        return $search . $body . "\n" . self::statusBar($status);
+        return $search . $tabBar . $body . "\n" . self::statusBar($status);
+    }
+
+    private static function renderTabBar(Manager $m): string
+    {
+        if ($m->tabs === [] || count($m->tabs) <= 1) {
+            return '';
+        }
+        $parts = [];
+        foreach ($m->tabs as $i => $tab) {
+            $label = $tab['left']->cwd;
+            if (strlen($label) > 20) {
+                $label = '…' . substr($label, -17);
+            }
+            $prefix = $i === $m->tabIndex ? '[' : ' ';
+            $suffix = $i === $m->tabIndex ? ']' : ' ';
+            $parts[] = "{$prefix}{$label}{$suffix}";
+        }
+        return implode(' ', $parts) . "\n";
     }
 
     private static function renderPane(Pane $pane, bool $active): string
@@ -61,7 +80,7 @@ final class Renderer
 
     private static function keyHelp(): string
     {
-        return 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search';
+        return 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle';
     }
 
     private static function renderSearch(Manager $m): string
