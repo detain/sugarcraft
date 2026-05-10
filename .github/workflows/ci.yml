@@ -97,9 +97,7 @@ jobs:
             lib: candy-wish
           - php: '8.4'
             lib: candy-wish
-          # candy-metrics — composer.lock was stale; runs on all 8.2+ cells
-          - php: '8.2'
-            lib: candy-metrics
+          # candy-metrics — composer.lock was stale; runs on all 8.3+ cells
           - php: '8.3'
             lib: candy-metrics
           - php: '8.4'

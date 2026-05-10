@@ -40,10 +40,11 @@ final class FilePicker implements Model
         public readonly bool $dirAllowed,
         public readonly bool $fileAllowed,
         public readonly ?string $selected,
-        public readonly bool $showIcons   = false,
-        public readonly bool $showSize    = false,
-        public readonly SortMode $sortBy  = SortMode::Name,
-        public readonly bool $reverseSort = false,
+        public readonly bool $showIcons      = false,
+        public readonly bool $showSize       = false,
+        public readonly bool $directoryFirst = true,
+        public readonly SortMode $sortBy     = SortMode::Name,
+        public readonly bool $reverseSort    = false,
         public readonly ?string $error    = null,
     ) {}
 
@@ -63,6 +64,7 @@ final class FilePicker implements Model
             dirAllowed:        false,
             fileAllowed:       true,
             selected:          null,
+            directoryFirst:    true,
         );
         return $self->refresh();
     }
@@ -227,6 +229,9 @@ final class FilePicker implements Model
     /** Append a right-aligned size column for files. Off by default. */
     public function withShowSize(bool $on = true): self  { return $this->mutate(showSize: $on); }
 
+    /** Show directories before files. Enabled by default. */
+    public function withDirectoryFirst(bool $first = true): self { return $this->mutate(directoryFirst: $first)->refresh(); }
+
     /**
      * Choose the secondary sort criterion (directories always group
      * first, regardless). Pass `$reverse: true` to flip order. Mirrors
@@ -304,11 +309,13 @@ final class FilePicker implements Model
             $mtime = (int) @filemtime($full);
             $entries[] = new Entry($name, $isDir, $hidden, $size, $mtime);
         }
-        // Directories always group first; secondary sort by configured mode.
+        // Directories always group first when $directoryFirst is set;
+        // secondary sort by configured mode.
         $reverse = $this->reverseSort ? -1 : 1;
         $mode = $this->sortBy;
-        usort($entries, static function (Entry $a, Entry $b) use ($mode, $reverse): int {
-            if ($a->isDir !== $b->isDir) {
+        $dirFirst = $this->directoryFirst;
+        usort($entries, static function (Entry $a, Entry $b) use ($mode, $reverse, $dirFirst): int {
+            if ($dirFirst && $a->isDir !== $b->isDir) {
                 return $a->isDir ? -1 : 1;
             }
             $cmp = match ($mode) {
@@ -359,6 +366,7 @@ final class FilePicker implements Model
         bool $touchSelected = false,
         ?bool $showIcons = null,
         ?bool $showSize = null,
+        ?bool $directoryFirst = null,
         ?SortMode $sortBy = null,
         ?bool $reverseSort = null,
         ?string $error = null, bool $errorSet = false,
@@ -377,6 +385,7 @@ final class FilePicker implements Model
             selected:          $touchSelected ? $selected : $this->selected,
             showIcons:         $showIcons         ?? $this->showIcons,
             showSize:          $showSize          ?? $this->showSize,
+            directoryFirst:    $directoryFirst    ?? $this->directoryFirst,
             sortBy:            $sortBy            ?? $this->sortBy,
             reverseSort:       $reverseSort       ?? $this->reverseSort,
             error:             $errorSet ? $error : $this->error,
