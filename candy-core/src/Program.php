@@ -283,12 +283,28 @@ final class Program
     }
 
     /**
-     * sprintf-flavoured companion to {@see println()}. Mirrors
-     * bubbletea's `Program.Printf(format, args...)`.
+     * Queue a PrintMsg with a formatted string.
+     *
+     * Mirrors the existing `Cmd::printf($format, ...$args)()` factory but
+     * reachable as an instance method for callers that hold a Program
+     * reference (matches bubbletea's `Program.Printf(...)`).
      */
     public function printf(string $format, mixed ...$args): void
     {
         $this->send(new PrintMsg(sprintf($format, ...$args)));
+    }
+
+    /**
+     *
+     * @return array<string,string>
+     */
+    private function collectEnv(): array
+    {
+        $env = getenv();
+        // getenv() returns array<string,string>|false; the false case
+        // only exists on PHP < 8.1 which this project doesn't support.
+        /** @var array<string,string> */
+        return $env;
     }
 
     /**
@@ -755,24 +771,6 @@ final class Program
     {
         return $a !== null && $b !== null
             && $a->r === $b->r && $a->g === $b->g && $a->b === $b->b;
-    }
-
-    /**
-     * Snapshot the current process environment for the startup
-     * {@see EnvMsg}. We pull from PHP's `getenv()` (no args) which
-     * returns every variable PHP knows about, regardless of the
-     * `variables_order` ini setting.
-     *
-     * @return array<string,string>
-     */
-    private function collectEnv(): array
-    {
-        $env = getenv();
-        if (!is_array($env)) {
-            return [];
-        }
-        /** @var array<string,string> $env */
-        return $env;
     }
 
     private function installSignalHandlers(): void
