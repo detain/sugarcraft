@@ -9,7 +9,7 @@ use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\ClipboardMsg;
 use SugarCraft\Core\Msg\CursorColorMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
-use SugarCraft\Core\Msg\FocusMsg;
+use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyboardEnhancementsMsg;
 use SugarCraft\Core\Msg\KeyMsg;
@@ -219,7 +219,7 @@ final class InputReader
     {
         // Focus reporting (CSI ?1004h): ESC[I → focus in, ESC[O → focus out.
         if ($params === '') {
-            if ($final === 'I') return new FocusMsg();
+            if ($final === 'I') return new FocusGainedMsg();
             if ($final === 'O') return new BlurMsg();
         }
 

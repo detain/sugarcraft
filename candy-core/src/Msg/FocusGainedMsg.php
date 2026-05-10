@@ -7,6 +7,6 @@ namespace SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg;
 
 /** Emitted when the terminal regains focus (CSI 1004 must be enabled). */
-final class FocusMsg implements Msg
+final class FocusGainedMsg implements Msg
 {
 }
