@@ -359,4 +359,184 @@ final class LayoutSolverTest extends TestCase
         $this->assertEquals(self::rect(20, 3, 60, 26), $cols[1]);
         $this->assertEquals(self::rect(80, 3, 20, 26), $cols[2]);
     }
+
+    // ── Percentage constraints ───────────────────────────────────────────────
+
+    public function testPercentageRejectsOutOfRange(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new \SugarCraft\Sprinkles\Layout\Percentage(150);
+    }
+
+    public function testPercentageRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new \SugarCraft\Sprinkles\Layout\Percentage(-1);
+    }
+
+    public function testPurePercentageHorizontal(): void
+    {
+        // Percentage(30) of 100 = 30
+        $rects = Layout::horizontal([
+            Constraint::percentage(30),
+            Constraint::percentage(70),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(30, $rects[0]->width);
+        $this->assertSame(70, $rects[1]->width);
+    }
+
+    public function testPercentageWithLength(): void
+    {
+        // Length(20) + Percentage(50) in 100 area
+        // Fixed: 20. Remaining: 80. Percentage(50) = 50% of total area = 50.
+        $rects = Layout::horizontal([
+            Constraint::length(20),
+            Constraint::percentage(50),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(20, $rects[0]->width);
+        $this->assertSame(50, $rects[1]->width);
+    }
+
+    public function testPercentageWithFill(): void
+    {
+        // Percentage(30) + Fill in 100 area
+        // Percentage = 30 (30% of 100). Fill gets remainder = 70.
+        $rects = Layout::horizontal([
+            Constraint::percentage(30),
+            Constraint::fill(1),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(30, $rects[0]->width);
+        $this->assertSame(70, $rects[1]->width);
+    }
+
+    // ── Ratio constraints ────────────────────────────────────────────────────
+
+    public function testRatioRejectsNegativeNumerator(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new \SugarCraft\Sprinkles\Layout\Ratio(-1, 3);
+    }
+
+    public function testRatioRejectsZeroDenominator(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new \SugarCraft\Sprinkles\Layout\Ratio(1, 0);
+    }
+
+    public function testPureRatioHorizontal(): void
+    {
+        // Ratio(1, 3) of 90 = 30; Ratio(2, 3) of 90 = 60
+        $rects = Layout::horizontal([
+            Constraint::ratio(1, 3),
+            Constraint::ratio(2, 3),
+        ])->split(new Rect(0, 0, 90, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(30, $rects[0]->width);
+        $this->assertSame(60, $rects[1]->width);
+    }
+
+    public function testRatioWithLength(): void
+    {
+        // Length(10) + Ratio(1, 2) in 100 area
+        // Fixed: 10. Remaining: 90. Ratio(1, 2) = 50% of total = 50.
+        $rects = Layout::horizontal([
+            Constraint::length(10),
+            Constraint::ratio(1, 2),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(10, $rects[0]->width);
+        $this->assertSame(50, $rects[1]->width);
+    }
+
+    // ── Max constraints ─────────────────────────────────────────────────────
+
+    public function testMaxRejectsNegative(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        new \SugarCraft\Sprinkles\Layout\Max(-1);
+    }
+
+    public function testMaxClampsWhenOver(): void
+    {
+        // Length(20) + Max(30) in 100 area
+        // Max greedily takes slack (80), clamp to 30; reclaimed goes to Length
+        $rects = Layout::horizontal([
+            Constraint::length(20),
+            Constraint::max(30),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(70, $rects[0]->width); // 20 + reclaimed 50
+        $this->assertSame(30, $rects[1]->width); // clamped from 80
+    }
+
+    public function testMaxClampGoesToFill(): void
+    {
+        // Length(20) + Max(10) + Fill in 100 area
+        // Max gets 80, clamps to 10 (reclaims 70), goes to Fill
+        $rects = Layout::horizontal([
+            Constraint::length(20),
+            Constraint::max(10),
+            Constraint::fill(1),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(3, $rects);
+        $this->assertSame(20, $rects[0]->width);
+        $this->assertSame(10, $rects[1]->width); // clamped
+        $this->assertSame(70, $rects[2]->width); // 70 + reclaimed
+    }
+
+    public function testMaxClampRedistributesToFill(): void
+    {
+        // Length(30) + Max(20) + Fill(1) in 100 area
+        // Fill gets slack (3) + reclaimed (47) = 50
+        $rects = Layout::horizontal([
+            Constraint::length(30),
+            Constraint::max(20),
+            Constraint::fill(1),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(3, $rects);
+        $this->assertSame(30, $rects[0]->width); // fixed
+        $this->assertSame(20, $rects[1]->width); // clamped
+        $this->assertSame(50, $rects[2]->width); // 3 + 47 reclaimed
+    }
+
+    public function testMaxWithPercentageNoFillNoMin(): void
+    {
+        // Percentage(50) + Max(30) in 100 area — no Fill, no Min
+        // Max gets 50, clamps to 30 (reclaims 20), goes to Percentage
+        $rects = Layout::horizontal([
+            Constraint::percentage(50),
+            Constraint::max(30),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(70, $rects[0]->width); // 50 + reclaimed 20
+        $this->assertSame(30, $rects[1]->width); // clamped
+    }
+
+    public function testMultipleMaxClampNoRecipients(): void
+    {
+        // Two Max constraints in 100 area, no Fill/Min
+        // Max(10) gets 33, clamps to 10 (reclaims 23)
+        // Max(20) gets 66, clamps to 20 (reclaims 46)
+        // No eligible recipients for reclaimed → stays unused
+        $rects = Layout::horizontal([
+            Constraint::max(10),
+            Constraint::max(20),
+        ])->split(new Rect(0, 0, 100, 24));
+
+        $this->assertCount(2, $rects);
+        $this->assertSame(10, $rects[0]->width); // clamped
+        $this->assertSame(20, $rects[1]->width); // clamped
+    }
 }
