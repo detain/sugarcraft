@@ -23,7 +23,7 @@
         "source": "https://github.com/sugarcraft/sugar-crumbs"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {

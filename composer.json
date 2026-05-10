@@ -21,7 +21,7 @@
         "docs":   "https://github.com/detain/sugarcraft/blob/master/CONVERSION.md"
     },
     "require": {
-        "php": "^8.2",
+        "php": "^8.3",
         "sugarcraft/candy-core":      "dev-master",
         "sugarcraft/candy-vt":        "dev-master",
         "sugarcraft/candy-vcr":       "dev-master",

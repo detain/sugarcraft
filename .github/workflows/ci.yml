@@ -25,7 +25,7 @@ jobs:
   # overrides to skip libs that don't support certain PHP majors.
   #
     # Lib exclusions by PHP version:
-    #   PHP 8.2  — excluded: candy-metrics candy-vcr vandy-vt candy-wish (^8.3)
+    #   PHP 8.3  — excluded: candy-metrics candy-vcr vandy-vt candy-wish (^8.4)
     #   PHP 8.3+ — all libs
   test:
     name: 'Test PHP ${{ matrix.php }} · ${{ matrix.lib }}'
@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4']
+        php: ['8.3', '8.4']
         lib:
           - candy-core
           - candy-sprinkles
@@ -81,7 +81,7 @@ jobs:
           - sugar-veil
           - sugar-crush
         include:
-          # candy-metrics / candy-wish / candy-vt / candy-vcr — PHP ^8.3, not 8.2
+          # candy-metrics / candy-wish / candy-vt / candy-vcr — PHP ^8.4, not 8.3
           - php: '8.3'
             lib: candy-vt
           - php: '8.4'
@@ -178,7 +178,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4']
+        php: ['8.3', '8.4']
         lib:
           - candy-core
           - sugar-prompt
@@ -188,7 +188,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # PHP on Windows comes with FFI enabled by default in PHP 8.2+.
+      # PHP on Windows comes with FFI enabled by default in PHP 8.3+.
       # We still declare mbstring / intl / json / pcntl explicitly so that
       # the action installs them if they are missing from the runner image.
       - name: Setup PHP
@@ -245,7 +245,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3']
+        php: ['8.3']
         lib:
           - candy-pty
     steps:
@@ -422,7 +422,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4']
+        php: ['8.3', '8.4']
         lib:
           - candy-core  # has phpstan.neon
     steps:
