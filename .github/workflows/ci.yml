@@ -182,7 +182,7 @@ jobs:
   # TTY-sensitive libs to keep wall-clock time reasonable.
   windows-test:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
-    runs-on: windows-2025
+    runs-on: windows-2025-vs2026
     # All pushes to the same branch share ONE concurrency group per matrix cell.
     # When a new commit arrives, any in-progress jobs from the previous commit
     # are cancelled immediately — no waiting for the old run to finish.
