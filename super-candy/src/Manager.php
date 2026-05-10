@@ -41,6 +41,9 @@ final class Manager implements Model
         public readonly string $status = '',
         public readonly ConfirmState $confirm = ConfirmState::None,
         \Closure $lister = null,
+        public readonly ?string $searchQuery = null,
+        public readonly array $searchResults = [],
+        public readonly int $searchCursor = 0,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -74,6 +77,11 @@ final class Manager implements Model
             return [$this->resolveConfirm($msg), null];
         }
 
+        // Search mode intercepts all keys
+        if ($this->searchQuery !== null) {
+            return [$this->handleSearchKey($msg), null];
+        }
+
         if ($msg->type === KeyType::Char && $msg->rune === 'q') {
             return [$this, Cmd::quit()];
         }
@@ -99,6 +107,8 @@ final class Manager implements Model
     private function dispatch(KeyMsg $msg): self
     {
         return match (true) {
+            $msg->type === KeyType::Char && $msg->rune === '/'
+                => $this->search(''),
             $msg->type === KeyType::Tab
                 => $this->withActive(1 - $this->activeIdx),
             $msg->type === KeyType::Up,
@@ -136,7 +146,10 @@ final class Manager implements Model
 
     private function withActive(int $idx): self
     {
-        return new self($this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister);
+        return new self(
+            $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor
+        );
     }
 
     /**
@@ -145,9 +158,15 @@ final class Manager implements Model
     private function withActivePane(\Closure $fn): self
     {
         if ($this->activeIdx === 0) {
-            return new self($fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister);
+            return new self(
+                $fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister,
+                $this->searchQuery, $this->searchResults, $this->searchCursor
+            );
         }
-        return new self($this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister);
+        return new self(
+            $this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor
+        );
     }
 
     private function navigate(): self
@@ -222,12 +241,130 @@ final class Manager implements Model
 
     private function withConfirm(ConfirmState $state, string $status): self
     {
-        return new self($this->left, $this->right, $this->activeIdx, $status, $state, $this->lister);
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $status, $state, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor
+        );
     }
 
     private function withStatus(string $status): self
     {
-        return new self($this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister);
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor
+        );
+    }
+
+    /** Start search mode with a query */
+    public function search(string $query): self
+    {
+        $cwd = $this->activePane()->cwd;
+        $allEntries = ($this->lister)($cwd);
+        if ($query === '') {
+            // Empty query shows all entries but stays in search mode
+            return $this->withSearch('', $allEntries, 0);
+        }
+        $results = array_values(array_filter(
+            $allEntries,
+            fn(Entry $e) => str_contains(strtolower($e->name), strtolower($query))
+        ));
+        return $this->withSearch($query, $results, 0);
+    }
+
+    /** Exit search mode */
+    public function exitSearch(): self
+    {
+        return $this->withSearch(null, [], 0);
+    }
+
+    /** Navigate search results with up/down */
+    public function moveSearchCursor(int $delta): self
+    {
+        if ($this->searchQuery === null || $this->searchResults === []) {
+            return $this;
+        }
+        $newCursor = max(0, min(count($this->searchResults) - 1, $this->searchCursor + $delta));
+        return $this->withSearch($this->searchQuery, $this->searchResults, $newCursor);
+    }
+
+    /** Open selected search result */
+    public function openSearchResult(): self
+    {
+        if ($this->searchQuery === null || $this->searchResults === []) {
+            return $this;
+        }
+        $entry = $this->searchResults[$this->searchCursor] ?? null;
+        if ($entry === null) {
+            return $this;
+        }
+        // If it's a directory, navigate into it; if file, deselect and exit search
+        if ($entry->isDir) {
+            return $this->withActivePane(fn(Pane $p) => Pane::open(
+                Pane::join($p->cwd, $entry->name),
+                $this->lister,
+                $p->sort,
+                $p->showHidden
+            ))->exitSearch();
+        }
+        return $this->exitSearch();
+    }
+
+    private function withSearch(?string $query, array $results, int $cursor): self
+    {
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm,
+            $this->lister,
+            searchQuery: $query,
+            searchResults: $results,
+            searchCursor: $cursor
+        );
+    }
+
+    /** Handle keys while in search mode */
+    private function handleSearchKey(KeyMsg $msg): self
+    {
+        // Escape exits search
+        if ($msg->type === KeyType::Escape) {
+            return $this->exitSearch();
+        }
+        // Enter opens result
+        if ($msg->type === KeyType::Enter) {
+            return $this->openSearchResult();
+        }
+        // Up/Down navigate results
+        if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+            return $this->moveSearchCursor(-1);
+        }
+        if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+            return $this->moveSearchCursor(1);
+        }
+        // Backspace removes last char from query
+        if ($msg->type === KeyType::Backspace) {
+            if ($this->searchQuery === '') {
+                // Empty query + backspace = exit search
+                return $this->exitSearch();
+            }
+            $newQuery = self::dropLast($this->searchQuery);
+            if ($newQuery === '') {
+                // Backspacing to empty = exit search
+                return $this->exitSearch();
+            }
+            return $this->search($newQuery);
+        }
+        // Regular chars append to query
+        if ($msg->type === KeyType::Char && !$msg->ctrl && $msg->rune !== '/') {
+            return $this->search(($this->searchQuery ?? '') . $msg->rune);
+        }
+        return $this;
+    }
+
+    /** Drop last UTF-8 character from string */
+    private static function dropLast(string $s): string
+    {
+        if ($s === '') {
+            return '';
+        }
+        return preg_replace('/.$/us', '', $s);
     }
 
     /** Recursive delete. Empty dirs use rmdir; files use unlink. */
