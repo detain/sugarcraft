@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish;
 
+use SugarCraft\Wish\Middleware\Keepalive;
 use SugarCraft\Wish\Transport\InProcessTransport;
 
 /**
@@ -101,6 +102,21 @@ final class Server
     public function transport(): Transport
     {
         return $this->transport;
+    }
+
+    /**
+     * Add SSH keepalive middleware to detect dead connections.
+     *
+     * Sends periodic SSH_MSG_IGNORE packets at the specified interval
+     * to keep connections alive through NAT gateways and firewalls.
+     * Also helps detect if the remote client has disconnected.
+     *
+     * @param int $intervalSeconds Interval between keepalive messages (default 60)
+     */
+    public function withKeepalive(int $intervalSeconds = 60): self
+    {
+        $this->stack[] = new Keepalive($intervalSeconds);
+        return $this;
     }
 
     /**
