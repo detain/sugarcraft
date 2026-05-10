@@ -30,7 +30,7 @@
         "bin/wishlist"
     ],
     "require": {
-        "php": ">=8.1",
+        "php": ">=8.2",
         "ext-pcntl": "*",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/sugar-bits": "dev-master"
