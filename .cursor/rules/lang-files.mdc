@@ -1,0 +1,14 @@
+---
+description: i18n locale file conventions and Lang::t wrapper pattern
+globs: "**/lang/*.php,**/src/Lang.php,LOCALES.md"
+alwaysApply: false
+---
+
+# i18n locale files
+
+- File at `<slug>/lang/<code>.php`. Codes from `LOCALES.md` recommended set: `en`, `fr`, `de`, `es`, `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`, `pl`, `nl`, `tr`, `cs`, `ar`.
+- Returns `array<string, string>` keyed by short id. Keep `{placeholder}` names intact across translations.
+- Lookup chain: exact locale → base language → `en` → raw key. A single `fr.php` covers `fr-fr`/`fr-ca`/`fr-be`. Only add regional variants when wording diverges.
+- Each lib exposes thin `Lang::t($key, $params)` wrapping `SugarCraft\Core\I18n\T` with namespace baked in. Canonical: `sugar-wishlist/src/Lang.php`.
+- App-level overrides via `T::overrideNamespace('<ns>', '/path/to/lang')`.
+- Translation PRs: one language across every lib with `en.php`, not per-lib.
