@@ -1,42 +1,39 @@
 ---
 name: add-locale
-description: Adds a translation file at <slug>/lang/<code>.php for an existing SugarCraft library by copying en.php and translating values while preserving keys and {placeholder} names. Codes follow LOCALES.md recommended set (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar). Use when user says 'add <language> translation', 'translate <lib> to <code>', 'add ar locale', 'add Polish locale to sugar-bits', 'add Japanese locale for all libs'. Do NOT use for first-time wiring of Lang::t() into a lib that doesn't have a lang/ dir yet (use scaffold-library); do NOT use to edit en.php (the source of truth) — translate FROM it instead.
+description: Adds a translation file at <slug>/lang/<code>.php for an existing SugarCraft library by copying en.php and translating values while preserving keys and {placeholder} names. Codes follow LOCALES.md recommended set (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar). Use when user says 'add <language> translation', 'translate <lib> to <code>', 'add ar locale', 'add Polish locale to sugar-bits', 'add Japanese locale for all libs'. Do NOT use for first-time wiring of Lang::t() into a lib without a lang/ dir (use scaffold-library); do NOT edit en.php (the source of truth) — translate FROM it instead.
 paths:
-  - "*/lang/*.php"
+  - */lang/*.php
   - LOCALES.md
 ---
-# Add a translation locale to a SugarCraft lib
+# Add locale
+
+Add a translation file for an already-wired SugarCraft library. The English locale file is the canonical source of truth — translate **from** it, never edit it.
 
 ## Critical
 
-- **Never edit the English source-of-truth file** — new keys land there first via the lib's own PR; translation files mirror it.
-- **Keys are immutable**, including their order and the `{placeholder}` names inside values. Only translate the right-hand-side strings.
-- **Filename = locale code from `LOCALES.md`** in lower-case kebab form, never with underscores or upper-case region. The lookup in `candy-core/src/I18n/T.php` normalizes glibc names to this shape.
-- **Only add a regional variant** when wording genuinely diverges from the base language. For everything else (`fr-ca`, `de-at`, `en-gb`) the base file falls through automatically.
-- **One language per PR, across every lib that already has English translations** — that is the established cadence (see commits `9c7e837`, `7736512`, `47fb236`, `8968e71`, …). Do not split per-lib unless the user asks.
-- **Skip libs without translations wired up.** If a lib has no English source file in its `lang` dir, it has not been wired through `Lang::t()` yet — that is `scaffold-library` territory, not this skill.
+- **Never edit the English locale.** It is the source of truth. All other locale files mirror its keys.
+- **The lib must already have an English locale and a `Lang` facade in `src/`.** If the locale directory does not exist, stop and tell the user to use `scaffold-library` first.
+- **Preserve every key verbatim.** `'config.not_found'` stays `'config.not_found'` — only the right-hand value is translated.
+- **Preserve every `{placeholder}` name verbatim.** `'failed to exec {bin}'` → French `'échec de l\'exécution de {bin}'` — `{bin}` MUST remain literal `{bin}`. Do NOT translate placeholder identifiers, change their case, or reorder them out of the value.
+- **Locale code must be from `LOCALES.md` recommended set** unless the user explicitly asks for an exotic glibc code (then warn them it will fall back to `en` for users not on that exact code). Recommended set: `en`, `fr`, `de`, `es`, `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`, `pl`, `nl`, `tr`, `cs`, `ar`.
+- **Prefer the bare base-language code.** The lookup chain `exact → base → en → raw` makes a single base-language file serve all regional variants. Only create regional variants (`pt-br`, `zh-cn`, `zh-tw`) when wording genuinely diverges from the base.
+- **Run the lib's PHPUnit suite after adding the file.** Any `LangTest` or coercion test that loads the registry will fail loudly on a syntax error in the new file.
 
 ## Instructions
 
-1. **Confirm the locale code.** Open `LOCALES.md` and pick the bare base-language code from the *Recommended set* table (e.g. `fr`, `de`, `ja`, `ar`). Use a regional variant ONLY if it is in the *Regional variants worth keeping separate* table (Brazilian Portuguese, Simplified/Traditional Chinese, Bokmål/Nynorsk). Verify the chosen code before touching files.
+1. **Resolve the target lib slug and locale code.** Verify the lib's English locale exists. If it does not, stop — this skill is for libs already wired through `Lang::t()`. If the user asked for "all libs", list every lib whose directory contains a locale tree and loop over them in step 2.
 
-2. **Enumerate target libs.** Run from the repo root to list every lib that already has translations wired:
+2. **Read the English locale.** Capture the full file: the header doc-comment, the `declare(strict_types=1);` line, and the `return [...]` array.
 
-   ```sh
-   ls -d */lang 2>/dev/null
-   ```
+3. **Check whether the target locale already exists.** If it does, ask the user before overwriting — do not blindly clobber an existing translation. If it does not, proceed.
 
-   Existing locale-wide PRs cover ~25 libs: `candy-core`, `candy-flip`, `candy-freeze`, `candy-lister`, `candy-log`, `candy-metrics`, `candy-mold`, `candy-palette`, `candy-query`, `candy-serve`, `candy-shell`, `candy-shine`, `candy-sprinkles`, `candy-tetris`, `candy-wish`, `candy-zone`, `honey-bounce`, `sugar-bits`, `sugar-charts`, `sugar-glow`, `sugar-post`, `sugar-skate`, `sugar-spark`, `sugar-stash`, `sugar-tick`, `sugar-wishlist`. Verify with the listing — the list grows over time. If the user asked for a single lib, use only that one.
-
-3. **Read each target's English source.** For each `<slug>` in the target list, Read its English language source. Do not assume keys are stable across libs — every lib has its own keyset (e.g. `candy-core` uses `color.*`/`ansi.*`/`program.*`; `sugar-bits` uses `column.*`/`viewport.*`/`spinner.*`/etc.).
-
-4. **Write the new locale file** mirroring the source exactly. Use the Write tool with this template:
+4. **Write the new locale file** using this exact structure:
 
    ```php
    <?php
 
    /**
-    * <Language name> translations.
+    * <LanguageName> translations for <slug>.
     *
     * @return array<string, string>
     */
@@ -44,83 +41,103 @@ paths:
    declare(strict_types=1);
 
    return [
-       'first.key'   => '<translated value, {placeholder} preserved>',
-       'second.key'  => '<translated value>',
-       // ... mirror every key in the same order
+       // every key from the English locale, in the same order, with translated value
    ];
    ```
 
-   Rules for the body:
-   - **Same keys, same order** as the source file. Do not alphabetize, group, or drop keys.
-   - **Translate values only.** Leave `{name}` placeholders byte-identical to the English file.
-   - **Keep section comments** only when the corresponding English source has them — `candy-core/lang/en.php` keeps them, `sugar-bits/lang/en.php` does not. Match the source file's style.
-   - **Strip the long doc-block.** Translation files use the short 4-line header (see `candy-core/lang/ar.php`, `candy-core/lang/fr.php`); only the English source carries the verbose contributor-facing doc-block.
-   - **RTL languages (`ar`, `he`, `fa`, `ur`)**: write values left-to-right in source order — terminal rendering handles bidi. Keep `{placeholder}` tokens latin (do not transliterate).
-   - **CJK (Simplified/Traditional Chinese, Japanese, Korean)**: no spaces around colons unless the English line had them; preserve numeric ranges like `[0,255]` verbatim.
+   - First line of doc-comment uses the English language name (e.g. `Brazilian Portuguese translations for sugar-wishlist.`, `Simplified Chinese translations for candy-core.`).
+   - Keep section comments from the English locale (e.g. `// bin/wishlist`) — translate them if natural, leave them in English if the comment names a file path.
+   - Preserve key order and column alignment of `=>` arrows where the English file aligned them.
 
-   Verify after writing with this PHP one-liner:
+5. **Translate every value.** Rules:
+
+   - Keys: untouched.
+   - `{placeholder}` tokens: untouched, identifier and braces literal.
+   - Backslash-escapes inside single-quoted strings: keep `\'` for apostrophes, double `\\` for literal backslashes. Example:
+
+     ```php
+     'launcher.exec_failed' => 'échec de l\'exécution de {bin}',
+     ```
+
+   - For Arabic (`ar`), Hebrew (`he`), Persian (`fa`): write left-to-right in the PHP source (the runtime renders RTL when displayed); do not insert Unicode bidi marks unless the original had them.
+   - For CJK locales (`zh-cn`, `zh-tw`, `ja`, `ko`): use fullwidth colons `：` only inside the translated prose if natural; keep ASCII `:` inside placeholder syntax and PHP punctuation.
+
+6. **Verify the file parses.** Run:
 
    ```sh
-   php -r "var_dump(array_keys(require 'candy-core/lang/en.php') === array_keys(require 'candy-core/lang/it.php'));"
+   cd <slug> && php -l <new locale file>
    ```
 
-   Must print `bool(true)`.
+   Output must be `No syntax errors detected`. If it fails, fix the escape/quoting issue before continuing.
 
-5. **Run the per-lib test suite** for at least one touched lib to confirm no parse error:
+7. **Verify keys match the English locale exactly.** Run:
 
    ```sh
-   cd candy-core && composer install --quiet && vendor/bin/phpunit
+   cd <slug> && \
+     diff <(php -r 'print_r(array_keys(require "<english file>"));') \
+          <(php -r 'print_r(array_keys(require "<new file>"));')
    ```
 
-   Translation files are loaded by `T::translate()` lazily, so a syntax error surfaces only when the test or runtime hits the locale. Verify exit code 0 before committing.
+   Output must be empty. A diff means you added, dropped, renamed, or reordered a key — fix the new file, not the English one.
 
-6. **Commit + PR per established cadence.** Branch name: `ai/locale-<code>` (or `feat/locale-<code>` for human contributors). Commit author MUST be `Joe Huss <detain@interserver.net>`. Title pattern (mirrors merged PRs #244–#262):
-   - All-libs: `Add <Language> locale for all libs`
-   - Single lib: `Add <Language> locale for <slug>`
+8. **Run the lib's test suite.**
 
-   Push and `gh pr create`. Do NOT update `MATCHUPS.md`, `CONVERSION.md`, `docs/`, or `LOCALES.md` — locale additions do not touch those files (verified across PRs #244–#262).
+   ```sh
+   cd <slug> && composer test
+   ```
+
+   Tests must pass. A failing `T::translate` lookup or registry-load test indicates a syntax issue or a missing key in the new file.
+
+9. **Do NOT edit `composer.json`, CI workflows, `MATCHUPS.md`, root `README.md`, `docs/index.html`, or any other index.** The registry picks up new lang files automatically once dropped in the directory; nothing else needs wiring. Do NOT add a `CHANGELOG.md` entry — out of scope before 1.0.
 
 ## Examples
 
-**User:** "Add Italian locale for all libs."
+**User says:** `add Polish locale to sugar-wishlist`
 
 **Actions:**
-1. Read `LOCALES.md` → `it` is in the recommended set.
-2. List target dirs (~26 libs returned).
-3. For each lib, Read its English source; Write the Italian counterpart translating values, keeping keys/order/placeholders intact, using the short 4-line header.
-4. `cd candy-core && vendor/bin/phpunit` → green.
-5. `git checkout -b ai/locale-it`; commit as Joe Huss; `gh pr create --title 'Add Italian locale for all libs'`.
 
-**Result:** 26 new translation files, one PR mirroring the Polish/Dutch/Czech/Arabic cadence.
+1. Verify the English locale exists under `sugar-wishlist/`. ✓
+2. Read it — 13 keys including `launcher.no_pcntl`, `cli.usage`, etc.
+3. Confirm the Polish file does not exist.
+4. Write the new file with header `* Polish translations for sugar-wishlist.`, identical key order, every value translated, `{path}`/`{bin}`/`{arg}`/`{line}`/`{message}` preserved.
+5. `php -l` → `No syntax errors detected`.
+6. Key diff → empty.
+7. `cd sugar-wishlist && composer test` → green.
 
-**User:** "Add Norwegian Bokmål translation for sugar-bits."
+**Result:** New locale file. Users with `LANG=pl_PL.UTF-8` now resolve via exact-locale match; users with `pl-pl` fall back to `pl` via base-language match. No other files touched.
+
+---
+
+**User says:** `translate candy-core to Brazilian Portuguese`
 
 **Actions:**
-1. `LOCALES.md` → `nb` is in the *Regional variants worth keeping separate* table (Bokmål vs Nynorsk).
-2. Single-lib scope: only `sugar-bits`.
-3. Read `sugar-bits/lang/en.php` (15 keys, no section comments).
-4. Write `sugar-bits/lang/nb.php` with translated values, same key order, short header, no section comments.
-5. `cd sugar-bits && vendor/bin/phpunit` → green.
-6. Commit + PR titled `Add Norwegian Bokmål locale for sugar-bits`.
+
+1. Verify the English locale exists under `candy-core/`. ✓
+2. Decide on code: `pt-br` (`LOCALES.md` flags `pt` vs `pt-br` as worth splitting).
+3. Read the English file.
+4. Write with header `* Brazilian Portuguese translations for candy-core.` and Brazilian-Portuguese values (e.g. `arquivo` over Iberian `ficheiro`, `tela` over `ecrã`).
+5. `php -l` + key diff + `composer test` in `candy-core/`.
+
+**Result:** Brazilian-Portuguese locale lands. If the user also wants European Portuguese, repeat for `pt` with the Iberian wording.
+
+---
+
+**User says:** `add Japanese locale for all libs`
+
+**Actions:**
+
+1. List every lib whose directory contains a locale tree.
+2. For each, in sequence (never in parallel — concurrent writes to shared files collide per project gotcha): perform steps 2–8 of Instructions with `<code>=ja`.
+3. After each lib, run that lib's test suite before moving on.
+
+**Result:** A Japanese locale in every lib that ships translations, each translated against that lib's specific English file (the strings are lib-specific, do NOT reuse one translation across libs).
 
 ## Common Issues
 
-- **`syntax error, unexpected ';' expecting ']'` when phpunit runs.** Unescaped apostrophe inside a single-quoted value (common in French `l'index`, Italian `dell'`). Fix: escape with `\'` or switch the value's surrounding quotes to double-quotes. Re-run phpunit.
-
-- **`Undefined array key 'foo.bar'` at runtime / test failure mentions a missing translation key.** The new locale file is missing a key that exists in the English source. Diff with:
-
-  ```sh
-  php -r "print_r(array_diff(array_keys(require 'candy-core/lang/en.php'), array_keys(require 'candy-core/lang/it.php')));"
-  ```
-
-  Add the missing keys preserving original order.
-
-- **Translation file parses but lookup falls through to English.** Filename mismatch — you used underscores or upper-case region letters. Rename the file to lower-case kebab with a `-` separator.
-
-- **`{placeholder}` rendered literally instead of substituted.** A translator localized the placeholder name (e.g. translated `{value}` → `{valeur}`). `T::translate()` substitutes by exact placeholder name — restore the original English placeholder name and only translate surrounding text.
-
-- **`composer validate` warns about `@dev` requirements.** Expected — the monorepo wires siblings as `@dev` path repositories. Ignore this warning; do not pass `--strict`.
-
-- **Lib has no translations directory.** It has not been wired through `Lang::t()` yet. Stop — this is not an `add-locale` task. Either skip the lib or invoke `scaffold-library` to wire i18n first.
-
-- **User asks for a code not in `LOCALES.md`'s recommended set** (e.g. `vi`, `th`, `he`). Per `LOCALES.md`, open an issue first. If the user insists, proceed using the bare base code from the glibc list at the bottom of `LOCALES.md` and note the deviation in the PR body.
+- **`syntax error, unexpected '...'` from `php -l`**: Usually an unescaped apostrophe inside a single-quoted French/Italian/Spanish value. Fix: escape with `\'`, or switch that one line to double quotes.
+- **Diff shows a missing key**: You skipped a line when translating. Open the English locale, find the key, add it in the same position in your new file. Never delete keys from the English locale to make the diff pass.
+- **Diff shows an extra key in the new file**: A typo introduced a new key. Fix the typo — do NOT add the typo to the English locale.
+- **`{placeholder}` rendered literally in app output**: You translated the placeholder name. The `T::translate` interpolator only substitutes the original token names; revert.
+- **`Unknown locale code` user pushback**: They asked for something like `en-gb` or `fr-ca`. Tell them the base-language file already covers regional variants via the fallback chain; only create a regional file if wording genuinely diverges (see `LOCALES.md` "Regional variants worth keeping separate" table).
+- **Tests pass but `T::translate` returns the raw key at runtime**: The lib's `Lang::t()` wrapper has not been called yet in that code path, or the namespace passed to `T::register` does not match. This is NOT a translation file bug — it is a wiring issue; out of scope for this skill (use `scaffold-library` to verify wiring).
+- **PHP CS Fixer reformats your alignment**: Project follows PSR-12 but the English locale uses extra spaces to align `=>`. Match what the English locale does for that specific lib; if the lib's existing French/German file does not bother aligning, you do not need to either. Consistency within the lib wins.

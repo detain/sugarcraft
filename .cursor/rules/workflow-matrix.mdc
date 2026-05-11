@@ -1,0 +1,18 @@
+---
+description: Hand-maintained CI and VHS workflow matrices
+globs: ".github/workflows/*.yml"
+alwaysApply: false
+---
+
+# CI / VHS workflow matrices
+
+**Both matrices are hand-maintained, NOT glob-driven.** Adding a lib without updating both means PHPUnit silently never runs and the GIF never re-renders.
+
+- `.github/workflows/ci.yml` — PHPUnit matrix entry per lib under `jobs.test.strategy.matrix.lib`. Coverage job runs after matrix; uploads per-lib Clover with `flags: <lib>` (matches `codecov.yml`).
+- `.github/workflows/vhs.yml` — hand-maintained `all=(...)` bash array around line ~51-64. Once a lib is in the array, every `.vhs/*.tape` it owns auto-renders. Don't commit rendered GIFs — the `commit` job does that.
+- `.github/workflows/sync-sugarcraft.yml` — pushes each subdir to `github.com/sugarcraft/<slug>`. Run `./scripts/bootstrap-org-repos.sh` first.
+- `.github/workflows/tests.yml` — SVN credentials HARDCODED. Do NOT refactor to `${{ secrets.SVN_USER }}` — secrets don't exist in repo settings yet.
+
+**VHS tape rules**: `Env COLUMNS "100"` (quote ALL values, even numerics). Always `Set Theme "TokyoNight"`. See `sugar-bits/.vhs/spinners.tape` for canonical shape.
+
+**Non-visual libs exempt**: `candy-pty`, FFI bindings, codecs — skip both tape AND matrix; note exemption in PR body.

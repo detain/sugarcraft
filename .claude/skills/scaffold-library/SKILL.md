@@ -1,266 +1,225 @@
 ---
 name: scaffold-library
-description: Scaffolds a new SugarCraft monorepo library following the canonical playbook in AGENTS.md. Creates <slug>/{composer.json,phpunit.xml,README.md,CALIBER_LEARNINGS.md,src/,tests/,examples/,lang/,.vhs/}, wires it into root composer.json (require + repositories), .github/workflows/{ci,vhs}.yml matrices, MATCHUPS.md, PROJECT_NAMES.md, CONVERSION.md, README.md table, docs/index.html + docs/lib/<slug>.html + docs/img/icons/<slug>.png. Use when user says 'add new library', 'port <upstream>', 'scaffold <slug>', 'new sugarcraft package', 'new lib'. Do NOT use for modifying existing libs, changing the umbrella metapackage's keywords, or adding a new locale to existing libs (use the i18n flow instead).
+description: Scaffolds a new SugarCraft library end-to-end per the AGENTS.md checklist. Creates <slug>/composer.json (path-repo closure copied from sugar-charts), README.md, CALIBER_LEARNINGS.md, phpunit.xml, src/<Class>.php with declare(strict_types=1) + PSR-4 namespace, tests/ stub, and updates root composer.json + MATCHUPS.md + PROJECT_NAMES.md + README.md table + docs/index.html tile + docs/lib/<slug>.html + .github/workflows/ci.yml + .github/workflows/vhs.yml + codecov.yml. Use when user says 'add new library', 'port <upstream>', 'create candy-X', 'create sugar-Y', or 'create honey-Z'. Do NOT use for adding features to an existing lib (follow that lib's CALIBER_LEARNINGS.md instead) or for renaming libs (separate flow).
 paths:
-  - composer.json
   - */composer.json
   - */phpunit.xml
-  - */src/**
-  - */tests/**
-  - */lang/**
-  - */.vhs/**
-  - .github/workflows/ci.yml
-  - .github/workflows/vhs.yml
+  - */src/**/*.php
+  - */tests/**/*.php
   - MATCHUPS.md
   - PROJECT_NAMES.md
-  - CONVERSION.md
   - docs/index.html
   - docs/lib/*.html
+  - .github/workflows/ci.yml
+  - .github/workflows/vhs.yml
+  - codecov.yml
 ---
 # scaffold-library
 
+End-to-end scaffolding of a new SugarCraft monorepo library. The output MUST be a checklist-complete lib that `composer install && composer test` passes on a clean clone.
+
 ## Critical
 
-- **Slug rules**: kebab-case. Prefix MUST be one of `candy-` (foundation/system), `sugar-` (components/data/apps), or `honey-` (math/physics/motion). See `MATCHUPS.md` and `PROJECT_NAMES.md`.
-- **PSR-4 namespace drops the prefix**: `candy-shine` → `SugarCraft\Shine\`. The single quirky exception is `candy-core` → `SugarCraft\Core\` (umbrella).
-- **Every PHP file MUST start with `declare(strict_types=1);`**. Public classes are `final` unless extension is contractual.
-- **CI matrices in `.github/workflows/ci.yml` AND `.github/workflows/vhs.yml` are hand-maintained, NOT glob-driven.** A new lib is invisible to CI until you add it to BOTH matrices.
-- **Do NOT run `composer validate --strict`** — `@dev` sibling constraints are flagged by `--strict` but are EXPECTED in this monorepo. Use plain `composer validate`.
-- **Do NOT add credit/upstream-acknowledgement sections** — out of scope for the pre-1.0 port (per `feedback_audit_skip_credit_upgrade`).
-- **Commit author MUST be `Joe Huss <detain@interserver.net>`** — CI infra depends on this.
-- Bundle the whole scaffold into ONE PR — do not split into many small PRs (per `feedback_pr_size`).
+- **Pick the prefix from `PROJECT_NAMES.md`** before writing anything. `Candy-` = foundation/runtime, `Sugar-` = components/data/apps, `Honey-` = math/physics. If the role is ambiguous, ASK the user; do not guess.
+- **Naming chain is rigid**: PascalCase upstream-style → kebab dir + composer pkg suffix → `sugarcraft/<slug>` composer pkg → `SugarCraft\<Sub>` namespace (drop the prefix). The one quirk: `SugarCraft\Core` keeps the umbrella name.
+- **Copy the path-repo closure from an existing leaf lib** when wiring sibling deps. Every transitive `@dev` sibling needs BOTH a `require` entry AND a `repositories` path entry with `symlink: true`. Missing one = install fails.
+- **`composer validate` MUST run without `--strict`**. `--strict` flags every `"sugarcraft/*": "@dev"` — this is EXPECTED before 1.0. Drop the flag.
+- **CI matrices are hand-maintained**. Both CI workflows under `.github/workflows/` must get a matrix entry. Skipping either means PHPUnit or GIF rendering silently never runs for the new lib.
+- **All commits land in the monorepo**. Do not create or push to per-lib downstream repos directly — the org sync workflow distributes them.
 
 ## Instructions
 
-### Step 1 — Pick the name and confirm with the user
+Use absolute paths — Bash CWD persists across calls and silent empty reads from a stale CWD are a documented gotcha.
 
-1. Read `MATCHUPS.md` and `PROJECT_NAMES.md` to confirm the slug isn't taken and the prefix matches role.
-2. Decide:
-   - Slug (kebab, e.g. `sugar-marbles`)
-   - PSR-4 namespace component (e.g. `Marbles` → full namespace `SugarCraft\Marbles\`)
-   - Upstream repo path (e.g. the upstream Go repo) and one-line role
-3. **Verify** the slug doesn't already exist:
+### Step 1 — Confirm name, role, deps
 
-```sh
-ls -d sugar-marbles 2>/dev/null && echo 'TAKEN — STOP' || echo 'free'
-```
+Ask (or confirm) with the user:
 
-If TAKEN, this is a modify task, not a scaffold task.
+1. Upstream repo URL — needed for `Mirrors charmbracelet/...` doc-comments and `MATCHUPS.md` row.
+2. Proposed slug and prefix (Candy/Sugar/Honey). Cross-check against `PROJECT_NAMES.md` — if the slug already exists or the prefix conflicts with the role, stop and ask.
+3. Direct sibling deps (e.g. depends on `candy-core` + `sugar-bits`). The path-repo closure is the FULL TRANSITIVE set, not just direct.
 
-### Step 2 — Create the package skeleton
+Derive: kebab-case slug, namespace = `SugarCraft\<SlugWithoutPrefix>` (exception: `candy-core` → `SugarCraft\Core`).
 
-Mirror the layout of an existing leaf lib like `sugar-bits/`. Every lib carries `composer.json`, a PHPUnit config XML, `README.md`, `CALIBER_LEARNINGS.md`, plus `src/`, `tests/`, `examples/`, `lang/`, `.vhs/` directories.
+Verify: read `PROJECT_NAMES.md` to confirm slug is free.
 
-**`composer.json` template** — copy this, replacing slug, namespace, upstream, description, keywords:
+### Step 2 — Read the canonical references
+
+These are the source of truth — copy structure, don't invent it. Read in parallel:
+
+- `sugar-charts/` for the canonical path-repo closure pattern.
+- `candy-core/` for the canonical PHPUnit XML.
+- `sugar-bits/` for the canonical leaf-lib skeleton.
+- Root `composer.json` for where to add `require` + `repositories`.
+- The CI workflow files under `.github/workflows/` for matrix entry shape.
+- `MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md`, `docs/index.html`, `codecov.yml`.
+
+Verify each file was read in full before generating any output.
+
+### Step 3 — Create the lib's `composer.json`
+
+Write the lib's composer manifest. Required block order (after `name`, `description`, `type`, `license`):
 
 ```json
 {
-    "name": "sugarcraft/sugar-marbles",
-    "description": "PHP port of upstream marbles — one-line role.",
-    "type": "library",
-    "license": "MIT",
-    "keywords": ["tui", "terminal", "sugarcraft", "marbles"],
-    "homepage": "https://github.com/sugarcraft/sugar-marbles",
-    "authors": [
-        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
-    ],
-    "support": {
-        "issues": "https://github.com/sugarcraft/sugar-marbles/issues",
-        "source": "https://github.com/sugarcraft/sugar-marbles",
-        "docs":   "https://sugarcraft.github.io/lib/sugar-marbles.html"
-    },
-    "require": {
-        "php": "^8.1",
-        "sugarcraft/candy-core": "@dev"
-    },
-    "require-dev": {
-        "phpunit/phpunit": "^10.5"
-    },
-    "repositories": [
-        { "type": "path", "url": "../candy-core", "options": { "symlink": true } }
-    ],
-    "autoload":     { "psr-4": { "SugarCraft\\Marbles\\": "src/" } },
-    "autoload-dev": { "psr-4": { "SugarCraft\\Marbles\\Tests\\": "tests/" } },
-    "minimum-stability": "dev",
-    "prefer-stable": true
+  "keywords": ["sugarcraft", "<upstream-go-name>"],
+  "homepage": "https://github.com/sugarcraft/<slug-placeholder>",
+  "authors": [
+    {"name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer"}
+  ],
+  "support": {
+    "issues": ".../issues",
+    "source": ".../tree/master",
+    "docs": ".../blob/master/README.md"
+  },
+  "require": {
+    "php": "^8.3",
+    "sugarcraft/<dep>": "@dev"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^10.5"
+  },
+  "autoload": {"psr-4": {"SugarCraft\\<Sub>\\": "src/"}},
+  "autoload-dev": {"psr-4": {"SugarCraft\\<Sub>\\Tests\\": "tests/"}},
+  "repositories": [
+    {"type": "path", "url": "../<dep>", "options": {"symlink": true}}
+  ],
+  "minimum-stability": "dev",
+  "prefer-stable": true
 }
 ```
 
-For each additional sibling lib your code requires, append BOTH a `require` entry AND a `repositories` entry. Pattern mirrored from `sugar-bits/composer.json`.
+Copy the `repositories` block verbatim from a working leaf lib and prune to the actual transitive closure. Verify: run `composer validate` (no `--strict`) — must exit 0 with at most the `@dev` warnings.
 
-**PHPUnit config** — copy `sugar-bits/phpunit.xml` verbatim, change only the `<testsuite name="sugar-bits">` to match the new slug.
+### Step 4 — Create the lib's PHPUnit config
 
-**Default English language file** — start with this header (every other locale file is a translation of this one; see `LOCALES.md` for codes):
+Mirror an existing leaf lib's PHPUnit XML exactly. Required attributes on the root element:
+
+```xml
+<phpunit
+    bootstrap="vendor/autoload.php"
+    colors="true"
+    failOnWarning="true"
+    cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="unit"><directory>tests</directory></testsuite>
+  </testsuites>
+  <source>
+    <include><directory>src</directory></include>
+  </source>
+</phpunit>
+```
+
+### Step 5 — Create the source file under `src/`
+
+Every PHP file starts with:
 
 ```php
 <?php
 
-/**
- * English (default) translations.
- *
- * @return array<string, string>
- */
-
 declare(strict_types=1);
 
-return [
-    // 'key.subkey' => 'message',
-];
+namespace SugarCraft\<Sub>;
 ```
 
-**VHS tape** — relative paths from the lib dir:
+Class rules:
 
-```
-# Render with: vhs <lib-dir>/.vhs/<demo>.tape
-Output .vhs/<demo>.gif
+- `final class <Name>` unless extension is part of the public contract.
+- Public `readonly` properties for state.
+- Every `with*()` returns a new instance via a private `mutate(): self` helper.
+- Bare-named accessors (NO `get` prefix) — `theme()` not `getTheme()`.
+- Factory methods mirror upstream (`Theme::ansi()`, `Spinner::line()`).
+- Doc-comment: `/** Mirrors upstream <Method>. */`.
+- No comments restating WHAT — only WHY (constraints, invariants, upstream issue links).
 
-Set FontSize 14
-Set Width 700
-Set Height 240
-Set TypingSpeed 60ms
-Set Theme "TokyoNight"
+### Step 6 — Create the lib's `README.md` and `CALIBER_LEARNINGS.md`
 
-Type "php examples/<demo>.php"
-Enter
-Sleep 8s
-```
+`README.md`: composer-require snippet, one-paragraph role summary, quickstart example, link to the upstream, Codecov per-flag badge (URL form: `?flag=<slug-placeholder>`).
 
-**`CALIBER_LEARNINGS.md`** — start with the canonical header (file is auto-managed):
+`CALIBER_LEARNINGS.md`: empty stub with a top-level heading. Accumulated by future sessions, not by this scaffold.
 
-```markdown
-# Caliber Learnings
+### Step 7 — Create the lib's test file under `tests/`
 
-Accumulated patterns and anti-patterns from development sessions.
-Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not edit manually.
-```
+Namespace `SugarCraft\<Sub>\Tests`. Class: `final class <Name>Test extends \PHPUnit\Framework\TestCase`. At minimum one snapshot/coercion test so the suite is green. Patterns:
 
-**Verify** before Step 3:
+- Snapshot tests assert raw `\x1b[...m` SGR bytes.
+- Behaviour tests drive `update()` with scripted `KeyMsg`/`MouseMsg` and assert `[Model, ?Cmd]`.
+- Coercion tests feed negative/oversized/empty/null to assert clamp/no-op.
+
+Verify: `composer install && composer test` — green. If red, fix before continuing.
+
+### Step 8 — Wire the root composer manifest
+
+Use the Edit tool on the root manifest. Add to `require` and add the path-repo to `repositories` (mirror existing entries). Verify with `composer validate` (no `--strict`).
+
+### Step 9 — Update cross-cut files
+
+All Edit calls — do not rewrite, surgically insert:
+
+- `MATCHUPS.md` — new row with status icon 🔴 (planned), 🟡 (partial), 🟢 (parity), 🚀 (split out). New scaffolds typically start 🟡 with a one-line scope note.
+- `PROJECT_NAMES.md` — naming entry under the appropriate prefix section.
+- Root `README.md` — bump the library count in the prose, add a row to the table, update the canonical test-loop snippet.
+- `docs/index.html` — add a tile to the homepage grid. Use the same markup shape as adjacent tiles.
+- `media/` or `docs/img/icons/` — 256-square candy-themed PNG. If no asset, leave a TODO note in the PR body — do NOT ship a missing-image tile silently.
+- `codecov.yml` — add the per-flag entry so the Codecov badge resolves.
+
+### Step 10 — Wire CI matrices (BOTH workflows)
+
+The CI matrix arrays under `.github/workflows/` are hand-maintained, NOT glob-driven. Add the slug to each matrix list. Verify with Grep that the slug appears in both workflow files.
+
+### Step 11 — Full verification gate
+
+Run in sequence:
 
 ```sh
-ls sugar-marbles/
-cd sugar-marbles && composer validate    # NOT --strict
+cd <slug> && composer install --quiet && composer test
+cd <slug> && composer validate
+composer validate
 ```
 
-Must print `./composer.json is valid`.
+Then re-run the monorepo canonical loop for any lib that newly depends on the new slug.
 
-### Step 3 — Wire into the root metapackage
-
-Edit `/home/sites/sugarcraft/composer.json`:
-
-1. Add to the `require` map: `"sugarcraft/sugar-marbles": "@dev"` (alphabetical-ish — match surrounding style).
-2. Add to the `repositories` array: `{ "type": "path", "url": "sugar-marbles", "options": { "symlink": true } }`.
-
-**Verify**:
-
-```sh
-cd /home/sites/sugarcraft && composer validate
-```
-
-### Step 4 — Add CI matrix entries (BOTH workflows)
-
-The matrices are hand-maintained — without these, CI will not run the new lib.
-
-1. `.github/workflows/ci.yml` — under `jobs.test.strategy.matrix.lib`, add `- sugar-marbles` to the list (preserve existing ordering pattern).
-2. `.github/workflows/vhs.yml` — locate the matching matrix/lib list and add `sugar-marbles` there too.
-
-**Verify**:
-
-```sh
-grep -c 'sugar-marbles' .github/workflows/ci.yml .github/workflows/vhs.yml
-```
-
-Must report ≥1 in each.
-
-### Step 5 — Update central docs
-
-Four edits, all required:
-
-1. **`MATCHUPS.md`** — add a new row in the Libraries table with the upstream→port mapping. Status icon starts at 🔴 (scaffold only) and progresses 🔴 → 🟡 → 🟢 → 🚀.
-2. **`PROJECT_NAMES.md`** — add a one-line entry plus rationale if the prefix/suffix choice isn't obvious.
-3. **`CONVERSION.md`** — append a row to the Phase 9+ table: name | subdir | namespace | dependency chain.
-4. **Root `README.md`** — add the new lib to the libraries table (match the existing column shape).
-
-Skip `AUDIT_2026_05_06.md` unless the upstream is one we're already tracking gaps against.
-
-### Step 6 — Wire the website
-
-Two edits:
-
-1. **`docs/index.html`** — add a new `<a class="lib-card" href="lib/sugar-marbles.html">` tile to the `#libraries` grid. Match an existing tile's structure exactly: `.lib-card-preview` (with demo `<img>` or `lib-card-preview--empty` placeholder), `.lib-icon-row`, title, `.lib-source`, `<p class="summary">`, `.links`.
-2. **Per-lib detail page under `docs/`** — copy a sibling page (e.g. `docs/lib/candy-core.html`) and customise: title, meta description, og:* tags, hero header (icon path, title, sub-title, port-of chip), install snippet (`composer require sugarcraft/sugar-marbles`), Quickstart, "What's in the box" feature grid, Source & demos pulling each `.vhs/*.gif`. Drop a 256-square candy-themed PNG with transparent background under `media/` or `docs/img/icons/` (match where existing icons live). If the user hasn't supplied one, leave a placeholder and FLAG it explicitly in the PR body.
-
-### Step 7 — Verify the whole stack
-
-```sh
-cd sugar-marbles && composer install && vendor/bin/phpunit
-cd /home/sites/sugarcraft && composer validate
-```
-
-Both must succeed before committing. Then run the canonical monorepo loop from `CLAUDE.md` if any sibling lib was added to your `require`.
-
-### Step 8 — Commit and PR
-
-1. Branch: `ai/sugar-marbles-scaffold` (AI-driven) or `feat/sugar-marbles-scaffold` (human).
-2. Bundle ALL of Steps 2–6 into ONE commit/PR — do not split.
-3. PR title: `sugar-marbles: initial scaffold`.
-4. PR body ends with a `## Test plan` checklist citing the test count: `sugar-marbles full suite green (N/N)`.
-5. Author: `Joe Huss <detain@interserver.net>`.
-6. Auto-merge is OFF; merge manually with `gh pr merge <num> --squash --delete-branch`.
+Only after all checks pass, hand off to the user with the PR-ready summary (audit-driven title shape `<lib>: scaffold (audit #N)`, else `<lib>: scaffold initial port`).
 
 ## Examples
 
-**User says**: "Port an upstream marbles library as `sugar-marbles`."
+### Example 1 — naming collision caught before scaffolding
 
-**Actions taken**:
-1. Confirm `sugar-marbles` is unused in `MATCHUPS.md`, `PROJECT_NAMES.md`, and on disk.
-2. Create the lib dir with `composer.json`, PHPUnit XML config, `README.md`, `CALIBER_LEARNINGS.md`, `src/Marbles.php`, `tests/MarblesTest.php`, `examples/marbles.php`, `lang/en.php`, `.vhs/marbles.tape` using the templates above. Namespace: `SugarCraft\Marbles\`.
-3. Edit root `composer.json`: add `"sugarcraft/sugar-marbles": "@dev"` to `require` and the matching path repo to `repositories`.
-4. Edit `.github/workflows/ci.yml` + `.github/workflows/vhs.yml`: add `- sugar-marbles` to each matrix lib list.
-5. Add rows to `MATCHUPS.md`, `PROJECT_NAMES.md`, `CONVERSION.md`, root `README.md` table.
-6. Add tile to `docs/index.html`, new per-lib detail page, plus placeholder PNG (FLAG that the icon needs an artist pass).
-7. `cd sugar-marbles && composer install && vendor/bin/phpunit` — green (1/1).
-8. Commit on `ai/sugar-marbles-scaffold`, open PR titled `sugar-marbles: initial scaffold`.
+User: "Port the upstream renderer as candy-glow."
 
-**Result**: Single PR adds the lib, wires CI, updates all four central docs, and lights up the website tile. Status row in `MATCHUPS.md` is 🔴 (scaffold) — bumps to 🟡 in the next PR when API parity work begins.
+Actions:
+
+1. Confirm prefix — renderer, foundation-y → `Candy-` fits. Check `PROJECT_NAMES.md` — `sugar-glow` exists, so the user means a different thing. Stop and clarify before scaffolding.
+2. After user confirms naming, derive namespace `SugarCraft\Glow`. Conflict — `sugar-glow` already owns `SugarCraft\Glow`. Resolve with user (e.g. `SugarCraft\GlowRenderer`) before any file is written.
+
+Result: collision caught before scaffolding; user picks final name.
+
+### Example 2 — leaf lib depending on `candy-core` + `sugar-bits`
+
+User: "Create a new sugar-prefixed lib, depends on candy-core and sugar-bits."
+
+Actions:
+
+1. Verify slug free in `PROJECT_NAMES.md`. Pick namespace.
+2. Read `sugar-charts/` composer manifest — its path-repo closure already includes `candy-core` + `sugar-bits`, so copy and prune to those two.
+3. Write the lib files (composer manifest, PHPUnit XML, README, CALIBER_LEARNINGS stub, source class, test class).
+4. Edit root composer manifest (require + repositories), `MATCHUPS.md` (🟡 row), `PROJECT_NAMES.md`, root `README.md` (count + table + loop), `docs/index.html` (tile), `codecov.yml`, both CI workflows.
+5. Run verification gate. All checks green.
+
+Result: branch ready for `unset GITHUB_TOKEN && gh pr create`.
 
 ## Common Issues
 
-**`composer validate` reports `"sugarcraft/candy-core: @dev" is dev-stable, but does not match minimum-stability`**
+**`Your requirements could not be resolved … sugarcraft/<dep> requires …` on install** — Missing transitive path-repo in the new lib's `repositories` block. Re-copy the full closure from a working leaf lib, prune to actual transitive set (run `composer why sugarcraft/<dep>` in a consumer to enumerate).
 
-You ran `composer validate --strict`. Drop `--strict` — every sibling is `@dev` by design. Plain `composer validate` should print `./composer.json is valid`.
+**`composer validate --strict` exits non-zero with `"sugarcraft/<dep>": "@dev" is not a stable version constraint`** — Drop the `--strict` flag. Pre-release path-repos always trip this. Documented in `AGENTS.md` gotchas.
 
-**`Could not find a matching version of package sugarcraft/sugar-marbles` when installing the root metapackage**
+**CI green locally, PHPUnit silently never runs in GitHub Actions** — Missing matrix entry in the CI workflow file. Hand-maintained, not glob-driven. Re-grep the slug against both workflow files.
 
-You added the package to the root `require` but forgot the matching `repositories` entry. Open `/home/sites/sugarcraft/composer.json` and confirm BOTH the `require` map AND the `repositories` array contain the new slug. Then `composer update sugarcraft/sugar-marbles` from the root.
+**`PHPUnit\Framework\Exception: PHP Warning ...` even though code works** — `failOnWarning="true"` is on. Fix the warning at source; do NOT remove the attribute — every lib's PHPUnit config carries it.
 
-**CI is green on master but the new lib never runs**
+**`Cannot redeclare ...` or PSR-4 autoload mismatch on first test** — Namespace doesn't match dir layout. Files must live under `src/` and the composer `autoload.psr-4` MUST use double backslash in JSON (`"SugarCraft\\<Sub>\\": "src/"`).
 
-The matrices in `.github/workflows/ci.yml` and `.github/workflows/vhs.yml` are hand-maintained, not glob-driven:
+**Bash reads return empty content unexpectedly** — Bash CWD persisted from a previous `cd <slug>` and the lib doesn't exist yet. Always anchor with absolute paths.
 
-```sh
-grep -n 'sugar-marbles' .github/workflows/ci.yml .github/workflows/vhs.yml
-```
-
-If there are zero hits in either file, add the slug to both matrix `lib:` lists and re-push.
-
-**`Class "SugarCraft\\Marbles\\Marbles" not found` in tests**
-
-The `autoload` PSR-4 map in the lib's `composer.json` doesn't match the actual namespace declared in the source file. Confirm both say `SugarCraft\Marbles\`. Run `composer dump-autoload` from the lib dir.
-
-**VHS demo renders but the `.gif` lands in the wrong path**
-
-`Output .vhs/marbles.gif` MUST be a path relative to the lib dir, not to repo root. The CI workflow `cd`s into each lib before invoking `vhs`. Match the path in `sugar-bits/.vhs/progress.tape`.
-
-**Icon 404 on the website**
-
-The homepage tile in `docs/index.html` references the icon by path. Either drop in a real 256-square PNG with transparent background under `media/` (or `docs/img/icons/` to match existing tiles), or use the existing `lib-card-preview--empty` placeholder structure (copy from a tile that doesn't yet have a demo). Don't link a non-existent file.
-
-**PR fails the `Author` check**
-
-CI infra requires `Joe Huss <detain@interserver.net>` as the commit author:
-
-```sh
-git log -1 --format='%an <%ae>'
-```
-
-Must match exactly. Re-author with `git commit --amend --author='Joe Huss <detain@interserver.net>'` (this is the documented exception to "never amend").
+**Codecov badge 404s on README** — Forgot the `codecov.yml` entry for the new flag. Add the per-lib flag block.
