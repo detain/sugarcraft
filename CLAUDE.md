@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md

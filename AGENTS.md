@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.1+ (PHP 8.4+ for Windows FFI features), PHPUnit 10, ReactPHP. Windows 10 1809+ required for TTY raw mode support.
+PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (PHP 8.4+ for Windows FFI features), PHPUnit 10, ReactPHP. Windows 10 1809+ required for TTY raw mode support.
 
 ## Source-of-truth files
 
@@ -33,7 +33,7 @@ Reference the existing leaf lib `sugar-bits/` for the canonical layout. Each lib
 
 ### `composer.json`
 
-PHP `^8.1`, PHPUnit `^10.5`, `minimum-stability: dev`. Metadata block (after `license`, before `require`): `keywords` (lowercase kebab, include `"sugarcraft"` + upstream Go name like `"bubbletea"`), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. PSR-4 `"<NS>\\<Sub>\\": "src/"` plus matching test namespace. Sibling deps: `"sugarcraft/<dep>": "@dev"` AND path-repo `{type: path, url: "../<dep>", options: {symlink: true}}` for the FULL transitive closure — copy from `sugar-charts/composer.json`.
+PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`. Metadata block (after `license`, before `require`): `keywords` (lowercase kebab, include `"sugarcraft"` + upstream Go name like `"bubbletea"`), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. PSR-4 `"<NS>\\<Sub>\\": "src/"` plus matching test namespace. Sibling deps: `"sugarcraft/<dep>": "@dev"` AND path-repo `{type: path, url: "../<dep>", options: {symlink: true}}` for the FULL transitive closure — copy from `sugar-charts/composer.json`.
 
 ### PHPUnit config
 

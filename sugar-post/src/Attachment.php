@@ -30,7 +30,10 @@ final class Attachment
     {
         $name = $filename ?? \basename($path);
         $mime = self::detectMimeType($path);
-        $content = \file_get_contents($path);
+        // Suppress warning when file doesn't exist - return null content
+        $prev = \error_reporting(E_ALL & ~\E_WARNING);
+        $content = @\file_get_contents($path);
+        \error_reporting($prev);
 
         return new self(
             filename:  $name,
@@ -82,7 +85,10 @@ final class Attachment
             return $this->content;
         }
         if ($this->path !== null) {
-            $c = \file_get_contents($this->path);
+            // Suppress warning when file doesn't exist
+            $prev = \error_reporting(E_ALL & ~\E_WARNING);
+            $c = @\file_get_contents($this->path);
+            \error_reporting($prev);
             return $c !== false ? $c : '';
         }
         return '';
@@ -122,7 +128,10 @@ final class Attachment
     private static function detectMimeType(string $path): string
     {
         if (\function_exists('mime_content_type')) {
-            $m = \mime_content_type($path);
+            // Suppress warning when file doesn't exist - we'll fall back to extension-based detection
+            $prev = \error_reporting(E_ALL & ~\E_WARNING);
+            $m = @\mime_content_type($path);
+            \error_reporting($prev);
             if ($m !== false && $m !== 'application/octet-stream') {
                 return $m;
             }
