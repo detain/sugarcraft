@@ -33,7 +33,7 @@
         "sugarcraft/candy-pty": "dev-master"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.5"
     },
     "suggest": {
         "ext-ssh2": "Enables the Ssh2 client middleware (forwarding, sftp helpers)."
