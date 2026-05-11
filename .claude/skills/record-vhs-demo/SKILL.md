@@ -1,136 +1,128 @@
 ---
 name: record-vhs-demo
-description: Creates a VHS .tape file at <slug>/.vhs/<demo>.tape driving a php examples/<demo>.php (or ./bin/<binary>) invocation with TokyoNight theme and the standard FontSize/Width/Height/Type/Enter/Sleep sequence. Also adds the lib to the hand-maintained matrix in .github/workflows/vhs.yml when missing — vhs.yml is glob-triggered on path but glob-skipped on rendering, so libs absent from the matrix render nothing. Use when the user says 'add VHS demo', 'record gif', 'new tape file', 'add a tape for <slug>'. Do NOT use for editing an existing tape's visual style, rendering GIFs locally (CI does that), or troubleshooting a failed render — those are separate flows.
+description: Creates a VHS .tape file at <slug>/.vhs/<demo>.tape driving php examples/<demo>.php with TokyoNight theme and the standard FontSize/Width/Height/Type/Enter/Sleep sequence. Also adds the lib to the hand-maintained matrix in .github/workflows/vhs.yml when missing. Use when user says 'add VHS demo', 'record gif', 'new tape file', 'add a tape for <slug>'. Do NOT use for editing an existing tape's visual style, rendering GIFs locally (CI does that via vhs.yml), or for non-visual libs (candy-pty, FFI/syscall wrappers) — those are exempt from the .vhs/ + matrix requirement.
 paths:
   - */.vhs/*.tape
   - .github/workflows/vhs.yml
 ---
-# record-vhs-demo
-
-Create a VHS tape file that drives a runnable example so CI re-renders the GIF on every push.
+# Record VHS demo
 
 ## Critical
 
-- The tape file lives at `<lib-dir>/.vhs/<demo-name>.tape` — dot-prefixed dir, never a top-level recordings folder.
-- The CI workflow `.github/workflows/vhs.yml` has a **hand-maintained `all=(...)` matrix at lines ~51-64**. A lib that is not in that array will never render, even if a tape file exists. Always check before scaffolding a tape for a new lib.
-- Do **not** commit the rendered GIF — CI renders and commits it on push via the `commit` job in `.github/workflows/vhs.yml`. The local repo only owns the tape source.
-- The demo command must be a real, working invocation. `Type "php examples/<demo>.php"` requires the example file to already exist and be self-contained (no extra setup, no external input fixtures).
-- Theme is **always** `"TokyoNight"`. Do not invent themes; the existing 90+ tapes are uniform on this.
+- Tape path is **always** under the lib's VHS directory. The `Output` directive inside is **always** relative to the lib root: `Output <dir>/<demo>.gif` where `<dir>` is the lib's tape directory. Never write absolute paths inside the tape.
+- Theme is **always** `Set Theme "TokyoNight"`. Don't pick a different theme without explicit user request — every existing tape uses it and the website tile grid assumes the same palette.
+- The CI matrix in `.github/workflows/` for VHS rendering is **hand-maintained** (a bash array in the workflow file). A tape that exists but whose lib isn't in that array will silently never render. Verify the lib is present before claiming the work is done.
+- Do **not** run `vhs` locally to commit a rendered output. CI renders and commits via the workflow's commit job. Tape files only — no rendered output in the same PR.
+- The matching example script (PHP entrypoint or bin command) must already exist. If it doesn't, stop and ask the user — don't fabricate an example script just to make the tape runnable.
+- Skip this skill entirely for non-visual libs: `candy-pty`, FFI/syscall wrappers, transport-only libs. They're explicitly listed (or omitted) from the workflow matrix and don't carry tape directories.
 
 ## Instructions
 
-1. **Verify the example exists.** Read the lib's example PHP file. If it doesn't exist, stop — scaffold the example first (separate task) before writing a tape that calls it. Verify it runs to completion in a bounded time (look for an exit, a timer, or a quit-on-key handler) so a fixed `Sleep` will cover its lifetime.
-
-2. **Pick dimensions from the demo's content.** Match a sibling tape with similar shape rather than guessing. Verified patterns from existing tapes:
-   - **Compact text/spinner** (`sugar-bits/.vhs/spinners.tape`): `FontSize 16` · `Width 600` · `Height 180`
-   - **Single-line input** (`candy-shell/.vhs/input.tape`): `FontSize 14` · `Width 700` · `Height 200`
-   - **Standard interactive demo** (`sugar-prompt/.vhs/form.tape`): `FontSize 16` · `Width 800` · `Height 480`
-   - **Tall chart/grid** (`sugar-charts/.vhs/bar.tape`): `FontSize 14` · `Width 700` · `Height 600`
-   - **Wide animation** (`honey-bounce/.vhs/spring.tape`): `FontSize 14` · `Width 800` · `Height 380`
-
-   When in doubt: `FontSize 14`, `Width 800`, `Height 480`. Verify the chosen dims match the example's actual output before continuing.
-
-3. **Write the tape file** at the lib's `.vhs/` dir using this exact ordering (Output first, then Set lines, then Type/Enter/Sleep). For a non-interactive demo:
+1. **Confirm the lib is visual and the example exists.**
 
    ```
-   Output .vhs/start.gif
+   Glob "<slug>/examples/*.php"
+   ```
+
+   If a specific demo name wasn't given, list candidates and ask the user. If none exist, stop — the tape can't drive a missing script.
+
+   Check the lib already has a VHS directory or other tapes:
+
+   ```
+   Glob "<slug>/.vhs/*.tape"
+   ```
+
+   If yes, **read one of them first** and mirror its `FontSize`/`Width`/`Height` choices unless the new demo genuinely needs different dimensions.
+
+2. **Pick dimensions from the established convention.** Use the closest match to neighbouring tapes. Defaults observed across the repo:
+
+   - `Set FontSize 14` for most libs; `Set FontSize 16` only for sugar-bits-style component showcases.
+   - `Set Width 700` is the canonical width. Use `600` only for narrow component demos (single spinner, single status line).
+   - `Set Height` scales to output: short status (`180`–`220`), medium TUI (`320`), full-screen game/board (`440`–`460`).
+   - `Set TypingSpeed 60ms` whenever `Type` is used to invoke or interact (omit only for pure-display tapes that just `Type` the launch line).
+
+3. **Write the tape using this exact skeleton:**
+
+   ```
+   # VHS tape — <one-line description of what the demo shows>.
+   Output <relative path to rendered output>
+
    Set FontSize 14
-   Set Width 800
-   Set Height 480
+   Set Width 700
+   Set Height 320
    Set TypingSpeed 60ms
    Set Theme "TokyoNight"
-   Type "php examples/start.php"
+
+   Type "php <example entrypoint>"
    Enter
-   Sleep 4s
+   Sleep 2s
    ```
 
-   Notes:
-   - `Output` path is relative to the lib dir (the workflow's `working-directory`), so it is always `.vhs/<demo>.gif` — never absolute.
-   - `Set TypingSpeed 60ms` (or `80ms`) is optional; include when the demo has a `Type` step the viewer should see being typed.
-   - The trailing `Sleep <N>s` must cover the demo's full runtime. `Sleep 2s` for instant chart renders; `Sleep 5s`-`12s` for animations or timers; `Sleep 22s` for long looping showcases.
-
-   For a demo that uses a binary under `<lib>/bin/` (e.g. `candy-shell`):
+   For interactive demos, append scripted input below the `Enter` using bare-name VHS keys and per-step `Sleep`:
 
    ```
-   Type "./bin/candy-shell run --flag value"
+   Up    Sleep 200ms
+   Down  Sleep 400ms
+   Space Sleep 600ms
+   Type "f" Sleep 600ms
+   Type "q"
    ```
 
-   For an interactive demo with key sequences, follow `sugar-prompt/.vhs/form.tape` — interleave `Type "..."`, `Tab`, `Down`, `Up`, `Enter`, and `Sleep <ms>ms` between actions. Use `400ms`-`800ms` between key actions, `1500ms` after page transitions.
+   For binary-driven demos, swap the `Type` line for `Type "./bin/<name> <args>"`. Do **not** add `cd` — VHS already runs in the lib's working dir when invoked from the repo root with a path-prefixed tape, and CI runs each tape from inside the matrix lib's working dir.
 
-   Verify: file written, syntax matches a sibling tape line-for-line on the `Set` block.
+4. **Verify the lib is in the CI matrix.** Read the VHS workflow file under `.github/workflows/` and locate its bash array of libs. If the lib isn't there:
 
-4. **Check the workflow matrix.** Read `.github/workflows/vhs.yml` lines 51-64. If the slug is not in the `all=(...)` array, add it. Group it next to its sibling category (candy-* together, sugar-* together, honey-* together) to match the existing layout. Wrap to a new line when the current line exceeds ~60 characters — match the existing wrap rhythm.
+   - Insert the slug alphabetically into the existing grouping (don't reformat the array — preserve the multi-line layout).
+   - The workflow's path filters already cover the lib's tape directory, so adding the tape file alone will trigger renders, but the matrix line must exist or the render job skips the lib silently.
 
-   Verify with:
+5. **Add the README hero image only if the lib has none.** If the lib's `README.md` doesn't already have a hero image line just below the `<!-- BADGES:END -->` block, add one (canonical placement: directly under the badges). If a hero image already exists, leave it — don't replace.
 
-   ```sh
-   grep -n 'sugar-marbles' .github/workflows/vhs.yml
-   ```
+6. **Final verification gate.** Before reporting done:
 
-   Must return a hit inside the `all=(...)` block.
-
-5. **Do NOT render locally.** CI renders on push. Local rendering would require installing `vhs` + `ttyd` + `ffmpeg` and would produce a non-deterministic GIF that wastes a CI re-render cycle when committed. If the user explicitly asks to preview locally:
-
-   ```sh
-   vhs sugar-marbles/.vhs/marbles.tape
-   ```
-
-   Do not commit the resulting GIF.
-
-6. **Verify before completing.** Read back the new tape file and the workflow change. Confirm:
-   - `Output .vhs/<demo>.gif` is the first non-comment line.
-   - `Set Theme "TokyoNight"` is present.
-   - `Type "..."` references a path that exists.
-   - The lib is in `.github/workflows/vhs.yml`'s `all=(...)` array.
-   - No GIF has been added to the working tree.
-
-7. **Commit pattern.** When the user is ready to commit, the message follows the existing convention: `<slug>: add <demo> VHS tape`. The companion GIF will land in a follow-up auto-commit by the `commit` job (`vhs: regenerate demo GIFs`, authored by Joe Huss).
+   - The new tape file exists under the lib's tape directory.
+   - `Grep -n "<slug>"` against the VHS workflow file shows it inside the bash array block.
+   - The tape contains exactly one `Output` line and exactly one `Set Theme "TokyoNight"` line.
+   - **Do NOT** run `vhs` locally and **do NOT** stage any rendered output. Tape + workflow edit only.
 
 ## Examples
 
-### User says: "add a VHS demo for candy-mold's start example"
+**User:** "Add a VHS demo for sugar-table showing the basic scrolling table."
 
-Actions:
-1. Read `candy-mold/examples/start.php` — confirm it exists and exits in ~3 seconds.
-2. Read `candy-core/.vhs/timer.tape` as the closest sibling (compact, non-interactive, fixed runtime).
-3. Write `candy-mold/.vhs/start.tape`:
+**Actions taken:**
+
+1. `Glob "sugar-table/examples/*.php"` → confirms a basic example exists.
+2. `Glob "sugar-table/.vhs/*.tape"` → empty, so this is the first tape; pick canonical defaults (FontSize 14, Width 700, Height 320).
+3. Write the new tape:
 
    ```
-   Output .vhs/start.gif
+   # VHS tape — sugar-table basic scrolling table demo.
+   Output .vhs/basic.gif
+
    Set FontSize 14
-   Set Width 800
-   Set Height 480
+   Set Width 700
+   Set Height 320
    Set TypingSpeed 60ms
    Set Theme "TokyoNight"
-   Type "php examples/start.php"
+
+   Type "php examples/basic.php"
    Enter
-   Sleep 4s
+   Sleep 500ms
+   Down Sleep 200ms
+   Down Sleep 200ms
+   Down Sleep 400ms
+   Type "q"
    ```
 
-4. Grep `.github/workflows/vhs.yml` for `candy-mold` — already present at line 56. No matrix change.
-5. Report: tape written, workflow already lists candy-mold, GIF will land on next push.
+4. `Grep -n "sugar-table"` against the VHS workflow → not in the bash array. Edit the array to insert `sugar-table` next to its alphabetical neighbours (`sugar-stickers sugar-table`).
+5. `Read sugar-table/README.md` head → no hero image. Add a hero image line directly under the badges block.
 
-### User says: "record gif for new lib sugar-newthing"
-
-Actions:
-1. Verify `sugar-newthing/examples/demo.php` exists (else stop).
-2. Write `sugar-newthing/.vhs/demo.tape` per the standard template.
-3. Grep `.github/workflows/vhs.yml` for `sugar-newthing` — **not found**.
-4. Edit `.github/workflows/vhs.yml`'s `all=(...)` array, inserting `sugar-newthing` next to its sugar-* siblings.
-5. Verify with grep, report both files changed.
+**Result:** Three changes in one PR — the new tape, the workflow matrix entry, the README hero image. No rendered output committed; CI's commit job will push it on the next master merge.
 
 ## Common Issues
 
-- **Workflow triggers but no GIF appears.** The push triggered `.github/workflows/vhs.yml` because `*/.vhs/*.tape` matched, but the `render` job's matrix is built from the hand-maintained `all=(...)` array in the `changed` job. If the lib isn't listed, the matrix is empty and nothing renders. Fix: add the slug to `all=(...)` lines 51-64.
-
-- **`Output` path produces no GIF.** The workflow's `working-directory` for the render step is the lib dir. An absolute path or a parent path writes the file outside the upload-artifact glob (`<lib>/.vhs/*.gif`). Fix: use `Output .vhs/<demo>.gif` exactly.
-
-- **GIF is truncated mid-animation.** Final `Sleep` is shorter than the example's runtime. The recording stops when the tape ends, not when the process exits. Fix: re-run the example manually, time it, then bump `Sleep <N>s` to runtime + 0.5-1s of trailing buffer.
-
-- **Hidden `.vhs/` dir not uploaded as artifact.** Already handled — `.github/workflows/vhs.yml` sets `include-hidden-files: true` on `actions/upload-artifact@v5` (line 197). If you fork this skill into a new workflow, preserve that flag.
-
-- **`Set Theme "<name>"` errors on render.** Theme name is case-sensitive and must be one VHS recognises. Use `"TokyoNight"` (verified across all 90+ existing tapes) — do not substitute.
-
-- **`Type "..."` runs the wrong binary.** Working dir is the lib dir, so `php examples/<demo>.php` and `./bin/<binary>` both resolve relative to the lib root. `composer install` ran in the previous workflow step, so `vendor/autoload.php` is available. Do not `cd` inside the tape.
-
-- **Commit job pushes nothing.** The `commit` job's `git diff --cached --quiet` check skips when no GIFs changed. Expected when only docs/non-render-relevant files changed in the push. Confirm by checking the workflow run's `commit` job logs for `no GIF changes — skipping commit`.
+- **Rendered output never appears on master after PR merge.** The lib isn't in the bash array in the VHS workflow. The render matrix iterates only that array — tapes for missing libs are skipped silently. Fix: add the slug to the array and re-trigger with `gh workflow run` against the workflow.
+- **`Error: file does not exist: ...` in render logs.** The `Output` directive uses an absolute or wrong-prefix path. It must be relative to the lib root.
+- **`PHP Fatal error: Uncaught Error: ...: No such file`.** The tape references an example script that doesn't exist. Don't `touch` an empty file to silence it — go back and confirm the user wants you to also write the example, or pick the actual existing demo name.
+- **Render finishes but output is blank/empty.** Final `Sleep` is shorter than the example's startup time. Bump the post-`Enter` `Sleep` to at least `1500ms` for ReactPHP-driven TUIs; 500ms is only safe for static `Type`+`echo` style scripts.
+- **`composer validate --strict` complaint after editing the workflow.** Unrelated — that's the `"sugarcraft/*": "@dev"` warning documented in `AGENTS.md`. Drop `--strict`. Tape work doesn't touch composer.
+- **Multiple tapes in one lib produce a single overwriting render.** Each tape needs a unique `Output` line matching the tape's basename — CI loops over each tape in the directory, and a duplicated `Output` clobbers the prior render.

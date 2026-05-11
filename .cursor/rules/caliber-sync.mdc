@@ -1,0 +1,7 @@
+---
+description: This project uses Caliber for automatic AI agent context sync
+alwaysApply: true
+---
+This project uses Caliber to keep AI agent configs (CLAUDE.md, Cursor rules, Copilot instructions)
+in sync with the codebase automatically. Before each commit, run `caliber refresh` to sync configs.
+If `caliber` is not found, read the setup-caliber skill from .cursor/skills/setup-caliber/SKILL.md and follow its instructions to install Caliber.
