@@ -6,7 +6,7 @@ paths:
 
 # Composer conventions
 
-- PHP `^8.1`, PHPUnit `^10.5`. `minimum-stability: dev`, `prefer-stable: true`.
+- PHP `^8.3`, PHPUnit `^10.5`. `minimum-stability: dev`, `prefer-stable: true`.
 - Sibling deps: `"sugarcraft/<dep>": "@dev"` in `require` AND a path-repo entry in `repositories` (`{type: path, url: "../<dep>", options: {symlink: true}}`).
 - Path-repos must cover the FULL transitive closure — copy from a working leaf like `sugar-charts/composer.json` and prune unused.
 - Metadata block (insert after `license`, before `require`): `keywords` (lowercase kebab, always include `"sugarcraft"` + upstream Go name like `"bubbletea"`), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`.
