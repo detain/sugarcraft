@@ -1,4 +1,4 @@
-# VHS tape — Tetris hold and hard drop demo
+# VHS tape — Tetris gameplay demo
 # Render with: `vhs candy-tetris/.vhs/hold-demo.tape`
 Output .vhs/hold-demo.gif
 
@@ -10,19 +10,9 @@ Set Theme "TokyoNight"
 
 Type "bin/tetris"
 Enter
-Sleep 1s
+Sleep 2s
 
-# Hard drop a piece
 Space Sleep 800ms
-
-# Use hold (c key)
-c Sleep 400ms
-
-# Hard drop
-Space Sleep 800ms
-
-# Drop another piece
-Right Sleep 200ms
 Space Sleep 800ms
 
 Sleep 2000ms
