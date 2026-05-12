@@ -60,7 +60,7 @@ jobs:
             sugar-stash candy-query sugar-tick
             candy-mines candy-flip honey-flap
             candy-log candy-palette candy-lister sugar-boxer
-            sugar-veil sugar-crumbs candy-hermit sugar-stickers
+            sugar-veil sugar-crumbs sugar-dash candy-hermit sugar-stickers
             sugar-toast sugar-calendar sugar-readline sugar-table
             sugar-skate sugar-post candy-serve
           )
