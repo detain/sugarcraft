@@ -327,12 +327,19 @@ jobs:
   coverage:
     name: 'Coverage · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
-    needs: [test, build-matrix]
-    # Gate is encoded in `matrix.lib` (empty on non-master pushes/PRs → zero
-    # jobs spawn → zero check_runs). A job-level `if:` would instead produce
-    # one "skipped" placeholder check_run per matrix cell with an
-    # unsubstituted `${{ matrix.lib }}` in the name — the source list lives
-    # in the `build-matrix` job above.
+    # Depend ONLY on build-matrix (the real matrix-data dependency). We used
+    # to also `needs: [test]` so coverage waited for tests, but that had a
+    # subtle side-effect: when any test matrix cell failed (fail-fast: false
+    # means cells DO fail individually) GitHub marked the whole `test` job
+    # failed → this job was skipped via needs-failure BEFORE its matrix could
+    # expand → GitHub emitted one "skipped" placeholder check_run per
+    # declared cell using the literal `name:` template, leaking the
+    # unexpanded `${{ matrix.lib }}` text into the Teams notification feed.
+    # Dynamic matrix only avoids the placeholder when the matrix actually
+    # gets evaluated; a needs-failure skip happens earlier. Running in
+    # parallel with `test` costs a few CI minutes when tests fail, but
+    # eliminates the placeholder noise.
+    needs: [build-matrix]
     concurrency:
       group: ci-coverage-${{ github.ref }}-${{ matrix.lib }}
       cancel-in-progress: true
@@ -417,10 +424,10 @@ jobs:
   phpstan:
     name: 'PHPStan ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
-    needs: [test, build-matrix]
-    # Gate is encoded in the matrix from `build-matrix` (empty `lib` → zero
-    # jobs spawn → zero check_runs). See the comment on the `build-matrix`
-    # job for why this is preferable to a job-level `if:` on a matrix job.
+    # Depend ONLY on build-matrix — see the long comment on the `coverage`
+    # job above for why dropping `needs: [test]` is what actually eliminates
+    # the unexpanded `${{ matrix.* }}` placeholder check_runs.
+    needs: [build-matrix]
     concurrency:
       group: ci-phpstan-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: true
