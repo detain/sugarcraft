@@ -58,8 +58,8 @@ jobs:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          force_all="${{ fromJSON(needs.affected.outputs.force_all) }}"
-          libs_str="${{ needs.affected.outputs.affected_libs }}"
+          force_all="${{ fromJSON(steps.affected.outputs.force_all) }}"
+          libs_str="${{ steps.affected.outputs.affected_libs }}"
 
           if [ "$force_all" = "yes" ]; then
             # Monorepo-wide change: push all libs
