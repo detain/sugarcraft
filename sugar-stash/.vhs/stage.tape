@@ -9,7 +9,7 @@ Set Height 400
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "sugar-stash/bin/sugar-stash"
+Type "./bin/sugar-stash"
 Enter
 Sleep 1s
 

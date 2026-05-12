@@ -77,7 +77,7 @@ final class Paragraph implements Sizer
         $wrapWidth = $this->getWrapWidth();
 
         // When no width is set and maxWidth is not set, render raw text with styling
-        if ($wrapWidth === -1 && !$this->sizeAllocated) {
+        if ($wrapWidth === -1 && $this->width === null && !$this->maxWidthSet) {
             $text = $this->trim ? $this->collapseWhitespace($this->text) : $this->text;
             $rawLines = $text !== '' ? explode("\n", $text) : [''];
 
