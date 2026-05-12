@@ -50,7 +50,7 @@ final class Wizard implements Sizer
      *
      * @param string[] $stepTitles
      */
-    public static function withSteps(array $stepTitles): self
+    public static function fromSteps(array $stepTitles): self
     {
         $steps = array_map(
             fn(string $title) => WizardStep::create($title),

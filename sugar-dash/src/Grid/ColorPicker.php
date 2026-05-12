@@ -58,7 +58,7 @@ final class ColorPicker implements Sizer
             selectedIndex: $currentIndex,
             showHex: true,
             columns: 4,
-            selectedColor: Color::hex('#FFFFFF')->withBackground(Color::hex('#3B82F6')),
+            selectedColor: Color::hex('#3B82F6'),
             hoverColor: Color::hex('#F59E0B'),
         );
     }
@@ -68,14 +68,14 @@ final class ColorPicker implements Sizer
      *
      * @param array<int, string> $hexColors Array of hex color codes
      */
-    public static function withPalette(array $hexColors, ?int $selectedIndex = null): self
+    public static function fromPalette(array $hexColors, ?int $selectedIndex = null): self
     {
         return new self(
             palette: $hexColors,
             selectedIndex: $selectedIndex ?? 0,
             showHex: true,
             columns: 4,
-            selectedColor: Color::hex('#FFFFFF')->withBackground(Color::hex('#3B82F6')),
+            selectedColor: Color::hex('#3B82F6'),
             hoverColor: Color::hex('#F59E0B'),
         );
     }
@@ -150,6 +150,15 @@ final class ColorPicker implements Sizer
         $isSelected = ($index === $this->selectedIndex);
 
         $bgColor = Color::hex($hex);
+
+        // When showHex is false, don't display hex codes even for selected swatch
+        if (!$this->showHex) {
+            $result = $bgColor->toBg(ColorProfile::TrueColor);
+            $result .= $bgColor->toFg(ColorProfile::TrueColor);
+            $result .= '██';
+            $result .= Ansi::reset();
+            return $result;
+        }
 
         if ($isSelected && $this->selectedColor !== null) {
             // Selected: show [##] format

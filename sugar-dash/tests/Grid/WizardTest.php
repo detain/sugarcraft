@@ -19,13 +19,13 @@ final class WizardTest extends TestCase
 
     public function testWizardImplementsSizer(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2']);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2']);
         $this->assertInstanceOf(Sizer::class, $wizard);
     }
 
     public function testWizardImplementsItem(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2']);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2']);
         $this->assertInstanceOf(Item::class, $wizard);
     }
 
@@ -35,7 +35,7 @@ final class WizardTest extends TestCase
 
     public function testEmptyWizardRendersEmpty(): void
     {
-        $wizard = Wizard::withSteps([]);
+        $wizard = Wizard::fromSteps([]);
         $rendered = $wizard->render();
 
         $this->assertSame('', $rendered);
@@ -43,7 +43,7 @@ final class WizardTest extends TestCase
 
     public function testRenderWithSingleStep(): void
     {
-        $wizard = Wizard::withSteps(['Step 1']);
+        $wizard = Wizard::fromSteps(['Step 1']);
         $rendered = $wizard->render();
 
         $this->assertStringContainsString('Step 1', $rendered);
@@ -52,7 +52,7 @@ final class WizardTest extends TestCase
 
     public function testRenderWithMultipleSteps(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2', 'Step 3']);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2', 'Step 3']);
         $rendered = $wizard->render();
 
         $this->assertStringContainsString('Step 1', $rendered);
@@ -66,7 +66,7 @@ final class WizardTest extends TestCase
 
     public function testFirstStepIsCurrent(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2']);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2']);
         $rendered = $wizard->render();
 
         // First step should be current (●)
@@ -75,7 +75,7 @@ final class WizardTest extends TestCase
 
     public function testCompletedStepsShowCheckmark(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2', 'Step 3'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2', 'Step 3'])
             ->withCurrentStep(1); // Move to step 2
         $rendered = $wizard->render();
 
@@ -85,7 +85,7 @@ final class WizardTest extends TestCase
 
     public function testUpcomingStepsShowCircle(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentStep(0);
         $rendered = $wizard->render();
 
@@ -99,7 +99,7 @@ final class WizardTest extends TestCase
 
     public function testWithCurrentStep(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2', 'Step 3'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2', 'Step 3'])
             ->withCurrentStep(2);
         $rendered = $wizard->render();
 
@@ -110,7 +110,7 @@ final class WizardTest extends TestCase
     public function testCurrentStepClampedToValidRange(): void
     {
         // Step beyond last should be clamped
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentStep(10);
         $rendered = $wizard->render();
 
@@ -120,7 +120,7 @@ final class WizardTest extends TestCase
 
     public function testNegativeCurrentStepClamped(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentStep(-5);
         $rendered = $wizard->render();
 
@@ -134,7 +134,7 @@ final class WizardTest extends TestCase
 
     public function testStepWithDescription(): void
     {
-        $wizard = Wizard::withSteps(['Step 1'])
+        $wizard = Wizard::fromSteps(['Step 1'])
             ->withSteps([
                 WizardStep::create('Step 1', 'This is a description'),
             ]);
@@ -145,7 +145,7 @@ final class WizardTest extends TestCase
 
     public function testStepWithNullDescription(): void
     {
-        $wizard = Wizard::withSteps(['Step 1'])
+        $wizard = Wizard::fromSteps(['Step 1'])
             ->withSteps([
                 WizardStep::create('Step 1', null),
             ]);
@@ -161,7 +161,7 @@ final class WizardTest extends TestCase
 
     public function testCustomCompletedChar(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentStep(1)
             ->withCompletedChar('✓');
         $rendered = $wizard->render();
@@ -171,7 +171,7 @@ final class WizardTest extends TestCase
 
     public function testCustomCurrentChar(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentChar('◆');
         $rendered = $wizard->render();
 
@@ -180,7 +180,7 @@ final class WizardTest extends TestCase
 
     public function testCustomUpcomingChar(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withUpcomingChar('◇');
         $rendered = $wizard->render();
 
@@ -189,7 +189,7 @@ final class WizardTest extends TestCase
 
     public function testCustomConnectorChar(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withConnectorChar('=');
         $rendered = $wizard->render();
 
@@ -203,7 +203,7 @@ final class WizardTest extends TestCase
 
     public function testCompletedColorAddsAnsiCodes(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentStep(1)
             ->withCompletedColor(Color::ansi(9));
         $rendered = $wizard->render();
@@ -213,7 +213,7 @@ final class WizardTest extends TestCase
 
     public function testCurrentColorAddsAnsiCodes(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withCurrentColor(Color::ansi(9));
         $rendered = $wizard->render();
 
@@ -222,7 +222,7 @@ final class WizardTest extends TestCase
 
     public function testUpcomingColorAddsAnsiCodes(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withUpcomingColor(Color::ansi(9));
         $rendered = $wizard->render();
 
@@ -235,7 +235,7 @@ final class WizardTest extends TestCase
 
     public function testSetSizeReturnsNewInstance(): void
     {
-        $original = Wizard::withSteps(['Step 1']);
+        $original = Wizard::fromSteps(['Step 1']);
         $resized = $original->setSize(80, 5);
 
         $this->assertNotSame($original, $resized);
@@ -243,8 +243,8 @@ final class WizardTest extends TestCase
 
     public function testWidthAllocationAffectsOutput(): void
     {
-        $narrow = Wizard::withSteps(['Step 1', 'Step 2', 'Step 3'])->setSize(30, 5);
-        $wide = Wizard::withSteps(['Step 1', 'Step 2', 'Step 3'])->setSize(100, 5);
+        $narrow = Wizard::fromSteps(['Step 1', 'Step 2', 'Step 3'])->setSize(30, 5);
+        $wide = Wizard::fromSteps(['Step 1', 'Step 2', 'Step 3'])->setSize(100, 5);
 
         $narrowRendered = $narrow->render();
         $wideRendered = $wide->render();
@@ -262,7 +262,7 @@ final class WizardTest extends TestCase
 
     public function testWithStepsReturnsNewInstance(): void
     {
-        $original = Wizard::withSteps(['Step 1']);
+        $original = Wizard::fromSteps(['Step 1']);
         $updated = $original->withSteps([
             WizardStep::create('New Step'),
         ]);
@@ -272,7 +272,7 @@ final class WizardTest extends TestCase
 
     public function testAddStepReturnsNewInstance(): void
     {
-        $original = Wizard::withSteps(['Step 1']);
+        $original = Wizard::fromSteps(['Step 1']);
         $updated = $original->addStep(WizardStep::create('Step 2'));
 
         $this->assertNotSame($original, $updated);
@@ -281,7 +281,7 @@ final class WizardTest extends TestCase
 
     public function testWithCurrentStepReturnsNewInstance(): void
     {
-        $original = Wizard::withSteps(['Step 1', 'Step 2']);
+        $original = Wizard::fromSteps(['Step 1', 'Step 2']);
         $updated = $original->withCurrentStep(1);
 
         $this->assertNotSame($original, $updated);
@@ -289,7 +289,7 @@ final class WizardTest extends TestCase
 
     public function testWithCompletedColorReturnsNewInstance(): void
     {
-        $original = Wizard::withSteps(['Step 1']);
+        $original = Wizard::fromSteps(['Step 1']);
         $updated = $original->withCompletedColor(Color::ansi(9));
 
         $this->assertNotSame($original, $updated);
@@ -297,7 +297,7 @@ final class WizardTest extends TestCase
 
     public function testOriginalUnchangedAfterWithCurrentStep(): void
     {
-        $original = Wizard::withSteps(['Step 1', 'Step 2']);
+        $original = Wizard::fromSteps(['Step 1', 'Step 2']);
         $original->withCurrentStep(1);
         $rendered = $original->render();
 
@@ -312,7 +312,7 @@ final class WizardTest extends TestCase
 
     public function testGetInnerSizeEmptyWizard(): void
     {
-        $wizard = Wizard::withSteps([]);
+        $wizard = Wizard::fromSteps([]);
         [$w, $h] = $wizard->getInnerSize();
 
         $this->assertSame(0, $w);
@@ -321,7 +321,7 @@ final class WizardTest extends TestCase
 
     public function testGetInnerSizeBasicWizard(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2']);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2']);
         [$w, $h] = $wizard->getInnerSize();
 
         $this->assertGreaterThan(0, $w);
@@ -330,7 +330,7 @@ final class WizardTest extends TestCase
 
     public function testGetInnerSizeWithDescriptions(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])
             ->withSteps([
                 WizardStep::create('Step 1', 'Description 1'),
                 WizardStep::create('Step 2', 'Description 2'),
@@ -342,7 +342,7 @@ final class WizardTest extends TestCase
 
     public function testGetInnerSizeWithWidthAllocation(): void
     {
-        $wizard = Wizard::withSteps(['Step 1', 'Step 2'])->setSize(100, 5);
+        $wizard = Wizard::fromSteps(['Step 1', 'Step 2'])->setSize(100, 5);
         [$w, ] = $wizard->getInnerSize();
 
         $this->assertSame(100, $w);
@@ -374,7 +374,7 @@ final class WizardTest extends TestCase
 
     public function testVeryLongStepTitle(): void
     {
-        $wizard = Wizard::withSteps([str_repeat('x', 100)]);
+        $wizard = Wizard::fromSteps([str_repeat('x', 100)]);
         $rendered = $wizard->render();
 
         // Should truncate
@@ -383,7 +383,7 @@ final class WizardTest extends TestCase
 
     public function testUnicodeStepTitle(): void
     {
-        $wizard = Wizard::withSteps(['日本語タイトル']);
+        $wizard = Wizard::fromSteps(['日本語タイトル']);
         $rendered = $wizard->render();
 
         $this->assertStringContainsString('日本語タイトル', $rendered);
@@ -395,7 +395,7 @@ final class WizardTest extends TestCase
         for ($i = 0; $i < 10; $i++) {
             $stepTitles[] = "Step $i";
         }
-        $wizard = Wizard::withSteps($stepTitles);
+        $wizard = Wizard::fromSteps($stepTitles);
         $rendered = $wizard->render();
 
         $this->assertNotSame('', $rendered);

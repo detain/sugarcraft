@@ -74,7 +74,8 @@ final class ComboBox implements Sizer
         $result = $this->renderInput();
 
         $filtered = $this->getFilteredOptions();
-        if (!empty($filtered) && !empty($this->query)) {
+        // Always show results when there are options (with or without query)
+        if (!empty($filtered)) {
             $result .= "\n" . $this->renderResults($filtered);
         }
 
@@ -148,13 +149,15 @@ final class ComboBox implements Sizer
      */
     private function highlightMatch(string $label): string
     {
-        $query = preg_quote($this->query, '/');
-        $regex = '/(' . $query . ')/i';
+        if ($this->matchColor === null) {
+            return $label;
+        }
 
-        if ($this->matchColor !== null) {
-            return preg_replace_callback($regex, function ($matches) {
-                return $this->matchColor->toFg(ColorProfile::TrueColor) . $matches[0] . Ansi::reset();
-            }, $label) ?? $label;
+        $query = $this->query;
+        // If the label contains the query (case-insensitive), highlight the whole label
+        // to avoid breaking the string with ANSI codes
+        if (stripos($label, $query) !== false) {
+            return $this->matchColor->toFg(ColorProfile::TrueColor) . $label . Ansi::reset();
         }
 
         return $label;
@@ -176,7 +179,8 @@ final class ComboBox implements Sizer
 
         foreach ($this->options as $option) {
             $label = strtolower($option['label']);
-            if (str_contains($label, $queryLower)) {
+            // Match items that start with the query (case-insensitive)
+            if (str_starts_with($label, $queryLower)) {
                 $filtered[] = $option;
             }
         }

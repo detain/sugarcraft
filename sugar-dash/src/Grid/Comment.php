@@ -34,7 +34,7 @@ final class Comment implements Sizer
         private readonly ?Avatar $avatar = null,
         private readonly bool $isReply = false,
         private readonly bool $isEdited = false,
-        private readonly ?string $headerColor = null,
+        private readonly ?Color $headerColor = null,
     ) {}
 
     /**
