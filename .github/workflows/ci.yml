@@ -21,6 +21,40 @@ env:
   PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl, ffi
 
 jobs:
+  # Compute the dynamic matrices for the gated jobs (coverage, phpstan).
+  # When the gate is closed the matrix array is `[]`, so GitHub spawns zero
+  # jobs and emits zero check_runs — which avoids the GitHub Actions quirk
+  # where a job-level `if:` on a `strategy.matrix` job produces one
+  # "skipped" placeholder check_run per matrix cell whose `name` still
+  # contains the literal `${{ matrix.* }}` template text (those leak into
+  # the Teams notification feed as e.g. "Coverage · ${{ matrix.lib }}
+  # Check skipped").
+  build-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      coverage_libs: ${{ steps.set.outputs.coverage_libs }}
+      phpstan_matrix: ${{ steps.set.outputs.phpstan_matrix }}
+    steps:
+      - id: set
+        env:
+          IS_MASTER_PUSH: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          # Coverage runs only on push to master.
+          if [ "$IS_MASTER_PUSH" = "true" ]; then
+            COV='["candy-core","candy-sprinkles","candy-pty","honey-bounce","candy-zone","sugar-bits","sugar-charts","sugar-prompt","candy-shell","candy-shine","candy-kit","candy-freeze","sugar-glow","sugar-spark","sugar-wishlist","candy-wish","candy-mold","candy-metrics","candy-mosaic","candy-vcr","candy-vt","candy-tetris","super-candy","sugar-stash","candy-query","sugar-tick","candy-mines","candy-flip","honey-flap","candy-hermit","candy-lister","candy-log","candy-palette","candy-serve","sugar-boxer","sugar-calendar","sugar-crumbs","sugar-post","sugar-readline","sugar-skate","sugar-stickers","sugar-table","sugar-toast","sugar-veil","sugar-crush"]'
+          else
+            COV='[]'
+          fi
+          # PHPStan runs on push-to-master and on any pull_request.
+          if [ "$IS_MASTER_PUSH" = "true" ] || [ "$IS_PR" = "true" ]; then
+            PHPSTAN='{"php":["8.3","8.4"],"lib":["candy-core"]}'
+          else
+            PHPSTAN='{"php":[],"lib":[]}'
+          fi
+          echo "coverage_libs=$COV" >> "$GITHUB_OUTPUT"
+          echo "phpstan_matrix=$PHPSTAN" >> "$GITHUB_OUTPUT"
+
   # Unified test matrix — single job, four PHP versions, with per-lib include
   # overrides to skip libs that don't support certain PHP majors.
   #
@@ -293,68 +327,19 @@ jobs:
   coverage:
     name: 'Coverage · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    # Same logic as the test job: when a newer push to master makes a previous
-    # coverage run stale, cancel the old one so we don't waste minutes on a
-    # report that's about to be replaced. The job's `if:` already restricts
-    # this to push-on-master, so the group key only needs lib granularity.
+    needs: [test, build-matrix]
+    # Gate is encoded in `matrix.lib` (empty on non-master pushes/PRs → zero
+    # jobs spawn → zero check_runs). A job-level `if:` would instead produce
+    # one "skipped" placeholder check_run per matrix cell with an
+    # unsubstituted `${{ matrix.lib }}` in the name — the source list lives
+    # in the `build-matrix` job above.
     concurrency:
       group: ci-coverage-${{ github.ref }}-${{ matrix.lib }}
       cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
-        lib:
-          - candy-core
-          - candy-sprinkles
-          - candy-pty
-          - honey-bounce
-          - candy-zone
-          - sugar-bits
-          - sugar-charts
-          - sugar-prompt
-          - candy-shell
-          - candy-shine
-          - candy-kit
-          - candy-freeze
-          - sugar-glow
-          - sugar-spark
-          - sugar-wishlist
-          # PHP >=8.3 — not available on 8.1/8.2
-          - candy-wish
-          - candy-mold
-          # PHP >=8.3 — not available on 8.1/8.2
-          - candy-metrics
-          - candy-mosaic
-          # PHP >=8.3 — not available on 8.1/8.2
-          - candy-vcr
-          # PHP >=8.3 — not available on 8.1/8.2
-          - candy-vt
-          - candy-tetris
-          - super-candy
-          - sugar-stash
-          - candy-query
-          - sugar-tick
-          - candy-mines
-          - candy-flip
-          - honey-flap
-          - candy-hermit
-          - candy-lister
-          - candy-log
-          - candy-palette
-          - candy-serve
-          - sugar-boxer
-          - sugar-calendar
-          - sugar-crumbs
-          - sugar-post
-          - sugar-readline
-          - sugar-skate
-          - sugar-stickers
-          - sugar-table
-          - sugar-toast
-          - sugar-veil
-          - sugar-crush
+        lib: ${{ fromJSON(needs.build-matrix.outputs.coverage_libs) }}
     steps:
       - uses: actions/checkout@v5
 
@@ -432,17 +417,16 @@ jobs:
   phpstan:
     name: 'PHPStan ${{ matrix.php }} · ${{ matrix.lib }}'
     runs-on: ubuntu-latest
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master' || github.event_name == 'pull_request'
+    needs: [test, build-matrix]
+    # Gate is encoded in the matrix from `build-matrix` (empty `lib` → zero
+    # jobs spawn → zero check_runs). See the comment on the `build-matrix`
+    # job for why this is preferable to a job-level `if:` on a matrix job.
     concurrency:
       group: ci-phpstan-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
       cancel-in-progress: true
     strategy:
       fail-fast: false
-      matrix:
-        php: ['8.3', '8.4']
-        lib:
-          - candy-core  # has phpstan.neon
+      matrix: ${{ fromJSON(needs.build-matrix.outputs.phpstan_matrix) }}
     steps:
       - uses: actions/checkout@v5
 
