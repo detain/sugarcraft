@@ -160,7 +160,15 @@ final class Checkbox implements Sizer
     {
         $options = $this->options;
         if (isset($options[$index])) {
-            $options[$index]['checked'] = $checked;
+            // In single-select mode, checking an option unchecks all others
+            if (!$this->multiSelect && $checked) {
+                foreach ($options as $i => &$opt) {
+                    $opt['checked'] = ($i === $index);
+                }
+                unset($opt);
+            } else {
+                $options[$index]['checked'] = $checked;
+            }
         }
 
         return new self(

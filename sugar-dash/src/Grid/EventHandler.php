@@ -9,5 +9,5 @@ namespace SugarCraft\Dash\Grid;
  *
  * @template T of Event
  * @param T $event
+ * @return void
  */
-type EventHandler = callable;
