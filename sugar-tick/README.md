@@ -12,6 +12,7 @@
 
 
 ![demo](.vhs/dashboard.gif)
+![push demo](.vhs/push.gif)
 
 Privacy-first coding-time tracker — port of [`Rtarun3606k/TakaTime`](https://github.com/Rtarun3606k/TakaTime). Storage is JSONL on local disk (no cloud, no MongoDB), the dashboard is a SugarCharts-driven TUI that reads it.
 
