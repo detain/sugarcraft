@@ -173,7 +173,7 @@ final class CardTest extends TestCase
         $rendered = $card->render();
 
         // Empty style should have spaces instead of border chars
-        $this->assertDoesNotMatchRegularExpression('/[┌┐┏┓╔╗]/', $rendered);
+        $this->assertDoesNotMatchRegularExpression('/[┌┐┏┓╔╗]/u', $rendered);
     }
 
     // ═══════════════════════════════════════════════════════════════

@@ -142,16 +142,21 @@ final class Tooltip implements Sizer
 
         // Top border
         $innerWidth = max(1, $totalWidth - 2);
-        $result .= '┌' . str_repeat('─', $innerWidth) . '┐' . "\n";
+        $borderStr = $this->borderColor !== null
+            ? $this->borderColor->toFg(ColorProfile::TrueColor)
+            : '';
+        $result .= $borderStr . '┌' . str_repeat('─', $innerWidth) . '┐' . Ansi::reset() . "\n";
 
         // Text line with padding
         $textPad = $innerWidth - $textWidth;
         $leftPad = (int) floor($textPad / 2);
         $rightPad = $textPad - $leftPad;
-        $result .= '│' . str_repeat(' ', $leftPad) . $this->text . str_repeat(' ', $rightPad) . '│' . "\n";
+        $result .= $borderStr . '│' . Ansi::reset(); // border color for left border
+        $result .= str_repeat(' ', $leftPad) . $this->text . str_repeat(' ', $rightPad);
+        $result .= $borderStr . '│' . Ansi::reset() . "\n"; // border color for right border
 
         // Bottom border
-        $result .= '└' . str_repeat('─', $innerWidth) . '┘';
+        $result .= $borderStr . '└' . str_repeat('─', $innerWidth) . '┘' . Ansi::reset();
 
         // Position indicator (arrow)
         $result .= "\n" . $positionArrow;
