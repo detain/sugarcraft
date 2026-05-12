@@ -44,6 +44,16 @@ The PDO connection is the only stateful dependency; tests use a `:memory:` SQLit
 
 Multi-driver (MySQL / Postgres / Mongo) is a planned follow-up — the current `Database` class is a SQLite-only concrete; promoting it to an interface is a one-class job once the second driver lands.
 
+## Demos
+
+### SQL query execution
+
+![play](.vhs/play.gif)
+
+### Query history cycling
+
+![query-history](.vhs/query-history.gif)
+
 ## Test
 
 ```bash

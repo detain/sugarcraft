@@ -203,6 +203,10 @@ cd sugar-bits && composer install && vendor/bin/phpunit
 
 ![timer](.vhs/timer.gif)
 
+### Tree
+
+![tree](.vhs/tree.gif)
+
 ### Viewport
 
 ![viewport](.vhs/viewport.gif)

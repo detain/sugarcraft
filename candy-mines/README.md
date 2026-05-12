@@ -15,6 +15,8 @@
 
 Minesweeper on the SugarCraft stack — port of [`maxpaulus43/go-sweep`](https://github.com/maxpaulus43/go-sweep). Customisable board, recursive flood-fill, win / lose detection, vim-style movement.
 
+Difficulty presets are available via `Game::withDifficulty(Difficulty::$LEVEL)` — `EASY` (9×9, 10 mines), `MEDIUM` (16×16, 40 mines), `EXPERT` (30×16, 99 mines).
+
 ## Run it
 
 ```bash
@@ -44,6 +46,16 @@ Three pure-state classes plus the runtime Model and a one-pass renderer:
 | `Renderer`        | Pure view function. CandySprinkles `Style` + `Border::rounded()`    |
 
 The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.
+
+## Demos
+
+### Gameplay
+
+![play](.vhs/play.gif)
+
+### Flagging
+
+![flagging](.vhs/flagging.gif)
 
 ## Test
 

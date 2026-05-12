@@ -77,6 +77,16 @@ Build a custom theme via the `Theme` constructor — set background / foreground
 / border / shadow / line-number colour / window-control colours / font family
 / size / line height.
 
+## Demos
+
+### Code screenshot
+
+![screenshot](.vhs/screenshot.gif)
+
+### ANSI input
+
+![ansi-input](.vhs/ansi-input.gif)
+
 ## Test
 
 ```sh
