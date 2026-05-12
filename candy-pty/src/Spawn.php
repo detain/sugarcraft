@@ -55,7 +55,7 @@ final class Spawn
         ];
         $pipes = [];
 
-        $process = \proc_open(
+        $process = @\proc_open(
             $cmd,
             $descriptors,
             $pipes,
