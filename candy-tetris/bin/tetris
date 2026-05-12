@@ -18,5 +18,26 @@ declare(strict_types=1);
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Tetris\Game;
+use SugarCraft\Tetris\VsGame;
 
-(new Program(Game::start(), new ProgramOptions(useAltScreen: true)))->run();
+$mode = 'single';
+if ($argc > 1) {
+    if ($argv[1] === 'v' || $argv[1] === '--vs') {
+        $mode = 'vs';
+    } elseif ($argv[1] === 'h' || $argv[1] === '--help') {
+        fwrite(STDOUT, "candy-tetris - Tetris clone\n\n");
+        fwrite(STDOUT, "Usage: tetris [options]\n");
+        fwrite(STDOUT, "  (no args)   Start single player game\n");
+        fwrite(STDOUT, "  -v, --vs    Start VS Computer mode\n");
+        fwrite(STDOUT, "  -h, --help  Show this help\n");
+        exit(0);
+    }
+}
+
+$game = match ($mode) {
+    'vs' => VsGame::start(),
+    default => Game::start(),
+};
+
+$options = new ProgramOptions(useAltScreen: true);
+(new Program($game, $options))->run();
