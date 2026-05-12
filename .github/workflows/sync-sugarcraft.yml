@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   sync-libs:
-    name: Subtree-push 44 lib/app subdirs to sugarcraft/<lib>
+    name: Subtree-push 46 lib/app subdirs to sugarcraft/<lib>
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
