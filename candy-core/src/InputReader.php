@@ -357,9 +357,10 @@ final class InputReader
         // Split into the three semicolon-separated sections; each
         // section may contain colon sub-fields.
         $sections = explode(';', $params);
+        $sectionCount = count($sections);
         $codePart = $sections[0];
-        $modPart  = $sections[1];
-        $textPart = $sections[2];
+        $modPart  = $sectionCount > 1 ? $sections[1] : '1';
+        $textPart = $sectionCount > 2 ? $sections[2] : '';
 
         // Primary code is the first colon-sub-field of section 0.
         $code = (int) explode(':', $codePart)[0];

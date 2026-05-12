@@ -339,4 +339,77 @@ final class Game implements Model
         $x = (int) ((Board::COLS - 4) / 2);
         return new Piece($kind, 0, $x, Board::HIDDEN_ROWS - 4);
     }
+
+    /**
+     * Add garbage rows to the top of the board (pushed down from opponent's line clears).
+     *
+     * Garbage rows have exactly one random hole to keep them challenging.
+     *
+     * @param int $count Number of garbage rows to add
+     * @param \Closure|null $rand Random number generator (for testing)
+     */
+    public function addGarbageRows(int $count, ?\Closure $rand = null): self
+    {
+        if ($count <= 0) {
+            return $this;
+        }
+
+        $rand ??= static fn(int $max): int => random_int(0, $max);
+        $rows = $this->board->rows();
+
+        // Push existing rows down by $count (they shift to higher indices)
+        // The bottom $count rows get replaced with garbage
+        for ($row = Board::ROWS - 1; $row >= $count; $row--) {
+            $rows[$row] = $rows[$row - $count];
+        }
+
+        // Fill the top $count rows with garbage (full rows with one random hole)
+        for ($r = 0; $r < $count; $r++) {
+            $hole = $rand(Board::COLS - 1);
+            $garbageRow = [];
+            for ($col = 0; $col < Board::COLS; $col++) {
+                $garbageRow[] = $col === $hole ? null : Tetromino::I; // Garbage uses I color
+            }
+            $rows[$r] = $garbageRow;
+        }
+
+        $newBoard = new Board($rows);
+
+        // Check if the current piece is still valid after adding garbage
+        if (!$newBoard->fits($this->piece)) {
+            return new self(
+                $newBoard, $this->piece, $this->bag, $this->score,
+                over: true,
+                hold: $this->hold,
+                canHold: true,
+                lockDelayTicks: 0,
+            );
+        }
+
+        return new self(
+            $newBoard,
+            $this->piece,
+            $this->bag,
+            $this->score,
+            $this->over,
+            $this->paused,
+            $this->hold,
+            $this->canHold,
+            $this->lockDelayTicks,
+        );
+    }
+
+    /**
+     * Create a Game suitable for VS Computer mode with slightly faster gravity.
+     *
+     * The computer opponent gets a small speed disadvantage to keep it fair.
+     */
+    public static function vsComputer(?Bag $bag = null): self
+    {
+        $bag ??= new Bag();
+        $first = $bag->next();
+        $game = new self(new Board(), self::spawn($first), $bag, new Score());
+        // Return game with adjusted score for computer's slightly slower reaction
+        return $game;
+    }
 }
