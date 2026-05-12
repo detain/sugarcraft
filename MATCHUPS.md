@@ -46,6 +46,7 @@ Status legend:
 | [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) | **SugarBoxer** | `sugar-boxer/` | `sugarcraft/sugar-boxer` | `SugarCraft\Boxer` | 🟢 |
 | [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) | **SugarVeil** | `sugar-veil/` | `sugarcraft/sugar-veil` | `SugarCraft\Veil` | 🟢 |
 | [KevM/bubbleo](https://github.com/KevM/bubbleo) | **SugarCrumbs** | `sugar-crumbs/` | `sugarcraft/sugar-crumbs` | `SugarCraft\Crumbs` | 🟢 |
+| [charmbracelet/bubble-grid](https://github.com/charmbracelet/bubble-grid) | **SugarDash** | `sugar-dash/` | `sugarcraft/sugar-dash` | `SugarCraft\Dash` | 🟢 |
 | [Genekkion/theHermit](https://github.com/Genekkion/theHermit) | **CandyHermit** | `candy-hermit/` | `sugarcraft/candy-hermit` | `SugarCraft\Hermit` | 🟢 |
 | [Evertras/bubble-table](https://github.com/Evertras/bubble-table) | **SugarTable** | `sugar-table/` | `sugarcraft/sugar-table` | `SugarCraft\Table` | 🟢 |
 | [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit) | **SugarReadline** | `sugar-readline/` | `sugarcraft/sugar-readline` | `SugarCraft\Readline` | 🟢 |

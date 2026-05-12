@@ -26,7 +26,7 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Forty-four libraries grouped by layer:
+Forty-five libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
@@ -50,6 +50,7 @@ Forty-four libraries grouped by layer:
 | <img src="media/icons/sugar-boxer.png" width="48" alt=""> | **[SugarBoxer](sugar-boxer/)** | Box-drawing layout engine — H/V panel composition with weighted sizing, borders, and nested grids. Port of [bubbleboxer](https://github.com/treilik/bubbleboxer) |
 | <img src="media/icons/sugar-veil.png" width="48" alt=""> | **[SugarVeil](sugar-veil/)** | Terminal overlay compositor — push/pop overlay views with z-ordering, positioning, and per-overlay teardown. Port of [bubbletea-overlay](https://github.com/rmhubbert/bubbletea-overlay) |
 | <img src="media/icons/sugar-crumbs.png" width="48" alt=""> | **[SugarCrumbs](sugar-crumbs/)** | Navigation breadcrumbs — immutable NavStack with push/pop, shell-change detection, and type-ahead filter. Port of [bubbleo](https://github.com/KevM/bubbleo) |
+| <img src="media/icons/sugar-dash.png" width="48" alt="" onerror="this.style.display='none'"> | **[SugarDash](sugar-dash/)** | Dashboard TUI library — column grid layout, framed panels, status bar, tabs, and more. Port of [bubble-grid](https://github.com/charmbracelet/bubble-grid). |
 | <img src="media/icons/candy-hermit.png" width="48" alt=""> | **[CandyHermit](candy-hermit/)** | Fuzzy finder overlay — type to filter a list, arrow keys to select, Enter to confirm. Bubbletea Model wrapper. Port of [theHermit](https://github.com/Genekkion/theHermit) |
 | <img src="media/icons/sugar-stickers.png" width="48" alt=""> | **[SugarStickers](sugar-stickers/)** | FlexBox layout engine + simple sort/filter table. Ratio-based sizing, gap, justify, align, per-column styling. Port of [stickers](https://github.com/76creates/stickers) |
 | <img src="media/icons/sugar-toast.png" width="48" alt=""> | **[SugarToast](sugar-toast/)** | Floating notification overlays — Info / Success / Warning / Error types, configurable position and auto-dismiss. Port of [bubbleup](https://github.com/DaltonSW/bubbleup) |
@@ -151,7 +152,7 @@ The umbrella package is a metapackage; each library has its own
 
 ```sh
 for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
-         sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
+         sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
          candy-mold candy-tetris super-candy sugar-crush \
