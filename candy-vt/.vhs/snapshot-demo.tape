@@ -5,7 +5,7 @@
 #
 # CI re-renders on every push that touches candy-vt/src or this tape.
 
-Output candy-vt/.vhs/snapshot-demo.gif
+Output .vhs/snapshot-demo.gif
 
 Set Theme "TokyoNight"
 Set FontSize 14
