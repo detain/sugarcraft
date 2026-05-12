@@ -58,7 +58,7 @@ final class ChafaRenderer implements Renderer
             $cmd[] = $tempFile;
 
             $descriptorSpec = [1 => ['pipe', 'w']];
-            $process = proc_open($cmd, $descriptorSpec, $pipes);
+            $process = @proc_open($cmd, $descriptorSpec, $pipes);
 
             if ($process === false) {
                 throw new \RuntimeException(Lang::t('chafa.not_found'));
