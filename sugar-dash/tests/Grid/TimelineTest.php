@@ -43,7 +43,7 @@ final class TimelineTest extends TestCase
 
     public function testRenderWithSingleNode(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
         ]);
         $rendered = $timeline->render();
@@ -54,7 +54,7 @@ final class TimelineTest extends TestCase
 
     public function testRenderWithMultipleNodes(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
             TimelineNode::create('Event 2'),
             TimelineNode::create('Event 3'),
@@ -72,7 +72,7 @@ final class TimelineTest extends TestCase
 
     public function testCustomNodeChar(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Test'),
         ])->withNodeChar('◆');
 
@@ -83,7 +83,7 @@ final class TimelineTest extends TestCase
 
     public function testConnectorChar(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
             TimelineNode::create('Event 2'),
         ])->withConnectorChar('│');
@@ -95,7 +95,7 @@ final class TimelineTest extends TestCase
 
     public function testAlternativeConnectorChar(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
             TimelineNode::create('Event 2'),
         ])->withConnectorChar(':');
@@ -111,7 +111,7 @@ final class TimelineTest extends TestCase
 
     public function testNodeWithDescription(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1', 'This is a description'),
         ]);
         $rendered = $timeline->render();
@@ -122,7 +122,7 @@ final class TimelineTest extends TestCase
 
     public function testNodeWithMultilineDescription(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1', "Line 1\nLine 2\nLine 3"),
         ]);
         $rendered = $timeline->render();
@@ -134,7 +134,7 @@ final class TimelineTest extends TestCase
 
     public function testNodeWithNullDescription(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             new TimelineNode('Event 1', null),
         ]);
         $rendered = $timeline->render();
@@ -148,7 +148,7 @@ final class TimelineTest extends TestCase
 
     public function testNodeColorAddsAnsiCodes(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Test'),
         ])->withNodeColor(Color::ansi(9));
 
@@ -159,7 +159,7 @@ final class TimelineTest extends TestCase
 
     public function testConnectorColorAddsAnsiCodes(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
             TimelineNode::create('Event 2'),
         ])->withConnectorColor(Color::ansi(9));
@@ -171,7 +171,7 @@ final class TimelineTest extends TestCase
 
     public function testContentColorAddsAnsiCodes(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Test'),
         ])->withContentColor(Color::ansi(9));
 
@@ -182,7 +182,7 @@ final class TimelineTest extends TestCase
 
     public function testColorResetAtEnd(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Test'),
         ])->withNodeColor(Color::ansi(9));
 
@@ -219,7 +219,7 @@ final class TimelineTest extends TestCase
 
     public function testAddNodeReturnsNewInstance(): void
     {
-        $original = Timeline::withNodes([
+        $original = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
         ]);
         $updated = $original->addNode(TimelineNode::create('Event 2'));
@@ -260,7 +260,7 @@ final class TimelineTest extends TestCase
 
     public function testGetInnerSizeWithNodes(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1'),
             TimelineNode::create('Event 2'),
         ]);
@@ -272,7 +272,7 @@ final class TimelineTest extends TestCase
 
     public function testGetInnerSizeWithDescriptions(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('Event 1', "Line 1\nLine 2"),
         ]);
         [, $h] = $timeline->getInnerSize();
@@ -315,7 +315,7 @@ final class TimelineTest extends TestCase
 
     public function testVeryLongLabel(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create(str_repeat('x', 100)),
         ]);
         $rendered = $timeline->render();
@@ -325,7 +325,7 @@ final class TimelineTest extends TestCase
 
     public function testUnicodeLabel(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create('日本語'),
         ]);
         $rendered = $timeline->render();
@@ -335,7 +335,7 @@ final class TimelineTest extends TestCase
 
     public function testEmptyLabel(): void
     {
-        $timeline = Timeline::withNodes([
+        $timeline = Timeline::fromNodes([
             TimelineNode::create(''),
         ]);
         $rendered = $timeline->render();

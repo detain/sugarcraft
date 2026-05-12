@@ -13,6 +13,12 @@ use PHPUnit\Framework\TestCase;
 
 final class CalendarTest extends TestCase
 {
+    // Helper to strip ANSI codes for string comparison
+    private function stripAnsi(string $output): string
+    {
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════
@@ -79,8 +85,9 @@ final class CalendarTest extends TestCase
         $rendered = $calendar->render();
 
         // Should contain June and 2024
-        $this->assertStringContainsString('June', $rendered);
-        $this->assertStringContainsString('2024', $rendered);
+        $stripped = $this->stripAnsi($rendered);
+        $this->assertStringContainsString('June', $stripped);
+        $this->assertStringContainsString('2024', $stripped);
     }
 
     public function testGetDaysInMonth(): void
@@ -109,8 +116,9 @@ final class CalendarTest extends TestCase
         $calendarMon = Calendar::new()->withStartOnMonday(true);
         $rendered = $calendarMon->render();
 
-        // Should start with Mo instead of Su
-        $this->assertStringStartsWith('Mo', trim($rendered));
+        // Should start with Mo instead of Su (second line has day names)
+        $firstContent = trim(explode("\n", $this->stripAnsi($rendered))[1] ?? '');
+        $this->assertStringStartsWith('Mo', $firstContent);
     }
 
     public function testStartOnSunday(): void
@@ -119,7 +127,7 @@ final class CalendarTest extends TestCase
         $rendered = $calendarSun->render();
 
         // Should start with Su
-        $firstContent = trim(explode("\n", $rendered)[1] ?? '');
+        $firstContent = trim(explode("\n", $this->stripAnsi($rendered))[1] ?? '');
         $this->assertStringStartsWith('Su', $firstContent);
     }
 
@@ -165,7 +173,7 @@ final class CalendarTest extends TestCase
 
         // Should not contain ANSI codes in header area
         $lines = explode("\n", $rendered);
-        $this->assertNotMatchesRegularExpression('/\x1b\[/', $lines[0] ?? '');
+        $this->assertDoesNotMatchRegularExpression('/\x1b\[/', $lines[0] ?? '');
     }
 
     // ═══════════════════════════════════════════════════════════════

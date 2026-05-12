@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors switch UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Switch implements Sizer
+final class SwitchComponent implements Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -87,36 +87,39 @@ final class Switch implements Sizer
             $result .= $this->textColor->toFg(ColorProfile::TrueColor);
         }
         $result .= '[';
+        if ($this->textColor !== null) {
+            $result .= Ansi::reset();
+        }
 
         if ($this->on) {
-            // ON state: space + O
+            // ON state: space before O, both colored with onColor
             if ($this->onColor !== null) {
                 $result .= $this->onColor->toFg(ColorProfile::TrueColor);
             }
             $result .= ' O';
-
-            // Closing bracket
-            if ($this->textColor !== null) {
+            if ($this->onColor !== null) {
                 $result .= Ansi::reset();
-                $result .= $this->textColor->toFg(ColorProfile::TrueColor);
             }
-            $result .= ']';
         } else {
-            // OFF state: O + space
+            // OFF state: O colored with offColor, then space
             if ($this->offColor !== null) {
                 $result .= $this->offColor->toFg(ColorProfile::TrueColor);
             }
-            $result .= 'O ';
-
-            // Closing bracket
-            if ($this->textColor !== null) {
+            $result .= 'O';
+            if ($this->offColor !== null) {
                 $result .= Ansi::reset();
-                $result .= $this->textColor->toFg(ColorProfile::TrueColor);
             }
-            $result .= ']';
+            $result .= ' ';
         }
 
-        // Reset ANSI
+        // Closing bracket - reset before applying textColor if needed
+        if ($this->onColor !== null || $this->offColor !== null) {
+            $result .= Ansi::reset();
+        }
+        if ($this->textColor !== null) {
+            $result .= $this->textColor->toFg(ColorProfile::TrueColor);
+        }
+        $result .= ']';
         if ($this->textColor !== null) {
             $result .= Ansi::reset();
         }
