@@ -9,7 +9,7 @@ Set Height 450
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "candy-query/bin/candy-query /tmp/candy-query-demo/sample.db"
+Type "./bin/candy-query /tmp/candy-query-demo/sample.db"
 Enter
 Sleep 1s
 

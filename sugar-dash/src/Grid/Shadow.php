@@ -100,9 +100,8 @@ final class Shadow implements Sizer
         // Build output with shadow
         $result = [];
 
-        // Add right-side shadow column for each content line
+        // Add right-side shadow columns for each content line (xOffset columns)
         for ($i = 0; $i < $contentHeight; $i++) {
-            $rightShadow = $shadowChars['vertical'];
             $line = $lines[$i];
             $lineWidth = Width::string($line);
 
@@ -113,7 +112,8 @@ final class Shadow implements Sizer
                 $line = $this->truncateToWidth($line, $contentWidth);
             }
 
-            // Add right shadow
+            // Add right shadow (xOffset columns)
+            $rightShadow = str_repeat($shadowChars['vertical'], $this->xOffset);
             if ($colorCode !== '') {
                 $result[] = $line . $colorCode . $rightShadow . Ansi::reset();
             } else {
@@ -121,14 +121,15 @@ final class Shadow implements Sizer
             }
         }
 
-        // Add bottom shadow row
-        $bottomShadowRow = '';
+        // Add bottom shadow rows (yOffset rows) spanning contentWidth + xOffset
+        $bottomShadowWidth = $contentWidth + $this->xOffset;
+        $bottomShadowLine = str_repeat($shadowChars['corner'], $bottomShadowWidth);
         if ($colorCode !== '') {
-            $bottomShadowRow = $colorCode . $bottomShadow . Ansi::reset();
-        } else {
-            $bottomShadowRow = $bottomShadow;
+            $bottomShadowLine = $colorCode . $bottomShadowLine . Ansi::reset();
         }
-        $result[] = $bottomShadowRow;
+        for ($i = 0; $i < $this->yOffset; $i++) {
+            $result[] = $bottomShadowLine;
+        }
 
         return implode("\n", $result);
     }

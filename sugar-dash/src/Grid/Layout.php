@@ -257,7 +257,21 @@ final class Layout implements Sizer
         // First pass: calculate fixed sizes and minimums
         $usedWidth = 0;
         foreach ($this->children as $index => $child) {
-            [$childWidth, $childHeight] = $child->content->getInnerSize();
+            if ($child->content instanceof Sizer) {
+                [$childWidth, $childHeight] = $child->content->getInnerSize();
+            } else {
+                // Non-Sizer: render to measure natural size
+                $rendered = $child->content->render();
+                $lines = explode("\n", $rendered);
+                $childHeight = count($lines);
+                $childWidth = 0;
+                foreach ($lines as $line) {
+                    $w = Width::string($line);
+                    if ($w > $childWidth) {
+                        $childWidth = $w;
+                    }
+                }
+            }
 
             if ($child->flex <= 0) {
                 // Fixed size - use width ratio if width is 0
@@ -320,7 +334,21 @@ final class Layout implements Sizer
         // First pass: calculate fixed sizes
         $usedHeight = 0;
         foreach ($this->children as $index => $child) {
-            [$childWidth, $childHeight] = $child->content->getInnerSize();
+            if ($child->content instanceof Sizer) {
+                [$childWidth, $childHeight] = $child->content->getInnerSize();
+            } else {
+                // Non-Sizer: render to measure natural size
+                $rendered = $child->content->render();
+                $lines = explode("\n", $rendered);
+                $childHeight = count($lines);
+                $childWidth = 0;
+                foreach ($lines as $line) {
+                    $w = Width::string($line);
+                    if ($w > $childWidth) {
+                        $childWidth = $w;
+                    }
+                }
+            }
 
             $height = $childHeight > 0 ? $childHeight : 1;
 
