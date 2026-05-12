@@ -373,29 +373,33 @@ final class SparklineTest extends TestCase
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * @see https://github.com/sugarcraft/sugar-dash/issues/X - Single data point causes DivisionByZeroError in multi-line
+     * Single data point with height > 1 renders without error.
+     * Bug fix: range check in renderMultiLine prevents DivisionByZeroError.
      */
     public function testSingleDataPointWithHeightGreaterThanOne(): void
     {
-        // Single data point with height > 1 triggers multi-line rendering
-        // Note: Component has a bug - range check is missing in renderMultiLine
-        $this->expectException(\DivisionByZeroError::class);
-
+        // Single data point with height > 1 should render correctly
         $sparkline = Sparkline::new([42])->withHeight(2);
-        $sparkline->render();
+        $rendered = $sparkline->render();
+
+        // Should render without error and produce multi-line output
+        $this->assertNotSame('', $rendered);
+        $this->assertStringContainsString("\n", $rendered);
     }
 
     /**
-     * @see https://github.com/sugarcraft/sugar-dash/issues/X - All same values causes DivisionByZeroError in multi-line
+     * All same values with height > 1 renders without error.
+     * Bug fix: range check in renderMultiLine prevents DivisionByZeroError.
      */
     public function testAllSameValuesWithHeightGreaterThanOne(): void
     {
-        // All same values with height > 1 triggers multi-line rendering
-        // Note: Component has a bug - range check is missing in renderMultiLine
-        $this->expectException(\DivisionByZeroError::class);
-
+        // All same values with height > 1 should render correctly
         $sparkline = Sparkline::new([5, 5, 5, 5, 5])->withHeight(2);
-        $sparkline->render();
+        $rendered = $sparkline->render();
+
+        // Should render without error
+        $this->assertNotSame('', $rendered);
+        $this->assertStringContainsString("\n", $rendered);
     }
 
     public function testNegativeValues(): void

@@ -273,7 +273,9 @@ final class Metric implements Sizer
         }
 
         // Apply value color (or preserve uncolored if no valueColor)
-        $afterTrend = $valueStart + $trendStrLen;
+        // Must skip past both the trend symbol AND the spacing after it
+        $trendSpacingLen = mb_strlen($this->trendSpacing, 'UTF-8');
+        $afterTrend = $valueStart + $trendStrLen + $trendSpacingLen;
         $valuePartOnly = mb_substr($line, $afterTrend, null, 'UTF-8');
         if ($this->valueColor !== null) {
             $result .= $this->valueColor->toFg(ColorProfile::TrueColor) . $valuePartOnly . Ansi::reset();
