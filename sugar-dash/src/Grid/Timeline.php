@@ -59,7 +59,7 @@ final class Timeline implements Sizer
      *
      * @param TimelineNode[] $nodes
      */
-    public static function withNodes(array $nodes): self
+    public static function fromNodes(array $nodes): self
     {
         return new self(
             nodes: $nodes,

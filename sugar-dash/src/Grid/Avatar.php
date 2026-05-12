@@ -43,7 +43,7 @@ final class Avatar implements Sizer
     /**
      * Create a new avatar with a name (displays initials as fallback).
      */
-    public static function withName(string $name): self
+    public static function fromName(string $name): self
     {
         return new self(
             imageUrl: null,
@@ -75,7 +75,7 @@ final class Avatar implements Sizer
      */
     public static function small(string $name): self
     {
-        return self::withName($name)->withSize(self::SIZE_SMALL);
+        return self::fromName($name)->withSize(self::SIZE_SMALL);
     }
 
     /**
@@ -83,7 +83,7 @@ final class Avatar implements Sizer
      */
     public static function large(string $name): self
     {
-        return self::withName($name)->withSize(self::SIZE_LARGE);
+        return self::fromName($name)->withSize(self::SIZE_LARGE);
     }
 
     /**
