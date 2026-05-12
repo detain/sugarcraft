@@ -77,13 +77,15 @@ final class Veil
             if ($destY >= $bgHeight) break;
 
             $fgLine = $fgLines[$fy];
-            $fgLineLen = \strlen($fgLine);
+            // Split into characters (not bytes) to handle UTF-8 properly
+            $fgChars = \mb_str_split($fgLine);
+            $fgCharCount = \count($fgChars);
 
-            for ($fx = 0; $fx < $fgLineLen; $fx++) {
+            for ($fx = 0; $fx < $fgCharCount; $fx++) {
                 $destX = $x + $fx;
                 if ($destX >= $bgWidth) break;
 
-                $char = $fgLine[$fx];
+                $char = $fgChars[$fx];
                 if ($char !== "\n" && $char !== "\r") {
                     $output[$destY] = $this->replaceCharAt($output[$destY], $destX, $char);
                 }
@@ -143,13 +145,10 @@ final class Veil
 
         while ($bytePos < $len) {
             if ($col === $x) {
-                // Found the target column — replace
-                $result .= $char;
-                // Skip the old character (could be multibyte)
-                $codepoint = '';
-                if (($line[$bytePos] ?? '') >= "\x80") {
-                    // Multibyte: skip UTF-8 char
-                    $ord = \ord($line[$bytePos]);
+                // Found the target column — first advance past the old character
+                $c = $line[$bytePos];
+                if ($c >= "\x80") {
+                    $ord = \ord($c);
                     if ($ord < 0xC0) {
                         $bytePos++;
                     } elseif ($ord < 0xE0) {
@@ -162,14 +161,14 @@ final class Veil
                 } else {
                     $bytePos++;
                 }
-                // Append rest of string
-                $result .= \substr($line, $bytePos);
-                return $result;
+                // Now append replacement char and rest of string
+                return $result . $char . \substr($line, $bytePos);
             }
 
+            // Not at target column yet — accumulate character and advance
             $c = $line[$bytePos];
             if ($c >= "\x80") {
-                // Multibyte — decode properly
+                // Multibyte — include full character
                 $ord = \ord($c);
                 if ($ord < 0xC0) {
                     $result .= $c;
