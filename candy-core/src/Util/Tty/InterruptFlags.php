@@ -38,9 +38,6 @@ final class InterruptFlags
     /** Shmop segment ID, or false on failure. */
     private $shmId = false;
 
-    /** Actual shared memory segment key. */
-    private int $shmKey = 0;
-
     /**
      * Return the singleton InterruptFlags instance.
      *
@@ -74,8 +71,6 @@ final class InterruptFlags
             // Fall back to attach (already created by another process).
             $this->shmId = @shmop_open($key, 'a+', 0, 1);
         }
-
-        $this->shmKey = $key;
     }
 
     /**
@@ -110,9 +105,10 @@ final class InterruptFlags
             return false;
         }
 
-        $data = shmop_read($this->shmId, 0, 1);
+        $raw = @shmop_read($this->shmId, 0, 1);
 
-        if ($data === false || $data === "\x00" || $data === '') {
+        // shmop_read may return false on error; empty or zero byte means no interrupt.
+        if (strlen($raw) === 0 || $raw === "\x00") {
             return false;
         }
 
@@ -174,12 +170,15 @@ final class InterruptFlags
         // POSIX: use ftok for a stable System V IPC key.
         static $posixKey = null;
         if ($posixKey === null) {
-            $posixKey = @\ftok(__FILE__, 'S');
-            if ($posixKey === false) {
+            $result = @\ftok(__FILE__, 'S');
+            // ftok returns int on success, -1 if file inaccessible.
+            if ($result === -1) {
                 // ftok fallback: use a fixed key if the file is unavailable.
                 // This is safe for single-process use (no other process needs
                 // to attach to the same segment in tests).
                 $posixKey = 0x41544347; // 'SGC' — fixed fallback
+            } else {
+                $posixKey = $result;
             }
         }
 

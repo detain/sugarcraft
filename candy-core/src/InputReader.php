@@ -40,7 +40,6 @@ use SugarCraft\Core\Msg\PasteStartMsg;
  */
 final class InputReader
 {
-    private const PASTE_START = "\x1b[200~";
     private const PASTE_END   = "\x1b[201~";
 
     private string $buf = '';
@@ -353,14 +352,14 @@ final class InputReader
      * Returns one of {@see KeyPressMsg} / {@see KeyRepeatMsg} /
      * {@see KeyReleaseMsg}.
      */
-    private function decodeKittyKey(string $params): ?KeyMsg
+    private function decodeKittyKey(string $params): KeyMsg
     {
         // Split into the three semicolon-separated sections; each
         // section may contain colon sub-fields.
         $sections = explode(';', $params);
-        $codePart = $sections[0] ?? '';
-        $modPart  = $sections[1] ?? '1';
-        $textPart = $sections[2] ?? '';
+        $codePart = $sections[0];
+        $modPart  = $sections[1];
+        $textPart = $sections[2];
 
         // Primary code is the first colon-sub-field of section 0.
         $code = (int) explode(':', $codePart)[0];

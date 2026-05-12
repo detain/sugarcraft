@@ -53,7 +53,7 @@ final class Cmd
     {
         /** @var list<\Closure> $filtered */
         $filtered = array_values(array_filter($cmds, static fn($c) => $c !== null));
-        return static function () use ($filtered): ?Msg {
+        return static function () use ($filtered): Msg {
             // The Program inspects this sentinel and explodes it into
             // separate dispatches. See Program::runCmd().
             return new BatchMsg($filtered);
@@ -124,10 +124,10 @@ final class Cmd
 
     /**
      * Wrap an async operation in a Cmd. The $factory should return a
-     * PromiseInterface<?Msg>. The promise's resolved Msg (if any) will
+     * React\Promise\PromiseInterface<?Msg>. The promise's resolved Msg (if any) will
      * be dispatched to update(). Rejected promises dispatch ExceptionMsg.
      *
-     * @param \Closure(): PromiseInterface<?Msg> $factory
+     * @param \Closure(): \React\Promise\PromiseInterface<?Msg> $factory
      * @return \Closure(): AsyncCmd
      */
     public static function promise(\Closure $factory): \Closure

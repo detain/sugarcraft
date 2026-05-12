@@ -5,9 +5,9 @@ parameters:
     level: 5
     paths:
         - src
-        - tests
     excludePaths:
         - vendor
+        - tests
         - src/Util/Tty/Kernel32.php
         - src/Util/Tty/Kernel32Interface.php
         - src/Util/Tty/WindowsBackend.php
