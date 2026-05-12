@@ -1,17 +1,17 @@
 name: Sync to sugarcraft org
 
-# Pushes every lib/app subdir to its sibling sugarcraft/<lib> repo,
+# Pushes changed lib/app subdirs to their sibling sugarcraft/<lib> repo,
 # and pushes docs/ to sugarcraft/sugarcraft.github.io. Treats this
 # monorepo as the source of truth.
+#
+# Only libs whose source/tests/config changed (or whose deps changed)
+# are pushed — same affected-libs logic as ci.yml. Monorepo-wide changes
+# (workflow files, root composer) push everything.
 #
 # Auth: SUGARCRAFT_SYNC_TOKEN secret — a PAT with `repo` scope on
 # the sugarcraft org. Without it, all push steps will 403.
 
 env:
-  # Belt-and-suspenders: actions/checkout is now pinned to v5 (Node 24
-  # native), but this flag keeps any transitively-loaded JavaScript
-  # action that still defaults to Node 20 from generating deprecation
-  # warnings.
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 on:
@@ -19,51 +19,59 @@ on:
     branches: [master]
   workflow_dispatch:
 
-# Don't pile on concurrent syncs — race-pushes back to master.
-# Don't cancel-in-progress; let each sync finish so org repos stay
-# coherent.
 concurrency:
   group: sync-sugarcraft
   cancel-in-progress: false
 
 jobs:
   sync-libs:
-    name: Subtree-push 46 lib/app subdirs to sugarcraft/<lib>
+    name: Subtree-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # git subtree split needs full history
 
+      - name: Compute affected libs
+        id: affected
+        run: |
+          set -euo pipefail
+          # Use the same affected-libs logic as ci.yml
+          # --range HEAD~1..HEAD gives us files changed in this push
+          # The script computes changed libs + transitive dependents
+          result=$(php scripts/affected-libs.php --range HEAD~1..HEAD 2>&1)
+          affected=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('\n'.join(d['affected']))" 2>/dev/null || true)
+          force_all=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('yes' if d['force_all'] else 'no')" 2>/dev/null || echo "yes")
+          echo "force_all=$force_all"
+          echo "affected_libs=$affected"
+          echo "affected_libs=$affected" >> "$GITHUB_OUTPUT"
+          echo "force_all=$force_all" >> "$GITHUB_OUTPUT"
+
       - name: Configure git identity + drop checkout's auth header
         run: |
           git config user.name  'Joe Huss'
           git config user.email 'detain@interserver.net'
-          # actions/checkout sets http.https://github.com/.extraheader
-          # to its own GITHUB_TOKEN, which overrides any token we
-          # embed in push URLs (results in github-actions[bot] auth →
-          # 403 to sugarcraft/* repos). Drop it so our PAT is used.
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-      - name: Subtree-split + force-push each lib
+      - name: Subtree-split + force-push each affected lib
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
         run: |
           set -euo pipefail
-          libs=(
-            candy-core candy-sprinkles honey-bounce candy-zone
-            candy-pty candy-vcr candy-vt candy-wish
-            sugar-bits sugar-charts sugar-prompt candy-shell
-            candy-shine candy-kit candy-freeze sugar-glow sugar-spark
-            sugar-wishlist candy-metrics
-            candy-mold candy-mosaic candy-tetris super-candy sugar-crush
-            sugar-stash candy-query sugar-tick
-            candy-mines candy-flip honey-flap
-            candy-log candy-palette candy-lister sugar-boxer
-            sugar-veil sugar-crumbs sugar-dash candy-hermit sugar-stickers
-            sugar-toast sugar-calendar sugar-readline sugar-table
-            sugar-skate sugar-post candy-serve
-          )
+          force_all="${{ fromJSON(needs.affected.outputs.force_all) }}"
+          libs_str="${{ needs.affected.outputs.affected_libs }}"
+
+          if [ "$force_all" = "yes" ]; then
+            # Monorepo-wide change: push all libs
+            echo "force_all=yes — pushing all libs"
+            mapfile -t libs < <(php scripts/affected-libs.php --all 2>/dev/null | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['all_libs']))")
+          else
+            # Changed-only: push only affected libs
+            echo "Pushing affected libs:"
+            echo "$libs_str"
+            mapfile -t libs < <(echo "$libs_str" | grep -v '^$')
+          fi
+
           for lib in "${libs[@]}"; do
             [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
             br="sync-$lib"
@@ -75,6 +83,7 @@ jobs:
             git branch -D "$br" >/dev/null
             echo "✓ synced $lib"
           done
+          echo "Done — ${#libs[@]} libs pushed"
 
   sync-site:
     name: Push docs/ to sugarcraft/sugarcraft.github.io
@@ -91,8 +100,6 @@ jobs:
           git clone --quiet \
             "https://x-access-token:$TOKEN@github.com/sugarcraft/sugarcraft.github.io.git" \
             "$tmp/site"
-          # rsync the docs/ tree on top, deleting site files that no
-          # longer exist in docs/. .git is preserved.
           rsync -a --delete --exclude=.git ./docs/ "$tmp/site/"
           cd "$tmp/site"
           git config user.name  'Joe Huss'
