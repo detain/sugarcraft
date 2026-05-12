@@ -59,7 +59,7 @@ jobs:
             candy-mines candy-mosaic candy-flip honey-flap
             candy-hermit candy-lister candy-log candy-metrics
             candy-palette candy-serve candy-wish candy-zone
-            sugar-boxer sugar-calendar sugar-crumbs sugar-post
+            sugar-boxer sugar-calendar sugar-crumbs sugar-dash sugar-post
             sugar-readline sugar-skate sugar-stickers sugar-table
             sugar-toast sugar-veil
           )
