@@ -48,6 +48,27 @@ echo StatusLine::error('connection refused'), "\n";
 - **`Logo`** — ASCII-art logo renderer with `Logo::sugarcraft()` built-in
   preset and `Logo::fromAscii($art)` for custom art. Chain
   `->withColor($hex)` to apply foreground color.
+- **`Section`** — styled section with title and body content, themeable.
+- **`Stage`** — multi-section presentation container.
+- **`HelpText`** — formatted help output.
+
+## Demos
+
+### CLI page
+
+![cli-page](.vhs/cli-page.gif)
+
+### Logo
+
+![logo](.vhs/logo.gif)
+
+### Section
+
+![section](.vhs/section.gif)
+
+### Stage
+
+![stage](.vhs/stage.gif)
 
 ## Test
 

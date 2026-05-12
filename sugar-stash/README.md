@@ -42,6 +42,12 @@ sugar-stash    # run inside any git working tree
 
 `SugarStash` is intentionally read-mostly: every git mutation that goes beyond stage / unstage shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config. Anything more (interactive rebase, cherry-pick, bisect) belongs in a follow-up release.
 
+## Demos
+
+### Staging workflow
+
+![stage](.vhs/stage.gif)
+
 ## Test
 
 ```bash

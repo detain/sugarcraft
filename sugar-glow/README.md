@@ -59,6 +59,16 @@ Standard reader keys come from `Viewport`:
 | `End` / `G` | bottom |
 | `q` / `Esc` / `Ctrl+C` | exit |
 
+## Demos
+
+### Render to stdout
+
+![render](.vhs/render.gif)
+
+### Fullscreen pager
+
+![pager](.vhs/pager.gif)
+
 ## Test
 
 ```sh
