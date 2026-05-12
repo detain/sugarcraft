@@ -235,27 +235,33 @@ final class ListComponent implements Sizer
 
     /**
      * Truncate a string to fit within the given width.
+     * Budgets 1 character for the ellipsis.
      */
     private function truncateToWidth(string $s, int $width): string
     {
         if ($width <= 0) {
             return '';
         }
-        if (Width::string($s) <= $width) {
-            return $s;
+        // Budget 1 column for the ellipsis
+        $maxContentWidth = max(1, $width - 1);
+        if (Width::string($s) <= $maxContentWidth) {
+            return $s . '…';
         }
         $lo = 0;
         $hi = mb_strlen($s, 'UTF-8');
         while ($lo < $hi) {
             $mid = (int) (($lo + $hi + 1) / 2);
             $candidate = mb_substr($s, 0, $mid, 'UTF-8');
-            if (Width::string($candidate) <= $width) {
+            if (Width::string($candidate) <= $maxContentWidth) {
                 $lo = $mid;
             } else {
                 $hi = $mid - 1;
             }
         }
-        $result = mb_substr($s, 0, max(1, $lo), 'UTF-8');
+        if ($lo === 0) {
+            return '';
+        }
+        $result = mb_substr($s, 0, $lo, 'UTF-8');
         return $result . '…';
     }
 

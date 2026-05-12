@@ -173,7 +173,8 @@ final class Tabs implements Sizer
         $tab = $this->tabs[$selectedIndex];
         $content = $tab['content'];
 
-        $contentHeight = $this->height !== null ? $this->height - 1 : 0; // -1 for tab bar
+        $tabBarHeight = $this->activeChar !== '' ? 2 : 1; // Same calculation as getInnerSize()
+        $contentHeight = $this->height !== null ? $this->height - $tabBarHeight : 0;
 
         if ($content instanceof Sizer && $this->width !== null && $contentHeight > 0) {
             $sized = $content->setSize($this->width, $contentHeight);
