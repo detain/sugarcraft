@@ -9,7 +9,7 @@ Set Height 400
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "cd super-candy && ../bin/sugar-stash"
+Type "sugar-stash/bin/sugar-stash"
 Enter
 Sleep 1s
 
@@ -21,3 +21,4 @@ Type "s" Sleep 400ms  # unstage
 Sleep 500ms
 Type "R" Sleep 600ms  # refresh
 Type "q"
+Sleep 200ms
