@@ -65,12 +65,17 @@ final class Spinner implements Sizer
     public function render(): string
     {
         $frame = $this->getCurrentFrame();
+        $output = $frame;
 
-        if ($this->color !== null) {
-            return $this->color->toFg(ColorProfile::TrueColor) . $frame . Ansi::reset();
+        if ($this->message !== '') {
+            $output .= ' ' . $this->message;
         }
 
-        return $frame;
+        if ($this->color !== null) {
+            return $this->color->toFg(ColorProfile::TrueColor) . $output . Ansi::reset();
+        }
+
+        return $output;
     }
 
     /**
