@@ -174,7 +174,7 @@ final class Code implements Sizer
      */
     private function renderBorder(int $contentWidth): string
     {
-        $totalWidth = $contentWidth + 4; // Account for │ and spaces
+        $totalWidth = $contentWidth; // contentWidth already accounts for │ and spaces
         $borderLine = str_repeat('─', $totalWidth);
 
         $output = '┌' . $borderLine . '┐';

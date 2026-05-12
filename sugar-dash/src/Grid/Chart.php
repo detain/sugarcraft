@@ -298,12 +298,12 @@ final class Chart implements Sizer
         }
 
         // Convert grid to string
-        for ($row = $chartHeight - 1; $row >= 0; $row--) {
+        for ($row = 0; $row < $chartHeight; $row++) {
             $line = '';
 
             // Y-axis label
-            if ($this->showGrid && isset($gridLines[$chartHeight - 1 - $row])) {
-                $yLabel = $this->formatYLabel($gridLines[$chartHeight - 1 - $row]);
+            if ($this->showGrid && isset($gridLines[$row])) {
+                $yLabel = $this->formatYLabel($gridLines[$row]);
                 $line .= str_pad($yLabel, 8) . ' ';
             }
 

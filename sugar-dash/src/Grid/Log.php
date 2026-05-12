@@ -94,6 +94,9 @@ final class Log implements Sizer
     /** @var list<LogEntry> */
     private array $entries;
 
+    /** @var list<LogEntry> Original unfiltered entries */
+    private array $originalEntries;
+
     public function __construct(
         array $entries = [],
         private readonly ?int $maxEntries = null,
@@ -103,6 +106,7 @@ final class Log implements Sizer
         private readonly ?int $timestampWidth = null,
         private readonly ?Color $timestampColor = null,
     ) {
+        $this->originalEntries = $entries;
         $this->entries = $this->filterAndSortEntries($entries);
     }
 
@@ -335,6 +339,7 @@ final class Log implements Sizer
     public function withEntries(array $entries): self
     {
         $clone = clone $this;
+        $clone->originalEntries = $entries;
         $clone->entries = $this->filterAndSortEntries($entries);
         return $clone;
     }
@@ -345,7 +350,9 @@ final class Log implements Sizer
     public function withEntry(LogEntry $entry): self
     {
         $clone = clone $this;
+        $newOriginalEntries = array_merge($clone->originalEntries, [$entry]);
         $newEntries = array_merge($clone->entries, [$entry]);
+        $clone->originalEntries = $newOriginalEntries;
         $clone->entries = $this->filterAndSortEntries($newEntries);
         return $clone;
     }
@@ -355,14 +362,13 @@ final class Log implements Sizer
      */
     public function withMaxEntries(?int $max): self
     {
-        $clone = clone $this;
-        $clone->entries = $this->filterAndSortEntries($clone->entries);
-        // Re-apply max entries limit
-        if ($max !== null && count($clone->entries) > $max) {
-            $clone->entries = array_slice($clone->entries, 0, $max);
+        // Re-apply filtering from original entries before limiting
+        $filteredEntries = $this->filterAndSortEntries($this->originalEntries);
+        if ($max !== null && count($filteredEntries) > $max) {
+            $filteredEntries = array_slice($filteredEntries, 0, $max);
         }
         return new self(
-            entries: $clone->entries,
+            entries: $this->originalEntries,
             maxEntries: $max,
             minLevel: $this->minLevel,
             showTimestamps: $this->showTimestamps,
@@ -378,7 +384,7 @@ final class Log implements Sizer
     public function withMinLevel(?LogLevel $level): self
     {
         return new self(
-            entries: $this->entries,
+            entries: $this->originalEntries,
             maxEntries: $this->maxEntries,
             minLevel: $level,
             showTimestamps: $this->showTimestamps,
