@@ -9,7 +9,7 @@ Set Height 480
 Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
-Type "super-candy/bin/supercandy src tests"
+Type "bin/supercandy src tests"
 Enter
 Sleep 1s
 
