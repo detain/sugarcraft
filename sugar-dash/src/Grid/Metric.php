@@ -262,17 +262,23 @@ final class Metric implements Sizer
 
         $result = $beforeValue;
 
-        // Apply trend color
+        // Apply trend color (or preserve uncolored if no trendColor)
         if ($this->trendColor !== null && $trendStr !== '') {
             $trendPart = mb_substr($line, $valueStart, $trendStrLen, 'UTF-8');
             $result .= $this->trendColor->toFg(ColorProfile::TrueColor) . $trendPart . Ansi::reset();
+        } elseif ($trendStr !== '') {
+            // No trend color but still need to include the trend symbol
+            $trendPart = mb_substr($line, $valueStart, $trendStrLen, 'UTF-8');
+            $result .= $trendPart;
         }
 
-        // Apply value color
+        // Apply value color (or preserve uncolored if no valueColor)
+        $afterTrend = $valueStart + $trendStrLen;
+        $valuePartOnly = mb_substr($line, $afterTrend, null, 'UTF-8');
         if ($this->valueColor !== null) {
-            $afterTrend = $valueStart + $trendStrLen;
-            $valuePartOnly = mb_substr($line, $afterTrend, null, 'UTF-8');
             $result .= $this->valueColor->toFg(ColorProfile::TrueColor) . $valuePartOnly . Ansi::reset();
+        } else {
+            $result .= $valuePartOnly;
         }
 
         return $result;
