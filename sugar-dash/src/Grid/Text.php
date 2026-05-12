@@ -7,16 +7,6 @@ namespace SugarCraft\Dash\Grid;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Horizontal text alignment enum.
- */
-enum HAlign: string
-{
-    case Left = 'left';
-    case Right = 'right';
-    case Center = 'center';
-}
-
-/**
  * Word-wrapped text content component.
  *
  * Handles:
