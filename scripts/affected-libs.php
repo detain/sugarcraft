@@ -49,6 +49,8 @@ const COVERAGE_PHP_VERSION = '8.3';
  */
 const FORCE_ALL_FILES = [
     '.github/workflows/ci.yml',
+    '.github/workflows/sync-sugarcraft.yml',
+    '.github/workflows/vhs.yml',
     'scripts/affected-libs.php',
     'composer.json',
     'composer.lock',
