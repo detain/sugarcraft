@@ -192,7 +192,7 @@ jobs:
   # TTY-sensitive libs to keep wall-clock time reasonable.
   windows-test:
     name: 'Windows · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
-    runs-on: windows-2025-vs2026
+    runs-on: windows-latest
     needs: [build-matrix]
     concurrency:
       group: ci-windows-${{ github.ref }}-${{ matrix.lib }}-${{ matrix.php }}
