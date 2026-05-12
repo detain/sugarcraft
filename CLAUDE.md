@@ -69,7 +69,7 @@ gh workflow run sync-sugarcraft.yml -R detain/sugarcraft
 
 ## Adding a library
 
-Follow `AGENTS.md` checklist end-to-end. Touched files: `<slug>/composer.json` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/` · root `composer.json` (`require` + `repositories[]`) · `MATCHUPS.md` · `PROJECT_NAMES.md` · `README.md` · `docs/index.html` · `media/icons/<slug>.png` · `.github/workflows/ci.yml` matrix · `.github/workflows/vhs.yml` matrix · `codecov.yml` (flags + components).
+Follow `AGENTS.md` checklist end-to-end. Touched files: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/` · root `composer.json` (`require` + `repositories[]`) · `MATCHUPS.md` · `PROJECT_NAMES.md` · `README.md` · `docs/index.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` matrix · `codecov.yml` (flags + components). `ci.yml` picks the new lib up automatically via `scripts/affected-libs.php` — only update the `WINDOWS_LIBS`/`MACOS_LIBS` pools inside that script if the lib needs OS-specific runners.
 
 Reference leaf libs for shape: `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/` (test config), `sugar-wishlist/src/Lang.php` (i18n wrapper).
 
@@ -85,7 +85,7 @@ Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED for path-repos pre-1.0. Drop `--strict`.
 - New transitive `@dev` deps need their path-repo added to every consuming lib's `composer.json` `repositories` array. Copy from `sugar-charts/composer.json`.
-- `.github/workflows/{ci,vhs}.yml` matrices are **hand-maintained**, NOT glob-driven. Adding a lib without updating both means PHPUnit/GIFs silently never run.
+- `.github/workflows/ci.yml` matrices are **dynamic** — computed by `scripts/affected-libs.php` from filesystem + reverse-dep graph in `composer.json`. Adding a lib needs only `composer.json` + `phpunit.xml`; the lib is auto-picked up. `.github/workflows/vhs.yml` is still hand-maintained — forget the `all=(...)` array entry and the GIF never re-renders.
 - Skip audit items for "credit upstream author" — out of scope before 1.0.
 - Run sub-agents ONE AT A TIME, never in parallel — burns extra-usage budget; concurrent writes to shared files (`MATCHUPS.md`, `README.md`) collide. `.codenomad/worktreeMap.json` records active worktree ownership; check it before launching a parallel run.
 - Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — secrets don't exist in repo settings yet.
