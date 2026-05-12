@@ -60,19 +60,15 @@ final class Parser
         $tokens = [];
         $textStart = -1;
 
-        $flushText = static function () use (&$tokens, &$textStart, $buf, &$i): void {
-            if ($textStart >= 0 && $textStart < $i) {
-                $tokens[] = new Token(Token::TEXT, substr($buf, $textStart, $i - $textStart));
-            }
-            $textStart = -1;
-        };
-
         while ($i < $len) {
             $b = $buf[$i];
 
             // ESC starts an escape sequence. Flush any pending text first.
             if ($b === "\x1b") {
-                $flushText();
+                if ($textStart >= 0 && $textStart < $i) {
+                    $tokens[] = new Token(Token::TEXT, substr($buf, $textStart, $i - $textStart));
+                }
+                $textStart = -1;
                 $consumed = $this->consumeEsc($buf, $i, $len, $tokens);
                 if ($consumed < 0) {
                     // Incomplete — buffer and bail.
@@ -86,7 +82,10 @@ final class Parser
             // C0 control bytes — emit individually.
             $ord = ord($b);
             if ($ord < 0x20 || $ord === 0x7f) {
-                $flushText();
+                if ($textStart >= 0 && $textStart < $i) {
+                    $tokens[] = new Token(Token::TEXT, substr($buf, $textStart, $i - $textStart));
+                }
+                $textStart = -1;
                 $tokens[] = new Token(Token::CONTROL, $b);
                 $i++;
                 continue;
@@ -98,7 +97,9 @@ final class Parser
             }
             $i++;
         }
-        $flushText();
+        if ($textStart >= 0 && $textStart < $i) {
+            $tokens[] = new Token(Token::TEXT, substr($buf, $textStart, $i - $textStart));
+        }
         return $tokens;
     }
 
@@ -124,7 +125,7 @@ final class Parser
      * Returns the number of bytes consumed, or -1 if the sequence is
      * incomplete (caller should buffer the rest).
      *
-     * @param list<Token> $tokens output appended to
+     * @param array $tokens output appended to
      */
     private function consumeEsc(string $buf, int $i, int $len, array &$tokens): int
     {

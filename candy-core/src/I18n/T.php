@@ -226,7 +226,7 @@ final class T
     {
         foreach (['LC_ALL', 'LC_MESSAGES', 'LANG'] as $var) {
             $raw = $_SERVER[$var] ?? getenv($var) ?: null;
-            if (is_string($raw) && $raw !== '' && $raw !== 'C' && $raw !== 'POSIX') {
+            if (is_string($raw) && !in_array($raw, ['', 'C', 'POSIX'], true)) {
                 return self::normalize($raw);
             }
         }
