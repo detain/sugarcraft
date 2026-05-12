@@ -12,6 +12,12 @@ use PHPUnit\Framework\TestCase;
 
 final class ComboBoxTest extends TestCase
 {
+    // Helper to strip ANSI codes for string comparison
+    private function stripAnsi(string $output): string
+    {
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════
@@ -45,7 +51,7 @@ final class ComboBoxTest extends TestCase
         $combobox = ComboBox::new('Type to search...');
         $rendered = $combobox->render();
 
-        $this->assertStringContainsString('Type to search...', $rendered);
+        $this->assertStringContainsString('Type to search...', $this->stripAnsi($rendered));
     }
 
     public function testRenderShowsSearchIcon(): void
@@ -123,7 +129,7 @@ final class ComboBoxTest extends TestCase
 
         $rendered = $combobox->render();
 
-        $this->assertStringContainsString('▶', $rendered);
+        $this->assertStringContainsString('▶', $this->stripAnsi($rendered));
     }
 
     public function testSwitchingSelection(): void
@@ -136,7 +142,7 @@ final class ComboBoxTest extends TestCase
         $combobox2 = $combobox->withSelectedIndex(1);
         $rendered = $combobox2->render();
 
-        $this->assertStringContainsString('▶', $rendered);
+        $this->assertStringContainsString('▶', $this->stripAnsi($rendered));
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -284,8 +290,11 @@ final class ComboBoxTest extends TestCase
 
         $rendered = $combobox->render();
 
-        // Should show input but no results
-        $this->assertStringContainsString('Search...', $rendered);
+        // Should show input (query xyz) but no results
+        $stripped = $this->stripAnsi($rendered);
+        $this->assertStringContainsString('xyz', $stripped);
+        $this->assertStringNotContainsString('Apple', $stripped);
+        $this->assertStringNotContainsString('Banana', $stripped);
     }
 
     public function testUnicodeQuery(): void

@@ -12,6 +12,12 @@ use PHPUnit\Framework\TestCase;
 
 final class DatePickerTest extends TestCase
 {
+    // Helper to strip ANSI codes for string comparison
+    private function stripAnsi(string $output): string
+    {
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $output);
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════
@@ -178,8 +184,10 @@ final class DatePickerTest extends TestCase
         $picker = DatePicker::new(2024, 1)->withStartDayOfWeek(DatePicker::DAYS_MONDAY);
         $rendered = $picker->render();
 
-        // Should show Mo first
-        $this->assertStringStartsWith('Mo', trim($rendered));
+        // Should show Mo first (second line has day names)
+        $lines = explode("\n", $this->stripAnsi($rendered));
+        $firstContent = trim($lines[1] ?? '');
+        $this->assertStringStartsWith('Mo', $firstContent);
     }
 
     // ═══════════════════════════════════════════════════════════════

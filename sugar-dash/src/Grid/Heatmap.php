@@ -122,13 +122,13 @@ final class Heatmap implements Sizer
         }
 
         // Simple linear interpolation between colors
-        $r1 = $this->lowColor->getRed();
-        $g1 = $this->lowColor->getGreen();
-        $b1 = $this->lowColor->getBlue();
+        $r1 = $this->lowColor->r;
+        $g1 = $this->lowColor->g;
+        $b1 = $this->lowColor->b;
 
-        $r2 = $this->highColor->getRed();
-        $g2 = $this->highColor->getGreen();
-        $b2 = $this->highColor->getBlue();
+        $r2 = $this->highColor->r;
+        $g2 = $this->highColor->g;
+        $b2 = $this->highColor->b;
 
         $r = (int) ($r1 + ($r2 - $r1) * $ratio);
         $g = (int) ($g1 + ($g2 - $g1) * $ratio);

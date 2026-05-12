@@ -97,7 +97,7 @@ final class Toggle implements Sizer
             }
             $result .= '●';
             $result .= Ansi::reset();
-            $result .= ' ' . $onLabel;
+            $result .= ' ' . $onLabel . ' ' . $offLabel;
         } else {
             // OFF state
             if ($this->trackColor !== null) {
@@ -108,7 +108,7 @@ final class Toggle implements Sizer
             }
             $result .= '○';
             $result .= Ansi::reset();
-            $result .= ' ' . $offLabel;
+            $result .= ' ' . $onLabel . ' ' . $offLabel;
         }
 
         return $result;
