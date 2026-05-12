@@ -1,24 +1,19 @@
-# VHS tape — chat shell with the offline EchoBackend (the binary's
-# default when SUGARCRUSH_BACKEND_CMD isn't set).
+# VHS tape — SugarCrush AI chat shell demonstrating tool use.
+# Shows Markdown rendering of assistant reply.
 # Render with: `vhs sugar-crush/.vhs/chat.tape`
 Output .vhs/chat.gif
 
 Set FontSize 14
 Set Width 900
-Set Height 460
-Set TypingSpeed 50ms
+Set Height 500
+Set TypingSpeed 60ms
 Set Theme "TokyoNight"
 
 Type "./bin/sugarcrush"
 Enter
-Sleep 800ms
-
-Type "explain fiber-based scheduling in PHP"
-Enter
 Sleep 1s
 
-Type "what does the cursed renderer save?"
+Type "Explain the Elm architecture in one sentence"
 Enter
-Sleep 1s
-
-Escape
+Sleep 2s
+Type "q"

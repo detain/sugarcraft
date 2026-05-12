@@ -72,6 +72,12 @@ Default: `~/.config/skate/` (respects `$XDG_CONFIG_HOME`).
 
 Each database gets its own SQLite file: `~/.config/skate/<dbname>.db`.
 
+## Demos
+
+### Glob pattern matching
+
+![glob](.vhs/glob.gif)
+
 ## License
 
 [MIT](LICENSE)

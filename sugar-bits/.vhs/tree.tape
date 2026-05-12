@@ -1,35 +1,27 @@
-# Render with: vhs sugar-bits/.vhs/tree.tape
+# VHS tape — interactive Tree with expand/collapse navigation.
+# Enter toggles expand, h/l collapse/expand, g/G jump.
+# Render with: `vhs sugar-bits/.vhs/tree.tape`
 Output .vhs/tree.gif
 
-Set FontSize 14
-Set Width 720
-Set Height 380
-Set TypingSpeed 60ms
+Set FontSize 16
+Set Width 700
+Set Height 300
+Set TypingSpeed 40ms
 Set Theme "TokyoNight"
 
 Type "php examples/tree.php"
 Enter
 Sleep 1s
 
-# Walk the tree: expand, descend, collapse, jump-to-bottom, jump-to-top.
-Enter
-Sleep 600ms
-Down
-Sleep 400ms
-Down
-Sleep 400ms
-Enter
-Sleep 600ms
-Down
-Sleep 400ms
-Down
-Sleep 400ms
-Right
-Sleep 600ms
-Down
-Sleep 400ms
-Type "G"
-Sleep 600ms
-Type "g"
-Sleep 600ms
+Down  Sleep 300ms     # move to Projects
+Enter Sleep 400ms     # expand Projects
+Down  Sleep 300ms     # move to app.php
+Enter Sleep 300ms     # toggle (collapse Projects)
+Right Sleep 300ms     # expand current branch
+Down  Sleep 300ms     # move to README.md
+Left  Sleep 300ms     # collapse
+g     Sleep 200ms     # jump to top
+G     Sleep 200ms     # jump to bottom
+Sleep 500ms
+
 Type "q"

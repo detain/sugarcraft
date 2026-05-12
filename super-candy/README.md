@@ -26,7 +26,7 @@ Dual-pane terminal file manager built on the SugarCraft stack — port of [`yoru
 │    notes.md                12KB   │  │                                    │
 │    todo.txt              512B    │  │                                    │
 └────────────────────────────────────┘  └────────────────────────────────────┘
- Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit
+ Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search · t tabs · u undo
 ```
 
 ## Run it
@@ -55,6 +55,13 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `d`             | Delete (selection or cursor); requires `y` confirm  |
 | `r`             | Refresh active pane                                 |
 | `q`             | Quit                                                |
+| `/`             | Start search mode; type to filter; Enter to open    |
+| `Escape`        | Exit search mode                                    |
+| `t`             | Duplicate current tab                               |
+| `Ctrl+w`        | Close current tab                                   |
+| `Ctrl+Tab`      | Cycle to next tab                                   |
+| `Ctrl+Shift+Tab`| Cycle to previous tab                               |
+| `u` / `Ctrl+z`  | Undo last delete operation                          |
 
 ## Architecture
 
@@ -76,6 +83,36 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 - Pure-state coverage: `Entry` (size formatting, parent sentinel), `Sort` (every order × dirs-first × cycle), `Pane` (open / navigate / move / select / sort / hidden toggle / parent-path / join)
 - `Manager` integration: Tab swap, key dispatch per pane, confirm gate (`d` arms, `y` confirms, anything else cancels), refresh status
 
+## Demos
+
+### Navigation
+
+![navigate](.vhs/navigate.gif)
+
+### Search
+
+![search](.vhs/search.gif)
+
+### Multi-select and delete
+
+![multi-select](.vhs/multi-select.gif)
+
+### Tab management
+
+![tabs](.vhs/tabs.gif)
+
+### Sort cycling
+
+![sort-cycle](.vhs/sort-cycle.gif)
+
+### Undo delete
+
+![undo](.vhs/undo.gif)
+
+### Hidden-file toggle
+
+![hidden-files](.vhs/hidden-files.gif)
+
 ## Status
 
-Phase 9+ entry #20 — first cut. Read + delete are wired; copy / move / rename / new-dir are obvious next steps. Everything underneath them (the pure-state transition layer) is already in place.
+Phase 9+ entry #20 — first cut. Read + delete are wired; search, tabs, and undo are fully implemented; copy / move / rename / new-dir are obvious next steps. Everything underneath them (the pure-state transition layer) is already in place.
