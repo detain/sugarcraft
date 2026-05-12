@@ -17,6 +17,6 @@ Sleep 500ms
 Type "SUGARTICK_DIR=/tmp/sugar-tick-test bin/sugar-tick push sugarcraft js assets/app.js 30"
 Enter
 Sleep 500ms
-Type "echo '---Heartbeats written---' && cat /tmp/sugar-tick-test/$(date +%Y-%m-%d).jsonl"
+Type "ls /tmp/sugar-tick-test/"
 Enter
 Sleep 300ms

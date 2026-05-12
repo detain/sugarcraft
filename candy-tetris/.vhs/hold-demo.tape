@@ -1,4 +1,4 @@
-# VHS tape — Tetris hold and lock delay demo
+# VHS tape — Tetris hold and hard drop demo
 # Render with: `vhs candy-tetris/.vhs/hold-demo.tape`
 Output .vhs/hold-demo.gif
 
@@ -12,27 +12,17 @@ Type "bin/tetris"
 Enter
 Sleep 1s
 
-# Drop first piece
+# Hard drop a piece
 Space Sleep 800ms
 
-# Use hold feature (c key) to swap current piece with held piece
-c Sleep 600ms
+# Use hold (c key)
+c Sleep 400ms
 
-# Hard drop the swapped piece
+# Hard drop
 Space Sleep 800ms
 
 # Drop another piece
 Right Sleep 200ms
 Space Sleep 800ms
 
-# Hold again to swap
-c Sleep 600ms
-Space Sleep 800ms
-
-# More gameplay
-Left Sleep 200ms
-Up Sleep 200ms
-Space Sleep 800ms
-
-# Linger to show final state
-Sleep 2500ms
+Sleep 2000ms
