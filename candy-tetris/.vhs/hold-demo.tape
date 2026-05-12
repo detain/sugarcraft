@@ -8,7 +8,7 @@ Set Height 560
 Set TypingSpeed 80ms
 Set Theme "TokyoNight"
 
-Type "./bin/tetris"
+Type "bin/tetris"
 Enter
 Sleep 1s
 
