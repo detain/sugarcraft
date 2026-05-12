@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "hooks": {
+    "postToolUse": [
+      {
+        "command": "/home/my/.nvm/versions/node/v24.15.0/bin/caliber learn observe"
+      }
+    ],
+    "postToolUseFailure": [
+      {
+        "command": "/home/my/.nvm/versions/node/v24.15.0/bin/caliber learn observe --failure"
+      }
+    ],
+    "userPromptSubmit": [
+      {
+        "command": "/home/my/.nvm/versions/node/v24.15.0/bin/caliber learn observe --prompt"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "/home/my/.nvm/versions/node/v24.15.0/bin/caliber learn finalize --auto"
+      }
+    ]
+  }
+}
