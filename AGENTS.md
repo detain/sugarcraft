@@ -75,8 +75,8 @@ Lang files under each lib's `lang/` dir per `LOCALES.md`. Lookup: exact locale �
 [ ] <slug>/composer.json + README.md + CALIBER_LEARNINGS.md
 [ ] <slug>/src/<Class>.php
 [ ] composer.json (root)               — repositories + require entry
-[ ] .github/workflows/ci.yml           — matrix lib: entry
-[ ] .github/workflows/vhs.yml          — matrix lib: entry
+[ ] .github/workflows/vhs.yml          — matrix lib: entry  (ci.yml auto-discovers via scripts/affected-libs.php)
+[ ] scripts/affected-libs.php          — only if lib needs Windows/macOS runners; add to WINDOWS_LIBS / MACOS_LIBS
 [ ] MATCHUPS.md                        — new row + status icon
 [ ] PROJECT_NAMES.md                   — naming entry
 [ ] README.md (root)                   — library count, table row, test-loop snippet
@@ -105,7 +105,7 @@ At v1.0: tag monorepo `<slug>-v1.0.0`, `git filter-repo` into `github.com/sugarc
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED for path-repos pre-1.0. Drop `--strict`.
 - New transitive `@dev` deps need their path-repo added to every consuming lib's `composer.json` `repositories` array.
-- `.github/workflows/{ci,vhs}.yml` matrices are hand-maintained, NOT glob-driven. Adding a lib without updating both means PHPUnit/GIFs silently never run.
+- `.github/workflows/ci.yml` matrices are dynamic — computed by `scripts/affected-libs.php` from filesystem + reverse-dep graph in `composer.json`. Adding a lib needs only `composer.json` + `phpunit.xml`. `.github/workflows/vhs.yml` is still hand-maintained — its `all=(...)` array must be updated or the GIF never re-renders.
 - Run sub-agents ONE AT A TIME, never in parallel — burns extra-usage budget, concurrent writes to shared files like `MATCHUPS.md` collide.
 - Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — secrets don't exist in repo settings yet.
 - When wrapping external CLI tools, pass ALL flags every invocation using `escapeshellarg((string)($field ?? ''))` so `null`/`''` render as `''` rather than dropping the flag.
