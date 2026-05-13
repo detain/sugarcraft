@@ -49,33 +49,18 @@ jobs:
 
       - name: Resolve vhs / ttyd versions
         id: tools
+        env:
+          # Use the workflow's GITHUB_TOKEN to authenticate API calls.
+          # Unauthenticated api.github.com requests are rate-limited to
+          # 60/hour per runner IP — easily blown by parallel runs across
+          # the org. Authenticated requests get 5000/hour. The previous
+          # curl + retry loop just burned 130s sleeping into HTTP 403s
+          # before exiting the changed job entirely.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          retry_gh_api() {
-            local max_attempts=3
-            local delay=10
-            for ((attempt=1; attempt<=max_attempts; attempt++)); do
-              local status
-              status=$(curl -sSL -o /dev/null -w "%{http_code}" "$1")
-              if [[ "$status" == "200" ]]; then
-                return 0
-              fi
-              echo "HTTP $status, waiting ${delay}s before retry $attempt/$max_attempts..."
-              sleep $delay
-              delay=$((delay * 3))
-            done
-            return 1
-          }
-
-          # Get VHS version
-          retry_gh_api "https://api.github.com/repos/charmbracelet/vhs/releases/latest"
-          vhs_tag=$(curl -sSL "https://api.github.com/repos/charmbracelet/vhs/releases/latest" | jq -r .tag_name)
-
-          # Get ttyd version
-          retry_gh_api "https://api.github.com/repos/tsl0922/ttyd/releases/latest"
-          ttyd_tag=$(curl -sSL "https://api.github.com/repos/tsl0922/ttyd/releases/latest" | jq -r .tag_name)
-
+          vhs_tag=$(gh release view --repo charmbracelet/vhs --json tagName -q .tagName)
+          ttyd_tag=$(gh release view --repo tsl0922/ttyd --json tagName -q .tagName)
           echo "vhs=$vhs_tag"
           echo "ttyd=$ttyd_tag"
           echo "vhs=$vhs_tag" >> "$GITHUB_OUTPUT"
@@ -205,62 +190,50 @@ jobs:
 
       - name: Install vhs + ttyd (cache miss)
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
+        env:
+          # Same rationale as the changed.tools step — authenticate to
+          # avoid the 60/hour anonymous api.github.com rate limit.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # vhs asset name embeds the version — get download URL via GitHub API with retry
-          get_vhs_url() {
-            local max_attempts=3
-            local delay=10
-            local attempt=1
-            while (( attempt <= max_attempts )); do
-              local response
-              response=$(curl -sSL -w "\n%{http_code}" "https://api.github.com/repos/charmbracelet/vhs/releases/latest")
-              local status=$(echo "$response" | tail -1)
-              local body=$(echo "$response" | sed '$d')
-              if [[ "$status" == "200" ]]; then
-                echo "$body" | jq -r '.assets[] | select(.name | endswith("Linux_x86_64.tar.gz")) | .browser_download_url' | head -1
-                return 0
-              elif [[ "$status" == "403" ]] || [[ "$status" == "429" ]]; then
-                echo "Rate limited (HTTP $status), waiting ${delay}s before retry $attempt/$max_attempts..." >&2
-                sleep $delay
-                delay=$((delay * 3))
-                ((attempt++))
-              else
-                echo "Non-retryable error (HTTP $status) after $attempt attempt(s)" >&2
-                return 1
-              fi
-            done
-            echo "Max retries exceeded" >&2
-            return 1
-          }
-          vhs_url=$(get_vhs_url)
-          curl -sSL "$vhs_url" \
-            | sudo tar -xz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
+          gh release download --repo charmbracelet/vhs \
+            --pattern '*Linux_x86_64.tar.gz' \
+            --output /tmp/vhs.tar.gz --clobber
+          sudo tar -xz -f /tmp/vhs.tar.gz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
           sudo chmod +x /usr/local/bin/vhs
 
-          curl -sSL -o /tmp/ttyd "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64"
+          gh release download --repo tsl0922/ttyd \
+            --pattern 'ttyd.x86_64' \
+            --output /tmp/ttyd --clobber
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
 
-      - name: Cache ffmpeg
+      - name: Install ffmpeg
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: ffmpeg
-          version: 1.0.0
-
-      - name: Install ffmpeg (fallback)
-        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        # Direct apt install instead of awalsh128/cache-apt-pkgs-action.
+        # That action restores cached .deb file contents but doesn't
+        # re-run apt's post-install scripts on cache hit — libblas's
+        # update-alternatives entry never gets recreated, and ffmpeg
+        # crashes at runtime with
+        #   libblas.so.3: cannot open shared object file
+        # Even with execute_install_scripts: true the dpkg --configure
+        # call isn't sufficient to recreate update-alternatives symlinks
+        # (see run 25825814166, candy-shine vs candy-kit). The runner
+        # image has apt cache pre-indexed so a direct install is ~15s,
+        # FASTER than the ~90s cache-apt-pkgs cache-miss path was, and
+        # always runs the real post-install scripts.
         run: |
           set -euo pipefail
-          # Skip the slow PPA refreshes — ffmpeg is in the default
-          # ubuntu archive which the runner image already has indexed.
-          # Fall back to a full update if the direct install fails.
           sudo apt-get install -y --no-install-recommends ffmpeg \
             || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
 
       - name: Verify tools
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        # set -o pipefail so `ffmpeg -version | head -1` propagates an
+        # ffmpeg shared-library load failure (exit 127) instead of being
+        # masked by head's success. We had a silent libblas.so.3
+        # cannot-open-shared-object regression slip through here.
         run: |
+          set -euo pipefail
           vhs --version
           ttyd --version
           ffmpeg -version | head -1
