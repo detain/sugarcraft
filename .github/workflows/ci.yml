@@ -359,8 +359,22 @@ jobs:
           restore-keys: |
             vendor-cov-${{ matrix.lib }}-
 
+      - name: Cache composer.lock
+        uses: actions/cache@v5
+        with:
+          path: ${{ matrix.lib }}/composer.lock
+          key: lock-cov-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            lock-cov-${{ matrix.lib }}-
+
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
+        run: |
+          set -e
+          for i in 1 2 3; do
+            cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n && break
+            echo "Composer install failed, retry $i/3 in 10s..."
+            sleep 10
+          done
 
       - name: Run tests with coverage
         run: php ${{ matrix.lib }}/vendor/bin/phpunit -c ${{ matrix.lib }}/phpunit.xml --colors=never --coverage-clover=${{ matrix.lib }}/coverage.xml
