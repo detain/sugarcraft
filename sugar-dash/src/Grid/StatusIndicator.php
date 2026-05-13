@@ -130,9 +130,10 @@ final class StatusIndicator implements Sizer
         $output = $color->toFg(ColorProfile::TrueColor);
 
         if ($this->pulse) {
-            $tick = (int) (microtime(true) * 1000);
-            $phase = ($tick / 500.0) % 2;
-            if ($phase < 1) {
+            $tickMs = (int) (microtime(true) * 1000);
+            // Use fmod for float modulo to avoid int/float deprecation in PHP 8.4
+            $phase = fmod($tickMs / 500.0, 2.0);
+            if ($phase < 1.0) {
                 $output .= $symbol;
             } else {
                 $dimColor = $color->toFg(ColorProfile::TrueColor);
