@@ -225,77 +225,77 @@ final class OHLC implements Sizer
             }
         }
 
-        // Render OHLC bars
+        // Render OHLC bars — compose all points onto a shared chart grid so
+        // the output is always `chartHeight` rows tall regardless of how many
+        // points are plotted.
         $pointCount = count($this->points);
         if ($pointCount === 0) {
             $result .= $v . str_repeat(' ', $chartWidth) . $v . "\n";
         } else {
             $barWidth = 2;
-            $spacing = max(0, intval(($chartWidth - $priceScaleWidth - 1 - $pointCount * $barWidth) / max(1, $pointCount - 1)));
+            $innerWidth = max(1, $chartWidth - $priceScaleWidth - 1);
+            $spacing = max(0, intval(($innerWidth - $pointCount * $barWidth) / max(1, $pointCount - 1)));
+
+            // Build a fixed-size grid: chartHeight rows × innerWidth cells.
+            $grid = array_fill(0, $chartHeight, str_repeat(' ', $innerWidth));
+            $cellColors = array_fill(0, $chartHeight, array_fill(0, $innerWidth, null));
 
             foreach ($this->points as $index => $point) {
                 $isBullish = $point->isBullish();
                 $color = $point->color ?? ($isBullish ? $bullishColor : $bearishColor);
 
-                // Calculate Y positions
                 $highY = $this->priceToY($point->high, $chartHeight);
                 $lowY = $this->priceToY($point->low, $chartHeight);
                 $openY = $this->priceToY($point->open, $chartHeight);
                 $closeY = $this->priceToY($point->close, $chartHeight);
 
-                // Draw the OHLC bar
                 $x = $index * ($barWidth + $spacing);
+                $barTop = max($openY, $closeY);
+                $barBottom = min($openY, $closeY);
 
-                // Wick (vertical line from low to high)
-                $wickLeft = $x + intval($barWidth / 2);
-                for ($y = $chartHeight - 1 - $lowY; $y <= $chartHeight - 1 - $highY; $y--) {
-                    if ($y >= 0 && $y < $chartHeight) {
-                        // Draw wick character at proper position
-                        $lineIndex = $chartHeight - 1 - $y;
-                        $resultLine = str_repeat(' ', $x) . $v;
-                    }
-                }
-
-                // Build bar representation
-                $barTop = min($openY, $closeY);
-                $barBottom = max($openY, $closeY);
-
-                // Draw vertical structure
                 for ($row = 0; $row < $chartHeight; $row++) {
                     $yCoord = $chartHeight - 1 - $row;
+                    $inHighWick = ($yCoord <= $highY && $yCoord >= $barTop);
+                    $inLowWick = ($yCoord <= $barBottom && $yCoord >= $lowY);
+                    $inBody = ($yCoord <= $barTop && $yCoord >= $barBottom);
 
-                    // Determine if this row is part of the bar
-                    $inHighWick = ($yCoord <= $highY);
-                    $inLowWick = ($yCoord >= $lowY);
-                    $inBody = ($yCoord >= $barBottom && $yCoord <= $barTop);
-
-                    $barChars = str_repeat(' ', $barWidth);
-
-                    if ($inHighWick || $inLowWick) {
-                        // Wick line
-                        $barChars = str_repeat('─', $barWidth);
+                    if (!$inHighWick && !$inLowWick && !$inBody) {
+                        continue;
                     }
 
-                    if ($inBody) {
-                        // Body - use block characters
-                        $openChar = 'O';
-                        $closeChar = 'C';
-                        if ($isBullish) {
-                            $barChars = '╂'; // Bullish marker
-                        } else {
-                            $barChars = '╋'; // Bearish marker
+                    $cell = $inBody ? ($isBullish ? '╂' : '╋') : '─';
+                    for ($bi = 0; $bi < $barWidth; $bi++) {
+                        $col = $x + $bi;
+                        if ($col >= 0 && $col < $innerWidth) {
+                            $grid[$row] = substr_replace($grid[$row], $cell, $col, 1);
+                            $cellColors[$row][$col] = $color;
                         }
                     }
-
-                    // Color and output
-                    if ($color !== null) {
-                        $result .= $color->toFg(ColorProfile::TrueColor);
-                    }
-                    $result .= $v . str_repeat(' ', $x) . $barChars . str_repeat(' ', $chartWidth - $x - $barWidth - $priceScaleWidth - 1) . $v . "\n";
-                    if ($color !== null) {
-                        $result .= Ansi::reset();
-                    }
                 }
+            }
+
+            // Emit the composed chart, splicing per-cell colors back in.
+            for ($row = 0; $row < $chartHeight; $row++) {
+                $line = $v;
+                $currentColor = null;
+                for ($col = 0; $col < $innerWidth; $col++) {
+                    $cellColor = $cellColors[$row][$col];
+                    if ($cellColor !== $currentColor) {
+                        if ($currentColor !== null) {
+                            $line .= Ansi::reset();
+                        }
+                        if ($cellColor !== null) {
+                            $line .= $cellColor->toFg(ColorProfile::TrueColor);
+                        }
+                        $currentColor = $cellColor;
+                    }
+                    $line .= mb_substr($grid[$row], $col, 1, 'UTF-8');
+                }
+                if ($currentColor !== null) {
+                    $line .= Ansi::reset();
+                }
+                $line .= $v;
+                $result .= $line . "\n";
             }
         }
 
