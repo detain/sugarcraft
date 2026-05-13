@@ -148,12 +148,12 @@ final class State implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $stateColor = null,
-        private readonly ?Color $initialColor = null,
-        private readonly ?Color $finalColor = null,
-        private readonly ?Color $transitionColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly string $style_ = 'rounded',
+        private ?Color $stateColor = null,
+        private ?Color $initialColor = null,
+        private ?Color $finalColor = null,
+        private ?Color $transitionColor = null,
+        private ?Color $textColor = null,
+        private string $style_ = 'rounded',
     ) {}
 
     /**
@@ -312,7 +312,7 @@ final class State implements Sizer
         $useWidth = $this->width ?? 60;
         $useHeight = $this->height ?? 20;
 
-        if ($useWidth < 20 || $useHeight < 8 || empty($this->states)) {
+        if ($useWidth < 20 || $useHeight < 8) {
             return '';
         }
 
@@ -336,8 +336,8 @@ final class State implements Sizer
 
         // Calculate state positions (simple grid layout)
         $stateCount = count($this->states);
-        $cols = max(1, intval(sqrt($stateCount)));
-        $rows = intval(($stateCount + $cols - 1) / $cols);
+        $cols = max(1, intval(sqrt(max(1, $stateCount))));
+        $rows = max(1, intval(($stateCount + $cols - 1) / $cols));
         $cellWidth = intval(($width - 4) / $cols);
         $cellHeight = intval(($height - 4) / $rows);
 
@@ -500,14 +500,9 @@ final class State implements Sizer
      */
     public function withStateColor(?Color $color): self
     {
-        return new self(
-            stateColor: $color,
-            initialColor: $this->initialColor,
-            finalColor: $this->finalColor,
-            transitionColor: $this->transitionColor,
-            textColor: $this->textColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->stateColor = $color;
+        return $clone;
     }
 
     /**
@@ -515,14 +510,9 @@ final class State implements Sizer
      */
     public function withInitialColor(?Color $color): self
     {
-        return new self(
-            stateColor: $this->stateColor,
-            initialColor: $color,
-            finalColor: $this->finalColor,
-            transitionColor: $this->transitionColor,
-            textColor: $this->textColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->initialColor = $color;
+        return $clone;
     }
 
     /**
@@ -530,14 +520,9 @@ final class State implements Sizer
      */
     public function withFinalColor(?Color $color): self
     {
-        return new self(
-            stateColor: $this->stateColor,
-            initialColor: $this->initialColor,
-            finalColor: $color,
-            transitionColor: $this->transitionColor,
-            textColor: $this->textColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->finalColor = $color;
+        return $clone;
     }
 
     /**
@@ -545,14 +530,9 @@ final class State implements Sizer
      */
     public function withTransitionColor(?Color $color): self
     {
-        return new self(
-            stateColor: $this->stateColor,
-            initialColor: $this->initialColor,
-            finalColor: $this->finalColor,
-            transitionColor: $color,
-            textColor: $this->textColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->transitionColor = $color;
+        return $clone;
     }
 
     /**
@@ -560,14 +540,9 @@ final class State implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            stateColor: $this->stateColor,
-            initialColor: $this->initialColor,
-            finalColor: $this->finalColor,
-            transitionColor: $this->transitionColor,
-            textColor: $color,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**

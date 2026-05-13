@@ -220,7 +220,7 @@ final class SankeyTest extends TestCase
 
         $rendered = $sankey->render();
 
-        // May still show if part of chart structure
+        $this->assertStringNotContainsString('Alpha', $rendered);
     }
 
     public function testShowValues(): void

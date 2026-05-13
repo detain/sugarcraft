@@ -90,10 +90,10 @@ final class Sankey implements Sizer
     private int $nodeSpacing = 3;
 
     public function __construct(
-        private readonly ?Color $nodeColor = null,
-        private readonly ?Color $flowColor = null,
-        private readonly ?Color $labelColor = null,
-        private readonly string $style = 'rounded',
+        private ?Color $nodeColor = null,
+        private ?Color $flowColor = null,
+        private ?Color $labelColor = null,
+        private string $style = 'rounded',
     ) {}
 
     /**
@@ -216,7 +216,7 @@ final class Sankey implements Sizer
     public function render(): string
     {
         $useWidth = $this->width ?? 60;
-        $useHeight = $this->height ?? 20;
+        $useHeight = $this->height ?? max(20, count($this->nodes) * ($this->nodeSpacing + 5) + 8);
 
         if ($useWidth < 20 || $useHeight < 5 || empty($this->nodes)) {
             return '';
@@ -461,12 +461,9 @@ final class Sankey implements Sizer
      */
     public function withNodeColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $color,
-            flowColor: $this->flowColor,
-            labelColor: $this->labelColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->nodeColor = $color;
+        return $clone;
     }
 
     /**
@@ -474,12 +471,9 @@ final class Sankey implements Sizer
      */
     public function withFlowColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            flowColor: $color,
-            labelColor: $this->labelColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->flowColor = $color;
+        return $clone;
     }
 
     /**
@@ -487,12 +481,9 @@ final class Sankey implements Sizer
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            flowColor: $this->flowColor,
-            labelColor: $color,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->labelColor = $color;
+        return $clone;
     }
 
     /**
@@ -500,12 +491,9 @@ final class Sankey implements Sizer
      */
     public function withStyle(string $style): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            flowColor: $this->flowColor,
-            labelColor: $this->labelColor,
-            style: $style,
-        );
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
     }
 
     /**

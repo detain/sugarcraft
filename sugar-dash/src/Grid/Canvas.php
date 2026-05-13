@@ -223,10 +223,10 @@ final class Canvas implements Sizer
         }
 
         $canvas = $this;
-        $x = $radius - 1;
+        $x = $radius;
         $y = 0;
         $dx = 1 - ($radius << 1);
-        $dy = 1 - ($radius << 1);
+        $dy = 1;
         $err = 0;
 
         while ($x >= $y) {

@@ -88,11 +88,11 @@ final class Sequence implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $lifelineColor = null,
-        private readonly ?Color $messageColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $activationColor = null,
-        private readonly string $style_ = 'rounded',
+        private ?Color $lifelineColor = null,
+        private ?Color $messageColor = null,
+        private ?Color $textColor = null,
+        private ?Color $activationColor = null,
+        private string $style_ = 'rounded',
     ) {}
 
     /**
@@ -226,7 +226,7 @@ final class Sequence implements Sizer
         $useWidth = $this->width ?? 70;
         $useHeight = $this->height ?? 20;
 
-        if ($useWidth < 30 || $useHeight < 8 || empty($this->participants)) {
+        if ($useWidth < 30 || $useHeight < 8) {
             return '';
         }
 
@@ -244,7 +244,15 @@ final class Sequence implements Sizer
         // Calculate participant column positions
         $participantCount = count($this->participants);
         if ($participantCount === 0) {
-            return '';
+            [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
+            $top = $tl . str_repeat($h, $width - 2) . $tr;
+            $mid = $v . str_repeat(' ', $width - 2) . $v;
+            $bot = $bl . str_repeat($h, $width - 2) . $br;
+            $body = $top;
+            for ($i = 0; $i < $height - 2; $i++) {
+                $body .= "\n" . $mid;
+            }
+            return $body . "\n" . $bot;
         }
 
         $colWidth = intval(($width - 4) / $participantCount);
@@ -324,7 +332,7 @@ final class Sequence implements Sizer
         $result .= $v . str_repeat(' ', $width - 2) . $v . "\n";
 
         // Lifelines and messages
-        $ lifelineColor = $this->lifelineColor ?? Color::hex('#45475A');
+        $lifelineColor = $this->lifelineColor ?? Color::hex('#45475A');
         $messageColor = $this->messageColor ?? Color::hex('#89B4FA');
 
         // Draw lifelines
@@ -457,13 +465,9 @@ final class Sequence implements Sizer
      */
     public function withLifelineColor(?Color $color): self
     {
-        return new self(
-            lifelineColor: $color,
-            messageColor: $this->messageColor,
-            textColor: $this->textColor,
-            activationColor: $this->activationColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->lifelineColor = $color;
+        return $clone;
     }
 
     /**
@@ -471,13 +475,9 @@ final class Sequence implements Sizer
      */
     public function withMessageColor(?Color $color): self
     {
-        return new self(
-            lifelineColor: $this->lifelineColor,
-            messageColor: $color,
-            textColor: $this->textColor,
-            activationColor: $this->activationColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->messageColor = $color;
+        return $clone;
     }
 
     /**
@@ -485,13 +485,9 @@ final class Sequence implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            lifelineColor: $this->lifelineColor,
-            messageColor: $this->messageColor,
-            textColor: $color,
-            activationColor: $this->activationColor,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -499,13 +495,9 @@ final class Sequence implements Sizer
      */
     public function withActivationColor(?Color $color): self
     {
-        return new self(
-            lifelineColor: $this->lifelineColor,
-            messageColor: $this->messageColor,
-            textColor: $this->textColor,
-            activationColor: $color,
-            style_: $this->style,
-        );
+        $clone = clone $this;
+        $clone->activationColor = $color;
+        return $clone;
     }
 
     /**
