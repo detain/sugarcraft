@@ -9,16 +9,16 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * An inline sparkline chart component.
+ * A bar-style sparkline chart component.
  *
- * Displays a compact trend visualization using Unicode block characters
- * to represent data points. Supports custom height, data point markers,
- * minimum/maximum colors, and area fill under the line.
+ * Displays a series of values as vertical bars using Unicode block
+ * characters. Unlike line sparklines, bars provide clear comparisons
+ * between discrete values.
  *
- * Mirrors sparkline rendering from bubbletea/sparkline but adapted
+ * Mirrors bar sparkline rendering from bubbletea/sparkline but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Sparkline implements Sizer
+final class SparklineBar implements Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -27,36 +27,35 @@ final class Sparkline implements Sizer
     private array $data;
 
     /**
-     * Unicode block characters for drawing sparklines.
-     * Each represents a different vertical position (height).
+     * Block characters for bar levels (8 levels).
      */
-    private const BLOCK_CHARS = [
-        '▁', // 0 - lowest
-        '▂', // 1
-        '▃', // 2
-        '▄', // 3
-        '▅', // 4
-        '▆', // 5
-        '▇', // 6
-        '█', // 7 - highest
+    private const BAR_BLOCKS = [
+        '▁', // 0 - lowest (1/8)
+        '▂', // 1 - (2/8)
+        '▃', // 2 - (3/8)
+        '▄', // 3 - (4/8)
+        '▅', // 4 - (5/8)
+        '▆', // 5 - (6/8)
+        '▇', // 6 - (7/8)
+        '█', // 7 - highest (8/8)
     ];
 
     public function __construct(
         array $data = [],
         private readonly ?int $widthConstraint = null,
-        private readonly int $height = 1,
-        private readonly bool $showDataPoints = false,
-        private readonly bool $fill = false,
+        private readonly int $height = 8,
+        private readonly bool $showValues = false,
         private readonly ?Color $color = null,
         private readonly ?Color $maxColor = null,
         private readonly ?Color $minColor = null,
-        private readonly ?Color $fillColor = null,
+        private readonly bool $showBarGaps = true,
+        private readonly string $separator = ' ',
     ) {
         $this->data = $data;
     }
 
     /**
-     * Create a new sparkline with default styling.
+     * Create a new bar sparkline with default styling.
      *
      * @param list<float> $data Array of numeric values to display
      */
@@ -65,13 +64,13 @@ final class Sparkline implements Sizer
         return new self(
             data: $data,
             widthConstraint: null,
-            height: 1,
-            showDataPoints: false,
-            fill: false,
+            height: 8,
+            showValues: false,
             color: Color::hex('#89B4FA'),
             maxColor: Color::hex('#A6E3A1'),
             minColor: Color::hex('#F38BA8'),
-            fillColor: null,
+            showBarGaps: true,
+            separator: ' ',
         );
     }
 
@@ -87,7 +86,7 @@ final class Sparkline implements Sizer
     }
 
     /**
-     * Render the sparkline as a string.
+     * Render the bar sparkline as a string.
      */
     public function render(): string
     {
@@ -100,11 +99,7 @@ final class Sparkline implements Sizer
         // Normalize data to fit display width
         $normalizedData = $this->normalizeData($displayWidth);
 
-        if ($this->height === 1) {
-            return $this->renderSingleLine($normalizedData);
-        }
-
-        return $this->renderMultiLine($normalizedData);
+        return $this->renderBars($normalizedData);
     }
 
     /**
@@ -157,11 +152,11 @@ final class Sparkline implements Sizer
     }
 
     /**
-     * Render a single-line sparkline (height = 1).
+     * Render bars with multi-line output.
      *
      * @param list<float> $data Normalized data
      */
-    private function renderSingleLine(array $data): string
+    private function renderBars(array $data): string
     {
         if (empty($data)) {
             return '';
@@ -173,73 +168,19 @@ final class Sparkline implements Sizer
         // Use abs and max to handle floating point precision issues
         $range = max(1.0, abs($range));
 
-        $output = '';
-        $lastBlockIndex = -1;
-
-        foreach ($data as $i => $value) {
-            // Normalize value to 0-7 range
-            $normalized = (($value - $min) / $range) * 7;
-            $blockIndex = (int) round(max(0, min(7, $normalized)));
-
-            $blockChar = self::BLOCK_CHARS[$blockIndex];
-
-            // Determine color based on position
-            $color = $this->getColorForValue($value, $min, $max);
-
-            if ($color !== null) {
-                $output .= $color->toFg(ColorProfile::TrueColor);
-            }
-
-            // Mark data points with a dot
-            if ($this->showDataPoints && ($i === 0 || $i === count($data) - 1 || $blockIndex !== $lastBlockIndex)) {
-                $output .= '•';
-                if ($color !== null) {
-                    $output .= Ansi::reset();
-                }
-                $output .= $blockChar;
-            } else {
-                $output .= $blockChar;
-            }
-
-            if ($color !== null) {
-                $output .= Ansi::reset();
-            }
-
-            $lastBlockIndex = $blockIndex;
-        }
-
-        return $output;
-    }
-
-    /**
-     * Render a multi-line sparkline (height > 1).
-     *
-     * @param list<float> $data Normalized data
-     */
-    private function renderMultiLine(array $data): string
-    {
-        if (empty($data)) {
-            return '';
-        }
-
-        $min = min($data);
-        $max = max($data);
-        $range = $max - $min;
-        // Use abs and max to handle floating point precision issues
-        $range = max(1.0, abs($range));
+        $lines = [];
 
         // Build output line by line (top to bottom)
-        $lines = [];
         for ($h = $this->height - 1; $h >= 0; $h--) {
             $line = '';
             $threshold = ($h + 1) / $this->height;
 
-            foreach ($data as $value) {
+            foreach ($data as $index => $value) {
                 $normalized = ($value - $min) / $range;
-                $color = $this->getColorForValue($value, $min, $max);
 
                 if ($normalized >= $threshold) {
                     // Filled at this height
+                    $color = $this->getColorForValue($value, $min, $max);
                     if ($color !== null) {
                         $line .= $color->toFg(ColorProfile::TrueColor);
                     }
@@ -247,21 +188,37 @@ final class Sparkline implements Sizer
                     if ($color !== null) {
                         $line .= Ansi::reset();
                     }
-                } elseif ($this->fill && $normalized >= ($threshold - (1 / $this->height))) {
-                    // Partial fill (for area fill effect)
-                    if ($color !== null && $this->fillColor !== null) {
-                        $line .= $this->fillColor->toFg(ColorProfile::TrueColor);
-                    }
-                    $line .= '░';
-                    if ($color !== null && $this->fillColor !== null) {
-                        $line .= Ansi::reset();
-                    }
                 } else {
                     $line .= ' ';
+                }
+
+                // Add separator between bars
+                if ($this->showBarGaps && $index < count($data) - 1) {
+                    $line .= $this->separator;
                 }
             }
 
             $lines[] = $line;
+        }
+
+        // Add values row if enabled
+        if ($this->showValues) {
+            $valuesLine = '';
+            foreach ($data as $index => $value) {
+                $formatted = sprintf('%3d', (int) round($value));
+                $color = $this->getColorForValue($value, $min, $max);
+                if ($color !== null) {
+                    $valuesLine .= $color->toFg(ColorProfile::TrueColor);
+                }
+                $valuesLine .= $formatted;
+                if ($color !== null) {
+                    $valuesLine .= Ansi::reset();
+                }
+                if ($this->showBarGaps && $index < count($data) - 1) {
+                    $valuesLine .= $this->separator;
+                }
+            }
+            $lines[] = $valuesLine;
         }
 
         return implode("\n", $lines);
@@ -313,7 +270,14 @@ final class Sparkline implements Sizer
             return [0, $this->height];
         }
 
-        return [$width, $this->height];
+        $totalWidth = $width;
+        if ($this->showBarGaps && $width > 1) {
+            $totalWidth = $width + ($width - 1) * mb_strlen($this->separator, 'UTF-8');
+        }
+
+        $height = $this->showValues ? $this->height + 1 : $this->height;
+
+        return [$totalWidth, $height];
     }
 
     // ─── Withers ──────────────────────────────────────────────────
@@ -329,12 +293,12 @@ final class Sparkline implements Sizer
             data: $data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
@@ -347,12 +311,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $width,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
@@ -365,48 +329,30 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: max(1, $height),
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
     /**
-     * Show or hide data point markers.
+     * Show or hide numeric values below bars.
      */
-    public function withDataPoints(bool $show): self
+    public function withShowValues(bool $show): self
     {
         return new self(
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $show,
-            fill: $this->fill,
+            showValues: $show,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
-        );
-    }
-
-    /**
-     * Enable or disable area fill.
-     */
-    public function withFill(bool $fill): self
-    {
-        return new self(
-            data: $this->data,
-            widthConstraint: $this->widthConstraint,
-            height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $fill,
-            color: $this->color,
-            maxColor: $this->maxColor,
-            minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
@@ -419,12 +365,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
@@ -437,12 +383,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $color,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
@@ -455,30 +401,48 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $color,
-            fillColor: $this->fillColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $this->separator,
         );
     }
 
     /**
-     * Set the fill color for area fill.
+     * Show or hide gaps between bars.
      */
-    public function withFillColor(?Color $color): self
+    public function withBarGaps(bool $show): self
     {
         return new self(
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
+            showValues: $this->showValues,
             color: $this->color,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $color,
+            showBarGaps: $show,
+            separator: $this->separator,
+        );
+    }
+
+    /**
+     * Set the separator between bars.
+     */
+    public function withSeparator(string $separator): self
+    {
+        return new self(
+            data: $this->data,
+            widthConstraint: $this->widthConstraint,
+            height: $this->height,
+            showValues: $this->showValues,
+            color: $this->color,
+            maxColor: $this->maxColor,
+            minColor: $this->minColor,
+            showBarGaps: $this->showBarGaps,
+            separator: $separator,
         );
     }
 }

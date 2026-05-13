@@ -9,16 +9,16 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * An inline sparkline chart component.
+ * An area-style sparkline chart component.
  *
- * Displays a compact trend visualization using Unicode block characters
- * to represent data points. Supports custom height, data point markers,
- * minimum/maximum colors, and area fill under the line.
+ * Displays a series of values as a filled area chart using Unicode
+ * block characters. The area below the line is filled with a gradient
+ * or solid color for visual emphasis.
  *
- * Mirrors sparkline rendering from bubbletea/sparkline but adapted
+ * Mirrors area sparkline rendering from bubbletea/sparkline but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Sparkline implements Sizer
+final class SparklineArea implements Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -27,10 +27,9 @@ final class Sparkline implements Sizer
     private array $data;
 
     /**
-     * Unicode block characters for drawing sparklines.
-     * Each represents a different vertical position (height).
+     * Block characters for drawing the area.
      */
-    private const BLOCK_CHARS = [
+    private const AREA_BLOCKS = [
         '▁', // 0 - lowest
         '▂', // 1
         '▃', // 2
@@ -41,22 +40,31 @@ final class Sparkline implements Sizer
         '█', // 7 - highest
     ];
 
+    /**
+     * Fill characters for area fill (partial blocks).
+     */
+    private const FILL_BLOCKS = [
+        '░', // Light shade
+        '▒', // Medium shade
+        '▓', // Dark shade
+    ];
+
     public function __construct(
         array $data = [],
         private readonly ?int $widthConstraint = null,
-        private readonly int $height = 1,
-        private readonly bool $showDataPoints = false,
-        private readonly bool $fill = false,
-        private readonly ?Color $color = null,
+        private readonly int $height = 3,
+        private readonly bool $showLine = true,
+        private readonly bool $showFill = true,
+        private readonly ?Color $lineColor = null,
+        private readonly ?Color $fillColor = null,
         private readonly ?Color $maxColor = null,
         private readonly ?Color $minColor = null,
-        private readonly ?Color $fillColor = null,
     ) {
         $this->data = $data;
     }
 
     /**
-     * Create a new sparkline with default styling.
+     * Create a new area sparkline with default styling.
      *
      * @param list<float> $data Array of numeric values to display
      */
@@ -65,13 +73,13 @@ final class Sparkline implements Sizer
         return new self(
             data: $data,
             widthConstraint: null,
-            height: 1,
-            showDataPoints: false,
-            fill: false,
-            color: Color::hex('#89B4FA'),
+            height: 3,
+            showLine: true,
+            showFill: true,
+            lineColor: Color::hex('#89B4FA'),
+            fillColor: Color::hex('#89B4FA')->darken(0.5),
             maxColor: Color::hex('#A6E3A1'),
             minColor: Color::hex('#F38BA8'),
-            fillColor: null,
         );
     }
 
@@ -87,7 +95,7 @@ final class Sparkline implements Sizer
     }
 
     /**
-     * Render the sparkline as a string.
+     * Render the area sparkline as a string.
      */
     public function render(): string
     {
@@ -100,11 +108,7 @@ final class Sparkline implements Sizer
         // Normalize data to fit display width
         $normalizedData = $this->normalizeData($displayWidth);
 
-        if ($this->height === 1) {
-            return $this->renderSingleLine($normalizedData);
-        }
-
-        return $this->renderMultiLine($normalizedData);
+        return $this->renderArea($normalizedData);
     }
 
     /**
@@ -157,11 +161,11 @@ final class Sparkline implements Sizer
     }
 
     /**
-     * Render a single-line sparkline (height = 1).
+     * Render area chart with multi-line output.
      *
      * @param list<float> $data Normalized data
      */
-    private function renderSingleLine(array $data): string
+    private function renderArea(array $data): string
     {
         if (empty($data)) {
             return '';
@@ -173,86 +177,47 @@ final class Sparkline implements Sizer
         // Use abs and max to handle floating point precision issues
         $range = max(1.0, abs($range));
 
-        $output = '';
-        $lastBlockIndex = -1;
+        // Calculate the baseline (bottom of the area)
+        $baseline = $min - ($range * 0.1); // Extend slightly below min
 
-        foreach ($data as $i => $value) {
-            // Normalize value to 0-7 range
-            $normalized = (($value - $min) / $range) * 7;
-            $blockIndex = (int) round(max(0, min(7, $normalized)));
-
-            $blockChar = self::BLOCK_CHARS[$blockIndex];
-
-            // Determine color based on position
-            $color = $this->getColorForValue($value, $min, $max);
-
-            if ($color !== null) {
-                $output .= $color->toFg(ColorProfile::TrueColor);
-            }
-
-            // Mark data points with a dot
-            if ($this->showDataPoints && ($i === 0 || $i === count($data) - 1 || $blockIndex !== $lastBlockIndex)) {
-                $output .= '•';
-                if ($color !== null) {
-                    $output .= Ansi::reset();
-                }
-                $output .= $blockChar;
-            } else {
-                $output .= $blockChar;
-            }
-
-            if ($color !== null) {
-                $output .= Ansi::reset();
-            }
-
-            $lastBlockIndex = $blockIndex;
-        }
-
-        return $output;
-    }
-
-    /**
-     * Render a multi-line sparkline (height > 1).
-     *
-     * @param list<float> $data Normalized data
-     */
-    private function renderMultiLine(array $data): string
-    {
-        if (empty($data)) {
-            return '';
-        }
-
-        $min = min($data);
-        $max = max($data);
-        $range = $max - $min;
-        // Use abs and max to handle floating point precision issues
-        $range = max(1.0, abs($range));
+        $lines = [];
 
         // Build output line by line (top to bottom)
-        $lines = [];
         for ($h = $this->height - 1; $h >= 0; $h--) {
             $line = '';
             $threshold = ($h + 1) / $this->height;
 
-            foreach ($data as $value) {
+            foreach ($data as $i => $value) {
                 $normalized = ($value - $min) / $range;
                 $color = $this->getColorForValue($value, $min, $max);
 
                 if ($normalized >= $threshold) {
-                    // Filled at this height
-                    if ($color !== null) {
-                        $line .= $color->toFg(ColorProfile::TrueColor);
+                    // The area is filled at this height - draw full block
+                    if ($this->showLine && $normalized >= ($threshold - (1 / $this->height)) && $normalized < ($threshold + (1 / $this->height))) {
+                        // This is near the top edge - draw line color
+                        if ($color !== null && $this->lineColor !== null) {
+                            $line .= $this->lineColor->toFg(ColorProfile::TrueColor);
+                        }
+                        $line .= self::AREA_BLOCKS[(int) (min(7, $normalized * 8))];
+                        if ($color !== null && $this->lineColor !== null) {
+                            $line .= Ansi::reset();
+                        }
+                    } else {
+                        // Fill area
+                        if ($color !== null && $this->fillColor !== null) {
+                            $line .= $this->fillColor->toFg(ColorProfile::TrueColor);
+                        }
+                        $line .= $this->getFillChar($normalized, $threshold);
+                        if ($color !== null && $this->fillColor !== null) {
+                            $line .= Ansi::reset();
+                        }
                     }
-                    $line .= '█';
-                    if ($color !== null) {
-                        $line .= Ansi::reset();
-                    }
-                } elseif ($this->fill && $normalized >= ($threshold - (1 / $this->height))) {
-                    // Partial fill (for area fill effect)
+                } elseif ($this->showFill && $normalized >= ($threshold - (1 / $this->height))) {
+                    // Partial fill for smoother edges
                     if ($color !== null && $this->fillColor !== null) {
                         $line .= $this->fillColor->toFg(ColorProfile::TrueColor);
                     }
-                    $line .= '░';
+                    $line .= self::FILL_BLOCKS[0];
                     if ($color !== null && $this->fillColor !== null) {
                         $line .= Ansi::reset();
                     }
@@ -268,12 +233,29 @@ final class Sparkline implements Sizer
     }
 
     /**
+     * Get fill character based on normalized value.
+     */
+    private function getFillChar(float $normalized, float $threshold): string
+    {
+        // Use progressively darker fill blocks
+        $fillLevel = $normalized * $this->height;
+        if ($fillLevel >= 3) {
+            return '█';
+        } elseif ($fillLevel >= 2) {
+            return '▓';
+        } elseif ($fillLevel >= 1) {
+            return '▒';
+        }
+        return '░';
+    }
+
+    /**
      * Get the appropriate color for a value based on min/max positions.
      */
     private function getColorForValue(float $value, float $min, float $max): ?Color
     {
         if ($min === $max) {
-            return $this->color;
+            return $this->lineColor;
         }
 
         $normalized = ($value - $min) / ($max - $min);
@@ -286,7 +268,7 @@ final class Sparkline implements Sizer
             return $this->minColor;
         }
 
-        return $this->color;
+        return $this->lineColor;
     }
 
     /**
@@ -329,12 +311,12 @@ final class Sparkline implements Sizer
             data: $data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
@@ -347,12 +329,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $width,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
@@ -365,66 +347,84 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: max(1, $height),
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
     /**
-     * Show or hide data point markers.
+     * Show or hide the line.
      */
-    public function withDataPoints(bool $show): self
+    public function withShowLine(bool $show): self
     {
         return new self(
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $show,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $show,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
     /**
-     * Enable or disable area fill.
+     * Show or hide the fill.
      */
-    public function withFill(bool $fill): self
+    public function withShowFill(bool $show): self
     {
         return new self(
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $show,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
     /**
-     * Set the main color.
+     * Set the line color.
      */
-    public function withColor(?Color $color): self
+    public function withLineColor(?Color $color): self
     {
         return new self(
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $color,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
+        );
+    }
+
+    /**
+     * Set the fill color.
+     */
+    public function withFillColor(?Color $color): self
+    {
+        return new self(
+            data: $this->data,
+            widthConstraint: $this->widthConstraint,
+            height: $this->height,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $color,
+            maxColor: $this->maxColor,
+            minColor: $this->minColor,
         );
     }
 
@@ -437,12 +437,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $color,
             minColor: $this->minColor,
-            fillColor: $this->fillColor,
         );
     }
 
@@ -455,30 +455,12 @@ final class Sparkline implements Sizer
             data: $this->data,
             widthConstraint: $this->widthConstraint,
             height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
+            showLine: $this->showLine,
+            showFill: $this->showFill,
+            lineColor: $this->lineColor,
+            fillColor: $this->fillColor,
             maxColor: $this->maxColor,
             minColor: $color,
-            fillColor: $this->fillColor,
-        );
-    }
-
-    /**
-     * Set the fill color for area fill.
-     */
-    public function withFillColor(?Color $color): self
-    {
-        return new self(
-            data: $this->data,
-            widthConstraint: $this->widthConstraint,
-            height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            color: $this->color,
-            maxColor: $this->maxColor,
-            minColor: $this->minColor,
-            fillColor: $color,
         );
     }
 }
