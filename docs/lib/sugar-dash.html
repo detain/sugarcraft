@@ -104,14 +104,750 @@ echo $grid->render();</code></pre>
     <div class="container">
         <h2>Demos.</h2>
         <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+
+        <h3 style="margin-top: 32px;">Layout &amp; Structure</h3>
         <div class="demo-grid">
             <div class="demo-card">
-                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard.gif" alt="Dashboard layout" onerror="this.parentElement.style.display='none'">
-                <h3>Dashboard layout</h3>
-                <span class="demo-caption">Column grid with framed panels and status bar.</span>
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stacked-grid.gif" alt="StackedGrid" onerror="this.parentElement.style.display='none'">
+                <h3>StackedGrid</h3>
+                <span class="demo-caption">Multi-column stacked grid layout.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/grid-layout.gif" alt="GridLayout" onerror="this.parentElement.style.display='none'">
+                <h3>GridLayout</h3>
+                <span class="demo-caption">CSS Grid-style layout.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/flex-layout.gif" alt="FlexLayout" onerror="this.parentElement.style.display='none'">
+                <h3>FlexLayout</h3>
+                <span class="demo-caption">Flexbox-style layout.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/vstack.gif" alt="VStack" onerror="this.parentElement.style.display='none'">
+                <h3>VStack</h3>
+                <span class="demo-caption">Vertical stack with alignment.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hstack.gif" alt="HStack" onerror="this.parentElement.style.display='none'">
+                <h3>HStack</h3>
+                <span class="demo-caption">Horizontal stack with spacing.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/zstack.gif" alt="ZStack" onerror="this.parentElement.style.display='none'">
+                <h3>ZStack</h3>
+                <span class="demo-caption">Layered stack.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stack.gif" alt="Stack" onerror="this.parentElement.style.display='none'">
+                <h3>Stack</h3>
+                <span class="demo-caption">Basic vertical stack.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/frame.gif" alt="Frame" onerror="this.parentElement.style.display='none'">
+                <h3>Frame</h3>
+                <span class="demo-caption">Bordered frame with title.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/panel.gif" alt="Panel" onerror="this.parentElement.style.display='none'">
+                <h3>Panel</h3>
+                <span class="demo-caption">Panel with header/footer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/card.gif" alt="Card" onerror="this.parentElement.style.display='none'">
+                <h3>Card</h3>
+                <span class="demo-caption">Card container component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/divider.gif" alt="Divider" onerror="this.parentElement.style.display='none'">
+                <h3>Divider</h3>
+                <span class="demo-caption">Horizontal or vertical divider.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/box-drawing.gif" alt="BoxDrawing" onerror="this.parentElement.style.display='none'">
+                <h3>BoxDrawing</h3>
+                <span class="demo-caption">Unicode box-drawing frame.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/border-text.gif" alt="BorderText" onerror="this.parentElement.style.display='none'">
+                <h3>BorderText</h3>
+                <span class="demo-caption">Text with ASCII border.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spacer.gif" alt="Spacer" onerror="this.parentElement.style.display='none'">
+                <h3>Spacer</h3>
+                <span class="demo-caption">Empty space filler.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/split.gif" alt="Split" onerror="this.parentElement.style.display='none'">
+                <h3>Split</h3>
+                <span class="demo-caption">Split layout.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/center.gif" alt="Center" onerror="this.parentElement.style.display='none'">
+                <h3>Center</h3>
+                <span class="demo-caption">Centered content.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/cover.gif" alt="Cover" onerror="this.parentElement.style.display='none'">
+                <h3>Cover</h3>
+                <span class="demo-caption">Cover layout.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/header.gif" alt="Header" onerror="this.parentElement.style.display='none'">
+                <h3>Header</h3>
+                <span class="demo-caption">Page header.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/footer.gif" alt="Footer" onerror="this.parentElement.style.display='none'">
+                <h3>Footer</h3>
+                <span class="demo-caption">Page footer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/window.gif" alt="Window" onerror="this.parentElement.style.display='none'">
+                <h3>Window</h3>
+                <span class="demo-caption">Window frame.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/drawer.gif" alt="Drawer" onerror="this.parentElement.style.display='none'">
+                <h3>Drawer</h3>
+                <span class="demo-caption">Drawer panel.</span>
             </div>
         </div>
-        <p style="margin-top: 24px; color: var(--ink-2);">No demos recorded yet. Run <code>php examples/*.php</code> locally to see the library in action.</p>
+
+        <h3 style="margin-top: 32px;">Charts</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chart.gif" alt="Chart" onerror="this.parentElement.style.display='none'">
+                <h3>Chart</h3>
+                <span class="demo-caption">Bar/line chart with axes.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/area-chart.gif" alt="AreaChart" onerror="this.parentElement.style.display='none'">
+                <h3>AreaChart</h3>
+                <span class="demo-caption">Area chart for time series.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bar.gif" alt="Bar" onerror="this.parentElement.style.display='none'">
+                <h3>Bar</h3>
+                <span class="demo-caption">Horizontal status bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/donut.gif" alt="Donut" onerror="this.parentElement.style.display='none'">
+                <h3>Donut</h3>
+                <span class="demo-caption">Donut chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/gauge.gif" alt="Gauge" onerror="this.parentElement.style.display='none'">
+                <h3>Gauge</h3>
+                <span class="demo-caption">Horizontal gauge.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/gauge-chart.gif" alt="GaugeChart" onerror="this.parentElement.style.display='none'">
+                <h3>GaugeChart</h3>
+                <span class="demo-caption">Circular gauge chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/gauge-circle.gif" alt="GaugeCircle" onerror="this.parentElement.style.display='none'">
+                <h3>GaugeCircle</h3>
+                <span class="demo-caption">Circular gauge visualization.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/heatmap.gif" alt="Heatmap" onerror="this.parentElement.style.display='none'">
+                <h3>Heatmap</h3>
+                <span class="demo-caption">Heat map visualization.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/radar-chart.gif" alt="RadarChart" onerror="this.parentElement.style.display='none'">
+                <h3>RadarChart</h3>
+                <span class="demo-caption">Radar/spider chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bubble.gif" alt="Bubble" onerror="this.parentElement.style.display='none'">
+                <h3>Bubble</h3>
+                <span class="demo-caption">Bubble chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bullet.gif" alt="Bullet" onerror="this.parentElement.style.display='none'">
+                <h3>Bullet</h3>
+                <span class="demo-caption">Bullet chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline.gif" alt="Sparkline" onerror="this.parentElement.style.display='none'">
+                <h3>Sparkline</h3>
+                <span class="demo-caption">Inline sparkline chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline-bar.gif" alt="SparklineBar" onerror="this.parentElement.style.display='none'">
+                <h3>SparklineBar</h3>
+                <span class="demo-caption">Bar-style sparkline.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline-area.gif" alt="SparklineArea" onerror="this.parentElement.style.display='none'">
+                <h3>SparklineArea</h3>
+                <span class="demo-caption">Area-style sparkline.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spark-area.gif" alt="SparkArea" onerror="this.parentElement.style.display='none'">
+                <h3>SparkArea</h3>
+                <span class="demo-caption">Spark area chart.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/funnel-chart.gif" alt="FunnelChart" onerror="this.parentElement.style.display='none'">
+                <h3>FunnelChart</h3>
+                <span class="demo-caption">Funnel chart.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Form &amp; Input</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/input.gif" alt="Input" onerror="this.parentElement.style.display='none'">
+                <h3>Input</h3>
+                <span class="demo-caption">Text input field.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/textarea.gif" alt="Textarea" onerror="this.parentElement.style.display='none'">
+                <h3>Textarea</h3>
+                <span class="demo-caption">Multi-line text area.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/select.gif" alt="Select" onerror="this.parentElement.style.display='none'">
+                <h3>Select</h3>
+                <span class="demo-caption">Dropdown select.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/checkbox.gif" alt="Checkbox" onerror="this.parentElement.style.display='none'">
+                <h3>Checkbox</h3>
+                <span class="demo-caption">Checkbox group.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/radio.gif" alt="Radio" onerror="this.parentElement.style.display='none'">
+                <h3>Radio</h3>
+                <span class="demo-caption">Radio button.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/slider.gif" alt="Slider" onerror="this.parentElement.style.display='none'">
+                <h3>Slider</h3>
+                <span class="demo-caption">Slider control.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toggle.gif" alt="Toggle" onerror="this.parentElement.style.display='none'">
+                <h3>Toggle</h3>
+                <span class="demo-caption">Toggle switch.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/switch-component.gif" alt="Switch" onerror="this.parentElement.style.display='none'">
+                <h3>Switch</h3>
+                <span class="demo-caption">Switch component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip.gif" alt="Chip" onerror="this.parentElement.style.display='none'">
+                <h3>Chip</h3>
+                <span class="demo-caption">Chip/tag component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip-group.gif" alt="ChipGroup" onerror="this.parentElement.style.display='none'">
+                <h3>ChipGroup</h3>
+                <span class="demo-caption">Group of chips.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/label.gif" alt="Label" onerror="this.parentElement.style.display='none'">
+                <h3>Label</h3>
+                <span class="demo-caption">Form label.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/combo-box.gif" alt="ComboBox" onerror="this.parentElement.style.display='none'">
+                <h3>ComboBox</h3>
+                <span class="demo-caption">Combo box.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/date-picker.gif" alt="DatePicker" onerror="this.parentElement.style.display='none'">
+                <h3>DatePicker</h3>
+                <span class="demo-caption">Date picker.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Navigation</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tabs.gif" alt="Tabs" onerror="this.parentElement.style.display='none'">
+                <h3>Tabs</h3>
+                <span class="demo-caption">Tabbed interface.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tabs-vertical.gif" alt="TabsVertical" onerror="this.parentElement.style.display='none'">
+                <h3>TabsVertical</h3>
+                <span class="demo-caption">Vertical tab navigation.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/navbar.gif" alt="Navbar" onerror="this.parentElement.style.display='none'">
+                <h3>Navbar</h3>
+                <span class="demo-caption">Navigation bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sidebar.gif" alt="Sidebar" onerror="this.parentElement.style.display='none'">
+                <h3>Sidebar</h3>
+                <span class="demo-caption">Sidebar navigation.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/breadcrumb.gif" alt="Breadcrumb" onerror="this.parentElement.style.display='none'">
+                <h3>Breadcrumb</h3>
+                <span class="demo-caption">Breadcrumb navigation.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/menu.gif" alt="Menu" onerror="this.parentElement.style.display='none'">
+                <h3>Menu</h3>
+                <span class="demo-caption">Menu component.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Feedback</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/alert.gif" alt="Alert" onerror="this.parentElement.style.display='none'">
+                <h3>Alert</h3>
+                <span class="demo-caption">Alert/message box.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toast.gif" alt="Toast" onerror="this.parentElement.style.display='none'">
+                <h3>Toast</h3>
+                <span class="demo-caption">Toast message.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/notification.gif" alt="Notification" onerror="this.parentElement.style.display='none'">
+                <h3>Notification</h3>
+                <span class="demo-caption">Toast notification.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spinner.gif" alt="Spinner" onerror="this.parentElement.style.display='none'">
+                <h3>Spinner</h3>
+                <span class="demo-caption">Loading spinner.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress.gif" alt="Progress" onerror="this.parentElement.style.display='none'">
+                <h3>Progress</h3>
+                <span class="demo-caption">Progress indicator.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-bar.gif" alt="ProgressBar" onerror="this.parentElement.style.display='none'">
+                <h3>ProgressBar</h3>
+                <span class="demo-caption">Progress bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-ring.gif" alt="ProgressRing" onerror="this.parentElement.style.display='none'">
+                <h3>ProgressRing</h3>
+                <span class="demo-caption">Circular progress indicator.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/nprogress.gif" alt="NProgress" onerror="this.parentElement.style.display='none'">
+                <h3>NProgress</h3>
+                <span class="demo-caption">npm-style progress bar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/loading-text.gif" alt="LoadingText" onerror="this.parentElement.style.display='none'">
+                <h3>LoadingText</h3>
+                <span class="demo-caption">Animated loading text.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Data Display</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-bordered.gif" alt="TableBordered" onerror="this.parentElement.style.display='none'">
+                <h3>TableBordered</h3>
+                <span class="demo-caption">Bordered table.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-zebra.gif" alt="TableZebra" onerror="this.parentElement.style.display='none'">
+                <h3>TableZebra</h3>
+                <span class="demo-caption">Zebra-striped table.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/list-component.gif" alt="List" onerror="this.parentElement.style.display='none'">
+                <h3>List</h3>
+                <span class="demo-caption">List renderer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tree.gif" alt="Tree" onerror="this.parentElement.style.display='none'">
+                <h3>Tree</h3>
+                <span class="demo-caption">Tree structure.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/metric.gif" alt="Metric" onerror="this.parentElement.style.display='none'">
+                <h3>Metric</h3>
+                <span class="demo-caption">Metric display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stat.gif" alt="Stat" onerror="this.parentElement.style.display='none'">
+                <h3>Stat</h3>
+                <span class="demo-caption">Single stat display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stats.gif" alt="Stats" onerror="this.parentElement.style.display='none'">
+                <h3>Stats</h3>
+                <span class="demo-caption">Statistics display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/metrics-grid.gif" alt="MetricsGrid" onerror="this.parentElement.style.display='none'">
+                <h3>MetricsGrid</h3>
+                <span class="demo-caption">Grid of metrics.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Media</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/image.gif" alt="Image" onerror="this.parentElement.style.display='none'">
+                <h3>Image</h3>
+                <span class="demo-caption">Image display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/picture.gif" alt="Picture" onerror="this.parentElement.style.display='none'">
+                <h3>Picture</h3>
+                <span class="demo-caption">Picture frame.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar.gif" alt="Avatar" onerror="this.parentElement.style.display='none'">
+                <h3>Avatar</h3>
+                <span class="demo-caption">User avatar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar-group.gif" alt="AvatarGroup" onerror="this.parentElement.style.display='none'">
+                <h3>AvatarGroup</h3>
+                <span class="demo-caption">Group of avatars.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/icon.gif" alt="Icon" onerror="this.parentElement.style.display='none'">
+                <h3>Icon</h3>
+                <span class="demo-caption">Icon display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/qr-code.gif" alt="QRCode" onerror="this.parentElement.style.display='none'">
+                <h3>QRCode</h3>
+                <span class="demo-caption">QR code.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/barcode.gif" alt="Barcode" onerror="this.parentElement.style.display='none'">
+                <h3>Barcode</h3>
+                <span class="demo-caption">Barcode.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/video.gif" alt="Video" onerror="this.parentElement.style.display='none'">
+                <h3>Video</h3>
+                <span class="demo-caption">Video player.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/audio.gif" alt="Audio" onerror="this.parentElement.style.display='none'">
+                <h3>Audio</h3>
+                <span class="demo-caption">Audio player.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Text</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/text.gif" alt="Text" onerror="this.parentElement.style.display='none'">
+                <h3>Text</h3>
+                <span class="demo-caption">Word-wrapped text.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/paragraph.gif" alt="Paragraph" onerror="this.parentElement.style.display='none'">
+                <h3>Paragraph</h3>
+                <span class="demo-caption">Paragraph text.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/code.gif" alt="Code" onerror="this.parentElement.style.display='none'">
+                <h3>Code</h3>
+                <span class="demo-caption">Code block.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/kbd.gif" alt="Kbd" onerror="this.parentElement.style.display='none'">
+                <h3>Kbd</h3>
+                <span class="demo-caption">Keyboard key display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/emoji.gif" alt="Emoji" onerror="this.parentElement.style.display='none'">
+                <h3>Emoji</h3>
+                <span class="demo-caption">Emoji display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/figlet-text.gif" alt="FigletText" onerror="this.parentElement.style.display='none'">
+                <h3>FigletText</h3>
+                <span class="demo-caption">ASCII art text.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/ascii-banner.gif" alt="ASCIIBanner" onerror="this.parentElement.style.display='none'">
+                <h3>ASCIIBanner</h3>
+                <span class="demo-caption">ASCII banner text.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/highlight.gif" alt="Highlight" onerror="this.parentElement.style.display='none'">
+                <h3>Highlight</h3>
+                <span class="demo-caption">Syntax highlighted code.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hex-dump.gif" alt="HexDump" onerror="this.parentElement.style.display='none'">
+                <h3>HexDump</h3>
+                <span class="demo-caption">Hex dump viewer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dot-matrix.gif" alt="DotMatrix" onerror="this.parentElement.style.display='none'">
+                <h3>DotMatrix</h3>
+                <span class="demo-caption">Dot matrix display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/pictogram.gif" alt="Pictogram" onerror="this.parentElement.style.display='none'">
+                <h3>Pictogram</h3>
+                <span class="demo-caption">Pictogram display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/boxer.gif" alt="Boxer" onerror="this.parentElement.style.display='none'">
+                <h3>Boxer</h3>
+                <span class="demo-caption">Boxing text effect.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Status</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/clock.gif" alt="Clock" onerror="this.parentElement.style.display='none'">
+                <h3>Clock</h3>
+                <span class="demo-caption">Digital clock.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/timer.gif" alt="Timer" onerror="this.parentElement.style.display='none'">
+                <h3>Timer</h3>
+                <span class="demo-caption">Countdown timer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stopwatch.gif" alt="Stopwatch" onerror="this.parentElement.style.display='none'">
+                <h3>Stopwatch</h3>
+                <span class="demo-caption">Stopwatch.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/calendar.gif" alt="Calendar" onerror="this.parentElement.style.display='none'">
+                <h3>Calendar</h3>
+                <span class="demo-caption">Calendar view.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/terminal.gif" alt="Terminal" onerror="this.parentElement.style.display='none'">
+                <h3>Terminal</h3>
+                <span class="demo-caption">Terminal emulator.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log-viewer.gif" alt="LogViewer" onerror="this.parentElement.style.display='none'">
+                <h3>LogViewer</h3>
+                <span class="demo-caption">Log file viewer.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log.gif" alt="Log" onerror="this.parentElement.style.display='none'">
+                <h3>Log</h3>
+                <span class="demo-caption">Log entry.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/console.gif" alt="Console" onerror="this.parentElement.style.display='none'">
+                <h3>Console</h3>
+                <span class="demo-caption">Terminal console.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/state.gif" alt="State" onerror="this.parentElement.style.display='none'">
+                <h3>State</h3>
+                <span class="demo-caption">Application state.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/focus.gif" alt="Focus" onerror="this.parentElement.style.display='none'">
+                <h3>Focus</h3>
+                <span class="demo-caption">Focus state management.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Advanced</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/accordion.gif" alt="Accordion" onerror="this.parentElement.style.display='none'">
+                <h3>Accordion</h3>
+                <span class="demo-caption">Accordion/collapsible.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/activity-feed.gif" alt="ActivityFeed" onerror="this.parentElement.style.display='none'">
+                <h3>ActivityFeed</h3>
+                <span class="demo-caption">Activity feed.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/badge.gif" alt="Badge" onerror="this.parentElement.style.display='none'">
+                <h3>Badge</h3>
+                <span class="demo-caption">Badge/tag component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/testimonial.gif" alt="Testimonial" onerror="this.parentElement.style.display='none'">
+                <h3>Testimonial</h3>
+                <span class="demo-caption">Testimonial quote.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/profile.gif" alt="Profile" onerror="this.parentElement.style.display='none'">
+                <h3>Profile</h3>
+                <span class="demo-caption">User profile card.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/cta.gif" alt="CTA" onerror="this.parentElement.style.display='none'">
+                <h3>CTA</h3>
+                <span class="demo-caption">Call-to-action.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/jumbotron.gif" alt="Jumbotron" onerror="this.parentElement.style.display='none'">
+                <h3>Jumbotron</h3>
+                <span class="demo-caption">Jumbotron hero section.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/empty-state.gif" alt="EmptyState" onerror="this.parentElement.style.display='none'">
+                <h3>EmptyState</h3>
+                <span class="demo-caption">Empty state placeholder.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/skeleton.gif" alt="Skeleton" onerror="this.parentElement.style.display='none'">
+                <h3>Skeleton</h3>
+                <span class="demo-caption">Loading skeleton.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/marquee.gif" alt="Marquee" onerror="this.parentElement.style.display='none'">
+                <h3>Marquee</h3>
+                <span class="demo-caption">Scrolling marquee text.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/scrollbar.gif" alt="Scrollbar" onerror="this.parentElement.style.display='none'">
+                <h3>Scrollbar</h3>
+                <span class="demo-caption">Custom scrollbar.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tooltip.gif" alt="Tooltip" onerror="this.parentElement.style.display='none'">
+                <h3>Tooltip</h3>
+                <span class="demo-caption">Tooltip popup.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/popover.gif" alt="Popover" onerror="this.parentElement.style.display='none'">
+                <h3>Popover</h3>
+                <span class="demo-caption">Popover content.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hint.gif" alt="Hint" onerror="this.parentElement.style.display='none'">
+                <h3>Hint</h3>
+                <span class="demo-caption">Hint component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tag.gif" alt="Tag" onerror="this.parentElement.style.display='none'">
+                <h3>Tag</h3>
+                <span class="demo-caption">Tag component.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/rating.gif" alt="Rating" onerror="this.parentElement.style.display='none'">
+                <h3>Rating</h3>
+                <span class="demo-caption">Star rating display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/leaderboard.gif" alt="Leaderboard" onerror="this.parentElement.style.display='none'">
+                <h3>Leaderboard</h3>
+                <span class="demo-caption">Leaderboard display.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/diff.gif" alt="Diff" onerror="this.parentElement.style.display='none'">
+                <h3>Diff</h3>
+                <span class="demo-caption">Diff view.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/editor.gif" alt="Editor" onerror="this.parentElement.style.display='none'">
+                <h3>Editor</h3>
+                <span class="demo-caption">Text editor.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/command-palette.gif" alt="CommandPalette" onerror="this.parentElement.style.display='none'">
+                <h3>CommandPalette</h3>
+                <span class="demo-caption">Command palette.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/modal.gif" alt="Modal" onerror="this.parentElement.style.display='none'">
+                <h3>Modal</h3>
+                <span class="demo-caption">Modal dialog.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/word-cloud.gif" alt="WordCloud" onerror="this.parentElement.style.display='none'">
+                <h3>WordCloud</h3>
+                <span class="demo-caption">Word cloud visualization.</span>
+            </div>
+        </div>
+
+        <h3 style="margin-top: 32px;">Dashboard Examples</h3>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-layout.gif" alt="Dashboard Layout" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Layout</h3>
+                <span class="demo-caption">Layout containers demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-charts.gif" alt="Dashboard Charts" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Charts</h3>
+                <span class="demo-caption">Charts demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-form.gif" alt="Dashboard Form" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Form</h3>
+                <span class="demo-caption">Form demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-nav.gif" alt="Dashboard Nav" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Nav</h3>
+                <span class="demo-caption">Navigation demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-status.gif" alt="Dashboard Status" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Status</h3>
+                <span class="demo-caption">Status indicators demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-text.gif" alt="Dashboard Text" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Text</h3>
+                <span class="demo-caption">Text components demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-time.gif" alt="Dashboard Time" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Time</h3>
+                <span class="demo-caption">Time components demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-ui.gif" alt="Dashboard UI" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard UI</h3>
+                <span class="demo-caption">UI components demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-complex.gif" alt="Dashboard Complex" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Complex</h3>
+                <span class="demo-caption">Complex layout demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-data.gif" alt="Dashboard Data" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Data</h3>
+                <span class="demo-caption">Data display demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-devtools.gif" alt="Dashboard Devtools" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Devtools</h3>
+                <span class="demo-caption">Devtools demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-interactive.gif" alt="Dashboard Interactive" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Interactive</h3>
+                <span class="demo-caption">Interactive components demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-media.gif" alt="Dashboard Media" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Media</h3>
+                <span class="demo-caption">Media components demo.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-metrics.gif" alt="Dashboard Metrics" onerror="this.parentElement.style.display='none'">
+                <h3>Dashboard Metrics</h3>
+                <span class="demo-caption">Metrics display demo.</span>
+            </div>
+        </div>
     </div>
 </section>
 
