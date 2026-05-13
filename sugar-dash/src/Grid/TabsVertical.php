@@ -80,7 +80,20 @@ final class TabsVertical implements Sizer
         $labelColumn = $this->renderLabels($safeIndex);
         $content = $this->renderContent($safeIndex);
 
-        $result = $labelColumn . $this->separator . $content;
+        // Splice label column and content row-by-row so the active content
+        // appears next to the active label rather than below the whole label
+        // stack.
+        $labelLines = explode("\n", $labelColumn);
+        $contentLines = explode("\n", $content);
+        $maxRows = max(count($labelLines), count($contentLines));
+        $blankLabel = str_repeat(' ', $this->labelWidth);
+        $rows = [];
+        for ($i = 0; $i < $maxRows; $i++) {
+            $left = $labelLines[$i] ?? $blankLabel;
+            $right = $contentLines[$i] ?? '';
+            $rows[] = $left . $this->separator . $right;
+        }
+        $result = implode("\n", $rows);
 
         // Ensure we end with reset if any colors were used
         if ($this->activeColor !== null || $this->inactiveColor !== null) {

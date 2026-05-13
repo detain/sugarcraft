@@ -297,13 +297,15 @@ final class Chart implements Sizer
             }
         }
 
-        // Convert grid to string
+        // Convert grid to string (top row first; grid row 0 holds the max-value points)
         for ($row = 0; $row < $chartHeight; $row++) {
             $line = '';
 
-            // Y-axis label
-            if ($this->showGrid && isset($gridLines[$row])) {
-                $yLabel = $this->formatYLabel($gridLines[$row]);
+            // Y-axis label — gridLines[0] is min, so invert the index so the
+            // top row shows the maximum value.
+            $labelIndex = $chartHeight - 1 - $row;
+            if ($this->showGrid && isset($gridLines[$labelIndex])) {
+                $yLabel = $this->formatYLabel($gridLines[$labelIndex]);
                 $line .= str_pad($yLabel, 8) . ' ';
             }
 

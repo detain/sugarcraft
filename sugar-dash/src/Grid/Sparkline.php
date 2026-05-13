@@ -169,9 +169,10 @@ final class Sparkline implements Sizer
 
         $min = min($data);
         $max = max($data);
-        $range = $max - $min;
-        // Use abs and max to handle floating point precision issues
-        $range = max(1.0, abs($range));
+        $range = abs($max - $min);
+        if ($range == 0.0) {
+            $range = 1.0;
+        }
 
         $output = '';
         $lastBlockIndex = -1;
@@ -224,9 +225,10 @@ final class Sparkline implements Sizer
 
         $min = min($data);
         $max = max($data);
-        $range = $max - $min;
-        // Use abs and max to handle floating point precision issues
-        $range = max(1.0, abs($range));
+        $range = abs($max - $min);
+        if ($range == 0.0) {
+            $range = 1.0;
+        }
 
         // Build output line by line (top to bottom)
         $lines = [];

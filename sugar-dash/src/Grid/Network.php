@@ -9,56 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Network node shape types.
- */
-enum NetworkShape: string
-{
-    case Circle = 'circle';
-    case Square = 'square';
-    case Diamond = 'diamond';
-    case Hexagon = 'hexagon';
-    case Star = 'star';
-}
-
-/**
- * Network edge styles.
- */
-enum EdgeStyle: string
-{
-    case Solid = 'solid';
-    case Dashed = 'dashed';
-    case Dotted = 'dotted';
-    case Bold = 'bold';
-}
-
-/**
- * A network diagram node.
- */
-final class NetworkNode
-{
-    /** @var list<string> */
-    public array $connections = [];
-
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly NetworkShape $shape = NetworkShape::Circle,
-        public readonly ?Color $color = null,
-        public readonly ?string $icon = null,
-    ) {}
-
-    /**
-     * Add a connection to another node.
-     */
-    public function withConnection(string $nodeId): self
-    {
-        $clone = clone $this;
-        $clone->connections[] = $nodeId;
-        return $clone;
-    }
-}
-
-/**
  * A network diagram component for visualizing connected data.
  *
  * Features:

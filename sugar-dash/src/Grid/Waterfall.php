@@ -9,62 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Waterfall chart bar types.
- */
-enum WaterfallBarType: string
-{
-    case Positive = 'positive';
-    case Negative = 'negative';
-    case Total = 'total';
-    case Subtotal = 'subtotal';
-}
-
-/**
- * A waterfall chart data point.
- */
-final class WaterfallItem
-{
-    public function __construct(
-        public readonly string $label,
-        public readonly float $value,
-        public readonly WaterfallBarType $type = WaterfallBarType::Positive,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a positive item.
-     */
-    public static function positive(string $label, float $value): self
-    {
-        return new self($label, $value, WaterfallBarType::Positive);
-    }
-
-    /**
-     * Create a negative item.
-     */
-    public static function negative(string $label, float $value): self
-    {
-        return new self($label, $value, WaterfallBarType::Negative);
-    }
-
-    /**
-     * Create a total item.
-     */
-    public static function total(string $label, float $value): self
-    {
-        return new self($label, $value, WaterfallBarType::Total);
-    }
-
-    /**
-     * Create a subtotal item.
-     */
-    public static function subtotal(string $label, float $value): self
-    {
-        return new self($label, $value, WaterfallBarType::Subtotal);
-    }
-}
-
-/**
  * A waterfall chart component for visualizing cumulative changes.
  *
  * Features:
