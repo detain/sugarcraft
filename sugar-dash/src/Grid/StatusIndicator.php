@@ -130,8 +130,14 @@ final class StatusIndicator implements Sizer
         $output = $color->toFg(ColorProfile::TrueColor);
 
         if ($this->pulse) {
+<<<<<<< Updated upstream
             $tick = (int) (microtime(true) * 1000);
             $phase = ($tick / 500) % 2;
+=======
+            /** @int Milliseconds since epoch, safely converted */
+            $tick = @((int) (microtime(true) * 1000));
+            $phase = intdiv($tick, 500) % 2;
+>>>>>>> Stashed changes
             if ($phase < 1) {
                 $output .= $symbol;
             } else {
