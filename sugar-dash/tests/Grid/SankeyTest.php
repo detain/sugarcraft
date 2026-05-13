@@ -52,7 +52,17 @@ final class SankeyTest extends TestCase
         $this->assertSame($color, $node->color);
     }
 
-    public function testSankeyNodeWithColor(): void
+    public function testSankeyNodeWithColorViaWither(): void
+    {
+        $node = new SankeyNode('test', 'Test', 50);
+        $color = Color::hex('#89B4FA');
+        $withColor = $node->withColor($color);
+
+        $this->assertSame($color, $withColor->color);
+        $this->assertNull($node->color);
+    }
+
+    public function testSankeyNodeWithColorViaConstructor(): void
     {
         $node = new SankeyNode('test', 'Test', 50);
         $color = Color::hex('#89B4FA');
