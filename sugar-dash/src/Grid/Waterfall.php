@@ -385,17 +385,9 @@ final class Waterfall implements Sizer
      */
     public function withPositiveColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $color,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->positiveColor = $color;
+        return $clone;
     }
 
     /**
@@ -403,17 +395,9 @@ final class Waterfall implements Sizer
      */
     public function withNegativeColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $color,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->negativeColor = $color;
+        return $clone;
     }
 
     /**
@@ -421,17 +405,9 @@ final class Waterfall implements Sizer
      */
     public function withTotalColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $color,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->totalColor = $color;
+        return $clone;
     }
 
     /**
@@ -439,17 +415,9 @@ final class Waterfall implements Sizer
      */
     public function withSubtotalColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $color,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->subtotalColor = $color;
+        return $clone;
     }
 
     /**
@@ -457,17 +425,9 @@ final class Waterfall implements Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $color,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -475,17 +435,9 @@ final class Waterfall implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $color,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -493,17 +445,9 @@ final class Waterfall implements Sizer
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $color,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->backgroundColor = $color;
+        return $clone;
     }
 
     /**
@@ -511,16 +455,8 @@ final class Waterfall implements Sizer
      */
     public function withStyle(string $style): self
     {
-        return new self(
-            maxItems: $this->maxItems,
-            positiveColor: $this->positiveColor,
-            negativeColor: $this->negativeColor,
-            totalColor: $this->totalColor,
-            subtotalColor: $this->subtotalColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $style,
-        );
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
     }
 }
