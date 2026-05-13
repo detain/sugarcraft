@@ -7,68 +7,60 @@ namespace SugarCraft\Dash\Grid;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Core\Util\Width;
 
 /**
- * A vertical timeline component for displaying chronological events.
+ * A timeline component for displaying chronological events.
  *
  * Features:
- * - Vertical timeline with optional nodes
- * - Each node has a label and content
- * - Connector lines between nodes
- * - Customizable colors for nodes and connectors
- * - Indentation for content
+ * - Vertical timeline with events
+ * - Configurable line style (solid, dashed, dotted)
+ * - Optional icons for each event
+ * - Different event types with colors (info, success, warning, error)
+ * - Configurable connector style
  *
- * Mirrors timeline UI concepts adapted to PHP with
- * wither-style immutable setters.
+ * Mirrors timeline patterns adapted to PHP with wither-style immutable setters.
  */
 final class Timeline implements Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
 
+    public const TypeInfo = 'info';
+    public const TypeSuccess = 'success';
+    public const TypeWarning = 'warning';
+    public const TypeError = 'error';
+    public const TypeDefault = 'default';
+
     /**
-     * @param TimelineNode[] $nodes
+     * @param list<array{time: string, title: string, description?: string, type?: string, color?: Color|null}> $events
      */
     public function __construct(
-        private readonly array $nodes = [],
-        private readonly ?Color $nodeColor = null,
-        private readonly ?Color $connectorColor = null,
-        private readonly ?Color $contentColor = null,
-        private readonly string $nodeChar = '●',
-        private readonly string $connectorChar = '│',
+        private readonly array $events,
+        private readonly string $lineStyle = 'solid',
+        private readonly HAlign $align = HAlign::Left,
+        private readonly bool $showDescriptions = true,
+        private readonly bool $showIcons = true,
+        private readonly bool $reverse = false,
     ) {}
 
     /**
-     * Create a new empty timeline.
+     * Create a new timeline with the given events.
+     *
+     * @param list<array{time: string, title: string, description?: string, type?: string, color?: string|Color|null}> $events
      */
-    public static function new(): self
+    public static function new(array $events): self
     {
-        return new self(
-            nodes: [],
-            nodeColor: Color::hex('#3B82F6'),
-            connectorColor: Color::hex('#9CA3AF'),
-            contentColor: null,
-            nodeChar: '●',
-            connectorChar: '│',
-        );
+        return new self(events: $events);
     }
 
     /**
-     * Create a timeline with the given nodes.
+     * Create a timeline with default Catppuccin Mocha colors.
      *
-     * @param TimelineNode[] $nodes
+     * @param list<array{time: string, title: string, description?: string, type?: string}> $events
      */
-    public static function fromNodes(array $nodes): self
+    public static function mocha(array $events): self
     {
-        return new self(
-            nodes: $nodes,
-            nodeColor: Color::hex('#3B82F6'),
-            connectorColor: Color::hex('#9CA3AF'),
-            contentColor: null,
-            nodeChar: '●',
-            connectorChar: '│',
-        );
+        return new self(events: $events);
     }
 
     /**
@@ -83,228 +75,184 @@ final class Timeline implements Sizer
     }
 
     /**
-     * Render the timeline as a string.
+     * Calculate the natural dimensions of this timeline.
+     *
+     * @return array{0:int, 1:int} [width, height]
+     */
+    public function getInnerSize(): array
+    {
+        $useWidth = $this->width ?? 60;
+        $useHeight = $this->height ?? max(3, count($this->events) * 3);
+        return [$useWidth, $useHeight];
+    }
+
+    /**
+     * Render the timeline.
      */
     public function render(): string
     {
-        if ($this->nodes === []) {
+        if ($this->events === []) {
             return '';
         }
 
+        $events = $this->reverse ? array_reverse($this->events) : $this->events;
+        $useWidth = $this->width ?? 60;
+
         $result = [];
-        $totalNodes = count($this->nodes);
+        $connectorChar = $this->getConnectorChar();
+        $connectorColor = Color::hex('#6C7086');
 
-        foreach ($this->nodes as $index => $node) {
-            $isLast = $index === $totalNodes - 1;
+        $timelineColor = Color::hex('#89B4FA');
+        $defaultColors = [
+            self::TypeInfo => Color::hex('#89B4FA'),
+            self::TypeSuccess => Color::hex('#A6E3A1'),
+            self::TypeWarning => Color::hex('#F9E2AF'),
+            self::TypeError => Color::hex('#F38BA8'),
+            self::TypeDefault => Color::hex('#CBA6F7'),
+        ];
 
-            // Render this node
-            $result[] = $this->renderNode($node, $isLast);
+        for ($i = 0; $i < count($events); $i++) {
+            $event = $events[$i];
+            $type = $event['type'] ?? self::TypeDefault;
+            $color = $event['color'] ?? ($defaultColors[$type] ?? $defaultColors[self::TypeDefault]);
+
+            $time = $event['time'];
+            $title = $event['title'];
+            $description = $event['description'] ?? '';
+
+            // Render time on the left
+            $timeStr = '[' . $time . ']';
+
+            // Render title
+            $titleStr = $title;
+
+            // Determine icons
+            $icon = $this->showIcons ? $this->getIcon($type) : '';
+
+            // Build the event line
+            $lineContent = trim("$icon $timeStr $titleStr");
+            if ($this->align === HAlign::Right) {
+                $lineContent = str_pad($lineContent, $useWidth, ' ', STR_PAD_LEFT);
+            }
+
+            // Add color
+            $line = $color->toFg(ColorProfile::TrueColor) . $lineContent . Ansi::reset();
+
+            // Add connector line (except for last event)
+            if ($i < count($events) - 1) {
+                $result[] = $line;
+                $connectorLine = str_repeat($connectorChar, $useWidth);
+                $result[] = $connectorColor->toFg(ColorProfile::TrueColor) . $connectorLine . Ansi::reset();
+            } else {
+                $result[] = $line;
+            }
         }
 
         return implode("\n", $result);
     }
 
     /**
-     * Render a single timeline node.
+     * Get the connector character based on line style.
      */
-    private function renderNode(TimelineNode $node, bool $isLast): string
+    private function getConnectorChar(): string
     {
-        $nodeStr = '';
-        $connectorStr = '';
-
-        // Apply node color
-        if ($this->nodeColor !== null) {
-            $nodeStr .= $this->nodeColor->toFg(ColorProfile::TrueColor);
-        }
-        $nodeStr .= $this->nodeChar;
-
-        // Apply connector color
-        if ($this->connectorColor !== null) {
-            $connectorStr .= $this->connectorColor->toFg(ColorProfile::TrueColor);
-        }
-
-        // Build the connector: vertical line down if not last
-        $connector = '';
-        if (!$isLast) {
-            $connector = ' ' . $connectorStr . $this->connectorChar;
-        } else {
-            $connector = ' ' . $connectorStr . ' ';
-        }
-
-        // Build the content
-        $content = '';
-        if ($this->contentColor !== null) {
-            $content .= $this->contentColor->toFg(ColorProfile::TrueColor);
-        }
-
-        $labelWidth = Width::string($node->label);
-        $content .= ' ' . $node->label;
-
-        // Add description on new line if present
-        if ($node->description !== null && $node->description !== '') {
-            $padding = $labelWidth + 3; // node char + space + label
-            $descLines = explode("\n", $node->description);
-            foreach ($descLines as $i => $descLine) {
-                if ($i === 0) {
-                    $content .= ' ' . $descLine;
-                } else {
-                    $content .= "\n" . str_repeat(' ', $padding) . $descLine;
-                }
-            }
-        }
-
-        // Apply color reset
-        if ($this->nodeColor !== null || $this->contentColor !== null) {
-            $content .= Ansi::reset();
-        }
-
-        return $nodeStr . $connector . $content;
+        return match ($this->lineStyle) {
+            'solid' => '│',
+            'dashed' => '┆',
+            'dotted' => '┊',
+            'double' => '║',
+            default => '│',
+        };
     }
 
     /**
-     * Calculate the natural dimensions of this timeline.
-     *
-     * @return array{0:int,1:int} [width, height]
+     * Get the icon for an event type.
      */
-    public function getInnerSize(): array
+    private function getIcon(string $type): string
     {
-        if ($this->nodes === []) {
-            return [0, 0];
-        }
-
-        $maxWidth = 0;
-        $totalHeight = 0;
-
-        foreach ($this->nodes as $index => $node) {
-            $nodeWidth = Width::string($this->nodeChar) + 1; // node + space
-            $nodeWidth += Width::string($node->label);
-
-            if ($node->description !== null && $node->description !== '') {
-                $nodeWidth += 1 + Width::string($node->description);
-                $descLines = explode("\n", $node->description);
-                $nodeWidth = max($nodeWidth, max(array_map(fn($l) => Width::string($l), $descLines)) + 3);
-            }
-
-            if ($nodeWidth > $maxWidth) {
-                $maxWidth = $nodeWidth;
-            }
-
-            // Each node takes at least 1 line, plus description lines
-            $totalHeight++;
-            if ($node->description !== null && $node->description !== '') {
-                $totalHeight += count(explode("\n", $node->description)) - 1;
-            }
-        }
-
-        return [$maxWidth, $totalHeight];
+        return match ($type) {
+            self::TypeInfo => '●',
+            self::TypeSuccess => '✓',
+            self::TypeWarning => '⚠',
+            self::TypeError => '✗',
+            default => '○',
+        };
     }
 
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
-     * Set the timeline nodes.
-     *
-     * @param TimelineNode[] $nodes
+     * Set the line style.
      */
-    public function withNodes(array $nodes): self
+    public function withLineStyle(string $style): self
     {
         return new self(
-            nodes: $nodes,
-            nodeColor: $this->nodeColor,
-            connectorColor: $this->connectorColor,
-            contentColor: $this->contentColor,
-            nodeChar: $this->nodeChar,
-            connectorChar: $this->connectorChar,
+            events: $this->events,
+            lineStyle: $style,
+            align: $this->align,
+            showDescriptions: $this->showDescriptions,
+            showIcons: $this->showIcons,
+            reverse: $this->reverse,
         );
     }
 
     /**
-     * Add a node to the timeline.
+     * Set the alignment.
      */
-    public function addNode(TimelineNode $node): self
+    public function withAlign(HAlign $align): self
     {
         return new self(
-            nodes: [...$this->nodes, $node],
-            nodeColor: $this->nodeColor,
-            connectorColor: $this->connectorColor,
-            contentColor: $this->contentColor,
-            nodeChar: $this->nodeChar,
-            connectorChar: $this->connectorChar,
+            events: $this->events,
+            lineStyle: $this->lineStyle,
+            align: $align,
+            showDescriptions: $this->showDescriptions,
+            showIcons: $this->showIcons,
+            reverse: $this->reverse,
         );
     }
 
     /**
-     * Set the node color.
+     * Show or hide descriptions.
      */
-    public function withNodeColor(?Color $color): self
+    public function withShowDescriptions(bool $show): self
     {
         return new self(
-            nodes: $this->nodes,
-            nodeColor: $color,
-            connectorColor: $this->connectorColor,
-            contentColor: $this->contentColor,
-            nodeChar: $this->nodeChar,
-            connectorChar: $this->connectorChar,
+            events: $this->events,
+            lineStyle: $this->lineStyle,
+            align: $this->align,
+            showDescriptions: $show,
+            showIcons: $this->showIcons,
+            reverse: $this->reverse,
         );
     }
 
     /**
-     * Set the connector color.
+     * Show or hide icons.
      */
-    public function withConnectorColor(?Color $color): self
+    public function withShowIcons(bool $show): self
     {
         return new self(
-            nodes: $this->nodes,
-            nodeColor: $this->nodeColor,
-            connectorColor: $color,
-            contentColor: $this->contentColor,
-            nodeChar: $this->nodeChar,
-            connectorChar: $this->connectorChar,
+            events: $this->events,
+            lineStyle: $this->lineStyle,
+            align: $this->align,
+            showDescriptions: $this->showDescriptions,
+            showIcons: $show,
+            reverse: $this->reverse,
         );
     }
 
     /**
-     * Set the content color.
+     * Reverse the timeline order.
      */
-    public function withContentColor(?Color $color): self
+    public function withReverse(bool $reverse): self
     {
         return new self(
-            nodes: $this->nodes,
-            nodeColor: $this->nodeColor,
-            connectorColor: $this->connectorColor,
-            contentColor: $color,
-            nodeChar: $this->nodeChar,
-            connectorChar: $this->connectorChar,
-        );
-    }
-
-    /**
-     * Set the node character.
-     */
-    public function withNodeChar(string $char): self
-    {
-        return new self(
-            nodes: $this->nodes,
-            nodeColor: $this->nodeColor,
-            connectorColor: $this->connectorColor,
-            contentColor: $this->contentColor,
-            nodeChar: $char,
-            connectorChar: $this->connectorChar,
-        );
-    }
-
-    /**
-     * Set the connector character.
-     */
-    public function withConnectorChar(string $char): self
-    {
-        return new self(
-            nodes: $this->nodes,
-            nodeColor: $this->nodeColor,
-            connectorColor: $this->connectorColor,
-            contentColor: $this->contentColor,
-            nodeChar: $this->nodeChar,
-            connectorChar: $char,
+            events: $this->events,
+            lineStyle: $this->lineStyle,
+            align: $this->align,
+            showDescriptions: $this->showDescriptions,
+            showIcons: $this->showIcons,
+            reverse: $reverse,
         );
     }
 }
