@@ -207,33 +207,22 @@ jobs:
             --output /tmp/ttyd --clobber
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
 
-      - name: Cache ffmpeg
+      - name: Install ffmpeg
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        id: cache-ffmpeg
-        uses: awalsh128/cache-apt-pkgs-action@v1
-        with:
-          packages: ffmpeg
-          # Bumped to invalidate caches built without
-          # execute_install_scripts — those archives never captured the
-          # libblas update-alternatives symlink, so ffmpeg crashed at
-          # runtime with `libblas.so.3: cannot open shared object file`.
-          version: 2.0.0
-          # Run apt's post-install scripts on cache restore. ffmpeg's
-          # transitive deps include libblas, which sets up
-          # /usr/lib/x86_64-linux-gnu/libblas.so.3 via update-alternatives
-          # — that symlink only exists if the post-install script runs.
-          execute_install_scripts: true
-
-      - name: Install ffmpeg (fallback)
-        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
-        # Only runs on cache miss. cache-apt-pkgs-action already
-        # restores the deb files on cache hit; without the gate this
-        # step blew through ~15s of redundant apt work on every render.
+        # Direct apt install instead of awalsh128/cache-apt-pkgs-action.
+        # That action restores cached .deb file contents but doesn't
+        # re-run apt's post-install scripts on cache hit — libblas's
+        # update-alternatives entry never gets recreated, and ffmpeg
+        # crashes at runtime with
+        #   libblas.so.3: cannot open shared object file
+        # Even with execute_install_scripts: true the dpkg --configure
+        # call isn't sufficient to recreate update-alternatives symlinks
+        # (see run 25825814166, candy-shine vs candy-kit). The runner
+        # image has apt cache pre-indexed so a direct install is ~15s,
+        # FASTER than the ~90s cache-apt-pkgs cache-miss path was, and
+        # always runs the real post-install scripts.
         run: |
           set -euo pipefail
-          # Skip the slow PPA refreshes — ffmpeg is in the default
-          # ubuntu archive which the runner image already has indexed.
-          # Fall back to a full update if the direct install fails.
           sudo apt-get install -y --no-install-recommends ffmpeg \
             || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
 
