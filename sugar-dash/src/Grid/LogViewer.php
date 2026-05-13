@@ -265,9 +265,13 @@ final class LogViewer implements Sizer
      */
     public function withEntries(array $entries): self
     {
-        $clone = clone $this;
-        $clone->entries = $entries;
-        return $clone;
+        return new self(
+            entries: $entries,
+            showTimestamps: $this->showTimestamps,
+            showSeverityPrefix: $this->showSeverityPrefix,
+            scrollToBottom: $this->scrollToBottom,
+            visibleLines: $this->visibleLines,
+        );
     }
 
     /**
@@ -275,9 +279,13 @@ final class LogViewer implements Sizer
      */
     public function withEntry(array $entry): self
     {
-        $clone = clone $this;
-        $clone->entries = array_merge($clone->entries, [$entry]);
-        return $clone;
+        return new self(
+            entries: array_merge($this->entries, [$entry]),
+            showTimestamps: $this->showTimestamps,
+            showSeverityPrefix: $this->showSeverityPrefix,
+            scrollToBottom: $this->scrollToBottom,
+            visibleLines: $this->visibleLines,
+        );
     }
 
     /**
@@ -285,9 +293,13 @@ final class LogViewer implements Sizer
      */
     public function withShowTimestamps(bool $show): self
     {
-        $clone = clone $this;
-        $clone->showTimestamps = $show;
-        return $clone;
+        return new self(
+            entries: $this->entries,
+            showTimestamps: $show,
+            showSeverityPrefix: $this->showSeverityPrefix,
+            scrollToBottom: $this->scrollToBottom,
+            visibleLines: $this->visibleLines,
+        );
     }
 
     /**
@@ -295,9 +307,13 @@ final class LogViewer implements Sizer
      */
     public function withShowSeverityPrefix(bool $show): self
     {
-        $clone = clone $this;
-        $clone->showSeverityPrefix = $show;
-        return $clone;
+        return new self(
+            entries: $this->entries,
+            showTimestamps: $this->showTimestamps,
+            showSeverityPrefix: $show,
+            scrollToBottom: $this->scrollToBottom,
+            visibleLines: $this->visibleLines,
+        );
     }
 
     /**
@@ -305,9 +321,13 @@ final class LogViewer implements Sizer
      */
     public function withScrollToBottom(bool $bottom): self
     {
-        $clone = clone $this;
-        $clone->scrollToBottom = $bottom;
-        return $clone;
+        return new self(
+            entries: $this->entries,
+            showTimestamps: $this->showTimestamps,
+            showSeverityPrefix: $this->showSeverityPrefix,
+            scrollToBottom: $bottom,
+            visibleLines: $this->visibleLines,
+        );
     }
 
     /**
@@ -315,8 +335,12 @@ final class LogViewer implements Sizer
      */
     public function withVisibleLines(int $lines): self
     {
-        $clone = clone $this;
-        $clone->visibleLines = max(1, $lines);
-        return $clone;
+        return new self(
+            entries: $this->entries,
+            showTimestamps: $this->showTimestamps,
+            showSeverityPrefix: $this->showSeverityPrefix,
+            scrollToBottom: $this->scrollToBottom,
+            visibleLines: max(1, $lines),
+        );
     }
 }

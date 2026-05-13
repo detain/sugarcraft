@@ -45,8 +45,9 @@ final class FigletTextTest extends TestCase
         $figlet = FigletText::new('A');
         $rendered = $figlet->render();
 
-        // Should contain the rendered letter A
-        $this->assertStringContainsString('A', $rendered);
+        // Figlet text renders ASCII art using █ block chars, not the literal letter
+        $this->assertNotSame('', $rendered);
+        $this->assertStringContainsString('█', $rendered);
     }
 
     public function testRenderHasMultipleLines(): void

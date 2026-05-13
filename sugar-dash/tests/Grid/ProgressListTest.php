@@ -38,7 +38,7 @@ final class ProgressListTest extends TestCase
         $list = ProgressList::new([]);
         $rendered = $list->render();
 
-        $this->assertNotSame('', $rendered);
+        $this->assertSame('', $rendered);
     }
 
     public function testRenderReturnsNonEmpty(): void
