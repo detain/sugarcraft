@@ -384,7 +384,7 @@ final class Flowchart implements Sizer
             FlowchartNodeType::Data => '┌' . str_repeat('─', $width - 2) . '┐│▤ ' . str_pad($shortLabel, $width - 5) . ' │└' . str_repeat('─', $width - 2) . '┘',
         };
 
-        return mb_substr($box, 0, $width) . "\n";
+        return $box . "\n";
     }
 
     /**

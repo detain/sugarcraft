@@ -264,6 +264,12 @@ final class CandlestickChart implements Sizer
             $candleWidth = max(1, intval(($chartWidth - $priceScaleWidth - 1) / $candleCount) - 1);
             $candleWidth = min(3, $candleWidth); // Cap width
 
+            // Build chart rows
+            $chartRows = [];
+            for ($i = 0; $i < $chartHeight; $i++) {
+                $chartRows[$i] = str_repeat(' ', $chartWidth - $priceScaleWidth - 1);
+            }
+
             foreach ($this->candles as $index => $candle) {
                 $x = $index * ($candleWidth + 1);
 
@@ -272,25 +278,40 @@ final class CandlestickChart implements Sizer
                     ? ($this->bullishColor ?? Color::hex('#A6E3A1'))
                     : ($this->bearishColor ?? Color::hex('#F38BA8')));
 
-                // Calculate positions
+                // Calculate positions (Y coordinates)
                 $highY = $this->priceToY($candle->high, $chartHeight);
                 $lowY = $this->priceToY($candle->low, $chartHeight);
                 $openY = $this->priceToY($candle->open, $chartHeight);
                 $closeY = $this->priceToY($candle->close, $chartHeight);
 
                 // Draw wick (vertical line from low to high)
-                $wickChar = '│';
                 for ($y = $lowY; $y <= $highY; $y++) {
-                    $lineIndex = $chartHeight - 1 - $y;
-                    // Position wick in candle column
+                    $rowIndex = $chartHeight - 1 - $y;
+                    if ($rowIndex >= 0 && $rowIndex < $chartHeight && $x >= 0) {
+                        $wick = $color !== null ? $color->toFg(ColorProfile::TrueColor) . '│' . Ansi::reset() : '│';
+                        $chartRows[$rowIndex] = substr_replace($chartRows[$rowIndex], $wick, $x, 1);
+                    }
                 }
 
                 // Draw candle body
                 $bodyTop = min($openY, $closeY);
                 $bodyBottom = max($openY, $closeY);
-
                 $candleChar = $isBullish ? '█' : '▓';
-                $candleStr = str_repeat($candleChar, $candleWidth);
+                $candleStr = $color !== null ? $color->toFg(ColorProfile::TrueColor) . str_repeat($candleChar, $candleWidth) . Ansi::reset() : str_repeat($candleChar, $candleWidth);
+
+                for ($y = $bodyBottom; $y <= $bodyTop; $y++) {
+                    $rowIndex = $chartHeight - 1 - $y;
+                    if ($rowIndex >= 0 && $rowIndex < $chartHeight && $x >= 0) {
+                        $chartRows[$rowIndex] = substr_replace($chartRows[$rowIndex], $candleStr, $x, $candleWidth);
+                    }
+                }
+            }
+
+            // Output chart rows with price scale
+            foreach ($chartRows as $row) {
+                $priceY = $this->maxPrice - (($this->maxPrice - $this->minPrice) * (array_search($row, $chartRows, true) ?? 0) / max(1, $chartHeight - 1));
+                $priceLabel = sprintf('%6.2f', $priceY);
+                $result .= $v . $row . $v . $priceLabel . $v . "\n";
             }
         }
 
@@ -350,16 +371,9 @@ final class CandlestickChart implements Sizer
      */
     public function withBullishColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $color,
-            bearishColor: $this->bearishColor,
-            wickColor: $this->wickColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->bullishColor = $color;
+        return $clone;
     }
 
     /**
@@ -367,16 +381,9 @@ final class CandlestickChart implements Sizer
      */
     public function withBearishColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $color,
-            wickColor: $this->wickColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->bearishColor = $color;
+        return $clone;
     }
 
     /**
@@ -384,16 +391,9 @@ final class CandlestickChart implements Sizer
      */
     public function withWickColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            wickColor: $color,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->wickColor = $color;
+        return $clone;
     }
 
     /**
@@ -401,16 +401,9 @@ final class CandlestickChart implements Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            wickColor: $this->wickColor,
-            gridColor: $color,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -418,16 +411,9 @@ final class CandlestickChart implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            wickColor: $this->wickColor,
-            gridColor: $this->gridColor,
-            textColor: $color,
-            backgroundColor: $this->backgroundColor,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -435,16 +421,9 @@ final class CandlestickChart implements Sizer
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            wickColor: $this->wickColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $color,
-            style: $this->style,
-        );
+        $clone = clone $this;
+        $clone->backgroundColor = $color;
+        return $clone;
     }
 
     /**
@@ -452,15 +431,8 @@ final class CandlestickChart implements Sizer
      */
     public function withStyle(string $style): self
     {
-        return new self(
-            maxCandles: $this->maxCandles,
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            wickColor: $this->wickColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-            style: $style,
-        );
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
     }
 }
