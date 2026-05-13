@@ -218,8 +218,9 @@ final class Bar implements Sizer
             leftBorder: $this->leftBorder,
             rightBorder: $this->rightBorder,
         );
-        $clone->width = $this->width;
-        $clone->height = $this->height;
+        if ($this->width !== null && $this->height !== null) {
+            return $clone->setSize($this->width, $this->height);
+        }
         return $clone;
     }
 
@@ -236,14 +237,12 @@ final class Bar implements Sizer
             leftBorder: $this->leftBorder,
             rightBorder: $this->rightBorder,
         );
-        $clone->width = $this->width;
-        $clone->height = $this->height;
+        if ($this->width !== null && $this->height !== null) {
+            return $clone->setSize($this->width, $this->height);
+        }
         return $clone;
     }
 
-    /**
-     * Set the background color.
-     */
     public function withBackground(?Color $color): self
     {
         $clone = new self(
@@ -254,14 +253,12 @@ final class Bar implements Sizer
             leftBorder: $this->leftBorder,
             rightBorder: $this->rightBorder,
         );
-        $clone->width = $this->width;
-        $clone->height = $this->height;
+        if ($this->width !== null && $this->height !== null) {
+            return $clone->setSize($this->width, $this->height);
+        }
         return $clone;
     }
 
-    /**
-     * Set the horizontal alignment.
-     */
     public function withAlign(HAlign $align): self
     {
         $clone = new self(
@@ -272,14 +269,12 @@ final class Bar implements Sizer
             leftBorder: $this->leftBorder,
             rightBorder: $this->rightBorder,
         );
-        $clone->width = $this->width;
-        $clone->height = $this->height;
+        if ($this->width !== null && $this->height !== null) {
+            return $clone->setSize($this->width, $this->height);
+        }
         return $clone;
     }
 
-    /**
-     * Set border characters for left and right sides.
-     */
     public function withBorders(string $left, string $right): self
     {
         $clone = new self(
@@ -290,8 +285,10 @@ final class Bar implements Sizer
             leftBorder: $left,
             rightBorder: $right,
         );
-        $clone->width = $this->width;
-        $clone->height = $this->height;
+        if ($this->width !== null && $this->height !== null) {
+            return $clone->setSize($this->width, $this->height);
+        }
         return $clone;
     }
+
 }

@@ -320,4 +320,55 @@ final class Leaderboard implements Sizer
             valueFormat: $this->valueFormat,
         );
     }
+
+    /**
+     * Show or hide trend indicators.
+     */
+    public function withShowTrend(bool $show): self
+    {
+        return new self(
+            items: $this->items,
+            rankStyle: $this->rankStyle,
+            topHighlight: $this->topHighlight,
+            showValue: $this->showValue,
+            showTrend: $show,
+            highlightColor: $this->highlightColor,
+            valueColor: $this->valueColor,
+            valueFormat: $this->valueFormat,
+        );
+    }
+
+    /**
+     * Set the highlight color for top items.
+     */
+    public function withHighlightColor(?Color $color): self
+    {
+        return new self(
+            items: $this->items,
+            rankStyle: $this->rankStyle,
+            topHighlight: $this->topHighlight,
+            showValue: $this->showValue,
+            showTrend: $this->showTrend,
+            highlightColor: $color,
+            valueColor: $this->valueColor,
+            valueFormat: $this->valueFormat,
+        );
+    }
+
+    /**
+     * Set the value color.
+     */
+    public function withValueColor(?Color $color): self
+    {
+        return new self(
+            items: $this->items,
+            rankStyle: $this->rankStyle,
+            topHighlight: $this->topHighlight,
+            showValue: $this->showValue,
+            showTrend: $this->showTrend,
+            highlightColor: $this->highlightColor,
+            valueColor: $color,
+            valueFormat: $this->valueFormat,
+        );
+    }
 }

@@ -54,7 +54,9 @@ final class AreaChart implements Sizer
             Color::hex('#CBA6F7'),
         ];
 
-        $normalizedSeries = array_map(function (array $item) use (&$colorIndex, $colors): array {
+        $normalizedSeries = [];
+        $colorIndex = 0;
+        foreach ($series as $item) {
             $color = $item['color'] ?? null;
             if (is_string($color)) {
                 $color = Color::hex($color);
@@ -63,14 +65,12 @@ final class AreaChart implements Sizer
                 $color = $colors[$colorIndex % count($colors)];
                 $colorIndex++;
             }
-            return [
+            $normalizedSeries[] = [
                 'label' => $item['label'],
                 'values' => array_map('floatval', $item['values']),
                 'color' => $color,
             ];
-        }, $series);
-
-        $colorIndex = 0;
+        }
 
         return new self(
             series: $normalizedSeries,
