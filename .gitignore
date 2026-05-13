@@ -3,8 +3,6 @@
 .caliber/learning/
 /vendor/
 **/vendor/
-composer.lock
-**/composer.lock
 .phpunit.result.cache
 **/.phpunit.result.cache
 .phpunit.cache/
