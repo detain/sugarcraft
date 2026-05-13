@@ -52,9 +52,13 @@ final class PertTask
      */
     public function withColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->color = $color;
-        return $clone;
+        return new self(
+            id: $this->id,
+            name: $this->name,
+            duration: $this->duration,
+            color: $color,
+            status: $this->status,
+        );
     }
 
     /**
@@ -72,9 +76,13 @@ final class PertTask
      */
     public function withDuration(int $duration): self
     {
-        $clone = clone $this;
-        $clone->duration = $duration;
-        return $clone;
+        return new self(
+            id: $this->id,
+            name: $this->name,
+            duration: $duration,
+            color: $this->color,
+            status: $this->status,
+        );
     }
 }
 

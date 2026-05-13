@@ -248,7 +248,7 @@ final class State implements Sizer
             uniqid('', true),
             $from,
             $to,
-            '[' . $condition . '] ' . $label ?? '',
+            '[' . $condition . '] ' . $condition ?? '',
         ));
     }
 
@@ -408,6 +408,7 @@ final class State implements Sizer
                     if ($transitionColor !== null) {
                         $arrow .= Ansi::reset();
                     }
+                    $result .= $arrow;
                 }
             }
         }
