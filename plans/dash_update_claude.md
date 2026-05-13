@@ -804,7 +804,6 @@ sugar-dash: phase NN — <one-line summary>
 
 <2-4 sentence body describing what changed and why.>
 
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )" --author="Joe Huss <detain@interserver.net>"
 
@@ -825,7 +824,6 @@ gh pr create --title "sugar-dash: phase NN — <summary>" --body "$(cat <<'EOF'
 - [x] .vhs/<demo>.tape added to .github/workflows/vhs.yml matrix
 - [x] sugar-dash/README.md + docs/lib/sugar-dash.md updated
 
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 
