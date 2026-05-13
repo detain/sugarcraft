@@ -236,4 +236,18 @@ final class Ladder implements Sizer
             pendingColor: $this->pendingColor,
         );
     }
+
+    /**
+     * Set pending color.
+     */
+    public function withPendingColor(?Color $color): self
+    {
+        return new self(
+            steps: $this->steps,
+            horizontal: $this->horizontal,
+            completeColor: $this->completeColor,
+            currentColor: $this->currentColor,
+            pendingColor: $color,
+        );
+    }
 }
