@@ -1,5 +1,5 @@
 # VHS tape — interactive Tree with expand/collapse navigation.
-# Enter toggles expand, h/l collapse/expand, g/G jump.
+# Enter toggles expand, h/l collapse/expand.
 # Render with: `vhs sugar-bits/.vhs/tree.tape`
 Output .vhs/tree.gif
 
@@ -20,8 +20,6 @@ Enter Sleep 300ms     # toggle (collapse Projects)
 Right Sleep 300ms     # expand current branch
 Down  Sleep 300ms     # move to README.md
 Left  Sleep 300ms     # collapse
-g     Sleep 200ms     # jump to top
-G     Sleep 200ms     # jump to bottom
 Sleep 500ms
 
 Type "q"
