@@ -139,10 +139,12 @@ jobs:
           echo "libs length: $(echo '${{ needs.changed.outputs.libs }}' | jq -r 'length')"
           echo "vhs_version: ${{ needs.changed.outputs.vhs_version }}"
           echo "ttyd_version: ${{ needs.changed.outputs.ttyd_version }}"
+          echo "libs eq empty array: ${{ needs.changed.outputs.libs == '[]' }}"
+          echo "libs ne empty array: ${{ needs.changed.outputs.libs != '[]' }}"
 
   render:
     needs: changed
-    if: needs.changed.outputs.libs != '[]'
+    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
