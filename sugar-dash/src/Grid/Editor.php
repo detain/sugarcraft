@@ -208,6 +208,13 @@ final class Editor implements Sizer
         $contentWidth = $useWidth - $lineNumberWidth - 2; // 2 for borders
         $contentHeight = $useHeight - 2; // 2 for borders
 
+        // If line numbers would crowd out content, drop them to keep at least
+        // one column of content visible.
+        if ($contentWidth <= 0 && $lineNumberWidth > 0) {
+            $lineNumberWidth = 0;
+            $contentWidth = $useWidth - 2;
+        }
+
         if ($contentWidth <= 0 || $contentHeight <= 0) {
             return '';
         }

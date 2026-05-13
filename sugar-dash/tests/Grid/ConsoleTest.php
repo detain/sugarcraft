@@ -36,14 +36,14 @@ final class ConsoleTest extends TestCase
 
     public function testConsoleStreamDefaultColor(): void
     {
-        $this->assertSame('#F9FAFB', strtolower(ConsoleStream::Stdout->defaultColor()->toHex()));
-        $this->assertSame('#F38BA8', strtolower(ConsoleStream::Stderr->defaultColor()->toHex()));
-        $this->assertSame('#89B4FA', strtolower(ConsoleStream::Info->defaultColor()->toHex()));
-        $this->assertSame('#A6E3A1', strtolower(ConsoleStream::Success->defaultColor()->toHex()));
-        $this->assertSame('#F9E2AF', strtolower(ConsoleStream::Warning->defaultColor()->toHex()));
-        $this->assertSame('#F38BA8', strtolower(ConsoleStream::Error->defaultColor()->toHex()));
-        $this->assertSame('#6C7086', strtolower(ConsoleStream::Debug->defaultColor()->toHex()));
-        $this->assertSame('#CDD6F4', strtolower(ConsoleStream::Raw->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#F9FAFB'), strtolower(ConsoleStream::Stdout->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#F38BA8'), strtolower(ConsoleStream::Stderr->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#89B4FA'), strtolower(ConsoleStream::Info->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#A6E3A1'), strtolower(ConsoleStream::Success->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#F9E2AF'), strtolower(ConsoleStream::Warning->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#F38BA8'), strtolower(ConsoleStream::Error->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#6C7086'), strtolower(ConsoleStream::Debug->defaultColor()->toHex()));
+        $this->assertSame(strtolower('#CDD6F4'), strtolower(ConsoleStream::Raw->defaultColor()->toHex()));
     }
 
     public function testConsoleStreamPrefix(): void
@@ -80,7 +80,7 @@ final class ConsoleTest extends TestCase
 
         $this->assertSame('Test message', $entry->message);
         $this->assertSame(ConsoleStream::Info, $entry->stream);
-        $this->assertSame('#FF0000', strtolower($entry->color?->toHex() ?? ''));
+        $this->assertSame(strtolower('#FF0000'), strtolower($entry->color?->toHex() ?? ''));
     }
 
     public function testConsoleEntryCreateFactory(): void

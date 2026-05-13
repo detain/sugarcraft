@@ -11,33 +11,6 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * A data point for a bubble chart.
  */
-final class BubblePoint
-{
-    public function __construct(
-        public readonly string $label,
-        public readonly float $x,
-        public readonly float $y,
-        public readonly float $size,       // Radius factor
-        public readonly ?Color $color = null,
-        public readonly ?string $category = null,
-    ) {}
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        return new self(
-            $this->label,
-            $this->x,
-            $this->y,
-            $this->size,
-            $color,
-            $this->category,
-        );
-    }
-}
-
 /**
  * A bubble chart component.
  *
@@ -82,10 +55,10 @@ final class Bubble implements Sizer
     ];
 
     public function __construct(
-        private readonly ?Color $color = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $labelColor = null,
-        private readonly ?Color $bgColor = null,
+        private ?Color $color = null,
+        private ?Color $gridColor = null,
+        private ?Color $labelColor = null,
+        private ?Color $bgColor = null,
     ) {}
 
     /**
@@ -93,12 +66,12 @@ final class Bubble implements Sizer
      */
     public static function new(array $points = []): self
     {
-        return new self(
+        return (new self(
             color: Color::hex('#89B4FA'),
             gridColor: Color::hex('#45475A'),
             labelColor: Color::hex('#CDD6F4'),
             bgColor: Color::hex('#1E1E2E'),
-        )->withPoints($points);
+        ))->withPoints($points);
     }
 
     /**
@@ -365,10 +338,10 @@ final class Bubble implements Sizer
         // Labels below chart
         if ($this->showLabels) {
             $labelLine = str_repeat(' ', 7);
+            $perPoint = max(5, (int) ($chartWidth / max(1, count($this->points))));
             foreach ($this->points as $point) {
-                $x = $this->mapX($point->x, $chartWidth);
-                $label = mb_substr($point->label, 0, 3);
-                $labelLine .= str_pad($label, $chartWidth / count($this->points));
+                $label = mb_substr($point->label, 0, $perPoint);
+                $labelLine .= str_pad($label, $perPoint);
             }
             if ($labelColor !== null) {
                 $labelLine = $labelColor->toFg(ColorProfile::TrueColor) . $labelLine . Ansi::reset();
@@ -530,12 +503,9 @@ final class Bubble implements Sizer
      */
     public function withColor(?Color $color): self
     {
-        return new self(
-            color: $color,
-            gridColor: $this->gridColor,
-            labelColor: $this->labelColor,
-            bgColor: $this->bgColor,
-        );
+        $clone = clone $this;
+        $clone->color = $color;
+        return $clone;
     }
 
     /**
@@ -543,12 +513,9 @@ final class Bubble implements Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            gridColor: $color,
-            labelColor: $this->labelColor,
-            bgColor: $this->bgColor,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -556,12 +523,9 @@ final class Bubble implements Sizer
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            gridColor: $this->gridColor,
-            labelColor: $color,
-            bgColor: $this->bgColor,
-        );
+        $clone = clone $this;
+        $clone->labelColor = $color;
+        return $clone;
     }
 
     /**
@@ -569,11 +533,8 @@ final class Bubble implements Sizer
      */
     public function withBgColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            gridColor: $this->gridColor,
-            labelColor: $this->labelColor,
-            bgColor: $color,
-        );
+        $clone = clone $this;
+        $clone->bgColor = $color;
+        return $clone;
     }
 }

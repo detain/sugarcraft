@@ -9,68 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A node in a dendrogram tree.
- */
-final class DendrogramNode
-{
-    /** @var list<DendrogramNode> */
-    public array $children = [];
-
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly float $value = 0.0,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a copy with children.
-     *
-     * @param list<DendrogramNode> $children
-     */
-    public function withChildren(array $children): self
-    {
-        $clone = clone $this;
-        $clone->children = $children;
-        return $clone;
-    }
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        $clone = clone $this;
-        $clone->color = $color;
-        return $clone;
-    }
-
-    /**
-     * Calculate total value including children.
-     */
-    public function getTotalValue(): float
-    {
-        $total = $this->value;
-        foreach ($this->children as $child) {
-            $total += $child->getTotalValue();
-        }
-        return $total;
-    }
-
-    /**
-     * Get the depth of this subtree.
-     */
-    public function getDepth(): int
-    {
-        $maxChildDepth = 0;
-        foreach ($this->children as $child) {
-            $maxChildDepth = max($maxChildDepth, $child->getDepth());
-        }
-        return 1 + $maxChildDepth;
-    }
-}
-
-/**
  * A Dendrogram component for hierarchical clustering visualization.
  *
  * Features:
@@ -98,10 +36,10 @@ final class Dendrogram implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $nodeColor = null,
-        private readonly ?Color $lineColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $leafColor = null,
+        private ?Color $nodeColor = null,
+        private ?Color $lineColor = null,
+        private ?Color $textColor = null,
+        private ?Color $leafColor = null,
     ) {}
 
     /**
@@ -548,12 +486,9 @@ final class Dendrogram implements Sizer
      */
     public function withNodeColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $color,
-            lineColor: $this->lineColor,
-            textColor: $this->textColor,
-            leafColor: $this->leafColor,
-        );
+        $clone = clone $this;
+        $clone->nodeColor = $color;
+        return $clone;
     }
 
     /**
@@ -561,12 +496,9 @@ final class Dendrogram implements Sizer
      */
     public function withLineColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            lineColor: $color,
-            textColor: $this->textColor,
-            leafColor: $this->leafColor,
-        );
+        $clone = clone $this;
+        $clone->lineColor = $color;
+        return $clone;
     }
 
     /**
@@ -574,12 +506,9 @@ final class Dendrogram implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            lineColor: $this->lineColor,
-            textColor: $color,
-            leafColor: $this->leafColor,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -587,11 +516,8 @@ final class Dendrogram implements Sizer
      */
     public function withLeafColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            lineColor: $this->lineColor,
-            textColor: $this->textColor,
-            leafColor: $color,
-        );
+        $clone = clone $this;
+        $clone->leafColor = $color;
+        return $clone;
     }
 }

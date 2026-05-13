@@ -40,12 +40,12 @@ final class SunburstSegment
      */
     public function withColor(?Color $color): self
     {
-        return new self(
+        return (new self(
             id: $this->id,
             label: $this->label,
             value: $this->value,
             color: $color,
-        )->withChildren($this->children);
+        ))->withChildren($this->children);
     }
 
     /**
@@ -100,9 +100,9 @@ final class Sunburst implements Sizer
     ];
 
     public function __construct(
-        private readonly ?Color $segmentColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $centerColor = null,
+        private ?Color $segmentColor = null,
+        private ?Color $textColor = null,
+        private ?Color $centerColor = null,
     ) {}
 
     /**
@@ -216,7 +216,7 @@ final class Sunburst implements Sizer
         $useWidth = $this->width ?? 50;
         $useHeight = $this->height ?? 25;
 
-        if ($useWidth < 20 || $useHeight < 10 || empty($this->segments)) {
+        if ($useWidth < 20 || $useHeight < 10) {
             return '';
         }
 
@@ -352,18 +352,20 @@ final class Sunburst implements Sizer
 
             foreach ($this->segments as $segment) {
                 $color = $segment->color ?? $segmentColor;
+                $visible = '▪ ' . $segment->label;
+                $visibleWidth = mb_strlen($visible);
                 $entry = '';
                 if ($color !== null) {
                     $entry .= $color->toFg(ColorProfile::TrueColor);
                 }
-                $entry .= '▪ ' . $segment->label;
+                $entry .= $visible;
                 if ($color !== null) {
                     $entry .= Ansi::reset();
                 }
 
-                if ($legendX + strlen($entry) < $width - 2) {
+                if ($legendX + $visibleWidth < $width - 2) {
                     $legendLine .= $entry . '  ';
-                    $legendX += strlen($entry) + 2;
+                    $legendX += $visibleWidth + 2;
                 }
             }
 
