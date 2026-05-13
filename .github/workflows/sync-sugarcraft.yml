@@ -56,7 +56,7 @@ jobs:
       - name: Subtree-split + force-push each affected lib
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
-          FORCE_ALL: ${{ fromJSON(steps.affected.outputs.force_all) }}
+          FORCE_ALL: ${{ steps.affected.outputs.force_all }}
           AFFECTED_LIBS: ${{ steps.affected.outputs.affected_libs }}
         run: |
           set -euo pipefail
