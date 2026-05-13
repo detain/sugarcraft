@@ -8,12 +8,6 @@ name: Sync to sugarcraft org
 # are pushed — same affected-libs logic as ci.yml. Monorepo-wide changes
 # (workflow files, root composer) push everything.
 #
-# Architecture: one "discover" job computes affected libs and emits a
-# JSON matrix; a "sync-libs" matrix job fans out, one runner per lib, so
-# subtree splits + pushes run in parallel. Concurrent splits in the SAME
-# repo aren't safe (subtree uses git read-tree which writes .git/index),
-# so the matrix gives each lib its own checkout/working tree.
-#
 # Auth: SUGARCRAFT_SYNC_TOKEN secret — a PAT with `repo` scope on
 # the sugarcraft org. Without it, all push steps will 403.
 
@@ -30,55 +24,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  discover:
-    name: Compute affected libs
-    runs-on: ubuntu-latest
-    outputs:
-      libs: ${{ steps.affected.outputs.libs }}
-      count: ${{ steps.affected.outputs.count }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0   # affected-libs.php --range HEAD~1..HEAD needs history
-
-      - name: Compute affected libs (JSON array for matrix)
-        id: affected
-        run: |
-          set -euo pipefail
-          # If this is a workflow_dispatch run, force-all so manual runs
-          # always sync everything. Otherwise use the script's
-          # range-based affected detection.
-          if [ "${GITHUB_EVENT_NAME:-}" = "workflow_dispatch" ]; then
-            libs_json=$(php scripts/affected-libs.php --all 2>/dev/null \
-              | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["all_libs"]))')
-          else
-            libs_json=$(php scripts/affected-libs.php --range HEAD~1..HEAD 2>/dev/null \
-              | python3 -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(d["all_libs"] if d.get("force_all") else d.get("affected", [])))')
-          fi
-          count=$(echo "$libs_json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
-          echo "Affected: $count libs"
-          echo "$libs_json" | python3 -m json.tool
-          echo "libs=$libs_json" >> "$GITHUB_OUTPUT"
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-
   sync-libs:
-    name: Sync ${{ matrix.lib }}
-    needs: discover
-    if: needs.discover.outputs.count != '0'
+    name: Subtree-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
-    # fail-fast=false: one failing lib shouldn't block the other 45.
-    # max-parallel=10: friendly to GitHub Free's 20-concurrent-job cap;
-    #                  with 46 libs this is ~5 batches × ~40s = ~3-4 min
-    #                  total wall time (vs ~25 min serial).
-    strategy:
-      fail-fast: false
-      max-parallel: 10
-      matrix:
-        lib: ${{ fromJSON(needs.discover.outputs.libs) }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # git subtree split needs full history
+
+      - name: Compute affected libs
+        id: affected
+        run: |
+          set -euo pipefail
+          # Use the same affected-libs logic as ci.yml
+          # --range HEAD~1..HEAD gives us files changed in this push
+          # The script computes changed libs + transitive dependents
+          result=$(php scripts/affected-libs.php --range HEAD~1..HEAD 2>&1)
+          affected=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('\n'.join(d['affected']))" 2>/dev/null || true)
+          force_all=$(echo "$result" | python3 -c "import json,sys; d=json.load(sys.stdin); print('yes' if d['force_all'] else 'no')" 2>/dev/null || echo "yes")
+          echo "force_all=$force_all"
+          echo "affected_libs=$affected"
+          echo "affected_libs=$affected" >> "$GITHUB_OUTPUT"
+          echo "force_all=$force_all" >> "$GITHUB_OUTPUT"
 
       - name: Configure git identity + drop checkout's auth header
         run: |
@@ -86,10 +53,11 @@ jobs:
           git config user.email 'detain@interserver.net'
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-      - name: Subtree-split + force-push ${{ matrix.lib }}
+      - name: Subtree-split + force-push each affected lib
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
-          LIB: ${{ matrix.lib }}
+          FORCE_ALL: ${{ steps.affected.outputs.force_all }}
+          AFFECTED_LIBS: ${{ steps.affected.outputs.affected_libs }}
         run: |
           set -euo pipefail
 
@@ -111,23 +79,32 @@ jobs:
             return 1
           }
 
-          # Defensive: skip if the lib dir doesn't exist (race against
-          # a delete + scheduled re-run).
-          if [ ! -d "$LIB" ]; then
-            echo "skip $LIB (no dir)"
-            exit 0
+          force_all="$FORCE_ALL"
+          libs_str="$AFFECTED_LIBS"
+
+          if [ "$force_all" = "yes" ]; then
+            # Monorepo-wide change: push all libs
+            echo "force_all=yes — pushing all libs"
+            mapfile -t libs < <(php scripts/affected-libs.php --all 2>/dev/null | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['all_libs']))")
+          else
+            # Changed-only: push only affected libs
+            echo "Pushing affected libs:"
+            echo "$libs_str"
+            mapfile -t libs < <(echo "$libs_str" | grep -v '^$')
           fi
 
-          br="sync-$LIB"
-          git branch -D "$br" 2>/dev/null || true
-          git subtree split --prefix="$LIB" --branch="$br" --quiet
-
-          retry_git_push git push --force \
-            "https://x-access-token:$TOKEN@github.com/sugarcraft/$LIB.git" \
-            "$br:master"
-
-          git branch -D "$br" >/dev/null
-          echo "✓ synced $LIB"
+          for lib in "${libs[@]}"; do
+            [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
+            br="sync-$lib"
+            git branch -D "$br" 2>/dev/null || true
+            git subtree split --prefix="$lib" --branch="$br" --quiet
+            retry_git_push git push --force \
+              "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
+              "$br:master"
+            git branch -D "$br" >/dev/null
+            echo "✓ synced $lib"
+          done
+          echo "Done — ${#libs[@]} libs pushed"
 
   sync-site:
     name: Push docs/ to sugarcraft/sugarcraft.github.io
