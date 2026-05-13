@@ -40,10 +40,46 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
+      vhs_version: ${{ steps.tools.outputs.vhs }}
+      ttyd_version: ${{ steps.tools.outputs.ttyd }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 2   # need HEAD~1 for the diff
+
+      - name: Resolve vhs / ttyd versions
+        id: tools
+        run: |
+          set -euo pipefail
+
+          retry_gh_api() {
+            local max_attempts=3
+            local delay=10
+            for ((attempt=1; attempt<=max_attempts; attempt++)); do
+              local status
+              status=$(curl -sSL -o /dev/null -w "%{http_code}" "$1")
+              if [[ "$status" == "200" ]]; then
+                return 0
+              fi
+              echo "HTTP $status, waiting ${delay}s before retry $attempt/$max_attempts..."
+              sleep $delay
+              delay=$((delay * 3))
+            done
+            return 1
+          }
+
+          # Get VHS version
+          retry_gh_api "https://api.github.com/repos/charmbracelet/vhs/releases/latest"
+          vhs_tag=$(curl -sSL "https://api.github.com/repos/charmbracelet/vhs/releases/latest" | jq -r .tag_name)
+
+          # Get ttyd version
+          retry_gh_api "https://api.github.com/repos/tsl0922/ttyd/releases/latest"
+          ttyd_tag=$(curl -sSL "https://api.github.com/repos/tsl0922/ttyd/releases/latest" | jq -r .tag_name)
+
+          echo "vhs=$vhs_tag"
+          echo "ttyd=$ttyd_tag"
+          echo "vhs=$vhs_tag" >> "$GITHUB_OUTPUT"
+          echo "ttyd=$ttyd_tag" >> "$GITHUB_OUTPUT"
 
       - id: compute
         run: |
@@ -103,6 +139,8 @@ jobs:
       fail-fast: false
       matrix:
         lib: ${{ fromJSON(needs.changed.outputs.libs) }}
+        vhs_version: ${{ needs.changed.outputs.vhs_version }}
+        ttyd_version: ${{ needs.changed.outputs.ttyd_version }}
     steps:
       - uses: actions/checkout@v5
 
@@ -130,34 +168,6 @@ jobs:
 
       # Cache the vhs + ttyd binaries by their resolved upstream
       # version. Saves ~30 seconds of API + tarball + extract per job.
-      - name: Resolve vhs / ttyd versions
-        id: tools
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        uses: actions/github-script@v7
-        with:
-          script: |
-            async function getLatestTagWithRetry(owner, repo, maxAttempts = 3) {
-              const delays = [10000, 30000, 60000];
-              for (let attempt = 0; attempt < maxAttempts; attempt++) {
-                try {
-                  const response = await github.rest.repos.getLatestRelease({ owner, repo });
-                  return response.data.tag_name;
-                } catch (e) {
-                  if ((e.status === 403 || e.status === 429) && attempt < maxAttempts - 1) {
-                    core.info(`Rate limited (HTTP ${e.status}) for ${owner}/${repo}, waiting ${delays[attempt]}ms before retry ${attempt + 1}/${maxAttempts}...`);
-                    await new Promise(r => setTimeout(r, delays[attempt]));
-                  } else if (attempt >= maxAttempts - 1) {
-                    throw e;
-                  }
-                }
-              }
-            }
-            const vhsTag = await getLatestTagWithRetry('charmbracelet', 'vhs');
-            const ttydTag = await getLatestTagWithRetry('tsl0922', 'ttyd');
-            core.setOutput('vhs', vhsTag);
-            core.setOutput('ttyd', ttydTag);
-            core.info(`vhs ${vhsTag} · ttyd ${ttydTag}`);
-
       - name: Restore cached vhs + ttyd
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         id: cache-bins
@@ -166,7 +176,7 @@ jobs:
           path: |
             /usr/local/bin/vhs
             /usr/local/bin/ttyd
-          key: vhs-${{ steps.tools.outputs.vhs }}-ttyd-${{ steps.tools.outputs.ttyd }}-linux-amd64
+          key: vhs-${{ matrix.vhs_version }}-ttyd-${{ matrix.ttyd_version }}-linux-amd64
 
       - name: Install vhs + ttyd (cache miss)
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
