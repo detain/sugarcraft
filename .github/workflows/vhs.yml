@@ -40,7 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
-      libs_json: ${{ toJSON(fromJSON(steps.compute.outputs.libs)) }}
       vhs_version: ${{ steps.tools.outputs.vhs }}
       ttyd_version: ${{ steps.tools.outputs.ttyd }}
     steps:
@@ -130,31 +129,17 @@ jobs:
           echo "libs=$out"
           echo "libs=$out" >> "$GITHUB_OUTPUT"
 
-  # DEBUG: test if render job matrix would expand
-  debug-render:
-    needs: changed
-    runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "libs: ${{ needs.changed.outputs.libs }}"
-          echo "libs length: $(echo '${{ needs.changed.outputs.libs }}' | jq -r 'length')"
-          echo "vhs_version: ${{ needs.changed.outputs.vhs_version }}"
-          echo "ttyd_version: ${{ needs.changed.outputs.ttyd_version }}"
-          echo "libs eq empty array: ${{ needs.changed.outputs.libs == '[]' }}"
-          echo "libs ne empty array: ${{ needs.changed.outputs.libs != '[]' }}"
-
   render:
     needs: changed
-    if: always()
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        lib: ${{ fromJSON(needs.changed.outputs.libs_json) }}
-        vhs_version: ${{ needs.changed.outputs.vhs_version }}
-        ttyd_version: ${{ needs.changed.outputs.ttyd_version }}
+        lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-dash, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
+        vhs_version: [v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0]
+        ttyd_version: [1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7]
     steps:
       - uses: actions/checkout@v5
 
@@ -166,7 +151,22 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      - name: Check if lib needs rendering
+        id: check
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "needs_render=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^${{ matrix.lib }}/(src|examples|bin|\.vhs)/"; then
+            echo "needs_render=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needs_render=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Cache composer dependencies
+        if: steps.check.outputs.needs_render == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -177,13 +177,14 @@ jobs:
             composer-${{ matrix.lib }}-
 
       - name: Install lib deps
+        if: steps.check.outputs.needs_render == 'true'
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
       # Cache the vhs + ttyd binaries by their resolved upstream
       # version. Saves ~30 seconds of API + tarball + extract per job.
       - name: Restore cached vhs + ttyd
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         id: cache-bins
         uses: actions/cache@v5
         with:
@@ -193,7 +194,7 @@ jobs:
           key: vhs-${{ matrix.vhs_version }}-ttyd-${{ matrix.ttyd_version }}-linux-amd64
 
       - name: Install vhs + ttyd (cache miss)
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # vhs asset name embeds the version — get download URL via GitHub API with retry
@@ -231,14 +232,14 @@ jobs:
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
 
       - name: Cache ffmpeg
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: ffmpeg
           version: 1.0.0
 
       - name: Install ffmpeg (fallback)
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # Skip the slow PPA refreshes — ffmpeg is in the default
@@ -248,14 +249,14 @@ jobs:
             || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
 
       - name: Verify tools
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         run: |
           vhs --version
           ttyd --version
           ffmpeg -version | head -1
 
       - name: Render every .tape in ${{ matrix.lib }}/.vhs/
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         working-directory: ${{ matrix.lib }}
         run: |
           set -euo pipefail
@@ -267,7 +268,7 @@ jobs:
           find .vhs -type f | sort
 
       - name: Upload rendered GIFs as artifact
-        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
         uses: actions/upload-artifact@v5
         with:
           name: gifs-${{ matrix.lib }}
