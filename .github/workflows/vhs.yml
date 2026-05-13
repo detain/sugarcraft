@@ -151,9 +151,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lib: ${{ fromJSON(needs.changed.outputs.libs) }}
-        vhs_version: ${{ needs.changed.outputs.vhs_version }}
-        ttyd_version: ${{ needs.changed.outputs.ttyd_version }}
+        lib: ["sugar-bits", "sugar-charts", "candy-core"]
     steps:
       - uses: actions/checkout@v5
 
