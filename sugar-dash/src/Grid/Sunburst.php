@@ -40,9 +40,12 @@ final class SunburstSegment
      */
     public function withColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->color = $color;
-        return $clone;
+        return new self(
+            id: $this->id,
+            label: $this->label,
+            value: $this->value,
+            color: $color,
+        )->withChildren($this->children);
     }
 
     /**
@@ -446,11 +449,9 @@ final class Sunburst implements Sizer
      */
     public function withSegmentColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $color,
-            textColor: $this->textColor,
-            centerColor: $this->centerColor,
-        );
+        $clone = clone $this;
+        $clone->segmentColor = $color;
+        return $clone;
     }
 
     /**
@@ -458,11 +459,9 @@ final class Sunburst implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $this->segmentColor,
-            textColor: $color,
-            centerColor: $this->centerColor,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -470,10 +469,8 @@ final class Sunburst implements Sizer
      */
     public function withCenterColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $this->segmentColor,
-            textColor: $this->textColor,
-            centerColor: $color,
-        );
+        $clone = clone $this;
+        $clone->centerColor = $color;
+        return $clone;
     }
 }
