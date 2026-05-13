@@ -149,7 +149,11 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, intl, pcntl
+          # ssh2 is required by candy-serve (ext-ssh2 in composer.json).
+          # The other libs that declare ext-* requirements (candy-flip,
+          # candy-pty, candy-query, sugar-skate) install cleanly on the
+          # default Ubuntu runner without explicit extension setup.
+          extensions: mbstring, intl, pcntl, ssh2
           tools: composer:v2
           coverage: none
 
