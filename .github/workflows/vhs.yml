@@ -137,9 +137,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Single-key matrix — declaring vhs/ttyd versions here would
+        # cartesian-product to 46×N×N jobs and exceed the 256-per-run
+        # limit, blowing up the workflow before any job starts. Version
+        # info is consumed from needs.changed.outputs.{vhs,ttyd}_version.
         lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-dash, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
-        vhs_version: [v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0, v0.11.0]
-        ttyd_version: [1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7, 1.7.7]
     steps:
       - uses: actions/checkout@v5
 
@@ -153,13 +155,17 @@ jobs:
 
       - name: Check if lib needs rendering
         id: check
+        env:
+          LIBS_JSON: ${{ needs.changed.outputs.libs }}
+          LIB: ${{ matrix.lib }}
         run: |
           set -euo pipefail
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "needs_render=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE "^${{ matrix.lib }}/(src|examples|bin|\.vhs)/"; then
+          # Delegate the "should I render?" decision to the changed
+          # job — it already handles workflow_dispatch, the workflow
+          # file-changed case, and the per-path diff. Re-deriving the
+          # logic here with shallow checkouts (fetch-depth=1, no HEAD~1)
+          # produced silent false negatives.
+          if jq -e --arg lib "$LIB" 'index($lib) != null' <<<"$LIBS_JSON" >/dev/null; then
             echo "needs_render=true" >> "$GITHUB_OUTPUT"
           else
             echo "needs_render=false" >> "$GITHUB_OUTPUT"
@@ -191,7 +197,7 @@ jobs:
           path: |
             /usr/local/bin/vhs
             /usr/local/bin/ttyd
-          key: vhs-${{ matrix.vhs_version }}-ttyd-${{ matrix.ttyd_version }}-linux-amd64
+          key: vhs-${{ needs.changed.outputs.vhs_version }}-ttyd-${{ needs.changed.outputs.ttyd_version }}-linux-amd64
 
       - name: Install vhs + ttyd (cache miss)
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
