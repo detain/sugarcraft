@@ -114,14 +114,14 @@ final class PERT implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $nodeColor = null,
-        private readonly ?Color $arrowColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $criticalColor = null,
-        private readonly ?Color $pendingColor = null,
-        private readonly ?Color $inProgressColor = null,
-        private readonly ?Color $completedColor = null,
-        private readonly ?Color $delayedColor = null,
+        private ?Color $nodeColor = null,
+        private ?Color $arrowColor = null,
+        private ?Color $textColor = null,
+        private ?Color $criticalColor = null,
+        private ?Color $pendingColor = null,
+        private ?Color $inProgressColor = null,
+        private ?Color $completedColor = null,
+        private ?Color $delayedColor = null,
     ) {}
 
     /**
@@ -402,7 +402,7 @@ final class PERT implements Sizer
         $taskCount = count($order);
         $nodeWidth = 10;
         $nodeHeight = 5;
-        $horizontalSpacing = max(3, intval(($chartWidth - $nodeCount * $nodeWidth) / max(1, $taskCount + 1)));
+        $horizontalSpacing = max(3, intval(($chartWidth - $taskCount * $nodeWidth) / max(1, $taskCount + 1)));
         $verticalSpacing = max(2, intval(($chartHeight - $nodeHeight) / 2));
 
         // Draw tasks from left to right
@@ -587,16 +587,9 @@ final class PERT implements Sizer
      */
     public function withNodeColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $color,
-            arrowColor: $this->arrowColor,
-            textColor: $this->textColor,
-            criticalColor: $this->criticalColor,
-            pendingColor: $this->pendingColor,
-            inProgressColor: $this->inProgressColor,
-            completedColor: $this->completedColor,
-            delayedColor: $this->delayedColor,
-        );
+        $clone = clone $this;
+        $clone->nodeColor = $color;
+        return $clone;
     }
 
     /**
@@ -604,16 +597,9 @@ final class PERT implements Sizer
      */
     public function withArrowColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            arrowColor: $color,
-            textColor: $this->textColor,
-            criticalColor: $this->criticalColor,
-            pendingColor: $this->pendingColor,
-            inProgressColor: $this->inProgressColor,
-            completedColor: $this->completedColor,
-            delayedColor: $this->delayedColor,
-        );
+        $clone = clone $this;
+        $clone->arrowColor = $color;
+        return $clone;
     }
 
     /**
@@ -621,16 +607,9 @@ final class PERT implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            arrowColor: $this->arrowColor,
-            textColor: $color,
-            criticalColor: $this->criticalColor,
-            pendingColor: $this->pendingColor,
-            inProgressColor: $this->inProgressColor,
-            completedColor: $this->completedColor,
-            delayedColor: $this->delayedColor,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -638,15 +617,8 @@ final class PERT implements Sizer
      */
     public function withCriticalColor(?Color $color): self
     {
-        return new self(
-            nodeColor: $this->nodeColor,
-            arrowColor: $this->arrowColor,
-            textColor: $this->textColor,
-            criticalColor: $color,
-            pendingColor: $this->pendingColor,
-            inProgressColor: $this->inProgressColor,
-            completedColor: $this->completedColor,
-            delayedColor: $this->delayedColor,
-        );
+        $clone = clone $this;
+        $clone->criticalColor = $color;
+        return $clone;
     }
 }

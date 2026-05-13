@@ -92,15 +92,15 @@ final class Waterfall implements Sizer
     private ?float $maxValue = null;
 
     public function __construct(
-        private readonly ?int $maxItems = null,
-        private readonly ?Color $positiveColor = null,
-        private readonly ?Color $negativeColor = null,
-        private readonly ?Color $totalColor = null,
-        private readonly ?Color $subtotalColor = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $backgroundColor = null,
-        private readonly string $style = 'rounded',
+        private ?int $maxItems = null,
+        private ?Color $positiveColor = null,
+        private ?Color $negativeColor = null,
+        private ?Color $totalColor = null,
+        private ?Color $subtotalColor = null,
+        private ?Color $gridColor = null,
+        private ?Color $textColor = null,
+        private ?Color $backgroundColor = null,
+        private string $style = 'rounded',
     ) {}
 
     /**

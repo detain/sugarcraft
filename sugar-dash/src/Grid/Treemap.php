@@ -9,51 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A leaf node in a treemap.
- */
-final class TreemapLeaf
-{
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly float $value,
-        public readonly ?Color $color = null,
-        /** @var list<TreemapLeaf> */
-        public readonly array $children = [],
-    ) {}
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        return new self(
-            $this->id,
-            $this->label,
-            $this->value,
-            $color,
-            $this->children,
-        );
-    }
-
-    /**
-     * Create a copy with children.
-     *
-     * @param list<TreemapLeaf> $children
-     */
-    public function withChildren(array $children): self
-    {
-        return new self(
-            $this->id,
-            $this->label,
-            $this->value,
-            $this->color,
-            $children,
-        );
-    }
-}
-
-/**
  * A treemap visualization component.
  *
  * Displays hierarchical data as nested rectangles where the size of each
@@ -82,9 +37,9 @@ final class Treemap implements Sizer
     private const FILL_CHARS = [' ', '░', '▒', '▓', '█'];
 
     public function __construct(
-        private readonly ?Color $borderColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $valueColor = null,
+        private ?Color $borderColor = null,
+        private ?Color $textColor = null,
+        private ?Color $valueColor = null,
     ) {}
 
     /**
@@ -92,11 +47,11 @@ final class Treemap implements Sizer
      */
     public static function new(array $leaves = []): self
     {
-        return new self(
+        return (new self(
             borderColor: Color::hex('#45475A'),
             textColor: Color::hex('#CDD6F4'),
             valueColor: Color::hex('#A6E3A1'),
-        )->withLeaves($leaves);
+        ))->withLeaves($leaves);
     }
 
     /**
@@ -259,18 +214,18 @@ final class Treemap implements Sizer
         // Layout algorithm: fill rows left-to-right, top-to-bottom
         $currentX = 0;
         $currentY = 0;
-        $rowHeight = 1;
+        $rowHeight = max(3, $useHeight - 1);
 
         foreach ($sortedLeaves as $leaf) {
             // Calculate width based on proportion of total
             $proportion = $leaf->value / $totalValue;
-            $cellWidth = max(2, intval($proportion * $useWidth));
+            $cellWidth = max(3, intval($proportion * $useWidth));
 
             // Ensure we don't exceed width
             if ($currentX + $cellWidth > $useWidth) {
                 $currentX = 0;
                 $currentY += $rowHeight;
-                $rowHeight = 1;
+                $rowHeight = max(3, $useHeight - $currentY - 1);
             }
 
             // Skip if we'd exceed height
@@ -294,7 +249,7 @@ final class Treemap implements Sizer
                 $useHeight,
             );
 
-            $currentX += $cellWidth + 1;
+            $currentX += $cellWidth;
             if ($currentX >= $useWidth) {
                 $currentX = 0;
                 $currentY += $rowHeight;
@@ -353,6 +308,11 @@ final class Treemap implements Sizer
         }
 
         // Content rows
+        $density = $leaf->value / $this->getTotalValue();
+        $fillIndex = min(4, intval($density * 5));
+        $fillChar = self::FILL_CHARS[$fillIndex];
+        $labelRow = ($this->showLabels && $innerHeight > 0) ? intval($innerHeight / 2) : -1;
+
         for ($row = 0; $row < $innerHeight; $row++) {
             $result .= "\n";
 
@@ -361,18 +321,42 @@ final class Treemap implements Sizer
                 $result .= $v;
             }
 
-            // Fill character based on density
-            $density = $leaf->value / $this->getTotalValue();
-            $fillIndex = min(4, intval($density * 5));
-            $fillChar = self::FILL_CHARS[$fillIndex];
+            // Left fill — replace middle row with the label
+            if ($row === $labelRow) {
+                $label = mb_substr($leaf->label, 0, $innerWidth, 'UTF-8');
+                $padding = $innerWidth - mb_strlen($label, 'UTF-8');
+                $leftPad = intval($padding / 2);
+                $rightPad = $padding - $leftPad;
 
-            // Left fill
-            if ($color !== null) {
-                $result .= $color->toFg(ColorProfile::TrueColor);
-            }
-            $result .= str_repeat($fillChar, $innerWidth);
-            if ($color !== null) {
-                $result .= Ansi::reset();
+                if ($color !== null) {
+                    $result .= $color->toFg(ColorProfile::TrueColor);
+                }
+                $result .= str_repeat($fillChar, $leftPad);
+                if ($color !== null) {
+                    $result .= Ansi::reset();
+                }
+                if ($textColor !== null) {
+                    $result .= $textColor->toFg(ColorProfile::TrueColor);
+                }
+                $result .= $label;
+                if ($textColor !== null) {
+                    $result .= Ansi::reset();
+                }
+                if ($color !== null) {
+                    $result .= $color->toFg(ColorProfile::TrueColor);
+                }
+                $result .= str_repeat($fillChar, $rightPad);
+                if ($color !== null) {
+                    $result .= Ansi::reset();
+                }
+            } else {
+                if ($color !== null) {
+                    $result .= $color->toFg(ColorProfile::TrueColor);
+                }
+                $result .= str_repeat($fillChar, $innerWidth);
+                if ($color !== null) {
+                    $result .= Ansi::reset();
+                }
             }
 
             // Right border
@@ -425,11 +409,9 @@ final class Treemap implements Sizer
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
-            borderColor: $color,
-            textColor: $this->textColor,
-            valueColor: $this->valueColor,
-        );
+        $clone = clone $this;
+        $clone->borderColor = $color;
+        return $clone;
     }
 
     /**
@@ -437,11 +419,9 @@ final class Treemap implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            borderColor: $this->borderColor,
-            textColor: $color,
-            valueColor: $this->valueColor,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -449,10 +429,8 @@ final class Treemap implements Sizer
      */
     public function withValueColor(?Color $color): self
     {
-        return new self(
-            borderColor: $this->borderColor,
-            textColor: $this->textColor,
-            valueColor: $color,
-        );
+        $clone = clone $this;
+        $clone->valueColor = $color;
+        return $clone;
     }
 }

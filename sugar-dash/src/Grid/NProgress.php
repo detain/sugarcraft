@@ -130,8 +130,8 @@ final class NProgress implements Sizer
     private function renderIndeterminate(int $totalWidth): string
     {
         // Calculate a position based on current time for animation effect
-        $tick = (int) (microtime(true) * 1000);
-        $position = ($tick / 20) % ($totalWidth + 20) - 10;
+        $tick = (int) (microtime(true) * 1000) % ((int) (($totalWidth + 20) * 20));
+        $position = intdiv($tick, 20) % ($totalWidth + 20) - 10;
         $barWidth = (int) ($totalWidth * 0.3); // Bar is 30% of track
 
         $barStart = max(0, (int) $position);
