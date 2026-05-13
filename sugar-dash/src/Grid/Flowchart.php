@@ -9,77 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * Flowchart node types.
- */
-enum FlowchartNodeType: string
-{
-    case Process = 'process';
-    case Decision = 'decision';
-    case StartEnd = 'startend';
-    case InputOutput = 'inputoutput';
-    case Connector = 'connector';
-    case Data = 'data';
-}
-
-/**
- * A flowchart node.
- */
-final class FlowchartNode
-{
-    /** @var list<string> */
-    public array $nextIds = [];
-
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly FlowchartNodeType $type = FlowchartNodeType::Process,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Add a connection to the next node.
-     */
-    public function withNext(string $nextId): self
-    {
-        $clone = clone $this;
-        $clone->nextIds[] = $nextId;
-        return $clone;
-    }
-
-    /**
-     * Create a process node.
-     */
-    public static function process(string $id, string $label): self
-    {
-        return new self($id, $label, FlowchartNodeType::Process);
-    }
-
-    /**
-     * Create a decision node.
-     */
-    public static function decision(string $id, string $label): self
-    {
-        return new self($id, $label, FlowchartNodeType::Decision);
-    }
-
-    /**
-     * Create a start/end node (oval/rounded rectangle).
-     */
-    public static function startEnd(string $id, string $label): self
-    {
-        return new self($id, $label, FlowchartNodeType::StartEnd);
-    }
-
-    /**
-     * Create an input/output node (parallelogram).
-     */
-    public static function inputOutput(string $id, string $label): self
-    {
-        return new self($id, $label, FlowchartNodeType::InputOutput);
-    }
-}
-
-/**
  * A flowchart component for visualizing processes and decisions.
  *
  * Features:
@@ -376,12 +305,12 @@ final class Flowchart implements Sizer
         $shortLabel = mb_substr($label, 0, $width - 4);
 
         $box = match ($node->type) {
-            FlowchartNodeType::Process => '┌' . str_repeat('─', $width - 2) . '┐│ ' . str_pad($shortLabel, $width - 4) . ' │└' . str_repeat('─', $width - 2) . '┘',
-            FlowchartNodeType::Decision => '┌' . str_repeat('─', $width - 2) . '┐│◆ ' . str_pad($shortLabel, $width - 5) . ' │└' . str_repeat('─', $width - 2) . '┘',
-            FlowchartNodeType::StartEnd => '╭' . str_repeat('─', $width - 2) . '╮│ ' . str_pad($shortLabel, $width - 4) . ' │╰' . str_repeat('─', $width - 2) . '╯',
-            FlowchartNodeType::InputOutput => '┌' . str_repeat('─', $width - 2) . '┐│/ ' . str_pad($shortLabel, $width - 5) . ' /│└' . str_repeat('─', $width - 2) . '┘',
+            FlowchartNodeType::Process => '┌' . str_repeat('─', $width - 2) . "┐\n│ " . str_pad($shortLabel, $width - 4) . " │\n└" . str_repeat('─', $width - 2) . '┘',
+            FlowchartNodeType::Decision => '┌' . str_repeat('─', $width - 2) . "┐\n│◆ " . str_pad($shortLabel, $width - 5) . " │\n└" . str_repeat('─', $width - 2) . '┘',
+            FlowchartNodeType::StartEnd => '╭' . str_repeat('─', $width - 2) . "╮\n│ " . str_pad($shortLabel, $width - 4) . " │\n╰" . str_repeat('─', $width - 2) . '╯',
+            FlowchartNodeType::InputOutput => '┌' . str_repeat('─', $width - 2) . "┐\n│/ " . str_pad($shortLabel, $width - 5) . " /│\n└" . str_repeat('─', $width - 2) . '┘',
             FlowchartNodeType::Connector => '○ ' . str_pad($shortLabel, $width - 4) . ' ',
-            FlowchartNodeType::Data => '┌' . str_repeat('─', $width - 2) . '┐│▤ ' . str_pad($shortLabel, $width - 5) . ' │└' . str_repeat('─', $width - 2) . '┘',
+            FlowchartNodeType::Data => '┌' . str_repeat('─', $width - 2) . "┐\n│▤ " . str_pad($shortLabel, $width - 5) . " │\n└" . str_repeat('─', $width - 2) . '┘',
         };
 
         return $box . "\n";

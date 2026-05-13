@@ -248,7 +248,7 @@ final class State implements Sizer
             uniqid('', true),
             $from,
             $to,
-            '[' . $condition . '] ' . $condition ?? '',
+            '[' . $condition . ']',
         ));
     }
 

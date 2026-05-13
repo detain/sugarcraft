@@ -9,45 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A candlestick chart data point (OHLC).
- */
-final class Candlestick
-{
-    public function __construct(
-        public readonly string $label,
-        public readonly float $open,
-        public readonly float $high,
-        public readonly float $low,
-        public readonly float $close,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a bullish (价格上涨) candlestick.
-     */
-    public static function bullish(string $label, float $open, float $high, float $low, float $close): self
-    {
-        return new self($label, $open, $high, $low, $close, Color::hex('#A6E3A1'));
-    }
-
-    /**
-     * Create a bearish (价格下跌) candlestick.
-     */
-    public static function bearish(string $label, float $open, float $high, float $low, float $close): self
-    {
-        return new self($label, $open, $high, $low, $close, Color::hex('#F38BA8'));
-    }
-
-    /**
-     * Check if this is a bullish candle.
-     */
-    public function isBullish(): bool
-    {
-        return $this->close >= $this->open;
-    }
-}
-
-/**
  * A candlestick chart component for financial data visualization.
  *
  * Features:
