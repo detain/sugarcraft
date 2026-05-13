@@ -75,14 +75,14 @@ final class CandlestickChart implements Sizer
     private ?float $maxPrice = null;
 
     public function __construct(
-        private readonly ?int $maxCandles = null,
-        private readonly ?Color $bullishColor = null,
-        private readonly ?Color $bearishColor = null,
-        private readonly ?Color $wickColor = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $backgroundColor = null,
-        private readonly string $style = 'rounded',
+        private ?int $maxCandles = null,
+        private ?Color $bullishColor = null,
+        private ?Color $bearishColor = null,
+        private ?Color $wickColor = null,
+        private ?Color $gridColor = null,
+        private ?Color $textColor = null,
+        private ?Color $backgroundColor = null,
+        private string $style = 'rounded',
     ) {}
 
     /**

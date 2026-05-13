@@ -11,58 +11,6 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * A single OHLC data point.
  */
-final readonly class OHLCPoint
-{
-    public function __construct(
-        public string $label,
-        public float $open,
-        public float $high,
-        public float $low,
-        public float $close,
-        public ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a bullish (up) point.
-     */
-    public static function bullish(string $label, float $open, float $high, float $low, float $close): self
-    {
-        return new self($label, $open, $high, $low, $close, Color::hex('#A6E3A1'));
-    }
-
-    /**
-     * Create a bearish (down) point.
-     */
-    public static function bearish(string $label, float $open, float $high, float $low, float $close): self
-    {
-        return new self($label, $open, $high, $low, $close, Color::hex('#F38BA8'));
-    }
-
-    /**
-     * Check if this is a bullish candle.
-     */
-    public function isBullish(): bool
-    {
-        return $this->close >= $this->open;
-    }
-
-    /**
-     * Get the range (high - low).
-     */
-    public function getRange(): float
-    {
-        return $this->high - $this->low;
-    }
-
-    /**
-     * Get the body size (absolute difference between open and close).
-     */
-    public function getBodySize(): float
-    {
-        return abs($this->close - $this->open);
-    }
-}
-
 /**
  * An OHLC (Open-High-Low-Close) chart component for financial data.
  *
@@ -93,11 +41,11 @@ final class OHLC implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $bullishColor = null,
-        private readonly ?Color $bearishColor = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $textColor = null,
-        private readonly ?Color $backgroundColor = null,
+        private ?Color $bullishColor = null,
+        private ?Color $bearishColor = null,
+        private ?Color $gridColor = null,
+        private ?Color $textColor = null,
+        private ?Color $backgroundColor = null,
     ) {}
 
     /**
@@ -241,7 +189,7 @@ final class OHLC implements Sizer
         $useWidth = $this->width ?? 65;
         $useHeight = $this->height ?? 15;
 
-        if ($useWidth < 30 || $useHeight < 8) {
+        if ($useWidth < 30 || $useHeight < 8 || empty($this->points)) {
             return '';
         }
 
@@ -353,15 +301,19 @@ final class OHLC implements Sizer
 
         // Labels row
         if ($this->showLabels && $pointCount > 0) {
+            $barWidth = 2;
+            $spacing = max(0, intval(($chartWidth - $priceScaleWidth - 1 - $pointCount * $barWidth) / max(1, $pointCount - 1)));
+            $cellWidth = $barWidth + $spacing;
+            $labelChars = max($barWidth, $cellWidth);
             $labelLine = $v . ' ';
+            $x = 0;
             foreach ($this->points as $index => $point) {
-                $label = mb_substr($point->label, 0, 2, 'UTF-8');
-                $barWidth = 2;
-                $spacing = max(0, intval(($chartWidth - $priceScaleWidth - 1 - $pointCount * $barWidth) / max(1, $pointCount - 1)));
-                $x = $index * ($barWidth + $spacing);
-                $labelLine .= str_repeat(' ', $x) . str_pad($label, $barWidth, ' ', STR_PAD_BOTH);
+                $label = mb_substr($point->label, 0, $labelChars, 'UTF-8');
+                $x = $index * $cellWidth;
+                $labelLine .= str_pad($label, $cellWidth, ' ', STR_PAD_RIGHT);
             }
-            $labelLine .= str_repeat(' ', $chartWidth - $priceScaleWidth - 1 - $x - $barWidth) . $v;
+            $remaining = max(0, $chartWidth - $priceScaleWidth - 1 - mb_strlen(preg_replace('/\x1b\[[0-9;]*m/', '', $labelLine), 'UTF-8') + 1);
+            $labelLine .= str_repeat(' ', $remaining) . $v;
             $result .= $labelLine . "\n";
         }
 
@@ -421,13 +373,9 @@ final class OHLC implements Sizer
      */
     public function withBullishColor(?Color $color): self
     {
-        return new self(
-            bullishColor: $color,
-            bearishColor: $this->bearishColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-        );
+        $clone = clone $this;
+        $clone->bullishColor = $color;
+        return $clone;
     }
 
     /**
@@ -435,13 +383,9 @@ final class OHLC implements Sizer
      */
     public function withBearishColor(?Color $color): self
     {
-        return new self(
-            bullishColor: $this->bullishColor,
-            bearishColor: $color,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-        );
+        $clone = clone $this;
+        $clone->bearishColor = $color;
+        return $clone;
     }
 
     /**
@@ -449,13 +393,9 @@ final class OHLC implements Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            gridColor: $color,
-            textColor: $this->textColor,
-            backgroundColor: $this->backgroundColor,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -463,13 +403,9 @@ final class OHLC implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            gridColor: $this->gridColor,
-            textColor: $color,
-            backgroundColor: $this->backgroundColor,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 
     /**
@@ -477,12 +413,8 @@ final class OHLC implements Sizer
      */
     public function withBackgroundColor(?Color $color): self
     {
-        return new self(
-            bullishColor: $this->bullishColor,
-            bearishColor: $this->bearishColor,
-            gridColor: $this->gridColor,
-            textColor: $this->textColor,
-            backgroundColor: $color,
-        );
+        $clone = clone $this;
+        $clone->backgroundColor = $color;
+        return $clone;
     }
 }

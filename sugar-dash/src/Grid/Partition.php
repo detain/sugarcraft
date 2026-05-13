@@ -9,68 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A segment in a partition chart.
- */
-final class PartitionSegment
-{
-    /** @var list<PartitionSegment> */
-    public array $children = [];
-
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly float $value,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a copy with children.
-     *
-     * @param list<PartitionSegment> $children
-     */
-    public function withChildren(array $children): self
-    {
-        $clone = clone $this;
-        $clone->children = $children;
-        return $clone;
-    }
-
-    /**
-     * Create a copy with a different color.
-     */
-    public function withColor(?Color $color): self
-    {
-        $clone = clone $this;
-        $clone->color = $color;
-        return $clone;
-    }
-
-    /**
-     * Calculate total value including children.
-     */
-    public function getTotalValue(): float
-    {
-        $total = $this->value;
-        foreach ($this->children as $child) {
-            $total += $child->getTotalValue();
-        }
-        return $total;
-    }
-
-    /**
-     * Get the depth of this subtree.
-     */
-    public function getDepth(): int
-    {
-        $maxChildDepth = 0;
-        foreach ($this->children as $child) {
-            $maxChildDepth = max($maxChildDepth, $child->getDepth());
-        }
-        return 1 + $maxChildDepth;
-    }
-}
-
-/**
  * A Partition chart component for hierarchical proportional visualization.
  *
  * Features:
@@ -95,9 +33,9 @@ final class Partition implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $segmentColor = null,
-        private readonly ?Color $borderColor = null,
-        private readonly ?Color $textColor = null,
+        private ?Color $segmentColor = null,
+        private ?Color $borderColor = null,
+        private ?Color $textColor = null,
     ) {}
 
     /**
@@ -286,6 +224,8 @@ final class Partition implements Sizer
             return;
         }
 
+        [, , , , , $v] = $this->getStyleChars();
+
         $isLeaf = count($segment->children) === 0;
         $color = $segment->color ?? $segmentColor;
 
@@ -428,6 +368,8 @@ final class Partition implements Sizer
         if ($depth > 10 || $width < 3 || $height < 2) {
             return;
         }
+
+        [, , , , , $v] = $this->getStyleChars();
 
         $isLeaf = count($segment->children) === 0;
         $color = $segment->color ?? $segmentColor;
@@ -595,11 +537,9 @@ final class Partition implements Sizer
      */
     public function withSegmentColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $color,
-            borderColor: $this->borderColor,
-            textColor: $this->textColor,
-        );
+        $clone = clone $this;
+        $clone->segmentColor = $color;
+        return $clone;
     }
 
     /**
@@ -607,11 +547,9 @@ final class Partition implements Sizer
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $this->segmentColor,
-            borderColor: $color,
-            textColor: $this->textColor,
-        );
+        $clone = clone $this;
+        $clone->borderColor = $color;
+        return $clone;
     }
 
     /**
@@ -619,10 +557,8 @@ final class Partition implements Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        return new self(
-            segmentColor: $this->segmentColor,
-            borderColor: $this->borderColor,
-            textColor: $color,
-        );
+        $clone = clone $this;
+        $clone->textColor = $color;
+        return $clone;
     }
 }

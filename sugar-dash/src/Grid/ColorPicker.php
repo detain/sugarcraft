@@ -102,7 +102,7 @@ final class ColorPicker implements Sizer
 
         $rows = $this->buildRows();
 
-        if ($this->showHex && $this->selectedIndex < count($this->palette)) {
+        if ($this->showHex && $this->selectedIndex >= 0 && $this->selectedIndex < count($this->palette)) {
             $selectedHex = $this->palette[$this->selectedIndex];
             $hexLine = '  ' . $selectedHex;
             $rows[] = $hexLine;
