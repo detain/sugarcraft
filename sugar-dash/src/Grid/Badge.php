@@ -7,102 +7,128 @@ namespace SugarCraft\Dash\Grid;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Core\Util\Width;
 
 /**
- * A status badge / tag component.
+ * A badge/tag component for displaying labels and statuses.
  *
- * Displays a labeled badge with customizable styling:
- * - Multiple styles (solid, outlined, subtle)
- * - Custom colors for foreground and background
- * - Optional padding around the label
- * - Rounded or square appearance
+ * Features:
+ * - Compact badge display with text
+ * - Multiple styles (solid, outline, subtle)
+ * - Different sizes (sm, md, lg)
+ * - Customizable colors
+ * - Optional icon prefix
  *
- * Mirrors the badge/tag concept from lipgloss but adapted
- * to PHP with wither-style immutable setters.
+ * Mirrors badge/tag patterns adapted to PHP with wither-style immutable setters.
  */
 final class Badge implements Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
 
+    public const StyleSolid = 'solid';
+    public const StyleOutline = 'outline';
+    public const StyleSubtle = 'subtle';
+
+    public const SizeSm = 'sm';
+    public const SizeMd = 'md';
+    public const SizeLg = 'lg';
+
     public function __construct(
-        private readonly string $label,
-        private readonly ?Color $foregroundColor = null,
-        private readonly ?Color $backgroundColor = null,
-        private readonly bool $outlined = false,
-        private readonly string $padding = ' ',
+        private readonly string $text,
+        private readonly ?Color $bgColor = null,
+        private readonly ?Color $textColor = null,
+        private readonly string $style = self::StyleSolid,
+        private readonly string $size = self::SizeMd,
+        private readonly ?string $icon = null,
     ) {}
 
     /**
-     * Create a new badge with default styling.
-     *
-     * Default: purple badge with white text.
+     * Create a new badge.
      */
-    public static function new(string $label): self
+    public static function new(string $text): self
     {
         return new self(
-            label: $label,
-            foregroundColor: Color::hex('#FFFFFF'),
-            backgroundColor: Color::hex('#874BFD'),
-            outlined: false,
-            padding: ' ',
+            text: $text,
+            bgColor: Color::hex('#313244'),
+            textColor: Color::hex('#CDD6F4'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: null,
         );
     }
 
     /**
-     * Create a success-style badge.
+     * Create a success badge.
      */
-    public static function success(string $label): self
+    public static function success(string $text): self
     {
         return new self(
-            label: $label,
-            foregroundColor: Color::hex('#FFFFFF'),
-            backgroundColor: Color::hex('#22C55E'),
-            outlined: false,
-            padding: ' ',
+            text: $text,
+            bgColor: Color::hex('#A6E3A1'),
+            textColor: Color::hex('#1E1E1E'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: '✓',
         );
     }
 
     /**
-     * Create a warning-style badge.
+     * Create a warning badge.
      */
-    public static function warning(string $label): self
+    public static function warning(string $text): self
     {
         return new self(
-            label: $label,
-            foregroundColor: Color::hex('#FFFFFF'),
-            backgroundColor: Color::hex('#F59E0B'),
-            outlined: false,
-            padding: ' ',
+            text: $text,
+            bgColor: Color::hex('#F9E2AF'),
+            textColor: Color::hex('#1E1E1E'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: '⚠',
         );
     }
 
     /**
-     * Create a danger/error-style badge.
+     * Create an error badge.
      */
-    public static function danger(string $label): self
+    public static function error(string $text): self
     {
         return new self(
-            label: $label,
-            foregroundColor: Color::hex('#FFFFFF'),
-            backgroundColor: Color::hex('#EF4444'),
-            outlined: false,
-            padding: ' ',
+            text: $text,
+            bgColor: Color::hex('#F38BA8'),
+            textColor: Color::hex('#1E1E1E'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: '✗',
         );
     }
 
     /**
-     * Create an info-style badge.
+     * Create a danger badge.
      */
-    public static function info(string $label): self
+    public static function danger(string $text): self
     {
         return new self(
-            label: $label,
-            foregroundColor: Color::hex('#FFFFFF'),
-            backgroundColor: Color::hex('#3B82F6'),
-            outlined: false,
-            padding: ' ',
+            text: $text,
+            bgColor: Color::hex('#F38BA8'),
+            textColor: Color::hex('#1E1E1E'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: '!',
+        );
+    }
+
+    /**
+     * Create an info badge.
+     */
+    public static function info(string $text): self
+    {
+        return new self(
+            text: $text,
+            bgColor: Color::hex('#89B4FA'),
+            textColor: Color::hex('#1E1E1E'),
+            style: self::StyleSolid,
+            size: self::SizeMd,
+            icon: 'ℹ',
         );
     }
 
@@ -118,140 +144,158 @@ final class Badge implements Sizer
     }
 
     /**
-     * Render the badge as a string.
-     */
-    public function render(): string
-    {
-        $paddedLabel = $this->padding . $this->label . $this->padding;
-        $labelWidth = Width::string($paddedLabel);
-
-        // Use allocated width if set and larger than content
-        $totalWidth = $this->width !== null && $this->width > $labelWidth
-            ? $this->width
-            : $labelWidth;
-
-        // Calculate horizontal padding to center or align
-        $horizontalPad = $totalWidth - $labelWidth;
-        $leftPad = (int) floor($horizontalPad / 2);
-        $rightPad = $horizontalPad - $leftPad;
-
-        $leftStr = str_repeat(' ', $leftPad);
-        $rightStr = str_repeat(' ', $rightPad);
-
-        $result = '';
-
-        if ($this->outlined) {
-            // Outlined style: border with color, text with foreground color
-            $topBorder = '┌' . str_repeat('─', $totalWidth - 2) . '┐';
-            $middle = '│' . $leftStr . $paddedLabel . $rightStr . '│';
-            $bottomBorder = '└' . str_repeat('─', $totalWidth - 2) . '┘';
-
-            if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
-            }
-            $result .= $topBorder . "\n" . $middle . "\n" . $bottomBorder;
-        } else {
-            // Filled style: background color, foreground text
-            if ($this->backgroundColor !== null) {
-                $result .= $this->backgroundColor->toBg(ColorProfile::TrueColor);
-            }
-            if ($this->foregroundColor !== null) {
-                $result .= $this->foregroundColor->toFg(ColorProfile::TrueColor);
-            }
-            $result .= $leftStr . $paddedLabel . $rightStr;
-        }
-
-        // Ensure ANSI reset at the end if colors were used
-        if ($this->foregroundColor !== null || $this->backgroundColor !== null) {
-            $result .= Ansi::reset();
-        }
-
-        return $result;
-    }
-
-    /**
      * Calculate the natural dimensions of this badge.
      *
-     * @return array{0:int,1:int} [width, height]
+     * @return array{0:int, 1:int} [width, height]
      */
     public function getInnerSize(): array
     {
-        $labelWidth = Width::string($this->padding . $this->label . $this->padding);
-        $width = $this->width !== null ? max($this->width, $labelWidth) : $labelWidth;
-        $height = $this->outlined ? 3 : 1;
+        $sizeMap = [
+            self::SizeSm => 1,
+            self::SizeMd => 1,
+            self::SizeLg => 1,
+        ];
+
+        $iconLen = $this->icon !== null ? mb_strlen($this->icon, 'UTF-8') + 1 : 0;
+        $textLen = mb_strlen($this->text, 'UTF-8');
+        $width = $iconLen + $textLen + 4; // padding
+
+        $height = $sizeMap[$this->size] ?? 1;
 
         return [$width, $height];
+    }
+
+    /**
+     * Render the badge.
+     */
+    public function render(): string
+    {
+        $text = $this->icon !== null ? $this->icon . ' ' . $this->text : $this->text;
+
+        $width = $this->width ?? $this->getInnerSize()[0];
+
+        return match ($this->style) {
+            self::StyleOutline => $this->renderOutline($text, $width),
+            self::StyleSubtle => $this->renderSubtle($text, $width),
+            default => $this->renderSolid($text, $width),
+        };
+    }
+
+    /**
+     * Render solid style badge.
+     */
+    private function renderSolid(string $text, int $width): string
+    {
+        $bgStr = $this->bgColor?->toBg(ColorProfile::TrueColor) ?? '';
+        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+
+        $padded = str_pad($text, $width - 2, ' ', STR_PAD_BOTH);
+
+        return $bgStr . $textStr . '[' . $padded . ']' . Ansi::reset();
+    }
+
+    /**
+     * Render outline style badge.
+     */
+    private function renderOutline(string $text, int $width): string
+    {
+        $borderStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+
+        $padded = str_pad($text, $width - 4, ' ', STR_PAD_BOTH);
+
+        $top = '┌' . str_repeat('─', $width - 2) . '┐';
+        $middle = '│' . $padded . '│';
+        $bottom = '└' . str_repeat('─', $width - 2) . '┘';
+
+        return $borderStr . $top . "\n" . $middle . "\n" . $bottom . Ansi::reset();
+    }
+
+    /**
+     * Render subtle style badge.
+     */
+    private function renderSubtle(string $text, int $width): string
+    {
+        $textStr = $this->textColor?->toFg(ColorProfile::TrueColor) ?? '';
+        $padded = str_pad($text, $width - 2, ' ', STR_PAD_BOTH);
+
+        return $textStr . ' ' . $padded . ' ' . Ansi::reset();
     }
 
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
-     * Set a custom label.
-     */
-    public function withLabel(string $label): self
-    {
-        return new self(
-            label: $label,
-            foregroundColor: $this->foregroundColor,
-            backgroundColor: $this->backgroundColor,
-            outlined: $this->outlined,
-            padding: $this->padding,
-        );
-    }
-
-    /**
-     * Set the foreground (text) color.
-     */
-    public function withForegroundColor(?Color $color): self
-    {
-        return new self(
-            label: $this->label,
-            foregroundColor: $color,
-            backgroundColor: $this->backgroundColor,
-            outlined: $this->outlined,
-            padding: $this->padding,
-        );
-    }
-
-    /**
      * Set the background color.
      */
-    public function withBackgroundColor(?Color $color): self
+    public function withBgColor(?Color $color): self
     {
         return new self(
-            label: $this->label,
-            foregroundColor: $this->foregroundColor,
-            backgroundColor: $color,
-            outlined: $this->outlined,
-            padding: $this->padding,
+            text: $this->text,
+            bgColor: $color,
+            textColor: $this->textColor,
+            style: $this->style,
+            size: $this->size,
+            icon: $this->icon,
         );
     }
 
     /**
-     * Set the outlined style.
+     * Set the text color.
      */
-    public function withOutlined(bool $outlined): self
+    public function withTextColor(?Color $color): self
     {
         return new self(
-            label: $this->label,
-            foregroundColor: $this->foregroundColor,
-            backgroundColor: $this->backgroundColor,
-            outlined: $outlined,
-            padding: $this->padding,
+            text: $this->text,
+            bgColor: $this->bgColor,
+            textColor: $color,
+            style: $this->style,
+            size: $this->size,
+            icon: $this->icon,
         );
     }
 
     /**
-     * Set the padding character(s) around the label.
+     * Set the style.
      */
-    public function withPadding(string $padding): self
+    public function withStyle(string $style): self
     {
         return new self(
-            label: $this->label,
-            foregroundColor: $this->foregroundColor,
-            backgroundColor: $this->backgroundColor,
-            outlined: $this->outlined,
-            padding: $padding,
+            text: $this->text,
+            bgColor: $this->bgColor,
+            textColor: $this->textColor,
+            style: $style,
+            size: $this->size,
+            icon: $this->icon,
+        );
+    }
+
+    /**
+     * Set the size.
+     */
+    public function withSize(string $size): self
+    {
+        return new self(
+            text: $this->text,
+            bgColor: $this->bgColor,
+            textColor: $this->textColor,
+            style: $this->style,
+            size: $size,
+            icon: $this->icon,
+        );
+    }
+
+    /**
+     * Set the icon.
+     */
+    public function withIcon(?string $icon): self
+    {
+        return new self(
+            text: $this->text,
+            bgColor: $this->bgColor,
+            textColor: $this->textColor,
+            style: $this->style,
+            size: $this->size,
+            icon: $icon,
         );
     }
 }
