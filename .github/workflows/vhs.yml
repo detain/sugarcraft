@@ -40,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
+      libs_json: ${{ toJSON(fromJSON(steps.compute.outputs.libs)) }}
       vhs_version: ${{ steps.tools.outputs.vhs }}
       ttyd_version: ${{ steps.tools.outputs.ttyd }}
     steps:
@@ -151,7 +152,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lib: ["sugar-bits", "sugar-charts", "candy-core"]
+        lib: ${{ fromJSON(needs.changed.outputs.libs_json) }}
+        vhs_version: ${{ needs.changed.outputs.vhs_version }}
+        ttyd_version: ${{ needs.changed.outputs.ttyd_version }}
     steps:
       - uses: actions/checkout@v5
 
