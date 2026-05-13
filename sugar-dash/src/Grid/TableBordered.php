@@ -140,7 +140,7 @@ final class TableBordered implements Sizer
                     $widths[$i] += (int) floor($extra / $count);
                 }
                 // Give remainder to last column
-                $widths[$count - 1] += $extra - array_sum(array_map(fn($w) => $w - $colWidths[$i] ?? 0, range(0, $count - 1)));
+                $widths[$count - 1] += $extra - array_sum(array_map(fn($w, $idx) => $w - $colWidths[$idx] ?? 0, $widths, array_keys($widths)));
             }
         }
 

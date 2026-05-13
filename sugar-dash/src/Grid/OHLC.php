@@ -9,9 +9,6 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A single OHLC data point.
- */
-/**
  * An OHLC (Open-High-Low-Close) chart component for financial data.
  *
  * Features:
