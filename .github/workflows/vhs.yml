@@ -213,7 +213,16 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: ffmpeg
-          version: 1.0.0
+          # Bumped to invalidate caches built without
+          # execute_install_scripts — those archives never captured the
+          # libblas update-alternatives symlink, so ffmpeg crashed at
+          # runtime with `libblas.so.3: cannot open shared object file`.
+          version: 2.0.0
+          # Run apt's post-install scripts on cache restore. ffmpeg's
+          # transitive deps include libblas, which sets up
+          # /usr/lib/x86_64-linux-gnu/libblas.so.3 via update-alternatives
+          # — that symlink only exists if the post-install script runs.
+          execute_install_scripts: true
 
       - name: Install ffmpeg (fallback)
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
@@ -230,7 +239,12 @@ jobs:
 
       - name: Verify tools
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        # set -o pipefail so `ffmpeg -version | head -1` propagates an
+        # ffmpeg shared-library load failure (exit 127) instead of being
+        # masked by head's success. We had a silent libblas.so.3
+        # cannot-open-shared-object regression slip through here.
         run: |
+          set -euo pipefail
           vhs --version
           ttyd --version
           ffmpeg -version | head -1
