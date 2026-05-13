@@ -129,6 +129,17 @@ jobs:
           echo "libs=$out"
           echo "libs=$out" >> "$GITHUB_OUTPUT"
 
+  # DEBUG: test if render job matrix would expand
+  debug-render:
+    needs: changed
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "libs: ${{ needs.changed.outputs.libs }}"
+          echo "libs length: $(echo '${{ needs.changed.outputs.libs }}' | jq -r 'length')"
+          echo "vhs_version: ${{ needs.changed.outputs.vhs_version }}"
+          echo "ttyd_version: ${{ needs.changed.outputs.ttyd_version }}"
+
   render:
     needs: changed
     if: needs.changed.outputs.libs != '[]'
