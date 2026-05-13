@@ -88,7 +88,7 @@ final class Sequence implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $ lifelineColor = null,
+        private readonly ?Color $lifelineColor = null,
         private readonly ?Color $messageColor = null,
         private readonly ?Color $textColor = null,
         private readonly ?Color $activationColor = null,
