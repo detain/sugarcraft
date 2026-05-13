@@ -60,6 +60,25 @@ jobs:
           AFFECTED_LIBS: ${{ steps.affected.outputs.affected_libs }}
         run: |
           set -euo pipefail
+
+          # Retry function for git push operations with exponential backoff
+          retry_git_push() {
+            local max_attempts=3
+            local delay=5
+            local attempt=1
+            while (( attempt <= max_attempts )); do
+              if "$@"; then
+                return 0
+              fi
+              echo "Push failed (attempt $attempt/$max_attempts), waiting ${delay}s..." >&2
+              sleep $delay
+              ((attempt++))
+              delay=$((delay * 2))
+            done
+            echo "Push failed after $max_attempts attempts" >&2
+            return 1
+          }
+
           force_all="$FORCE_ALL"
           libs_str="$AFFECTED_LIBS"
 
@@ -79,7 +98,7 @@ jobs:
             br="sync-$lib"
             git branch -D "$br" 2>/dev/null || true
             git subtree split --prefix="$lib" --branch="$br" --quiet
-            git push --force \
+            retry_git_push git push --force \
               "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
               "$br:master"
             git branch -D "$br" >/dev/null
@@ -98,6 +117,25 @@ jobs:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
         run: |
           set -euo pipefail
+
+          # Retry function for git push operations with exponential backoff
+          retry_git_push() {
+            local max_attempts=3
+            local delay=5
+            local attempt=1
+            while (( attempt <= max_attempts )); do
+              if "$@"; then
+                return 0
+              fi
+              echo "Push failed (attempt $attempt/$max_attempts), waiting ${delay}s..." >&2
+              sleep $delay
+              ((attempt++))
+              delay=$((delay * 2))
+            done
+            echo "Push failed after $max_attempts attempts" >&2
+            return 1
+          }
+
           tmp=$(mktemp -d)
           git clone --quiet \
             "https://x-access-token:$TOKEN@github.com/sugarcraft/sugarcraft.github.io.git" \
@@ -112,5 +150,5 @@ jobs:
             exit 0
           fi
           git commit --quiet -m "Sync from monorepo @ ${GITHUB_SHA:0:7}"
-          git push --quiet origin master
+          retry_git_push git push --quiet origin master
           echo "✓ pushed site update"
