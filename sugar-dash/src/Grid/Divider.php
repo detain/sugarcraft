@@ -4,49 +4,68 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Grid;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\Width;
+use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A horizontal divider line with optional label.
+ * A divider line component.
  *
  * Features:
- * - Configurable character (default: ─)
- * - Optional label text displayed in the center
- * - Configurable color
- * - Horizontal alignment of label (left, center, right)
+ * - Horizontal or vertical orientation
+ * - Multiple line styles (solid, dashed, dotted, double)
+ * - Customizable color and thickness
+ * - Optional label in the center
  *
- * Mirrors lipgloss Divider functionality adapted to PHP with
- * wither-style immutable setters.
+ * Mirrors divider/separator patterns adapted to PHP with wither-style
+ * immutable setters.
  */
 final class Divider implements Sizer
 {
     private ?int $width = null;
+    private ?int $height = null;
 
-    public const CHAR_BOX = '─';
-    public const CHAR_HEAVY = '━';
-    public const CHAR_DASHED = '-';
-    public const CHAR_DOTTED = '·';
-    public const CHAR_DOUBLE = '═';
+    public const StyleSolid = 'solid';
+    public const StyleDashed = 'dashed';
+    public const StyleDotted = 'dotted';
+    public const StyleDouble = 'double';
 
     public function __construct(
-        private readonly string $char = self::CHAR_BOX,
         private readonly ?string $label = null,
+        private readonly string $style = self::StyleSolid,
         private readonly ?Color $color = null,
-        private readonly HAlign $labelAlign = HAlign::Center,
+        private readonly bool $horizontal = true,
+        private readonly int $thickness = 1,
     ) {}
 
     /**
-     * Create a divider with the default style.
+     * Create a new divider.
      */
     public static function new(?string $label = null): self
     {
         return new self(
-            char: self::CHAR_BOX,
             label: $label,
-            color: null,
-            labelAlign: HAlign::Center,
+            style: self::StyleSolid,
+            color: Color::hex('#6C7086'),
+            horizontal: true,
+            thickness: 1,
         );
+    }
+
+    /**
+     * Create a horizontal divider.
+     */
+    public static function h(?string $label = null): self
+    {
+        return new self(label: $label, style: self::StyleSolid, color: Color::hex('#6C7086'), horizontal: true);
+    }
+
+    /**
+     * Create a vertical divider.
+     */
+    public static function v(?string $label = null): self
+    {
+        return new self(label: $label, style: self::StyleSolid, color: Color::hex('#6C7086'), horizontal: false);
     }
 
     /**
@@ -56,112 +75,167 @@ final class Divider implements Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
+        $clone->height = $height;
         return $clone;
     }
 
     /**
-     * Render the divider line.
-     */
-    public function render(): string
-    {
-        $w = $this->width ?? 80;
-
-        if ($w <= 0) {
-            return '';
-        }
-
-        if ($this->label === null || $this->label === '') {
-            return str_repeat($this->char, $w);
-        }
-
-        $labelWidth = Width::string($this->label);
-        if ($labelWidth >= $w) {
-            return str_repeat($this->char, $w);
-        }
-
-        // Space available for lines on either side of label
-        $remainingSpace = $w - $labelWidth;
-
-        return match ($this->labelAlign) {
-            HAlign::Left => $this->label . str_repeat($this->char, $remainingSpace),
-            HAlign::Right => str_repeat($this->char, $remainingSpace) . $this->label,
-            HAlign::Center => $this->centeredWithLabel($w, $labelWidth),
-        };
-    }
-
-    /**
-     * Calculate natural dimensions (width only, height is always 1).
+     * Calculate the natural dimensions of this divider.
      *
-     * @return array{0:int,1:int}
+     * @return array{0:int, 1:int} [width, height]
      */
     public function getInnerSize(): array
     {
-        return [$this->width ?? 80, 1];
+        if ($this->horizontal) {
+            $width = $this->width ?? 40;
+            $height = $this->thickness;
+        } else {
+            $width = $this->thickness;
+            $height = $this->height ?? 10;
+        }
+
+        return [$width, $height];
     }
 
     /**
-     * Create a divider with label centered.
+     * Render the divider.
      */
-    private function centeredWithLabel(int $totalWidth, int $labelWidth): string
+    public function render(): string
     {
-        $remainingSpace = $totalWidth - $labelWidth;
-        $leftSpace = (int) floor($remainingSpace / 2);
-        $rightSpace = $remainingSpace - $leftSpace;
+        if ($this->horizontal) {
+            return $this->renderHorizontal();
+        }
+        return $this->renderVertical();
+    }
 
-        return str_repeat($this->char, $leftSpace) . $this->label . str_repeat($this->char, $rightSpace);
+    /**
+     * Render horizontal divider.
+     */
+    private function renderHorizontal(): string
+    {
+        $useWidth = $this->width ?? 40;
+        $char = $this->getLineChar();
+
+        $colorStr = $this->color?->toFg(ColorProfile::TrueColor) ?? '';
+
+        if ($this->label === null) {
+            return $colorStr . str_repeat($char, $useWidth) . Ansi::reset();
+        }
+
+        $labelLen = mb_strlen($this->label, 'UTF-8');
+        $availableWidth = $useWidth - $labelLen - 2; // -2 for spaces around label
+        if ($availableWidth < 0) {
+            return $colorStr . $this->label . Ansi::reset();
+        }
+
+        $sideWidth = (int) floor($availableWidth / 2);
+        $leftSide = str_repeat($char, $sideWidth);
+        $rightSide = str_repeat($char, $availableWidth - $sideWidth);
+
+        return $colorStr . $leftSide . ' ' . $this->label . ' ' . $rightSide . Ansi::reset();
+    }
+
+    /**
+     * Render vertical divider.
+     */
+    private function renderVertical(): string
+    {
+        $useHeight = $this->height ?? 10;
+        $char = $this->getLineChar();
+
+        $colorStr = $this->color?->toFg(ColorProfile::TrueColor) ?? '';
+
+        $lines = [];
+        for ($i = 0; $i < $useHeight; $i++) {
+            $lines[] = $char;
+        }
+
+        return $colorStr . implode("\n", $lines) . Ansi::reset();
+    }
+
+    /**
+     * Get the line character based on style.
+     */
+    private function getLineChar(): string
+    {
+        return match ($this->style) {
+            self::StyleSolid => '─',
+            self::StyleDashed => '┅',
+            self::StyleDotted => '┄',
+            self::StyleDouble => '═',
+            default => '─',
+        };
     }
 
     // ─── Withers ──────────────────────────────────────────────────
 
     /**
-     * Set the divider character.
+     * Set the style.
      */
-    public function withChar(string $char): self
+    public function withStyle(string $style): self
     {
         return new self(
-            char: $char,
             label: $this->label,
+            style: $style,
             color: $this->color,
-            labelAlign: $this->labelAlign,
+            horizontal: $this->horizontal,
+            thickness: $this->thickness,
         );
     }
 
     /**
-     * Set the label text.
+     * Set the color.
+     */
+    public function withColor(?Color $color): self
+    {
+        return new self(
+            label: $this->label,
+            style: $this->style,
+            color: $color,
+            horizontal: $this->horizontal,
+            thickness: $this->thickness,
+        );
+    }
+
+    /**
+     * Set the label.
      */
     public function withLabel(?string $label): self
     {
         return new self(
-            char: $this->char,
             label: $label,
+            style: $this->style,
             color: $this->color,
-            labelAlign: $this->labelAlign,
+            horizontal: $this->horizontal,
+            thickness: $this->thickness,
         );
     }
 
     /**
-     * Set the divider color.
+     * Set horizontal orientation.
      */
-    public function withColor(Color $color): self
+    public function withHorizontal(bool $horizontal): self
     {
         return new self(
-            char: $this->char,
             label: $this->label,
-            color: $color,
-            labelAlign: $this->labelAlign,
+            style: $this->style,
+            color: $this->color,
+            horizontal: $horizontal,
+            thickness: $this->thickness,
         );
     }
 
     /**
-     * Set the label alignment.
+     * Set the thickness.
      */
-    public function withLabelAlign(HAlign $align): self
+    public function withThickness(int $thickness): self
     {
         return new self(
-            char: $this->char,
             label: $this->label,
+            style: $this->style,
             color: $this->color,
-            labelAlign: $align,
+            horizontal: $this->horizontal,
+            thickness: max(1, $thickness),
         );
     }
 }
