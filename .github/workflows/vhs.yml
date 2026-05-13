@@ -114,23 +114,49 @@ jobs:
           tools: composer:v2
           coverage: none
 
+      - name: Cache composer dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            ${{ matrix.lib }}/vendor/
+            ~/.composer/cache/
+          key: composer-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          restore-keys: |
+            composer-${{ matrix.lib }}-
+
       - name: Install lib deps
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
       # Cache the vhs + ttyd binaries by their resolved upstream
       # version. Saves ~30 seconds of API + tarball + extract per job.
-      # ffmpeg is fast enough via apt that caching it isn't worth it.
       - name: Resolve vhs / ttyd versions
         id: tools
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        run: |
-          set -euo pipefail
-          vhs_tag=$(curl -sSL https://api.github.com/repos/charmbracelet/vhs/releases/latest | jq -r .tag_name)
-          ttyd_tag=$(curl -sSL https://api.github.com/repos/tsl0922/ttyd/releases/latest | jq -r .tag_name)
-          echo "vhs=$vhs_tag"   >> "$GITHUB_OUTPUT"
-          echo "ttyd=$ttyd_tag" >> "$GITHUB_OUTPUT"
-          echo "vhs $vhs_tag · ttyd $ttyd_tag"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            async function getLatestTagWithRetry(owner, repo, maxAttempts = 3) {
+              const delays = [10000, 30000, 60000];
+              for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                try {
+                  const response = await github.rest.repos.getLatestRelease({ owner, repo });
+                  return response.data.tag_name;
+                } catch (e) {
+                  if ((e.status === 403 || e.status === 429) && attempt < maxAttempts - 1) {
+                    core.info(`Rate limited (HTTP ${e.status}) for ${owner}/${repo}, waiting ${delays[attempt]}ms before retry ${attempt + 1}/${maxAttempts}...`);
+                    await new Promise(r => setTimeout(r, delays[attempt]));
+                  } else if (attempt >= maxAttempts - 1) {
+                    throw e;
+                  }
+                }
+              }
+            }
+            const vhsTag = await getLatestTagWithRetry('charmbracelet', 'vhs');
+            const ttydTag = await getLatestTagWithRetry('tsl0922', 'ttyd');
+            core.setOutput('vhs', vhsTag);
+            core.setOutput('ttyd', ttydTag);
+            core.info(`vhs ${vhsTag} · ttyd ${ttydTag}`);
 
       - name: Restore cached vhs + ttyd
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
@@ -146,10 +172,33 @@ jobs:
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
-          # vhs asset name embeds the version
-          vhs_url=$(curl -sSL "https://api.github.com/repos/charmbracelet/vhs/releases/latest" \
-            | jq -r '.assets[] | select(.name | endswith("Linux_x86_64.tar.gz")) | .browser_download_url' \
-            | head -1)
+          # vhs asset name embeds the version — get download URL via GitHub API with retry
+          get_vhs_url() {
+            local max_attempts=3
+            local delay=10
+            local attempt=1
+            while (( attempt <= max_attempts )); do
+              local response
+              response=$(curl -sSL -w "\n%{http_code}" "https://api.github.com/repos/charmbracelet/vhs/releases/latest")
+              local status=$(echo "$response" | tail -1)
+              local body=$(echo "$response" | sed '$d')
+              if [[ "$status" == "200" ]]; then
+                echo "$body" | jq -r '.assets[] | select(.name | endswith("Linux_x86_64.tar.gz")) | .browser_download_url' | head -1
+                return 0
+              elif [[ "$status" == "403" ]] || [[ "$status" == "429" ]]; then
+                echo "Rate limited (HTTP $status), waiting ${delay}s before retry $attempt/$max_attempts..." >&2
+                sleep $delay
+                delay=$((delay * 3))
+                ((attempt++))
+              else
+                echo "Non-retryable error (HTTP $status) after $attempt attempt(s)" >&2
+                return 1
+              fi
+            done
+            echo "Max retries exceeded" >&2
+            return 1
+          }
+          vhs_url=$(get_vhs_url)
           curl -sSL "$vhs_url" \
             | sudo tar -xz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
           sudo chmod +x /usr/local/bin/vhs
@@ -157,8 +206,15 @@ jobs:
           curl -sSL -o /tmp/ttyd "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.x86_64"
           sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
 
-      - name: Install ffmpeg
+      - name: Cache ffmpeg
         if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: ffmpeg
+          version: 1.0.0
+
+      - name: Install ffmpeg (fallback)
+        if: hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-ffmpeg.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # Skip the slow PPA refreshes — ffmpeg is in the default
