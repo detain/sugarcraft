@@ -293,9 +293,13 @@ final class ProgressList implements Sizer
      */
     public function withShowProgressBars(bool $show): self
     {
-        $clone = clone $this;
-        $clone->showProgressBars = $show;
-        return $clone;
+        return new self(
+            items: $this->items,
+            showProgressBars: $show,
+            showPercentages: $this->showPercentages,
+            progressBarWidth: $this->progressBarWidth,
+            labelAlign: $this->labelAlign,
+        );
     }
 
     /**
@@ -303,9 +307,13 @@ final class ProgressList implements Sizer
      */
     public function withShowPercentages(bool $show): self
     {
-        $clone = clone $this;
-        $clone->showPercentages = $show;
-        return $clone;
+        return new self(
+            items: $this->items,
+            showProgressBars: $this->showProgressBars,
+            showPercentages: $show,
+            progressBarWidth: $this->progressBarWidth,
+            labelAlign: $this->labelAlign,
+        );
     }
 
     /**
@@ -313,9 +321,13 @@ final class ProgressList implements Sizer
      */
     public function withProgressBarWidth(int $width): self
     {
-        $clone = clone $this;
-        $clone->progressBarWidth = max(1, $width);
-        return $clone;
+        return new self(
+            items: $this->items,
+            showProgressBars: $this->showProgressBars,
+            showPercentages: $this->showPercentages,
+            progressBarWidth: max(1, $width),
+            labelAlign: $this->labelAlign,
+        );
     }
 
     /**
@@ -323,8 +335,12 @@ final class ProgressList implements Sizer
      */
     public function withLabelAlign(HAlign $align): self
     {
-        $clone = clone $this;
-        $clone->labelAlign = $align;
-        return $clone;
+        return new self(
+            items: $this->items,
+            showProgressBars: $this->showProgressBars,
+            showPercentages: $this->showPercentages,
+            progressBarWidth: $this->progressBarWidth,
+            labelAlign: $align,
+        );
     }
 }

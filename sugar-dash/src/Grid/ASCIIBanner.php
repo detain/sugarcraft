@@ -51,9 +51,9 @@ final class ASCIIBanner implements Sizer
     }
 
     /**
-     * Create a banner with a subtitle.
+     * Create a banner with a title and subtitle.
      */
-    public static function withSubtitle(string $title, string $subtitle): self
+    public static function withTitleAndSubtitle(string $title, string $subtitle): self
     {
         return new self(
             title: $title,

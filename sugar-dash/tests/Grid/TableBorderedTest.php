@@ -60,10 +60,11 @@ final class TableBorderedTest extends TestCase
     {
         $table = TableBordered::new([
             ['header' => 'Col1'],
+            ['header' => 'Col2'],
         ]);
         $rendered = $table->render();
 
-        // Should contain box-drawing characters
+        // Should contain box-drawing characters (including ┬ for multiple columns)
         $this->assertStringContainsString('┌', $rendered);
         $this->assertStringContainsString('┐', $rendered);
         $this->assertStringContainsString('┬', $rendered);

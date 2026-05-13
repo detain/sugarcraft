@@ -63,7 +63,7 @@ final class ASCIIBannerTest extends TestCase
 
     public function testWithSubtitleFactory(): void
     {
-        $banner = ASCIIBanner::withSubtitle('Title', 'Subtitle');
+        $banner = ASCIIBanner::withTitleAndSubtitle('Title', 'Subtitle');
         $rendered = $banner->render();
 
         $this->assertStringContainsString('Title', $rendered);
@@ -296,7 +296,7 @@ final class ASCIIBannerTest extends TestCase
     public function testGetInnerSizeWithSubtitleIncreasesHeight(): void
     {
         $bannerNoSub = ASCIIBanner::new('Title');
-        $bannerWithSub = ASCIIBanner::withSubtitle('Title', 'Subtitle');
+        $bannerWithSub = ASCIIBanner::withTitleAndSubtitle('Title', 'Subtitle');
 
         [, $h1] = $bannerNoSub->getInnerSize();
         [, $h2] = $bannerWithSub->getInnerSize();

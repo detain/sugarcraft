@@ -183,7 +183,9 @@ final class BoxDrawing implements Sizer
         $contentHeight -= $this->showSubtitleBar && $this->subtitle !== null ? 1 : 0;
         $contentHeight = max(0, $contentHeight);
 
-        for ($i = 0; $i < $contentHeight; $i++) {
+        // Render content lines (at least one empty line if showing vertical borders)
+        $renderLines = max(1, $contentHeight);
+        for ($i = 0; $i < $renderLines; $i++) {
             $left = $this->showLeftBorder ? $v : ' ';
             $right = $this->showRightBorder ? $v : ' ';
             $result .= $left . str_repeat(' ', $innerWidth) . $right . "\n";

@@ -244,15 +244,16 @@ final class HexDumpTest extends TestCase
     public function testGetInnerSizeIncreasesWithMoreData(): void
     {
         $hex1 = HexDump::new('A');
-        $hex16 = HexDump::new(str_repeat('A', 16));
-        $hex32 = HexDump::new(str_repeat('A', 32));
+        $hex17 = HexDump::new(str_repeat('A', 17));
+        $hex33 = HexDump::new(str_repeat('A', 33));
 
         [, $h1] = $hex1->getInnerSize();
-        [, $h16] = $hex16->getInnerSize();
-        [, $h32] = $hex32->getInnerSize();
+        [, $h17] = $hex17->getInnerSize();
+        [, $h33] = $hex33->getInnerSize();
 
-        $this->assertLessThan($h16, $h1);
-        $this->assertLessThan($h32, $h16);
+        // 1 byte = 1 line, 17 bytes = 2 lines, 33 bytes = 3 lines (bytesPerLine=16)
+        $this->assertLessThan($h17, $h1);
+        $this->assertLessThan($h33, $h17);
     }
 
     // ═══════════════════════════════════════════════════════════════

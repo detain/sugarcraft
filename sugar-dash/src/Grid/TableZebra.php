@@ -152,10 +152,12 @@ final class TableZebra implements Sizer
             if ($this->width > $naturalWidth) {
                 $extra = $this->width - $naturalWidth;
                 $count = count($widths);
+                $perColumn = (int) floor($extra / $count);
+                $remainder = $extra - $perColumn * $count;
                 for ($i = 0; $i < $count - 1; $i++) {
-                    $widths[$i] += (int) floor($extra / $count);
+                    $widths[$i] += $perColumn;
                 }
-                $widths[$count - 1] += $extra - array_sum(array_map(fn($w) => $w - ($col['width'] ?? 10), $this->columns));
+                $widths[$count - 1] += $perColumn + $remainder;
             }
         }
 
