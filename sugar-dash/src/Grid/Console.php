@@ -10,158 +10,6 @@ use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
 
 /**
- * Console output stream types.
- */
-enum ConsoleStream: string
-{
-    case Stdout = 'stdout';
-    case Stderr = 'stderr';
-    case Info = 'info';
-    case Success = 'success';
-    case Warning = 'warning';
-    case Error = 'error';
-    case Debug = 'debug';
-    case Raw = 'raw';
-
-    /**
-     * Get the default color for this stream.
-     */
-    public function defaultColor(): Color
-    {
-        return match ($this) {
-            self::Stdout => Color::hex('#F9FAFB'),
-            self::Stderr => Color::hex('#F38BA8'),
-            self::Info => Color::hex('#89B4FA'),
-            self::Success => Color::hex('#A6E3A1'),
-            self::Warning => Color::hex('#F9E2AF'),
-            self::Error => Color::hex('#F38BA8'),
-            self::Debug => Color::hex('#6C7086'),
-            self::Raw => Color::hex('#CDD6F4'),
-        };
-    }
-
-    /**
-     * Get the prefix for this stream.
-     */
-    public function prefix(): string
-    {
-        return match ($this) {
-            self::Stdout => '',
-            self::Stderr => '',
-            self::Info => '[INFO]',
-            self::Success => '[OK]',
-            self::Warning => '[WARN]',
-            self::Error => '[ERROR]',
-            self::Debug => '[DEBUG]',
-            self::Raw => '',
-        };
-    }
-
-    /**
-     * Whether this stream writes to stderr.
-     */
-    public function isError(): bool
-    {
-        return match ($this) {
-            self::Stderr, self::Error, self::Warning => true,
-            default => false,
-        };
-    }
-
-    /**
-     * Get the sort order for this stream (lower = less severe).
-     */
-    public function sortOrder(): int
-    {
-        return match ($this) {
-            self::Raw => 0,
-            self::Stdout => 1,
-            self::Debug => 2,
-            self::Info => 3,
-            self::Success => 4,
-            self::Warning => 5,
-            self::Stderr => 6,
-            self::Error => 7,
-        };
-    }
-}
-
-/**
- * Console output entry.
- */
-final readonly class ConsoleEntry
-{
-    public function __construct(
-        public string $message,
-        public ConsoleStream $stream = ConsoleStream::Stdout,
-        public ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a new console entry.
-     */
-    public static function create(
-        string $message,
-        ConsoleStream $stream = ConsoleStream::Stdout,
-        ?Color $color = null,
-    ): self {
-        return new self(
-            message: $message,
-            stream: $stream,
-            color: $color ?? $stream->defaultColor(),
-        );
-    }
-
-    /**
-     * Create an info entry.
-     */
-    public static function info(string $message): self
-    {
-        return self::create($message, ConsoleStream::Info);
-    }
-
-    /**
-     * Create a success entry.
-     */
-    public static function success(string $message): self
-    {
-        return self::create($message, ConsoleStream::Success);
-    }
-
-    /**
-     * Create a warning entry.
-     */
-    public static function warning(string $message): self
-    {
-        return self::create($message, ConsoleStream::Warning);
-    }
-
-    /**
-     * Create an error entry.
-     */
-    public static function error(string $message): self
-    {
-        return self::create($message, ConsoleStream::Error);
-    }
-
-    /**
-     * Create a debug entry.
-     */
-    public static function debug(string $message): self
-    {
-        return self::create($message, ConsoleStream::Debug);
-    }
-
-    /**
-     * Create a raw stdout entry (no prefix, no color).
-     */
-    public static function raw(string $message): self
-    {
-        return self::create($message, ConsoleStream::Raw);
-    }
-}
-
-/**
  * A styled console output component.
  *
  * Features:
@@ -308,7 +156,7 @@ final class Console implements Sizer
 
         $prefixStr = '';
         if ($this->showPrefix && $prefix !== '') {
-            $prefixStr = str_pad($prefix, $prefixWidth);
+            $prefixStr = $this->showTimestamps ? str_pad($prefix, $prefixWidth) : $prefix;
             if ($this->prefixColor !== null) {
                 $prefixStr = $this->prefixColor->toFg(ColorProfile::TrueColor) . $prefixStr . Ansi::reset();
             } else {
@@ -446,7 +294,8 @@ final class Console implements Sizer
     public function withEntry(ConsoleEntry $entry): self
     {
         $clone = clone $this;
-        $newEntries = array_merge($clone->entries, [$entry]);
+        $newEntries = array_merge($clone->originalEntries, [$entry]);
+        $clone->originalEntries = $newEntries;
         $clone->entries = $this->filterEntries($newEntries);
         return $clone;
     }

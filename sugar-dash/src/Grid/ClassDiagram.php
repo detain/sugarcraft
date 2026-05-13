@@ -415,7 +415,7 @@ final class ClassDiagram implements Sizer
         $useWidth = $this->width ?? 70;
         $useHeight = $this->height ?? 20;
 
-        if ($useWidth < 25 || $useHeight < 10 || empty($this->classes)) {
+        if ($useWidth < 25 || $useHeight < 10) {
             return '';
         }
 

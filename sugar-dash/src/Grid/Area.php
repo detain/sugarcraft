@@ -11,15 +11,6 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * Data point for area charts.
  */
-final readonly class AreaPoint
-{
-    public function __construct(
-        public string $label,
-        public float $value,
-        public ?float $y0 = null,  // Baseline (default 0)
-    ) {}
-}
-
 /**
  * An area chart component with stacked layers.
  *
@@ -56,10 +47,10 @@ final class Area implements Sizer
     private const FILL_BLOCKS = ['░', '▒', '▓', '█'];
 
     public function __construct(
-        private readonly ?Color $color = null,
-        private readonly ?Color $fillColor = null,
-        private readonly ?Color $gridColor = null,
-        private readonly ?Color $labelColor = null,
+        private ?Color $color = null,
+        private ?Color $fillColor = null,
+        private ?Color $gridColor = null,
+        private ?Color $labelColor = null,
     ) {}
 
     /**
@@ -69,12 +60,12 @@ final class Area implements Sizer
      */
     public static function new(array $dataPoints = []): self
     {
-        return new self(
+        return (new self(
             color: Color::hex('#89B4FA'),
             fillColor: Color::hex('#45475A'),
             gridColor: Color::hex('#45475A'),
             labelColor: Color::hex('#6C7086'),
-        )->withDataPoints($dataPoints);
+        ))->withDataPoints($dataPoints);
     }
 
     /**
@@ -261,8 +252,14 @@ final class Area implements Sizer
                 }
 
                 // Calculate row threshold
-                $valueHeight = intval((($value - $baseline) / ($maxValue - $minValue)) * $chartHeight);
-                $baselineHeight = intval((($baseline - $minValue) / ($maxValue - $minValue)) * $chartHeight);
+                $range = $maxValue - $minValue;
+                if ($range == 0.0) {
+                    $valueHeight = 0;
+                    $baselineHeight = 0;
+                } else {
+                    $valueHeight = intval((($value - $baseline) / $range) * $chartHeight);
+                    $baselineHeight = intval((($baseline - $minValue) / $range) * $chartHeight);
+                }
 
                 $threshold = $row + 1;
 
@@ -315,9 +312,10 @@ final class Area implements Sizer
         // Labels
         if ($this->showLabels) {
             $line = str_repeat(' ', 7);
+            $perPoint = max(1, intdiv($chartWidth, max(1, $dataCount)));
             foreach ($this->dataPoints as $point) {
-                $label = mb_substr($point->label, 0, 1, 'UTF-8');
-                $line .= $label;
+                $label = mb_substr($point->label, 0, $perPoint, 'UTF-8');
+                $line .= str_pad($label, $perPoint);
             }
             if ($labelColor !== null) {
                 $line = $labelColor->toFg(ColorProfile::TrueColor) . $line . Ansi::reset();
@@ -353,7 +351,7 @@ final class Area implements Sizer
         if ($this->width !== null && $this->width > 0) {
             return max(0, $this->width - 10);
         }
-        return max(1, count($this->dataPoints));
+        return max(40, count($this->dataPoints) * 4);
     }
 
     /**
@@ -388,8 +386,8 @@ final class Area implements Sizer
      */
     public function getInnerSize(): array
     {
-        $width = $this->getChartWidth() + 10;
-        $height = $this->getChartHeight() + 2;
+        $width = $this->width ?? $this->getChartWidth() + 10;
+        $height = $this->sizerHeight ?? $this->getChartHeight() + 2;
 
         return [$width, $height];
     }
@@ -401,12 +399,9 @@ final class Area implements Sizer
      */
     public function withColor(?Color $color): self
     {
-        return new self(
-            color: $color,
-            fillColor: $this->fillColor,
-            gridColor: $this->gridColor,
-            labelColor: $this->labelColor,
-        );
+        $clone = clone $this;
+        $clone->color = $color;
+        return $clone;
     }
 
     /**
@@ -414,12 +409,9 @@ final class Area implements Sizer
      */
     public function withFillColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            fillColor: $color,
-            gridColor: $this->gridColor,
-            labelColor: $this->labelColor,
-        );
+        $clone = clone $this;
+        $clone->fillColor = $color;
+        return $clone;
     }
 
     /**
@@ -427,12 +419,9 @@ final class Area implements Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            fillColor: $this->fillColor,
-            gridColor: $color,
-            labelColor: $this->labelColor,
-        );
+        $clone = clone $this;
+        $clone->gridColor = $color;
+        return $clone;
     }
 
     /**
@@ -440,12 +429,9 @@ final class Area implements Sizer
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            fillColor: $this->fillColor,
-            gridColor: $this->gridColor,
-            labelColor: $color,
-        );
+        $clone = clone $this;
+        $clone->labelColor = $color;
+        return $clone;
     }
 
     /**

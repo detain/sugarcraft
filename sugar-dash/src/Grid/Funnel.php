@@ -57,10 +57,10 @@ final class Funnel implements Sizer
     private string $style = 'rounded';
 
     public function __construct(
-        private readonly ?Color $color = null,
-        private readonly ?Color $borderColor = null,
-        private readonly ?Color $labelColor = null,
-        private readonly ?Color $valueColor = null,
+        private ?Color $color = null,
+        private ?Color $borderColor = null,
+        private ?Color $labelColor = null,
+        private ?Color $valueColor = null,
     ) {}
 
     /**
@@ -70,12 +70,12 @@ final class Funnel implements Sizer
      */
     public static function new(array $stages = []): self
     {
-        return new self(
+        return (new self(
             color: Color::hex('#89B4FA'),
             borderColor: Color::hex('#45475A'),
             labelColor: Color::hex('#CDD6F4'),
             valueColor: Color::hex('#A6E3A1'),
-        )->withStages($stages);
+        ))->withStages($stages);
     }
 
     /**
@@ -544,12 +544,9 @@ final class Funnel implements Sizer
      */
     public function withColor(?Color $color): self
     {
-        return new self(
-            color: $color,
-            borderColor: $this->borderColor,
-            labelColor: $this->labelColor,
-            valueColor: $this->valueColor,
-        );
+        $clone = clone $this;
+        $clone->color = $color;
+        return $clone;
     }
 
     /**
@@ -557,12 +554,9 @@ final class Funnel implements Sizer
      */
     public function withBorderColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            borderColor: $color,
-            labelColor: $this->labelColor,
-            valueColor: $this->valueColor,
-        );
+        $clone = clone $this;
+        $clone->borderColor = $color;
+        return $clone;
     }
 
     /**
@@ -570,12 +564,9 @@ final class Funnel implements Sizer
      */
     public function withLabelColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            borderColor: $this->borderColor,
-            labelColor: $color,
-            valueColor: $this->valueColor,
-        );
+        $clone = clone $this;
+        $clone->labelColor = $color;
+        return $clone;
     }
 
     /**
@@ -583,11 +574,8 @@ final class Funnel implements Sizer
      */
     public function withValueColor(?Color $color): self
     {
-        return new self(
-            color: $this->color,
-            borderColor: $this->borderColor,
-            labelColor: $this->labelColor,
-            valueColor: $color,
-        );
+        $clone = clone $this;
+        $clone->valueColor = $color;
+        return $clone;
     }
 }

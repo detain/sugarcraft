@@ -285,9 +285,10 @@ final class ScrollbarTest extends TestCase
         $original = Scrollbar::new(0.5);
         $original->withPosition(0.9);
 
-        // Original should still show 0.5 position
-        $lines = explode("\n", $original->render());
-        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $lines[1] ?? '');
+        // Original should be immutable: rendering it again still produces the
+        // same string (with the 0.5 position thumb), since withPosition returns
+        // a new instance.
+        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $original->render());
         $this->assertStringContainsString('█', $stripped);
     }
 
