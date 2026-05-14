@@ -25,6 +25,7 @@ final class TileLayout implements Item, Sizer
         private readonly Direction $direction = Direction::Horizontal,
         private readonly array $tiles = [],
         private readonly Size $baseSize = new Size(),
+        private readonly int $gap = 0,
     ) {}
 
     public static function horizontal(string $name = 'Root'): self
@@ -58,40 +59,113 @@ final class TileLayout implements Item, Sizer
             return '';
         }
 
-        $views = [];
-        $totalFixedWidth = 0;
-        $totalFixedHeight = 0;
+        // Build constraints and hinters from tiles
+        $constraints = [];
+        $hinters = [];
 
         foreach ($this->tiles as $tile) {
-            if ($tile->getSize()->fixedWidth !== null) {
-                $totalFixedWidth += $tile->getSize()->fixedWidth;
-            }
-            if ($tile->getSize()->fixedHeight !== null) {
-                $totalFixedHeight += $tile->getSize()->fixedHeight;
+            $size = $tile->getSize();
+            $content = $tile->getContent();
+            $hinters[] = $content instanceof SizeHinter ? $content : null;
+
+            if ($this->direction === Direction::Horizontal) {
+                // Horizontal: primary axis is width
+                if ($size->fixedWidth !== null) {
+                    $constraints[] = Constraint::fixed($size->fixedWidth);
+                } elseif ($size->weight > 0) {
+                    $c = Constraint::flex($size->weight);
+                    if ($size->minWidth !== null) {
+                        $c = $c->withMinSize($size->minWidth);
+                    }
+                    if ($size->maxWidth !== null) {
+                        $c = $c->withMaxSize($size->maxWidth);
+                    }
+                    if ($size->optional) {
+                        $c = $c->withOptional(true);
+                    }
+                    if ($size->minSizeFit) {
+                        $c = $c->withMinSizeFit(true);
+                    }
+                    $constraints[] = $c;
+                } else {
+                    // Fit constraint - will query hinter for desired size
+                    $c = Constraint::fit();
+                    if ($size->minWidth !== null) {
+                        $c = $c->withMinSize($size->minWidth);
+                    }
+                    if ($size->maxWidth !== null) {
+                        $c = $c->withMaxSize($size->maxWidth);
+                    }
+                    if ($size->optional) {
+                        $c = $c->withOptional(true);
+                    }
+                    if ($size->minSizeFit) {
+                        $c = $c->withMinSizeFit(true);
+                    }
+                    $constraints[] = $c;
+                }
+            } else {
+                // Vertical: primary axis is height
+                if ($size->fixedHeight !== null) {
+                    $constraints[] = Constraint::fixed($size->fixedHeight);
+                } elseif ($size->weight > 0) {
+                    $c = Constraint::flex($size->weight);
+                    if ($size->minHeight !== null) {
+                        $c = $c->withMinSize($size->minHeight);
+                    }
+                    if ($size->maxHeight !== null) {
+                        $c = $c->withMaxSize($size->maxHeight);
+                    }
+                    if ($size->optional) {
+                        $c = $c->withOptional(true);
+                    }
+                    if ($size->minSizeFit) {
+                        $c = $c->withMinSizeFit(true);
+                    }
+                    $constraints[] = $c;
+                } else {
+                    $c = Constraint::fit();
+                    if ($size->minHeight !== null) {
+                        $c = $c->withMinSize($size->minHeight);
+                    }
+                    if ($size->maxHeight !== null) {
+                        $c = $c->withMaxSize($size->maxHeight);
+                    }
+                    if ($size->optional) {
+                        $c = $c->withOptional(true);
+                    }
+                    if ($size->minSizeFit) {
+                        $c = $c->withMinSizeFit(true);
+                    }
+                    $constraints[] = $c;
+                }
             }
         }
 
-        $currentX = 0;
-        $currentY = 0;
+        // Resolve sizes along the primary axis
+        $horizontal = $this->direction === Direction::Horizontal;
+        $sizes = Resolver::resolveLinear(
+            $horizontal ? $w : $h,
+            $constraints,
+            $this->gap,
+            $hinters,
+            $horizontal,
+        );
 
-        foreach ($this->tiles as $tile) {
-            [$tileW, $tileH] = Resolver::resolveTile(
-                $tile,
-                $this->direction,
-                $w,
-                $h,
-                $totalFixedWidth,
-                $totalFixedHeight,
-            );
+        // Apply resolved sizes to tiles and collect rendered views
+        $views = [];
+
+        foreach ($this->tiles as $index => $tile) {
+            if ($horizontal) {
+                $tileW = $sizes[$index] ?? 0;
+                $tileH = $tile->getSize()->fixedHeight ?? $h;
+            } else {
+                $tileW = $tile->getSize()->fixedWidth ?? $w;
+                $tileH = $sizes[$index] ?? 0;
+            }
 
             $tile->setSize($tileW, $tileH);
             $views[] = $tile->render();
-
-            if ($this->direction === Direction::Horizontal) {
-                $currentX += $tileW;
-            } else {
-                $currentY += $tileH;
-            }
         }
 
         if ($this->direction === Direction::Horizontal) {
@@ -116,6 +190,7 @@ final class TileLayout implements Item, Sizer
             direction: $this->direction,
             tiles: $tiles,
             baseSize: $this->baseSize,
+            gap: $this->gap,
         );
     }
 
@@ -126,6 +201,7 @@ final class TileLayout implements Item, Sizer
             direction: $direction,
             tiles: $this->tiles,
             baseSize: $this->baseSize,
+            gap: $this->gap,
         );
     }
 
@@ -136,6 +212,18 @@ final class TileLayout implements Item, Sizer
             direction: $this->direction,
             tiles: [...$this->tiles, $tile],
             baseSize: $this->baseSize,
+            gap: $this->gap,
+        );
+    }
+
+    public function withGap(int $gap): self
+    {
+        return new self(
+            name: $this->name,
+            direction: $this->direction,
+            tiles: $this->tiles,
+            baseSize: $this->baseSize,
+            gap: $gap,
         );
     }
 }

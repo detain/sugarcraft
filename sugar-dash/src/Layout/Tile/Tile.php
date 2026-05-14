@@ -32,6 +32,21 @@ final class Tile extends BaseTile
         $this->parent = $parent;
     }
 
+    public function isOptional(): bool
+    {
+        return $this->size->optional;
+    }
+
+    public function isMinSizeFit(): bool
+    {
+        return $this->size->minSizeFit;
+    }
+
+    public function getContent(): ?Item
+    {
+        return $this->content;
+    }
+
     public function render(): string
     {
         if ($this->content === null) {

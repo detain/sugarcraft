@@ -155,15 +155,20 @@ final class BrailleCanvasTest extends TestCase
 
     public function testSetLineDiagonal(): void
     {
-        // 45-degree diagonal line
+        // 45-degree diagonal line from (0,0) to (8,8)
+        // Each braille cell is 2×4 pixels
+        // Pixels (0,0), (1,1), (2,2) → cell (0,0)
+        // Pixels (2,2), (3,3) → cell (1,0)
+        // Pixels (4,4), (5,5) → cell (2,1)
+        // etc.
         $canvas = BrailleCanvas::new(20, 20);
         $updated = $canvas->setLine(0, 0, 8, 8);
 
         // Should have cells set along the diagonal
         $this->assertNotSame(0, $updated->getCell(0, 0));
 
-        // Check intermediate point (should be around cell 2,2)
-        $bits = $updated->getCell(2, 2);
+        // Check intermediate point at cell (1,0) where pixel (2,2) lands
+        $bits = $updated->getCell(1, 0);
         $this->assertNotSame(0, $bits);
     }
 

@@ -386,8 +386,8 @@ final class PlotTest extends TestCase
         $plot = Plot::new([10, 20, 30], 40, 2);
         $rendered = $plot->render();
 
-        // Very small height may produce empty string
-        $this->assertNotSame('', $rendered);
+        // Very small height with axes on produces empty string (innerHeight=0)
+        $this->assertSame('', $rendered);
     }
 
     public function testVeryLargeValues(): void
