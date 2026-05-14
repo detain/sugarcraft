@@ -171,7 +171,7 @@ final class Tabs implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         $tab = $this->tabs[$selectedIndex];
-        $content = $tab['content'];
+        $content = $tab['content'] ?? '';
 
         $tabBarHeight = $this->activeChar !== '' ? 2 : 1; // Same calculation as getInnerSize()
         $contentHeight = $this->height !== null ? $this->height - $tabBarHeight : 0;

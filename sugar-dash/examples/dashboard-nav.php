@@ -12,7 +12,7 @@ use SugarCraft\Dash\Components\Nav\{Navbar, Breadcrumb, Menu};
 $grid = new StackedGrid(new Options(fitScreen: true));
 
 // Navigation components
-$navbar = Navbar::new('Dashboard');
+$navbar = Navbar::brand('Dashboard');
 
 // Tabs horizontal
 $tabs = Tabs::new([

@@ -5,7 +5,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Heatmap};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
-use SugarCraft\Dash\Components\System\{Clock, Calendar, Timer, Stopwatch};
+use SugarCraft\Dash\Components\Calendar\{Calendar};
+use SugarCraft\Dash\Components\System\{Clock, Timer, Stopwatch};
 
 // Dashboard Time & Date Example
 $grid = new StackedGrid(new Options(fitScreen: true));
@@ -13,11 +14,11 @@ $grid = new StackedGrid(new Options(fitScreen: true));
 // Clock
 $clock = Clock::new();
 
-// Calendar
-$calendar = Calendar::new();
+// Calendar - use Calendar::now() for current month
+$calendar = Calendar::now();
 
-// Timer
-$timer = Timer::new();
+// Timer - use Timer::fromMinutes(5) for a 5-minute timer
+$timer = Timer::fromMinutes(5);
 
 // Stopwatch
 $stopwatch = Stopwatch::new();

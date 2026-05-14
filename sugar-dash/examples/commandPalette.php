@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Command palette
-$component = CommandPalette::new();
+$component = CommandPalette::new([["label" => "New File"], ["label" => "Open Folder"], ["label" => "Save"]]);
 $component->setSize(60, 15);
 echo $component->render();

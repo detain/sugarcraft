@@ -10,8 +10,13 @@ use SugarCraft\Dash\Components\System\{LogViewer, Console, Terminal, HexDump};
 // Dashboard Developer Tools Example
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Log viewer
-$logViewer = LogViewer::new();
+// Log viewer - requires array of entries
+$logViewer = LogViewer::new([
+    ['message' => 'Application started', 'severity' => 'info'],
+    ['message' => 'Loading configuration...', 'severity' => 'debug'],
+    ['message' => 'Warning: Low memory', 'severity' => 'warning'],
+    ['message' => 'Error: Connection failed', 'severity' => 'error'],
+]);
 
 // Console
 $console = Console::new();
@@ -24,14 +29,8 @@ $hexDump = HexDump::new('Hello, SugarDash! This is a test string for hex dump di
 
 // Diff
 $diff = Diff::new(
-    "Line 1: Old content
-Line 2: Original text
-Line 3: More old content
-Line 4: Final line",
-    "Line 1: New content
-Line 2: Modified text
-Line 3: More new content
-Line 4: Final line"
+    "Line 1: Old content\nLine 2: Original text\nLine 3: More old content\nLine 4: Final line",
+    "Line 1: New content\nLine 2: Modified text\nLine 3: More new content\nLine 4: Final line"
 );
 
 $topRow = HStack::spaced(2,

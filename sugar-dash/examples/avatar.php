@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // User avatar
-$component = Avatar::new("JD");
+$component = Avatar::fromName("JD");
 $component->setSize(60, 15);
 echo $component->render();

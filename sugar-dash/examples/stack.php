@@ -2,12 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Dash\Components\Card\Text;
 use SugarCraft\Dash\Layout\Stack;
-use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
 
 // Generic stack
-$component = Stack::new([Text::new("Item 1"), Text::new("Item 2")]);
-$component->setSize(60, 15);
+$component = Stack::new(Text::new("Item 1"), Text::new("Item 2"))->setSize(60, 15);
 echo $component->render();

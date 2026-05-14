@@ -2,34 +2,35 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Button};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
-use SugarCraft\Dash\Components\Form\{Input, Select, Checkbox, Toggle, Slider};
+use SugarCraft\Dash\Components\Form\{Input, Checkbox, Toggle, Slider};
+use SugarCraft\Dash\Components\Select\Select;
 
 // Dashboard Form Example
 $grid = new StackedGrid(new Options(fitScreen: true));
 
 // Form inputs
-$nameInput = Input::labeled('John Doe', 'Full Name');
-$emailInput = Input::labeled('john@example.com', 'Email Address');
+$nameInput = Input::new('John Doe');
+$emailInput = Input::new('john@example.com');
 $roleSelect = Select::new([
     ['label' => 'Admin'],
     ['label' => 'User'],
     ['label' => 'Guest'],
 ]);
 
-$notificationsToggle = Toggle::new('Enable Notifications', true);
-$darkModeToggle = Toggle::new('Dark Mode', false);
+$notificationsToggle = Toggle::on();
+$darkModeToggle = Toggle::off();
 
-$volumeSlider = Slider::new(75);
+$volumeSlider = Slider::new(75.0);
 
 $formStack = VStack::spaced(2,
     $nameInput,
     $emailInput,
     Frame::new(
         VStack::spaced(1,
-            Text::new('Role'),
+            new Text('Role'),
             $roleSelect
         )
     )->withPadding(1),
@@ -37,17 +38,13 @@ $formStack = VStack::spaced(2,
     $darkModeToggle,
     Frame::new(
         VStack::spaced(1,
-            Text::new('Volume: 75'),
+            new Text('Volume: 75'),
             $volumeSlider
         )
-    )->withPadding(1),
-    HStack::spaced(1,
-        Button::new('Save'),
-        Button::new('Cancel')
-    )
+    )->withPadding(1)
 );
 
-$termsCheckbox = Checkbox::new('I agree to the terms and conditions', false);
+$termsCheckbox = Checkbox::new([['label' => 'I agree to the terms and conditions', 'checked' => false]]);
 
 $mainContent = VStack::spaced(2,
     Card::titled($formStack, 'User Settings'),
@@ -55,7 +52,7 @@ $mainContent = VStack::spaced(2,
 );
 
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard Form Demo')))->withPadding(1),
+    Frame::new(HStack::new(new Text('Dashboard Form Demo')))->withPadding(1),
     new ItemOptions(column: 0, expandVertical: false)
 );
 
