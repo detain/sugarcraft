@@ -25,7 +25,7 @@ final class Registry
      * @param Constructor $constructor Closure that creates the module
      * @throws \RuntimeException If a module with this name is already registered
      */
-    public static function register(string $name, Constructor $constructor): void
+    public static function register(string $name, callable $constructor): void
     {
         if (isset(self::$registry[$name])) {
             throw new \RuntimeException("Module '{$name}' is already registered");
@@ -40,7 +40,7 @@ final class Registry
      * @return Constructor
      * @throws \RuntimeException If no module with this name is registered
      */
-    public static function get(string $name): Constructor
+    public static function get(string $name): callable
     {
         if (!isset(self::$registry[$name])) {
             throw new \RuntimeException("Module '{$name}' is not registered");
