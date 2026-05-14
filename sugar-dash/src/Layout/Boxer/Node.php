@@ -432,9 +432,10 @@ final class Node implements Item
 
             $boxes = array_merge($boxes, $lines);
 
-            // Fill to child's height if needed
-            while (count($boxes) < $this->height) {
-                // We need to track per-child height, not total
+            // Pad to child's height if content is shorter than allocated height
+            $paddingNeeded = $child->height - count($lines);
+            for ($p = 0; $p < $paddingNeeded; $p++) {
+                $boxes[] = str_repeat(self::SPACE, $targetWidth);
             }
         }
 

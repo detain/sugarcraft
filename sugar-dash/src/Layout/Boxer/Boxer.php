@@ -145,10 +145,11 @@ final class Boxer implements Item, Sizer
         // If model items are Sizers, propagate size to them
         $newModelMap = [];
         foreach ($this->modelMap as $addr => $item) {
-            $node = $this->findNode($this->root, $addr);
-            $newModelMap[$addr] = $item;
+            $addrStr = (string) $addr;
+            $node = $this->findNode($this->root, $addrStr);
+            $newModelMap[$addrStr] = $item;
             if ($item instanceof Sizer && $node !== null) {
-                $newModelMap[$addr] = $item->setSize($node->getWidth(), $node->getHeight());
+                $newModelMap[$addrStr] = $item->setSize($node->getWidth(), $node->getHeight());
             }
         }
 
