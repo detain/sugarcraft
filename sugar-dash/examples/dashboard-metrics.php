@@ -2,7 +2,12 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, Stat, Metric, MetricsGrid, StatusIndicator, Leaderboard, ActivityFeed, ProgressList, Rating};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card, Stat, Metric, MetricsGrid, Leaderboard, ActivityFeed};
+use SugarCraft\Dash\Components\StatusBar\StatusIndicator;
+use SugarCraft\Dash\Components\System\{ProgressList};
+use SugarCraft\Dash\Components\Form\Rating;
 
 // Dashboard Metrics Example
 $grid = new StackedGrid(new Options(fitScreen: true));

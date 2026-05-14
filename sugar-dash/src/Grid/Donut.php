@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors donut/pie chart patterns adapted to PHP with wither-style
  * immutable setters.
  */
-final class Donut implements Sizer
+final class Donut implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -116,7 +116,7 @@ final class Donut implements Sizer
     /**
      * Set the allocated dimensions for this chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

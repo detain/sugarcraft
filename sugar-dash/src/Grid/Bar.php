@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Layout\HAlign;
 
 /**
  * A horizontal status bar component.
@@ -21,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the bar concept from bubble-termbox/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Bar implements Sizer
+final class Bar implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -55,7 +56,7 @@ final class Bar implements Sizer
     /**
      * Set the allocated dimensions for this bar.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

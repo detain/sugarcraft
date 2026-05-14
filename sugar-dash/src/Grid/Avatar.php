@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors avatar UI concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Avatar implements Sizer
+final class Avatar implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -102,7 +102,7 @@ final class Avatar implements Sizer
     /**
      * Set the allocated dimensions for this avatar.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

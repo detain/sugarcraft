@@ -21,10 +21,10 @@ use SugarCraft\Core\Util\Width;
  * Mirrors focus handling from bubble-focus but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Focus implements Sizer
+final class Focus implements \SugarCraft\Dash\Foundation\Sizer
 {
     /**
-     * @param list<Item> $items
+     * @param list<\SugarCraft\Dash\Foundation\Item> $items
      */
     public function __construct(
         private readonly array $items,
@@ -57,7 +57,7 @@ final class Focus implements Sizer
     /**
      * Set the allocated dimensions for this focus manager.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         return new self(
             items: $this->items,
@@ -91,7 +91,7 @@ final class Focus implements Sizer
         $item = $focusedItem;
         $width = $this->getWidth();
         $height = $this->getHeight();
-        if ($item instanceof Sizer && ($width > 0 || $height > 0)) {
+        if ($item instanceof \SugarCraft\Dash\Foundation\Sizer&& ($width > 0 || $height > 0)) {
             $item = $item->setSize($width, $height);
         }
         $content = $item->render();
@@ -130,7 +130,7 @@ final class Focus implements Sizer
         for ($i = 0; $i < count($this->items); $i++) {
             $item = $this->items[$i];
 
-            if ($item instanceof Sizer) {
+            if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
                 $item = $item->setSize($this->getWidth(), $this->getHeight());
             }
             $content = $item->render();

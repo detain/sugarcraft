@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors analog meter concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Meter implements Sizer
+final class Meter implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $sizerWidth = null;
     private ?int $sizerHeight = null;
@@ -73,7 +73,7 @@ final class Meter implements Sizer
     /**
      * Set the allocated dimensions for this meter.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->sizerWidth = $width;

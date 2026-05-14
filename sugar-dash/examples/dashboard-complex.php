@@ -2,7 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, Donut, AreaChart, Chart, ChartType, ChartDataPoint, RadarChart, Heatmap, FunnelChart, Sparkline};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Donut, AreaChart, Chart, ChartType, ChartDataPoint, RadarChart, Heatmap, FunnelChart, Sparkline};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card};
 
 // Complex Dashboard - Full Featured
 $grid = new StackedGrid(new Options(fitScreen: true));

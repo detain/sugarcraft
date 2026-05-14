@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors speedometer/gauge-circle concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class GaugeCircle implements Sizer
+final class GaugeCircle implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -65,7 +65,7 @@ final class GaugeCircle implements Sizer
     /**
      * Set the allocated dimensions for this gauge.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

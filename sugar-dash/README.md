@@ -1,6 +1,6 @@
-# SugarCraft\Dash\Grid
+# SugarCraft\Dash
 
-A comprehensive TUI grid rendering library for PHP 8.3+, ported from the Charmbracelet ecosystem (bubbletea, bubble-grid, lipgloss). Provides 200+ components for building rich terminal user interfaces.
+A comprehensive TUI component library for PHP 8.3+, ported from the Charmbracelet ecosystem (bubbletea, bubble-grid, lipgloss). Provides 200+ components organized into 13 namespaces for building rich terminal user interfaces.
 
 ## Installation
 
@@ -8,14 +8,35 @@ A comprehensive TUI grid rendering library for PHP 8.3+, ported from the Charmbr
 composer require sugarcraft/sugar-dash
 ```
 
-## Core Concepts
+## Namespace Structure (13 Namespaces)
+
+| Namespace | Description |
+|-----------|-------------|
+| `Foundation\` | Pure interfaces + low-level primitives (Item, Sizer, Style, Theme, Color, Rect, Drawable, Buffer, Cell) |
+| `Layout\` | Layout primitives (Stack, VStack, HStack, ZStack, FlexLayout, GridLayout, Frame, Panel, Split, Spacer, Window, etc.) |
+| `Components\` | UI components (Modal, Select, Toast, Tabs, StatusBar, Form, Feedback, Nav, Card, Calendar, Tree, Table, etc.) |
+| `Plot\` | Charts and plotting (Chart, Sparkline, Gauge, Donut, Heatmap, RadarChart, TreeViz, Graph, etc.) |
+| `Module\` | Module interface + base implementations |
+| `Registry\` | Registry pattern for modules |
+| `Plugin\` | Plugin system with JSON protocol |
+| `Modules\` | Built-in modules (Clock, System, Weather, etc.) |
+| `Events\` | Input/event plumbing (Event, KeyEvent, MouseEvent, FocusEvent, etc.) |
+| `Keys\` | Key registry and mappings |
+| `Position\` | ANSI-aware geometry helpers |
+| `Output\` | Extracted helpers (truncate, render bar) |
+| `State\` | State management |
+
+---
+
+## Foundation Namespace
 
 ### Interfaces & Contracts
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Item` | Anything that can be placed in a StackedGrid and rendered as a string | `render(): string` |
+| `Item` | Anything that can be rendered as a string | `render(): string` |
 | `Sizer` | An Item that knows its own dimensions (extends Item) | `setSize(int $width, int $height): Sizer`, `render(): string` |
+| `Drawable` | Universal draw contract with GetRect/SetRect/Draw | `getRect(): Rect`, `setRect(Rect): void`, `draw(Buffer): void` |
 
 ### Configuration Classes
 
@@ -24,6 +45,22 @@ composer require sugarcraft/sugar-dash
 | `Options` | Grid-level configuration options | `$fitScreen: bool` (default: true) |
 | `ItemOptions` | Per-item placement options within StackedGrid | `$column: int` (0-based), `$expandVertical: bool` |
 | `ItemWithOptions` | Internal pairing of Item + ItemOptions | `$item: Item`, `$options: ItemOptions` |
+
+### Low-Level Primitives
+
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `Cell` | Single terminal cell (rune + style) | |
+| `Buffer` | Cell grid buffer for drawing | `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
+| `Rect` | Rectangle geometry | `contains()`, `intersect()`, `dx()`, `dy()` |
+| `Style` | Terminal styling (colors, attributes) | `fg()`, `bg()`, `bold()`, etc. |
+| `StyleParser` | ParseStyles inline syntax `[text](fg:red,bg:blue)` | |
+| `Color` | Color representation | |
+| `Theme` | Pre-defined theme palettes | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+
+---
+
+## Layout Namespace
 
 ### Layout Enums
 
@@ -37,14 +74,6 @@ composer require sugarcraft/sugar-dash
 | `HAlign` | `Left`, `Right`, `Center` |
 | `VAlign` | `Top`, `Middle`, `Bottom` |
 | `JustifyContent` | `Start`, `End`, `FlexStart`, `FlexEnd`, `Center`, `SpaceBetween`, `SpaceAround`, `SpaceEvenly` |
-| `FlowchartNodeType` | `Process`, `Decision`, `StartEnd`, `InputOutput`, `Connector`, `Data` |
-| `EdgeStyle` | `Solid`, `Dashed`, `Dotted`, `Bold` |
-| `NetworkShape` | `Circle`, `Square`, `Diamond`, `Hexagon`, `Star` |
-| `WaterfallBarType` | `Positive`, `Negative`, `Total`, `Subtotal` |
-
----
-
-## Layout & Structural Components
 
 ### Layout Containers
 
@@ -57,6 +86,7 @@ composer require sugarcraft/sugar-dash
 | `HStack` | Horizontal stack with spacing and alignment | `new(...items)`, `spaced(int, ...items)`, `centered(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hstack.gif) |
 | `ZStack` | Layered stack (items on top of each other) | `new(...items)`, `left(...items)`, `right(...items)`, `top(...items)`, `bottom(...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/zstack.gif) |
 | `Stack` | Basic vertical stack | `new(...items)`, `spaced(int, ...items)` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stack.gif) |
+| `Split` | Split view with two panes | `new(...items)`, `horizontal()`, `vertical()` | |
 
 ### Border & Frame Components
 
@@ -76,15 +106,21 @@ composer require sugarcraft/sugar-dash
 | `LayoutItem` | Item with flex properties for layouts | `flex(Item, int)`, `fixed(Item)` | |
 | `Shadow` | Drop shadow effect wrapping any Item | `new(Item)`, `withStyle()`, `withColor()`, `withOffset()`, `withHeavy()`, `withNoShadow()` | |
 | `Segment` | 7-segment digital display | `new(string)`, `withDigitWidth()`, `withOnColor()`, `withOffColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/segment.gif) |
+| `Window` | Window frame with title bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/window.gif) |
+| `Screen` | Terminal screen container | | |
+| `Viewport` | Scrollable viewport | | |
+| `Sidebar` | Sidebar navigation panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sidebar.gif) |
+| `Pad` | Padding wrapper (formerly Boxer) | | |
 
 ---
 
-## Data Visualization (Charts)
+## Plot Namespace (Charts & Visualization)
 
 ### Chart Components
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
+| `Plot` | Line/scatter chart with braille plotting | `new(dataPoints, type)`, `withDataPoints()`, `withType()`, `withColor()`, `withGrid()` | |
 | `Chart` | Bar/line chart with axes, labels, grid | `new(dataPoints, type)`, `withDataPoints()`, `withType()`, `withColor()`, `withGrid()`, `withShowValues()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chart.gif) |
 | `AreaChart` | Area chart for time series data | `new(series)`, `withShowGrid()`, `withShowLegend()`, `withMaxValue()`, `withStacked()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/area-chart.gif) |
 | `Area` | Stacked area chart with gradient fills | `new(dataPoints)`, `sample(int)`, `withDataPoints()`, `withStacked()`, `withShowLegend()` | |
@@ -100,60 +136,93 @@ composer require sugarcraft/sugar-dash
 | `Heatmap` | Heat map visualization with legend | `new(data)`, `sample()`, `withLegend()`, `withValues()`, `withLowColor()`, `withHighColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/heatmap.gif) |
 | `HeatmapCalendar` | GitHub-style calendar heatmap | `new(data)`, `sample()`, `withLowColor()`, `withHighColor()`, `withEmptyChar()` | |
 | `RadarChart` | Radar/spider chart for multi-axis data | `new(labels, series)`, `withSize()`, `withGridLines()`, `withShowLabels()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/radar-chart.gif) |
-| `Sankey` | Sankey diagram for flow visualization | `new()`, `addNode()`, `addFlow()`, `withHorizontal()`, `withShowLabels()` | |
-| `SankeyNode` | Node in Sankey diagram: `id`, `label`, `value`, `color` | | |
-| `SankeyFlow` | Flow connection: `source`, `target`, `value`, `color` | | |
 | `Sparkline` | Inline sparkline chart | `new(data)`, `withData()`, `withWidth()`, `withHeight()`, `withDataPoints()`, `withFill()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline.gif) |
 | `SparklineBar` | Bar-style sparkline | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline-bar.gif) |
 | `SparklineArea` | Area-style sparkline | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sparkline-area.gif) |
-| `SparkArea` | Spark area chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spark-area.gif) |
-| `Sunburst` | Sunburst chart visualization | | |
-| `Treemap` | Treemap chart visualization | | |
-| `TreemapLeaf` | Leaf node in treemap | | |
-| `TreeViz` | Tree visualization | | |
-| `Waterfall` | Waterfall chart | | |
-| `WaterfallItem` | Waterfall bar item | | |
+| `SparkArea` | Spark area chart | | |
 | `FunnelChart` | Funnel chart visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/funnel-chart.gif) |
 | `Funnel` | Funnel visualization component | | |
-| `Partition` | Partition chart | | |
-| `PartitionSegment` | Partition segment | | |
 | `Bullet` | Bullet chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bullet.gif) |
-| `NProgress` | Progress bar component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/nprogress.gif) |
 | `Meter` | Meter/gauge component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/meter.gif) |
 | `Rating` | Star rating display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/rating.gif) |
 | `OHLC` | Open-High-Low-Close data | | |
 | `OHLCPoint` | OHLC data point | | |
-| `TableChart` | Table-based chart | | |
-| `TableBordered` | Bordered table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-bordered.gif) |
-| `TableZebra` | Zebra-striped table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-zebra.gif) |
+| `Waterfall` | Waterfall chart | | |
+| `WaterfallItem` | Waterfall bar item | | |
 | `MetricsGrid` | Grid of metric displays | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/metrics-grid.gif) |
-| `ProgressList` | List of progress items | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-list.gif) |
 
----
-
-## Form & Input Components
+### Graph & Network Visualization
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Checkbox` | Checkbox group with single/multi-select | `new(options)`, `withSelectedIndex()`, `withOptionChecked()`, `withMultiSelect()`, `withCheckedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/checkbox.gif) |
-| `Input` | Text input field | `new(?string)`, `labeled()`, `password()`, `withValue()`, `withPlaceholder()`, `withLabel()`, `withError()`, `withBorderColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/input.gif) |
-| `Select` | Dropdown select component | `new(options)`, `withSelectedIndex()`, `withOptions()`, `withSelectedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/select.gif) |
-| `Textarea` | Multi-line text area | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/textarea.gif) |
-| `Slider` | Slider control | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/slider.gif) |
-| `Toggle` | Toggle switch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toggle.gif) |
-| `SwitchComponent` | Switch component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/switch-component.gif) |
-| `Radio` | Radio button | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/radio.gif) |
-| `Label` | Form label | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/label.gif) |
-| `Chip` | Chip/tag component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip.gif) |
-| `ChipGroup` | Group of chips | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip-group.gif) |
-| `ComboBox` | Combo box | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/combo-box.gif) |
-| `DatePicker` | Date picker | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/date-picker.gif) |
-| `ColorPicker` | Color picker | | |
-| `Dropdown` | Dropdown menu | | |
+| `Sankey` | Sankey diagram for flow visualization | `new()`, `addNode()`, `addFlow()`, `withHorizontal()`, `withShowLabels()` | |
+| `SankeyNode` | Node in Sankey diagram: `id`, `label`, `value`, `color` | | |
+| `SankeyFlow` | Flow connection: `source`, `target`, `value`, `color` | | |
+| `Sunburst` | Sunburst chart visualization | | |
+| `Treemap` | Treemap chart visualization | | |
+| `TreemapLeaf` | Leaf node in treemap | | |
+| `TreeViz` | Tree visualization | | |
+| `Network` | Network diagram | | |
+| `NetworkNode` | Node in network | | |
+| `NetworkShape` | `Circle`, `Square`, `Diamond`, `Hexagon`, `Star` | | |
+| `MindMap` | Mind map visualization | | |
+| `OrgChart` | Organization chart | | |
+| `ClassDiagram` | UML class diagram | | |
+| `Flowchart` | Flowchart diagram | | |
+| `FlowchartNode` | Node in flowchart | | |
+| `FlowchartNodeType` | `Process`, `Decision`, `StartEnd`, `InputOutput`, `Connector`, `Data` | | |
+| `Dendrogram` | Dendrogram/tree diagram | | |
+| `DendrogramNode` | Node in dendrogram | | |
+| `Gantt` | Gantt chart | | |
+| `PERT` | PERT chart | | |
+| `Timeline` | Timeline display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/timeline.gif) |
+| `TimelineViz` | Timeline visualization | | |
+| `TimelineNode` | Node in timeline | | |
+| `Sequence` | Sequence diagram | | |
+| `Graph` | Graph visualization | | |
+| `Bubble` | Bubble chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bubble.gif) |
+| `BubblePoint` | Bubble chart point | | |
+| `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/leaderboard.gif) |
+| `WordCloud` | Word cloud visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/word-cloud.gif) |
+| `DotMatrix` | Dot matrix display | | |
+| `Pictogram` | Pictogram display | | |
+| `Partition` | Partition chart | | |
+| `PartitionSegment` | Partition segment | | |
+| `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/diff.gif) |
+| `Ladder` | Ladder diagram | | |
+| `Canvas` | Drawing canvas | | |
+| `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/scrollbar.gif) |
 
 ---
 
-## Feedback & Status Components
+## Components Namespace
+
+### Components\Form (Form & Input)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Input` | Text input field | `new(?string)`, `labeled()`, `password()`, `withValue()`, `withPlaceholder()`, `withLabel()`, `withError()`, `withBorderColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/input.gif) |
+| `Textarea` | Multi-line text area | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/textarea.gif) |
+| `Checkbox` | Checkbox group with single/multi-select | `new(options)`, `withSelectedIndex()`, `withOptionChecked()`, `withMultiSelect()`, `withCheckedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/checkbox.gif) |
+| `Radio` | Radio button | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/radio.gif) |
+| `Toggle` | Toggle switch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toggle.gif) |
+| `SwitchComponent` | Switch component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/switch-component.gif) |
+| `Slider` | Slider control | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/slider.gif) |
+| `Select` | Dropdown select component | `new(options)`, `withSelectedIndex()`, `withOptions()`, `withSelectedColor()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/select.gif) |
+| `ComboBox` | Combo box | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/combo-box.gif) |
+| `Dropdown` | Dropdown menu | | |
+| `DatePicker` | Date picker | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/date-picker.gif) |
+| `ColorPicker` | Color picker | | |
+| `Label` | Form label | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/label.gif) |
+| `Chip` | Chip/tag component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip.gif) |
+| `ChipGroup` | Group of chips | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/chip-group.gif) |
+| `Editor` | Text editor | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/editor.gif) |
+| `CommandPalette` | Command palette | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/command-palette.gif) |
+| `Cursor` | Terminal cursor | | |
+
+---
+
+### Components\Feedback (Non-Modal Feedback)
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
@@ -161,145 +230,148 @@ composer require sugarcraft/sugar-dash
 | `Badge` | Badge/tag component | `new(string)`, `success()`, `warning()`, `error()`, `info()`, `withStyle()`, `withSize()`, `withIcon()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/badge.gif) |
 | `BadgeGroup` | Group of badges | | |
 | `LoadingText` | Animated loading text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/loading-text.gif) |
-| `Modal` | Modal dialog | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/modal.gif) |
-| `Notification` | Toast notification | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/notification.gif) |
-| `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress.gif) |
-| `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-bar.gif) |
-| `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-ring.gif) |
 | `Skeleton` | Loading skeleton | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/skeleton.gif) |
 | `Spinner` | Loading spinner | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spinner.gif) |
-| `StatusIndicator` | Status indicator dot | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/status-indicator.gif) |
 | `Toast` | Toast message | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toast.gif) |
 | `Tooltip` | Tooltip popup | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tooltip.gif) |
 | `Popover` | Popover content | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/popover.gif) |
 | `NProgress` | npm-style progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/nprogress.gif) |
 | `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/marquee.gif) |
-| `Cursor` | Terminal cursor | | |
-| `Buffer` | Terminal buffer | | |
+| `EmptyState` | Empty state placeholder | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/empty-state.gif) |
 
----
-
-## Navigation Components
+### Components\Modal (Modal Dialogs)
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
-| `Breadcrumb` | Breadcrumb navigation | `new(items)`, `fromPath()`, `withItems()`, `withSeparator()`, `withActiveIndex()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/breadcrumb.gif) |
+| `Modal` | Modal dialog | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/modal.gif) |
+| `Notification` | Toast notification | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/notification.gif) |
+| `Progress` | Progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress.gif) |
+| `ProgressBar` | Progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-bar.gif) |
+| `ProgressRing` | Circular progress indicator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-ring.gif) |
+| `Drawer` | Drawer panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/drawer.gif) |
+| `Wizard` | Multi-step wizard | | |
+| `WizardStep` | Wizard step | | |
+
+---
+
+### Components\Nav (Navigation)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
 | `Tabs` | Tabbed interface | `new(tabs)`, `withSelectedIndex()`, `withActiveColor()`, `withTabs()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tabs.gif) |
 | `TabsVertical` | Vertical tab navigation | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tabs-vertical.gif) |
+| `Breadcrumb` | Breadcrumb navigation | `new(items)`, `fromPath()`, `withItems()`, `withSeparator()`, `withActiveIndex()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/breadcrumb.gif) |
 | `Pagination` | Pagination controls | | |
 | `PaginationSimple` | Simple pagination | | |
 | `Stepper` | Step progress indicator | | |
 | `Navbar` | Navigation bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/navbar.gif) |
-| `Sidebar` | Sidebar navigation | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sidebar.gif) |
 | `Menu` | Menu component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/menu.gif) |
+| `Ladder` | Ladder diagram | | |
+| `Sequence` | Sequence diagram | | |
+| `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/scrollbar.gif) |
+
+### Components\StatusBar (Status Bar)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `StatusBar` | Status bar with left/right zones | `new()`, `withLeft()`, `withRight()`, `withSeparator()` | |
+| `StatusIndicator` | Status indicator dot | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/status-indicator.gif) |
 
 ---
 
-## Layout Helper Components
+### Components\Card (Card & Content Components)
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
 | `Card` | Card container component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/card.gif) |
+| `Header` | Page header | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/header.gif) |
+| `Footer` | Page footer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/footer.gif) |
 | `Cover` | Cover layout | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/cover.gif) |
 | `Jumbotron` | Jumbotron hero section | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/jumbotron.gif) |
 | `CTA` | Call-to-action component | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/cta.gif) |
-| `Avatar` | User avatar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar.gif) |
-| `AvatarGroup` | Group of avatars | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar-group.gif) |
 | `Profile` | User profile card | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/profile.gif) |
-| `Pricing` | Pricing table | | |
 | `Testimonial` | Testimonial quote | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/testimonial.gif) |
+| `Pricing` | Pricing table | | |
 | `Features` | Feature grid | | |
-| `EmptyState` | Empty state placeholder | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/empty-state.gif) |
-| `Footer` | Page footer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/footer.gif) |
-| `Header` | Page header | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/header.gif) |
-| `ListComponent` | List renderer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/list-component.gif) |
-| `Stat` | Single stat display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stat.gif) |
-| `Stats` | Statistics display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stats.gif) |
-| `Metric` | Metric display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/metric.gif) |
-| `ActivityFeed` | Activity feed | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/activity-feed.gif) |
-| `Comment` | Comment component | | |
-| `LogViewer` | Log file viewer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log-viewer.gif) |
-| `Console` | Terminal console | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/console.gif) |
-| `CommandPalette` | Command palette | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/command-palette.gif) |
-| `Editor` | Text editor | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/editor.gif) |
-| `Terminal` | Terminal emulator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/terminal.gif) |
-| `Log` | Log entry | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log.gif) |
-| `Screen` | Terminal screen | | |
-| `Viewport` | Viewport component | | |
-| `Window` | Window frame | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/window.gif) |
-| `Wizard` | Multi-step wizard | | |
-| `WizardStep` | Wizard step | | |
-| `Drawer` | Drawer panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/drawer.gif) |
 | `Accordion` | Accordion/collapsible | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/accordion.gif) |
-| `Calendar` | Calendar view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/calendar.gif) |
-| `Clock` | Digital clock | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/clock.gif) |
-| `Timer` | Countdown timer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/timer.gif) |
-| `Stopwatch` | Stopwatch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stopwatch.gif) |
-| `Video` | Video player | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/video.gif) |
-| `Audio` | Audio player | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/audio.gif) |
+| `Comment` | Comment component | | |
+| `ActivityFeed` | Activity feed | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/activity-feed.gif) |
+| `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/leaderboard.gif) |
+
+### Components\Media (Media Components)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
 | `Image` | Image display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/image.gif) |
 | `Picture` | Picture frame | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/picture.gif) |
+| `Avatar` | User avatar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar.gif) |
+| `AvatarGroup` | Group of avatars | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/avatar-group.gif) |
 | `Icon` | Icon display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/icon.gif) |
 | `QRCode` | QR code | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/qr-code.gif) |
 | `Barcode` | Barcode | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/barcode.gif) |
+| `Video` | Video player | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/video.gif) |
+| `Audio` | Audio player | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/audio.gif) |
+| `FigletText` | ASCII art text (FIGlet style) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/figlet-text.gif) |
+| `ASCIIBanner` | ASCII banner text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/ascii-banner.gif) |
+| `Emoji` | Emoji display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/emoji.gif) |
+| `Marquee` | Scrolling marquee text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/marquee.gif) |
+
+### Components\Calendar (Calendar & Date Components)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Calendar` | Calendar view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/calendar.gif) |
+| `ListComponent` | List renderer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/list-component.gif) |
+
+### Components\System (System/Console Components)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Console` | Terminal console | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/console.gif) |
+| `Terminal` | Terminal emulator | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/terminal.gif) |
+| `Log` | Log entry | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log.gif) |
+| `LogViewer` | Log file viewer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/log-viewer.gif) |
+| `HexDump` | Hex dump viewer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hex-dump.gif) |
+| `Clock` | Digital clock | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/clock.gif) |
+| `Timer` | Countdown timer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/timer.gif) |
+| `Stopwatch` | Stopwatch | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stopwatch.gif) |
 
 ---
 
-## Text Components
+### Components\Tree (Tree Structure Components)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `Tree` | Tree structure | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tree.gif) |
+| `TreeNode` | Tree node | | |
+
+### Components\Table (Table Components)
+
+| Type | Description | Key Methods/Factories | GIF |
+|------|-------------|----------------------|-----|
+| `TableChart` | Table-based chart | | |
+| `TableBordered` | Bordered table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-bordered.gif) |
+| `TableZebra` | Zebra-striped table | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/table-zebra.gif) |
+| `Stat` | Single stat display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stat.gif) |
+| `Stats` | Statistics display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/stats.gif) |
+| `Metric` | Metric display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/metric.gif) |
+| `ProgressList` | List of progress items | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/progress-list.gif) |
+
+### Components\Text (Text Components)
 
 | Type | Description | Key Methods/Factories | GIF |
 |------|-------------|----------------------|-----|
 | `Text` | Word-wrapped text content | `new(string)`, `withMaxWidth()`, `withTrim()`, `withHorizontalAlign()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/text.gif) |
+| `Paragraph` | Paragraph text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/paragraph.gif) |
 | `Code` | Code block with syntax highlighting | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/code.gif) |
 | `Kbd` | Keyboard key display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/kbd.gif) |
-| `Paragraph` | Paragraph text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/paragraph.gif) |
 | `Markdown` | Markdown rendering | | |
-| `FigletText` | ASCII art text (FIGlet style) | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/figlet-text.gif) |
-| `ASCIIBanner` | ASCII banner text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/ascii-banner.gif) |
-| `Emoji` | Emoji display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/emoji.gif) |
-| `HexDump` | Hex dump viewer | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/hex-dump.gif) |
 | `Highlight` | Syntax highlighted code | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/highlight.gif) |
-| `DotMatrix` | Dot matrix display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dot-matrix.gif) |
-| `Pictogram` | Pictogram display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/pictogram.gif) |
-| `Boxer` | Boxing text effect | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/boxer.gif) |
-
----
-
-## Diagram & Visualization Components
-
-| Type | Description | Key Methods/Factories | GIF |
-|------|-------------|----------------------|-----|
-| `ClassDiagram` | UML class diagram | | |
-| `Dendrogram` | Dendrogram/tree diagram | | |
-| `DendrogramNode` | Node in dendrogram | | |
-| `Flowchart` | Flowchart diagram | | |
-| `FlowchartNode` | Node in flowchart | | |
-| `Gantt` | Gantt chart | | |
-| `Graph` | Graph visualization | | |
-| `HexDump` | Hex dump view | | |
-| `Ladder` | Ladder diagram | | |
-| `Leaderboard` | Leaderboard display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/leaderboard.gif) |
-| `MindMap` | Mind map visualization | | |
-| `Network` | Network diagram | | |
-| `NetworkNode` | Node in network | | |
-| `OrgChart` | Organization chart | | |
-| `PERT` | PERT chart | | |
-| `Sequence` | Sequence diagram | | |
-| `Timeline` | Timeline display | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/timeline.gif) |
-| `TimelineViz` | Timeline visualization | | |
-| `TimelineNode` | Node in timeline | | |
-| `Tree` | Tree structure | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tree.gif) |
-| `TreeNode` | Tree node | | |
-| `WordCloud` | Word cloud visualization | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/word-cloud.gif) |
 | `Diff` | Diff view | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/diff.gif) |
-| `Bubble` | Bubble chart | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/bubble.gif) |
-| `BubblePoint` | Bubble chart point | | |
-| `Canvas` | Drawing canvas | | |
-| `Scrollbar` | Custom scrollbar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/scrollbar.gif) |
 
 ---
 
-## Event Types
+## Events Namespace (Input/Event Plumbing)
 
 | Type | Description | Key Properties |
 |------|-------------|----------------|
@@ -312,25 +384,83 @@ composer require sugarcraft/sugar-dash
 | `PasteEvent` | Paste event |
 | `ResizeEvent` | Resize event |
 | `Focus` | Focus state management |
+
+## Keys Namespace (Key Registry)
+
+| Type | Description | Key Properties |
+|------|-------------|----------------|
 | `Key` | Key representation |
 | `KeyAction` | Key action |
 | `KeyMap` | Key mapping |
+
+## State Namespace (State Management)
+
+| Type | Description | Key Properties |
+|------|-------------|----------------|
 | `State` | Application state |
 
----
-
-## Theme & Styling
+## Position Namespace (ANSI-Aware Geometry)
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Theme` | Theme management with pre-defined themes | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()`, `foreground()`, `background()`, `primary()`, `bar()`, `text()` |
+| `Center` | Calculate centered position |
+| `HAlign` | `Left`, `Right`, `Center` |
+| `VAlign` | `Top`, `Middle`, `Bottom` |
+
+## Output Namespace (Extracted Helpers)
+
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `Truncate` | String truncation with ANSI awareness |
+| `RenderBar` | Bar rendering helper |
+| `WrapCells` | Cell-aware text wrapping |
+
+## Module Namespace (Module Interface)
+
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `Module` | Module interface: name/init/update/view/minSize |
+| `BaseModule` | Abstract helper with default behavior |
+| `ModuleConfig` | Module configuration |
+| `ImagePlacer` | Optional interface for image placements |
+| `ImagePlacement` | Image placement data |
+| `TickEpoch` | Focus-regain epoch counter |
+
+## Registry Namespace (Module Registry)
+
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `Registry` | Static register/get/list/reset for modules |
+
+## Plugin Namespace (Plugin System)
+
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `Request` | Plugin request DTO |
+| `Response` | Plugin response DTO |
+| `PluginSdk` | Plugin runner loop |
+| `ExternalModule` | Wraps binary into Module interface |
+| `Discovery` | Plugin discovery from filesystem |
+
+## Modules Namespace (Built-in Modules)
+
+| Type | Description |
+|------|-------------|
+| `Clock\ClockModule` | Single-line clock |
+| `System\SystemModule` | CPU/mem/disk stats |
+| `Weather\WeatherModule` | HTTP weather fetcher |
+| `Uptime\UptimeModule` | System uptime |
+| `Greeting\GreetingModule` | Time-of-day greeting |
+| `Generic\GenericModule` | Arbitrary shell command runner |
 
 ---
 
 ## Usage Example
 
 ```php
-use SugarCraft\Dash\Grid\{StackedGrid, Frame, VStack, Text, Panel, Options, ItemOptions};
+use SugarCraft\Dash\Layout\{StackedGrid, Frame, VStack, Panel};
+use SugarCraft\Dash\Layout\Grid\{Options, ItemOptions};
+use SugarCraft\Dash\Components\Text;
 
 // Create a stacked grid layout
 $grid = new StackedGrid(new Options(fitScreen: true));
