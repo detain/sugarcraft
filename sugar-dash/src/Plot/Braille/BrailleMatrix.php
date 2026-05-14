@@ -16,15 +16,29 @@ namespace SugarCraft\Dash\Plot\Braille;
 final class BrailleMatrix
 {
     /**
-     * 4x2 lookup table for braille dot positions.
-     * Index: [row % 4][column % 2]
+     * 2x4 lookup table for braille dot positions (8 rows = 2 braille cells vertically).
+     * Index: [row % 8][column % 2]
      * Value: bitmask for that dot position
+     *
+     * Braille cell dot layout (each cell is 2 cols x 4 rows):
+     *   (0,0) (1,0)  <- row 0: left=0x01, right=0x08
+     *   (0,1) (1,1)  <- row 1: same as row 0
+     *   (0,2) (1,2)  <- row 2: left=0x02, right=0x10
+     *   (0,3) (1,3)  <- row 3: same as row 2
+     *   (0,4) (1,4)  <- row 4: left=0x04, right=0x20
+     *   (0,5) (1,5)  <- row 5: same as row 4
+     *   (0,6) (1,6)  <- row 6: left=0x40, right=0x80
+     *   (0,7) (1,7)  <- row 7: same as row 6
      */
     private const BRAILLE = [
-        [0x01, 0x08],  // rows 0, 1: left column dots
-        [0x02, 0x10],  // rows 2, 3
-        [0x04, 0x20],  // rows 4, 5
-        [0x40, 0x80],  // rows 6, 7
+        [0x01, 0x08],  // row 0: top-left, top-right
+        [0x01, 0x08],  // row 1: same as row 0
+        [0x02, 0x10],  // row 2
+        [0x02, 0x10],  // row 3: same as row 2
+        [0x04, 0x20],  // row 4
+        [0x04, 0x20],  // row 5: same as row 4
+        [0x40, 0x80],  // row 6
+        [0x40, 0x80],  // row 7: same as row 6
     ];
 
     /**
@@ -59,7 +73,7 @@ final class BrailleMatrix
      */
     public static function dotBit(int $pixelX, int $pixelY): int
     {
-        $row = $pixelY % 4;
+        $row = $pixelY % 8;
         $col = $pixelX % 2;
         return self::BRAILLE[$row][$col];
     }
@@ -76,17 +90,19 @@ final class BrailleMatrix
 
     /**
      * Get the character width in braille cells.
+     * A braille cell is 2 pixels wide; at least 1 cell is needed for any pixels.
      */
     public static function cellWidth(int $pixelWidth): int
     {
-        return intdiv($pixelWidth + 1, 2);
+        return max(1, intdiv($pixelWidth + 1, 2));
     }
 
     /**
      * Get the character height in braille cells.
+     * A braille cell is 4 pixels tall; at least 1 cell is needed for any pixels.
      */
     public static function cellHeight(int $pixelHeight): int
     {
-        return intdiv($pixelHeight + 3, 4);
+        return max(1, intdiv($pixelHeight + 3, 4));
     }
 }
