@@ -16,18 +16,16 @@ $qrCode = QRCode::new('https://sugarcraft.github.io');
 $barcode = Barcode::new('123456789012');
 
 // Avatar
-$avatar = Avatar::new('JD');
+$avatar = Avatar::fromName('JD');
 
 // Avatar Group
-$avatarGroup = AvatarGroup::new([
-    ['label' => 'Alice'],
-    ['label' => 'Bob'],
-    ['label' => 'Charlie'],
-    ['label' => 'Diana'],
-]);
+$avatarGroup = AvatarGroup::fromNames(['Alice', 'Bob', 'Charlie', 'Diana']);
 
-// Pictogram
-$pictogram = Pictogram::new('info');
+// Pictogram - correct API: array of items with label/value
+$pictogram = Pictogram::new([
+    ['label' => 'Sales', 'value' => 75],
+    ['label' => 'Marketing', 'value' => 45],
+]);
 
 $topRow = HStack::spaced(2,
     Card::titled($qrCode, 'QR Code'),

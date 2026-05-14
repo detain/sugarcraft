@@ -2,12 +2,8 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Components\GridTable\Footer;
-use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Components\Card\Footer;
 
 // Footer
-$component = Footer::new("© 2024 SugarCraft Inc.");
-$component->setSize(60, 15);
+$component = Footer::copyright("SugarCraft Inc.")->setSize(60, 15);
 echo $component->render();

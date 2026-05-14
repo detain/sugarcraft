@@ -6,8 +6,9 @@ use SugarCraft\Dash\Components\Card\Cover;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Components\Card\Text;
 
 // Cover overlay
-$component = Cover::new(Text::new("Cover Overlay Content"));
+$component = Cover::new(new Text("Cover Overlay Content"));
 $component->setSize(60, 15);
 echo $component->render();

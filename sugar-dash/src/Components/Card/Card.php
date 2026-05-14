@@ -128,7 +128,7 @@ final class Card implements \SugarCraft\Dash\Foundation\Sizer
             $leftPad = (int) floor($paddingWidth / 2);
             $rightPad = $paddingWidth - $leftPad;
 
-            $result .= str_repeat($h, $leftPad);
+            $result .= str_repeat($h, max(0, $leftPad));
             if ($this->titleColor !== null) {
                 $result .= $this->titleColor->toFg(ColorProfile::TrueColor);
             }
@@ -136,7 +136,7 @@ final class Card implements \SugarCraft\Dash\Foundation\Sizer
             if ($this->borderColor !== null) {
                 $result .= $this->borderColor->toFg(ColorProfile::TrueColor);
             }
-            $result .= str_repeat($h, $rightPad);
+            $result .= str_repeat($h, max(0, $rightPad));
         } else {
             $result .= str_repeat($h, $useWidth - 2);
         }
