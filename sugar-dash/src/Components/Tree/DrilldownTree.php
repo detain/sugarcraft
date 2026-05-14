@@ -7,6 +7,8 @@ namespace SugarCraft\Dash\Components\Tree;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dash\Components\Nav\Breadcrumb;
+use SugarCraft\Dash\Layout\StackLayout;
 
 /**
  * A drill-down tree view component.
@@ -17,6 +19,9 @@ use SugarCraft\Core\Util\ColorProfile;
  * - Current path highlighting
  * - Configurable node rendering
  * - Interactive drill-down navigation
+ * - StackLayout pattern for child-view navigation
+ * - Breadcrumb showing current navigation path
+ * - onEnter/onExit lifecycle hooks
  *
  * Mirrors drill-down tree patterns adapted to PHP with
  * wither-style immutable setters.
@@ -31,6 +36,15 @@ final class DrilldownTree implements \SugarCraft\Dash\Foundation\Sizer
     private bool $showValues = true;
     private bool $showIcons = true;
     private bool $expanded = true;
+
+    /** @var list<string> Navigation stack of expanded node IDs */
+    private array $navigationStack = [];
+
+    /** @var callable|null Called when entering a node: callable(string $nodeId): void */
+    private mixed $onEnter = null;
+
+    /** @var callable|null Called when exiting a node: callable(string $nodeId): void */
+    private mixed $onExit = null;
 
     public function __construct(
         private ?Color $nodeColor = null,
@@ -47,13 +61,14 @@ final class DrilldownTree implements \SugarCraft\Dash\Foundation\Sizer
      */
     public static function new(TreeNode $root): self
     {
-        return new self(
+        $tree = new self(
             nodeColor: Color::hex('#89B4FA'),
             selectedColor: Color::hex('#A6E3A1'),
             textColor: Color::hex('#CDD6F4'),
             lineColor: Color::hex('#45475A'),
             style: 'rounded',
-        )->withRoot($root);
+        );
+        return $tree->withRoot($root);
     }
 
     /**
@@ -118,6 +133,100 @@ final class DrilldownTree implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
+     * Set the onEnter lifecycle hook.
+     */
+    public function withOnEnter(callable $onEnter): self
+    {
+        $clone = clone $this;
+        $clone->onEnter = $onEnter;
+        return $clone;
+    }
+
+    /**
+     * Set the onExit lifecycle hook.
+     */
+    public function withOnExit(callable $onExit): self
+    {
+        $clone = clone $this;
+        $clone->onExit = $onExit;
+        return $clone;
+    }
+
+    /**
+     * Push a node onto the navigation stack and call onEnter.
+     */
+    public function pushNode(string $nodeId): self
+    {
+        $clone = clone $this;
+        $clone->navigationStack[] = $nodeId;
+        if ($clone->onEnter !== null) {
+            ($clone->onEnter)($nodeId);
+        }
+        return $clone;
+    }
+
+    /**
+     * Pop a node from the navigation stack and call onExit.
+     */
+    public function popNode(): self
+    {
+        $clone = clone $this;
+        $nodeId = array_pop($clone->navigationStack);
+        if ($nodeId !== null && $clone->onExit !== null) {
+            ($clone->onExit)($nodeId);
+        }
+        return $clone;
+    }
+
+    /**
+     * Get the current navigation stack.
+     *
+     * @return list<string>
+     */
+    public function getNavigationStack(): array
+    {
+        return $this->navigationStack;
+    }
+
+    /**
+     * Get breadcrumb items from the navigation stack.
+     *
+     * @return list<string>
+     */
+    public function getBreadcrumbItems(): array
+    {
+        if (empty($this->navigationStack)) {
+            return [$this->root->label];
+        }
+
+        $items = [$this->root->label];
+        foreach ($this->navigationStack as $nodeId) {
+            $node = $this->findNodeById($this->root, $nodeId);
+            if ($node !== null) {
+                $items[] = $node->label;
+            }
+        }
+        return $items;
+    }
+
+    /**
+     * Find a node by its ID in the tree.
+     */
+    private function findNodeById(TreeNode $root, string $id): ?TreeNode
+    {
+        if ($root->id === $id) {
+            return $root;
+        }
+        foreach ($root->children as $child) {
+            $found = $this->findNodeById($child, $id);
+            if ($found !== null) {
+                return $found;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Render the drill-down tree as a string.
      */
     public function render(): string
@@ -131,15 +240,21 @@ final class DrilldownTree implements \SugarCraft\Dash\Foundation\Sizer
 
         [$tl, $tr, $bl, $br, $h, $v] = $this->getStyleChars();
 
-        $textColor = $this->textColor ?? Color::hex('#CDD6F4');
-        $nodeColor = $this->nodeColor ?? Color::hex('#89B4FA');
-
         $result = '';
 
         // Title
         $title = 'Drill-Down Tree';
         $titlePadding = intval(($useWidth - 2 - strlen($title)) / 2);
         $result .= $tl . str_repeat('─', $titlePadding) . $title . str_repeat('─', $useWidth - 2 - $titlePadding - strlen($title)) . $tr . "\n";
+
+        // Render breadcrumb if navigation stack is not empty
+        if (!empty($this->navigationStack)) {
+            $breadcrumbItems = $this->getBreadcrumbItems();
+            $breadcrumb = Breadcrumb::new($breadcrumbItems);
+            $breadcrumb = $breadcrumb->withSeparator('›');
+            $breadcrumbStr = $breadcrumb->setSize($useWidth - 2, 1)->render();
+            $result .= $v . mb_substr($breadcrumbStr, 0, $useWidth - 2) . $v . "\n";
+        }
 
         // Render tree content
         $content = $this->renderNode($this->root, 0, $useWidth - 4);

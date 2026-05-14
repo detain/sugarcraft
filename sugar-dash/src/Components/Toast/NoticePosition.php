@@ -18,6 +18,7 @@ enum NoticePosition: string
     case CenterLeft = 'center-left';
     case CenterRight = 'center-right';
     case Center = 'center';
+    case Anchor = 'anchor';
 
     /**
      * Get the vertical alignment for this position.
@@ -28,6 +29,7 @@ enum NoticePosition: string
             self::TopLeft, self::TopCenter, self::TopRight => 'top',
             self::BottomLeft, self::BottomCenter, self::BottomRight => 'bottom',
             self::CenterLeft, self::CenterRight, self::Center => 'center',
+            self::Anchor => 'anchor',
         };
     }
 
@@ -40,6 +42,7 @@ enum NoticePosition: string
             self::TopLeft, self::BottomLeft, self::CenterLeft => 'left',
             self::TopRight, self::BottomRight, self::CenterRight => 'right',
             self::TopCenter, self::BottomCenter, self::Center => 'center',
+            self::Anchor => 'anchor',
         };
     }
 
@@ -62,5 +65,13 @@ enum NoticePosition: string
     public function isCenter(): bool
     {
         return $this === self::Center;
+    }
+
+    /**
+     * Check if this is an anchor position (positioned relative to an element).
+     */
+    public function isAnchor(): bool
+    {
+        return $this === self::Anchor;
     }
 }

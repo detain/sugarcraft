@@ -28,9 +28,23 @@ final class ConfirmModal implements Item
         return new self(message: $message, confirmLabel: 'Delete', cancelLabel: 'Cancel', isDanger: true);
     }
 
+    public static function ok(string $message): self
+    {
+        return new self(message: $message, confirmLabel: 'OK', cancelLabel: '');
+    }
+
+    public static function yesNo(string $message): self
+    {
+        return new self(message: $message, confirmLabel: 'Yes', cancelLabel: 'No');
+    }
+
     public function render(): string
     {
         $confirm = $this->isDanger ? '⚠ ' . $this->confirmLabel : $this->confirmLabel;
-        return $this->message . ' [' . $confirm . '] [' . $this->cancelLabel . ']';
+        $result = $this->message . ' [' . $confirm . ']';
+        if ($this->cancelLabel !== '') {
+            $result .= ' [' . $this->cancelLabel . ']';
+        }
+        return $result;
     }
 }
