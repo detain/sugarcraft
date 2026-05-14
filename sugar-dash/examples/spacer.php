@@ -4,6 +4,6 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Layout\Spacer;
 
-// Spacer element
-$component = Spacer::new(60, 15);
+// Spacer element - dotted line separator
+$component = Spacer::dotted(60);
 echo $component->render();
