@@ -6,8 +6,9 @@ use SugarCraft\Dash\Layout\Pad;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Components\Card\Text;
 
 // Box component (Pad was formerly known as Boxer)
-$component = Pad::new(Text::new("Boxed Content"));
+$component = Pad::new(new Text("Boxed Content"));
 $component->setSize(60, 15);
 echo $component->render();

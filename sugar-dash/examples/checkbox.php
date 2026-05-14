@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Checkbox control
-$component = Checkbox::new("Accept Terms", true);
+$component = Checkbox::new([["label" => "Accept Terms", "checked" => true]]);
 $component->setSize(60, 15);
 echo $component->render();

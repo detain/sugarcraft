@@ -192,6 +192,10 @@ final class Skeleton implements \SugarCraft\Dash\Foundation\Sizer
      */
     private function generateShimmerLine(int $filledWidth, int $totalWidth): string
     {
+        $totalWidth = max(0, $totalWidth);
+        if ($totalWidth === 0) {
+            return '';
+        }
         if ($filledWidth >= $totalWidth) {
             return str_repeat($this->fillChar, $totalWidth);
         }

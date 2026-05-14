@@ -6,8 +6,9 @@ use SugarCraft\Dash\Layout\Center;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Components\Card\Text;
 
 // Center-aligned content
-$component = Center::new(Text::new("Centered Text"));
+$component = Center::new(new Text("Centered Text"));
 $component->setSize(60, 15);
 echo $component->render();

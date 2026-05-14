@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Calendar
-$component = Calendar::new();
+$component = Calendar::now();
 $component->setSize(60, 15);
 echo $component->render();

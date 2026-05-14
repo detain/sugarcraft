@@ -52,7 +52,7 @@ $activityFeed = ActivityFeed::new([
 ]);
 
 // Rating
-$rating = Rating::new(4.5);
+$rating = Rating::of(4.5);
 
 // Progress list
 $progressList = ProgressList::new([

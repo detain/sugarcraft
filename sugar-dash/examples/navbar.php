@@ -3,11 +3,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Components\Nav\Navbar;
-use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
 
 // Navigation bar
-$component = Navbar::new("Dashboard");
-$component->setSize(60, 15);
+$component = Navbar::brand("Dashboard", [
+    ["label" => "Home", "isActive" => true],
+    ["label" => "About"],
+    ["label" => "Contact"],
+])->setSize(60, 15);
 echo $component->render();

@@ -158,7 +158,11 @@ final class ActivityFeed implements \SugarCraft\Dash\Foundation\Sizer
         $maxItems = min($this->maxItems, count($this->events));
 
         for ($i = 0; $i < $maxItems; $i++) {
-            $event = $this->events[$i];
+            $rawEvent = $this->events[$i];
+            // Handle both ActivityEvent objects and legacy arrays
+            $event = is_array($rawEvent)
+                ? (object) ['type' => $rawEvent['type'] ?? 'default', 'actor' => $rawEvent['actor'] ?? $rawEvent['label'] ?? '', 'action' => $rawEvent['action'] ?? '', 'target' => $rawEvent['target'] ?? '', 'timestamp' => $rawEvent['timestamp'] ?? $rawEvent['time'] ?? null]
+                : $rawEvent;
             $line = '';
 
             // Icon

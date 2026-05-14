@@ -8,6 +8,7 @@ use SugarCraft\Dash\Components\Card\{Text, Card};
 use SugarCraft\Dash\Components\Table\{TableBordered, TableZebra};
 use SugarCraft\Dash\Components\Calendar\ListComponent;
 use SugarCraft\Dash\Components\Tree\Tree;
+use SugarCraft\Dash\Components\Tree\TreeNode;
 
 // Dashboard Data Display Example
 $grid = new StackedGrid(new Options(fitScreen: true));
@@ -34,15 +35,17 @@ $list = ListComponent::new([
     ['label' => 'Diana - Manager'],
 ]);
 
-// Tree view
-$tree = Tree::new('Root', [
-    ['label' => 'Folder 1', 'children' => [
-        ['label' => 'File 1.1'],
-        ['label' => 'File 1.2'],
-    ]],
-    ['label' => 'Folder 2', 'children' => [
-        ['label' => 'File 2.1'],
-    ]],
+// Tree view with proper TreeNode objects
+$tree = Tree::new([
+    TreeNode::new('Root')->withChildren([
+        TreeNode::new('Folder 1')->withChildren([
+            TreeNode::new('File 1.1'),
+            TreeNode::new('File 1.2'),
+        ]),
+        TreeNode::new('Folder 2')->withChildren([
+            TreeNode::new('File 2.1'),
+        ]),
+    ]),
 ]);
 
 $topRow = HStack::spaced(2,

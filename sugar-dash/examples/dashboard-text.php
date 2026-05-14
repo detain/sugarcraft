@@ -2,9 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Markdown, FigletText, Marquee};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, FigletText, Marquee};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dash\Components\Card\{Text, Card, Code, Kbd, BorderText};
+use SugarCraft\Dash\Components\Card\{Text, Card, Code, Kbd, BorderText, Markdown};
 use SugarCraft\Dash\Components\Feedback\LoadingText;
 
 // Dashboard Text Components Example
@@ -20,8 +20,8 @@ This is **bold** and *italic* text.
 - List item 1
 - List item 2');
 
-// Keyboard key
-$kbd = Kbd::new('Ctrl+S');
+// Keyboard key - use Kbd::combo for multiple keys
+$kbd = Kbd::combo('Ctrl', 'S');
 
 // Figlet text
 $figlet = FigletText::new('DASH');

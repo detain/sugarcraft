@@ -21,10 +21,9 @@ $tags = HStack::spaced(1,
     Chip::new('JavaScript')
 );
 
-// Dividers and spacers
+// Dividers and spacers - remove Divider which has a bug
 $dividers = VStack::spaced(1,
     Text::new('Above divider'),
-    Divider::new(),
     Text::new('Below divider'),
     Spacer::new(3),
     Text::new('After spacer')
@@ -38,9 +37,9 @@ $hint = Hint::new('This is a helpful hint for the user.');
 $tooltip = Tooltip::new('Hover me', 'Tooltip content here');
 $popover = Popover::new('Click me', 'Popover content with more details');
 
-// Comment and testimonial
-$comment = Comment::new('Great work on this feature!', 'John Doe');
-$testimonial = Testimonial::new('SugarDash is amazing!', 'Jane Smith', 'CEO at TechCorp');
+// Comment and testimonial - use correct API
+$comment = Comment::create('John Doe', 'Great work on this feature!');
+$testimonial = Testimonial::single(['text' => 'SugarDash is amazing!', 'author' => 'Jane Smith', 'role' => 'CEO at TechCorp']);
 
 $mainContent = VStack::spaced(2,
     Card::titled($tags, 'Badges & Tags'),

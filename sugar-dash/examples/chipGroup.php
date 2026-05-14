@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Chip group
-$component = ChipGroup::new([["label" => "PHP"], ["label" => "JavaScript"], ["label" => "Python"]]);
+$component = ChipGroup::fromLabels(["PHP", "JavaScript", "Python"]);
 $component->setSize(60, 15);
 echo $component->render();
