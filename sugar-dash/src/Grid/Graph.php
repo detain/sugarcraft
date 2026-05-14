@@ -42,7 +42,7 @@ enum AxisPosition: string
  * Mirrors chart visualization patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Graph implements Sizer
+final class Graph implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -91,7 +91,7 @@ final class Graph implements Sizer
     /**
      * Set the allocated dimensions for this graph.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

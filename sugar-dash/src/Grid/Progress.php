@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors segmented progress bar concepts adapted to PHP with wither-style immutable setters.
  */
-final class Progress implements Sizer
+final class Progress implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -77,7 +77,7 @@ final class Progress implements Sizer
     /**
      * Set the allocated dimensions for this progress bar.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

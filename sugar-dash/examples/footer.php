@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\Footer;
+use SugarCraft\Dash\Components\GridTable\Footer;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;

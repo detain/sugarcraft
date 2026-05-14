@@ -33,7 +33,7 @@ enum WaveformStyle: string
  * Mirrors audio player patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Audio implements Sizer
+final class Audio implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -81,7 +81,7 @@ final class Audio implements Sizer
     /**
      * Set the allocated dimensions for this audio player.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

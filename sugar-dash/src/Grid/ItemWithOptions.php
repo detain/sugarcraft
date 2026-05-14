@@ -12,7 +12,7 @@ namespace SugarCraft\Dash\Grid;
 final readonly class ItemWithOptions
 {
     public function __construct(
-        public Item $item,
+        public \SugarCraft\Dash\Foundation\Item $item,
         public ItemOptions $options,
     ) {}
 }

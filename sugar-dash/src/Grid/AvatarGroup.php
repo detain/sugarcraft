@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors avatar-group UI concepts adapted to PHP with wither-style immutable setters.
  */
-final class AvatarGroup implements Sizer
+final class AvatarGroup implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -88,7 +88,7 @@ final class AvatarGroup implements Sizer
     /**
      * Set the allocated dimensions for this avatar group.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
@@ -119,7 +119,7 @@ final class AvatarGroup implements Sizer
         // Render avatars from left to right
         for ($i = 0; $i < count($displayAvatars); $i++) {
             $avatar = $displayAvatars[$i];
-            if ($avatar instanceof Sizer) {
+            if ($avatar instanceof \SugarCraft\Dash\Foundation\Sizer) {
                 $avatar = $avatar->setSize($avatarSize, 1);
             }
             $result .= $avatar->render();

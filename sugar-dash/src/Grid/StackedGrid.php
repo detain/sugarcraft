@@ -18,9 +18,9 @@ use SugarCraft\Sprinkles\Position;
  * Supports nested grids (a StackedGrid can be added as an item) and any
  * type implementing Sizer for explicit dimension propagation.
  *
- * @implements Sizer
+ * @implements \SugarCraft\Dash\Foundation\Sizer
  */
-final class StackedGrid implements Sizer
+final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
 {
     /** @var ItemWithOptions[] */
     private array $items = [];
@@ -35,7 +35,7 @@ final class StackedGrid implements Sizer
     /**
      * Add an item to the grid with the given placement options.
      */
-    public function addItem(Item $item, ItemOptions $options = new ItemOptions()): void
+    public function addItem(\SugarCraft\Dash\Foundation\Item $item, ItemOptions $options = new ItemOptions()): void
     {
         $this->items[] = new ItemWithOptions($item, $options);
     }
@@ -43,7 +43,7 @@ final class StackedGrid implements Sizer
     /**
      * Propagate terminal dimensions to the grid.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $this->width = $width;
         $this->height = $height;
@@ -169,7 +169,7 @@ final class StackedGrid implements Sizer
     /**
      * Render a single item within a column at the allocated width/height.
      */
-    private function renderItem(Item $item, int $width, int $height): string
+    private function renderItem(\SugarCraft\Dash\Foundation\Item $item, int $width, int $height): string
     {
         // Nested grid
         if ($item instanceof self) {
@@ -178,7 +178,7 @@ final class StackedGrid implements Sizer
         }
 
         // Sizer (e.g. Frame)
-        if ($item instanceof Sizer) {
+        if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
             $item->setSize($width, $height);
             return $item->render();
         }
@@ -213,13 +213,13 @@ final class StackedGrid implements Sizer
     /**
      * Compute the natural rendered height of an item (number of lines).
      */
-    private function getItemNaturalHeight(Item $item): int
+    private function getItemNaturalHeight(\SugarCraft\Dash\Foundation\Item $item): int
     {
         if ($item instanceof self) {
             // For nested grids, use current height or default to 1
             return $this->height > 0 ? $this->height : 1;
         }
-        if ($item instanceof Sizer) {
+        if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
             return 1; // Sizer will receive explicit size from renderItem
         }
         $lines = substr_count($item->render(), "\n") + 1;

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Grid;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Layout\HAlign;
 
 /**
  * A 2D text buffer for TUI rendering.
@@ -16,7 +17,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors the buffer concept from charmbracelet/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Buffer implements Sizer
+final class Buffer implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -64,7 +65,7 @@ final class Buffer implements Sizer
     /**
      * Set the allocated dimensions for this buffer.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

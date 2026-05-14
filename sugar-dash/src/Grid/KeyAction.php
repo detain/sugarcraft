@@ -24,7 +24,7 @@ final class KeyAction
      *
      * @return T
      */
-    public function execute(Key $key): Item
+    public function execute(Key $key): \SugarCraft\Dash\Foundation\Item
     {
         return ($this->execute)($key);
     }

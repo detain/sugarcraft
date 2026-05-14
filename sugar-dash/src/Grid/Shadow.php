@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors shadow concepts from bubble tea/lipgloss but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Shadow implements Sizer
+final class Shadow implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -32,7 +32,7 @@ final class Shadow implements Sizer
     public const None = 'none';
 
     public function __construct(
-        private readonly Item $content,
+        private readonly \SugarCraft\Dash\Foundation\Item $content,
         private readonly string $style = self::Normal,
         private readonly ?Color $color = null,
         private readonly int $xOffset = 1,
@@ -44,7 +44,7 @@ final class Shadow implements Sizer
      *
      * Default: normal style, dark gray shadow, offset (1, 1).
      */
-    public static function new(Item $content): self
+    public static function new(\SugarCraft\Dash\Foundation\Item $content): self
     {
         return new self(
             content: $content,
@@ -58,7 +58,7 @@ final class Shadow implements Sizer
     /**
      * Set the allocated dimensions for this shadow.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
@@ -150,7 +150,7 @@ final class Shadow implements Sizer
             $innerW = max(1, $innerW);
             $innerH = max(1, $innerH);
 
-            if ($this->content instanceof Sizer) {
+            if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
                 $sized = $this->content->setSize($innerW, $innerH);
                 return $sized->render();
             }
@@ -197,7 +197,7 @@ final class Shadow implements Sizer
      */
     private function renderContent(): string
     {
-        if ($this->content instanceof Sizer) {
+        if ($this->content instanceof \SugarCraft\Dash\Foundation\Sizer) {
             $innerW = $this->width ?? 0;
             $innerH = $this->height ?? 0;
             if ($innerW > 0 && $innerH > 0) {

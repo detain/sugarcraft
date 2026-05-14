@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors word cloud patterns adapted to PHP with wither-style immutable setters.
  */
-final class WordCloud implements Sizer
+final class WordCloud implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -62,7 +62,7 @@ final class WordCloud implements Sizer
     /**
      * Set the allocated dimensions for this word cloud.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

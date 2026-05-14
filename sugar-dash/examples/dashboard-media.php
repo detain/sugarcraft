@@ -2,7 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, QRCode, Barcode, Avatar, AvatarGroup, Pictogram, Image};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, QRCode, Barcode, Avatar, AvatarGroup, Pictogram, Image};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card};
 
 // Dashboard Media Components Example
 $grid = new StackedGrid(new Options(fitScreen: true));

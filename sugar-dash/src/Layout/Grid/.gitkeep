@@ -1,0 +1,12 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Dash\Layout;
+
+/**
+ * Placeholder for Grid sub-namespace - files moved from Grid\ to Layout\Grid\.
+ */
+final class Placeholder
+{
+}
