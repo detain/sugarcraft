@@ -34,11 +34,11 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
     private RingBuffer $buffer;
 
     public function __construct(
-        private readonly int $widthConstraint = 40,
-        private readonly int $height = 1,
-        private readonly bool $showDataPoints = false,
-        private readonly bool $fill = false,
-        private readonly bool $dimEdge = false,
+        private int $widthConstraint = 40,
+        private int $height = 1,
+        private bool $showDataPoints = false,
+        private bool $fill = false,
+        private bool $dimEdge = false,
     ) {
         $this->buffer = new RingBuffer($this->widthConstraint ?? 40);
     }
@@ -224,13 +224,9 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withWidth(int $width): self
     {
-        return new self(
-            widthConstraint: $width,
-            height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            dimEdge: $this->dimEdge,
-        );
+        $clone = clone $this;
+        $clone->width = $width;
+        return $clone;
     }
 
     /**
@@ -238,13 +234,9 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withHeight(int $height): self
     {
-        return new self(
-            widthConstraint: $this->widthConstraint,
-            height: max(1, $height),
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            dimEdge: $this->dimEdge,
-        );
+        $clone = clone $this;
+        $clone->sizerHeight = max(1, $height);
+        return $clone;
     }
 
     /**
@@ -252,13 +244,9 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withDataPoints(bool $show): self
     {
-        return new self(
-            widthConstraint: $this->widthConstraint,
-            height: $this->height,
-            showDataPoints: $show,
-            fill: $this->fill,
-            dimEdge: $this->dimEdge,
-        );
+        $clone = clone $this;
+        $clone->showDataPoints = $show;
+        return $clone;
     }
 
     /**
@@ -266,13 +254,9 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withFill(bool $fill): self
     {
-        return new self(
-            widthConstraint: $this->widthConstraint,
-            height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $fill,
-            dimEdge: $this->dimEdge,
-        );
+        $clone = clone $this;
+        $clone->fill = $fill;
+        return $clone;
     }
 
     /**
@@ -283,13 +267,9 @@ final class Sparkline implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withDimEdge(bool $dim): self
     {
-        return new self(
-            widthConstraint: $this->widthConstraint,
-            height: $this->height,
-            showDataPoints: $this->showDataPoints,
-            fill: $this->fill,
-            dimEdge: $dim,
-        );
+        $clone = clone $this;
+        $clone->dimEdge = $dim;
+        return $clone;
     }
 
     // ─── Internal Helpers ─────────────────────────────────────────

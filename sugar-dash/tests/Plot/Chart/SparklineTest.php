@@ -56,15 +56,16 @@ final class SparklineTest extends TestCase
     {
         $sparkline = Sparkline::new(3); // Only 3 slots
 
-        $sparkline = $sparkline->push(1.0);
-        $sparkline = $sparkline->push(2.0);
-        $sparkline = $sparkline->push(3.0);
+        // Use values that produce different block indices (15->1, 30->2, 45->3)
+        $sparkline = $sparkline->push(15.0);
+        $sparkline = $sparkline->push(30.0);
+        $sparkline = $sparkline->push(45.0);
 
         // Now full
         $rendered1 = $sparkline->render();
 
-        // Push 4th value - should overwrite oldest
-        $sparkline = $sparkline->push(4.0);
+        // Push 4th value - should overwrite oldest (60->4, different from 15->1)
+        $sparkline = $sparkline->push(60.0);
         $rendered2 = $sparkline->render();
 
         // Should still render (not empty)

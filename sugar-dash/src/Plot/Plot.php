@@ -289,7 +289,14 @@ final class Plot implements Sizer, Drawable
         $resultLines[] = $xLabelLine;
         $resultLines[] = '  ' . ($xLabels[1] ?? '');
 
-        return implode("\n", $resultLines);
+        $output = implode("\n", $resultLines);
+
+        // If color was applied, ensure reset code at the very end
+        if ($this->color !== null) {
+            $output .= "\x1b[0m";
+        }
+
+        return $output;
     }
 
     /**
