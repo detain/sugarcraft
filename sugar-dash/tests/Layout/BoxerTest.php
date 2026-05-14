@@ -236,7 +236,7 @@ final class BoxerTest extends TestCase
             (int) ($totalWidth * 0.3),
         ];
 
-        $root = Node::horizontal($child1, $child2)->withSizeFunc($sizeFunc);
+        $root = Node::horizontal($child1, $child2)->withCustomSizeFunc($sizeFunc);
         $boxer = Boxer::tree($root)->setSize(100, 20);
 
         // Should use the sizeFunc distribution
