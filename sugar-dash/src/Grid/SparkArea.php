@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors sparkline/area patterns adapted to PHP with wither-style immutable setters.
  */
-final class SparkArea implements Sizer
+final class SparkArea implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -52,7 +52,7 @@ final class SparkArea implements Sizer
     /**
      * Set the allocated dimensions for this spark area.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

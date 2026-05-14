@@ -22,7 +22,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors emoji display concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Emoji implements Sizer
+final class Emoji implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -209,7 +209,7 @@ final class Emoji implements Sizer
     /**
      * Set the allocated dimensions for this emoji.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
