@@ -1,0 +1,29 @@
+{
+  "id": "sugar-dash-phase-2-04",
+  "seq": "04",
+  "title": "Enhance Plot.php with MarkerBraille/MarkerDot and axes",
+  "status": "pending",
+  "depends_on": ["01", "02", "03"],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "sugar-dash/src/Plot/Plot.php",
+    "sugar-dash/src/Plot/Braille/BrailleCanvas.php",
+    "sugar-dash/src/Plot/Canvas/CanvasPoint.php"
+  ],
+  "acceptance_criteria": [
+    "LineChart mode draws connected points with braille markers",
+    "ScatterPlot mode draws unconnected points",
+    "MarkerBraille / MarkerDot toggle switches rendering mode",
+    "ShowAxes renders x/y axis lines with tick labels",
+    "HorizontalScale controls x-axis stride"
+  ],
+  "deliverables": [
+    "sugar-dash/src/Plot/Plot.php"
+  ],
+  "bounded_context": "plot",
+  "module": "sugar-dash"
+}

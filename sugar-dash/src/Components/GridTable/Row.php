@@ -5,34 +5,29 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\GridTable;
 
 /**
- * Row data container for data grid tables.
+ * A data row with cells indexed by column key.
  *
- * Holds the cell values for a single row in the grid.
+ * @param array<string, mixed> $cells
  */
 final class Row
 {
-    /**
-     * @param array<string, mixed> $cells
-     */
     public function __construct(
-        private readonly array $cells = [],
+        public readonly array $cells = [],
     ) {}
 
-    public static function new(array $cells = []): self
+    /**
+     * Get cell value by key.
+     */
+    public function get(string $key): mixed
     {
-        return new self(cells: $cells);
+        return $this->cells[$key] ?? null;
     }
 
     /**
-     * @return array<string, mixed>
+     * Check if row has a cell with the given key.
      */
-    public function getCells(): array
+    public function has(string $key): bool
     {
-        return $this->cells;
-    }
-
-    public function getCell(string $key): mixed
-    {
-        return $this->cells[$key] ?? null;
+        return array_key_exists($key, $this->cells);
     }
 }

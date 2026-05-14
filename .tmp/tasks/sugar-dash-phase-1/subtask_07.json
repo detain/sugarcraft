@@ -1,0 +1,24 @@
+{
+  "id": "sugar-dash-phase-1-07",
+  "seq": "07",
+  "title": "Run phpunit and verify all Foundation tests pass",
+  "status": "pending",
+  "depends_on": ["02", "03", "04", "05", "06"],
+  "parallel": false,
+  "suggested_agent": "VerifierAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "sugar-dash/phpunit.xml"
+  ],
+  "acceptance_criteria": [
+    "vendor/bin/phpunit tests/Foundation/ completes without errors",
+    "All 6 new Foundation tests pass (BufferTest, DrawableTest, CellTest, RectTest, StyleParserTest, ThemeTest)",
+    "No phpunit warnings or failures",
+    "Code coverage includes new Buffer.php and all Foundation files"
+  ],
+  "deliverables": [
+    "phpunit output showing all tests passing"
+  ]
+}

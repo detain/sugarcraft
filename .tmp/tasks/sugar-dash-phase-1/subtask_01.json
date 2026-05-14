@@ -1,0 +1,31 @@
+{
+  "id": "sugar-dash-phase-1-01",
+  "seq": "01",
+  "title": "Create Foundation/Buffer.php with Cell[][] grid implementing Drawable",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "sugar-dash/src/Foundation/Drawable.php",
+    "sugar-dash/src/Foundation/Cell.php",
+    "sugar-dash/src/Foundation/Rect.php",
+    "sugar-dash/src/Foundation/Style.php"
+  ],
+  "acceptance_criteria": [
+    "Buffer.php has private Cell[][] grid property",
+    "getCell(x, y): Cell method exists",
+    "setCell(x, y, Cell): self method exists",
+    "fill(Rect, Cell): self method exists",
+    "setString(x, y, string, Style): self method exists",
+    "implements Drawable interface with getRect/setRect/draw",
+    "getRect returns Rect from constructor dimensions",
+    "draw(Buffer) copies own content into target buffer"
+  ],
+  "deliverables": [
+    "sugar-dash/src/Foundation/Buffer.php"
+  ]
+}

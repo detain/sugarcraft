@@ -1,0 +1,49 @@
+{
+  "id": "sugar-dash-phase-0-01",
+  "seq": "01",
+  "title": "Foundation namespace creation + file moves",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    "sugar-dash/CALIBER_LEARNINGS.md"
+  ],
+  "reference_files": [
+    "plans/dash_update_claude.md",
+    "sugar-dash/src/Grid/Item.php",
+    "sugar-dash/src/Grid/Sizer.php",
+    "sugar-dash/src/Grid/Theme.php"
+  ],
+  "acceptance_criteria": [
+    "src/Foundation/ directory created with all Foundation files",
+    "Item.php, Sizer.php moved from Grid/ to Foundation/",
+    "Drawable.php, Buffer.php, Cell.php, StyleParser.php, Rect.php created as new files",
+    "Style.php extracted from Theme",
+    "Color.php aliased or moved from Grid/ to Foundation/",
+    "Theme.php moved from Grid/ to Foundation/",
+    "All internal use statements in moved files updated (Grid\\Foo → Foundation\\Foo)",
+    "All files use correct namespace SugarCraft\\Dash\\Foundation\\",
+    "composer dump-autoload succeeds without errors",
+    "Technical debt TD-6 fixed inline: any file with >1 class split to own PSR-4 file"
+  ],
+  "deliverables": [
+    "src/Foundation/Item.php",
+    "src/Foundation/Sizer.php",
+    "src/Foundation/Drawable.php (new)",
+    "src/Foundation/Buffer.php (new)",
+    "src/Foundation/Cell.php (new)",
+    "src/Foundation/Style.php",
+    "src/Foundation/StyleParser.php (new)",
+    "src/Foundation/Color.php",
+    "src/Foundation/Rect.php (new)",
+    "src/Foundation/Theme.php"
+  ],
+  "bounded_context": "sugar-dash",
+  "module": "sugar-dash",
+  "vertical_slice": "phase-0-reorganize",
+  "notes": {
+    "td_fixes": "TD-6: Split files with >1 class into own PSR-4 files. TD-1: Convert readonly constructor-promoted + clone-mutate to private non-readonly or named constructors.",
+    "new_files": "Drawable.php (interface GetRect/SetRect/Draw/Lock), Buffer.php (Cell[][] grid), Cell.php (rune + style), StyleParser.php (ParseStyles inline syntax), Rect.php (image.Rectangle equivalent)"
+  }
+}

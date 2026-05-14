@@ -5,39 +5,85 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\GridTable;
 
 /**
- * Calculation helpers for data grid tables.
- *
- * Provides utility methods for computing column widths, totals, and averages.
+ * Calculation utilities for grid layout.
  */
 final class Calc
 {
     /**
-     * Compute optimal column widths based on content.
-     *
-     * @param array<Column> $columns
-     * @param array<Row> $rows
-     * @return array<int, int>
+     * Greatest common divisor using Euclidean algorithm.
      */
-    public static function computeColumnWidths(array $columns, array $rows, int $availableWidth = 0): array
+    public static function gcd(int $a, int $b): int
     {
-        $widths = [];
-
-        foreach ($columns as $index => $column) {
-            $widths[$index] = $column->getWidth();
+        if ($a === 0) {
+            return $b;
         }
 
-        if ($availableWidth > 0) {
-            $totalSpecified = array_sum($widths);
-            if ($totalSpecified < $availableWidth) {
-                $extra = $availableWidth - $totalSpecified;
-                $count = count($widths);
-                $perColumn = (int) floor($extra / $count);
-                $remainder = $extra - $perColumn * $count;
+        if ($b === 0) {
+            return $a;
+        }
 
-                for ($i = 0; $i < $count - 1; $i++) {
-                    $widths[$i] += $perColumn;
+        return self::gcd($b % $a, $a);
+    }
+
+    /**
+     * Calculate column widths to fill available width.
+     *
+     * @param list<Row> $rows
+     * @param list<Column> $columns
+     * @return list<int> Calculated widths for each column
+     */
+    public static function calculateColumnWidths(
+        array $rows,
+        array $columns,
+        int $availableWidth,
+    ): array {
+        if ($columns === []) {
+            return [];
+        }
+
+        // Calculate minimum widths based on content
+        $minWidths = array_map(
+            fn(Column $col): int => self::colMinWidth($col, $rows),
+            $columns,
+        );
+
+        // Apply column-level minWidth constraints
+        foreach ($columns as $i => $col) {
+            if ($col->minWidth !== null && $minWidths[$i] < $col->minWidth) {
+                $minWidths[$i] = $col->minWidth;
+            }
+        }
+
+        $totalMin = array_sum($minWidths);
+        $numCols = count($columns);
+
+        // If we have enough space for minimums, distribute extra space
+        if ($totalMin >= $availableWidth) {
+            // Cannot satisfy minimums - return minimums and let caller handle overflow
+            return $minWidths;
+        }
+
+        $extra = $availableWidth - $totalMin;
+        $widths = $minWidths;
+
+        // Distribute extra space evenly using GCD reduction
+        if ($extra > 0 && $numCols > 1) {
+            // First pass: try to give each column equal extra space
+            $baseExtra = (int) floor($extra / $numCols);
+            $remainder = $extra - ($baseExtra * $numCols);
+
+            for ($i = 0; $i < $numCols; $i++) {
+                $widths[$i] = $minWidths[$i] + $baseExtra;
+                if ($i < $remainder) {
+                    $widths[$i]++;
                 }
-                $widths[$count - 1] += $perColumn + $remainder;
+            }
+        }
+
+        // Apply maxWidth constraints
+        foreach ($columns as $i => $col) {
+            if ($col->maxWidth !== null && $widths[$i] > $col->maxWidth) {
+                $widths[$i] = $col->maxWidth;
             }
         }
 
@@ -45,84 +91,42 @@ final class Calc
     }
 
     /**
-     * Calculate sum of a column.
+     * Calculate minimum width for a column based on content.
      *
-     * @param array<Row> $rows
+     * @param list<Row> $rows
      */
-    public static function sum(array $rows, string $columnKey): float
+    private static function colMinWidth(Column $col, array $rows): int
     {
-        $total = 0.0;
+        $width = mb_strlen($col->label);
+
         foreach ($rows as $row) {
-            $value = $row->getCell($columnKey);
-            if (is_numeric($value)) {
-                $total += (float) $value;
+            $value = $row->get($col->key);
+            if ($value !== null) {
+                $str = is_string($value) ? $value : (string) $value;
+                $len = mb_strlen($str);
+                if ($len > $width) {
+                    $width = $len;
+                }
             }
         }
-        return $total;
+
+        return $width;
     }
 
     /**
-     * Calculate average of a column.
-     *
-     * @param array<Row> $rows
+     * Truncate string to maximum width.
      */
-    public static function avg(array $rows, string $columnKey): float
+    public static function truncate(string $str, int $maxWidth): string
     {
-        if (count($rows) === 0) {
-            return 0.0;
+        if ($maxWidth <= 0) {
+            return '';
         }
-        return self::sum($rows, $columnKey) / count($rows);
-    }
 
-    /**
-     * Find minimum value in a column.
-     *
-     * @param array<Row> $rows
-     */
-    public static function min(array $rows, string $columnKey): ?float
-    {
-        $min = null;
-        foreach ($rows as $row) {
-            $value = $row->getCell($columnKey);
-            if (is_numeric($value)) {
-                $v = (float) $value;
-                $min = $min === null ? $v : min($min, $v);
-            }
+        $len = mb_strlen($str);
+        if ($len <= $maxWidth) {
+            return $str;
         }
-        return $min;
-    }
 
-    /**
-     * Find maximum value in a column.
-     *
-     * @param array<Row> $rows
-     */
-    public static function max(array $rows, string $columnKey): ?float
-    {
-        $max = null;
-        foreach ($rows as $row) {
-            $value = $row->getCell($columnKey);
-            if (is_numeric($value)) {
-                $v = (float) $value;
-                $max = $max === null ? $v : max($max, $v);
-            }
-        }
-        return $max;
-    }
-
-    /**
-     * Count non-null values in a column.
-     *
-     * @param array<Row> $rows
-     */
-    public static function count(array $rows, string $columnKey): int
-    {
-        $count = 0;
-        foreach ($rows as $row) {
-            if ($row->getCell($columnKey) !== null) {
-                $count++;
-            }
-        }
-        return $count;
+        return mb_substr($str, 0, $maxWidth - 1) . '…';
     }
 }

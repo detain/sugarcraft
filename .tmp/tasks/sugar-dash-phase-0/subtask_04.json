@@ -1,0 +1,51 @@
+{
+  "id": "sugar-dash-phase-0-04",
+  "seq": "04",
+  "title": "Plot namespace creation + file moves",
+  "status": "pending",
+  "depends_on": ["03"],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    "sugar-dash/CALIBER_LEARNINGS.md"
+  ],
+  "reference_files": [
+    "plans/dash_update_claude.md",
+    "sugar-dash/src/Grid/Chart.php",
+    "sugar-dash/src/Grid/Sparkline.php",
+    "sugar-dash/src/Grid/Canvas.php",
+    "sugar-dash/src/Grid/Gauge.php"
+  ],
+  "acceptance_criteria": [
+    "src/Plot/Plot.php created (new braille line+scatter widget)",
+    "src/Plot/Braille/ created with BrailleCanvas.php, BrailleMatrix.php, Bresenham.php",
+    "src/Plot/Canvas/ created with Canvas.php, CanvasPoint.php, DrawingOps.php",
+    "src/Plot/Chart/ created with Chart.php, AreaChart.php, Area.php, AreaPoint.php, SparkArea.php, Bar.php, BubbleChart.php, Bubble.php, BubblePoint.php, CandlestickChart.php, Candlestick.php, Donut.php, FunnelChart.php, Funnel.php, GaugeChart.php, GaugeCircle.php, Gauge.php, ProgressRing.php, HeatmapCalendar.php, HeatMapChart.php, Heatmap.php, OHLC.php, OHLCPoint.php, PartitionSegment.php, Partition.php, RadarChart.php, Sparkline.php, SparklineArea.php, SparklineBar.php, Waterfall.php, WaterfallItem.php, WaterfallBarType.php, DotMatrix.php, MetricsGrid.php, WordCloud.php",
+    "src/Plot/Graph/ created with Network.php, NetworkNode.php, NetworkShape.php, MindMap.php, OrgChart.php, ClassDiagram.php, Flowchart.php, FlowchartNode.php, FlowchartNodeType.php, Dendrogram.php, DendrogramNode.php, Sankey.php, Sunburst.php, Treemap.php, TreemapLeaf.php, Gantt.php, PERT.php, Timeline.php, TimelineNode.php, TimelineViz.php, Graph.php",
+    "Meter.php, Progress.php, ProgressBar.php, ProgressList.php, NProgress.php, Bullet.php, Stepper.php moved to Plot/",
+    "All internal use statements updated (Grid\\Foo → Plot\\Foo or Plot\\Chart\\Foo etc.)",
+    "TD-1, TD-2, TD-6 fixed inline during moves"
+  ],
+  "deliverables": [
+    "src/Plot/Plot.php (new)",
+    "src/Plot/Braille/*.php (3 new files for braille canvas)",
+    "src/Plot/Canvas/*.php (3 files)",
+    "src/Plot/Chart/*.php (35+ files)",
+    "src/Plot/Graph/*.php (21 files)",
+    "src/Plot/Meter.php",
+    "src/Plot/Progress.php",
+    "src/Plot/ProgressBar.php",
+    "src/Plot/ProgressList.php",
+    "src/Plot/NProgress.php",
+    "src/Plot/Bullet.php",
+    "src/Plot/Stepper.php"
+  ],
+  "bounded_context": "sugar-dash",
+  "module": "sugar-dash",
+  "vertical_slice": "phase-0-reorganize",
+  "notes": {
+    "braille_math": "Braille canvas: 2x4 dots per cell using U+2800 offset. cell = (p.X/2, p.Y/4), dotBit = BRAILLE[p.Y%4][p.X%2], rune |= dotBit, emit rune + 0x2800.",
+    "chart_label_truncation": "Chart label-row rendering: $perPoint = max(1, intdiv($chartWidth, max(1, $dataCount))) then mb_substr($label, 0, $perPoint) + str_pad. Not naive single-char truncation.",
+    "td_fixes": "TD-1: readonly+wither fails. TD-2: Dual-state collections need rebuildFiltered(). TD-6: Split inline classes to own files (OHLCPoint, Candlestick, etc.)"
+  }
+}
