@@ -8,9 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Pictogram icon
-$component = Pictogram::new([
-    ['label' => 'Sales', 'value' => 75],
-    ['label' => 'Marketing', 'value' => 45],
-]);
+$component = Pictogram::new([["label" => "Warnings", "value" => 3], ["label" => "Errors", "value" => 1], ["label" => "Info", "value" => 5]]);
 $component->setSize(60, 15);
 echo $component->render();

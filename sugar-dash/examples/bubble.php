@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Speech bubble
-$component = Bubble::sample(6);
+$component = Bubble::new("Hello! How are you?");
 $component->setSize(60, 15);
 echo $component->render();

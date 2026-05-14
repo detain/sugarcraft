@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Gauge chart
-$component = new GaugeChart(80.0);
+$component = GaugeChart::new([["label" => "CPU", "value" => 80.0], ["label" => "Memory", "value" => 60.0], ["label" => "Disk", "value" => 45.0]]);
 $component->setSize(60, 15);
 echo $component->render();

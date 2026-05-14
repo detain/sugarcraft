@@ -49,6 +49,14 @@ final class Icon implements \SugarCraft\Dash\Foundation\Sizer
     ) {}
 
     /**
+     * Create an icon with the given glyph.
+     */
+    public static function new(string $glyph, ?string $label = null): self
+    {
+        return new self(glyph: $glyph, label: $label, size: 1, color: Color::ansi(11), labelColor: null);
+    }
+
+    /**
      * Create a file icon.
      */
     public static function file(?string $name = null): self
