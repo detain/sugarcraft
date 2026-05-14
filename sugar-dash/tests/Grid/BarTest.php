@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Grid;
 
 use SugarCraft\Dash\Grid\Bar;
-use SugarCraft\Dash\Grid\HAlign;
-use SugarCraft\Dash\Grid\Item;
-use SugarCraft\Dash\Grid\Sizer;
+use SugarCraft\Dash\Layout\HAlign;
+use SugarCraft\Dash\Foundation\Item;
+use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Ansi;
 use PHPUnit\Framework\TestCase;

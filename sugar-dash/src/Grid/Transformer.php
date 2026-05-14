@@ -19,7 +19,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors lipgloss transformer functionality but adapted to PHP
  * with wither-style immutable setters.
  */
-final class Transformer implements Sizer
+final class Transformer implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -31,14 +31,14 @@ final class Transformer implements Sizer
     public const UpperWords = 'upper_words';
 
     public function __construct(
-        private readonly Item $content,
+        private readonly \SugarCraft\Dash\Foundation\Item $content,
         private readonly string $transform = self::Upper,
     ) {}
 
     /**
      * Create a new transformer with uppercase transformation.
      */
-    public static function new(Item $content): self
+    public static function new(\SugarCraft\Dash\Foundation\Item $content): self
     {
         return new self(
             content: $content,
@@ -49,7 +49,7 @@ final class Transformer implements Sizer
     /**
      * Set the allocated dimensions for this transformer.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

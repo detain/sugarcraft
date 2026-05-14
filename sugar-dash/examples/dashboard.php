@@ -2,7 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Frame, VStack, Text, Options, ItemOptions};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\{Frame, VStack};
+use SugarCraft\Dash\Components\Card\Text;
 
 $grid = new StackedGrid(new Options(fitScreen: true));
 

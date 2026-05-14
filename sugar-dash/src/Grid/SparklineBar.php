@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors bar sparkline rendering from bubbletea/sparkline but adapted
  * to PHP with wither-style immutable setters.
  */
-final class SparklineBar implements Sizer
+final class SparklineBar implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -77,7 +77,7 @@ final class SparklineBar implements Sizer
     /**
      * Set the allocated dimensions for this sparkline.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

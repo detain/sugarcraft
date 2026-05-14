@@ -26,7 +26,7 @@ use SugarCraft\Core\Util\Width;
  * Mirrors image display concepts adapted to PHP with
  * wither-style immutable setters.
  */
-final class Image implements Sizer
+final class Image implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -83,7 +83,7 @@ final class Image implements Sizer
     /**
      * Set the allocated dimensions for this image.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

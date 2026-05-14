@@ -23,7 +23,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors bubble chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Bubble implements Sizer
+final class Bubble implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -100,7 +100,7 @@ final class Bubble implements Sizer
     /**
      * Set the allocated dimensions for this bubble chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

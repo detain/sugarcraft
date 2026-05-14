@@ -21,7 +21,7 @@ final class WaterfallTest extends TestCase
     {
         $waterfall = Waterfall::new();
         $result = $waterfall->setSize(70, 15);
-        $this->assertInstanceOf(\SugarCraft\Dash\Grid\Sizer::class, $result);
+        $this->assertInstanceOf(\SugarCraft\Dash\Foundation\Sizer::class, $result);
     }
 
     public function testRenderReturnsNonEmptyString(): void

@@ -16,7 +16,7 @@ namespace SugarCraft\Dash\Grid;
  * Mirrors keymap handling from bubble-keymap but adapted
  * to PHP with wither-style immutable setters.
  */
-final class KeyMap implements Sizer
+final class KeyMap implements \SugarCraft\Dash\Foundation\Sizer
 {
     /** @var array<string, list<KeyAction>> */
     private array $actions = [];
@@ -28,13 +28,13 @@ final class KeyMap implements Sizer
     private array $size = ['width' => null, 'height' => null];
 
     public function __construct(
-        private readonly Item $content,
+        private readonly \SugarCraft\Dash\Foundation\Item $content,
     ) {}
 
     /**
      * Create a new keymap with default styling.
      */
-    public static function new(Item $content): self
+    public static function new(\SugarCraft\Dash\Foundation\Item $content): self
     {
         return new self($content);
     }
@@ -50,10 +50,10 @@ final class KeyMap implements Sizer
     /**
      * Set the allocated dimensions for this keymap.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $newContent = $this->content;
-        if ($newContent instanceof Sizer) {
+        if ($newContent instanceof \SugarCraft\Dash\Foundation\Sizer) {
             $newContent = $newContent->setSize($width, $height);
         }
         $clone = new self($newContent);
@@ -81,7 +81,7 @@ final class KeyMap implements Sizer
     /**
      * Register an action for a key combination.
      *
-     * @param callable(Key): Item $action
+     * @param callable(Key): \SugarCraft\Dash\Foundation\Item $action
      */
     public function on(string $key, callable $action, bool $ctrl = false, bool $alt = false, bool $shift = false): self
     {
@@ -102,7 +102,7 @@ final class KeyMap implements Sizer
      *
      * Global actions are checked after specific actions.
      *
-     * @param callable(Key): Item $action
+     * @param callable(Key): \SugarCraft\Dash\Foundation\Item $action
      */
     public function onAny(callable $action): self
     {
@@ -185,7 +185,7 @@ final class KeyMap implements Sizer
     /**
      * Set new content.
      */
-    public function withContent(Item $content): self
+    public function withContent(\SugarCraft\Dash\Foundation\Item $content): self
     {
         $clone = new self($content);
         $clone->actions = $this->actions;
@@ -197,7 +197,7 @@ final class KeyMap implements Sizer
     /**
      * Create a new KeyMap with an action registered for a simple key.
      *
-     * @param callable(Key): Item $action
+     * @param callable(Key): \SugarCraft\Dash\Foundation\Item $action
      */
     public function withAction(string $key, callable $action): self
     {

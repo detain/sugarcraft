@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Grid;
 
 use SugarCraft\Dash\Grid\SparklineArea;
-use SugarCraft\Dash\Grid\Sizer;
+use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;
 

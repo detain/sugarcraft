@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors QR code display concepts adapted to PHP with wither-style immutable setters.
  */
-final class QRCode implements Sizer
+final class QRCode implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -54,7 +54,7 @@ final class QRCode implements Sizer
     /**
      * Set the allocated dimensions for this QR code.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

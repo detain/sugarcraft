@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, Input, Select, Checkbox, Button, Toggle, Slider};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Button};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card};
+use SugarCraft\Dash\Components\Form\{Input, Select, Checkbox, Toggle, Slider};
 
 // Dashboard Form Example
 $grid = new StackedGrid(new Options(fitScreen: true));
