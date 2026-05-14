@@ -1,0 +1,28 @@
+{
+  "id": "sugar-dash-phase-2-02",
+  "seq": "02",
+  "title": "Review and enhance BrailleCanvas.php",
+  "status": "pending",
+  "depends_on": ["01"],
+  "parallel": true,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "/tmp/dash-research/src/termui/drawille_drawille.go:33-45",
+    "sugar-dash/src/Plot/Braille/BrailleCanvas.php",
+    "sugar-dash/src/Plot/Braille/Bresenham.php"
+  ],
+  "acceptance_criteria": [
+    "setPoint(int $x, int $y, ?Color $color = null) method exists and works",
+    "setLine(int $x1, int $y1, int $x2, int $y2, ?Color $color = null) method uses Bresenham",
+    "clear() method resets canvas",
+    "render() outputs braille string using mb_chr(BRAILLE_OFFSET + $bits)"
+  ],
+  "deliverables": [
+    "sugar-dash/src/Plot/Braille/BrailleCanvas.php"
+  ],
+  "bounded_context": "plot",
+  "module": "sugar-dash"
+}

@@ -5,123 +5,173 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\GridTable;
 
 /**
- * Border character set for data grid tables.
+ * Box-drawing characters for table borders.
  *
- * Defines the Unicode characters used to render grid borders.
+ * Mirrors tealeaves BorderChars with all junction types.
  */
 final class BorderChars
 {
+    // Scalar constants for individual character access - Default set
+    public const TOP_LEFT_DEFAULT = '┏';
+    public const TOP_DEFAULT = '━';
+    public const TOP_RIGHT_DEFAULT = '┓';
+    public const LEFT_DEFAULT = '┃';
+    public const BOTTOM_LEFT_DEFAULT = '┗';
+    public const BOTTOM_DEFAULT = '━';
+    public const BOTTOM_RIGHT_DEFAULT = '┛';
+    public const RIGHT_DEFAULT = '┃';
+    public const TOP_MID_DEFAULT = '┳';
+    public const BOTTOM_MID_DEFAULT = '┻';
+    public const CENTER_DEFAULT = '╋';
+    public const LEFT_JUNCTION_DEFAULT = '┣';
+    public const RIGHT_JUNCTION_DEFAULT = '┫';
+    public const FREEZE_DIVIDER_DEFAULT = '║';
+    public const FREEZE_TOP_JUNCTION_DEFAULT = '╥';
+    public const FREEZE_BOTTOM_JUNCTION_DEFAULT = '╨';
+
+    // Scalar constants for individual character access - Rounded set
+    public const TOP_LEFT_ROUNDED = '╭';
+    public const TOP_ROUNDED = '─';
+    public const TOP_RIGHT_ROUNDED = '╮';
+    public const LEFT_ROUNDED = '│';
+    public const BOTTOM_LEFT_ROUNDED = '╰';
+    public const BOTTOM_ROUNDED = '─';
+    public const BOTTOM_RIGHT_ROUNDED = '╯';
+    public const RIGHT_ROUNDED = '│';
+    public const TOP_MID_ROUNDED = '┬';
+    public const BOTTOM_MID_ROUNDED = '┴';
+    public const CENTER_ROUNDED = '┼';
+    public const LEFT_JUNCTION_ROUNDED = '├';
+    public const RIGHT_JUNCTION_ROUNDED = '┤';
+    public const FREEZE_DIVIDER_ROUNDED = '║';
+    public const FREEZE_TOP_JUNCTION_ROUNDED = '╥';
+    public const FREEZE_BOTTOM_JUNCTION_ROUNDED = '╨';
+
     public function __construct(
-        private readonly string $horizontal = '─',
-        private readonly string $vertical = '│',
-        private readonly string $topLeft = '┌',
-        private readonly string $topRight = '┐',
-        private readonly string $bottomLeft = '└',
-        private readonly string $bottomRight = '┘',
-        private readonly string $cross = '┼',
-        private readonly string $topCross = '┬',
-        private readonly string $bottomCross = '┴',
-        private readonly string $leftCross = '├',
-        private readonly string $rightCross = '┤',
+        public readonly string $topLeft,
+        public readonly string $top,
+        public readonly string $topRight,
+        public readonly string $left,
+        public readonly string $bottomLeft,
+        public readonly string $bottom,
+        public readonly string $bottomRight,
+        public readonly string $right,
+        public readonly string $topMid,
+        public readonly string $bottomMid,
+        public readonly string $center,
+        public readonly string $leftJunction = '┣',
+        public readonly string $rightJunction = '┫',
+        public readonly string $topJunction = '┳',
+        public readonly string $bottomJunction = '┻',
+        public readonly string $innerJunction = '╋',
+        public readonly string $innerDivider = '┃',
+        public readonly string $freezeDivider = '║',
+        public readonly string $freezeTopJunction = '╥',
+        public readonly string $freezeBottomJunction = '╨',
+        public readonly string $freezeInnerJunction = '╫',
     ) {}
 
-    public static function new(
-        string $horizontal = '─',
-        string $vertical = '│',
-        string $topLeft = '┌',
-        string $topRight = '┐',
-        string $bottomLeft = '└',
-        string $bottomRight = '┘',
-        string $cross = '┼',
-        string $topCross = '┬',
-        string $bottomCross = '┴',
-        string $leftCross = '├',
-        string $rightCross = '┤',
-    ): self {
-        return new self(
-            horizontal: $horizontal,
-            vertical: $vertical,
-            topLeft: $topLeft,
-            topRight: $topRight,
-            bottomLeft: $bottomLeft,
-            bottomRight: $bottomRight,
-            cross: $cross,
-            topCross: $topCross,
-            bottomCross: $bottomCross,
-            leftCross: $leftCross,
-            rightCross: $rightCross,
+    /**
+     * Get default heavy border characters.
+     */
+    public static function default(): self
+    {
+        static $instance = null;
+        return $instance ??= new self(
+            topLeft: self::TOP_LEFT_DEFAULT,
+            top: self::TOP_DEFAULT,
+            topRight: self::TOP_RIGHT_DEFAULT,
+            left: self::LEFT_DEFAULT,
+            bottomLeft: self::BOTTOM_LEFT_DEFAULT,
+            bottom: self::BOTTOM_DEFAULT,
+            bottomRight: self::BOTTOM_RIGHT_DEFAULT,
+            right: self::RIGHT_DEFAULT,
+            topMid: self::TOP_MID_DEFAULT,
+            bottomMid: self::BOTTOM_MID_DEFAULT,
+            center: self::CENTER_DEFAULT,
+            leftJunction: self::LEFT_JUNCTION_DEFAULT,
+            rightJunction: self::RIGHT_JUNCTION_DEFAULT,
+            freezeDivider: self::FREEZE_DIVIDER_DEFAULT,
+            freezeTopJunction: self::FREEZE_TOP_JUNCTION_DEFAULT,
+            freezeBottomJunction: self::FREEZE_BOTTOM_JUNCTION_DEFAULT,
         );
     }
 
+    /**
+     * Get rounded thin border characters.
+     */
     public static function rounded(): self
     {
-        return new self(
-            horizontal: '─',
-            vertical: '│',
-            topLeft: '╭',
-            topRight: '╮',
-            bottomLeft: '╰',
-            bottomRight: '╯',
-            cross: '┼',
-            topCross: '┬',
-            bottomCross: '┴',
-            leftCross: '├',
-            rightCross: '┤',
+        static $instance = null;
+        return $instance ??= new self(
+            topLeft: self::TOP_LEFT_ROUNDED,
+            top: self::TOP_ROUNDED,
+            topRight: self::TOP_RIGHT_ROUNDED,
+            left: self::LEFT_ROUNDED,
+            bottomLeft: self::BOTTOM_LEFT_ROUNDED,
+            bottom: self::BOTTOM_ROUNDED,
+            bottomRight: self::BOTTOM_RIGHT_ROUNDED,
+            right: self::RIGHT_ROUNDED,
+            topMid: self::TOP_MID_ROUNDED,
+            bottomMid: self::BOTTOM_MID_ROUNDED,
+            center: self::CENTER_ROUNDED,
+            leftJunction: self::LEFT_JUNCTION_ROUNDED,
+            rightJunction: self::RIGHT_JUNCTION_ROUNDED,
+            freezeDivider: self::FREEZE_DIVIDER_ROUNDED,
+            freezeTopJunction: self::FREEZE_TOP_JUNCTION_ROUNDED,
+            freezeBottomJunction: self::FREEZE_BOTTOM_JUNCTION_ROUNDED,
         );
     }
 
-    public function getHorizontal(): string
+    /**
+     * Get borderless characters (empty strings).
+     */
+    public static function borderless(): self
     {
-        return $this->horizontal;
+        static $instance = null;
+        return $instance ??= new self(
+            topLeft: '',
+            top: '',
+            topRight: '',
+            left: '',
+            bottomLeft: '',
+            bottom: '',
+            bottomRight: '',
+            right: '',
+            topMid: '',
+            bottomMid: '',
+            center: '',
+            leftJunction: '',
+            rightJunction: '',
+            freezeDivider: '',
+            freezeTopJunction: '',
+            freezeBottomJunction: '',
+        );
     }
 
-    public function getVertical(): string
+    /**
+     * Get minimal border characters.
+     */
+    public static function minimal(): self
     {
-        return $this->vertical;
-    }
-
-    public function getTopLeft(): string
-    {
-        return $this->topLeft;
-    }
-
-    public function getTopRight(): string
-    {
-        return $this->topRight;
-    }
-
-    public function getBottomLeft(): string
-    {
-        return $this->bottomLeft;
-    }
-
-    public function getBottomRight(): string
-    {
-        return $this->bottomRight;
-    }
-
-    public function getCross(): string
-    {
-        return $this->cross;
-    }
-
-    public function getTopCross(): string
-    {
-        return $this->topCross;
-    }
-
-    public function getBottomCross(): string
-    {
-        return $this->bottomCross;
-    }
-
-    public function getLeftCross(): string
-    {
-        return $this->leftCross;
-    }
-
-    public function getRightCross(): string
-    {
-        return $this->rightCross;
+        static $instance = null;
+        return $instance ??= new self(
+            topLeft: ' ',
+            top: '─',
+            topRight: ' ',
+            left: '│',
+            bottomLeft: ' ',
+            bottom: '─',
+            bottomRight: ' ',
+            right: '│',
+            topMid: ' ',
+            bottomMid: ' ',
+            center: ' ',
+            leftJunction: ' ',
+            rightJunction: ' ',
+            freezeDivider: '│',
+            freezeTopJunction: ' ',
+            freezeBottomJunction: ' ',
+        );
     }
 }

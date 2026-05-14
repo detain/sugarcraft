@@ -1,0 +1,59 @@
+{
+  "id": "sugar-dash-phase-0-05",
+  "seq": "05",
+  "title": "Module/Registry/Plugin/Modules/Events/Keys/Position/Output/State namespace creation + file moves",
+  "status": "pending",
+  "depends_on": ["04"],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    "sugar-dash/CALIBER_LEARNINGS.md"
+  ],
+  "reference_files": [
+    "plans/dash_update_claude.md",
+    "sugar-dash/src/Grid/Event.php",
+    "sugar-dash/src/Grid/Key.php",
+    "sugar-dash/src/Grid/State.php"
+  ],
+  "acceptance_criteria": [
+    "src/Module/ created with Module.php, ImagePlacer.php, ImagePlacement.php, ModuleConfig.php, BaseModule.php, TickEpoch.php",
+    "src/Registry/ created with Registry.php, Constructor.php",
+    "src/Plugin/ created with Request.php, Response.php, PluginSdk.php, ExternalModule.php, Discovery.php",
+    "src/Modules/Clock/ created with ClockModule.php",
+    "src/Modules/System/ created with SystemModule.php",
+    "src/Modules/Weather/ created with WeatherModule.php",
+    "src/Modules/Uptime/ created with UptimeModule.php",
+    "src/Modules/Greeting/ created with GreetingModule.php",
+    "src/Modules/Generic/ created with GenericModule.php",
+    "src/Events/ created with Event.php, EventDispatcher.php, EventHandler.php, FocusEvent.php, KeyEvent.php, MouseEvent.php, PasteEvent.php, ResizeEvent.php, Key.php, KeyAction.php, KeyMap.php, Focus.php",
+    "src/Keys/ created with KeyRegistry.php, KeyIdentifier.php, KeyMeta.php, Category.php",
+    "src/Position/ created with Center.php, Overlay.php",
+    "src/Output/ created with Truncate.php, RenderBar.php, WrapCells.php",
+    "src/State/ created with State.php (moved from Grid/State.php)",
+    "All internal use statements updated (Grid\\Foo → appropriate new namespace)",
+    "composer dump-autoload succeeds without errors"
+  ],
+  "deliverables": [
+    "src/Module/*.php (6 files)",
+    "src/Registry/*.php (2 files)",
+    "src/Plugin/*.php (5 files)",
+    "src/Modules/Clock/ClockModule.php",
+    "src/Modules/System/SystemModule.php",
+    "src/Modules/Weather/WeatherModule.php",
+    "src/Modules/Uptime/UptimeModule.php",
+    "src/Modules/Greeting/GreetingModule.php",
+    "src/Modules/Generic/GenericModule.php",
+    "src/Events/*.php (12 files)",
+    "src/Keys/*.php (4 files)",
+    "src/Position/*.php (2 files)",
+    "src/Output/*.php (3 files)",
+    "src/State/State.php"
+  ],
+  "bounded_context": "sugar-dash",
+  "module": "sugar-dash",
+  "vertical_slice": "phase-0-reorganize",
+  "notes": {
+    "smaller_namespaces": "These 9 namespaces are smaller than Foundation/Layout/Components/Plot. State.php had TD-1 issue (readonly+wither) - fix during move.",
+    "atomic_state_persist": "For State.php: tmp+rename pattern for atomic persistence. tmp := path + '.tmp', WriteFile(tmp, data), Rename(tmp, path)."
+  }
+}

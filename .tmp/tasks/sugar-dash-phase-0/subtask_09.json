@@ -1,0 +1,38 @@
+{
+  "id": "sugar-dash-phase-0-09",
+  "seq": "09",
+  "title": "Run phpunit validation - all tests must pass",
+  "status": "pending",
+  "depends_on": ["08"],
+  "parallel": false,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    "sugar-dash/CALIBER_LEARNINGS.md"
+  ],
+  "reference_files": [
+    "sugar-dash/composer.json",
+    "sugar-dash/phpunit.xml"
+  ],
+  "acceptance_criteria": [
+    "composer dump-autoload runs without errors",
+    "vendor/bin/phpunit runs without autoload errors",
+    "All tests pass (100% green)",
+    "No warnings or deprecations (failOnWarning=true, failOnDeprecation=true)",
+    "No undefined variables or missing class errors",
+    "Boxer→Pad rename verified: no remaining references to Grid\\Boxer or Boxer::new()",
+    "All 222 files properly moved and autoloaded"
+  ],
+  "deliverables": [
+    "composer dump-autoload output (clean)",
+    "phpunit test results (all passing)",
+    "Verification that Boxer.php is fully renamed to Pad.php"
+  ],
+  "bounded_context": "sugar-dash",
+  "module": "sugar-dash",
+  "vertical_slice": "phase-0-reorganize",
+  "notes": {
+    "validation_checklist": "Run: cd sugar-dash && composer dump-autoload && vendor/bin/phpunit --testdox 2>&1 | head -100",
+    "grep_for_boxer": "After validation, grep for any remaining 'Grid\\\\Boxer' or 'Boxer::new()' to confirm rename is complete",
+    "fail_on_warning": "The phpunit.xml has failOnWarning=true, so any undefined variable or similar will fail the build"
+  }
+}

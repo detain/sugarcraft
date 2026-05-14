@@ -1,0 +1,25 @@
+{
+  "id": "sugar-dash-phase-1-03",
+  "seq": "03",
+  "title": "Create Foundation/DrawableTest.php for interface conformance",
+  "status": "pending",
+  "depends_on": ["01"],
+  "parallel": true,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "sugar-dash/src/Foundation/Drawable.php",
+    "sugar-dash/src/Foundation/Buffer.php"
+  ],
+  "acceptance_criteria": [
+    "Buffer implements Drawable interface",
+    "getRect returns Rect matching Buffer dimensions",
+    "setRect returns self for fluent chaining",
+    "draw writes content to target Buffer"
+  ],
+  "deliverables": [
+    "sugar-dash/tests/Foundation/DrawableTest.php"
+  ]
+}

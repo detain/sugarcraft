@@ -1,0 +1,26 @@
+{
+  "id": "sugar-dash-phase-2-03",
+  "seq": "03",
+  "title": "Create RingBuffer.php for sparkline data",
+  "status": "pending",
+  "depends_on": [],
+  "parallel": true,
+  "suggested_agent": "CoderAgent",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "/tmp/dash-research/src/homedash/internal_ui_components_sparkline.go:56-78"
+  ],
+  "acceptance_criteria": [
+    "O(1) push operation - appends value, evicts oldest when full",
+    "toArray() returns chronological order (oldest first)",
+    "Default size of 60 when not specified",
+    "count() returns current number of elements"
+  ],
+  "deliverables": [
+    "sugar-dash/src/Plot/RingBuffer.php"
+  ],
+  "bounded_context": "plot",
+  "module": "sugar-dash"
+}

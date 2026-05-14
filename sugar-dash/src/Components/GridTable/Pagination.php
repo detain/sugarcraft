@@ -5,76 +5,87 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\GridTable;
 
 /**
- * Pagination state for data grid tables.
- *
- * Tracks current page, page size, and total records.
+ * Pagination state for the grid.
  */
 final class Pagination
 {
     public function __construct(
-        private readonly int $page = 1,
-        private readonly int $pageSize = 25,
-        private readonly int $totalRows = 0,
+        public readonly int $page = 1,
+        public readonly int $perPage = 20,
+        public readonly int $totalRows = 0,
     ) {}
 
-    public static function new(int $page = 1, int $pageSize = 25, int $totalRows = 0): self
+    /**
+     * Total number of pages.
+     */
+    public function totalPages(): int
     {
-        return new self(page: $page, pageSize: $pageSize, totalRows: $totalRows);
+        if ($this->perPage <= 0 || $this->totalRows === 0) {
+            return 1;
+        }
+
+        return (int) ceil($this->totalRows / $this->perPage);
     }
 
-    public function getPage(): int
+    /**
+     * Zero-based offset for the current page.
+     */
+    public function offset(): int
     {
-        return $this->page;
-    }
-
-    public function getPageSize(): int
-    {
-        return $this->pageSize;
-    }
-
-    public function getTotalRows(): int
-    {
-        return $this->totalRows;
-    }
-
-    public function getTotalPages(): int
-    {
-        if ($this->pageSize <= 0) {
+        if ($this->perPage <= 0) {
             return 0;
         }
-        return (int) ceil($this->totalRows / $this->pageSize);
+
+        return ($this->page - 1) * $this->perPage;
     }
 
-    public function getOffset(): int
+    /**
+     * Clamp page to valid range.
+     */
+    public function clampPage(int $page): int
     {
-        return ($this->page - 1) * $this->pageSize;
+        if ($page < 1) {
+            return 1;
+        }
+
+        $max = $this->totalPages();
+
+        return $page > $max ? $max : $page;
     }
 
-    public function hasNextPage(): bool
-    {
-        return $this->page < $this->getTotalPages();
-    }
-
-    public function hasPreviousPage(): bool
-    {
-        return $this->page > 1;
-    }
-
+    /**
+     * Create a new pagination with updated page.
+     */
     public function withPage(int $page): self
     {
         return new self(
-            page: max(1, min($page, $this->getTotalPages())),
-            pageSize: $this->pageSize,
+            page: $this->clampPage($page),
+            perPage: $this->perPage,
             totalRows: $this->totalRows,
         );
     }
 
-    public function withPageSize(int $pageSize): self
+    /**
+     * Create a new pagination with updated perPage.
+     */
+    public function withPerPage(int $perPage): self
     {
         return new self(
             page: $this->page,
-            pageSize: max(1, $pageSize),
+            perPage: $perPage,
             totalRows: $this->totalRows,
+        );
+    }
+
+    /**
+     * Create a new pagination with updated totalRows.
+     */
+    public function withTotalRows(int $totalRows): self
+    {
+        return new self(
+            page: $this->page,
+            perPage: $this->perPage,
+            totalRows: $totalRows,
         );
     }
 }

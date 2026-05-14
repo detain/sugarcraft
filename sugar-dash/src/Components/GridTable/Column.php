@@ -5,35 +5,99 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\GridTable;
 
 /**
- * Column definition for data grid tables.
- *
- * Defines a single column's header, width, alignment, and sort/filter behavior.
+ * A column definition for the grid.
  */
 final class Column
 {
     public function __construct(
-        private readonly string $header = '',
-        private readonly int $width = 10,
-        private readonly ?string $key = null,
+        public readonly string $key,
+        public readonly string $label,
+        public readonly ?int $minWidth = null,
+        public readonly ?int $maxWidth = null,
+        public readonly bool $sortable = false,
+        public readonly bool $filterable = false,
+        public readonly ?\Closure $renderer = null,
     ) {}
 
-    public static function new(string $header = '', int $width = 10, ?string $key = null): self
+    /**
+     * Create a column with minimum width constraint.
+     */
+    public function withMinWidth(int $width): self
     {
-        return new self(header: $header, width: $width, key: $key);
+        return new self(
+            key: $this->key,
+            label: $this->label,
+            minWidth: $width,
+            maxWidth: $this->maxWidth,
+            sortable: $this->sortable,
+            filterable: $this->filterable,
+            renderer: $this->renderer,
+        );
     }
 
-    public function getHeader(): string
+    /**
+     * Create a column with maximum width constraint.
+     */
+    public function withMaxWidth(int $width): self
     {
-        return $this->header;
+        return new self(
+            key: $this->key,
+            label: $this->label,
+            minWidth: $this->minWidth,
+            maxWidth: $width,
+            sortable: $this->sortable,
+            filterable: $this->filterable,
+            renderer: $this->renderer,
+        );
     }
 
-    public function getWidth(): int
+    /**
+     * Create a sortable column.
+     */
+    public function sortable(): self
     {
-        return $this->width;
+        return new self(
+            key: $this->key,
+            label: $this->label,
+            minWidth: $this->minWidth,
+            maxWidth: $this->maxWidth,
+            sortable: true,
+            filterable: $this->filterable,
+            renderer: $this->renderer,
+        );
     }
 
-    public function getKey(): ?string
+    /**
+     * Create a filterable column.
+     */
+    public function filterable(): self
     {
-        return $this->key ?? $this->header;
+        return new self(
+            key: $this->key,
+            label: $this->label,
+            minWidth: $this->minWidth,
+            maxWidth: $this->maxWidth,
+            sortable: $this->sortable,
+            filterable: true,
+            renderer: $this->renderer,
+        );
+    }
+
+    /**
+     * Create a column with a custom renderer.
+     *
+     * @param callable(mixed): string $renderer
+     */
+    public function withRenderer(callable $renderer): self
+    {
+        return new self(
+            key: $this->key,
+            label: $this->label,
+            minWidth: $this->minWidth,
+            maxWidth: $this->maxWidth,
+            sortable: $this->sortable,
+            filterable: $this->filterable,
+            renderer: $renderer,
+        );
     }
 }

@@ -4,15 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Layout;
 
-use SugarCraft\Dash\Layout\Pad;
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Dash\Layout\Boxer\Boxer;
+use SugarCraft\Dash\Layout\Boxer\Node;
+use SugarCraft\Dash\Layout\Boxer\NotFoundError;
+use SugarCraft\Dash\Layout\Boxer\SizeError;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
-use SugarCraft\Sprinkles\VAlign;
-use SugarCraft\Core\Util\Width;
-use PHPUnit\Framework\TestCase;
 
 final class BoxerTest extends TestCase
 {
+    // ═══════════════════════════════════════════════════════════════
+    // Test Helpers
+    // ═══════════════════════════════════════════════════════════════
+
     private function strItem(string $s): Item
     {
         return new class($s) implements Item {
@@ -21,13 +26,16 @@ final class BoxerTest extends TestCase
         };
     }
 
-    private function sizedItem(): Item
+    private function sizedItem(int $w = 0, int $h = 0): Item
     {
-        return new class implements Item, Sizer {
+        return new class($w, $h) implements Item, Sizer {
             public int $capturedW = 0;
             public int $capturedH = 0;
-            private int $w = 0;
-            private int $h = 0;
+
+            public function __construct(
+                private int $w,
+                private int $h,
+            ) {}
 
             public function setSize(int $width, int $height): Sizer
             {
@@ -38,6 +46,7 @@ final class BoxerTest extends TestCase
                 $clone->h = $height;
                 return $clone;
             }
+
             public function render(): string
             {
                 return "Size:{$this->w}x{$this->h}";
@@ -49,299 +58,364 @@ final class BoxerTest extends TestCase
     // Interface conformance
     // ═══════════════════════════════════════════════════════════════
 
-    public function testBoxerImplementsSizer(): void
-    {
-        $boxer = Pad::new($this->strItem('test'));
-        $this->assertInstanceOf(Sizer::class, $boxer);
-    }
-
     public function testBoxerImplementsItem(): void
     {
-        $boxer = Pad::new($this->strItem('test'));
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
         $this->assertInstanceOf(Item::class, $boxer);
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Basic rendering
-    // ═══════════════════════════════════════════════════════════════
-
-    public function testRenderWithNoSizeReturnsContent(): void
+    public function testBoxerImplementsSizer(): void
     {
-        $boxer = Pad::new($this->strItem('raw content'));
-        $this->assertSame('raw content', $boxer->render());
-    }
-
-    public function testRenderWithSizeStillReturnsContent(): void
-    {
-        $boxer = Pad::new($this->strItem('inner'));
-        $boxer = $boxer->setSize(20, 7);
-        $rendered = $boxer->render();
-
-        // Should contain the inner content somewhere
-        $this->assertStringContainsString('inner', $rendered);
-    }
-
-    public function testRenderedOutputHasCorrectDimensions(): void
-    {
-        $boxer = Pad::new($this->strItem('x'));
-        $boxer = $boxer->setSize(15, 6);
-        $rendered = $boxer->render();
-
-        $lines = explode("\n", $rendered);
-        // With setSize(15, 6) and default padding [0,0,0,0], output is 6 lines
-        $this->assertCount(6, $lines);
-    }
-
-    public function testRenderWithZeroSizeReturnsContent(): void
-    {
-        $boxer = Pad::new($this->strItem('still raw'));
-        $boxer = $boxer->setSize(0, 5);
-        $this->assertSame('still raw', $boxer->render());
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
+        $this->assertInstanceOf(Sizer::class, $boxer);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Sizer propagation
+    // createLeaf / factory methods
     // ═══════════════════════════════════════════════════════════════
 
-    public function testSetSizePropagatesToSizerContent(): void
+    public function testCreateLeafReturnsNodeWithAddress(): void
+    {
+        $boxer = Boxer::leaf('0.1.2', $this->strItem('content'));
+        $node = $boxer->getNode('0.1.2');
+
+        $this->assertNotNull($node);
+        $this->assertSame('0.1.2', $node->getAddress());
+        $this->assertTrue($node->isLeaf());
+    }
+
+    public function testCreateLeafWithEmptyAddressThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Boxer::leaf('', $this->strItem('test'));
+    }
+
+    public function testHorizontalFactoryCreatesHorizontalNode(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+
+        $boxer = Boxer::horizontal($child1, $child2);
+
+        $this->assertFalse($boxer->getRoot()->isLeaf());
+        $this->assertFalse($boxer->getRoot()->isVerticalStacked());
+        $this->assertCount(2, $boxer->getRoot()->getChildren());
+    }
+
+    public function testVerticalFactoryCreatesVerticalNode(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+
+        $boxer = Boxer::vertical($child1, $child2);
+
+        $this->assertFalse($boxer->getRoot()->isLeaf());
+        $this->assertTrue($boxer->getRoot()->isVerticalStacked());
+        $this->assertCount(2, $boxer->getRoot()->getChildren());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // editLeaf
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testEditLeafModifiesNode(): void
+    {
+        $boxer = Boxer::leaf('0', $this->strItem('original'));
+        $modifiedBoxer = $boxer->editLeaf('0', fn($item) => $this->strItem('modified'));
+
+        // Original unchanged
+        $this->assertSame('original', $boxer->getItem('0')->render());
+
+        // New instance has modified content
+        $this->assertSame('modified', $modifiedBoxer->getItem('0')->render());
+    }
+
+    public function testEditLeafAutoSaves(): void
     {
         $sized = $this->sizedItem();
-        $boxer = Pad::new($sized);
-        $boxer = $boxer->setSize(30, 6);
-        // Boxer should render correctly with Sizer content
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-        // Verify the rendered output contains the expected format
-        $this->assertStringContainsString('Size:', $rendered);
+        $boxer = Boxer::leaf('0', $sized);
+
+        // Set size to propagate
+        $boxer = $boxer->setSize(20, 5);
+
+        // Edit leaf
+        $modifiedBoxer = $boxer->editLeaf('0', function ($item) {
+            return $item->setSize(15, 3);
+        });
+
+        // Verify the modification persisted
+        $this->assertSame(15, $modifiedBoxer->getItem('0')->capturedW ?? 0);
+        $this->assertSame(3, $modifiedBoxer->getItem('0')->capturedH ?? 0);
     }
 
-    public function testSetSizeReturnsNewInstance(): void
+    public function testEditLeafThrowsNotFoundForUnknownAddress(): void
     {
-        $original = Pad::new($this->strItem('test'));
-        $resized = $original->setSize(10, 3);
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
+
+        $this->expectException(NotFoundError::class);
+        $boxer->editLeaf('99', fn($item) => $item);
+    }
+
+    public function testEditLeafRethrowsErrorFromEditFunc(): void
+    {
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
+
+        $this->expectException(\RuntimeException::class);
+        $boxer->editLeaf('0', function ($item) {
+            throw new \RuntimeException('edit failed');
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Size distribution
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testEvenSplitHorizontal(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+        $child3 = Node::leaf('2');
+
+        $boxer = Boxer::horizontal($child1, $child2, $child3);
+        $boxer = $boxer->setSize(30, 10);
+
+        // Each child should get 10 width (30 / 3)
+        $this->assertSame(10, $boxer->getNode('0')->getWidth());
+        $this->assertSame(10, $boxer->getNode('1')->getWidth());
+        $this->assertSame(10, $boxer->getNode('2')->getWidth());
+
+        // All should have full height
+        $this->assertSame(10, $boxer->getNode('0')->getHeight());
+        $this->assertSame(10, $boxer->getNode('1')->getHeight());
+        $this->assertSame(10, $boxer->getNode('2')->getHeight());
+    }
+
+    public function testEvenSplitVertical(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+        $child3 = Node::leaf('2');
+
+        $boxer = Boxer::vertical($child1, $child2, $child3);
+        $boxer = $boxer->setSize(20, 30);
+
+        // Each child should get 10 height (30 / 3)
+        $this->assertSame(10, $boxer->getNode('0')->getHeight());
+        $this->assertSame(10, $boxer->getNode('1')->getHeight());
+        $this->assertSame(10, $boxer->getNode('2')->getHeight());
+
+        // All should have full width
+        $this->assertSame(20, $boxer->getNode('0')->getWidth());
+        $this->assertSame(20, $boxer->getNode('1')->getWidth());
+        $this->assertSame(20, $boxer->getNode('2')->getWidth());
+    }
+
+    public function testEvenSplitWithRemainder(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+        $child3 = Node::leaf('2');
+
+        $boxer = Boxer::horizontal($child1, $child2, $child3);
+        $boxer = $boxer->setSize(31, 10);  // 31 / 3 = 10 remainder 1
+
+        // First child gets the extra
+        $this->assertSame(11, $boxer->getNode('0')->getWidth());
+        $this->assertSame(10, $boxer->getNode('1')->getWidth());
+        $this->assertSame(10, $boxer->getNode('2')->getWidth());
+    }
+
+    public function testSizeFuncOverridesEvenSplit(): void
+    {
+        $child1 = Node::leaf('0');
+        $child2 = Node::leaf('1');
+
+        // Custom sizeFunc that gives 70% to first, 30% to second
+        $sizeFunc = fn(Node $node, int $totalWidth): array => [
+            (int) ($totalWidth * 0.7),
+            (int) ($totalWidth * 0.3),
+        ];
+
+        $root = Node::horizontal($child1, $child2)->withSizeFunc($sizeFunc);
+        $boxer = Boxer::tree($root)->setSize(100, 20);
+
+        // Should use the sizeFunc distribution
+        $this->assertEquals(70, $boxer->getNode('0')->getWidth());
+        $this->assertEquals(30, $boxer->getNode('1')->getWidth());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Address handling
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testAddressUniqueness(): void
+    {
+        $boxer1 = Boxer::leaf('leaf-a', $this->strItem('content1'));
+        $boxer2 = Boxer::leaf('leaf-b', $this->strItem('content2'));
+
+        $this->assertSame('leaf-a', $boxer1->getNode('leaf-a')->getAddress());
+        $this->assertSame('leaf-b', $boxer2->getNode('leaf-b')->getAddress());
+        $this->assertNotSame($boxer1->getNode('leaf-a')->getAddress(), $boxer2->getNode('leaf-b')->getAddress());
+    }
+
+    public function testNestedAddresses(): void
+    {
+        $leaf1 = Node::leaf('0');
+        $leaf2 = Node::leaf('1');
+        $leaf3 = Node::leaf('0.0');  // Child of leaf1's would-be parent
+        $leaf4 = Node::leaf('0.1');
+
+        $boxer = Boxer::vertical(
+            Node::horizontal($leaf1, $leaf2),
+            Node::horizontal($leaf3, $leaf4),
+        );
+
+        $this->assertSame('0', $boxer->getNode('0')->getAddress());
+        $this->assertSame('1', $boxer->getNode('1')->getAddress());
+        $this->assertSame('0.0', $boxer->getNode('0.0')->getAddress());
+        $this->assertSame('0.1', $boxer->getNode('0.1')->getAddress());
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Rendering
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testBoxerRendersWithContent(): void
+    {
+        $boxer = Boxer::leaf('0', $this->strItem('Hello World'));
+        $boxer = $boxer->setSize(20, 3);
+
+        $rendered = $boxer->render();
+
+        $this->assertStringContainsString('Hello World', $rendered);
+    }
+
+    public function testRenderWithoutSizeReturnsWaitingMessage(): void
+    {
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
+        $rendered = $boxer->render();
+
+        $this->assertSame('waiting for size information', $rendered);
+    }
+
+    public function testBoxerSetSizeReturnsNewInstance(): void
+    {
+        $original = Boxer::leaf('0', $this->strItem('test'));
+        $resized = $original->setSize(10, 5);
 
         $this->assertNotSame($original, $resized);
-        // Original unchanged
-        $original->render(); // no crash
+        $this->assertSame(0, $original->getWidth());
+        $this->assertSame(0, $original->getHeight());
+        $this->assertSame(10, $resized->getWidth());
+        $this->assertSame(5, $resized->getHeight());
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Inner size calculation
-    // ═══════════════════════════════════════════════════════════════
-
-    public function testGetInnerSizeSubtractsPadding(): void
+    public function testNestedBoxerLayout(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPadding(2); // 2 cells each side
-        $boxer = $boxer->setSize(12, 8);
+        // Create a nested layout: [ [A][B] ] [C] ]
+        // This is: vertical containing horizontal(A,B) and C
 
-        [$w, $h] = $boxer->getInnerSize();
+        $itemA = $this->strItem('A');
+        $itemB = $this->strItem('B');
+        $itemC = $this->strItem('C');
 
-        // 12 total - 4 (2 left + 2 right) = 8 inner width
-        $this->assertSame(8, $w);
-        // 8 total - 4 (2 top + 2 bottom) = 4 inner height
-        $this->assertSame(4, $h);
+        $root = Node::vertical(
+            Node::horizontal(Node::leaf('0'), Node::leaf('1')),
+            Node::leaf('2')
+        );
+
+        $boxer = Boxer::tree($root, [
+            '0' => $itemA,
+            '1' => $itemB,
+            '2' => $itemC,
+        ])->setSize(30, 10);
+
+        $rendered = $boxer->render();
+
+        $this->assertStringContainsString('A', $rendered);
+        $this->assertStringContainsString('B', $rendered);
+        $this->assertStringContainsString('C', $rendered);
     }
 
-    public function testGetInnerSizeWithNoPadding(): void
+    public function testSetSizeToZeroReturnsZeroSizedBoxer(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPadding(0);
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
         $boxer = $boxer->setSize(10, 5);
+        $boxer = $boxer->setSize(0, 0);
 
-        [$w, $h] = $boxer->getInnerSize();
-
-        // 10 - 0 = 10, 5 - 0 = 5
-        $this->assertSame(10, $w);
-        $this->assertSame(5, $h);
-    }
-
-    public function testGetInnerSizeReturnsZeroOnTinyBox(): void
-    {
-        // With padding of 1 on each side, a 1x1 box has no room for content
-        $boxer = Pad::new($this->strItem('tiny'))
-            ->withPadding(1);
-        $boxer = $boxer->setSize(1, 1);
-
-        [$w, $h] = $boxer->getInnerSize();
-        // padding 1 on each side = 2 total each axis, 1 - 2 = -1 -> clamped to 0
-        $this->assertSame(0, $w);
-        $this->assertSame(0, $h);
-    }
-
-    public function testGetInnerSizeBeforeSetSizeReturnsZero(): void
-    {
-        $boxer = Pad::new($this->strItem('test'));
-        [$w, $h] = $boxer->getInnerSize();
-        $this->assertSame(0, $w);
-        $this->assertSame(0, $h);
-    }
-
-    public function testGetInnerSizeWithPaddingXY(): void
-    {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPaddingXY(3, 1); // 3 vertical, 1 horizontal
-        $boxer = $boxer->setSize(12, 9);
-
-        [$w, $h] = $boxer->getInnerSize();
-
-        // 12 - 2 (1 left + 1 right) = 10
-        $this->assertSame(10, $w);
-        // 9 - 6 (3 top + 3 bottom) = 3
-        $this->assertSame(3, $h);
+        $this->assertSame(0, $boxer->getWidth());
+        $this->assertSame(0, $boxer->getHeight());
+        $this->assertSame('waiting for size information', $boxer->render());
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // Withers / fluent API
+    // Accessors
     // ═══════════════════════════════════════════════════════════════
 
-    public function testWithPaddingChangesAllSides(): void
+    public function testGetModelMap(): void
     {
-        $noPad = Pad::new($this->strItem('x'))->withPadding(0)->setSize(10, 3);
-        $pad = Pad::new($this->strItem('x'))->withPadding(2)->setSize(14, 7);
+        $item = $this->strItem('content');
+        $boxer = Boxer::leaf('my-address', $item);
 
-        $noPadRendered = $noPad->render();
-        $padRendered = $pad->render();
+        $map = $boxer->getModelMap();
 
-        // Both should render without error
-        $this->assertNotSame('', $noPadRendered);
-        $this->assertNotSame('', $padRendered);
+        $this->assertArrayHasKey('my-address', $map);
+        $this->assertSame($item, $map['my-address']);
     }
 
-    public function testWithPaddingXYSetsVerticalAndHorizontal(): void
+    public function testGetItem(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPaddingXY(3, 1) // 3 vertical, 1 horizontal
-            ->setSize(12, 9);
+        $item = $this->strItem('content');
+        $boxer = Boxer::leaf('addr', $item);
 
-        [$w, $h] = $boxer->getInnerSize();
-
-        // 12 - 2 (1 left + 1 right) = 10
-        $this->assertSame(10, $w);
-        // 9 - 6 (3 top + 3 bottom) = 3
-        $this->assertSame(3, $h);
+        $this->assertSame($item, $boxer->getItem('addr'));
+        $this->assertNull($boxer->getItem('non-existent'));
     }
 
-    public function testWithPaddingArraySetsIndividualSides(): void
+    public function testGetNode(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPaddingArray([1, 2, 3, 4]) // top=1, right=2, bottom=3, left=4
-            ->setSize(12, 8);
+        $boxer = Boxer::leaf('test-addr', $this->strItem('test'));
 
-        [$w, $h] = $boxer->getInnerSize();
+        $node = $boxer->getNode('test-addr');
 
-        // 12 - 6 (4 left + 2 right) = 6
-        $this->assertSame(6, $w);
-        // 8 - 4 (1 top + 3 bottom) = 4
-        $this->assertSame(4, $h);
+        $this->assertNotNull($node);
+        $this->assertSame('test-addr', $node->getAddress());
     }
 
-    public function testWithBorderEnablesBorder(): void
+    public function testGetNodeReturnsNullForNonexistent(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withBorder(true)
-            ->setSize(10, 5);
+        $boxer = Boxer::leaf('exists', $this->strItem('test'));
 
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-    }
-
-    public function testWithBorderFalseDisablesBorder(): void
-    {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withBorder(false)
-            ->setSize(10, 5);
-
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-    }
-
-    public function testWithVerticalAlignBottom(): void
-    {
-        $boxer = Pad::new($this->strItem('x'))
-            ->withVerticalAlign(VAlign::Bottom)
-            ->setSize(10, 5);
-
-        // Should render without error
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-    }
-
-    public function testWithVerticalAlignMiddle(): void
-    {
-        $boxer = Pad::new($this->strItem('x'))
-            ->withVerticalAlign(VAlign::Middle)
-            ->setSize(10, 5);
-
-        // Should render without error
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // Default values
-    // ═══════════════════════════════════════════════════════════════
-
-    public function testDefaultPaddingIsZero(): void
-    {
-        $boxer = Pad::new($this->strItem('test'))->setSize(10, 5);
-        [$w, $h] = $boxer->getInnerSize();
-
-        // No padding subtracted
-        $this->assertSame(10, $w);
-        $this->assertSame(5, $h);
-    }
-
-    public function testDefaultBorderIsFalse(): void
-    {
-        $boxer = Pad::new($this->strItem('test'))->setSize(10, 5);
-        $rendered = $boxer->render();
-
-        // Should not have border characters when border is disabled
-        $this->assertStringNotContainsString('╭', $rendered);
-        $this->assertStringNotContainsString('╮', $rendered);
+        $this->assertNull($boxer->getNode('does-not-exist'));
     }
 
     // ═══════════════════════════════════════════════════════════════
     // Edge cases
     // ═══════════════════════════════════════════════════════════════
 
-    public function testNegativePaddingClampedByStyle(): void
+    public function testTreeWithEmptyModelMap(): void
     {
-        $boxer = Pad::new($this->strItem('test'))
-            ->withPadding(0) // No negative padding
-            ->setSize(5, 3);
+        $boxer = Boxer::tree(Node::horizontal(Node::leaf('0'), Node::leaf('1')));
 
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
+        $this->assertSame([], $boxer->getModelMap());
     }
 
-    public function testContentTruncationWhenTooWide(): void
+    public function testSetSizeIdempotent(): void
     {
-        $boxer = Pad::new($this->strItem('this is very long content'))
-            ->withPadding(1)
-            ->setSize(10, 5);
+        $boxer = Boxer::leaf('0', $this->strItem('test'));
+        $boxer = $boxer->setSize(10, 5);
+        $sameBoxer = $boxer->setSize(10, 5);
 
-        $rendered = $boxer->render();
-        $this->assertNotSame('', $rendered);
-
-        // Each line should fit within the allocated width
-        $lines = explode("\n", $rendered);
-        foreach ($lines as $line) {
-            $this->assertLessThanOrEqual(10, Width::string($line));
-        }
+        $this->assertSame($boxer, $sameBoxer);
     }
 
-    public function testContentPaddingMakesContentSmaller(): void
+    public function testEditLeafReturnsNewInstance(): void
     {
-        $noPad = Pad::new($this->strItem('x'))->withPadding(0)->setSize(5, 3);
-        $pad = Pad::new($this->strItem('x'))->withPadding(1)->setSize(5, 3);
+        $original = Boxer::leaf('0', $this->strItem('original'));
+        $modified = $original->editLeaf('0', fn($item) => $this->strItem('modified'));
 
-        $noPadRendered = $noPad->render();
-        $padRendered = $pad->render();
-
-        // Both should render without error
-        $this->assertNotSame('', $noPadRendered);
-        $this->assertNotSame('', $padRendered);
+        $this->assertNotSame($original, $modified);
+        $this->assertSame('original', $original->getItem('0')->render());
+        $this->assertSame('modified', $modified->getItem('0')->render());
     }
 }

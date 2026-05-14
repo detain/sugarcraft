@@ -1,0 +1,28 @@
+{
+  "id": "sugar-dash-phase-2",
+  "name": "SugarDash Phase 2 - Braille Canvas + Plot Widget",
+  "status": "active",
+  "objective": "Implement 2x horizontal, 4x vertical resolution for pixel-style widgets with new Plot widget featuring MarkerBraille/MarkerDot toggle",
+  "context_files": [
+    ".opencode/context/core/standards/code-quality.md"
+  ],
+  "reference_files": [
+    "/tmp/dash-research/src/termui/drawille_drawille.go",
+    "/tmp/dash-research/src/homedash/internal_ui_components_sparkline.go",
+    "/tmp/dash-research/src/homedash/internal_ui_components_gauge.go",
+    "sugar-dash/src/Plot/Braille/BrailleCanvas.php",
+    "sugar-dash/src/Plot/Braille/BrailleMatrix.php",
+    "sugar-dash/src/Plot/Plot.php",
+    "sugar-dash/src/Plot/Chart/Sparkline.php"
+  ],
+  "exit_criteria": [
+    "All 6 new/refactored components created and passing",
+    "PHPUnit tests pass for all new components",
+    "Braille rendering produces correct Unicode output"
+  ],
+  "subtask_count": 8,
+  "completed_count": 0,
+  "created_at": "2026-05-14T00:00:00Z",
+  "bounded_context": "plot",
+  "module": "sugar-dash"
+}
