@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Avatar group
-$component = AvatarGroup::new([["label" => "Alice"], ["label" => "Bob"], ["label" => "Charlie"]]);
+$component = AvatarGroup::fromNames(["Alice", "Bob", "Charlie"]);
 $component->setSize(60, 15);
 echo $component->render();

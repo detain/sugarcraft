@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Emoji display
-$component = Emoji::new("🚀");
+$component = Emoji::rocket();
 $component->setSize(60, 15);
 echo $component->render();
