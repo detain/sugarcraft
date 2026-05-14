@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors area chart patterns adapted to PHP with wither-style immutable setters.
  */
-final class AreaChart implements Sizer
+final class AreaChart implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -87,7 +87,7 @@ final class AreaChart implements Sizer
     /**
      * Set the allocated dimensions for this chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

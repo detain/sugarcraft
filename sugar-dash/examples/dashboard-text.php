@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, Code, Markdown, Kbd, FigletText, BorderText, Marquee, LoadingText};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Markdown, FigletText, Marquee};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card, Code, Kbd, BorderText};
+use SugarCraft\Dash\Components\Feedback\LoadingText;
 
 // Dashboard Text Components Example
 $grid = new StackedGrid(new Options(fitScreen: true));

@@ -20,7 +20,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors gauge/meter patterns adapted to PHP with wither-style immutable setters.
  */
-final class GaugeChart implements Sizer
+final class GaugeChart implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -88,7 +88,7 @@ final class GaugeChart implements Sizer
     /**
      * Set the allocated dimensions for this gauge.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

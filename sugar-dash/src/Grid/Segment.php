@@ -17,7 +17,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * Mirrors 7-segment display concepts adapted to PHP with wither-style immutable setters.
  */
-final class Segment implements Sizer
+final class Segment implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $sizerHeight = null;
@@ -84,7 +84,7 @@ final class Segment implements Sizer
     /**
      * Set the allocated dimensions for this display.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

@@ -2,7 +2,11 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, Badge, Tag, Chip, ChipGroup, Divider, Spacer, Highlight, Tooltip, Hint, Popover, Comment, Testimonial};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame, Spacer};
+use SugarCraft\Dash\Components\Card\{Text, Card, Badge, Tag, Chip, ChipGroup, Divider, Highlight, Comment, Testimonial};
+use SugarCraft\Dash\Components\Toast\{Tooltip, Hint};
+use SugarCraft\Dash\Components\Modal\Popover;
 
 // Dashboard UI Components Example
 $grid = new StackedGrid(new Options(fitScreen: true));

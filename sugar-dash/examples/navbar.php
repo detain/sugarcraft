@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\Navbar;
+use SugarCraft\Dash\Components\Nav\Navbar;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;

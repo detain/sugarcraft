@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors partition/icicle chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class Partition implements Sizer
+final class Partition implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -79,7 +79,7 @@ final class Partition implements Sizer
     /**
      * Set the allocated dimensions for this partition chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

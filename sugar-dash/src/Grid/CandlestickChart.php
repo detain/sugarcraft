@@ -21,7 +21,7 @@ use SugarCraft\Core\Util\ColorProfile;
  * Mirrors candlestick chart patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class CandlestickChart implements Sizer
+final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -66,7 +66,7 @@ final class CandlestickChart implements Sizer
     /**
      * Set the allocated dimensions for this candlestick chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;

@@ -2,7 +2,12 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, VStack, HStack, Frame, Text, Options, ItemOptions, Card, TableBordered, TableZebra, ListComponent, Tree, GridLayout};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame, GridLayout};
+use SugarCraft\Dash\Components\Card\{Text, Card};
+use SugarCraft\Dash\Components\Table\{TableBordered, TableZebra};
+use SugarCraft\Dash\Components\Calendar\ListComponent;
+use SugarCraft\Dash\Components\Tree\Tree;
 
 // Dashboard Data Display Example
 $grid = new StackedGrid(new Options(fitScreen: true));

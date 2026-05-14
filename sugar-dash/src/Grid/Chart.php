@@ -38,7 +38,7 @@ final readonly class ChartDataPoint
  * Mirrors chart rendering from bubbletea/spinner but adapted to PHP
  * with wither-style immutable setters.
  */
-final class Chart implements Sizer
+final class Chart implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -94,7 +94,7 @@ final class Chart implements Sizer
     /**
      * Set the allocated dimensions for this chart.
      */
-    public function setSize(int $width, int $height): Sizer
+    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
