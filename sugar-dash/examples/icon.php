@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Icon display
-$component = new Icon("★");
+$component = Icon::star();
 $component->setSize(60, 15);
 echo $component->render();

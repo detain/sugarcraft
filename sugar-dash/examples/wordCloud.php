@@ -8,6 +8,12 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Word cloud
-$component = WordCloud::new(["PHP" => 10, "JavaScript" => 8, "Python" => 6, "Go" => 5, "Rust" => 4]);
+$component = WordCloud::new([
+    ['word' => 'PHP', 'weight' => 10],
+    ['word' => 'JavaScript', 'weight' => 8],
+    ['word' => 'Python', 'weight' => 6],
+    ['word' => 'Go', 'weight' => 5],
+    ['word' => 'Rust', 'weight' => 4],
+]);
 $component->setSize(60, 15);
 echo $component->render();
