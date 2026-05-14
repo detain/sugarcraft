@@ -47,6 +47,17 @@ final class Image implements \SugarCraft\Dash\Foundation\Sizer
     ) {}
 
     /**
+     * Create a new image from URL.
+     */
+    public static function new(?string $url, ?string $alt = null): self
+    {
+        if ($url === null) {
+            return self::placeholder($alt);
+        }
+        return self::fromUrl($url, $alt);
+    }
+
+    /**
      * Create a new image with a URL.
      */
     public static function fromUrl(string $url, ?string $alt = null): self

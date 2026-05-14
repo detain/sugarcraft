@@ -43,12 +43,29 @@ final class WordCloud implements \SugarCraft\Dash\Foundation\Sizer
      */
     public static function new(array $words): self
     {
-        $normalized = array_map(function (array $item): array {
-            return [
-                'word' => $item['word'],
-                'weight' => max(0.1, floatval($item['weight'] ?? 1.0)),
-            ];
-        }, $words);
+        // Detect associative [word => weight] format and normalize
+        // If the outer array has non-integer keys, it's the associative format
+        $keys = array_keys($words);
+        $isAssociative = $words !== [] && array_keys($keys) !== $keys;
+        
+        if ($isAssociative) {
+            // Associative format: ["word" => weight, ...]
+            $normalized = [];
+            foreach ($words as $word => $weight) {
+                $normalized[] = [
+                    'word' => (string) $word,
+                    'weight' => max(0.1, floatval($weight)),
+                ];
+            }
+        } else {
+            // Already normalized format: [[word => ?, weight => ?], ...]
+            $normalized = array_map(function (array $item): array {
+                return [
+                    'word' => $item['word'],
+                    'weight' => max(0.1, floatval($item['weight'] ?? 1.0)),
+                ];
+            }, $words);
+        }
 
         return new self(
             words: $normalized,

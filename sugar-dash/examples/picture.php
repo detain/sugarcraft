@@ -8,6 +8,6 @@ use SugarCraft\Dash\Grid\Options;
 use SugarCraft\Dash\Grid\ItemOptions;
 
 // Picture frame
-$component = Picture::placeholder();
+$component = Picture::new("https://placehold.co/300x200.png");
 $component->setSize(60, 15);
 echo $component->render();
