@@ -2,13 +2,9 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Progress};
-use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dash\Components\Card\{Text, Card, Bullet, Accordion};
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Text};
+use SugarCraft\Dash\Components\Card\{Accordion};
 use SugarCraft\Dash\Components\Tree\Timeline;
-use SugarCraft\Dash\Components\Nav\Stepper;
-use SugarCraft\Dash\Components\Form\{Rating, SwitchComponent, Toggle};
-use SugarCraft\Dash\Components\System\ProgressBar;
 
 // Dashboard Interactive Example
 $grid = new StackedGrid(new Options(fitScreen: true));
@@ -22,8 +18,14 @@ $accordion = Accordion::new([
 
 // Timeline
 $timeline = Timeline::new([
-    ['label' => 'Project Start', 'time' => 'Jan 1, 2024'],
-    ['label' => 'Alpha Release', 'time' => 'Mar 15, 2024'],
-    ['label' => 'Beta Release', 'time' => 'Jun 30, 2024'],
-    ['label' => 'v1.0 Launch', 'time' => 'Sep 1, 2024'],
+    ['title' => 'Project Start', 'time' => 'Jan 1, 2024'],
+    ['title' => 'Alpha Release', 'time' => 'Mar 15, 2024'],
+    ['title' => 'Beta Release', 'time' => 'Jun 30, 2024'],
+    ['title' => 'v1.0 Launch', 'time' => 'Sep 1, 2024'],
 ]);
+
+// Render the dashboard
+$grid->addItem($accordion, new ItemOptions(column: 0, expandVertical: true));
+$grid->addItem($timeline, new ItemOptions(column: 1));
+$grid->setSize(80, 20);
+echo $grid->render();
