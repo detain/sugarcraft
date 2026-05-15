@@ -12,6 +12,7 @@ use SugarCraft\Vcr\Cli\Command;
 use SugarCraft\Vcr\Cli\DiffCommand;
 use SugarCraft\Vcr\Cli\InspectCommand;
 use SugarCraft\Vcr\Cli\ReplayCommand;
+use SugarCraft\Vcr\Cli\StatsCommand;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
@@ -26,6 +27,7 @@ final class ApplicationTest extends TestCase
         $this->assertStringContainsString('inspect', $stdout);
         $this->assertStringContainsString('replay', $stdout);
         $this->assertStringContainsString('diff', $stdout);
+        $this->assertStringContainsString('stats', $stdout);
     }
 
     public function testHelpExitsZero(): void
@@ -179,6 +181,30 @@ final class ApplicationTest extends TestCase
     public function testDiffWrongArityShowsUsage(): void
     {
         [$exit, , $stderr] = $this->exec(new DiffCommand(), [], ['only-one.cas']);
+        $this->assertSame(2, $exit);
+        $this->assertStringContainsString('usage:', $stderr);
+    }
+
+    public function testStatsShowsEventTalliesThroughApp(): void
+    {
+        $path = $this->writeFixtureCassette([
+            new Event(t: 0.0, kind: EventKind::Resize, payload: ['cols' => 80, 'rows' => 24]),
+            new Event(t: 0.5, kind: EventKind::Quit, payload: []),
+        ]);
+        try {
+            [$exit, $stdout] = $this->exec(new Application(), ['candy-vcr', 'stats', $path]);
+            $this->assertSame(0, $exit);
+            $this->assertStringContainsString('Events: 2', $stdout);
+            $this->assertStringContainsString('resize: 1', $stdout);
+            $this->assertStringContainsString('quit: 1', $stdout);
+        } finally {
+            @unlink($path);
+        }
+    }
+
+    public function testStatsMissingArgThroughAppExitsTwo(): void
+    {
+        [$exit, , $stderr] = $this->exec(new Application(), ['candy-vcr', 'stats']);
         $this->assertSame(2, $exit);
         $this->assertStringContainsString('usage:', $stderr);
     }

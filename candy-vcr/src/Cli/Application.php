@@ -20,6 +20,7 @@ final class Application
             'inspect' => new InspectCommand(),
             'replay' => new ReplayCommand(),
             'diff' => new DiffCommand(),
+            'stats' => new StatsCommand(),
         ];
     }
 
