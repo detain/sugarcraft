@@ -515,6 +515,28 @@ cd sugar-dash && composer install && vendor/bin/phpunit
 | ![Dashboard Media](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-media.gif) | Media components demo |
 | ![Dashboard Metrics](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-metrics.gif) | Metrics display demo |
 
+## Example Demos
+
+The `examples/` directory contains standalone demo files that showcase individual components and combinations:
+
+| Demo | Description |
+|------|-------------|
+| `dashboard-showcase.php` | Multi-component server dashboard with gauges, charts, timeline, breadcrumb, avatar group |
+| `dashboard-complex.php` | Full-featured analytics dashboard with charts, stats, funnel, sparkline |
+| `dashboard-interactive.php` | Accordion and timeline components |
+| `dashboard-metrics.php` | Key statistics and status indicators |
+| `dashboard-status.php` | Spinners, progress bars, gauges, alerts |
+| `dashboard-charts.php` | Chart components including area, donut, radar, heatmap |
+| `dashboard-form.php` | Form components demo |
+| `dashboard-ui.php` | UI components demo |
+| `dashboard-nav.php` | Navigation components demo |
+| `dashboard-text.php` | Text components demo |
+| `dashboard-time.php` | Time components demo |
+| `dashboard-media.php` | Media components demo |
+| `dashboard-data.php` | Data display components demo |
+| `dashboard-devtools.php` | Devtools components demo |
+| `dashboard-layout.php` | Layout containers demo |
+
 ## License
 
 MIT License - See LICENSE file for details.
