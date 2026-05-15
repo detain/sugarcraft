@@ -164,8 +164,7 @@ final class TileLayout implements Item, Sizer
                 $tileH = $sizes[$index] ?? 0;
             }
 
-            $tile->setSize($tileW, $tileH);
-            $views[] = $tile->render();
+            $views[] = $tile->setSize($tileW, $tileH)->render();
         }
 
         if ($this->direction === Direction::Horizontal) {

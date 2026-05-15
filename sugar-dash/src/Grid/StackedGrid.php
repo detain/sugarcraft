@@ -177,10 +177,10 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
             return $item->render();
         }
 
-        // Sizer (e.g. Frame)
+        // Sizer (e.g. Frame) — setSize returns a NEW sized clone for immutable
+        // items, so we MUST use the return value.
         if ($item instanceof \SugarCraft\Dash\Foundation\Sizer) {
-            $item->setSize($width, $height);
-            return $item->render();
+            return $item->setSize($width, $height)->render();
         }
 
         // Plain item — wrap with style

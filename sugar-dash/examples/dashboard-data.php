@@ -10,15 +10,33 @@ use SugarCraft\Dash\Components\Calendar\ListComponent;
 use SugarCraft\Dash\Components\Tree\Tree;
 use SugarCraft\Dash\Components\Tree\TreeNode;
 
-// Dashboard Data Display Example
+/**
+ * Dashboard Data Display - showcasing data presentation components
+ *
+ * Shows tables (bordered and zebra), list components, and tree views
+ * in a multi-column framed layout.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Data Display Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 1: Tables (2 columns)
+// ============================================
 // Table with borders
 $tableBordered = TableBordered::new([
     ['ID' => '1', 'Name' => 'Alice', 'Role' => 'Admin'],
     ['ID' => '2', 'Name' => 'Bob', 'Role' => 'User'],
     ['ID' => '3', 'Name' => 'Charlie', 'Role' => 'Editor'],
 ]);
+$tableBorderedFrame = Card::titled($tableBordered, 'Users (Bordered)');
 
 // Zebra striped table
 $tableZebra = TableZebra::new([
@@ -26,7 +44,21 @@ $tableZebra = TableZebra::new([
     ['Product' => 'Widget B', 'Sales' => '2,456', 'Revenue' => '$24,560'],
     ['Product' => 'Gadget X', 'Sales' => '789', 'Revenue' => '$7,890'],
 ]);
+$tableZebraFrame = Card::titled($tableZebra, 'Sales (Zebra)');
 
+$grid->addItem(
+    $tableBorderedFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $tableZebraFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 2: List + Tree (2 columns)
+// ============================================
 // List component
 $list = ListComponent::new([
     ['label' => 'Alice - Admin'],
@@ -34,6 +66,7 @@ $list = ListComponent::new([
     ['label' => 'Charlie - Editor'],
     ['label' => 'Diana - Manager'],
 ]);
+$listFrame = Card::titled($list, 'User List');
 
 // Tree view with proper TreeNode objects
 $tree = Tree::new([
@@ -47,27 +80,16 @@ $tree = Tree::new([
         ]),
     ]),
 ]);
-
-$topRow = HStack::spaced(2,
-    Card::titled($tableBordered, 'Users (Bordered)'),
-    Card::titled($tableZebra, 'Sales (Zebra)')
-);
-
-$bottomRow = HStack::spaced(2,
-    Card::titled($list, 'User List'),
-    Card::titled($tree, 'File Tree')
-);
-
-$mainContent = VStack::spaced(2, $topRow, $bottomRow);
+$treeFrame = Card::titled($tree, 'File Tree');
 
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard Data Display Demo')))->withPadding(1),
-    new ItemOptions(column: 0, expandVertical: false)
-);
-
-$grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
+    $listFrame,
     new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $treeFrame,
+    new ItemOptions(column: 1, expandVertical: true)
 );
 
 $grid->setSize(100, 30);

@@ -2,66 +2,64 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, GaugeChart, AreaChart, Chart, ChartType, ChartDataPoint, Donut, Sparkline};
-use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
-use SugarCraft\Dash\Components\Card\Text;
+use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, GaugeChart, AreaChart, Chart, ChartType, ChartDataPoint, Donut, Sparkline, AvatarGroup};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame, HAlign};
+use SugarCraft\Dash\Components\Card\{Text, Card, MetricsGrid, MetricCard};
 use SugarCraft\Dash\Components\Nav\Breadcrumb;
 use SugarCraft\Dash\Components\Tree\Timeline;
-use SugarCraft\Dash\Grid\AvatarGroup;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Border;
 
 /**
  * Production Server Dashboard - Real Multi-Column Dashboard
  *
- * Demonstrates proper StackedGrid usage with:
- * - Multiple columns for side-by-side panes
- * - VStack grouping within columns for row alignment
- * - Frame borders for distinct visual panels
+ * Redesigned to look like a real TUI dashboard with proper framing:
+ * - Header row with title + breadcrumb navigation
+ * - Row 1: 4 metric gauges in a horizontal row (grouped in one frame)
+ * - Row 2: AreaChart + Donut in separate frames side-by-side
+ * - Row 3: AvatarGroup + Timeline in separate frames side-by-side
+ * - Footer row with summary stats
  */
+
+// Create the main dashboard grid
 $grid = new StackedGrid(new Options(fitScreen: true));
 
 // ============================================
-// ROW 1: SERVER METRICS - 4 gauges side-by-side
+// HEADER: Title + Breadcrumb in one frame
 // ============================================
-$leftGauges = VStack::spaced(1,
-    GaugeChart::cpu(67.5)->withLabel('CPU'),
-    GaugeChart::cpu(42.3)->withLabel('Memory')
-);
+$breadcrumb = Breadcrumb::new(['Home', 'Servers', 'Production', 'prod-web-01']);
 
-$rightGauges = VStack::spaced(1,
-    GaugeChart::percent(78.9)->withLabel('Disk I/O'),
-    GaugeChart::percent(23.4)->withLabel('Network')
-);
+$headerContent = HStack::spaced(3, Text::new('Production Dashboard'), $breadcrumb);
+$headerFrame = Card::titled($headerContent, '')->withPadding(1);
 
 $grid->addItem(
-    Frame::new($leftGauges, 'System Metrics')->withPadding(1),
-    new ItemOptions(column: 0)
-);
-
-$grid->addItem(
-    Frame::new($rightGauges, 'Storage & Network')->withPadding(1),
-    new ItemOptions(column: 1)
+    $headerFrame,
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
 // ============================================
-// ROW 2: CHARTS - Area + Sparkline vs Bar + Donut
+// ROW 1: METRICS GRID - CPU, Memory, Disk, Network KPIs
+// ============================================
+$metricsGrid = MetricsGrid::new([
+    new MetricCard('CPU', '67.5%', '+2.3%', 'up', Color::hex('#A6E3A1')),
+    new MetricCard('Memory', '42.3%', '-1.8%', 'down', Color::hex('#89B4FA')),
+    new MetricCard('Disk I/O', '78.9%', '+5.2%', 'up', Color::hex('#F9E2AF')),
+    new MetricCard('Network', '23.4%', '-0.5%', 'down', Color::hex('#CBA6F7')),
+])->withColumns(4);
+
+$grid->addItem(
+    $metricsGrid,
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 2: CHARTS - AreaChart (left) + Donut (right) in separate frames
 // ============================================
 $areaChart = AreaChart::new([
     ['label' => 'Requests', 'values' => [1200.0, 1450.0, 1320.0, 1680.0, 1890.0, 2100.0, 1950.0]],
     ['label' => 'Latency', 'values' => [45.0, 52.0, 48.0, 61.0, 55.0, 72.0, 68.0]],
 ]);
-
-$sparkline = Sparkline::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 6.0, 4.0, 8.0], 35);
-$leftCharts = VStack::spaced(1, $areaChart, $sparkline);
-
-$barChart = Chart::new([
-    new ChartDataPoint('Mon', 1200.0),
-    new ChartDataPoint('Tue', 1450.0),
-    new ChartDataPoint('Wed', 1320.0),
-    new ChartDataPoint('Thu', 1680.0),
-    new ChartDataPoint('Fri', 1890.0),
-    new ChartDataPoint('Sat', 2100.0),
-    new ChartDataPoint('Sun', 1950.0),
-], ChartType::Bar);
+$areaFrame = Card::titled($areaChart, 'Traffic (24h)');
 
 $donut = Donut::mocha([
     ['label' => 'CPU', 'value' => 35.0],
@@ -69,22 +67,23 @@ $donut = Donut::mocha([
     ['label' => 'Disk', 'value' => 22.0],
     ['label' => 'Swap', 'value' => 15.0],
 ]);
-$rightCharts = VStack::spaced(1, $barChart, $donut);
+$donutFrame = Card::titled($donut, 'Resource Usage');
 
 $grid->addItem(
-    Frame::new($leftCharts, 'Traffic (24h)')->withPadding(1),
-    new ItemOptions(column: 0)
+    $areaFrame,
+    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->addItem(
-    Frame::new($rightCharts, 'Resource Usage')->withPadding(1),
-    new ItemOptions(column: 1)
+    $donutFrame,
+    new ItemOptions(column: 1, expandVertical: true)
 );
 
 // ============================================
-// ROW 3: TEAM & TIMELINE - AvatarGroup + Timeline
+// ROW 3: DATA - AvatarGroup (left) + Timeline (right)
 // ============================================
 $avatarGroup = AvatarGroup::compact(['Alice Chen', 'Bob Martinez', 'Carol Smith', 'Dave Wilson', 'Eve Johnson'], 5);
+$avatarFrame = Card::titled($avatarGroup, 'Online Team');
 
 $timeline = Timeline::new([
     ['title' => 'Server started', 'time' => '14:23:01', 'type' => 'success'],
@@ -93,36 +92,29 @@ $timeline = Timeline::new([
     ['title' => 'Backup completed', 'time' => '14:00:00', 'type' => 'success'],
     ['title' => 'Health check passed', 'time' => '13:55:33', 'type' => 'info'],
 ]);
+$timelineFrame = Card::titled($timeline, 'Recent Events');
 
 $grid->addItem(
-    Frame::new($avatarGroup, 'Online Team')->withPadding(1),
-    new ItemOptions(column: 0)
+    $avatarFrame,
+    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->addItem(
-    Frame::new($timeline, 'Recent Events')->withPadding(1),
-    new ItemOptions(column: 1)
+    $timelineFrame,
+    new ItemOptions(column: 1, expandVertical: true)
 );
 
 // ============================================
-// ROW 4: FOOTER - Breadcrumb + Stats
+// ROW 4: FOOTER - Status summary
 // ============================================
-$breadcrumb = Breadcrumb::new(['Home', 'Servers', 'prod-web-01']);
-
-$statsText = Text::new('12,847 requests  •  99.97% uptime  •  127ms avg latency');
-
-$footerLeft = VStack::spaced(0, $breadcrumb);
-$footerRight = VStack::spaced(0, $statsText);
+$statusText = Text::new('12,847 requests  •  99.97% uptime  •  127ms avg latency  •  4 alerts');
+$footerFrame = Card::titled($statusText, 'Summary');
 
 $grid->addItem(
-    Frame::new($footerLeft, 'Navigation')->withPadding(1),
-    new ItemOptions(column: 0)
+    $footerFrame,
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
-$grid->addItem(
-    Frame::new($footerRight, 'Status')->withPadding(1),
-    new ItemOptions(column: 1)
-);
-
+// Set size and render
 $grid->setSize(140, 48);
 echo $grid->render();

@@ -7,45 +7,59 @@ use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card, BorderText};
 use SugarCraft\Dash\Components\Feedback\LoadingText;
 
-// Dashboard Text Components Example
+/**
+ * Dashboard Text - showcasing text components
+ *
+ * Shows FigletText, BorderText, Marquee, and LoadingText components.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Markdown
-$markdown = "Hello\nThis is **bold** and *italic* text.";
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Text Components Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
 
-// Figlet text
+// ============================================
+// ROW 1: Figlet + Border Text (2 columns)
+// ============================================
 $figlet = FigletText::new('DASH');
+$figletFrame = Card::titled($figlet, 'Figlet Text');
 
-// Border text
 $borderText = BorderText::new('IMPORTANT');
-
-// Marquee
-$marquee = Marquee::new('Welcome to SugarDash!');
-
-// Loading text
-$loadingText = LoadingText::new('Processing...');
-
-$topRow = HStack::spaced(2,
-    Card::titled($figlet, 'Figlet Text'),
-    Card::titled($borderText, 'Border Text')
-);
-
-$bottomRow = HStack::spaced(2,
-    Card::titled($marquee, 'Marquee'),
-    Card::titled($loadingText, 'Loading Text')
-);
-
-$mainContent = VStack::spaced(2, $topRow, $bottomRow);
+$borderTextFrame = Card::titled($borderText, 'Border Text');
 
 $grid->addItem(
-    Frame::new(HStack::new(new Text('Dashboard Text Demo')))->withPadding(1),
+    $figletFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
 
 $grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
+    $borderTextFrame,
+    new ItemOptions(column: 1, expandVertical: false)
+);
+
+// ============================================
+// ROW 2: Marquee + Loading Text (2 columns)
+// ============================================
+$marquee = Marquee::new('Welcome to SugarDash!');
+$marqueeFrame = Card::titled($marquee, 'Marquee');
+
+$loadingText = LoadingText::new('Processing...');
+$loadingTextFrame = Card::titled($loadingText, 'Loading Text');
+
+$grid->addItem(
+    $marqueeFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->setSize(80, 20);
+$grid->addItem(
+    $loadingTextFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+$grid->setSize(100, 20);
 echo $grid->render();

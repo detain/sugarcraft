@@ -134,8 +134,7 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
         $renderedPanes = [];
         foreach ($this->panes as $index => $pane) {
             [$pW, $pH] = $paneSizes[$index] ?? [$useWidth, $useHeight];
-            $pane->setSize($pW, $pH);
-            $renderedPanes[] = $pane->render();
+            $renderedPanes[] = $pane->setSize($pW, $pH)->render();
         }
 
         // Combine panes based on direction

@@ -7,54 +7,78 @@ use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card, Diff};
 use SugarCraft\Dash\Components\System\{LogViewer, Console, Terminal, HexDump};
 
-// Dashboard Developer Tools Example
+/**
+ * Dashboard Developer Tools - showcasing dev utility components
+ *
+ * Shows LogViewer, Console, Terminal, HexDump, and Diff components
+ * in a multi-column framed layout.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Log viewer - requires array of entries
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Developer Tools Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 1: Log Viewer + Console (2 columns)
+// ============================================
 $logViewer = LogViewer::new([
     ['message' => 'Application started', 'severity' => 'info'],
     ['message' => 'Loading configuration...', 'severity' => 'debug'],
     ['message' => 'Warning: Low memory', 'severity' => 'warning'],
     ['message' => 'Error: Connection failed', 'severity' => 'error'],
 ]);
+$logFrame = Card::titled($logViewer, 'Log Viewer');
 
-// Console
 $console = Console::new();
+$consoleFrame = Card::titled($console, 'Console');
 
-// Terminal
+$grid->addItem(
+    $logFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $consoleFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 2: Terminal + Hex Dump (2 columns)
+// ============================================
 $terminal = Terminal::new();
+$terminalFrame = Card::titled($terminal, 'Terminal');
 
-// Hex dump
 $hexDump = HexDump::new('Hello, SugarDash! This is a test string for hex dump display.');
+$hexFrame = Card::titled($hexDump, 'Hex Dump');
 
-// Diff
+$grid->addItem(
+    $terminalFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $hexFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 3: Diff View (full width)
+// ============================================
 $diff = Diff::new(
     "Line 1: Old content\nLine 2: Original text\nLine 3: More old content\nLine 4: Final line",
     "Line 1: New content\nLine 2: Modified text\nLine 3: More new content\nLine 4: Final line"
 );
-
-$topRow = HStack::spaced(2,
-    Card::titled($logViewer, 'Log Viewer'),
-    Card::titled($console, 'Console')
-);
-
-$middleRow = HStack::spaced(2,
-    Card::titled($terminal, 'Terminal'),
-    Card::titled($hexDump, 'Hex Dump')
-);
-
-$bottomRow = Card::titled($diff, 'Diff View');
-
-$mainContent = VStack::spaced(2, $topRow, $middleRow, $bottomRow);
+$diffFrame = Card::titled($diff, 'Diff View');
 
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard Developer Tools Demo')))->withPadding(1),
+    $diffFrame,
     new ItemOptions(column: 0, expandVertical: false)
-);
-
-$grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
-    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->setSize(100, 30);

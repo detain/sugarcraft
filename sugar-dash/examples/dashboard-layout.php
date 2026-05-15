@@ -4,39 +4,52 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dash\Layout\{VStack, HStack, ZStack, Frame};
-use SugarCraft\Dash\Components\Card\Text;
+use SugarCraft\Dash\Components\Card\{Text, Card};
 
-// Dashboard Layout Example - Demonstrates StackedGrid, VStack, HStack, ZStack
+/**
+ * Dashboard Layout - showcasing layout components
+ *
+ * Demonstrates StackedGrid, VStack, HStack, ZStack with proper framing.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Header row with HStack
-$header = HStack::new(
+// ============================================
+// HEADER
+// ============================================
+$header = HStack::spaced(3,
     Text::new('SugarDash Layout Demo'),
     Text::new('v1.0.0')
 );
-
-// Left column with VStack
-$leftColumn = VStack::spaced(1,
-    Frame::new(Text::new('Panel 1'))->withPadding(1),
-    Frame::new(Text::new('Panel 2'))->withPadding(1),
-    Frame::new(Text::new('Panel 3'))->withPadding(1)
-);
-
-// Right column with stacked items
-$rightColumn = VStack::spaced(1,
-    Frame::new(Text::new('Wide Panel Content'))->withPadding(1),
-    Frame::new(Text::new('Another Panel'))->withPadding(1)
-);
-
 $grid->addItem(
-    Frame::new($header)->withPadding(1),
+    Card::titled($header, ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
 
+// ============================================
+// ROW 1: Left Column with VStack of Cards
+// ============================================
+$leftColumn = VStack::spaced(1,
+    Card::titled(Text::new('Panel 1'), 'Card 1'),
+    Card::titled(Text::new('Panel 2'), 'Card 2'),
+    Card::titled(Text::new('Panel 3'), 'Card 3')
+);
 $grid->addItem(
-    Frame::new($leftColumn)->withPadding(1),
+    $leftColumn,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->setSize(80, 20);
+// ============================================
+// ROW 2: Right Column with Wide Panels
+// ============================================
+$rightColumn = VStack::spaced(1,
+    Card::titled(Text::new('Wide panel content goes here'), 'Wide Panel'),
+    Card::titled(Text::new('Another panel'), 'Short Panel')
+);
+$grid->addItem(
+    $rightColumn,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+$grid->setSize(100, 25);
 echo $grid->render();

@@ -8,10 +8,26 @@ use SugarCraft\Dash\Components\Card\{Text, Card};
 use SugarCraft\Dash\Components\Form\{Input, Checkbox, Toggle, Slider};
 use SugarCraft\Dash\Components\Select\Select;
 
-// Dashboard Form Example
+/**
+ * Dashboard Form - showcasing form components
+ *
+ * Shows various form components including Input, Select, Toggle, Checkbox, and Slider
+ * in a multi-column framed layout.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Form inputs
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Form Components Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// LEFT COLUMN: User Settings Form
+// ============================================
 $nameInput = Input::new('John Doe');
 $emailInput = Input::new('john@example.com');
 $roleSelect = Select::new([
@@ -20,45 +36,50 @@ $roleSelect = Select::new([
     ['label' => 'Guest'],
 ]);
 
-$notificationsToggle = Toggle::on();
-$darkModeToggle = Toggle::off();
-
-$volumeSlider = Slider::new(75.0);
-
-$formStack = VStack::spaced(2,
+$formStack = VStack::spaced(1,
     $nameInput,
     $emailInput,
-    Frame::new(
-        VStack::spaced(1,
-            new Text('Role'),
-            $roleSelect
-        )
-    )->withPadding(1),
+    Text::new('Role:'),
+    $roleSelect
+);
+$formFrame = Card::titled($formStack, 'User Information');
+
+// ============================================
+// RIGHT COLUMN: Settings Toggles
+// ============================================
+$notificationsToggle = Toggle::on();
+$darkModeToggle = Toggle::off();
+$volumeSlider = Slider::new(75.0);
+
+$settingsStack = VStack::spaced(1,
+    Text::new('Notifications:'),
     $notificationsToggle,
+    Text::new('Dark Mode:'),
     $darkModeToggle,
-    Frame::new(
-        VStack::spaced(1,
-            new Text('Volume: 75'),
-            $volumeSlider
-        )
-    )->withPadding(1)
+    Text::new('Volume: 75'),
+    $volumeSlider
 );
-
-$termsCheckbox = Checkbox::new([['label' => 'I agree to the terms and conditions', 'checked' => false]]);
-
-$mainContent = VStack::spaced(2,
-    Card::titled($formStack, 'User Settings'),
-    Card::titled($termsCheckbox, 'Agreement')
-);
+$settingsFrame = Card::titled($settingsStack, 'Preferences');
 
 $grid->addItem(
-    Frame::new(HStack::new(new Text('Dashboard Form Demo')))->withPadding(1),
-    new ItemOptions(column: 0, expandVertical: false)
-);
-
-$grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
+    $formFrame,
     new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $settingsFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// BOTTOM: Agreement Checkbox
+// ============================================
+$termsCheckbox = Checkbox::new([['label' => 'I agree to the terms and conditions', 'checked' => false]]);
+$agreementFrame = Card::titled($termsCheckbox, 'Agreement');
+
+$grid->addItem(
+    $agreementFrame,
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
 $grid->setSize(80, 30);
