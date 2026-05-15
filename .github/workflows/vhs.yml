@@ -273,6 +273,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Fetch full history so we can reliably detect GIF deltas
+          # vs. what was already committed at the trigger SHA.
+          fetch-depth: 0
 
       - name: Download all GIF artifacts
         uses: actions/download-artifact@v5
@@ -286,8 +290,16 @@ jobs:
           shopt -s nullglob
           for d in /tmp/gifs/gifs-*; do
             lib="${d#/tmp/gifs/gifs-}"
+            echo "Processing artifact dir: $d -> lib: $lib"
             mkdir -p "$lib/.vhs"
-            cp -v "$d"/*.gif "$lib/.vhs/" || true
+            echo "Contents of $d:"
+            ls -la "$d/" || echo "(empty or missing)"
+            if [ "$(ls -1 "$d"/*.gif 2>/dev/null | wc -l)" -eq 0 ]; then
+              echo "WARNING: No .gif files found in $d/"
+              continue
+            fi
+            cp -v "$d"/*.gif "$lib/.vhs/"
+            echo "Copied $(ls -1 "$lib/.vhs/"/*.gif 2>/dev/null | wc -l) GIF(s) to $lib/.vhs/"
           done
 
       - name: Commit + push
@@ -295,11 +307,38 @@ jobs:
           set -euo pipefail
           git config user.name  'Joe Huss'
           git config user.email 'detain@interserver.net'
-          git add */.vhs/*.gif
-          if git diff --cached --quiet; then
-            echo "no GIF changes — skipping commit"
+
+          # Count GIF files present in artifacts
+          artifact_count=$(find /tmp/gifs -name "*.gif" -type f | wc -l)
+          echo "Found $artifact_count GIF file(s) in artifacts"
+
+          if [ "$artifact_count" -eq 0 ]; then
+            echo "No GIF artifacts found — skipping commit"
             exit 0
           fi
+
+          # Stage all GIFs from the rendered artifacts
+          git add */.vhs/*.gif
+
+          # Count staged files
+          staged_count=$(git diff --cached --name-only -- "*/.vhs/*.gif" | wc -l)
+          echo "Staged $staged_count GIF file(s)"
+
+          if [ "$staged_count" -eq 0 ]; then
+            echo "no GIF files staged — skipping commit"
+            exit 0
+          fi
+
+          # Check if there are actual differences vs HEAD (the trigger commit)
+          # Use --exit-code so we get a clear success/failure
+          if git diff --cached --quiet --exit-code; then
+            # No diff means new GIFs are identical to HEAD — nothing to commit
+            echo "GIFs identical to HEAD — skipping commit"
+            git reset HEAD -- "*/.vhs/*.gif" 2>/dev/null || true
+            exit 0
+          fi
+
+          echo "GIFs differ from HEAD — committing"
           git commit -m "vhs: regenerate demo GIFs"
           # Single push — no concurrent jobs means no race. If something
           # else pushed during this run, rebase + retry once.
