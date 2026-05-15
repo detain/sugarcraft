@@ -11,6 +11,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ByteAssertion;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Matcher\EventMatcher;
 use SugarCraft\Vcr\Msg\Registry;
 
 /**
@@ -81,6 +82,7 @@ final class Player
      * @param int            $speed            {@see self::SPEED_INSTANT} (default) or {@see self::SPEED_REALTIME}.
      * @param Registry|null  $serializerRegistry For `input.msg`-form events. Defaults to {@see Registry::default}.
      * @param float          $timeoutSeconds   Hard cap on the loop. Default: cassette duration + 5s.
+     * @param EventMatcher|null $matcher       Event matching policy. Defaults to null (no matcher-based filtering).
      */
     public function play(
         \Closure $programFactory,
@@ -89,6 +91,7 @@ final class Player
         ?Registry $serializerRegistry = null,
         ?float $timeoutSeconds = null,
         bool $skipFirstResize = true,
+        ?EventMatcher $matcher = null,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
