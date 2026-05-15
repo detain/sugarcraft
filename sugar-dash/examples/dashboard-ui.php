@@ -8,10 +8,25 @@ use SugarCraft\Dash\Components\Card\{Text, Card, Badge, Tag, Chip, ChipGroup, Di
 use SugarCraft\Dash\Components\Toast\{Tooltip, Hint};
 use SugarCraft\Dash\Components\Modal\Popover;
 
-// Dashboard UI Components Example
+/**
+ * Dashboard UI - showcasing UI components
+ *
+ * Shows Badge, Tag, Chip, Divider, Highlight, Hint, Tooltip, Popover, Comment, Testimonial.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Tags and badges
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('UI Components Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 1: Badges & Tags (full width)
+// ============================================
 $tags = HStack::spaced(1,
     Badge::new('NEW'),
     Badge::new('HOT'),
@@ -20,51 +35,69 @@ $tags = HStack::spaced(1,
     Chip::new('PHP'),
     Chip::new('JavaScript')
 );
-
-// Dividers and spacers - remove Divider which has a bug
-$dividers = VStack::spaced(1,
-    Text::new('Above divider'),
-    Text::new('Below divider'),
-    Spacer::new(3),
-    Text::new('After spacer')
-);
-
-// Highlight and hints
-$highlight = Highlight::new('This is **important** text that stands out.', '**important**');
-$hint = Hint::new('This is a helpful hint for the user.');
-
-// Tooltip and popover
-$tooltip = Tooltip::new('Hover me', 'Tooltip content here');
-$popover = Popover::new('Click me', 'Popover content with more details');
-
-// Comment and testimonial - use correct API
-$comment = Comment::create('John Doe', 'Great work on this feature!');
-$testimonial = Testimonial::single(['text' => 'SugarDash is amazing!', 'author' => 'Jane Smith', 'role' => 'CEO at TechCorp']);
-
-$mainContent = VStack::spaced(2,
-    Card::titled($tags, 'Badges & Tags'),
-    Card::titled($dividers, 'Dividers & Spacers'),
-    Card::titled($highlight, 'Highlight'),
-    Card::titled($hint, 'Hint'),
-    HStack::spaced(2,
-        Card::titled($tooltip, 'Tooltip'),
-        Card::titled($popover, 'Popover')
-    ),
-    HStack::spaced(2,
-        Card::titled($comment, 'Comment'),
-        Card::titled($testimonial, 'Testimonial')
-    )
-);
+$tagsFrame = Card::titled($tags, 'Badges & Tags');
 
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard UI Components Demo')))->withPadding(1),
+    $tagsFrame,
     new ItemOptions(column: 0, expandVertical: false)
 );
 
+// ============================================
+// ROW 2: Highlight + Hint (2 columns)
+// ============================================
+$highlight = Highlight::new('This is **important** text that stands out.', '**important**');
+$highlightFrame = Card::titled($highlight, 'Highlight');
+
+$hint = Hint::new('This is a helpful hint for the user.');
+$hintFrame = Card::titled($hint, 'Hint');
+
 $grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
+    $highlightFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->setSize(90, 35);
+$grid->addItem(
+    $hintFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 3: Tooltip + Popover (2 columns)
+// ============================================
+$tooltip = Tooltip::new('Hover me', 'Tooltip content here');
+$tooltipFrame = Card::titled($tooltip, 'Tooltip');
+
+$popover = Popover::new('Click me', 'Popover content with more details');
+$popoverFrame = Card::titled($popover, 'Popover');
+
+$grid->addItem(
+    $tooltipFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $popoverFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 4: Comment + Testimonial (2 columns)
+// ============================================
+$comment = Comment::create('John Doe', 'Great work on this feature!');
+$commentFrame = Card::titled($comment, 'Comment');
+
+$testimonial = Testimonial::single(['text' => 'SugarDash is amazing!', 'author' => 'Jane Smith', 'role' => 'CEO at TechCorp']);
+$testimonialFrame = Card::titled($testimonial, 'Testimonial');
+
+$grid->addItem(
+    $commentFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $testimonialFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+$grid->setSize(100, 35);
 echo $grid->render();

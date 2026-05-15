@@ -8,22 +8,63 @@ use SugarCraft\Dash\Components\Card\{Text, Card};
 use SugarCraft\Dash\Components\Calendar\{Calendar};
 use SugarCraft\Dash\Components\System\{Clock, Timer, Stopwatch};
 
-// Dashboard Time & Date Example
+/**
+ * Dashboard Time - showcasing time and date components
+ *
+ * Shows Clock, Calendar, Timer, Stopwatch, and Heatmap components.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Clock
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Time & Date Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 1: Clock + Calendar (2 columns)
+// ============================================
 $clock = Clock::new();
+$clockFrame = Card::titled($clock, 'Current Time');
 
-// Calendar - use Calendar::now() for current month
 $calendar = Calendar::now();
+$calendarFrame = Card::titled($calendar, 'Calendar');
 
-// Timer - use Timer::fromMinutes(5) for a 5-minute timer
+$grid->addItem(
+    $clockFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $calendarFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 2: Timer + Stopwatch (2 columns)
+// ============================================
 $timer = Timer::fromMinutes(5);
+$timerFrame = Card::titled($timer, 'Timer');
 
-// Stopwatch
 $stopwatch = Stopwatch::new();
+$stopwatchFrame = Card::titled($stopwatch, 'Stopwatch');
 
-// Heatmap
+$grid->addItem(
+    $timerFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $stopwatchFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 3: Heatmap (full width)
+// ============================================
 $heatmap = Heatmap::new([
     [5.0, 10.0, 15.0, 20.0, 18.0],
     [8.0, 12.0, 18.0, 22.0, 15.0],
@@ -31,29 +72,11 @@ $heatmap = Heatmap::new([
     [6.0, 11.0, 16.0, 21.0, 16.0],
     [4.0, 9.0, 13.0, 17.0, 14.0],
 ]);
-
-$topRow = HStack::spaced(2,
-    Card::titled($clock, 'Current Time'),
-    Card::titled($calendar, 'Calendar')
-);
-
-$middleRow = HStack::spaced(2,
-    Card::titled($timer, 'Timer'),
-    Card::titled($stopwatch, 'Stopwatch')
-);
-
-$bottomRow = Card::titled($heatmap, 'Activity Heatmap (Last 5 Days)');
-
-$mainContent = VStack::spaced(2, $topRow, $middleRow, $bottomRow);
+$heatmapFrame = Card::titled($heatmap, 'Activity Heatmap (Last 5 Days)');
 
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard Time & Date Demo')))->withPadding(1),
+    $heatmapFrame,
     new ItemOptions(column: 0, expandVertical: false)
-);
-
-$grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
-    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->setSize(100, 30);

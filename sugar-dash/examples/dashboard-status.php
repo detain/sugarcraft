@@ -10,55 +10,92 @@ use SugarCraft\Dash\Components\System\{NProgress, ProgressBar};
 use SugarCraft\Dash\Components\Toast\Toast;
 use SugarCraft\Dash\Components\Modal\{Alert, Notification};
 
-// Dashboard Status Indicators Example
+/**
+ * Dashboard Status - showcasing status and feedback components
+ *
+ * Shows Spinner, Skeleton, Progress, Gauge, Toast, Alert, Notification components.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// Loading indicators
-$spinner = Spinner::new();
-$skeleton = Skeleton::new();
-$nProgress = NProgress::new(0.65);
-
-// Progress indicators
-$progress = Progress::new(0.75);
-$progressBar = ProgressBar::new(80);
-$progressRing = ProgressRing::new(65);
-$gauge = Gauge::new(85);
-
-// Notifications and alerts
-$toast = Toast::new('Changes saved successfully!');
-$alert = Alert::new('Warning: Your subscription expires in 3 days.');
-$notification = Notification::new('5 new messages');
-
-$topRow = HStack::spaced(2,
-    Card::titled($spinner, 'Spinner'),
-    Card::titled($skeleton, 'Skeleton'),
-    Card::titled($nProgress, 'Nano Progress'),
-    Card::titled($progress, 'Progress')
-);
-
-$middleRow = HStack::spaced(2,
-    Card::titled($progressBar, 'Progress Bar'),
-    Card::titled($progressRing, 'Progress Ring'),
-    Card::titled($gauge, 'Gauge')
-);
-
-$bottomRow = HStack::spaced(2,
-    Card::titled($toast, 'Toast'),
-    Card::titled($alert, 'Alert'),
-    Card::titled($notification, 'Notification')
-);
-
-$mainContent = VStack::spaced(2, $topRow, $middleRow, $bottomRow);
-
+// ============================================
+// HEADER
+// ============================================
 $grid->addItem(
-    Frame::new(HStack::new(Text::new('Dashboard Status Indicators Demo')))->withPadding(1),
+    Card::titled(Text::new('Status & Feedback Dashboard'), ''),
     new ItemOptions(column: 0, expandVertical: false)
 );
 
+// ============================================
+// ROW 1: Loading Indicators (4 columns)
+// ============================================
+$spinner = Spinner::new();
+$spinnerFrame = Card::titled($spinner, 'Spinner');
+
+$skeleton = Skeleton::new();
+$skeletonFrame = Card::titled($skeleton, 'Skeleton');
+
+$nProgress = NProgress::new(0.65);
+$nProgressFrame = Card::titled($nProgress, 'Nano Progress');
+
+$progress = Progress::new(0.75);
+$progressFrame = Card::titled($progress, 'Progress');
+
+$loadingRow = HStack::spaced(1, $spinnerFrame, $skeletonFrame, $nProgressFrame, $progressFrame);
 $grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
+    $loadingRow,
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 2: Progress Indicators (4 columns)
+// ============================================
+$progressBar = ProgressBar::new(80);
+$progressBarFrame = Card::titled($progressBar, 'Progress Bar');
+
+$progressRing = ProgressRing::new(65);
+$progressRingFrame = Card::titled($progressRing, 'Progress Ring');
+
+$gauge = Gauge::new(85);
+$gaugeFrame = Card::titled($gauge, 'Gauge');
+
+$grid->addItem(
+    $progressBarFrame,
     new ItemOptions(column: 0, expandVertical: true)
 );
 
-$grid->setSize(100, 30);
+$grid->addItem(
+    $progressRingFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+$grid->addItem(
+    $gaugeFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $gaugeFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+// ============================================
+// ROW 3: Notifications (3 columns)
+// ============================================
+$toast = Toast::new('Changes saved successfully!');
+$toastFrame = Card::titled($toast, 'Toast');
+
+$alert = Alert::new('Warning: Your subscription expires in 3 days.');
+$alertFrame = Card::titled($alert, 'Alert');
+
+$notification = Notification::new('5 new messages');
+$notificationFrame = Card::titled($notification, 'Notification');
+
+$notificationRow = HStack::spaced(1, $toastFrame, $alertFrame, $notificationFrame);
+$grid->addItem(
+    $notificationRow,
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+$grid->setSize(120, 30);
 echo $grid->render();

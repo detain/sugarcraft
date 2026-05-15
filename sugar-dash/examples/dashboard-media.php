@@ -6,38 +6,43 @@ use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, QRCode, Barcode, Pi
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
 
-// Dashboard Media Components Example
+/**
+ * Dashboard Media - showcasing media components
+ *
+ * Shows QRCode, Barcode, and Pictogram components in a framed layout.
+ */
+
 $grid = new StackedGrid(new Options(fitScreen: true));
 
-// QR Code
+// ============================================
+// HEADER
+// ============================================
+$grid->addItem(
+    Card::titled(Text::new('Media Components Dashboard'), ''),
+    new ItemOptions(column: 0, expandVertical: false)
+);
+
+// ============================================
+// ROW 1: QR Code + Barcode + Pictogram (3 columns)
+// ============================================
 $qrCode = QRCode::new('https://sugarcraft.github.io');
+$qrFrame = Card::titled($qrCode, 'QR Code');
 
-// Barcode
 $barcode = Barcode::new('123456789012');
+$barcodeFrame = Card::titled($barcode, 'Barcode');
 
-// Pictogram - correct API: array of items with label/value
 $pictogram = Pictogram::new([
     ['label' => 'Sales', 'value' => 75],
     ['label' => 'Marketing', 'value' => 45],
 ]);
+$pictogramFrame = Card::titled($pictogram, 'Pictogram');
 
-$topRow = HStack::spaced(2,
-    Card::titled($qrCode, 'QR Code'),
-    Card::titled($barcode, 'Barcode'),
-    Card::titled($pictogram, 'Pictogram')
-);
-
-$mainContent = VStack::spaced(2, $topRow);
+$mediaRow = HStack::spaced(2, $qrFrame, $barcodeFrame, $pictogramFrame);
 
 $grid->addItem(
-    Frame::new(HStack::new(new Text('Dashboard Media Components Demo')))->withPadding(1),
+    $mediaRow,
     new ItemOptions(column: 0, expandVertical: false)
 );
 
-$grid->addItem(
-    Frame::new($mainContent)->withPadding(1),
-    new ItemOptions(column: 0, expandVertical: true)
-);
-
-$grid->setSize(90, 15);
+$grid->setSize(100, 20);
 echo $grid->render();

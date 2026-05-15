@@ -3,11 +3,12 @@ declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Donut, AreaChart, Chart, ChartType, ChartDataPoint, RadarChart, Sparkline, GaugeChart};
-use SugarCraft\Dash\Layout\{VStack, Frame};
-use SugarCraft\Dash\Components\Card\{Text, Card};
+use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
+use SugarCraft\Dash\Components\Card\{Text, Card, MetricsGrid, MetricCard};
 use SugarCraft\Dash\Components\Nav\Breadcrumb;
 use SugarCraft\Dash\Components\Tree\Timeline;
 use SugarCraft\Dash\Grid\AvatarGroup;
+use SugarCraft\Core\Util\Color;
 
 /**
  * Complex Analytics Dashboard - Real Multi-Column Dashboard
@@ -21,26 +22,27 @@ use SugarCraft\Dash\Grid\AvatarGroup;
 $grid = new StackedGrid(new Options(fitScreen: true));
 
 // ============================================
-// ROW 1: KEY METRICS - Gauges + Stats
+// HEADER
 // ============================================
-$leftMetrics = VStack::spaced(1,
-    GaugeChart::percent(73.2)->withLabel('Total Users'),
-    GaugeChart::percent(45.8)->withLabel('Server Load')
+$breadcrumb = Breadcrumb::fromPath('Analytics / Reports / Q4 2024');
+$grid->addItem(
+    Card::titled($breadcrumb, 'Navigation'),
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
-$rightMetrics = VStack::spaced(1,
-    GaugeChart::percent(89.1)->withLabel('Storage'),
-    GaugeChart::percent(62.4)->withLabel('Memory')
-);
+// ============================================
+// ROW 1: KEY METRICS (using MetricsGrid for better display)
+// ============================================
+$metricsGrid = MetricsGrid::new([
+    new MetricCard('Total Users', '73.2%', '+12.5%', 'up', Color::hex('#A6E3A1')),
+    new MetricCard('Server Load', '45.8%', '+3.2%', 'up', Color::hex('#89B4FA')),
+    new MetricCard('Storage', '89.1%', '-1.1%', 'down', Color::hex('#F9E2AF')),
+    new MetricCard('Memory', '62.4%', '+5.7%', 'up', Color::hex('#CBA6F7')),
+])->withColumns(4);
 
 $grid->addItem(
-    Frame::new($leftMetrics, 'Performance Metrics')->withPadding(1),
-    new ItemOptions(column: 0)
-);
-
-$grid->addItem(
-    Frame::new($rightMetrics, 'System Health')->withPadding(1),
-    new ItemOptions(column: 1)
+    Card::titled($metricsGrid, 'Performance Metrics'),
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
 // ============================================
@@ -54,12 +56,12 @@ $barChart = Chart::new([
     new ChartDataPoint('May', 55.0),
     new ChartDataPoint('Jun', 70.0),
 ], ChartType::Bar);
+$barFrame = Card::titled($barChart, 'Revenue by Month');
 
 $areaChart = AreaChart::new([
     ['label' => 'Revenue', 'values' => [20.0, 35.0, 45.0, 40.0, 55.0, 60.0, 75.0]],
 ]);
-
-$leftCharts = VStack::spaced(1, $barChart, $areaChart);
+$areaFrame = Card::titled($areaChart, 'Revenue Trend');
 
 $donut = Donut::mocha([
     ['label' => 'Direct', 'value' => 40.0],
@@ -67,18 +69,30 @@ $donut = Donut::mocha([
     ['label' => 'Referral', 'value' => 20.0],
     ['label' => 'Social', 'value' => 10.0],
 ]);
+$donutFrame = Card::titled($donut, 'Traffic Sources');
 
 $sparkline = Sparkline::new([3.0, 5.0, 2.0, 8.0, 6.0, 4.0, 7.0, 5.0, 9.0, 6.0, 8.0, 7.0], 40);
-$rightCharts = VStack::spaced(1, $donut, $sparkline);
+$sparkFrame = Card::titled($sparkline, 'Activity Trend');
 
+// Charts in 2x2 grid
 $grid->addItem(
-    Frame::new($leftCharts, 'Revenue Analysis')->withPadding(1),
-    new ItemOptions(column: 0)
+    $barFrame,
+    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->addItem(
-    Frame::new($rightCharts, 'Traffic Sources')->withPadding(1),
-    new ItemOptions(column: 1)
+    $areaFrame,
+    new ItemOptions(column: 1, expandVertical: true)
+);
+
+$grid->addItem(
+    $donutFrame,
+    new ItemOptions(column: 0, expandVertical: true)
+);
+
+$grid->addItem(
+    $sparkFrame,
+    new ItemOptions(column: 1, expandVertical: true)
 );
 
 // ============================================
@@ -91,6 +105,7 @@ $timeline = Timeline::new([
     ['title' => 'Backup completed', 'time' => '08:00:00', 'type' => 'success'],
     ['title' => 'Security scan', 'time' => '07:15:33', 'type' => 'info'],
 ]);
+$timelineFrame = Card::titled($timeline, 'Recent Activity');
 
 $avatarGroup = AvatarGroup::compact([
     'Sarah Connor',
@@ -100,36 +115,31 @@ $avatarGroup = AvatarGroup::compact([
     'Emily Brown',
     'Michael Davis'
 ], 5);
+$avatarFrame = Card::titled($avatarGroup, 'Active Users');
 
 $grid->addItem(
-    Frame::new($timeline, 'Recent Activity')->withPadding(1),
-    new ItemOptions(column: 0)
+    $timelineFrame,
+    new ItemOptions(column: 0, expandVertical: true)
 );
 
 $grid->addItem(
-    Frame::new($avatarGroup, 'Active Users')->withPadding(1),
-    new ItemOptions(column: 1)
+    $avatarFrame,
+    new ItemOptions(column: 1, expandVertical: true)
 );
 
 // ============================================
-// ROW 4: NAVIGATION & STATUS
+// ROW 4: SUMMARY STATS
 // ============================================
-$breadcrumb = Breadcrumb::fromPath('Analytics / Reports / Q4 2024');
-
-$stats = VStack::spaced(0,
+$stats = VStack::spaced(1,
     Text::new('Total Revenue: $1,234,567'),
     Text::new('Active Sessions: 8,429'),
     Text::new('Conversion Rate: 3.24%')
 );
+$statsFrame = Card::titled($stats, 'Summary');
 
 $grid->addItem(
-    Frame::new($breadcrumb, 'Navigation')->withPadding(1),
-    new ItemOptions(column: 0)
-);
-
-$grid->addItem(
-    Frame::new($stats, 'Summary')->withPadding(1),
-    new ItemOptions(column: 1)
+    $statsFrame,
+    new ItemOptions(column: 0, expandVertical: false)
 );
 
 $grid->setSize(140, 52);
