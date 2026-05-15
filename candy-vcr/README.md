@@ -86,9 +86,10 @@ The CLI lands in PR7.
 vendor/bin/candy-vcr inspect session.cas               # list events
 vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream output to stdout
 vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
+vendor/bin/candy-vcr stats   session.cas               # show cassette statistics
 ```
 
-`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference.
+`inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
 ## Examples
 
@@ -97,6 +98,7 @@ vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
 ```sh
 php examples/record.php examples/cassettes/counter.cas
 bin/candy-vcr inspect examples/cassettes/counter.cas
+bin/candy-vcr stats   examples/cassettes/counter.cas
 bin/candy-vcr replay  examples/cassettes/counter.cas --speed=realtime
 php examples/replay.php examples/cassettes/counter.cas
 ```
