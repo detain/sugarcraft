@@ -21,6 +21,7 @@ final class Application
             'replay' => new ReplayCommand(),
             'diff' => new DiffCommand(),
             'stats' => new StatsCommand(),
+            'migrate' => new MigrateCommand(),
         ];
     }
 
