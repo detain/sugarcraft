@@ -163,6 +163,29 @@ vendor/bin/candy-vcr stats   session.cas               # show cassette statistic
 
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
+### Cassette migration
+
+Cassette format versions evolve over time. The `migrate` command upgrades cassettes automatically:
+
+```sh
+# Migrate in-place (creates session.cas.bak backup)
+candy-vcr migrate session.cas
+
+# Migrate to a new file
+candy-vcr migrate session.cas upgraded.cas
+
+# Dry-run — validate without writing
+candy-vcr migrate session.cas --dry-run
+
+# Show registered migrators
+candy-vcr migrate --info
+```
+
+The migration system is pluggable via `SugarCraft\Vcr\Migration\CassetteMigrator`.
+`V1ToV2Migrator` upgrades v1 cassettes by adding sequential event IDs, explicit
+encoding metadata on output events, and other structural improvements. Future version
+migrators slot in without modifying the core infrastructure.
+
 ## Examples
 
 `examples/record.php`, `examples/replay.php`, `examples/inspect.php` — runnable scripts using a tiny `CounterModel`. The `examples/cassettes/counter.cas` fixture is a real recording you can play with:
