@@ -3,7 +3,7 @@
 **Library:** `candy-hermit` (PHP port of Genekkion/theHermit)
 **Date:** 2026-05-13
 **Researcher:** Research Agent
-**Output:** `/home/sites/sugarcraft/.tmp/research/libraries/candy-hermit-research.md`
+**Output:** `/home/sites/sugarcraft/docs/research/libraries/candy-hermit-research.md`
 
 ---
 

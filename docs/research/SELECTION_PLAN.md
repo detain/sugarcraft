@@ -366,7 +366,7 @@
 ## FULL LIBRARY LIST
 
 All 45 research documents available at:
-- `/home/sites/sugarcraft/.tmp/research/libraries/`
+- `/home/sites/sugarcraft/docs/research/libraries/`
 
 ### Libraries with Research:
 
