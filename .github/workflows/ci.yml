@@ -210,7 +210,7 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring, intl, json, pcntl, shmop, ffi
+          extensions: mbstring, intl, json, pcntl, ffi
           tools: composer:v2
           coverage: none
           ini-values: ffi.enable=true
@@ -228,7 +228,7 @@ jobs:
             vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
-        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl
+        run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
 
       # candy-core: run TTY subsystem tests (where WindowsBackend / kernel32 FFI
       # lives).  Downstream libs (sugar-prompt, sugar-bits, candy-shell,
