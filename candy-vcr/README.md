@@ -53,6 +53,56 @@ composer require sugarcraft/candy-vcr
   `quit`) with kind-specific payload fields.
 - `t` is seconds since cassette start (ms precision).
 
+### Timestamp modes
+
+Cassettes support two timestamp modes:
+
+| Mode | Description | Use case |
+|------|-------------|-----------|
+| `absolute` (default) | `t` is seconds since cassette start | Playback timing |
+| `relative` | `t` is interval since previous event (like asciinema v3) | Easier manual editing |
+
+Set the mode when creating a cassette header:
+
+```php
+use SugarCraft\Vcr\CassetteHeader;
+
+// Absolute timestamps (default)
+$header = new CassetteHeader(
+    version: 1,
+    createdAt: '2026-05-07T10:00:00Z',
+    cols: 80,
+    rows: 24,
+    runtime: 'sugarcraft/candy-core@dev',
+);
+
+// Relative timestamps (interval since previous event)
+$header = new CassetteHeader(
+    version: 1,
+    createdAt: '2026-05-07T10:00:00Z',
+    cols: 80,
+    rows: 24,
+    runtime: 'sugarcraft/candy-core@dev',
+    timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
+);
+```
+
+**Absolute mode example:**
+```jsonl
+{"t":0.000,"k":"output","b":"$ "}
+{"t":0.500,"k":"output","b":"ls\r\n"}
+{"t":0.502,"k":"output","b":"file1.txt file2.txt\r\n"}
+```
+
+**Relative mode example (same events):**
+```jsonl
+{"t":0.000,"k":"output","b":"$ "}
+{"t":0.500,"k":"output","b":"ls\r\n"}
+{"t":0.002,"k":"output","b":"file1.txt file2.txt\r\n"}
+```
+
+The JsonlFormat reader and writer handle conversion automatically based on the header's `timestampMode`. Backwards compatibility is preserved — cassettes without a `timestampMode` key default to `absolute`.
+
 ### Gzip compression
 
 Cassettes can be gzip-compressed by using the `.gz` extension or by using
