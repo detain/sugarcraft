@@ -120,6 +120,7 @@ final class BuiltinSerializerTest extends TestCase
     {
         return [
             'focus' => ['FocusGainedMsg', new FocusGainedMsg()],
+            'focus-lost' => ['FocusLostMsg', new \SugarCraft\Core\Msg\FocusLostMsg()],
             'blur' => ['BlurMsg', new BlurMsg()],
             'paste-start' => ['PasteStartMsg', new PasteStartMsg()],
             'paste-end' => ['PasteEndMsg', new PasteEndMsg()],
@@ -219,7 +220,8 @@ final class BuiltinSerializerTest extends TestCase
         $this->assertContains('MouseWheelMsg', $tags);
         $this->assertContains('MouseReleaseMsg', $tags);
         $this->assertContains('WindowSizeMsg', $tags);
-            $this->assertContains('FocusGainedMsg', $tags);
+        $this->assertContains('FocusGainedMsg', $tags);
+        $this->assertContains('FocusLostMsg', $tags);
         $this->assertContains('BlurMsg', $tags);
         $this->assertContains('PasteStartMsg', $tags);
         $this->assertContains('PasteEndMsg', $tags);
@@ -227,6 +229,6 @@ final class BuiltinSerializerTest extends TestCase
         $this->assertContains('BackgroundColorMsg', $tags);
         $this->assertContains('ForegroundColorMsg', $tags);
         $this->assertContains('CursorPositionMsg', $tags);
-        $this->assertCount(14, $tags);
+        $this->assertCount(15, $tags);
     }
 }

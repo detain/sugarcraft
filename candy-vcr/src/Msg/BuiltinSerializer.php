@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\BackgroundColorMsg;
 use SugarCraft\Core\Msg\BlurMsg;
 use SugarCraft\Core\Msg\CursorPositionMsg;
 use SugarCraft\Core\Msg\FocusGainedMsg;
+use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
@@ -30,7 +31,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * - KeyMsg
  * - MouseClickMsg / MouseMotionMsg / MouseWheelMsg / MouseReleaseMsg
  * - WindowSizeMsg
- * - FocusGainedMsg / BlurMsg
+ * - FocusGainedMsg / FocusLostMsg / BlurMsg
  * - PasteStartMsg / PasteEndMsg / PasteMsg
  * - BackgroundColorMsg / ForegroundColorMsg
  * - CursorPositionMsg
@@ -88,6 +89,10 @@ final class BuiltinSerializer implements MsgSerializer
             FocusGainedMsg::class => [
                 'encode' => static fn(FocusGainedMsg $m): array => ['@type' => 'FocusGainedMsg'],
                 'decode' => static fn(array $e): FocusGainedMsg => new FocusGainedMsg(),
+            ],
+            FocusLostMsg::class => [
+                'encode' => static fn(FocusLostMsg $m): array => ['@type' => 'FocusLostMsg'],
+                'decode' => static fn(array $e): FocusLostMsg => new FocusLostMsg(),
             ],
             BlurMsg::class => [
                 'encode' => static fn(BlurMsg $m): array => ['@type' => 'BlurMsg'],
@@ -181,7 +186,7 @@ final class BuiltinSerializer implements MsgSerializer
             'KeyMsg',
             'MouseClickMsg', 'MouseMotionMsg', 'MouseWheelMsg', 'MouseReleaseMsg',
             'WindowSizeMsg',
-            'FocusGainedMsg', 'BlurMsg',
+            'FocusGainedMsg', 'FocusLostMsg', 'BlurMsg',
             'PasteStartMsg', 'PasteEndMsg', 'PasteMsg',
             'BackgroundColorMsg', 'ForegroundColorMsg',
             'CursorPositionMsg',
@@ -199,6 +204,7 @@ final class BuiltinSerializer implements MsgSerializer
             'MouseReleaseMsg' => MouseReleaseMsg::class,
             'WindowSizeMsg' => WindowSizeMsg::class,
             'FocusGainedMsg' => FocusGainedMsg::class,
+            'FocusLostMsg' => FocusLostMsg::class,
             'BlurMsg' => BlurMsg::class,
             'PasteStartMsg' => PasteStartMsg::class,
             'PasteEndMsg' => PasteEndMsg::class,
