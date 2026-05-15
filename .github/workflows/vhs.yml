@@ -287,6 +287,13 @@ jobs:
       - name: Move GIFs into their lib's .vhs/ dir
         run: |
           set -euo pipefail
+          # download-artifact creates /tmp/gifs only if artifacts were downloaded;
+          # if none matched (e.g. all renders skipped) the dir is never created — skip
+          # gracefully rather than failing.
+          if [ ! -d /tmp/gifs ]; then
+            echo "No /tmp/gifs directory — no artifacts to move"
+            exit 0
+          fi
           shopt -s nullglob
           for d in /tmp/gifs/gifs-*; do
             lib="${d#/tmp/gifs/gifs-}"
@@ -309,7 +316,8 @@ jobs:
           git config user.email 'detain@interserver.net'
 
           # Count GIF files present in artifacts
-          artifact_count=$(find /tmp/gifs -name "*.gif" -type f | wc -l)
+          mkdir -p /tmp/gifs
+          artifact_count=$(find /tmp/gifs -name "*.gif" -type f 2>/dev/null | wc -l)
           echo "Found $artifact_count GIF file(s) in artifacts"
 
           if [ "$artifact_count" -eq 0 ]; then
