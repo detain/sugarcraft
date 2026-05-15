@@ -53,6 +53,28 @@ composer require sugarcraft/candy-vcr
   `quit`) with kind-specific payload fields.
 - `t` is seconds since cassette start (ms precision).
 
+### Gzip compression
+
+Cassettes can be gzip-compressed by using the `.gz` extension or by using
+`CompressedJsonlFormat` directly:
+
+```php
+use SugarCraft\Vcr\Format\CompressedJsonlFormat;
+
+$format = new CompressedJsonlFormat();
+
+// Write compressed cassette
+$format->write($cassette, '/tmp/session.cas.gz');
+
+// Read compressed cassette (auto-detects .gz extension)
+$cassette = $format->read('/tmp/session.cas.gz');
+```
+
+Compressed cassettes are typically 5-10x smaller than plain JSONL,
+making them suitable for CI storage and git repositories. The format
+uses streaming gzip with per-line flush to maintain memory efficiency
+for large cassettes.
+
 ## Quickstart
 
 Record a session:
@@ -149,6 +171,26 @@ same grapheme grid, so a recording → replay round trip passes even
 when the byte streams differ. Failure messages list the first 5
 differing cells with `(row,col)` coordinates and the expected vs
 actual graphemes.
+
+`ContainsAssertion` provides flexible partial matching — it passes when
+the expected substring is found anywhere within the actual output:
+
+```php
+use SugarCraft\Vcr\Assert\ContainsAssertion;
+
+$result = $player->play(
+    programFactory: $factory,
+    assertion: new ContainsAssertion(),
+);
+// Passes if actual output contains "Ready." anywhere
+// even if the full byte stream differs from expected
+$this->assertTrue($result->ok);
+```
+
+This is useful when you only care about specific content appearing
+in the output (e.g. a status message, prompt, or error keyword) without
+requiring exact formatting. The comparison is case-sensitive; empty
+substring always matches.
 
 ### Msg serializers (PR3)
 
