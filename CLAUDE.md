@@ -1,100 +1,83 @@
 # SugarCraft
 
-PHP monorepo of 45+ TUI library ports (Charmbracelet ecosystem + originals). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 45+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
 
 ## Layout
 
-Each lib at its own dir shares the same skeleton: `composer.json` · `README.md` · `CALIBER_LEARNINGS.md` · `src/` (PSR-4 `SugarCraft\<Sub>\`). Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `CALIBER_LEARNINGS.md` · `docs/index.html` · `media/` · `scripts/` · `codecov.yml`.
+Per-lib skeleton: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/` (PSR-4 `SugarCraft\<Sub>\`) · `<slug>/tests/` · `<slug>/.vhs/`.
 
-Project-wide auxiliary trees that agents should know about:
+Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `UPSTREAM_OPPORTUNITIES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `scripts/bootstrap-org-repos.sh` · `codecov.yml`.
 
-- `plans/` — audit prompt drivers like `plans/AUDIT_DOCS_PROMPT.md` (docs pass) and `plans/AUDIT_QUALITY_PROMPT.md` (code quality pass). Walk these top-to-bottom; mark items in place.
-- `.opencode/` — cross-tool agent config mirror (`.opencode/memory`, `.opencode/skills`, `.opencode/package.json`) kept in sync by Caliber alongside `.claude/` and `.agents/`.
-- `.codenomad/` — parallel-worktree coordination state; `.codenomad/worktreeMap.json` records which worktree owns which lib so sub-agents don't collide on shared files.
-- `.logs/` — captured sub-agent run logs (e.g. `.logs/subtask2.log`). Inspect after a failed sub-agent run before retrying.
-- `.sisyphus/` — long-running task checkpoints for resumable multi-step jobs.
+Aux trees: `plans/AUDIT_*.md` (walk top-down, mark `✅`/`⏭️` in place) · `.codenomad/worktreeMap.json` (parallel-worktree ownership) · `.opencode/` (Codex mirror) · `.logs/subtask*.log` · `.sisyphus/`.
 
 **Foundation** (`Candy-`): `candy-core` · `candy-sprinkles` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-mold` · `candy-tetris` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
 
 **Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash`.
 
-**Physics/motion** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
+**Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
 
 ## Commands
 
 ```sh
-# Per-lib install + test
 cd candy-core && composer install && vendor/bin/phpunit
 ```
 
 ```sh
-# Whole monorepo canonical loop
-for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
-         sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
-         candy-freeze sugar-glow sugar-spark candy-wish sugar-wishlist \
-         candy-metrics candy-mold candy-tetris super-candy sugar-crush; do
+for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits sugar-charts sugar-prompt candy-shell candy-shine candy-kit candy-freeze; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
 
 ```sh
-# Validate composer.json — drop --strict, every "@dev" sibling is flagged but EXPECTED
-cd candy-core && composer validate
-```
-
-```sh
-# Coverage locally (per-lib)
-pecl install pcov && echo 'extension=pcov.so' | sudo tee /etc/php/8.3/cli/conf.d/20-pcov.ini
-cd candy-core && vendor/bin/phpunit --coverage-clover=coverage.xml
-```
-
-```sh
-# Bootstrap sugarcraft org repos (one-shot, idempotent)
-gh auth login && ./scripts/bootstrap-org-repos.sh
-gh workflow run sync-sugarcraft.yml -R detain/sugarcraft
+cd candy-core && composer validate && vendor/bin/phpunit --coverage-clover=coverage.xml
 ```
 
 ## Conventions
 
 - `declare(strict_types=1);` at top of every file. PSR-12 + PSR-4.
 - Public classes `final` unless extension is part of contract.
-- **Immutable + fluent**: every `with*()` returns new instance via private `mutate()` helper. Public `readonly` properties for state.
-- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`.
+- **Immutable + fluent** — every `with*()` returns new instance via private `mutate()` helper; public `readonly` properties for state. Canonical: `candy-sprinkles/src/Style.php`.
+- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`.
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
-- Don't comment what code does — only *why* (constraints, invariants, links to upstream issues).
 - Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
 
 ## Adding a library
 
-Follow `AGENTS.md` checklist end-to-end. Touched files: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/` · root `composer.json` (`require` + `repositories[]`) · `MATCHUPS.md` · `PROJECT_NAMES.md` · `README.md` · `docs/index.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` matrix · `codecov.yml` (flags + components). `ci.yml` picks the new lib up automatically via `scripts/affected-libs.php` — only update the `WINDOWS_LIBS`/`MACOS_LIBS` pools inside that script if the lib needs OS-specific runners.
+Reference shapes: `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `sugar-wishlist/src/Lang.php` (i18n `Lang::t()` wrapper).
 
-Reference leaf libs for shape: `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/` (test config), `sugar-wishlist/src/Lang.php` (i18n wrapper).
-
-## i18n
-
-Locale files keyed per `LOCALES.md` recommended set (`en`, `fr`, `de`, `es`, `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`, `pl`, `nl`, `tr`, `cs`, `ar`). Lookup chain: exact locale → base language → `en` → raw key. Each lib exposes `Lang::t($key, $params)` wrapping `SugarCraft\Core\I18n\T` (canonical in `sugar-wishlist/src/Lang.php`).
+Touched: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/<Class>.php` · root `composer.json` (`require` + `repositories[]`) · `MATCHUPS.md` · `PROJECT_NAMES.md` · `README.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` matrix · `codecov.yml`. `.github/workflows/ci.yml` auto-picks via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` pools for OS-specific runners.
 
 ## PR workflow
 
-Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only` → next change-set. Bundle 2–4 related items per PR. Multi-lib audit work splits into one PR per lib/phase ordered by dependency. Branches: `ai/<slug>-<short>` (AI) or `feat/<slug>-<short>` (human). Author commits as `Joe Huss <detain@interserver.net>`.
+Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Bundle 2–4 related items. Branches: `ai/<slug>-<short>` or `feat/<slug>-<short>`. Author: `Joe Huss <detain@interserver.net>`.
 
-## Gotchas (from `CALIBER_LEARNINGS.md`)
+## Gotchas
 
-- `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED for path-repos pre-1.0. Drop `--strict`.
-- New transitive `@dev` deps need their path-repo added to every consuming lib's `composer.json` `repositories` array. Copy from `sugar-charts/composer.json`.
-- `.github/workflows/ci.yml` matrices are **dynamic** — computed by `scripts/affected-libs.php` from filesystem + reverse-dep graph in `composer.json`. Adding a lib needs only `composer.json` + `phpunit.xml`; the lib is auto-picked up. `.github/workflows/vhs.yml` is still hand-maintained — forget the `all=(...)` array entry and the GIF never re-renders.
-- Skip audit items for "credit upstream author" — out of scope before 1.0.
-- Run sub-agents ONE AT A TIME, never in parallel — burns extra-usage budget; concurrent writes to shared files (`MATCHUPS.md`, `README.md`) collide. `.codenomad/worktreeMap.json` records active worktree ownership; check it before launching a parallel run.
-- Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — secrets don't exist in repo settings yet.
-- When wrapping external CLI tools, pass ALL flags every invocation using `escapeshellarg((string)($field ?? ''))` so `null`/`''` render as `''`.
-- Bash tool's CWD persists across calls — anchor with absolute paths or `cd /home/sites/sugarcraft && ...` to avoid silent empty reads.
-- `gh pr create` `Warning: 1 uncommitted change` is informational — the PR still creates. Often Caliber's pre-commit refresh touching `<lib>/CALIBER_LEARNINGS.md` after `git add`.
-- Non-visual primitive libs (`candy-pty`, FFI bindings, codecs) are EXEMPT from the `vhs.yml` matrix; call out the exemption in the PR body.
-- After a sub-agent failure, check `.logs/` (e.g. `.logs/subtask2.log`) and `.sisyphus/` checkpoints before retrying — resume rather than restart when possible.
+- `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
+- New transitive `@dev` deps need their path-repo added to every consuming lib's `repositories[]` — copy from `sugar-charts/composer.json`.
+- `.github/workflows/vhs.yml` `all=(...)` array hand-maintained. Non-visual libs (`candy-pty`, FFI bindings, codecs) exempt.
+- Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
+- Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide; check `.codenomad/worktreeMap.json`.
+- Pass ALL CLI tool flags every invocation via `escapeshellarg((string)($field ?? ''))`.
+- Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.
+- After sub-agent failure check `.logs/subtask*.log` + `.sisyphus/` before retrying.
 
+## Session learnings
+
+Root `CALIBER_LEARNINGS.md` + per-lib variants: `candy-core/CALIBER_LEARNINGS.md` · `candy-wish/CALIBER_LEARNINGS.md` · `candy-shell/CALIBER_LEARNINGS.md` · `sugar-bits/CALIBER_LEARNINGS.md` · `candy-zone/CALIBER_LEARNINGS.md`.
+
+## Before committing
+
+Check: `grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"`. If hook-active, commit normally. Otherwise: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ AGENTS.md .agents/ .opencode/`. Run `/setup-caliber` if missing.
+
+## Model
+
+Default: `claude-sonnet-4-6` with high effort. Pin via `/model` or `CALIBER_MODEL`.
+
+<!-- caliber:managed:pre-commit -->
 ## Before Committing
 
 **IMPORTANT:** Before every git commit, you MUST ensure Caliber syncs agent configs with the latest code changes.
@@ -107,19 +90,36 @@ grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || ech
 - If **hook-active**: the hook handles sync automatically — just commit normally. Tell the user: "Caliber will sync your agent configs automatically via the pre-commit hook."
 - If **no-hook**: run Caliber manually before committing:
   1. Tell the user: "Caliber: Syncing agent configs with your latest changes..."
-  2. Run: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ AGENTS.md .agents/ .opencode/ 2>/dev/null`
+  2. Run: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ .cursor/ .cursorrules 2>/dev/null`
   3. After it completes, briefly tell the user what Caliber updated. Then proceed with the commit.
 
-If `caliber` is not found, tell the user: "This project uses Caliber for agent config sync. Run /setup-caliber to get set up."
+**Valid `caliber refresh` options:** `--quiet` (suppress output) and `--dry-run` (preview without writing). Do not pass any other flags — options like `--auto-approve`, `--debug`, or `--force` do not exist and will cause errors.
 
+**`caliber config`** takes no flags — it runs an interactive provider setup. Do not pass `--provider`, `--api-key`, or `--endpoint`.
+
+If `caliber` is not found, tell the user: "This project uses Caliber for agent config sync. Run /setup-caliber to get set up."
+<!-- /caliber:managed:pre-commit -->
+
+<!-- caliber:managed:learnings -->
 ## Session Learnings
 
-Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions. Per-lib variants live at `<lib>/CALIBER_LEARNINGS.md` (e.g. `candy-core/CALIBER_LEARNINGS.md`, `candy-wish/CALIBER_LEARNINGS.md`, `sugar-bits/CALIBER_LEARNINGS.md`).
+Read `CALIBER_LEARNINGS.md` for patterns and anti-patterns learned from previous sessions.
+These are auto-extracted from real tool usage — treat them as project-specific rules.
+<!-- /caliber:managed:learnings -->
 
+<!-- caliber:managed:model-config -->
 ## Model Configuration
 
-Recommended default: `claude-sonnet-4-6` with high effort. Pin via `/model` in Claude Code or `CALIBER_MODEL` env var.
+Recommended default: `claude-sonnet-4-6` with high effort (stronger reasoning; higher cost and latency than smaller models).
+Smaller/faster models trade quality for speed and cost — pick what fits the task.
+Pin your choice (`/model` in Claude Code, or `CALIBER_MODEL` when using Caliber with an API provider) so upstream default changes do not silently change behavior.
 
+<!-- /caliber:managed:model-config -->
+
+<!-- caliber:managed:sync -->
 ## Context Sync
 
-This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex (and the `.opencode/` mirror). Configs update automatically before each commit via `caliber refresh`. If the pre-commit hook is not set up, run `/setup-caliber`.
+This project uses [Caliber](https://github.com/caliber-ai-org/ai-setup) to keep AI agent configs in sync across Claude Code, Cursor, Copilot, and Codex.
+Configs update automatically before each commit via `caliber refresh`.
+If the pre-commit hook is not set up, run `/setup-caliber` to configure everything automatically.
+<!-- /caliber:managed:sync -->

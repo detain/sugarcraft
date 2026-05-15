@@ -1,0 +1,17 @@
+---
+description: SugarCraft TUI Model + value-object pattern (immutable, fluent, mutate helper)
+globs: "**/src/**/*.php"
+alwaysApply: false
+---
+
+# SugarCraft TUI Model + value-object pattern
+
+- `declare(strict_types=1);` first line, PSR-4 namespace `SugarCraft\<Sub>\` (quirk: `candy-core` → `SugarCraft\Core\`).
+- Public classes `final` unless extension is part of contract. Public `readonly` properties for state.
+- **Immutable + fluent**: every `with*()` returns a NEW instance through a private `mutate(...)` helper. Canonical: `candy-sprinkles/src/Style.php`.
+- Nullable fields need a paired `bool $XSet = false` sentinel parameter. Canonical: `sugar-bits/src/TextInput/TextInput.php`.
+- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`.
+- TUI Model contract: `init(): ?\Closure` · `update(Msg): [Model, ?Cmd]` · `view(): string`. `update()` returns a NEW model; side effects → `Cmd`s, never `view()`. See `candy-core/README.md`.
+- Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
+- Don't comment WHAT — only WHY (constraints, upstream issue links).
+- i18n: `Lang::t($key, $params)` wraps `SugarCraft\Core\I18n\T` (`sugar-wishlist/src/Lang.php`).
