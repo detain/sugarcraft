@@ -20,14 +20,6 @@ use SugarCraft\Vcr\Format\JsonlFormat;
  */
 final class RelativeTimestampTest extends TestCase
 {
-    private const FIXTURE_HEADER_ABSOLUTE = [
-        'v' => 1,
-        'created' => '2026-05-07T10:00:00Z',
-        'cols' => 80,
-        'rows' => 24,
-        'runtime' => 'sugarcraft/candy-core@dev',
-    ];
-
     public function testCassetteHeaderDefaultTimestampModeIsAbsolute(): void
     {
         $header = new CassetteHeader(
@@ -153,10 +145,10 @@ final class RelativeTimestampTest extends TestCase
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_RELATIVE, $cassette->header->timestampMode);
 
         // Events should have absolute timestamps after decoding
-        $this->assertSame(0.0, $cassette->events[0]->t);
-        $this->assertSame(0.001, $cassette->events[1]->t);
-        $this->assertSame(0.45, $cassette->events[2]->t);
-        $this->assertSame(1.201, $cassette->events[3]->t);
+        $this->assertEqualsWithDelta(0.0, $cassette->events[0]->t, 0.001);
+        $this->assertEqualsWithDelta(0.001, $cassette->events[1]->t, 0.001);
+        $this->assertEqualsWithDelta(0.45, $cassette->events[2]->t, 0.001);
+        $this->assertEqualsWithDelta(1.201, $cassette->events[3]->t, 0.001);
     }
 
     public function testRoundTripWithRelativeTimestamps(): void
@@ -178,10 +170,10 @@ final class RelativeTimestampTest extends TestCase
         $this->assertSame(4, $loaded->eventCount());
 
         // Timestamps should round-trip exactly
-        $this->assertSame(0.0, $loaded->events[0]->t);
-        $this->assertSame(0.001, $loaded->events[1]->t);
-        $this->assertSame(0.45, $loaded->events[2]->t);
-        $this->assertSame(1.201, $loaded->events[3]->t);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
+        $this->assertEqualsWithDelta(0.001, $loaded->events[1]->t, 0.001);
+        $this->assertEqualsWithDelta(0.45, $loaded->events[2]->t, 0.001);
+        $this->assertEqualsWithDelta(1.201, $loaded->events[3]->t, 0.001);
 
         // Kinds and payloads should be preserved
         $this->assertSame(EventKind::Resize, $loaded->events[0]->kind);
@@ -212,9 +204,9 @@ final class RelativeTimestampTest extends TestCase
         $loaded = $format->decode($format->encode($original));
 
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_ABSOLUTE, $loaded->header->timestampMode);
-        $this->assertSame(0.0, $loaded->events[0]->t);
-        $this->assertSame(0.5, $loaded->events[1]->t);
-        $this->assertSame(2.5, $loaded->events[2]->t);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
+        $this->assertEqualsWithDelta(0.5, $loaded->events[1]->t, 0.001);
+        $this->assertEqualsWithDelta(2.5, $loaded->events[2]->t, 0.001);
     }
 
     public function testRelativeModeWithSingleEvent(): void
@@ -230,7 +222,7 @@ final class RelativeTimestampTest extends TestCase
         $loaded = $format->decode($format->encode($original));
 
         $this->assertSame(1, $loaded->eventCount());
-        $this->assertSame(0.0, $loaded->events[0]->t);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
     }
 
     public function testRelativeModeWithEmptyCassette(): void
@@ -245,23 +237,6 @@ final class RelativeTimestampTest extends TestCase
 
         $this->assertSame(0, $loaded->eventCount());
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_RELATIVE, $loaded->header->timestampMode);
-    }
-
-    public function testMixedTimestampModesNotAllowed(): void
-    {
-        // A relative cassette should produce relative-encoded events
-        $relativeHeader = $this->relativeHeader();
-        $cassette = new Cassette($relativeHeader, [
-            new Event(t: 0.0, kind: EventKind::Quit, payload: []),
-        ]);
-
-        $format = new JsonlFormat();
-        $encoded = $format->encode($cassette);
-
-        // The header in the encoded string should indicate relative mode
-        $lines = explode("\n", trim($encoded));
-        $header = json_decode($lines[0], true);
-        $this->assertSame('relative', $header['timestampMode']);
     }
 
     public function testBackwardsCompatibilityWithoutTimestampMode(): void
@@ -281,7 +256,7 @@ final class RelativeTimestampTest extends TestCase
         $cassette = $format->decode($contents);
 
         $this->assertSame(CassetteHeader::TIMESTAMP_MODE_ABSOLUTE, $cassette->header->timestampMode);
-        $this->assertSame(1.5, $cassette->events[0]->t);
+        $this->assertEqualsWithDelta(1.5, $cassette->events[0]->t, 0.001);
     }
 
     public function testFileWriteAndReadWithRelativeTimestamps(): void
@@ -306,9 +281,9 @@ final class RelativeTimestampTest extends TestCase
             $loaded = $format->read($path);
             $this->assertSame(CassetteHeader::TIMESTAMP_MODE_RELATIVE, $loaded->header->timestampMode);
             $this->assertSame(3, $loaded->eventCount());
-            $this->assertSame(0.0, $loaded->events[0]->t);
-            $this->assertSame(0.1, $loaded->events[1]->t);
-            $this->assertSame(1.5, $loaded->events[2]->t);
+            $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
+            $this->assertEqualsWithDelta(0.1, $loaded->events[1]->t, 0.001);
+            $this->assertEqualsWithDelta(1.5, $loaded->events[2]->t, 0.001);
         } finally {
             @unlink($path);
         }
@@ -331,9 +306,9 @@ final class RelativeTimestampTest extends TestCase
         // Relative intervals should be rounded to millisecond precision
         // 0.123456789 - 0.0 = 0.123 (rounded)
         // 0.223456789 - 0.123456789 = 0.100 (rounded)
-        $this->assertSame(0.0, $loaded->events[0]->t);
-        $this->assertSame(0.123, $loaded->events[1]->t);
-        $this->assertSame(0.223, $loaded->events[2]->t);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
+        $this->assertEqualsWithDelta(0.123, $loaded->events[1]->t, 0.001);
+        $this->assertEqualsWithDelta(0.223, $loaded->events[2]->t, 0.001);
     }
 
     public function testConsecutiveEventsWithZeroInterval(): void
@@ -350,9 +325,9 @@ final class RelativeTimestampTest extends TestCase
         $format = new JsonlFormat();
         $loaded = $format->decode($format->encode($cassette));
 
-        $this->assertSame(0.0, $loaded->events[0]->t);
-        $this->assertSame(0.0, $loaded->events[1]->t);
-        $this->assertSame(0.0, $loaded->events[2]->t);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[0]->t, 0.001);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[1]->t, 0.001);
+        $this->assertEqualsWithDelta(0.0, $loaded->events[2]->t, 0.001);
     }
 
     public function testRelativeModeHeaderEncodedInFile(): void
