@@ -62,6 +62,12 @@ final class InterruptFlags
      */
     private function __construct()
     {
+        if (!extension_loaded('shmop')) {
+            $this->shmId = false;
+
+            return;
+        }
+
         $key = $this->makeKey();
 
         // 1 byte, mode 0644 (owner read+write, world read-only).
@@ -149,6 +155,8 @@ final class InterruptFlags
         // On Windows, shmop_open uses a platform-native named shared
         // memory object.  The key string is passed as-is on Windows.
         // On POSIX, ftok() maps a file inode to a System V IPC key.
+        // When ext-shmop is not available this returns 0 — the caller
+        // guards against that case.
         if (DIRECTORY_SEPARATOR === '\\') {
             // Use a well-known name string.  shmop_open on Windows accepts
             // this as the shared memory object name.
