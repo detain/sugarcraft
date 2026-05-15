@@ -18,6 +18,11 @@ use SugarCraft\Vcr\EventKind;
  * non-printable bytes as `\u00xx`. Reading reverses this faithfully so
  * arbitrary 8-bit output payloads round-trip.
  *
+ * Supports two timestamp modes:
+ * - `absolute` (default): timestamps are seconds since cassette start.
+ * - `relative`: timestamps are intervals since the previous event, making
+ *   cassettes easier to edit manually (like asciinema v3 format).
+ *
  * Mirrors charmbracelet/x/vcr Format/Jsonl.
  */
 final class JsonlFormat implements Format
@@ -44,7 +49,11 @@ final class JsonlFormat implements Format
     public function encode(Cassette $cassette): string
     {
         $lines = [$this->encodeHeader($cassette->header)];
-        foreach ($cassette->events as $event) {
+        $events = $cassette->events;
+        if ($cassette->header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
+            $events = $this->toRelativeTimestamps($events);
+        }
+        foreach ($events as $event) {
             $lines[] = $this->encodeEvent($event);
         }
         return implode("\n", $lines) . "\n";
@@ -76,18 +85,68 @@ final class JsonlFormat implements Format
             throw new \RuntimeException('candy-vcr: cassette is empty (no header line)');
         }
 
+        if ($header->timestampMode === CassetteHeader::TIMESTAMP_MODE_RELATIVE) {
+            $events = $this->fromRelativeTimestamps($events);
+        }
+
         return new Cassette($header, $events);
+    }
+
+    /**
+     * Convert absolute timestamps to relative (interval since last event).
+     * First event gets interval 0.0 since there's no prior event.
+     *
+     * @param list<Event> $events
+     * @return list<Event>
+     */
+    private function toRelativeTimestamps(array $events): array
+    {
+        if (empty($events)) {
+            return $events;
+        }
+        $result = [];
+        $prevT = 0.0;
+        foreach ($events as $event) {
+            $interval = round($event->t - $prevT, self::T_PRECISION);
+            $result[] = new Event(t: $interval, kind: $event->kind, payload: $event->payload);
+            $prevT = $event->t;
+        }
+        return $result;
+    }
+
+    /**
+     * Convert relative timestamps back to absolute (cumulative sum).
+     *
+     * @param list<Event> $events
+     * @return list<Event>
+     */
+    private function fromRelativeTimestamps(array $events): array
+    {
+        if (empty($events)) {
+            return $events;
+        }
+        $result = [];
+        $cumulative = 0.0;
+        foreach ($events as $event) {
+            $cumulative += $event->t;
+            $result[] = new Event(t: round($cumulative, self::T_PRECISION), kind: $event->kind, payload: $event->payload);
+        }
+        return $result;
     }
 
     private function encodeHeader(CassetteHeader $h): string
     {
-        return $this->jsonEncode([
+        $data = [
             'v' => $h->version,
             'created' => $h->createdAt,
             'cols' => $h->cols,
             'rows' => $h->rows,
             'runtime' => $h->runtime,
-        ]);
+        ];
+        if ($h->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
+            $data['timestampMode'] = $h->timestampMode;
+        }
+        return $this->jsonEncode($data);
     }
 
     private function encodeEvent(Event $event): string
@@ -117,6 +176,7 @@ final class JsonlFormat implements Format
             cols: (int) $data['cols'],
             rows: (int) $data['rows'],
             runtime: (string) $data['runtime'],
+            timestampMode: isset($data['timestampMode']) ? (string) $data['timestampMode'] : CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
         );
     }
 
