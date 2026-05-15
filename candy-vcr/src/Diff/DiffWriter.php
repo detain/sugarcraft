@@ -38,7 +38,7 @@ final class DiffWriter
         int $context = 3,
     ): int|false {
         $diff = $this->buildUnifiedDiff($expected, $actual, $context);
-        $result = file_put_contents($path, $diff);
+        $result = @file_put_contents($path, $diff);
         return $result !== false ? strlen($diff) : false;
     }
 
