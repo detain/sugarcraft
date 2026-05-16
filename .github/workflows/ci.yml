@@ -105,6 +105,24 @@ jobs:
             echo "macos_matrix=$(echo "$JSON" | jq -c '.macos_matrix')"
           } >> "$GITHUB_OUTPUT"
 
+  # Verify every "@dev" intra-monorepo dependency has a path-repo entry
+  # so composer install resolves via symlink, never the upstream remote.
+  # Catches the CLAUDE.md gotcha: "new transitive @dev deps need their
+  # path-repo added to every consuming lib's repositories[]". Cheap —
+  # one PHP run, no composer install needed.
+  path-repo-check:
+    name: 'Path-repo closure'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - name: Verify path-repo closure
+        run: php tools/check-path-repos.php
+
   # Unified test matrix — every (php, lib) tuple comes from build-matrix, which
   # auto-discovers libs from filesystem (any dir with composer.json + phpunit.xml)
   # and scopes to libs affected by the change-set via the reverse-dep graph.
