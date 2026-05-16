@@ -83,6 +83,7 @@ final class Player
      * @param Registry|null  $serializerRegistry For `input.msg`-form events. Defaults to {@see Registry::default}.
      * @param float          $timeoutSeconds   Hard cap on the loop. Default: cassette duration + 5s.
      * @param EventMatcher|null $matcher       Event matching policy. Defaults to null (no matcher-based filtering).
+     * @param float|null      $idleThresholdSeconds If set in REALTIME mode, pauses longer than this (seconds) are clamped to this value for faster CI runs.
      */
     public function play(
         \Closure $programFactory,
@@ -92,6 +93,7 @@ final class Player
         ?float $timeoutSeconds = null,
         bool $skipFirstResize = true,
         ?EventMatcher $matcher = null,
+        ?float $idleThresholdSeconds = null,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
@@ -160,9 +162,13 @@ final class Player
             // Schedule the next step. INSTANT mode uses a tiny yield to
             // let the program's render tick fire between events;
             // REALTIME mode uses the recorded delta between consecutive
-            // event timestamps, clamped to >= 0.
+            // event timestamps, clamped to >= 0. If idleThresholdSeconds
+            // is set, long pauses are clamped to that value for faster CI.
             if ($speed === self::SPEED_REALTIME) {
                 $delta = max(0.0, $events[$i]->t - $event->t);
+                if ($idleThresholdSeconds !== null && $delta > $idleThresholdSeconds) {
+                    $delta = $idleThresholdSeconds;
+                }
             } else {
                 $delta = self::INSTANT_YIELD_SECONDS;
             }

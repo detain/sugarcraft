@@ -256,6 +256,16 @@ if (!$result->ok) {
 
 `Player::play` walks the cassette and feeds each event into the program: resize → `WindowSizeMsg`, input bytes → re-parsed via `InputReader` and dispatched, input msg envelope → decoded via the serializer registry, quit → `program->quit()`. Output events accumulate into the expected byte buffer; the program's actual output stream is captured and compared via the supplied assertion.
 
+**Idle time trimming:** In `SPEED_REALTIME` mode, long pauses between events can slow down CI tests. Pass `idleThresholdSeconds: 0.5` to clamp pauses longer than 500ms to 500ms, making tests run faster while still honoring shorter pauses:
+
+```php
+$result = $player->play(
+    programFactory: $factory,
+    speed: Player::SPEED_REALTIME,
+    idleThresholdSeconds: 0.5,  // Skip long pauses in CI
+);
+```
+
 `ByteAssertion` is the strict baseline — exact byte equality with a hex-and-printable diff window on failure. `ScreenAssertion` (cell-grid equality via [candy-vt](../candy-vt/)) is the recommended choice for round-trip tests:
 
 ```php
