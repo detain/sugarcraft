@@ -1,0 +1,134 @@
+name: PTY integration matrix
+
+# Runs candy-pty's interactive-shell + lifecycle integration suite
+# across a matrix of OS × PHP versions × termios backends so we
+# catch platform-specific regressions (macOS pty path differences,
+# stty-fallback drift, PHP minor-bump breakage) before they ship.
+#
+# Distinct from ci.yml — this workflow targets the integration tier
+# specifically (real bash / vim / sleep spawns), gated to push-to-
+# master + manual dispatch + PRs that touched candy-pty/, so macOS
+# minutes stay bounded.
+#
+# @see plans/sugarcraft-is-a-mono-logical-twilight.md (P5.6)
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'candy-pty/**'
+      - '.github/workflows/pty-matrix.yml'
+  pull_request:
+    paths:
+      - 'candy-pty/**'
+      - '.github/workflows/pty-matrix.yml'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+  PHP_EXTENSIONS: mbstring, json, pcntl, ssh2, ffi, posix
+
+jobs:
+  integration:
+    name: 'integration · ${{ matrix.os }} · PHP ${{ matrix.php }} · termios=${{ matrix.termios }}'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+        php: ['8.3', '8.4']
+        termios: [ffi, stty]
+        # macOS minutes are 10× Linux cost — keep that runner to the
+        # one (php, termios) cell we care about for native xnu pty
+        # behaviour (the FFI path against /usr/lib/libSystem.B.dylib).
+        # The full os×php×termios grid only fans out on Linux.
+        exclude:
+          - os: macos-14
+            php: '8.4'
+          - os: macos-14
+            termios: stty
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+          tools: composer:v2
+
+      - name: Verify ext-ffi present (the matrix lives or dies on this)
+        run: |
+          php -r 'exit(extension_loaded("ffi") ? 0 : 1);' || {
+            echo "::error::ext-ffi not loaded — pty-matrix cannot run without it";
+            exit 1;
+          }
+
+      - name: Install shells (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          # bash + sh come pre-installed; add dash + zsh + fish + vim
+          # for the full shell-REPL matrix. python3 is on the image.
+          sudo apt-get install -qq -y --no-install-recommends \
+            dash zsh fish vim
+
+      - name: Install shells (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # bash + zsh + python3 + vim are on the macOS image; dash is
+          # not (skip-guard handles it). fish via brew when worth it.
+          brew install fish || true
+
+      - name: Composer cache key
+        id: composer-cache
+        run: |
+          echo "dir=$(composer config -d candy-pty cache-files-dir)" >> "$GITHUB_OUTPUT"
+          echo "key=composer-${{ runner.os }}-php${{ matrix.php }}-$(sha1sum candy-pty/composer.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer
+        uses: actions/cache@v5
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ steps.composer-cache.outputs.key }}
+          restore-keys: composer-${{ runner.os }}-php${{ matrix.php }}-
+
+      - name: Install candy-pty deps
+        run: cd candy-pty && composer install --prefer-dist --no-progress -n
+
+      - name: Run integration suite
+        env:
+          # The termios backend selector — PosixBackend's TermiosFactory
+          # honours SUGARCRAFT_TERMIOS to choose between the FFI path
+          # (default) and the stty shell-out fallback. Forcing both
+          # paths in CI catches drift between them.
+          SUGARCRAFT_TERMIOS: ${{ matrix.termios }}
+        run: cd candy-pty && vendor/bin/phpunit tests/Integration/ --colors=never --testdox
+
+  full-suite-sanity:
+    # Cheap regression: the full candy-pty unit suite must still pass
+    # on the canonical Linux+PHP8.3 cell even when integration tests
+    # are the focus. Catches "I broke the unit tests while debugging
+    # an integration flake" — common during pty-shim work.
+    name: 'unit-suite · ubuntu-22.04 · PHP 8.3'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: ${{ env.PHP_EXTENSIONS }}
+          coverage: none
+
+      - name: Install candy-pty deps
+        run: cd candy-pty && composer install --prefer-dist --no-progress -n
+
+      - name: Run full suite
+        run: cd candy-pty && vendor/bin/phpunit --colors=never
