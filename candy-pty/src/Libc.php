@@ -95,6 +95,7 @@ int   grantpt(int fd);
 int   unlockpt(int fd);
 int   ptsname_r(int fd, char *buf, unsigned long buflen);
 int   close(int fd);
+int   open(const char *path, int flags);
 int   ioctl(int fd, unsigned long request, void *arg);
 
 /* termios — struct termios is treated as opaque (≥80 bytes) because
