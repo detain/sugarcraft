@@ -8,6 +8,8 @@ namespace SugarCraft\Pty;
  * Facade for opening a master/slave PTY pair and (in later PRs)
  * driving I/O / resize / signals on it.
  *
+ * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead
+ *
  * Usage:
  * ```
  * $pty   = Pty::open();
