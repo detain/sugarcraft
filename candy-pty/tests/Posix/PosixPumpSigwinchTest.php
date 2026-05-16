@@ -70,7 +70,10 @@ final class PosixPumpSigwinchTest extends TestCase
             \fclose($stdin);
             \fclose($stdout);
 
-            $this->assertSame(0, $exitCode);
+            // -1 because the `sleep 5` child is still alive when the
+            // pump returns (stdin EOF + grace + flush); pump no
+            // longer blocks on wait().
+            $this->assertSame(-1, $exitCode);
             $this->assertTrue($sigwinchCalled, 'onSigwinch callback should fire at least once during idle pump loop');
             $this->assertSame(0, $capturedCols, 'onSigwinch cols should be 0 (pump does not track PTY size)');
             $this->assertSame(0, $capturedRows, 'onSigwinch rows should be 0 (pump does not track PTY size)');
@@ -143,7 +146,10 @@ final class PosixPumpSigwinchTest extends TestCase
             \fclose($stdin);
             \fclose($stdout);
 
-            $this->assertSame(0, $exitCode);
+            // -1 because the `sleep 5` child is still alive when the
+            // pump returns (stdin EOF + grace + flush); pump no
+            // longer blocks on wait().
+            $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(1, $sigwinchCount, 'onSigwinch should be called at least once per idle iteration');
         } finally {
             $pair->master()->close();

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Transport;
 
 use SugarCraft\Pty\Libc;
+use SugarCraft\Pty\Posix\PosixPump;
+use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\Pty;
 use SugarCraft\Pty\PtyException;
 use SugarCraft\Pty\SignalForwarder;
@@ -26,34 +28,14 @@ use SugarCraft\Wish\Transport;
  * back into {@see runChild()} with the cmd produced from the
  * Session.
  *
- * @see plans/plan-candy-wish-pty.md
+ * The pump loop itself lives in {@see PosixPump} (candy-pty); this
+ * class owns lifecycle (open PTY → spawn child → attach SIGWINCH →
+ * pump → tear down) and the Session-driven cols/rows fallback.
+ *
+ * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P2.5)
  */
 final class InProcessTransport implements Transport, ChildSpawner
 {
-    /** Bytes per `fread` / `fwrite` chunk in the pump loop. */
-    private const PUMP_CHUNK = 4096;
-
-    /** `stream_select` poll interval — 50 ms keeps CPU near zero
-     *  on idle while staying snappy under typing-rate I/O. */
-    private const PUMP_TIMEOUT_USEC = 50_000;
-
-    /** Final-flush window after the pump loop exits, before
-     *  closing the PTY. Drains any tail bytes the kernel buffered
-     *  on the master after the child exited or stdin EOF'd. */
-    private const FLUSH_DEADLINE_SEC = 0.5;
-
-    /** Grace window after STDIN EOF for the child to notice
-     *  (via VEOF / SIGHUP) and exit on its own before we force-
-     *  close the PTY (which delivers SIGHUP via lost-ctty). 300 ms
-     *  is comfortable for shells / cat / well-behaved children;
-     *  daemon-style children (sleep, non-tty-aware loops) get
-     *  force-closed at the deadline. */
-    private const STDIN_EOF_GRACE_SEC = 0.3;
-
-    /** VEOF char (Ctrl+D, 0x04). In cooked-mode PTY this signals
-     *  EOF on the slave's stdin to the inner child. */
-    private const VEOF = "\x04";
-
     /**
      * Override the size provider used by SIGWINCH forwarding.
      *
@@ -123,7 +105,6 @@ final class InProcessTransport implements Transport, ChildSpawner
      * This is used by keepalive callbacks to write heartbeat bytes.
      * Only valid while a session is actively being pumped.
      *
-     * @return Pty
      * @throws \RuntimeException if called outside of pump loop
      */
     public function getPty(): Pty
@@ -136,12 +117,6 @@ final class InProcessTransport implements Transport, ChildSpawner
 
     public function run(Session $session, array $stack): void
     {
-        // Duck-typed transport injection: any middleware that exposes
-        // a `setTransport(ChildSpawner)` method gets us handed in
-        // before the dispatch loop runs. Currently the only consumer
-        // is the {@see \SugarCraft\Wish\Middleware\Spawn} terminal
-        // middleware (PR3), but the hook is open-ended for future
-        // PTY-aware middleware (recorder taps, observability tees).
         foreach ($stack as $mw) {
             if (\method_exists($mw, 'setTransport')) {
                 $mw->setTransport($this);
@@ -199,6 +174,8 @@ final class InProcessTransport implements Transport, ChildSpawner
         $rows = $session->rows > 0 ? $session->rows : 24;
 
         $pty = Pty::open();
+        $child = null;
+        $pumpResult = -1;
 
         try {
             $pty->setBlocking(false);
@@ -215,10 +192,7 @@ final class InProcessTransport implements Transport, ChildSpawner
             // SIGWINCH forwarding — when sshd resizes the supervisor's
             // PTY, the kernel sends SIGWINCH to us; the handler queries
             // the new dimensions via the size provider and propagates
-            // them into the inner candy-pty via $pty->resize(). Caller
-            // can override the provider via withSizeProvider() — useful
-            // for tests that need to drive resize events without an
-            // actual host PTY.
+            // them into the inner candy-pty via $pty->resize().
             $sigwinchAttached = false;
             if (SignalForwarder::pcntlReady() && \defined('SIGWINCH')) {
                 $provider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
@@ -226,46 +200,26 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
 
             try {
-                // Store PTY reference so keepalive callbacks can write
-                // heartbeat bytes from within the pump loop.
                 $this->pty = $pty;
-                $this->pump($pty, $child, $stdin, $stdout);
+                $keepalive = $this->keepaliveCallback !== null
+                    ? \Closure::fromCallable($this->keepaliveCallback)
+                    : null;
+                $opts = new PumpOptions(keepalive: $keepalive);
 
-                // Drain any tail bytes the kernel buffered on the master
-                // before we tear down. Best-effort — broken stdout is
-                // silently ignored.
-                $flushDeadline = \microtime(true) + self::FLUSH_DEADLINE_SEC;
-                while (\microtime(true) < $flushDeadline) {
-                    $tail = $pty->read(self::PUMP_CHUNK);
-                    if ($tail === null || $tail === '') {
-                        if ($child->exited()) {
-                            break;
-                        }
-                        \usleep(20_000);
-                        continue;
-                    }
-                    @\fwrite($stdout, $tail);
-                }
+                $pumpResult = (new PosixPump())->run($pty, $stdin, $stdout, $child, $opts);
             } finally {
-                // Clear PTY reference — keepalive callbacks must not
-                // fire after the PTY is closed.
                 $this->pty = null;
-
-                // Restore SIGWINCH default disposition before any
-                // session-specific cleanup runs. Otherwise a stale
-                // closure with this $pty captured would fire on the
-                // next session's SIGWINCH and target a closed Pty.
                 if ($sigwinchAttached && \defined('SIGWINCH')) {
                     SignalForwarder::reset(\SIGWINCH);
                 }
             }
         } finally {
             // If the child is still running (pump exited because of
-            // STDIN EOF / EPIPE), we have to terminate it explicitly:
-            // closing the PTY master does NOT auto-deliver SIGHUP on
-            // Linux. Send SIGHUP first (gentle, daemons handle it),
-            // then SIGKILL after a brief grace if still alive.
-            if (isset($child) && !$child->exited()) {
+            // STDIN EOF / EPIPE), terminate it explicitly: closing the
+            // PTY master does NOT auto-deliver SIGHUP on Linux. Send
+            // SIGHUP first (gentle, daemons handle it), then SIGKILL
+            // after a brief grace if still alive.
+            if ($child !== null && !$child->exited()) {
                 if (\function_exists('posix_kill')) {
                     @\posix_kill($child->pid, \SIGHUP);
                     $killDeadline = \microtime(true) + 0.2;
@@ -280,84 +234,20 @@ final class InProcessTransport implements Transport, ChildSpawner
                     }
                 }
             }
-            if (isset($pty) && !$pty->isClosed()) {
+            if (!$pty->isClosed()) {
                 $pty->close();
             }
         }
 
-        return isset($child) ? $child->wait() : 0;
-    }
-
-    /**
-     * Inner pump loop. Exits when:
-     *  - child exits,
-     *  - STDOUT hits EPIPE (peer closed read end),
-     *  - STDIN reached EOF AND the post-EOF grace window expired
-     *    (child got VEOF + had {@see STDIN_EOF_GRACE_SEC} to notice;
-     *    if it's still running we let runChild's PTY close deliver
-     *    SIGHUP via lost-ctty).
-     *
-     * @param resource $stdin
-     * @param resource $stdout
-     */
-    private function pump(Pty $pty, \SugarCraft\Pty\Child $child, $stdin, $stdout): void
-    {
-        $masterStream = $pty->stream();
-        $stdinClosed = false;
-        $stdinClosedDeadline = 0.0;
-
-        while (true) {
-            if ($child->exited()) {
-                return;
-            }
-
-            if ($stdinClosed && \microtime(true) > $stdinClosedDeadline) {
-                return; // grace expired; runChild's $pty->close() force-quits the child
-            }
-
-            $r = $stdinClosed ? [$masterStream] : [$stdin, $masterStream];
-            $w = null;
-            $e = null;
-            $ready = @\stream_select($r, $w, $e, 0, self::PUMP_TIMEOUT_USEC);
-
-            if ($ready === false) {
-                if (\function_exists('pcntl_signal_dispatch')) {
-                    @\pcntl_signal_dispatch();
-                    continue;
-                }
-                return;
-            }
-
-            if ($ready === 0) {
-                // No I/O ready — invoke keepalive callback if registered.
-                // This lets middleware send periodic heartbeat bytes
-                // through the PTY to keep NAT gateways / firewalls open.
-                if ($this->keepaliveCallback !== null) {
-                    ($this->keepaliveCallback)();
-                }
-                continue;
-            }
-
-            foreach ($r as $stream) {
-                if ($stream === $stdin && !$stdinClosed) {
-                    if (!$this->pumpStdinToMaster($stdin, $pty)) {
-                        // STDIN EOF — flag and send VEOF so the inner
-                        // child sees stdin EOF (cooked-mode kernel
-                        // translates 0x04 to read() returning 0).
-                        // Well-behaved shells / cat / read-loops exit
-                        // on this; daemons (sleep, etc.) get killed
-                        // by the grace-deadline + PTY close path.
-                        $stdinClosed = true;
-                        $stdinClosedDeadline = \microtime(true) + self::STDIN_EOF_GRACE_SEC;
-                        @\fwrite($masterStream, self::VEOF);
-                    }
-                } elseif ($stream === $masterStream) {
-                    if (!$this->pumpMasterToStdout($pty, $stdout)) {
-                        return; // STDOUT EPIPE — peer closed.
-                    }
-                }
-            }
+        // PosixPump returns -1 when the child was still alive at pump
+        // exit; reap it here (non-blocking now that the outer finally
+        // killed it + closed the PTY). When the pump observed the
+        // child's natural exit, the cached exit code is returned
+        // directly so we don't double-reap.
+        if ($pumpResult >= 0) {
+            return $pumpResult;
         }
+        return $child !== null ? $child->wait() : 0;
     }
 
     /**
@@ -379,13 +269,6 @@ final class InProcessTransport implements Transport, ChildSpawner
             return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
         }
 
-        // We need the underlying integer fd, not the PHP stream.
-        // PHP exposes the fd for stdin/stdout/stderr as constants
-        // STDIN/STDOUT/STDERR, but for arbitrary streams there's no
-        // public API. As a heuristic: if the resource is the global
-        // STDIN, use fd 0 — anything else (proc_open pipes, sockets,
-        // etc.) almost certainly isn't a tty and the fallback is the
-        // right answer.
         if ($stdin !== \STDIN) {
             return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
         }
@@ -404,37 +287,6 @@ final class InProcessTransport implements Transport, ChildSpawner
         } catch (\Throwable) {
             return ['cols' => $fallbackCols, 'rows' => $fallbackRows];
         }
-    }
-
-    /**
-     * @param resource $stdin
-     * @return bool false if STDIN reached EOF (caller should exit pump)
-     */
-    private function pumpStdinToMaster($stdin, Pty $pty): bool
-    {
-        $bytes = @\fread($stdin, self::PUMP_CHUNK);
-        if ($bytes === false || $bytes === '') {
-            if (\feof($stdin)) {
-                return false;
-            }
-            return true;
-        }
-        $pty->write($bytes);
-        return true;
-    }
-
-    /**
-     * @param resource $stdout
-     * @return bool false if STDOUT hit EPIPE (caller should exit pump)
-     */
-    private function pumpMasterToStdout(Pty $pty, $stdout): bool
-    {
-        $bytes = $pty->read(self::PUMP_CHUNK);
-        if ($bytes === null || $bytes === '') {
-            return true;
-        }
-        $written = @\fwrite($stdout, $bytes);
-        return $written !== false;
     }
 
     /**
