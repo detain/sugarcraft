@@ -48,6 +48,23 @@ $pty->close();
 echo $out;
 ```
 
+### DI-friendly (preferred for libraries)
+
+For consumers that want to stay decoupled from the POSIX backend
+(useful in tests + when a Windows ConPTY sidecar lands in v2), resolve
+the `PtySystem` through the factory:
+
+```php
+use SugarCraft\Pty\PtySystemFactory;
+
+$system = PtySystemFactory::default();   // throws UnsupportedPlatformException on Windows
+$pair   = $system->open(100, 30);
+$master = $pair->master();
+$child  = $pair->slave()->spawn(['/bin/bash', '-l'], null, 100, 30, controllingTerminal: true);
+```
+
+Tests can swap in a stub `PtySystem` without touching libc.
+
 ## API at a glance
 
 | Call | What it does |
