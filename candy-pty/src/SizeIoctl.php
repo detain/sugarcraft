@@ -105,5 +105,30 @@ final class SizeIoctl
         ];
     }
 
+    /**
+     * Query the terminal size for the given fd via TIOCGWINSZ.
+     *
+     * @param int $fd a file descriptor that refers to a TTY
+     * @return array{cols:int, rows:int, xpix:int, ypix:int}
+     * @throws \RuntimeException if fd is not a TTY or ioctl fails
+     * @see creack/pty.GetsizeFull
+     */
+    public static function query(int $fd): array
+    {
+        if (!\function_exists('posix_isatty') || !\posix_isatty($fd)) {
+            throw new \RuntimeException('Cannot query size of non-tty fd');
+        }
+
+        $libc = Libc::lib();
+        $ws = self::emptyBuffer();
+        $rc = $libc->ioctl($fd, self::getRequest(), $ws);
+        if ($rc !== 0) {
+            throw new \RuntimeException(
+                'TIOCGWINSZ ioctl failed on fd ' . $fd . ' with rc=' . $rc
+            );
+        }
+        return self::unpack($ws);
+    }
+
     private function __construct() {}
 }
