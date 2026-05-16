@@ -120,12 +120,28 @@ $format->write($cassette, '/tmp/session.cas.gz');
 $cassette = $format->read('/tmp/session.cas.gz');
 ```
 
-Compressed cassettes are typically 5-10x smaller than plain JSONL,
-making them suitable for CI storage and git repositories. The format
-uses streaming gzip with per-line flush to maintain memory efficiency
-for large cassettes.
+ Compressed cassettes are typically 5-10x smaller than plain JSONL,
+ making them suitable for CI storage and git repositories. The format
+ uses streaming gzip with per-line flush to maintain memory efficiency
+ for large cassettes.
 
-## Quickstart
+ ## Asciinema import (L2)
+
+ Import asciinema v3 cast files as candy-vcr Cassettes for replay:
+
+ ```php
+ use SugarCraft\Vcr\Format\AsciinemaFormat;
+
+ $cassette = (new AsciinemaFormat())->read('/path/to/session.cast');
+ $player = new Player($cassette);
+ $result = $player->play(programFactory: $factory, speed: Player::SPEED_REALTIME);
+ ```
+
+ The importer handles asciinema v3's relative timestamps, converts `o` (stdout)
+ events to output events, `i` (stdin) events to input events, and `x` (exit)
+ events to quit events.
+
+ ## Quickstart
 
 Record a session:
 
