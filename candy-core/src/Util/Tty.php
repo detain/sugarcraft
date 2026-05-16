@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Pty\Contract\Termios;
+
 /**
  * Minimal portable TTY façade.
  *
@@ -38,10 +40,16 @@ final class Tty
     /** @var \SugarCraft\Core\Util\Tty\Backend */
     private \SugarCraft\Core\Util\Tty\Backend $backend;
 
-    /** @param resource|null $stream defaults to STDIN */
-    public function __construct($stream = null)
+    /**
+     * @param resource|null $stream  defaults to STDIN
+     * @param Termios|null  $termios optional pre-built Termios; passed
+     *                               through to {@see Tty\PosixBackend}
+     *                               for raw-mode setup. Test seam — see
+     *                               {@see \SugarCraft\Core\ProgramOptions::$termios}.
+     */
+    public function __construct($stream = null, ?Termios $termios = null)
     {
-        $this->backend = self::backend($stream ?? STDIN);
+        $this->backend = self::backend($stream ?? STDIN, $termios);
     }
 
     /**
@@ -54,7 +62,7 @@ final class Tty
      * 4. Native Windows (DIRECTORY_SEPARATOR === '\\') → WindowsBackend
      * 5. Everything else → PosixBackend
      */
-    private static function backend($stream): \SugarCraft\Core\Util\Tty\Backend
+    private static function backend($stream, ?Termios $termios = null): \SugarCraft\Core\Util\Tty\Backend
     {
         if (DIRECTORY_SEPARATOR === '\\') {
             // WSL_INTEROP / WSL_DISTRO_NAME are set inside WSL even when
@@ -62,6 +70,8 @@ final class Tty
             // itself is a Linux ELF so DIRECTORY_SEPARATOR would be '/'.
             // If we are here, DIRECTORY_SEPARATOR is '\\', so this IS
             // native Windows and we should use the WindowsBackend.
+            // WindowsBackend does not take a Termios — the candy-pty
+            // contract is POSIX-only in v1.
             if (!Tty\EnvDetect::isWsl()) {
                 return new Tty\WindowsBackend($stream);
             }
@@ -69,7 +79,7 @@ final class Tty
 
         // WSL, Mintty, MSYS2, Git-Bash, Cygwin — all use a POSIX-like PTY.
         if (Tty\EnvDetect::isWsl() || Tty\EnvDetect::isMintty() || Tty\EnvDetect::isCygwin()) {
-            return new Tty\PosixBackend($stream);
+            return new Tty\PosixBackend($stream, $termios);
         }
 
         // Native Windows PHP.
@@ -77,7 +87,7 @@ final class Tty
             return new Tty\WindowsBackend($stream);
         }
 
-        return new Tty\PosixBackend($stream);
+        return new Tty\PosixBackend($stream, $termios);
     }
 
     public function isTty(): bool
