@@ -91,7 +91,7 @@ final class Program
             inline:   $options->inlineMode,
             cellDiff: $options->cellDiffRenderer,
         );
-        $this->tty = new Tty($this->input);
+        $this->tty = new Tty($this->input, $options->termios);
     }
 
     /**

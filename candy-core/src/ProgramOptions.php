@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core;
 
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Pty\Contract\Termios;
 use React\EventLoop\LoopInterface;
 
 /**
@@ -119,5 +120,18 @@ final class ProgramOptions
          * existing handlers.
          */
         public readonly bool $withoutSignalHandler = false,
+        /**
+         * Override the {@see Termios} implementation used for raw-mode
+         * setup / teardown. When null (default), {@see Tty} resolves
+         * via candy-pty's `TermiosFactory` (FFI primary, stty fallback).
+         *
+         * Production code rarely needs to set this — the factory hits
+         * the right backend for the host. Tests inject a stub Termios
+         * so they can assert `apply()` / `restore()` are called at the
+         * expected points without touching the real terminal state.
+         *
+         * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.4)
+         */
+        public readonly ?Termios $termios = null,
     ) {}
 }
