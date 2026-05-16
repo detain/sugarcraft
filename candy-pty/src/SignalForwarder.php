@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Contract\MasterPty;
+
 /**
  * Forwards host-side `SIGWINCH` (terminal resize) and optionally
  * `SIGCHLD` (child termination) into PTY-aware callbacks.
@@ -41,19 +43,19 @@ final class SignalForwarder
      * @return bool true if the handler installed; false on platforms
      *              without pcntl or `SIGWINCH`.
      */
-    public static function attachSigwinch(Pty $pty, callable $sizeProvider, bool $async = true): bool
+    public static function attachSigwinch(MasterPty $master, callable $sizeProvider, bool $async = true): bool
     {
         if (!self::pcntlReady() || !\defined('SIGWINCH')) {
             return false;
         }
 
-        $handler = static function (int $signo) use ($pty, $sizeProvider): void {
-            if ($pty->isClosed()) {
+        $handler = static function (int $signo) use ($master, $sizeProvider): void {
+            if ($master->isClosed()) {
                 return;
             }
             try {
                 $size = $sizeProvider();
-                $pty->resize((int) $size['cols'], (int) $size['rows']);
+                $master->resize((int) $size['cols'], (int) $size['rows']);
             } catch (\Throwable) {
                 // Signal handlers must not throw — best-effort only.
             }
