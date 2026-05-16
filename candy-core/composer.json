@@ -32,7 +32,8 @@
     "require": {
         "php": "^8.3",
         "react/event-loop": "^1.6",
-        "react/promise": "^3.3"
+        "react/promise": "^3.3",
+        "sugarcraft/candy-pty": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
@@ -128,6 +129,13 @@
         {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/sugar-crush"
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "minimum-stability": "dev",
