@@ -4,131 +4,94 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Process;
 
-use SugarCraft\Shell\Lang;
+use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
- * Production {@see Process} backed by `proc_open`. The child's stdout
- * and stderr are inherited from the parent so the spinner overlays the
- * command's output naturally; redirect with shell pipes if you want
- * silent execution.
+ * Thin adapter that satisfies candy-shell's {@see Process} interface
+ * by delegating to {@see PosixProcess} from candy-pty.
+ *
+ * @deprecated since v0.x; new callers should depend on
+ *             `SugarCraft\Pty\Posix\PosixProcess` directly. This class
+ *             exists to preserve the in-package `Process` shape
+ *             (`exitCode()` / `terminate()` / `close()` / `stdout()` /
+ *             `stderr()`) used by SpinModel + SpinCommand, while moving
+ *             the proc_open polling lifecycle into candy-pty's
+ *             {@see \SugarCraft\Pty\Posix\ChildPollTrait}.
+ *
+ * @see PosixProcess for the canonical non-PTY spawn handle.
+ * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P3.3)
  */
 final class RealProcess implements Process
 {
-    /** @var resource */
-    private $handle;
-    private ?int $cachedExit = null;
     private bool $closed = false;
-    /** @var array{0:?resource,1:?resource} pipes for captured stdout/stderr */
-    private array $pipes = [null, null];
-    private string $bufferedStdout = '';
-    private string $bufferedStderr = '';
+    private ?int $cachedExit = null;
+
+    public function __construct(
+        private readonly PosixProcess $inner,
+    ) {}
 
     /**
-     * @param list<string>|string $command
+     * @param list<string> $command
      */
     public static function spawn(
-        array|string $command,
+        array $command,
         bool $captureStdout = false,
         bool $captureStderr = false,
     ): self {
-        $descriptors = [0 => ['file', '/dev/null', 'r']];
-        $descriptors[1] = $captureStdout ? ['pipe', 'w'] : STDOUT;
-        $descriptors[2] = $captureStderr ? ['pipe', 'w'] : STDERR;
-        $pipes  = [];
-        $handle = @proc_open($command, $descriptors, $pipes);
-        if (!is_resource($handle)) {
-            throw new \RuntimeException(Lang::t('process.spawn_failed'));
-        }
-        $self = new self($handle);
-        $self->pipes[0] = $captureStdout && isset($pipes[1]) && is_resource($pipes[1]) ? $pipes[1] : null;
-        $self->pipes[1] = $captureStderr && isset($pipes[2]) && is_resource($pipes[2]) ? $pipes[2] : null;
-        // Non-blocking so SpinModel's poll loop never stalls reading.
-        if ($self->pipes[0] !== null) {
-            stream_set_blocking($self->pipes[0], false);
-        }
-        if ($self->pipes[1] !== null) {
-            stream_set_blocking($self->pipes[1], false);
-        }
-        return $self;
-    }
-
-    /** @param resource $handle */
-    public function __construct($handle)
-    {
-        $this->handle = $handle;
+        return new self(PosixProcess::spawn(
+            cmd: $command,
+            env: null,
+            captureStdout: $captureStdout,
+            captureStderr: $captureStderr,
+        ));
     }
 
     public function exitCode(): ?int
     {
-        // Drain pending pipe data before checking — otherwise the child
-        // can deadlock waiting for the parent to read stdout.
-        $this->drain();
         if ($this->cachedExit !== null) {
             return $this->cachedExit;
         }
-        if ($this->closed) {
-            return $this->cachedExit;
-        }
-        $status = proc_get_status($this->handle);
-        if ($status['running']) {
+        if (!$this->inner->exited()) {
             return null;
         }
-        $this->cachedExit = (int) $status['exitcode'];
-        // Final drain to capture anything written during exit.
-        $this->drain();
+        $this->cachedExit = $this->inner->exitCode();
         return $this->cachedExit;
     }
 
-    private function drain(): void
+    public function stdout(): string
     {
-        if ($this->pipes[0] !== null && is_resource($this->pipes[0])) {
-            $chunk = @stream_get_contents($this->pipes[0]);
-            if (is_string($chunk)) {
-                $this->bufferedStdout .= $chunk;
-            }
-        }
-        if ($this->pipes[1] !== null && is_resource($this->pipes[1])) {
-            $chunk = @stream_get_contents($this->pipes[1]);
-            if (is_string($chunk)) {
-                $this->bufferedStderr .= $chunk;
-            }
-        }
+        return $this->inner->stdoutBytes();
     }
 
-    public function stdout(): string { return $this->bufferedStdout; }
-    public function stderr(): string { return $this->bufferedStderr; }
+    public function stderr(): string
+    {
+        return $this->inner->stderrBytes();
+    }
 
     public function terminate(): void
     {
         if ($this->closed || $this->cachedExit !== null) {
             return;
         }
-        @proc_terminate($this->handle);
+        if (\function_exists('posix_kill')) {
+            $this->inner->kill(\defined('SIGTERM') ? \SIGTERM : 15);
+        }
     }
 
     /**
-     * Reap the OS process handle. Always calls `proc_close()` exactly
-     * once even after `exitCode()` has cached the status — without that,
-     * long-running PHP processes accumulated zombie entries because the
-     * proc_open handle was never explicitly released.
+     * Reap the OS process handle. Idempotent — second call returns the
+     * cached exit code without re-reaping. Required so SpinModel can
+     * call close() in both happy-path and error-path branches without
+     * worrying about double-reap.
      */
     public function close(): int
     {
         if ($this->closed) {
             return $this->cachedExit ?? 0;
         }
-        // Final drain + close pipes before reaping the handle.
-        $this->drain();
-        foreach ($this->pipes as $pipe) {
-            if (is_resource($pipe)) {
-                @fclose($pipe);
-            }
-        }
-        $code = @proc_close($this->handle);
+        $code = $this->inner->wait();
         $this->closed = true;
-        if ($this->cachedExit === null) {
-            $this->cachedExit = is_int($code) && $code >= 0 ? $code : 0;
-        }
-        return $this->cachedExit;
+        $this->cachedExit = $code;
+        return $code;
     }
 }
