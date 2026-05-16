@@ -13,13 +13,22 @@ namespace SugarCraft\Pty\Contract;
 interface Pump
 {
     /**
-     * Run the byte pump until the child exits.
+     * Run the byte pump until pump conditions trigger: child exits,
+     * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
+     * window elapses. Does NOT block on {@see Child::wait()} when the
+     * child is still alive — the caller is responsible for kill /
+     * PTY close / final wait() so supervisors can enforce kill-on-
+     * STDIN-EOF policy without the pump holding them hostage.
      *
      * @param MasterPty  $master
      * @param resource  $stdinStream  PHP stream resource (e.g. STDIN)
      * @param resource  $stdoutStream PHP stream resource (e.g. STDOUT)
      * @param Child|null $child  null when no child to monitor (stdin→master only)
-     * @return int exit code from the child, or -1 if no child
+     * @return int  the child's exit code if it has already exited by
+     *              the time the pump returns; 0 if there is no child
+     *              to monitor (stdin→master only); -1 if a child was
+     *              supplied but is still running (caller must kill +
+     *              wait()).
      * @see portable-pty.Pump.Run()
      */
     public function run(
