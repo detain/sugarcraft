@@ -32,6 +32,13 @@ const WINDOWS_LIBS = [
 ];
 const MACOS_LIBS = [
     'candy-pty',
+    // PTY plan P5.6 keeps candy-core + candy-wish in the macOS pool
+    // for the duration of P5+ — both consume candy-pty heavily
+    // (PosixBackend + InProcessTransport), and macOS xnu PTY
+    // semantics drift just enough from Linux ptmx that consumers
+    // need their own coverage cell.
+    'candy-core',
+    'candy-wish',
 ];
 
 /** PHP versions every lib's PHPUnit suite runs against. */
