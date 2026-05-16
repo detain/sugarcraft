@@ -8,6 +8,8 @@ namespace SugarCraft\Pty;
  * Platform-aware `TIOCSWINSZ` / `TIOCGWINSZ` request constants and
  * a packer / unpacker for the kernel `winsize` struct.
  *
+ * @see creack/pty.GetsizeFull
+ *
  * The struct is identical on both supported platforms — four
  * little-endian unsigned shorts laid out as
  * `[ws_row, ws_col, ws_xpixel, ws_ypixel]` — but the ioctl request
