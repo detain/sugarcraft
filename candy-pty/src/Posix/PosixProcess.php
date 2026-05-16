@@ -68,6 +68,7 @@ final class PosixProcess implements Process
      *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env null inherits parent env
+     * @see creack/pty.Start()
      */
     public static function spawn(
         array $cmd,
@@ -117,6 +118,9 @@ final class PosixProcess implements Process
         return new self($pid, $process, $stdoutPipe, $stderrPipe);
     }
 
+    /**
+     * @see creack/pty.Cmd.Signal()
+     */
     public function kill(int $signal): void
     {
         \posix_kill($this->pid, $signal);
@@ -142,6 +146,8 @@ final class PosixProcess implements Process
      *
      * Timing matches the trait's wait() byte-for-byte aside from the
      * drain call — same `usleep(10_000)`, same `proc_close()` reap.
+     *
+     * @see creack/pty.Cmd.Wait()
      */
     public function wait(): int
     {

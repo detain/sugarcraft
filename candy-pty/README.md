@@ -148,6 +148,40 @@ Alpine, custom sysroots).
 | `xpty.Pty.Size()`                 | `Pty::size()`                                            |
 | `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
 
+## Compared to node-pty / creack/pty / portable-pty
+
+Cross-ecosystem parity table for the dominant PTY libraries in Go,
+Rust, and Node.js. The goal is "as good as `creack/pty` on Linux and
+macOS" — not a kitchen-sink port. This table is deliberately honest
+about gaps: Windows ConPTY, foreground-job control, and worker-thread
+support are flagged as planned-or-missing rather than papered over.
+
+| Feature | candy-pty | creack/pty (Go) | portable-pty (Rust) | node-pty (Node.js) |
+|---|---|---|---|---|
+| Open / close PTY pair | ✅ `PtySystemFactory::default()->open()` | ✅ `pty.Open()` | ✅ `native_pty_system().openpty()` | ✅ `pty.spawn()` |
+| Master read | ✅ `MasterPty::read($len, $timeout)` | ✅ `Pty.Read([]byte)` | ✅ `MasterPty::try_clone_reader()` | ✅ `pty.onData()` |
+| Master write | ✅ `MasterPty::write($bytes)` | ✅ `Pty.Write([]byte)` | ✅ `MasterPty::take_writer()` | ✅ `pty.write()` |
+| Resize (TIOCSWINSZ) | ✅ `MasterPty::resize($cols, $rows)` | ✅ `pty.Setsize()` | ✅ `MasterPty::resize()` | ✅ `pty.resize()` |
+| Get size (TIOCGWINSZ) | ✅ `MasterPty::size()` | ✅ `pty.GetsizeFull()` | ✅ `MasterPty::get_size()` | ⚠️ via `cols`/`rows` props |
+| Slave device path | ✅ `SlavePty::path()` | ✅ `Pty.Name()` | ✅ `SlavePty::as_raw_fd()` | ❌ hidden |
+| Child spawn on slave | ✅ `SlavePty::spawn($cmd, $env, ...)` | ✅ `pty.Start(cmd)` | ✅ `SlavePty::spawn_command()` | ✅ `pty.spawn(file, args)` |
+| Controlling terminal (TIOCSCTTY) | ✅ opt-in via `controllingTerminal: true` | ✅ implicit in `Start()` | ✅ implicit in `spawn_command()` | ✅ implicit |
+| Termios raw mode | ✅ `Termios::makeRaw()` (FFI + stty fallback) | ✅ via `golang.org/x/term` | ✅ `Termios` in `nix` crate | ⚠️ caller's responsibility |
+| Termios get / restore | ✅ `Termios::current()` / `restore()` | ✅ `term.MakeRaw()` / `Restore()` | ✅ `Termios::set_termios()` | ❌ caller's responsibility |
+| SIGWINCH forwarding | ✅ `SignalForwarder::attachSigwinch()` | ✅ `pty.InheritSize()` | ⚠️ caller wires signal handler | ✅ implicit |
+| Exit code retrieval | ✅ `Child::wait()` / `exitCode()` | ✅ `cmd.Wait()` / `ProcessState` | ✅ `Child::wait()` | ✅ `pty.onExit()` |
+| Signal injection (SIGINT/TERM/KILL) | ✅ `Child::kill($signal)` | ✅ `cmd.Process.Signal()` | ✅ `Child::kill()` | ✅ `pty.kill(signal)` |
+| EOF / VEOF handling | ✅ `PosixPump` writes VEOF on stdin EOF | ⚠️ caller drives termios | ⚠️ caller drives termios | ⚠️ caller writes `\x04` |
+| Non-blocking master I/O | ✅ `setBlocking(false)` + `stream_select` | ✅ `os.File` non-blocking | ✅ `set_nonblocking()` | ✅ event-driven |
+| Byte pump abstraction | ✅ `PosixPump::run()` w/ EOF grace + keepalive | ❌ caller copies bytes | ❌ caller copies bytes | ✅ libuv-driven |
+| Async / threaded operation | ⚠️ single-loop pump only (ReactPHP-friendly) | ✅ goroutines built-in | ✅ thread / async runtime | ✅ libuv worker thread |
+| Windows ConPTY | ❌ planned (v2 sidecar; see `plans/x-windows.md`) | ❌ Linux/macOS only | ✅ `ConPtySystem` | ✅ `winpty` / ConPTY |
+| Dependency-free DI seam | ✅ `Contract\PtySystem` interface | ❌ concrete `*Pty` only | ✅ `PtySystem` trait | ❌ concrete bindings |
+
+Legend: ✅ shipping today · ⚠️ partial / opt-in / caller-driven · ❌ not
+implemented. Method names cite real upstream symbols — see
+`docs/CONCEPTS.md` for the porting rationale behind each row.
+
 ## Controlling terminal (Ctrl+C, job control)
 
 Pass `controllingTerminal: true` to `spawn()` when you need
