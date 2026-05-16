@@ -4,11 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Contract\MasterPty;
+
 /**
  * Facade for opening a master/slave PTY pair and (in later PRs)
  * driving I/O / resize / signals on it.
  *
  * @deprecated since v0.x, use `SugarCraft\Pty\Posix\PosixPtySystem` instead
+ *
+ * Implements {@see MasterPty} so callers that take the new contract
+ * (e.g. {@see Posix\PosixPump}) accept this legacy facade directly —
+ * keeps the migration to PosixPtySystem (plan step P4.2) decoupled
+ * from the pump extraction (P2.5).
  *
  * Usage:
  * ```
@@ -26,7 +33,7 @@ namespace SugarCraft\Pty;
  *
  * @see https://github.com/charmbracelet/x/tree/main/xpty
  */
-final class Pty
+final class Pty implements MasterPty
 {
     /** `O_RDWR` flag — value identical on Linux and macOS. */
     private const O_RDWR = 0x0002;
@@ -171,7 +178,7 @@ final class Pty
      *
      * @return resource
      */
-    public function stream()
+    public function stream(): mixed
     {
         $this->assertOpen();
         if ($this->stream !== null) {

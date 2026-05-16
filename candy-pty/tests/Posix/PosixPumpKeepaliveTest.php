@@ -56,7 +56,11 @@ final class PosixPumpKeepaliveTest extends TestCase
             \fclose($stdin);
             \fclose($stdout);
 
-            $this->assertSame(0, $exitCode);
+            // -1 because the `sleep 5` child is still alive when the
+            // pump returns (stdin EOF + grace + flush ≈ 0.8s); the
+            // pump no longer blocks on wait(). Test pins the new
+            // non-blocking contract.
+            $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(
                 3,
                 $keepaliveCount,
@@ -133,7 +137,10 @@ final class PosixPumpKeepaliveTest extends TestCase
             \fclose($stdin);
             \fclose($stdout);
 
-            $this->assertSame(0, $exitCode);
+            // -1 because the `sleep 5` child is still alive when the
+            // pump returns (stdin EOF + grace + flush); pump no
+            // longer blocks on wait().
+            $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(1, $keepaliveCount, 'keepalive should fire at least once');
             $this->assertGreaterThanOrEqual(1, $sigwinchCount, 'onSigwinch should fire at least once');
             $this->assertSame(
