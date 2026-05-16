@@ -94,6 +94,9 @@ final class PosixPump implements PumpContract
             }
 
             if ($ready === 0) {
+                if ($opts->onSigwinch !== null) {
+                    ($opts->onSigwinch)(0, 0);
+                }
                 if ($opts->keepalive !== null) {
                     ($opts->keepalive)();
                 }
