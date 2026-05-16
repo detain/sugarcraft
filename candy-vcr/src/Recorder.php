@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr;
 
 use SugarCraft\Core\Recorder as RecorderInterface;
+use SugarCraft\Vcr\Hook\HookRegistry;
 
 /**
  * Streaming JSONL cassette writer. Each event is encoded and flushed
@@ -26,6 +27,7 @@ final class Recorder implements RecorderInterface
     private $fh;
     private readonly float $startTime;
     private bool $closed = false;
+    private HookRegistry $hooks;
 
     /**
      * @param resource $fh  Open writable stream — typically a file opened
@@ -36,12 +38,14 @@ final class Recorder implements RecorderInterface
         $fh,
         CassetteHeader $header,
         ?float $startTime = null,
+        ?HookRegistry $hooks = null,
     ) {
         if (!is_resource($fh)) {
             throw new \InvalidArgumentException('Recorder requires an open stream resource');
         }
         $this->fh = $fh;
         $this->startTime = $startTime ?? microtime(true);
+        $this->hooks = $hooks ?? new HookRegistry();
         $this->writeLine([
             'v' => $header->version,
             'created' => $header->createdAt,
@@ -77,6 +81,25 @@ final class Recorder implements RecorderInterface
             rows: $rows,
             runtime: $runtime,
         );
+    }
+
+    /**
+     * Add a hook to be called during recording.
+     *
+     * @return $this
+     */
+    public function withHook(\SugarCraft\Vcr\Hook\Hook $hook): self
+    {
+        $this->hooks->addHook($hook);
+        return $this;
+    }
+
+    /**
+     * Get the hook registry for direct manipulation.
+     */
+    public function hooks(): HookRegistry
+    {
+        return $this->hooks;
     }
 
     public function recordResize(int $cols, int $rows): void
@@ -128,8 +151,24 @@ final class Recorder implements RecorderInterface
      */
     private function writeEvent(string $kind, array $payload): void
     {
-        $line = ['t' => round(microtime(true) - $this->startTime, 3), 'k' => $kind, ...$payload];
+        $event = new Event(
+            t: round(microtime(true) - $this->startTime, 3),
+            kind: EventKind::from($kind),
+            payload: $payload,
+        );
+
+        // Run beforeSave hooks
+        $event = $this->hooks->beforeSave($event);
+        if ($event === null) {
+            // Event was suppressed by a hook
+            return;
+        }
+
+        $line = ['t' => $event->t, 'k' => $event->kind->value, ...$event->payload];
         $this->writeLine($line);
+
+        // Run afterCapture hooks (fire-and-forget)
+        $this->hooks->afterCapture($event);
     }
 
     /**
