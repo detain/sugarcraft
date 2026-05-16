@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Core\Tests\Util\Tty;
 
 use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Pty\Posix\PosixPtySystem;
 use PHPUnit\Framework\TestCase;
 
 final class PosixBackendTest extends TestCase
@@ -111,5 +112,80 @@ final class PosixBackendTest extends TestCase
         // Returns int (0 or SIGNAL_RESIZE=2) when pcntl is available,
         // or false when pcntl_signal_dispatch does not exist.
         $this->assertTrue(\is_int($result) || $result === false);
+    }
+
+    public function testRawModeWithSttyFallbackOnRealPty(): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            $this->markTestSkipped('PosixBackend is POSIX-only.');
+        }
+        if (!is_readable('/dev/ptmx') || !is_writable('/dev/ptmx')) {
+            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
+        }
+        if (!function_exists('posix_isatty')) {
+            $this->markTestSkipped('posix_isatty is not available.');
+        }
+
+        // Check that stty can actually use /dev/fd/ for a real fd
+        $testFd = fopen('php://memory', 'r+');
+        if ($testFd === false) {
+            $this->markTestSkipped('Could not open test stream');
+        }
+        $fd = (int) $testFd;
+        fclose($testFd);
+        $sttyTestPath = '/dev/fd/' . $fd;
+        if (!is_readable($sttyTestPath) && !is_link($sttyTestPath)) {
+            $this->markTestSkipped('/dev/fd/<n> is not accessible in this environment.');
+        }
+
+        $prevTermios = getenv('SUGARCRAFT_TERMIOS');
+        putenv('SUGARCRAFT_TERMIOS=stty');
+        try {
+            $system = new PosixPtySystem();
+            $pair = $system->open();
+            $master = $pair->master();
+            $slavePath = $pair->slave()->path();
+
+            $slave = fopen($slavePath, 'r+');
+            if ($slave === false) {
+                $this->markTestSkipped('Could not open PTY slave path: ' . $slavePath);
+            }
+
+            try {
+                $backend = new PosixBackend($slave);
+                $backend->enableRawMode();
+
+                $child = $pair->slave()->spawn(['/bin/cat']);
+                $master->write("hello\n");
+                $captured = '';
+                $deadline = \microtime(true) + 2.0;
+                while (\microtime(true) < $deadline) {
+                    $chunk = $master->read(4096, 0.1);
+                    if ($chunk === null || $chunk === '') {
+                        \usleep(10_000);
+                        continue;
+                    }
+                    $captured .= $chunk;
+                    if (\str_contains($captured, "hello\n")) {
+                        break;
+                    }
+                }
+                $child->kill(\SIGTERM);
+                $child->wait();
+
+                $this->assertStringContainsString('hello', $captured, 'cat should have received input');
+                $this->assertStringNotContainsString("\r", $captured, 'raw mode should have no CR from echo');
+            } finally {
+                $backend->restore();
+                fclose($slave);
+                $master->close();
+            }
+        } finally {
+            if ($prevTermios === false) {
+                putenv('SUGARCRAFT_TERMIOS');
+            } else {
+                putenv('SUGARCRAFT_TERMIOS=' . $prevTermios);
+            }
+        }
     }
 }

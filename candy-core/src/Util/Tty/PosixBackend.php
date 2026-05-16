@@ -4,18 +4,28 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Tty;
 
+use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Pty\TermiosFactory;
+use SugarCraft\Pty\Contract\Termios;
+
 /**
- * POSIX shell-out TTY backend.
+ * POSIX TTY backend delegating to candy-pty for termios and size queries.
  *
- * Uses `stty` to query and manipulate terminal attributes.  Suitable
- * for Linux, macOS, BSD, and any POSIX-conformant environment that
- * provides `/dev/tty` and the `stty` utility.
+ * Uses TermiosFactory (FFI primary, stty fallback) for raw mode and
+ * SizeIoctl for terminal dimensions.
+ *
+ * Mirrors charmbracelet/bubbletea TtyBackend
  */
 final class PosixBackend implements Backend
 {
     /** @var resource */
     private $stream;
-    private ?string $savedSttyState = null;
+
+    /** @var Termios|null */
+    private ?Termios $termios = null;
+
+    /** @var Termios|null saved original termios for restore() */
+    private ?Termios $saved = null;
 
     /** Saved stty state for restoreLast(). */
     private static ?string $lastSttyState = null;
@@ -57,10 +67,20 @@ final class PosixBackend implements Backend
         if ($cols > 0 && $rows > 0) {
             return ['cols' => $cols, 'rows' => $rows];
         }
-        if ($this->isTty() && self::hasStty()) {
-            $out = @shell_exec('stty size 2>/dev/null');
-            if (is_string($out) && preg_match('/^(\d+)\s+(\d+)/', trim($out), $m) === 1) {
-                return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
+        if ($this->isTty()) {
+            $fd = (int) $this->stream;
+            if ($fd >= 0) {
+                try {
+                    $result = SizeIoctl::query($fd);
+                    return ['cols' => $result['cols'], 'rows' => $result['rows']];
+                } catch (\RuntimeException) {
+                }
+            }
+            if (self::hasStty()) {
+                $out = @shell_exec('stty size 2>/dev/null');
+                if (is_string($out) && preg_match('/^(\d+)\s+(\d+)/', trim($out), $m) === 1) {
+                    return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
+                }
             }
         }
         return ['cols' => 80, 'rows' => 24];
@@ -68,15 +88,16 @@ final class PosixBackend implements Backend
 
     public function enableRawMode(): void
     {
-        if ($this->savedSttyState !== null || !$this->isTty() || !self::hasStty()) {
+        if ($this->termios !== null || !$this->isTty()) {
             return;
         }
-        $saved = @shell_exec('stty -g 2>/dev/null');
-        if (!is_string($saved)) {
+        $fd = (int) $this->stream;
+        if ($fd < 0) {
             return;
         }
-        $this->savedSttyState = trim($saved);
-        @shell_exec('stty -icanon -echo min 1 time 0 2>/dev/null');
+        $this->termios = TermiosFactory::open($fd);
+        $this->saved = $this->termios->current();
+        $this->termios->makeRaw()->apply();
         if (is_resource($this->stream)) {
             @stream_set_blocking($this->stream, false);
         }
@@ -84,14 +105,15 @@ final class PosixBackend implements Backend
 
     public function restore(): void
     {
-        if ($this->savedSttyState === null) {
+        if ($this->saved === null) {
             return;
         }
-        @shell_exec('stty ' . escapeshellarg($this->savedSttyState) . ' 2>/dev/null');
+        $this->saved->apply();
+        $this->termios = null;
+        $this->saved = null;
         if (is_resource($this->stream)) {
             @stream_set_blocking($this->stream, true);
         }
-        $this->savedSttyState = null;
     }
 
     public function __destruct()
