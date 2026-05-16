@@ -22,14 +22,28 @@ use SugarCraft\Pty\PumpOptions;
 final class PosixPump implements PumpContract
 {
     /**
-     * Run the byte pump until the child exits.
+     * Run the byte pump until pump conditions trigger: child exits,
+     * STDOUT hits EPIPE, or STDIN reaches EOF and the post-EOF grace
+     * window elapses.
+     *
+     * Does NOT block on {@see Child::wait()} when the child is still
+     * alive — the caller is responsible for cleanup (kill / PTY close)
+     * and the final wait() call. This keeps the supervisor in
+     * candy-wish::InProcessTransport in control of the kill-on-stdin-
+     * EOF policy: a long-running child (e.g. `/bin/sleep 5`) that
+     * doesn't react to VEOF gets SIGHUP'd by the caller, not blocked
+     * on inside the pump.
      *
      * @param MasterPty            $master
      * @param resource              $stdinStream  PHP stream resource (e.g. STDIN)
      * @param resource              $stdoutStream PHP stream resource (e.g. STDOUT)
      * @param Child|null            $child        null when no child to monitor (stdin→master only)
      * @param PumpOptions           $opts         pump configuration
-     * @return int exit code from the child, or 0 if no child
+     * @return int  the child's exit code if it has already exited
+     *              by the time the pump returns; 0 if there is no
+     *              child to monitor (stdin→master only); -1 if a
+     *              child was supplied but is still running (caller
+     *              must kill + wait()).
      */
     public function run(
         MasterPty $master,
@@ -46,7 +60,13 @@ final class PosixPump implements PumpContract
         $this->pump($master, $stdinStream, $stdoutStream, $child, $opts);
         $this->flushMaster($master, $stdoutStream, $child, $opts);
 
-        return $child !== null ? $child->wait() : 0;
+        if ($child === null) {
+            return 0;
+        }
+        if ($child->exited()) {
+            return $child->exitCode() ?? 0;
+        }
+        return -1;
     }
 
     /**
@@ -157,21 +177,6 @@ final class PosixPump implements PumpContract
         if ($bytes === false || $bytes === '') {
             if (\feof($stdinStream)) {
                 return false;
-            }
-            if ($bytes === '' && \ftell($stdinStream) !== false) {
-                $meta =@\stream_get_meta_data($stdinStream);
-                if (!($meta['seekable'] ?? false)) {
-                    return true;
-                }
-                if (\fseek($stdinStream, 0, SEEK_END) === 0) {
-                    $eof =@\ftell($stdinStream);
-                    \rewind($stdinStream);
-                    $pos =@\ftell($stdinStream);
-                    if ($eof !== false && $pos !== false && $eof === $pos) {
-                        return false;
-                    }
-                }
-                \rewind($stdinStream);
             }
             return true;
         }
