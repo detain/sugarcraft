@@ -31,6 +31,9 @@ final class SttyTermios implements Termios
         $this->savedMode = '';
     }
 
+    /**
+     * @see portable-pty.Termios.Current()
+     */
     public function current(): self
     {
         $out = $this->runStty('-g');
@@ -39,6 +42,9 @@ final class SttyTermios implements Termios
         return $instance;
     }
 
+    /**
+     * @see portable-pty.Termios.MakeRaw()
+     */
     public function makeRaw(): self
     {
         $clone = clone $this;
@@ -46,6 +52,9 @@ final class SttyTermios implements Termios
         return $clone;
     }
 
+    /**
+     * @see portable-pty.Termios.Apply()
+     */
     public function apply(int $when = self::TCSANOW): void
     {
         if (!$this->raw) {
@@ -54,6 +63,9 @@ final class SttyTermios implements Termios
         $this->runStty('raw', '-echo');
     }
 
+    /**
+     * @see portable-pty.Termios.Restore()
+     */
     public function restore(): void
     {
         if ($this->savedMode === '') {
@@ -62,6 +74,9 @@ final class SttyTermios implements Termios
         $this->runStty($this->savedMode);
     }
 
+    /**
+     * @see portable-pty.Termios.IsAty()
+     */
     public function isAtty(): bool
     {
         if (\function_exists('posix_isatty')) {

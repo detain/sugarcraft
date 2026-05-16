@@ -15,6 +15,9 @@ use SugarCraft\Pty\Posix\ChildPollTrait;
  *
  * Mirrors charmbracelet/x/xpty.Cmd's lifecycle hooks (`Wait`,
  * `ProcessState.Exited`).
+ *
+ * @see creack/pty.Cmd
+ * @see portable-pty.Process
  */
 class Child
 {

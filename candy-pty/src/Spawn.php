@@ -42,6 +42,8 @@ final class Spawn
      *                                  doc; opt-in because shim startup
      *                                  costs ~5-50ms and only interactive
      *                                  shells / editors actually need it.
+     * @see creack/pty.Start()
+     * @see portable-pty.SlavePty.Start()
      */
     public static function proc(
         Master $master,

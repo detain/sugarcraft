@@ -44,6 +44,7 @@ final class PosixPump implements PumpContract
      *              child to monitor (stdin→master only); -1 if a
      *              child was supplied but is still running (caller
      *              must kill + wait()).
+     * @see portable-pty.Pump.Run()
      */
     public function run(
         MasterPty $master,
