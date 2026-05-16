@@ -192,6 +192,11 @@ final class PosixMasterPty implements MasterPty
         }
     }
 
+    public function isClosed(): bool
+    {
+        return $this->closed;
+    }
+
     public function fd(): int
     {
         return $this->fd;
