@@ -96,6 +96,17 @@ int   unlockpt(int fd);
 int   ptsname_r(int fd, char *buf, unsigned long buflen);
 int   close(int fd);
 int   ioctl(int fd, unsigned long request, void *arg);
+
+/* termios — struct termios is treated as opaque (≥80 bytes) because
+   layout differs across glibc/musl (60 bytes) and Darwin (72 bytes).
+   Only call cfmakeraw/tcgetattr/tcsetattr; do NOT read individual fields. */
+int   tcgetattr(int fd, void *termios_p);
+int   tcsetattr(int fd, int when, void *termios_p);
+void  cfmakeraw(void *termios_p);
+int   cfgetospeed(void *termios_p);
+int   cfsetospeed(void *termios_p, int speed);
+unsigned int cfgetispeed(void *termios_p);
+int   cfsetispeed(void *termios_p, int speed);
 CPROTO;
     }
 
