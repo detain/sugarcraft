@@ -49,6 +49,6 @@ final class PosixSlavePty implements SlavePty
             $this->master->resize($cols, $rows);
         }
 
-        return new ChildAdapter(Spawn::proc($master, $cmd, $env, $controllingTerminal));
+        return Spawn::proc($master, $cmd, $env, $controllingTerminal);
     }
 }
