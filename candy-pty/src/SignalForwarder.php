@@ -42,6 +42,7 @@ final class SignalForwarder
      * @param callable(): array{cols:int, rows:int} $sizeProvider
      * @return bool true if the handler installed; false on platforms
      *              without pcntl or `SIGWINCH`.
+     * @see creack/pty.InheritSize()
      */
     public static function attachSigwinch(MasterPty $master, callable $sizeProvider, bool $async = true): bool
     {

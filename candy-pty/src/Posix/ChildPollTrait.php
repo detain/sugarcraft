@@ -30,6 +30,9 @@ trait ChildPollTrait
 
     private ?int $exitCode = null;
 
+    /**
+     * @see creack/pty.Cmd.ProcessState
+     */
     public function exited(): bool
     {
         if ($this->exitCode !== null) {
@@ -47,6 +50,9 @@ trait ChildPollTrait
         return false;
     }
 
+    /**
+     * @see creack/pty.Cmd.Wait()
+     */
     public function wait(): int
     {
         if ($this->exitCode !== null) {
@@ -70,11 +76,17 @@ trait ChildPollTrait
         return $this->exitCode;
     }
 
+    /**
+     * @see creack/pty.Cmd.ExitCode()
+     */
     public function exitCode(): ?int
     {
         return $this->exitCode;
     }
 
+    /**
+     * @see creack/pty.Cmd.Pid()
+     */
     public function pid(): int
     {
         return $this->pid;
