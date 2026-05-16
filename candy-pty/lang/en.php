@@ -16,6 +16,8 @@ return [
     'close.failed'             => 'close(master_fd={fd}) failed (rc={rc})',
     'spawn.proc_open_failed'   => 'proc_open() returned false for command: {cmd}',
     'spawn.no_pid'             => 'proc_open() succeeded but proc_get_status() reported no pid for: {cmd}',
+    'process.spawn_failed'     => 'proc_open() returned false while spawning non-PTY process: {cmd}',
+    'process.no_pid'           => 'proc_open() succeeded but proc_get_status() reported no pid for non-PTY spawn: {cmd}',
     'spawn.shim_pcntl_required' => 'controllingTerminal:true requires ext-pcntl; install it or set controllingTerminal:false',
     'spawn.shim_not_found'     => 'pty-shim.php not found or unreadable at {path}',
     'resize.failed'            => 'TIOCSWINSZ ioctl failed on master_fd={fd} (cols={cols} rows={rows} rc={rc})',
