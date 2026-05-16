@@ -25,6 +25,10 @@ use SugarCraft\Wish\Transport\ChildSpawner;
  * migrate to {@see BubbleTea} (which works under HostSshd) or
  * switch the Server to `withTransport(new InProcessTransport())`.
  *
+ * The PTY backend itself is injectable on the transport (see plan
+ * P4.2): `new InProcessTransport($stubPtySystem)` swaps out the
+ * libc surface for tests without any change to this middleware.
+ *
  * Like {@see BubbleTea}, this middleware does NOT call `$next` —
  * it's the end of the chain by design.
  *
