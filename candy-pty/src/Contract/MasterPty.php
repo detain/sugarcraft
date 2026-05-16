@@ -67,4 +67,14 @@ interface MasterPty
      * @see creack/pty.Close()
      */
     public function close(): void;
+
+    /**
+     * True if {@see close()} has already run on this master.
+     *
+     * Surfaced on the contract (not just implementations) so signal
+     * handlers and supervisors can guard `resize()` / `write()` calls
+     * against a torn-down session without forcing a concrete-class
+     * dependency.
+     */
+    public function isClosed(): bool;
 }

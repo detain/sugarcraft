@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Transport;
 
+use SugarCraft\Pty\Contract\MasterPty;
+use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Libc;
 use SugarCraft\Pty\Posix\PosixPump;
-use SugarCraft\Pty\PumpOptions;
-use SugarCraft\Pty\Pty;
 use SugarCraft\Pty\PtyException;
+use SugarCraft\Pty\PtySystemFactory;
+use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\SizeIoctl;
 use SugarCraft\Wish\Lang;
@@ -17,10 +19,11 @@ use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport;
 
 /**
- * Default transport — allocates a `candy-pty` master/slave pair,
- * spawns the user's cmd as a subprocess with
- * `controllingTerminal: true`, and pumps bytes between the
- * supervisor's STDIN/STDOUT and the PTY master.
+ * Default transport — allocates a `candy-pty` master/slave pair via
+ * the injected (or factory-resolved) {@see PtySystem}, spawns the
+ * user's cmd as a subprocess with `controllingTerminal: true`, and
+ * pumps bytes between the supervisor's STDIN/STDOUT and the PTY
+ * master via {@see PosixPump}.
  *
  * The middleware stack walks like {@see HostSshdTransport} does
  * (Logger, RateLimit, Auth, etc. work unchanged). Spawning a child
@@ -28,14 +31,17 @@ use SugarCraft\Wish\Transport;
  * back into {@see runChild()} with the cmd produced from the
  * Session.
  *
- * The pump loop itself lives in {@see PosixPump} (candy-pty); this
- * class owns lifecycle (open PTY → spawn child → attach SIGWINCH →
- * pump → tear down) and the Session-driven cols/rows fallback.
- *
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P2.5)
+ * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P2.5, P4.2)
  */
 final class InProcessTransport implements Transport, ChildSpawner
 {
+    /**
+     * PTY backend used by `runChild()`. Injected for testability — a
+     * stub can satisfy `PtySystem` without touching libc / FFI.
+     * Defaults to {@see PtySystemFactory::default()} on first use.
+     */
+    private readonly PtySystem $system;
+
     /**
      * Override the size provider used by SIGWINCH forwarding.
      *
@@ -60,14 +66,17 @@ final class InProcessTransport implements Transport, ChildSpawner
     private $keepaliveCallback = null;
 
     /**
-     * The active PTY for the current session. Stored here so that
-     * the keepalive callback (registered by middleware via
-     * setKeepaliveCallback at stack-walk time) can access the PTY
-     * when it fires inside the pump loop.
-     *
-     * @var Pty|null
+     * The active master for the current session. Stored here so the
+     * keepalive callback (registered by middleware via
+     * {@see setKeepaliveCallback} at stack-walk time) can write
+     * heartbeat bytes when it fires inside the pump loop.
      */
-    private ?Pty $pty = null;
+    private ?MasterPty $master = null;
+
+    public function __construct(?PtySystem $system = null)
+    {
+        $this->system = $system ?? PtySystemFactory::default();
+    }
 
     /**
      * Returns a clone of this transport with the given size
@@ -100,19 +109,18 @@ final class InProcessTransport implements Transport, ChildSpawner
     }
 
     /**
-     * Returns the active PTY for the current session.
-     *
-     * This is used by keepalive callbacks to write heartbeat bytes.
-     * Only valid while a session is actively being pumped.
+     * Returns the active master PTY for the current session. Valid
+     * only while a session is actively being pumped — callers must
+     * not store the reference across pump-loop boundaries.
      *
      * @throws \RuntimeException if called outside of pump loop
      */
-    public function getPty(): Pty
+    public function getPty(): MasterPty
     {
-        if ($this->pty === null) {
+        if ($this->master === null) {
             throw new \RuntimeException('getPty() called outside of active pump loop');
         }
-        return $this->pty;
+        return $this->master;
     }
 
     public function run(Session $session, array $stack): void
@@ -136,12 +144,6 @@ final class InProcessTransport implements Transport, ChildSpawner
      * master signals SIGHUP to the child via lost-ctty so children
      * that don't react to STDIN EOF (sleep, daemons) still
      * terminate when the SSH client disconnects.
-     *
-     * `$stdin` / `$stdout` are accepted as resources for testability
-     * — a `proc_open` invocation's pipe halves let unit tests drive
-     * the pump loop without a real SSH connection. Production
-     * callers pass `null` and inherit `STDIN` / `STDOUT` (the slave
-     * side of sshd's PTY in a ForceCommand deployment).
      *
      * @param list<string>              $cmd  argv passed to candy-pty
      * @param array<string,string>|null $env
@@ -173,15 +175,17 @@ final class InProcessTransport implements Transport, ChildSpawner
         $cols = $session->cols > 0 ? $session->cols : 80;
         $rows = $session->rows > 0 ? $session->rows : 24;
 
-        $pty = Pty::open();
+        $pair = $this->system->open($cols, $rows);
+        $master = $pair->master();
+        $slave = $pair->slave();
         $child = null;
         $pumpResult = -1;
 
         try {
-            $pty->setBlocking(false);
+            \stream_set_blocking($master->stream(), false);
             @\stream_set_blocking($stdin, false);
 
-            $child = $pty->spawn(
+            $child = $slave->spawn(
                 $cmd,
                 $env,
                 $cols,
@@ -192,23 +196,23 @@ final class InProcessTransport implements Transport, ChildSpawner
             // SIGWINCH forwarding — when sshd resizes the supervisor's
             // PTY, the kernel sends SIGWINCH to us; the handler queries
             // the new dimensions via the size provider and propagates
-            // them into the inner candy-pty via $pty->resize().
+            // them into the inner candy-pty via $master->resize().
             $sigwinchAttached = false;
             if (SignalForwarder::pcntlReady() && \defined('SIGWINCH')) {
                 $provider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
-                $sigwinchAttached = SignalForwarder::attachSigwinch($pty, $provider);
+                $sigwinchAttached = SignalForwarder::attachSigwinch($master, $provider);
             }
 
             try {
-                $this->pty = $pty;
+                $this->master = $master;
                 $keepalive = $this->keepaliveCallback !== null
                     ? \Closure::fromCallable($this->keepaliveCallback)
                     : null;
                 $opts = new PumpOptions(keepalive: $keepalive);
 
-                $pumpResult = (new PosixPump())->run($pty, $stdin, $stdout, $child, $opts);
+                $pumpResult = (new PosixPump())->run($master, $stdin, $stdout, $child, $opts);
             } finally {
-                $this->pty = null;
+                $this->master = null;
                 if ($sigwinchAttached && \defined('SIGWINCH')) {
                     SignalForwarder::reset(\SIGWINCH);
                 }
@@ -221,7 +225,7 @@ final class InProcessTransport implements Transport, ChildSpawner
             // after a brief grace if still alive.
             if ($child !== null && !$child->exited()) {
                 if (\function_exists('posix_kill')) {
-                    @\posix_kill($child->pid, \SIGHUP);
+                    @\posix_kill($child->pid(), \SIGHUP);
                     $killDeadline = \microtime(true) + 0.2;
                     while (\microtime(true) < $killDeadline) {
                         if ($child->exited()) {
@@ -230,20 +234,15 @@ final class InProcessTransport implements Transport, ChildSpawner
                         \usleep(20_000);
                     }
                     if (!$child->exited()) {
-                        @\posix_kill($child->pid, \SIGKILL);
+                        @\posix_kill($child->pid(), \SIGKILL);
                     }
                 }
             }
-            if (!$pty->isClosed()) {
-                $pty->close();
+            if (!$master->isClosed()) {
+                $master->close();
             }
         }
 
-        // PosixPump returns -1 when the child was still alive at pump
-        // exit; reap it here (non-blocking now that the outer finally
-        // killed it + closed the PTY). When the pump observed the
-        // child's natural exit, the cached exit code is returned
-        // directly so we don't double-reap.
         if ($pumpResult >= 0) {
             return $pumpResult;
         }
