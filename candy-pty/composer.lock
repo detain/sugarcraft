@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5e25eb4805779bed2f7fc9715ae9f547",
+    "content-hash": "78c573b194f025509a3fb34065091ac1",
     "packages": [
         {
             "name": "react/event-loop",
@@ -1845,6 +1845,125 @@
             "time": "2023-02-07T11:34:05+00:00"
         },
         {
+            "name": "sugarcraft/candy-sprinkles",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-sprinkles",
+                "reference": "31c389ced5c7dfd799a383566713bf7fb1497880"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Sprinkles\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Sprinkles\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/lipgloss — declarative terminal styling and layout.",
+            "homepage": "https://github.com/sugarcraft/candy-sprinkles",
+            "keywords": [
+                "ansi",
+                "borders",
+                "cli",
+                "layout",
+                "lipgloss",
+                "list",
+                "styling",
+                "sugarcraft",
+                "tables",
+                "terminal",
+                "tree",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-sprinkles/issues",
+                "source": "https://github.com/sugarcraft/candy-sprinkles",
+                "docs": "https://sugarcraft.github.io/lib/candy-sprinkles.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-vt",
+            "version": "dev-ai/candy-pty-vim-resize-buffer-tests",
+            "dist": {
+                "type": "path",
+                "url": "../candy-vt",
+                "reference": "abcb6d8482e33ec33237ee966450e1b94d4df795"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Vt\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Vt\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "In-memory virtual terminal emulator — parses ANSI byte stream into a cell grid.",
+            "homepage": "https://github.com/sugarcraft/candy-vt",
+            "keywords": [
+                "ansi",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt100",
+                "xterm"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-vt/issues",
+                "source": "https://github.com/sugarcraft/candy-vt",
+                "docs": "https://sugarcraft.github.io/lib/candy-vt.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "theseer/tokenizer",
             "version": "1.3.1",
             "source": {
@@ -1898,12 +2017,13 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
-        "sugarcraft/candy-core": 20
+        "sugarcraft/candy-core": 20,
+        "sugarcraft/candy-vt": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.2",
+        "php": "^8.3",
         "ext-ffi": "*"
     },
     "platform-dev": {},
