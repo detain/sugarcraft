@@ -128,6 +128,32 @@ Routes the spawn through `bin/pty-shim.php`, which does
 ms of shim startup per spawn — opt-in because non-interactive
 spawns (`echo`, `tput`, `bash -c '…'`) don't benefit.
 
+## Architecture
+
+The library is organised in two layers:
+
+### Contract interfaces (`src/Contract/`) — pure signatures, no logic
+
+| Contract | Upstream mirror | Upcoming POSIX implementation |
+|---|---|---|
+| `PtySystem` | `portable-pty.PtySystem` | `PosixPtySystem` |
+| `PtyPair` | `portable-pty.PtyPair` | `PosixPtyPair` |
+| `MasterPty` | `creack/pty.Pty` / `portable-pty.MasterPTY` | `PosixMasterPty` |
+| `SlavePty` | `creack/pty.Pty` / `portable-pty.SlavePty` | `PosixSlavePty` |
+| `Child` | `creack/pty.Cmd` / `portable-pty.Process` | `PosixChild` |
+| `Process` | `creack/pty.Cmd` (non-PTY spawn) | `PosixProcess` |
+| `Termios` | `portable-pty.Termios` | `PosixTermios` / `SttyTermios` |
+| `Pump` | `candy-wish.InProcessTransport` | `PosixPump` |
+
+### POSIX implementation (`src/Posix/`) — implementation layer
+
+The `Posix*` classes implement the contracts above using Linux/macOS syscalls:
+FFI into libc for `posix_openpt/grantpt/unlockpt/ptsname_r`, `proc_open`
+for child spawning, `ioctl(TIOCSWINSZ/TIOCGWINSZ)` for resize, and
+`FFI::cdef()` tcgetattr/tcsetattr/cfmakeraw for termios. The factory
+`TermiosFactory` selects `PosixTermios` (FFI) when `ext-ffi` is available
+and falls back to `SttyTermios` (shell-out `stty`) otherwise.
+
 ## Known limitations
 
 - **Linux + macOS only.** Windows ConPTY is a separate port.
