@@ -66,6 +66,9 @@ final class Pty implements MasterPty
      * Open a fresh PTY pair. Steps mirror `posix_openpt + grantpt +
      * unlockpt + ptsname_r`; any failure throws {@see PtyException}
      * after closing the master fd if step 1 succeeded.
+     *
+     * @see creack/pty.Open()
+     * @see portable-pty.PtySystem.open()
      */
     public static function open(): self
     {
@@ -112,6 +115,8 @@ final class Pty implements MasterPty
      *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env
+     * @see creack/pty.Start()
+     * @see portable-pty.SlavePty.Start()
      */
     public function spawn(
         array $cmd,
@@ -131,6 +136,9 @@ final class Pty implements MasterPty
      * process group — currently NOT the case (see TIOCSCTTY caveat
      * in `CALIBER_LEARNINGS.md`), so the new size becomes visible
      * only when the child queries it via `TIOCGWINSZ` itself.
+     *
+     * @see creack/pty.Setsize()
+     * @see portable-pty.MasterPty.Resize()
      */
     public function resize(int $cols, int $rows): void
     {
@@ -153,6 +161,7 @@ final class Pty implements MasterPty
      * Read the current winsize via `TIOCGWINSZ`.
      *
      * @return array{cols:int, rows:int, xpix:int, ypix:int}
+     * @see creack/pty.GetsizeFull()
      */
     public function size(): array
     {
@@ -177,6 +186,7 @@ final class Pty implements MasterPty
      * fd, so prefer {@see close()} to unwind both at once.
      *
      * @return resource
+     * @see creack/pty.Pty.Fd()
      */
     public function stream(): mixed
     {
@@ -197,6 +207,8 @@ final class Pty implements MasterPty
      * Write `$bytes` to the master end. Returns the number of bytes
      * actually written (may be less than `strlen($bytes)` in
      * non-blocking mode under back-pressure).
+     *
+     * @see creack/pty.Write()
      */
     public function write(string $bytes): int
     {
@@ -227,6 +239,9 @@ final class Pty implements MasterPty
      * `$timeout` is in fractional seconds (`0.05` = 50 ms). It uses
      * `stream_select()` to wait for the master fd to become readable;
      * if the timeout elapses with nothing pending, returns `null`.
+     *
+     * @see creack/pty.Read()
+     * @see portable-pty.MasterPty.Read()
      */
     public function read(int $len = 8192, ?float $timeout = null): ?string
     {
@@ -284,6 +299,8 @@ final class Pty implements MasterPty
 
     /**
      * Toggle blocking / non-blocking mode on the master fd.
+     *
+     * @see creack/pty.Pty.Fd()
      */
     public function setBlocking(bool $blocking): void
     {
@@ -308,6 +325,7 @@ final class Pty implements MasterPty
      *
      * @throws PtyException if the underlying close fails on the first
      *                      call.
+     * @see creack/pty.Close()
      */
     public function close(): void
     {
