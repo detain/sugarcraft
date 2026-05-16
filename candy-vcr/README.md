@@ -163,6 +163,37 @@ vendor/bin/candy-vcr stats   session.cas               # show cassette statistic
 
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
 
+### Hook system (L4)
+
+Hooks intercept and transform events during recording, enabling sanitization,
+metadata injection, and custom logging:
+
+```php
+use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Hook\SanitizingHook;
+use SugarCraft\Vcr\Hook\MetadataHook;
+
+$recorder = Recorder::open('/tmp/session.cas');
+
+// Remove sensitive keys from all events
+$recorder->withHook(new SanitizingHook(
+    removeKeys: ['API_KEY', 'SECRET_TOKEN'],
+));
+
+// Add CI metadata to the first output event
+$recorder->withHook(new MetadataHook([
+    'CI_RUN_ID' => getenv('GITHUB_RUN_ID'),
+    'test_name' => 'MyTest::testViewOutput',
+]));
+
+(new Program($model))->withRecorder($recorder)->run();
+```
+
+**Available hooks:**
+- `SanitizingHook` — removes keys or replaces patterns via regex
+- `MetadataHook` — injects metadata into the first output event
+- Custom hooks implement `SugarCraft\Vcr\Hook\Hook`
+
 ### Cassette migration
 
 Cassette format versions evolve over time. The `migrate` command upgrades cassettes automatically:
