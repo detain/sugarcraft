@@ -254,7 +254,55 @@ Only if P0–P5 land on time:
 - **Resource pooling** — `PtyPool` for SSH server scenarios (candy-wish) that spawn many short-lived sessions; reuse libc FFI handles across opens. Profile first; only build if measurable.
 - **Pty multiplexing helper** — `MultiPump` that supervises N pumps for split-pane / tmux-like scenarios. Driven by candy-zone if it needs it.
 - **Higher-level Expect-style API** — `Expect::on($pty)->send("login: ")->expect("password:", timeout: 5)->...` for scripting / test fixtures. Modeled on `pexpect` (Python).
-- **`candy-vcr` integration** — once `PosixPump` exists, wire vcr's `Recorder` interface in as a tee in the pump itself so recording is "free" for any pump-based consumer.
+- **`candy-vcr` Recorder tap in `PosixPump`** — add a `?Recorder $recorder = null` field to `PumpOptions`. When set, the pump tees stdin → `recordInputBytes()` and master-read → `recordOutput()` directly, and feeds `WindowSizeMsg` resizes through `recordResize()`. Makes byte-level cassette capture "free" for any pump-based consumer (candy-wish SSH sessions, the Shirley CLI below, REPL fixtures). Acceptance: existing `candy-vcr` round-trip tests pass; new `PumpRecorderTapTest` asserts the tap captures a `bash` session and `Player::play()` reproduces it.
+
+### P6.5 — Shirley-style PTY recorder CLI (stretch, week 5–6)
+
+**Goal:** standalone `candy-vcr record -- <cmd>` CLI that records command execution at the PTY level, equivalent to `asciinema rec` or the hypothetical charmbracelet/shirley described in `docs/research/libraries/candy-vcr-research.md:110-127`. The PTY consolidation makes this nearly free — it's the canonical first external user of the new `PosixPump` + Recorder-tap combination.
+
+The current `candy-vcr` only records sessions attached as a library to a `SugarCraft\Core\Program` (API-mode capture). A Shirley-style recorder closes the gap so users can record **any** terminal program — `bash`, `vim`, `htop`, `python -i`, an external CLI under test — without that program needing to know about SugarCraft.
+
+**Architecture** (lives in `candy-vcr`, not `candy-pty`):
+
+- `SugarCraft\Vcr\Cli\RecordCommand.php` (new) — Symfony Console command. Argv: `candy-vcr record [--output session.cas] [--shell] [--idle-trim] -- <cmd> [args...]`.
+- On invocation:
+  1. Resolve `PtySystem` via `PtySystemFactory::default()`.
+  2. Query host TTY size via `SizeIoctl::query(STDIN)`; default 80×24 if not a tty.
+  3. `$pair = $pty->open($cols, $rows)`.
+  4. `$child = $pair->slave()->spawn($cmd, $env, controllingTerminal: true)` — controlling-terminal so Ctrl+C reaches the recorded program, not the recorder.
+  5. Save host termios via `TermiosFactory::open(STDIN)`, switch host stdin to raw mode (transparent passthrough).
+  6. Open a streaming `Recorder` against the output cassette path; write the header (cols, rows, env-snapshot if `--env` flag).
+  7. Attach `SignalForwarder::attachSigwinch()` to propagate host resizes into the master.
+  8. Build `PumpOptions(recorder: $recorder, onSigwinch: …)` and run `PosixPump::run($pair->master(), STDIN, STDOUT, $child, $opts)`.
+  9. On child exit: restore host termios, flush + close recorder, exit with child's exit code.
+- `--shell` shorthand: if no command given, spawns `$SHELL` (or `/bin/sh`) with `-l`.
+- `--idle-trim <seconds>`: if a gap >N seconds appears between events, the pump emits a synthetic shortened timestamp delta. Modeled on `asciinema --idle-time-limit` (research doc §4.1).
+- `--env`: capture allowed `ENV` keys (allowlist with secret-name regex filter) into the cassette header for deterministic replay.
+- Cassette format: existing JSONL — no new schema, just exercised more thoroughly than the API-mode recorder hits today.
+
+**Why this fits the PTY plan:**
+
+- Validates `PosixPump`'s Recorder tap in a real user-facing path (not just unit tests).
+- Validates `TermiosFactory` host raw-mode switching with an interactive shell — the highest-stakes termios consumer.
+- Validates `SignalForwarder` across two boundaries (host SIGWINCH → master, child Ctrl+C → controlling tty).
+- Validates the deferred-Windows decision: this is the feature that would most benefit from ConPTY; if it ships smoothly on Linux/macOS, the demand for Windows is concrete and prioritization for v2 has evidence.
+
+**Acceptance:**
+
+- `candy-vcr record --output /tmp/bash.cas -- bash -c 'echo hello; sleep 0.2; echo world'` produces a cassette with `output` events totalling "hello\nworld\n" (after CR/LF normalization) and a `quit` event with exit 0.
+- `candy-vcr record --output /tmp/vim.cas -- vim /tmp/scratch.txt` then `<Esc>:wq<CR>` produces a cassette that replays into a `candy-vt` Terminal showing an empty buffer post-replay.
+- `candy-vcr replay /tmp/bash.cas` round-trips on the same host (timing tolerance applied).
+- `candy-vcr stats /tmp/bash.cas` (from P6 stats CLI in `candy-vcr-research.md` H1) reports plausible event counts.
+- Recording overhead measured at ≤2% wall-clock vs running the same command without `record` (on `time bash -c 'seq 100000'`).
+- Documented in `candy-vcr/README.md` with the asciinema comparison from research doc §4.1.
+
+**Scope discipline:**
+
+- Format conversion to/from `.cast` (asciinema) — explicitly **out of scope** for P6.5; tracked as candy-vcr research §13 item #L2.
+- Hook system, custom matchers, gzip compression — out of scope; tracked separately in candy-vcr research §13.
+- SVG rendering output (term-transcript style) — out of scope.
+
+**Dependencies on the rest of the PTY plan:** P0–P5 must land first. The Recorder tap in `PumpOptions` (above P6 bullet) is the precondition. If P6.5 is started before that bullet, both expand into a single ~3-day effort.
 
 ---
 
@@ -292,6 +340,11 @@ To create:
 - `candy-pty/tests/Posix/PosixPumpTest.php`
 - `candy-pty/tests/Posix/PosixProcessTest.php`
 - `.github/workflows/pty-matrix.yml`
+- `candy-pty/tests/Posix/PumpRecorderTapTest.php` *(P6 — pump-side Recorder tap)*
+- `candy-vcr/src/Cli/RecordCommand.php` *(P6.5 — Shirley-style CLI)*
+- `candy-vcr/tests/Cli/RecordCommandTest.php` *(P6.5)*
+- `candy-vcr/tests/Integration/ShirleyBashTest.php` *(P6.5 — record `bash -c '...'`, replay, assert)*
+- `candy-vcr/tests/Integration/ShirleyVimTest.php` *(P6.5 — record `vim`, screen-assert via candy-vt)*
 
 To modify:
 
@@ -301,6 +354,10 @@ To modify:
 - `candy-pty/src/Libc.php` — extend cdef with termios surface.
 - `candy-pty/src/SizeIoctl.php` — add `query($fd): array` helper (TIOCGWINSZ readback).
 - `candy-pty/composer.json` — bump description, keywords, add `examples/` to autoload-dev.
+- `candy-vcr/src/Cli/Application.php` — register `RecordCommand` alongside existing `inspect`/`replay`/`diff` (P6.5).
+- `candy-vcr/src/Recorder.php` — verify `recordInputBytes()` / `recordOutput()` / `recordResize()` signatures match what `PosixPump`'s tap will call; widen if needed without breaking existing callers (P6).
+- `candy-vcr/composer.json` — add `"sugarcraft/candy-pty": "@dev"` + path repo (P6.5; was already needed transitively, now direct).
+- `candy-vcr/README.md` — document `candy-vcr record` and compare to `asciinema rec` (P6.5).
 - `candy-pty/README.md` — add feature parity table + concept link.
 - `candy-pty/CALIBER_LEARNINGS.md` — log new patterns as they emerge.
 - `candy-core/src/Util/Tty/PosixBackend.php` — delegate to `candy-pty::Termios` + `SizeIoctl`.
@@ -383,6 +440,8 @@ Parity check (manual, end of P5):
 5. **macOS CI runner cost.** macOS GitHub runners are 10x cost of Linux. P5's integration matrix should be limited to the necessary tests on macOS — not the full suite. Use `markTestSkipped` on Linux-only edge cases.
 6. **Composer path-repo closure.** Adding candy-pty as a dependency of candy-core means every lib that depends on candy-core must also list candy-pty in its `repositories[]`. Mechanically tedious but the CLAUDE.md "Gotchas" section explicitly warns about this. Use `scripts/affected-libs.php` output to enumerate before merge.
 7. **`candy-shell::RealProcess` deletion vs alias.** If it's `internal` and zero external callers, prefer deletion. Grep `RealProcess` across the monorepo before P3 to decide.
+8. **Shirley CLI and host terminal hygiene.** The recorder switches the host's stdin into raw mode while a child program runs — if it crashes mid-record, the user is left in a broken terminal. Mitigation: register a `register_shutdown_function` + `pcntl_signal(SIGTERM)` handler that always calls `TermiosFactory::open(STDIN)->saved->apply()`. Test by killing the recorder with SIGKILL during a `vim` session and verifying the host shell is usable after.
+9. **Idle-trim timestamp semantics.** `--idle-trim` rewrites event timestamps, which breaks naive byte-exact replay if a downstream consumer expects original timing. Mitigation: store both `t` (trimmed) and `tRaw` (original) on the event when `--idle-trim` was active; `Player` honors `tRaw` if present and `--no-trim` is passed. Document the trade-off in `candy-vcr/README.md`.
 
 ---
 
