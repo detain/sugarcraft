@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Pty\Posix\PosixChild;
+
 /**
+ * @deprecated since v0.x; use PosixSlavePty::spawn() or inject
+ *              SugarCraft\Pty\Contract\SlavePty via PtySystemFactory.
+ *              Will be removed in v2.0.
+ *
  * Wires `proc_open()` to a slave PTY path so the spawned child's
  * stdin / stdout / stderr all read from / write to the same pseudo-
  * terminal device.
@@ -27,6 +33,9 @@ final class Spawn
     private const SHIM_RELATIVE = '/../bin/pty-shim.php';
 
     /**
+     * @deprecated since v0.x; use PosixSlavePty::spawn() instead.
+     *              Will be removed in v2.0.
+     *
      * @param list<string>              $cmd
      * @param array<string,string>|null $env  null inherits parent env
      * @param bool                      $controllingTerminal  see class
@@ -79,7 +88,7 @@ final class Spawn
             ]));
         }
 
-        return new Child($pid, $process);
+        return new PosixChild($pid, $process);
     }
 
     /**

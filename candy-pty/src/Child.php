@@ -7,15 +7,14 @@ namespace SugarCraft\Pty;
 /**
  * Handle to a child process spawned through {@see Pty::spawn()}.
  *
- * Wraps the {@see proc_open()} resource so {@see exited()} can poll
- * non-blockingly via `proc_get_status()` and {@see wait()} can block
- * until termination. The exit code is captured the first time it
- * becomes available and cached — subsequent calls are idempotent.
+ * @deprecated since v0.x; use SugarCraft\Pty\Posix\PosixChild directly.
+ *             Will be removed in v2.0. This class is a backward-
+ *             compatible alias for PosixChild.
  *
  * Mirrors charmbracelet/x/xpty.Cmd's lifecycle hooks (`Wait`,
  * `ProcessState.Exited`).
  */
-final class Child
+class Child
 {
     /** @var resource|null */
     private $process;
@@ -35,10 +34,6 @@ final class Child
         $this->process = $process;
     }
 
-    /**
-     * Non-blocking check. Returns true once the kernel has reported
-     * termination at least once (the exit code is cached at that point).
-     */
     public function exited(): bool
     {
         if ($this->exitCode !== null) {
@@ -56,15 +51,6 @@ final class Child
         return false;
     }
 
-    /**
-     * Block until the child exits and return its exit code.
-     *
-     * Polls `proc_get_status()` at 10 ms intervals because PHP does
-     * not expose a blocking-`waitpid` wrapper — `proc_close()` does
-     * block, but it returns -1 when the kernel has already reaped
-     * the child via a prior `proc_get_status()` call, costing us the
-     * actual exit code. Polling first then closing keeps the value.
-     */
     public function wait(): int
     {
         if ($this->exitCode !== null) {
@@ -88,30 +74,21 @@ final class Child
         return $this->exitCode;
     }
 
-    /**
-     * Cached exit code or `null` if the child is still running.
-     */
     public function exitCode(): ?int
     {
         return $this->exitCode;
     }
 
-    /**
-     * Best-effort safety-net reap — runs only if the caller forgot to
-     * call {@see wait()} and the proc resource is still live. Never
-     * blocks: a still-running child stays running and gets reaped by
-     * the kernel when this PHP process exits. Prevents zombie
-     * accumulation on long-lived parents that spawn children eagerly.
-     */
+    public function pid(): int
+    {
+        return $this->pid;
+    }
+
     public function __destruct()
     {
         if (!\is_resource($this->process)) {
             return;
         }
-        // proc_close blocks if the process is still running, which is
-        // the wrong behaviour during PHP shutdown. Probe once
-        // non-blockingly via proc_get_status — if running, leave the
-        // resource alone and let the kernel clean up at exit.
         $status = @\proc_get_status($this->process);
         if (\is_array($status) && ($status['running'] ?? true) === false) {
             @\proc_close($this->process);
