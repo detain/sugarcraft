@@ -3,57 +3,60 @@
 declare(strict_types=1);
 
 /**
- * spawn-bash — Run a bash one-liner inside a PTY and stream its
- * output back through the master end.
+ * spawn-bash — Run a bash one-liner inside a PTY using the DI-friendly
+ * {@see \SugarCraft\Pty\PtySystemFactory} entry point.
  *
- * Demonstrates the full spawn → wait → drain cycle:
- *  1. Open a 100×30 PTY pair.
- *  2. Spawn `bash -c '<one-liner>'` with stdio wired to the slave.
- *  3. Drain the master end in non-blocking mode while the child is
- *     still running, accumulating into a buffer.
- *  4. Reap the child via wait() and print the buffer + exit code.
+ * The simplest end-to-end slice: open a PTY pair, spawn the child
+ * against the slave, drain the master, reap, print.
  *
- * Caveat — TIOCSCTTY is NOT yet wired (tracked for the candy-wish
- * in-process upgrade), so do NOT use this pattern with INTERACTIVE
- * commands like `bash -i` or `vim` that depend on Ctrl+C reaching
- * the child via SIGINT — it won't. Non-interactive `bash -c '...'`
- * pipelines work cleanly.
+ *   1. PtySystemFactory::default() → PosixPtySystem on Linux/macOS
+ *      (UnsupportedPlatformException on Windows; v2 ConPTY work).
+ *   2. $system->open($cols, $rows) → PtyPair with master/slave.
+ *   3. $pair->slave()->spawn(...) with controllingTerminal:true so
+ *      Ctrl+C in interactive children reaches the right pgroup.
+ *   4. Drain master in non-blocking mode while child runs.
+ *   5. child->wait() + master->close().
  *
  * Usage:
  *   php examples/spawn-bash.php
  *   php examples/spawn-bash.php 'echo $TERM; uname -s; date'
+ *
+ * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.6)
  */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\PtySystemFactory;
 
-$cmd = $argv[1] ?? 'echo "TERM=$TERM"; uname -s; date';
+$cmd = $argv[1] ?? 'echo "TERM=$TERM"; uname -s';
 
-$pty = Pty::open();
+$system = PtySystemFactory::default();
+$pair = $system->open(80, 24);
+$master = $pair->master();
+$slave = $pair->slave();
+
 try {
-    echo "slave path : {$pty->master->slavePath}\n";
+    echo "slave path : {$slave->path()}\n";
     echo "spawn      : bash -c '{$cmd}'\n";
-    echo "size       : 100x30\n\n";
+    echo "size       : 80x24\n\n";
 
-    $child = $pty->spawn(
+    $child = $slave->spawn(
         ['/bin/bash', '-c', $cmd],
         ['TERM' => 'xterm-256color', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
-        100,
-        30,
+        80,
+        24,
+        controllingTerminal: true,
     );
 
-    $pty->setBlocking(false);
+    stream_set_blocking($master->stream(), false);
     $captured = '';
     $deadline = microtime(true) + 5.0;
 
     while (microtime(true) < $deadline) {
-        $chunk = $pty->read(4096, 0.05);
+        $chunk = $master->read(4096, 0.05);
         if ($chunk === null) {
-            // Timeout — check if child has exited and we should drain
-            // any final bytes before bailing.
             if ($child->exited()) {
-                $tail = $pty->read(8192);
+                $tail = $master->read(8192);
                 if ($tail !== null && $tail !== '') {
                     $captured .= $tail;
                 }
@@ -62,13 +65,16 @@ try {
             continue;
         }
         if ($chunk === '') {
-            break; // EOF
+            break;
         }
         $captured .= $chunk;
     }
 
     $exit = $child->wait();
     echo "── output (exit {$exit}) ──\n{$captured}";
+    exit($exit);
 } finally {
-    $pty->close();
+    if (!$master->isClosed()) {
+        $master->close();
+    }
 }
