@@ -126,7 +126,7 @@ already polls `pcntl_signal_dispatch()` itself.
 
 ## Examples
 
-- [`examples/spawn-bash.php`](examples/spawn-bash.php) — Run a non-interactive bash one-liner inside a PTY and stream the output back through the master end.
+- [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::default()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
 - [`examples/pump-output.php`](examples/pump-output.php) — Long-running counter; demonstrates non-blocking read with timeout, line-by-line pumping.
 - [`examples/resize-forwarding.php`](examples/resize-forwarding.php) — Wire `SignalForwarder` to deliver host SIGWINCH into the child PTY's TIOCSWINSZ; observe the child's `tput cols / lines` flip mid-stream.
 
