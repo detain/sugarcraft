@@ -65,6 +65,31 @@ echo $out;
 | `$child->wait(): int` | Blocks via 10ms `proc_get_status` poll, returns exit code. Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
 
+## Non-PTY processes
+
+For child processes that don't need a PTY (e.g. a sub-step in a
+spinner overlay), `PosixProcess` shares the same lifecycle
+(`pid/exited/wait/exitCode/kill`) but binds stdin to `/dev/null`
+and lets you capture stdout/stderr into in-memory buffers:
+
+```php
+use SugarCraft\Pty\Posix\PosixProcess;
+
+$proc = PosixProcess::spawn(
+    ['/bin/sh', '-c', 'echo out; echo err >&2'],
+    env: null,
+    captureStdout: true,
+    captureStderr: true,
+);
+$exit = $proc->wait();
+echo $proc->stdoutBytes();   // "out\n"
+echo $proc->stderrBytes();   // "err\n"
+```
+
+When a capture flag is `false`, the corresponding stream is
+inherited from the parent's `STDOUT` / `STDERR` and the
+matching `*Bytes()` accessor returns `''`.
+
 ## Resize forwarding
 
 ```php
