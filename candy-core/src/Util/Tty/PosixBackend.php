@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util\Tty;
 
+use SugarCraft\Pty\Contract\Termios;
 use SugarCraft\Pty\SizeIoctl;
 use SugarCraft\Pty\TermiosFactory;
-use SugarCraft\Pty\Contract\Termios;
 
 /**
  * POSIX TTY backend delegating to candy-pty for termios and size queries.
@@ -27,13 +27,27 @@ final class PosixBackend implements Backend
     /** @var Termios|null saved original termios for restore() */
     private ?Termios $saved = null;
 
+    /**
+     * Injected Termios override (set when a caller wired one via
+     * {@see \SugarCraft\Core\ProgramOptions::$termios}). When non-null
+     * {@see enableRawMode()} uses it directly instead of resolving via
+     * {@see TermiosFactory}; the host TTY is never touched. Test seam.
+     */
+    private readonly ?Termios $injectedTermios;
+
     /** Saved stty state for restoreLast(). */
     private static ?string $lastSttyState = null;
 
-    /** @param resource|null $stream defaults to STDIN */
-    public function __construct($stream = null)
+    /**
+     * @param resource|null $stream  defaults to STDIN
+     * @param Termios|null  $termios optional pre-built Termios; when
+     *                               null, {@see enableRawMode()} resolves
+     *                               via {@see TermiosFactory}.
+     */
+    public function __construct($stream = null, ?Termios $termios = null)
     {
         $this->stream = $stream ?? STDIN;
+        $this->injectedTermios = $termios;
     }
 
     public function isTty(): bool
@@ -88,14 +102,23 @@ final class PosixBackend implements Backend
 
     public function enableRawMode(): void
     {
-        if ($this->termios !== null || !$this->isTty()) {
+        if ($this->termios !== null) {
             return;
         }
-        $fd = (int) $this->stream;
-        if ($fd < 0) {
-            return;
+
+        if ($this->injectedTermios !== null) {
+            $this->termios = $this->injectedTermios;
+        } else {
+            if (!$this->isTty()) {
+                return;
+            }
+            $fd = (int) $this->stream;
+            if ($fd < 0) {
+                return;
+            }
+            $this->termios = TermiosFactory::open($fd);
         }
-        $this->termios = TermiosFactory::open($fd);
+
         $this->saved = $this->termios->current();
         $this->termios->makeRaw()->apply();
         if (is_resource($this->stream)) {
