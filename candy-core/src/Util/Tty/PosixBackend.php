@@ -35,8 +35,8 @@ final class PosixBackend implements Backend
      */
     private readonly ?Termios $injectedTermios;
 
-    /** Saved stty state for restoreLast(). */
-    private static ?string $lastSttyState = null;
+    /** Saved termios snapshot for restoreLast(). */
+    private static ?\SugarCraft\Pty\Contract\Termios $rescueSnapshot = null;
 
     /**
      * @param resource|null $stream  defaults to STDIN
@@ -90,11 +90,19 @@ final class PosixBackend implements Backend
                 } catch (\RuntimeException) {
                 }
             }
-            if (self::hasStty()) {
-                $out = @shell_exec('stty size 2>/dev/null');
-                if (is_string($out) && preg_match('/^(\d+)\s+(\d+)/', trim($out), $m) === 1) {
-                    return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
-                }
+        }
+        // Non-TTY stream: try /dev/tty directly.
+        $tty = self::openTty();
+        if ($tty !== null) {
+            try {
+                $ttyFd = (int) $tty[0];
+                $result = SizeIoctl::query($ttyFd);
+                fclose($tty[0]);
+                fclose($tty[1]);
+                return ['cols' => $result['cols'], 'rows' => $result['rows']];
+            } catch (\RuntimeException) {
+                fclose($tty[0]);
+                fclose($tty[1]);
             }
         }
         return ['cols' => 80, 'rows' => 24];
@@ -176,28 +184,20 @@ final class PosixBackend implements Backend
 
     public static function restoreLast(): void
     {
-        if (self::$lastSttyState !== null) {
-            // Second+ call: actually restore.
-            @shell_exec('stty ' . escapeshellarg(self::$lastSttyState) . ' 2>/dev/null');
-            self::$lastSttyState = null;
+        if (self::$rescueSnapshot !== null) {
+            // Second+ call: restore saved termios.
+            try {
+                self::$rescueSnapshot->apply();
+            } finally {
+                self::$rescueSnapshot = null;
+            }
             return;
         }
-        // First call: save current state.
-        if (is_resource(STDIN) && stream_isatty(STDIN) && self::hasStty()) {
-            $saved = @shell_exec('stty -g 2>/dev/null');
-            if (is_string($saved)) {
-                self::$lastSttyState = trim($saved);
-            }
+        // First call: save current state from STDIN.
+        try {
+            self::$rescueSnapshot = TermiosFactory::open((int) STDIN)->current();
+        } catch (\Throwable) {
+            // STDIN closed (CI runner): silently no-op.
         }
-    }
-
-    private static function hasStty(): bool
-    {
-        static $cached = null;
-        if ($cached !== null) {
-            return $cached;
-        }
-        $out = @shell_exec('command -v stty 2>/dev/null');
-        return $cached = is_string($out) && trim($out) !== '';
     }
 }
