@@ -36,7 +36,7 @@ the step that surfaced it.)
 to add a path-repo entry for sugar-wishlist". Put one-liners here so
 later steps don't rediscover.)
 
-_none yet_
+- Posix\* classes are `final` per project convention — any plan that says "extend Posix\Foo" must use composition instead. Reviewed during step 01.06.
 
 ---
 
@@ -57,3 +57,4 @@ review for step 01.04 · clean · PR#496
 docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html
 step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
+step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
