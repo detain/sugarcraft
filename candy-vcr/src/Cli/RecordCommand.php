@@ -134,7 +134,7 @@ final class RecordCommand implements Command
                 controllingTerminal: $ctty,
             );
 
-            $headerEnv = $captureEnv ? self::filteredHostEnv($envRegex) : [];
+            $headerEnv = $captureEnv ? self::filteredHostEnv($envRegex ?? self::SECRET_KEY_REGEX) : [];
             $recorder = Recorder::open(
                 $outputPath,
                 new \SugarCraft\Vcr\CassetteHeader(
@@ -200,7 +200,7 @@ final class RecordCommand implements Command
      * when usage was printed and the caller should exit 2.
      *
      * @param list<string> $args
-     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: string, idleTrim: ?float}|null
+     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: ?string, idleTrim: ?float}|null
      * @param resource $stderr
      */
     private function parseArgs(array $args, $stderr): ?array
@@ -211,7 +211,7 @@ final class RecordCommand implements Command
         $ctty = true;
         $shell = false;
         $captureEnv = false;
-        $envRegex = self::SECRET_KEY_REGEX;
+        $envRegex = null;   // null means "use default SECRET_KEY_REGEX"; '' means skip filtering
         $idleTrim = null;
         $cmd = [];
         $inOpts = true;
@@ -256,6 +256,15 @@ final class RecordCommand implements Command
                     if (@\preg_match($envRegex, '') === false) {
                         throw new \InvalidArgumentException("--env-regex='{$envRegex}' is not a valid PCRE pattern");
                     }
+                } elseif ($a === '--env-allow-secrets') {
+                    // FOOTGUN: when this flag is set, secret keys are NOT
+                    // filtered from the captured env. The cassette will
+                    // contain credential values verbatim. Only use this
+                    // flag when recording in a trusted, isolated environment
+                    // and you understand that the cassette must never be shared
+                    // or stored in an untrusted location.
+                    $captureEnv = true;
+                    $envRegex = '';
                 } elseif (\str_starts_with($a, '--idle-trim=')) {
                     $idleTrim = (float) \substr($a, 12);
                     if ($idleTrim <= 0.0) {
@@ -328,9 +337,9 @@ final class RecordCommand implements Command
     }
 
     /**
-     * Install the safety-net handlers so a SIGTERM, SIGHUP, fatal
-     * error, or unclean exit still restores the host termios. The
-     * snapshot is held statically because shutdown_function and
+     * Install the safety-net handlers so a SIGTERM, SIGHUP, SIGINT,
+     * fatal error, or unclean exit still restores the host termios.
+     * The snapshot is held statically because shutdown_function and
      * pcntl_signal cannot capture closures with arbitrary instance
      * state (in particular, the recorder's own snapshot disappears as
      * soon as the run() frame unwinds).
@@ -340,6 +349,10 @@ final class RecordCommand implements Command
      * can't be intercepted — that's documented; the marker file at
      * {@see $rescueMarkerPath} points at the host's tty path so an
      * external recovery (`stty sane < $tty`) is at least possible.
+     *
+     * SIGINT is included because Ctrl-C may reach the recorder
+     * process on macOS signal-quirk cases (controlling terminal is
+     * on the child by design, but signals do leak).
      */
     private static function installRescueHandlers(Termios $snapshot): void
     {
@@ -357,6 +370,7 @@ final class RecordCommand implements Command
             \pcntl_async_signals(true);
             \pcntl_signal(\SIGTERM, [self::class, 'handleRescueSignal']);
             \pcntl_signal(\SIGHUP,  [self::class, 'handleRescueSignal']);
+            \pcntl_signal(\SIGINT,  [self::class, 'handleRescueSignal']);
         }
     }
 
@@ -454,9 +468,14 @@ final class RecordCommand implements Command
      * the configured secret regex. Keys are sorted alphabetically so
      * the cassette diff stays stable across runs.
      *
+     * @param string|null $regex  PCRE regex checked against env-var names.
+     *                            Null (default): use SECRET_KEY_REGEX.
+     *                            Empty string: skip ALL filtering (footgun —
+     *                            see --env-allow-secrets).
+     *                            Non-empty string: apply that regex.
      * @return array<string, string>
      */
-    public static function filteredHostEnv(string $regex = self::SECRET_KEY_REGEX): array
+    public static function filteredHostEnv(?string $regex = null): array
     {
         // `getenv()` (no args) returns the full process env on PHP 8.3.
         // Fall back to `$_SERVER` if for some reason it's disabled.
@@ -470,12 +489,16 @@ final class RecordCommand implements Command
             }
         }
 
+        // null → use default; empty string → skip all filtering.
+        $effectiveRegex = $regex ?? self::SECRET_KEY_REGEX;
+        $skipAll = ($effectiveRegex === '');
+
         $kept = [];
         foreach ($env as $k => $v) {
             if (!\is_string($k) || $k === '' || !\is_string($v)) {
                 continue;
             }
-            if (@\preg_match($regex, $k) === 1) {
+            if (!$skipAll && @\preg_match($effectiveRegex, $k) === 1) {
                 continue;
             }
             $kept[$k] = $v;
@@ -492,7 +515,8 @@ final class RecordCommand implements Command
         \fwrite(
             $stream,
             "usage: candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty]\n"
-            . "                        [--shell] [--env] [--env-regex=PATTERN] -- <cmd> [args...]\n"
+            . "                        [--shell] [--env] [--env-regex=PATTERN]\n"
+            . "                        [--env-allow-secrets] [--idle-trim N] -- <cmd> [args...]\n"
             . "\n"
             . "  --output PATH    Cassette file to write (default: session-<timestamp>.cas)\n"
             . "  --cols N         Initial terminal columns (default: 80)\n"
@@ -508,6 +532,10 @@ final class RecordCommand implements Command
             . "  --env-regex=RE   Override the secret-stripping regex (default conservative\n"
             . "                   /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).\n"
             . "                   Implies --env.\n"
+            . "  --env-allow-secrets\n"
+            . "                   DANGEROUS: disables secret-key filtering entirely. The\n"
+            . "                   cassette will contain credential values verbatim. Only\n"
+            . "                   use in trusted, isolated environments. Implies --env.\n"
             . "  --idle-trim N    Compress inter-event gaps longer than N seconds. Trimmed\n"
             . "                   events carry both `t` (compressed) and `tRaw` (original)\n"
             . "                   so `replay --no-trim` can opt back into the real cadence.\n",
