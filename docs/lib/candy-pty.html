@@ -93,6 +93,7 @@ SignalForwarder::attachSigwinch(
       <div class="feature"><strong>read / write / setBlocking</strong><span><code>read($len, $timeout)</code> returns <code>null</code> on timeout, <code>''</code> on EOF, bytes otherwise. Non-blocking + <code>stream_select</code> with EINTR retry. <code>write</code> returns bytes actually written.</span></div>
       <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ. Platform-aware constants for Linux + macOS.</span></div>
       <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
+      <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (dimension change), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>.</span></div>
       <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
     </div>
 
@@ -140,6 +141,11 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>Pty</td><td>size()</td><td>Get current terminal size</td></tr>
 <tr><td>Pty</td><td>close()</td><td>Close the PTY</td></tr>
 <tr><td>SignalForwarder</td><td>attachSigwinch(pty, provider)</td><td>Forward SIGWINCH to PTY resize</td></tr>
+<tr><td>PosixPump</td><td>run(master, stdin, stdout, child?, opts?)</td><td>Run byte pump with optional PumpOptions callbacks</td></tr>
+<tr><td>PumpOptions</td><td>withOnIdle(fn)</td><td>Register idle-tick callback (fires every stream_select timeout)</td></tr>
+<tr><td>PumpOptions</td><td>withOnSigwinch(fn(cols, rows))</td><td>Register SIGWINCH callback (fires on terminal resize)</td></tr>
+<tr><td>PumpOptions</td><td>withOnChildExit(fn(code))</td><td>Register child-exit callback</td></tr>
+<tr><td>PumpOptions</td><td>withRecorder(recorder)</td><td>Attach session recorder (tee stdin/master bytes)</td></tr>
 <tr><td>Child</td><td>pid</td><td>Child process ID</td></tr>
 <tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit</td></tr>
 </table>

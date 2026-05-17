@@ -150,6 +150,37 @@ chains into `$recorder->recordResize($cols, $rows)` — the pump
 itself stays clear of SIGWINCH detection so it can be reused for
 non-interactive recordings.
 
+## Pump callbacks
+
+`PumpOptions` exposes four optional callbacks covering the pump loop
+lifecycle:
+
+| Callback | Fires when | Use for |
+|---|---|---|
+| `keepalive` | idle tick (stream_select → 0) | Legacy heartbeat alias; prefer `onIdle` |
+| `onIdle` (step 01.03) | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
+| `onSigwinch` | terminal dimensions change | Forward host resize into child's TIOCSWINSZ |
+| `onChildExit` | child process exits | Resource cleanup, notification |
+
+**`onIdle` vs `onSigwinch`:** These are independent hooks.
+`onIdle` fires on *every* idle tick (no I/O ready). `onSigwinch`
+fires only when `MasterPty::size()` differs from the last known size
+— driven by the consumer's `SignalForwarder` callback. Do not conflate
+them: if you were passing `onSigwinch(0, 0)` as a fake idle tick,
+migrate to `onIdle` (step 01.03).
+
+```php
+use SugarCraft\Pty\Posix\PosixPump;
+use SugarCraft\Pty\PumpOptions;
+
+$opts = (new PumpOptions())
+    ->withOnIdle(fn () => error_log('still alive'))        // every ~50 ms
+    ->withOnSigwinch(fn (int $cols, int $rows) => null)   // on dimension change
+    ->withOnChildExit(fn (int $code) => error_log("exited $code"));
+
+(new PosixPump())->run($master, STDIN, STDOUT, $child, $opts);
+```
+
 ## Examples
 
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::default()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
