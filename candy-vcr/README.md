@@ -188,9 +188,27 @@ vendor/bin/candy-vcr stats    session.cas                                # show 
 vendor/bin/candy-vcr record -- vim /tmp/scratch
 vendor/bin/candy-vcr record --output bash-session.cas --cols 132 --rows 40 -- bash -l
 vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello, world'   # non-interactive child, no Ctrl+C wiring
+vendor/bin/candy-vcr record --shell                                  # spawn $SHELL -l (or /bin/sh -l)
+vendor/bin/candy-vcr record --env -- bash -c 'echo hi'              # capture filtered host env into cassette header
 ```
 
-Roughly equivalent to `asciinema rec` / charmbracelet's `shirley`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. Subsequent plan steps will layer in `--shell` / `--env` (P6.5.2), `--idle-trim` (P6.5.3), and a host-termios safety net via `register_shutdown_function` + signal handlers (P6.5.4).
+Roughly equivalent to `asciinema rec` / charmbracelet's `shirley`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. Subsequent plan steps will layer in `--idle-trim` (P6.5.3) and a host-termios safety net via `register_shutdown_function` + signal handlers (P6.5.4).
+
+#### `--shell` (PR P6.5.2)
+
+Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empty or non-executable) instead of an explicit positional command. Useful for "capture what my prompt does" demos without enumerating the shell binary every time. Mutually exclusive with positional `<cmd>`.
+
+#### `--env` and `--env-regex=PATTERN` (PR P6.5.2)
+
+Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`.
+
+Captured env lands on the cassette header as a JSON object:
+
+```jsonl
+{"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record","env":{"HOME":"/home/me","LANG":"en_US.UTF-8","PATH":"/usr/bin:/bin","TERM":"xterm-256color"}}
+```
+
+`Recorder::filteredHostEnv(string $regex = SECRET_KEY_REGEX): array<string,string>` is the public helper invoked under the hood; tests can drive it directly without spawning a child.
 
 ### Hook system (L4)
 

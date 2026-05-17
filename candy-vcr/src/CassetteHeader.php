@@ -18,7 +18,16 @@ final readonly class CassetteHeader
     public const TIMESTAMP_MODE_ABSOLUTE = 'absolute';
     public const TIMESTAMP_MODE_RELATIVE = 'relative';
 
-    /** @param 'absolute'|'relative' $timestampMode */
+    /**
+     * @param 'absolute'|'relative'   $timestampMode
+     * @param array<string, string>   $env
+     *   Filtered environment captured at record time. Empty (default) when
+     *   the recorder was started without `--env` — `record` is opt-in for
+     *   env capture to avoid leaking the caller's full shell environment.
+     *   `RecordCommand::SECRET_KEY_REGEX` strips any key matching the
+     *   conservative secret regex (`/(SECRET|TOKEN|KEY|PASSWORD|API)/i`)
+     *   before the env reaches the cassette.
+     */
     public function __construct(
         public int $version,
         public string $createdAt,
@@ -26,6 +35,7 @@ final readonly class CassetteHeader
         public int $rows,
         public string $runtime,
         public string $timestampMode = self::TIMESTAMP_MODE_ABSOLUTE,
+        public array $env = [],
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");
@@ -37,6 +47,14 @@ final readonly class CassetteHeader
             throw new \InvalidArgumentException(
                 "CassetteHeader timestampMode must be 'absolute' or 'relative', got '{$timestampMode}'",
             );
+        }
+        foreach ($env as $key => $value) {
+            if (!\is_string($key) || $key === '') {
+                throw new \InvalidArgumentException('CassetteHeader env keys must be non-empty strings');
+            }
+            if (!\is_string($value)) {
+                throw new \InvalidArgumentException("CassetteHeader env['{$key}'] must be a string, got " . \get_debug_type($value));
+            }
         }
     }
 }
