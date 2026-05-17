@@ -267,7 +267,12 @@ jobs:
   # macOS-specific regressions on demand if/when issues surface.
   macos-test:
     name: 'macOS · PHP ${{ matrix.php }} · ${{ matrix.lib }}'
-    runs-on: macos-26-intel
+    # macos-15 is the current stable Apple Silicon (arm64) image.
+    # macos-26-intel was an Intel runner; GitHub is phasing Intel out
+    # and the candy-pty FFI / PTY syscalls hung on it past the 30-min
+    # cell timeout. arm64 ships a newer macOS kernel + libSystem and
+    # is the default for new repos as of late 2025.
+    runs-on: macos-15
     timeout-minutes: 30
     needs: [build-matrix]
     concurrency:
