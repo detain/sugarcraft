@@ -58,3 +58,4 @@ docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + 
 step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
 step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
+candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
