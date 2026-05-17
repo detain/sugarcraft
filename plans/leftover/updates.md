@@ -80,3 +80,9 @@ step 01.07 · PR#502 · candy-shell: RealProcess kept as deprecated alias; Proce
 review for step 01.07 · clean · PR#502
 docs for step 01.07 · clean · PR#502
 tests-ci for step 01.07 · PR#503 · add stdoutBytes/stderrBytes forwarding tests to FakeProcess
+step 01.08 · PR#504 · candy-pty: add SUGARCRAFT_PTY_BACKEND env var for backend selection
+fix for step 01.08 · PR#505 · add deferred-backend-exception CALIBER entry
+
+## Open review findings — 01.08
+
+- [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
