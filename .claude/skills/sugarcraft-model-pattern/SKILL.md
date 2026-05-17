@@ -2,8 +2,8 @@
 name: sugarcraft-model-pattern
 description: Scaffolds a new SugarCraft TUI class following the immutable + fluent pattern: `final` class, `declare(strict_types=1)`, `readonly` properties, private `mutate()` helper, `with*()` setters, bare accessors, and (for TUI roots) the `Model::init/update/view` contract. Mirrors upstream via `Mirrors charmbracelet/<repo>.<Method>` doc-comments and pairs every public method with a PHPUnit 10 snapshot/behaviour/coercion test. Use when user says 'add a new Model', 'new TUI widget', 'port from charmbracelet/<x>', 'scaffold a SugarCraft class', or creates files under `<slug>/src/`. Do NOT use for editing existing Models (use direct Edit), for non-PHP files, for the lib skeleton itself (use scaffold-library), or for non-SugarCraft repos.
 paths:
-  - **/src/**/*.php
-  - **/tests/**/*.php
+  - '**/src/**/*.php'
+  - '**/tests/**/*.php'
 ---
 # SugarCraft Model / Widget Pattern
 

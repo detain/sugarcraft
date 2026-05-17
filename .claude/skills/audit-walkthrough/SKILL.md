@@ -4,7 +4,7 @@ description: Processes AUDIT_*.md files by marking items ✅ inline with one-lin
 paths:
   - plans/AUDIT_*.md
   - AUDIT_*.md
-  - **/AUDIT_*.md
+  - '**/AUDIT_*.md'
 ---
 # Audit Walkthrough
 

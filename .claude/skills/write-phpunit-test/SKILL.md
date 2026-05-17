@@ -2,8 +2,8 @@
 name: write-phpunit-test
 description: Writes a PHPUnit 10 test in <slug>/tests/<Class>Test.php for SugarCraft monorepo libs. Use when the user says 'add test', 'write a phpunit test', 'cover <Class>', 'test this method', or modifies files under <slug>/src/. Produces snapshot tests for renderers (asserting raw \x1b[…m SGR bytes), behaviour tests for state machines (driving update() with scripted KeyMsg/MouseMsg/Tick), coercion tests for fluent setters (clamped/no-op on bad input), and immutability checks for with*() builders. Uses namespace SugarCraft\<Sub>\Tests, final class extending PHPUnit\Framework\TestCase, runs via vendor/bin/phpunit from the lib root. Do NOT use for integration tests, CI workflow files, JS/frontend tests, or non-PHPUnit testing frameworks.
 paths:
-  - **/tests/*Test.php
-  - **/src/**/*.php
+  - '**/tests/*Test.php'
+  - '**/src/**/*.php'
 ---
 # write-phpunit-test
 

@@ -2,7 +2,7 @@
 name: vhs-tape-record
 description: Authors a `<slug>/.vhs/*.tape` VHS demo file and wires it into `.github/workflows/vhs.yml` so CI re-renders the GIF. Sets `Set Theme "TokyoNight"`, 800x480 dims, `Type "php examples/<demo>.php"` boilerplate. Use when user says 'add a demo', 'record VHS', 'new tape', 'regenerate GIF', or creates/edits a file under `<slug>/.vhs/`. Capabilities: scaffolds the .tape file, adds the slug to the workflow `all=(...)` array, registers required non-default PHP extensions (ext-ssh2/ext-gd/ext-ffi) in `extensions:`. Do NOT use for non-visual primitive libs (`candy-pty`, FFI bindings, codecs) — they're matrix-exempt; do NOT use for changes to the rendered `.gif` itself (CI overwrites it).
 paths:
-  - **/.vhs/*.tape
+  - '**/.vhs/*.tape'
   - .github/workflows/vhs.yml
 ---
 # vhs-tape-record

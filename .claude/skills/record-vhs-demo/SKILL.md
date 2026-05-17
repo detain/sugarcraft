@@ -2,7 +2,7 @@
 name: record-vhs-demo
 description: Creates a VHS .tape file at <slug>/.vhs/<demo>.tape driving php examples/<demo>.php with TokyoNight theme and the standard FontSize/Width/Height/Type/Enter/Sleep sequence. Also adds the lib to the hand-maintained matrix in .github/workflows/vhs.yml when missing. Use when user says 'add VHS demo', 'record gif', 'new tape file', 'add a tape for <slug>'. Do NOT use for editing an existing tape's visual style, rendering GIFs locally (CI does that via vhs.yml), or for non-visual libs (candy-pty, FFI/syscall wrappers) — those are exempt from the .vhs/ + matrix requirement.
 paths:
-  - */.vhs/*.tape
+  - '*/.vhs/*.tape'
   - .github/workflows/vhs.yml
 ---
 # Record VHS demo
