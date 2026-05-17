@@ -54,3 +54,4 @@ fix for step 01.03 · PR#494 · resolved 3 findings
 tests-ci for step 01.03 · clean
 step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor
 review for step 01.04 · clean · PR#496
+docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html
