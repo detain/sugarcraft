@@ -113,6 +113,13 @@
         {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/sugar-crush"
+        },
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "autoload": {
