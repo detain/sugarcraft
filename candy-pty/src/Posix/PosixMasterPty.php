@@ -131,7 +131,7 @@ final class PosixMasterPty implements MasterPty
 
         $libc = Libc::lib();
         $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
-        $rc = $libc->ioctl($this->fd, \SugarCraft\Pty\SizeIoctl::setRequest(), $ws);
+        $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc($libc, $this->fd, $ws);
         if ($rc !== 0) {
             throw new PtyException(
                 \SugarCraft\Pty\Lang::t('resize.failed', [
@@ -154,7 +154,7 @@ final class PosixMasterPty implements MasterPty
 
         $libc = Libc::lib();
         $ws = \SugarCraft\Pty\SizeIoctl::emptyBuffer();
-        $rc = $libc->ioctl($this->fd, \SugarCraft\Pty\SizeIoctl::getRequest(), $ws);
+        $rc = \SugarCraft\Pty\SizeIoctl::getSizeViaLibc($libc, $this->fd, $ws);
         if ($rc !== 0) {
             throw new PtyException(
                 \SugarCraft\Pty\Lang::t('size.failed', [

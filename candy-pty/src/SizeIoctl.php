@@ -121,13 +121,51 @@ final class SizeIoctl
 
         $libc = Libc::lib();
         $ws = self::emptyBuffer();
-        $rc = $libc->ioctl($fd, self::getRequest(), $ws);
+        $rc = self::getSizeViaLibc($libc, $fd, $ws);
         if ($rc !== 0) {
             throw new \RuntimeException(
                 'TIOCGWINSZ ioctl failed on fd ' . $fd . ' with rc=' . $rc
             );
         }
         return self::unpack($ws);
+    }
+
+    /**
+     * Apply a winsize to `$fd`. Returns 0 on success, libc's rc on
+     * failure. Uses the non-variadic POSIX 2024 `tcsetwinsize` on
+     * Darwin (where the real `ioctl` is variadic and the arm64 ABI
+     * mismatch causes our fixed-arg cdef to send the struct pointer
+     * to the wrong register); falls back to `ioctl(TIOCSWINSZ)` on
+     * Linux. Centralised here so both legacy `Pty::resize()` and
+     * `PosixMasterPty::resize()` get the fix transparently.
+     */
+    public static function setSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int
+    {
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            try {
+                return $libc->tcsetwinsize($fd, $ws);
+            } catch (\Throwable) {
+                // Fall through to ioctl if tcsetwinsize is missing
+                // on the host (pre-macOS-13 libSystem).
+            }
+        }
+        return $libc->ioctl($fd, self::setRequest(), $ws);
+    }
+
+    /**
+     * Read the winsize from `$fd` into the provided buffer. Returns
+     * 0 on success, libc's rc on failure. Same Darwin-vs-Linux split
+     * as {@see setSizeViaLibc()}.
+     */
+    public static function getSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int
+    {
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            try {
+                return $libc->tcgetwinsize($fd, $ws);
+            } catch (\Throwable) {
+            }
+        }
+        return $libc->ioctl($fd, self::getRequest(), $ws);
     }
 
     private function __construct() {}
