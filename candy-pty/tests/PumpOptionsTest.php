@@ -24,6 +24,22 @@ final class PumpOptionsTest extends TestCase
         $this->assertNull($opts->onChildExit);
     }
 
+    public function testSshDefaultReturnsExpectedDtoShape(): void
+    {
+        $opts = PumpOptions::sshDefault();
+
+        $this->assertInstanceOf(PumpOptions::class, $opts);
+        $this->assertSame(PumpOptions::DEFAULT_CHUNK_BYTES, $opts->chunkBytes);
+        $this->assertSame(PumpOptions::DEFAULT_SELECT_TIMEOUT_US, $opts->selectTimeoutUs);
+        $this->assertSame(PumpOptions::DEFAULT_FLUSH_DEADLINE_SEC, $opts->flushDeadlineSec);
+        $this->assertSame(PumpOptions::DEFAULT_STDIN_EOF_GRACE_SEC, $opts->stdinEofGraceSec);
+        $this->assertSame(PumpOptions::DEFAULT_VEOF, $opts->veof);
+        $this->assertNull($opts->keepalive);
+        $this->assertNull($opts->onIdle);
+        $this->assertNull($opts->onSigwinch);
+        $this->assertNull($opts->onChildExit);
+    }
+
     public function testWithChunkBytesReturnsNewInstanceOriginalUnchanged(): void
     {
         $original = new PumpOptions();
