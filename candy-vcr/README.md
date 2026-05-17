@@ -190,6 +190,8 @@ vendor/bin/candy-vcr record --output bash-session.cas --cols 132 --rows 40 -- ba
 vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello, world'   # non-interactive child, no Ctrl+C wiring
 vendor/bin/candy-vcr record --shell                                  # spawn $SHELL -l (or /bin/sh -l)
 vendor/bin/candy-vcr record --env -- bash -c 'echo hi'              # capture filtered host env into cassette header
+vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh         # compress idle gaps > 1s (asciinema-style trim)
+vendor/bin/candy-vcr replay  --no-trim session.cas --speed=realtime # restore real cadence on a trimmed cassette
 ```
 
 Roughly equivalent to `asciinema rec` / charmbracelet's `shirley`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. Subsequent plan steps will layer in `--idle-trim` (P6.5.3) and a host-termios safety net via `register_shutdown_function` + signal handlers (P6.5.4).
@@ -209,6 +211,19 @@ Captured env lands on the cassette header as a JSON object:
 ```
 
 `Recorder::filteredHostEnv(string $regex = SECRET_KEY_REGEX): array<string,string>` is the public helper invoked under the hood; tests can drive it directly without spawning a child.
+
+#### `--idle-trim N` and `replay --no-trim` (PR P6.5.3)
+
+Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-second `make build` doesn't take 30 seconds to replay. When the gap between consecutive events exceeds `N` seconds, the recorder writes the event with both `t` (the compressed timestamp) and `tRaw` (the original wall-clock timestamp). The compressed gap defaults to 0.5 s (or `N`, whichever is smaller).
+
+```jsonl
+{"v":1,"created":"...","cols":80,"rows":24,"runtime":"sugarcraft/candy-vcr@record"}
+{"t":0,"k":"output","b":"pre\r\n"}
+{"t":0.5,"k":"output","b":"post\r\n","tRaw":1.234}
+{"t":0.515,"k":"quit","tRaw":1.249}
+```
+
+Replay defaults to the compressed timeline. Pass `--no-trim` to replay to honour `tRaw` instead — useful when the original cadence matters (demos, race-condition repros). Events without `tRaw` (older cassettes, or untrimmed events) replay using `t`, so the format stays backward-compatible. The `Player::play(... useRawTimestamps: true)` flag exposes the same behaviour to PHP callers.
 
 ### Hook system (L4)
 

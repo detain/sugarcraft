@@ -83,6 +83,7 @@ final class RecordCommand implements Command
         $cmd  = $opts['cmd'];
         $captureEnv = $opts['captureEnv'];
         $envRegex   = $opts['envRegex'];
+        $idleTrim   = $opts['idleTrim'];
 
         $stdin = $this->stdin ?? \STDIN;
 
@@ -118,6 +119,9 @@ final class RecordCommand implements Command
                     env: $headerEnv,
                 ),
             );
+            if ($idleTrim !== null) {
+                $recorder->withIdleTrim($idleTrim);
+            }
             $recorder->recordResize($cols, $rows);
 
             $pumpOpts = (new PumpOptions())->withRecorder($recorder);
@@ -166,7 +170,7 @@ final class RecordCommand implements Command
      * when usage was printed and the caller should exit 2.
      *
      * @param list<string> $args
-     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: string}|null
+     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: string, idleTrim: ?float}|null
      * @param resource $stderr
      */
     private function parseArgs(array $args, $stderr): ?array
@@ -178,6 +182,7 @@ final class RecordCommand implements Command
         $shell = false;
         $captureEnv = false;
         $envRegex = self::SECRET_KEY_REGEX;
+        $idleTrim = null;
         $cmd = [];
         $inOpts = true;
 
@@ -221,6 +226,20 @@ final class RecordCommand implements Command
                     if (@\preg_match($envRegex, '') === false) {
                         throw new \InvalidArgumentException("--env-regex='{$envRegex}' is not a valid PCRE pattern");
                     }
+                } elseif (\str_starts_with($a, '--idle-trim=')) {
+                    $idleTrim = (float) \substr($a, 12);
+                    if ($idleTrim <= 0.0) {
+                        throw new \InvalidArgumentException('--idle-trim must be > 0 seconds');
+                    }
+                } elseif ($a === '--idle-trim') {
+                    $next = $args[++$i] ?? null;
+                    if ($next === null) {
+                        throw new \InvalidArgumentException('--idle-trim requires a positive seconds argument');
+                    }
+                    $idleTrim = (float) $next;
+                    if ($idleTrim <= 0.0) {
+                        throw new \InvalidArgumentException('--idle-trim must be > 0 seconds');
+                    }
                 } elseif (\str_starts_with($a, '--')) {
                     throw new \InvalidArgumentException("unknown option {$a}");
                 } else {
@@ -256,6 +275,7 @@ final class RecordCommand implements Command
             'cmd'    => $cmd,
             'captureEnv' => $captureEnv,
             'envRegex'   => $envRegex,
+            'idleTrim'   => $idleTrim,
         ];
     }
 
@@ -335,7 +355,10 @@ final class RecordCommand implements Command
             . "                   secret regex (see --env-regex) are stripped.\n"
             . "  --env-regex=RE   Override the secret-stripping regex (default conservative\n"
             . "                   /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).\n"
-            . "                   Implies --env.\n",
+            . "                   Implies --env.\n"
+            . "  --idle-trim N    Compress inter-event gaps longer than N seconds. Trimmed\n"
+            . "                   events carry both `t` (compressed) and `tRaw` (original)\n"
+            . "                   so `replay --no-trim` can opt back into the real cadence.\n",
         );
     }
 

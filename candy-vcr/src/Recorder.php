@@ -30,6 +30,38 @@ final class Recorder implements RecorderInterface
     private HookRegistry $hooks;
 
     /**
+     * Idle-trim threshold in seconds. When set, inter-event gaps
+     * larger than this are compressed to {@see $idleTrimCompressedMaxSec}
+     * and the trimmed event(s) carry a `tRaw` payload field with the
+     * original wallclock-relative timestamp.
+     *
+     * Null disables trimming. Wired via {@see withIdleTrim()}.
+     */
+    private ?float $idleTrimSec = null;
+
+    /** Compressed gap that replaces a > $idleTrimSec idle period. */
+    private float $idleTrimCompressedMaxSec = 0.5;
+
+    /**
+     * Real-time stamp (seconds since startTime) of the previous event.
+     * Kept unrounded so a first event with a sub-millisecond realT
+     * still anchors the gap calculation for subsequent events.
+     */
+    private float $prevRealT = 0.0;
+
+    /**
+     * True once at least one event has been written — guards the gap
+     * arithmetic so the first event never appears to be preceded by
+     * a 0 → realT idle. Separate flag instead of `prevRealT > 0` because
+     * the rounded prevRealT can legitimately equal 0.0 on a fast first
+     * event.
+     */
+    private bool $hasPriorEvent = false;
+
+    /** Cumulative seconds shaved off the timeline by all trims so far. */
+    private float $cumulativeTrim = 0.0;
+
+    /**
      * @param resource $fh  Open writable stream — typically a file opened
      *                      via {@see open()}, but any wb-mode stream works
      *                      (php://memory, php://temp, network sockets).
@@ -102,6 +134,34 @@ final class Recorder implements RecorderInterface
     }
 
     /**
+     * Enable idle-trim: gaps between consecutive events that exceed
+     * `$thresholdSec` are compressed to `$compressedMaxSec`, and the
+     * trimmed events carry a `tRaw` payload with their original
+     * (uncompressed) timestamp so a replay can opt back into the
+     * real cadence via `--no-trim` (player flag).
+     *
+     * Passing null disables trimming and resets the cumulative offset
+     * so subsequent events resume at real-time.
+     *
+     * @return $this
+     */
+    public function withIdleTrim(?float $thresholdSec, float $compressedMaxSec = 0.5): self
+    {
+        if ($thresholdSec !== null && $thresholdSec <= 0.0) {
+            throw new \InvalidArgumentException("idle-trim threshold must be > 0, got {$thresholdSec}");
+        }
+        if ($compressedMaxSec < 0.0) {
+            throw new \InvalidArgumentException("idle-trim compressedMaxSec must be >= 0, got {$compressedMaxSec}");
+        }
+        $this->idleTrimSec = $thresholdSec;
+        $this->idleTrimCompressedMaxSec = $compressedMaxSec;
+        if ($thresholdSec === null) {
+            $this->cumulativeTrim = 0.0;
+        }
+        return $this;
+    }
+
+    /**
      * Get the hook registry for direct manipulation.
      */
     public function hooks(): HookRegistry
@@ -158,8 +218,21 @@ final class Recorder implements RecorderInterface
      */
     private function writeEvent(string $kind, array $payload): void
     {
+        $realT = microtime(true) - $this->startTime;
+
+        if ($this->idleTrimSec !== null && $this->hasPriorEvent) {
+            $gap = $realT - $this->prevRealT;
+            if ($gap > $this->idleTrimSec) {
+                $newGap = min($this->idleTrimSec, $this->idleTrimCompressedMaxSec);
+                $this->cumulativeTrim += ($gap - $newGap);
+            }
+        }
+        $effectiveT = round($realT - $this->cumulativeTrim, 3);
+        $this->prevRealT = $realT;
+        $this->hasPriorEvent = true;
+
         $event = new Event(
-            t: round(microtime(true) - $this->startTime, 3),
+            t: $effectiveT,
             kind: EventKind::from($kind),
             payload: $payload,
         );
@@ -172,6 +245,12 @@ final class Recorder implements RecorderInterface
         }
 
         $line = ['t' => $event->t, 'k' => $event->kind->value, ...$event->payload];
+        if ($this->cumulativeTrim > 0.0 && !isset($line['tRaw'])) {
+            // P6.5.3 dual-timestamp: any event after a trim carries the
+            // original wallclock-relative timestamp so a replay can opt
+            // back into the real cadence via --no-trim.
+            $line['tRaw'] = round($realT, 3);
+        }
         $this->writeLine($line);
 
         // Run afterCapture hooks (fire-and-forget)
