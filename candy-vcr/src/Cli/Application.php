@@ -17,6 +17,7 @@ final class Application
     public function __construct(?array $commands = null)
     {
         $this->commands = $commands ?? [
+            'record' => new RecordCommand(),
             'inspect' => new InspectCommand(),
             'replay' => new ReplayCommand(),
             'diff' => new DiffCommand(),
