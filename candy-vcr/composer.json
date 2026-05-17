@@ -29,7 +29,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-pty": "@dev"
+        "sugarcraft/candy-pty": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
