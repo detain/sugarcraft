@@ -92,7 +92,8 @@ docs for step 01.09 · clean
  docs for step 01.10 · PR#510 · document --env-allow-secrets in end-user hub-admin dev docs + CALIBER entries
 review for step 01.10 · clean · PR#508
 tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkipsAllFiltering for --env-allow-secrets empty-regex path
-step 01.11 · PR#511 · tools: add --fix flag to check-path-repos.php
+ step 01.11 · PR#511 · tools: add --fix flag to check-path-repos.php
+ review for step 01.11 · clean · PR#511
 
 ## Open review findings — 01.08
 
