@@ -171,13 +171,26 @@ The CLI lands in PR7.
 ## CLI
 
 ```sh
-vendor/bin/candy-vcr inspect session.cas               # list events
-vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream output to stdout
-vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
-vendor/bin/candy-vcr stats   session.cas               # show cassette statistics
+vendor/bin/candy-vcr record   --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
+vendor/bin/candy-vcr inspect  session.cas                                # list events
+vendor/bin/candy-vcr replay   session.cas --speed=realtime               # stream output to stdout
+vendor/bin/candy-vcr diff     a.cas b.cas                                # structural diff
+vendor/bin/candy-vcr stats    session.cas                                # show cassette statistics
 ```
 
+`record` (PR P6.5.1) spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the candy-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
+
 `inspect` shows each event's timestamp, kind, and a short payload summary (with `--since=<seconds>` / `--until=<seconds>` filters). `replay` streams the cassette's recorded output bytes to stdout — `--speed=realtime` honours the recorded cadence (use it for visual demos), `--speed=instant` flushes everything as fast as the kernel will accept it. `diff` compares headers + per-event payloads and exits non-zero on any difference. `stats` prints event tallies by kind, total duration, input message type breakdown, and output byte counts with per-event averages.
+
+### Recording commands
+
+```sh
+vendor/bin/candy-vcr record -- vim /tmp/scratch
+vendor/bin/candy-vcr record --output bash-session.cas --cols 132 --rows 40 -- bash -l
+vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello, world'   # non-interactive child, no Ctrl+C wiring
+```
+
+Roughly equivalent to `asciinema rec` / charmbracelet's `shirley`, but writes the candy-vcr JSONL cassette so the existing inspect / replay / diff / stats commands and the `Player::play()` API work without conversion. Subsequent plan steps will layer in `--shell` / `--env` (P6.5.2), `--idle-trim` (P6.5.3), and a host-termios safety net via `register_shutdown_function` + signal handlers (P6.5.4).
 
 ### Hook system (L4)
 
