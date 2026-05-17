@@ -95,6 +95,7 @@ SignalForwarder::attachSigwinch(
       <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
       <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (dimension change), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>.</span></div>
       <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
+      <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX), <code>auto</code> (same as unset), <code>sidecar</code> or <code>pecl</code> (throw <code>UnsupportedPlatformException</code> — deferred to phase 12). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
