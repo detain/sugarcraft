@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyPty (Operations)</title>
+<meta name="description" content="CandyPty operations: signals, configuration, failure modes.">
+<meta property="og:title" content="SugarCraft — CandyPty (Operations)">
+<link rel="canonical" href="https://sugarcraft.github.io/admin/candy-pty.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/admin/candy-pty.html">
+<link rel="icon" type="image/png" href="../img/icons/candy-pty.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a> / <a href="../lib/candy-pty.html">candy-pty</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-pty.png" alt="CandyPty">
+      <div>
+        <h2>🖥️ CandyPty — Operations</h2>
+        <p class="detail-sub">Operational guide for embedded PTY usage</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Signals handled</h3>
+    <ul>
+      <li><strong>SIGWINCH</strong> — When a terminal resize is detected via <code>SignalForwarder::attachSigwinch()</code>, the PTY is resized via <code>ioctl(TIOCSWINSZ)</code>. If <code>ext-pcntl</code> is present, the forwarder uses async signals; otherwise it degrades to a no-op and the host terminal resizes without being propagated to the child.</li>
+      <li><strong>SIGCHLD</strong> — The <code>SignalForwarder</code> also attaches a SIGCHLD handler to reap zombie children. If <code>ext-pcntl</code> is absent, <code>waitpid()</code> is polled manually in the pump loop instead.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Files written</h3>
+    <ul>
+      <li><strong>No persistent files.</strong> Candy-pty is a pure in-memory library. It writes nothing to disk unless you explicitly call <code>Recorder::open()</code> to capture a session to a <code>.cas</code> file. That file is owned by the application, not by the library.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Configuration</h3>
+    <table class="api-table">
+      <tr><th>Env var</th><th>Values</th><th>Effect</th></tr>
+      <tr><td><code>SUGARCRAFT_PTY_BACKEND</code></td><td><code>posix-ffi</code> (default), <code>auto</code>, <code>sidecar</code>, <code>pecl</code></td><td>Selects the PTY backend. <code>sidecar</code> and <code>pecl</code> throw <code>UnsupportedPlatformException</code> — deferred to phase 12.</td></tr>
+      <tr><td><code>SUGARCRAFT_LIBC</code></td><td>Path to libc shared object</td><td>Override the libc path for FFI. Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Useful for musl/Alpine or custom sysroots.</td></tr>
+    </table>
+
+    <h3 style="margin-top: 32px;">Failure modes</h3>
+    <ul>
+      <li><strong><code>UnsupportedPlatformException</code></strong> — Thrown by <code>PtySystemFactory::default()</code> on Windows (v1 is POSIX-only), or when <code>SUGARCRAFT_PTY_BACKEND</code> is set to <code>sidecar</code> or <code>pecl</code> (not yet implemented).</li>
+      <li><strong><code>InvalidArgumentException</code></strong> — Thrown when <code>SUGARCRAFT_PTY_BACKEND</code> is set to an unrecognised value.</li>
+      <li><strong>FFI load failure</strong> — If <code>ext-ffi</code> is not available, or the libc path is wrong, the FFI <code>cdef()</code> call throws. Ensure <code>ext-ffi</code> is loaded and <code>SUGARCRAFT_LIBC</code> points to a valid file on non-standard systems.</li>
+      <li><strong>Child deadlock</strong> — If a child process writes more than the kernel pipe buffer (~64 KiB) and the parent is not reading, the child blocks on write and the parent deadlocks waiting for the child to exit. Use non-blocking reads (<code>setBlocking(false)</code>) or <code>PosixPump</code> to avoid this.</li>
+      <li><strong>Zombie children</strong> — Every <code>spawn()</code> must be followed by <code>$child->wait()</code> or <code>$child->exited()</code> polling to reap the exit status. Without reaping, the child becomes a zombie.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Resource cleanup</h3>
+    <p>Always call <code>$pty->close()</code> when done. The method is idempotent — calling it multiple times is safe. If you used <code>controllingTerminal: true</code>, the shim process (<code>bin/pty-shim.php</code>) is reaped by the same <code>$child->wait()</code> call.</p>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md">Full README</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../lib/candy-pty.html" class="btn btn-primary">← Back to candy-pty docs</a></p>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-pty">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-pty/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
