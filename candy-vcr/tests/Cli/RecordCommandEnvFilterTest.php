@@ -136,6 +136,44 @@ final class RecordCommandEnvFilterTest extends TestCase
         }
     }
 
+    /**
+     * @see RecordCommand::filteredHostEnv() — empty string means "skip
+     *   all filtering". This is the mechanism behind --env-allow-secrets.
+     */
+    public function testFilteredHostEnvWithEmptyStringSkipsAllFiltering(): void
+    {
+        $fixtures = [
+            'VCR_FIXTURE_SECRET_TOKEN' => 'should-be-kept',
+            'VCR_FIXTURE_DB_PASSWORD'    => 'should-be-kept',
+            'VCR_FIXTURE_OAUTH_KEY'      => 'should-be-kept',
+            'VCR_FIXTURE_BENIGN_VAR'     => 'also-kept',
+        ];
+        $prior = [];
+        foreach ($fixtures as $k => $v) {
+            $prior[$k] = \getenv($k);
+            \putenv("{$k}={$v}");
+        }
+
+        try {
+            // Empty string → skip all filtering (--env-allow-secrets path).
+            $kept = RecordCommand::filteredHostEnv('');
+
+            $this->assertArrayHasKey('VCR_FIXTURE_SECRET_TOKEN', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_DB_PASSWORD', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_OAUTH_KEY', $kept);
+            $this->assertArrayHasKey('VCR_FIXTURE_BENIGN_VAR', $kept);
+            $this->assertSame('should-be-kept', $kept['VCR_FIXTURE_SECRET_TOKEN']);
+        } finally {
+            foreach ($prior as $k => $v) {
+                if ($v === false) {
+                    \putenv($k);
+                } else {
+                    \putenv("{$k}={$v}");
+                }
+            }
+        }
+    }
+
     public function testEnvFlagPopulatesCassetteHeader(): void
     {
         $this->requirePtySyscalls();
