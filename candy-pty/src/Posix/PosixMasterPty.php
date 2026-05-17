@@ -19,10 +19,37 @@ final class PosixMasterPty implements MasterPty
     /** @var resource|null */
     private $stream = null;
 
+    /**
+     * Optional anchor slave fd held open for the lifetime of the
+     * master. macOS xnu zeroes the PTY winsize whenever the kernel-
+     * side slave count drops to 0 — keeping a slave fd open in the
+     * parent process prevents that reset between PosixPtySystem::open
+     * and the first proc_open that actually wires the child's stdio
+     * to the slave path. Closed in {@see close()}. Negative sentinel
+     * means "no anchor was wired" (Linux ptmx doesn't need this).
+     */
+    private int $anchorSlaveFd = -1;
+
     public function __construct(
         private readonly int $fd,
         private readonly string $slavePath,
     ) {}
+
+    /**
+     * Internal: register a slave fd to hold open for the master's
+     * lifetime. Set by {@see PosixPtySystem::open()} on macOS to
+     * stabilise TIOCSWINSZ semantics. Idempotent — second call closes
+     * the previous anchor first.
+     *
+     * @internal
+     */
+    public function attachAnchorSlaveFd(int $fd): void
+    {
+        if ($this->anchorSlaveFd >= 0) {
+            @Libc::lib()->close($this->anchorSlaveFd);
+        }
+        $this->anchorSlaveFd = $fd;
+    }
 
     /**
      * @see creack/pty.Read()
@@ -169,6 +196,15 @@ final class PosixMasterPty implements MasterPty
             return;
         }
         $this->closed = true;
+
+        // Release the macOS slave anchor (if any) BEFORE closing the
+        // master so the kernel's PTY teardown is symmetric — master
+        // first would be fine on Linux, but macOS warns on the
+        // anchored fd surviving past the master.
+        if ($this->anchorSlaveFd >= 0) {
+            @Libc::lib()->close($this->anchorSlaveFd);
+            $this->anchorSlaveFd = -1;
+        }
 
         if ($this->stream !== null) {
             $stream = $this->stream;
