@@ -274,6 +274,26 @@ spawns (`echo`, `tput`, `bash -c '…'`) don't benefit.
 
 ## Architecture
 
+### Backend selection
+
+`PtySystemFactory::default()` respects the `SUGARCRAFT_PTY_BACKEND`
+environment variable to select which PTY backend to use:
+
+| Value | Behaviour |
+|---|---|
+| _(unset)_ / `auto` | Platform-appropriate default (same as `posix-ffi` on POSIX) |
+| `posix-ffi` | `PosixPtySystem` — FFI into libc `posix_openpt` etc. (Linux / macOS) |
+| `sidecar` | Not implemented in v1 — throws `UnsupportedPlatformException` (deferred to phase 12) |
+| `pecl` | Not implemented in v1 — throws `UnsupportedPlatformException` (deferred to phase 12) |
+
+Unrecognised values throw `\InvalidArgumentException` naming the
+valid options.
+
+The termios backend follows the same pattern via `SUGARCRAFT_TERMIOS`
+(`posix-ffi` / `stty`).
+
+### Library layout
+
 The library is organised in two layers:
 
 ### Contract interfaces (`src/Contract/`) — pure signatures, no logic
