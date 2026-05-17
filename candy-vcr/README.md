@@ -40,6 +40,10 @@ composer require sugarcraft/candy-vcr
 
 ## Cassette format (JSONL)
 
+> **Full schema reference:** [`docs/CASSETTE.md`](docs/CASSETTE.md) — includes
+> dual-timestamp (`t` + `tRaw`) format, all event kinds, and the header
+> structure.
+
 ```jsonl
 {"v":1,"created":"2026-05-07T10:00:00Z","cols":80,"rows":24,"runtime":"sugarcraft/candy-core@1.0.0"}
 {"t":0.000,"k":"resize","cols":80,"rows":24}
@@ -203,6 +207,15 @@ Spawn the user's `$SHELL -l` (falling back to `/bin/sh -l` when `$SHELL` is empt
 #### `--env` and `--env-regex=PATTERN` (PR P6.5.2)
 
 Env capture is **opt-in** — `--env` snapshots the host environment into the cassette header. By default, keys matching the conservative secret-name regex `/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i` are stripped before they hit disk. The bias is "rather strip-too-much than leak" — `KEYBOARD_LAYOUT` is stripped because it contains `KEY`. Override the regex with `--env-regex=PATTERN` when you need a narrower (or wider) filter; passing `--env-regex` implies `--env`.
+
+#### `--env-allow-secrets` (PR P6.5.2)
+
+**DANGEROUS — for trusted, isolated environments only.** When this flag is set, secret-key filtering is disabled entirely and the cassette will contain credential values verbatim (API tokens, passwords, private keys, etc.). Only use this flag when recording in a fully isolated environment and you understand that the resulting cassette must never be shared or stored in an untrusted location.
+
+```sh
+vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $GITHUB_TOKEN'
+# GITHUB_TOKEN value is now in the cassette in plain text
+```
 
 Captured env lands on the cassette header as a JSON object:
 

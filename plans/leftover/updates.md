@@ -84,6 +84,8 @@ step 01.08 · PR#504 · candy-pty: add SUGARCRAFT_PTY_BACKEND env var for backen
 fix for step 01.08 · PR#505 · add deferred-backend-exception CALIBER entry
 docs for step 01.08 · PR#506 · document SUGARCRAFT_PTY_BACKEND in end-user/admin/dev docs
 step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + Expect withRecorder
+review for step 01.09 · clean · PR#507
+docs for step 01.09 · clean
 
 ## Open review findings — 01.08
 
