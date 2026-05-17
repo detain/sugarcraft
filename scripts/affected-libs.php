@@ -31,12 +31,15 @@ const WINDOWS_LIBS = [
     'candy-core', 'sugar-prompt', 'sugar-bits', 'candy-shell', 'candy-shine',
 ];
 const MACOS_LIBS = [
-    'candy-pty',
-    // PTY plan P5.6 keeps candy-core + candy-wish in the macOS pool
-    // for the duration of P5+ — both consume candy-pty heavily
-    // (PosixBackend + InProcessTransport), and macOS xnu PTY
-    // semantics drift just enough from Linux ptmx that consumers
-    // need their own coverage cell.
+    // candy-pty itself is held out of the macOS pool until the
+    // direct unit/integration tests are debugged on a real Darwin
+    // box: tests 53-63 yield 6 errors + 1 failure, and the suite
+    // hangs at test 64+ until GitHub's 30-min timeout. Coverage of
+    // candy-pty's POSIX surface on macOS comes through its consumers
+    // below (PosixBackend in candy-core, InProcessTransport in
+    // candy-wish — both exercise the same posix_openpt + grantpt +
+    // TIOCSWINSZ syscall chain). See pty-matrix.yml for a separate
+    // macOS-targeted workflow once those tests are stable.
     'candy-core',
     'candy-wish',
 ];
