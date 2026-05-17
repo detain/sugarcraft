@@ -94,6 +94,7 @@ review for step 01.10 · clean · PR#508
 tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkipsAllFiltering for --env-allow-secrets empty-regex path
  step 01.11 · PR#511 · tools: add --fix flag to check-path-repos.php
  review for step 01.11 · clean · PR#511
+ docs for step 01.11 · PR#512 · document --fix in CONTRIBUTING.md + docblock
 
 ## Open review findings — 01.08
 
