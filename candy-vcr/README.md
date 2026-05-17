@@ -225,6 +225,17 @@ Borrowed from asciinema, idle-trim compresses long inter-event gaps so a 30-seco
 
 Replay defaults to the compressed timeline. Pass `--no-trim` to replay to honour `tRaw` instead — useful when the original cadence matters (demos, race-condition repros). Events without `tRaw` (older cassettes, or untrimmed events) replay using `t`, so the format stays backward-compatible. The `Player::play(... useRawTimestamps: true)` flag exposes the same behaviour to PHP callers.
 
+### Host TTY safety net (PR P6.5.4)
+
+`record` puts the host stdin into raw mode while the recorded program runs. The in-band `finally` restores it on every PHP-controlled exit path (clean exit, exception). For exits that bypass `finally` — SIGTERM, SIGHUP, fatal errors — the command installs:
+
+- `register_shutdown_function([RecordCommand::class, 'rescueRestore'])` — fires on every PHP run shutdown, including fatal errors.
+- `pcntl_signal(SIGTERM/SIGHUP, [RecordCommand::class, 'handleRescueSignal'])` with `pcntl_async_signals(true)` — restores then re-raises the signal with the default handler so the process still dies with the right status.
+
+`SIGKILL` cannot be intercepted by anything. As a mitigation, while recording is in flight the command drops a marker file at `sys_get_temp_dir() . '/candy-vcr-rescue.<pid>'` containing the host TTY's device path (resolved via `posix_ttyname(STDIN)`). If a hard kill leaves your terminal stuck in raw mode, run `stty sane < /path/to/your/tty` (you'll find the path in the marker file, which is cleaned up on every clean exit).
+
+The static handlers are signal-safe (no allocation, no logging) and idempotent; calling `rescueRestore()` twice in a row is a no-op.
+
 ### Hook system (L4)
 
 Hooks intercept and transform events during recording, enabling sanitization,
