@@ -150,6 +150,48 @@ chains into `$recorder->recordResize($cols, $rows)` — the pump
 itself stays clear of SIGWINCH detection so it can be reused for
 non-interactive recordings.
 
+## Multi-pump
+
+`MultiPump` demuxes multiple PTY sessions from a single
+`stream_select` loop — a split-pane viewer, parallel test harness,
+or tmux-style supervisor use-case:
+
+```php
+use SugarCraft\Pty\PtySystemFactory;
+use SugarCraft\Pty\Posix\MultiPump;
+
+$system = PtySystemFactory::default();
+$mp     = new MultiPump();
+
+// Register two shells and tee each master to stdout with a prefix.
+foreach ([0, 1] as $idx) {
+    $pair   = $system->open(80, 24);
+    $prefix = "[session-{$idx}] ";
+    $sink   = fopen('php://memory', 'w+b');
+
+    $child = $pair->slave()->spawn(
+        ['/bin/bash', '-i'],
+        ['TERM' => 'xterm-256color'],
+        80, 24,
+        controllingTerminal: true,
+    );
+
+    $mp->add($pair->master(), $sink, $child);
+}
+
+// Drive the multiplexer until every session exits.
+while (!$mp->allDone()) {
+    $drained = $mp->tick();
+    if ($drained > 0) {
+        // Drain each per-session sink, tag with prefix, print.
+    }
+}
+```
+
+See [`examples/multi-pump.php`](examples/multi-pump.php) for the full
+interactive demo — two shells teed to stdout with per-session prefixes,
+quit on Ctrl-C.
+
 ## Pump callbacks
 
 `PumpOptions` exposes four optional callbacks covering the pump loop
