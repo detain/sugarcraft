@@ -51,3 +51,5 @@ step 01.02 · PR#491 · PARTIAL — add .gitignore + @dev→dev-master + CI cach
 fix for step 01.02 · PR#492 · resolved 3 findings
 step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorder-tap comment
 fix for step 01.03 · PR#494 · resolved 3 findings
+tests-ci for step 01.03 · clean
+step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor
