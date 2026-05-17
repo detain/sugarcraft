@@ -146,6 +146,9 @@ final class JsonlFormat implements Format
         if ($h->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
             $data['timestampMode'] = $h->timestampMode;
         }
+        if ($h->env !== []) {
+            $data['env'] = $h->env;
+        }
         return $this->jsonEncode($data);
     }
 
@@ -170,6 +173,14 @@ final class JsonlFormat implements Format
                 throw new \RuntimeException("candy-vcr: header on line {$lineNo} missing '{$key}'");
             }
         }
+        $env = [];
+        if (isset($data['env']) && \is_array($data['env'])) {
+            foreach ($data['env'] as $k => $v) {
+                if (\is_string($k) && \is_string($v)) {
+                    $env[$k] = $v;
+                }
+            }
+        }
         return new CassetteHeader(
             version: (int) $data['v'],
             createdAt: (string) $data['created'],
@@ -177,6 +188,7 @@ final class JsonlFormat implements Format
             rows: (int) $data['rows'],
             runtime: (string) $data['runtime'],
             timestampMode: isset($data['timestampMode']) ? (string) $data['timestampMode'] : CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
+            env: $env,
         );
     }
 
