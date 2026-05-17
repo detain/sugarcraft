@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14]
+        os: [ubuntu-22.04, macos-15]
         php: ['8.3', '8.4']
         termios: [ffi, stty]
         # macOS minutes are 10× Linux cost — keep that runner to the
@@ -44,9 +44,9 @@ jobs:
         # behaviour (the FFI path against /usr/lib/libSystem.B.dylib).
         # The full os×php×termios grid only fans out on Linux.
         exclude:
-          - os: macos-14
+          - os: macos-15
             php: '8.4'
-          - os: macos-14
+          - os: macos-15
             termios: stty
 
     steps:
