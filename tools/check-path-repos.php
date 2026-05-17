@@ -17,7 +17,7 @@ declare(strict_types=1);
  * Exits 0 on clean closure, 1 with a printed report on any drift.
  *
  * With --fix: auto-inserts missing path-repo entries and exits 0 if every
- * issue was fixable.
+ * issue was fixable. With --help: print usage and exit 0.
  *
  * Constraints other than `@dev` (e.g. `dev-master`, `^1.0`) are skipped
  * — those resolve via the VCS remote and don't need a path-repo. The
