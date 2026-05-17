@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Pty;
 
+use SugarCraft\Core\Recorder;
 use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Exception\ExpectEofException;
 use SugarCraft\Pty\Exception\ExpectTimeoutException;
@@ -46,6 +47,10 @@ final class Expect
      * @param string|null $before    Bytes that appeared BEFORE the last match —
      *                               equivalent to pexpect's `child.before`.
      *                               Null on a fresh instance.
+     * @param Recorder|null $recorder Optional recording sink for dialog
+     *                               scripting.  When set, {@see send()} calls
+     *                               {@see Recorder::recordInputBytes()} and
+     *                               each successful match calls {@see Recorder::recordOutput()}.
      */
     public function __construct(
         public readonly MasterPty $master,
@@ -53,6 +58,7 @@ final class Expect
         public readonly ?string $lastMatch = null,
         public readonly ?string $before = null,
         public readonly int $readChunk = self::DEFAULT_READ_CHUNK,
+        public readonly ?Recorder $recorder = null,
     ) {}
 
     /**
@@ -61,12 +67,12 @@ final class Expect
      * this lib expects the caller to handle the spawn separately so
      * the master can be reused across multiple Expect chains.
      */
-    public static function on(MasterPty $master, int $readChunk = self::DEFAULT_READ_CHUNK): self
+    public static function on(MasterPty $master, int $readChunk = self::DEFAULT_READ_CHUNK, ?Recorder $recorder = null): self
     {
         if ($readChunk <= 0) {
             throw new \InvalidArgumentException("readChunk must be > 0, got {$readChunk}");
         }
-        return new self($master, readChunk: $readChunk);
+        return new self($master, readChunk: $readChunk, recorder: $recorder);
     }
 
     /**
@@ -76,12 +82,14 @@ final class Expect
     public function send(string $bytes): self
     {
         $this->master->write($bytes);
+        $this->recorder?->recordInputBytes($bytes);
         return new self(
             master: $this->master,
             buffer: $this->buffer,
             lastMatch: $this->lastMatch,
             before: $this->before,
             readChunk: $this->readChunk,
+            recorder: $this->recorder,
         );
     }
 
@@ -93,6 +101,26 @@ final class Expect
     public function sendLine(string $line, string $eol = "\n"): self
     {
         return $this->send($line . $eol);
+    }
+
+    /**
+     * Attach (or detach) a {@see Recorder} to tee sent bytes and received
+     * output into a cassette.  Pass null to detach.
+     *
+     * Returns a new Expect — immutable + fluent per the model pattern.
+     *
+     * @see \SugarCraft\Core\Recorder
+     */
+    public function withRecorder(?Recorder $recorder): self
+    {
+        return new self(
+            master: $this->master,
+            buffer: $this->buffer,
+            lastMatch: $this->lastMatch,
+            before: $this->before,
+            readChunk: $this->readChunk,
+            recorder: $recorder,
+        );
     }
 
     /**
@@ -159,6 +187,7 @@ final class Expect
                     lastMatch: $bestNeedle,
                     before: $before,
                     readChunk: $this->readChunk,
+                    recorder: $this->recorder,
                 );
             }
 
@@ -177,6 +206,7 @@ final class Expect
             if ($chunk === '') {
                 throw ExpectEofException::forNeedles($needles, $buffer);
             }
+            $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
         }
     }
@@ -217,6 +247,7 @@ final class Expect
                     lastMatch: $matchText,
                     before: $before,
                     readChunk: $this->readChunk,
+                    recorder: $this->recorder,
                 );
             }
 
@@ -235,6 +266,7 @@ final class Expect
             if ($chunk === '') {
                 throw ExpectEofException::forPattern($regex, $buffer);
             }
+            $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
         }
     }
