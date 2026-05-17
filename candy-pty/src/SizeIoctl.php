@@ -132,39 +132,72 @@ final class SizeIoctl
 
     /**
      * Apply a winsize to `$fd`. Returns 0 on success, libc's rc on
-     * failure. Uses the non-variadic POSIX 2024 `tcsetwinsize` on
-     * Darwin (where the real `ioctl` is variadic and the arm64 ABI
-     * mismatch causes our fixed-arg cdef to send the struct pointer
-     * to the wrong register); falls back to `ioctl(TIOCSWINSZ)` on
-     * Linux. Centralised here so both legacy `Pty::resize()` and
+     * failure. Linux uses `ioctl(TIOCSWINSZ)`. Darwin tries the same
+     * but falls back to `stty -f /dev/fd/<fd>` because the real libc
+     * `ioctl` is variadic and arm64 puts varargs on the stack while
+     * fixed args sit in `x0`–`x7` — our fixed-arg cdef pushes the
+     * winsize pointer to the wrong register and the kernel returns
+     * -1. POSIX 2024 `tcsetwinsize` would solve this cleanly but
+     * macOS 15 libSystem doesn't ship it yet (verified PR #475 CI:
+     * `Failed resolving C function 'tcsetwinsize'`).
+     *
+     * Centralised here so both legacy `Pty::resize()` and
      * `PosixMasterPty::resize()` get the fix transparently.
+     *
+     * @see SttyTermios::sttyArgs() for the Darwin `-f` flag convention
      */
     public static function setSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int
     {
-        if (\PHP_OS_FAMILY === 'Darwin') {
-            try {
-                return $libc->tcsetwinsize($fd, $ws);
-            } catch (\Throwable) {
-                // Fall through to ioctl if tcsetwinsize is missing
-                // on the host (pre-macOS-13 libSystem).
+        $rc = $libc->ioctl($fd, self::setRequest(), $ws);
+
+        if ($rc !== 0 && \PHP_OS_FAMILY === 'Darwin') {
+            $sttyRc = self::sttySetSize($fd, (int) $ws[0], (int) $ws[1]);
+            if ($sttyRc === 0) {
+                return 0;
             }
         }
-        return $libc->ioctl($fd, self::setRequest(), $ws);
+
+        return $rc;
+    }
+
+    /**
+     * Shell-out to stty(1) to set the terminal size on Darwin.
+     *
+     * Uses `stty -f /dev/fd/<fd> rows <rows> cols <cols>` per the
+     * macOS convention (note `-f`, not Linux's `-F`).
+     *
+     * @see SttyTermios::runStty() for the same pattern
+     */
+    private static function sttySetSize(int $fd, int $rows, int $cols): int
+    {
+        $cmd = ['stty', '-f', '/dev/fd/' . $fd, 'rows', (string) $rows, 'cols', (string) $cols];
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+
+        \fclose($pipes[0]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return \proc_close($proc);
     }
 
     /**
      * Read the winsize from `$fd` into the provided buffer. Returns
-     * 0 on success, libc's rc on failure. Same Darwin-vs-Linux split
-     * as {@see setSizeViaLibc()}.
+     * 0 on success, libc's rc on failure. Routes through ioctl on
+     * both platforms — empirically `ioctl(TIOCGWINSZ)` works on
+     * macOS arm64 despite the variadic ABI mismatch that breaks
+     * TIOCSWINSZ (the read direction may pack the buffer into a
+     * register the kernel still uses correctly; only the write
+     * direction with payload-bearing struct triggers the bug). Once
+     * POSIX 2024 `tcgetwinsize` ships on macOS we can switch this
+     * to the non-variadic helper for symmetry with set.
      */
     public static function getSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int
     {
-        if (\PHP_OS_FAMILY === 'Darwin') {
-            try {
-                return $libc->tcgetwinsize($fd, $ws);
-            } catch (\Throwable) {
-            }
-        }
         return $libc->ioctl($fd, self::getRequest(), $ws);
     }
 
