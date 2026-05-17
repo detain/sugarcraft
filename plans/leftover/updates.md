@@ -53,3 +53,4 @@ step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorde
 fix for step 01.03 · PR#494 · resolved 3 findings
 tests-ci for step 01.03 · clean
 step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor
+review for step 01.04 · clean · PR#496
