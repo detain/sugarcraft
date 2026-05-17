@@ -155,6 +155,23 @@ final class PumpOptions
         $this->recorder = $recorder;
     }
 
+    /**
+     * SSH-session-tuned preset — matches values previously hardcoded
+     * in InProcessTransport for SSH session behaviour.
+     *
+     * @see \SugarCraft\Wish\Transport\InProcessTransport
+     */
+    public static function sshDefault(): self
+    {
+        return new self(
+            chunkBytes: self::DEFAULT_CHUNK_BYTES,
+            selectTimeoutUs: self::DEFAULT_SELECT_TIMEOUT_US,
+            flushDeadlineSec: self::DEFAULT_FLUSH_DEADLINE_SEC,
+            stdinEofGraceSec: self::DEFAULT_STDIN_EOF_GRACE_SEC,
+            veof: self::DEFAULT_VEOF,
+        );
+    }
+
     public function withChunkBytes(int $v): self
     {
         return new self(

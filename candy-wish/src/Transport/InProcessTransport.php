@@ -208,7 +208,7 @@ final class InProcessTransport implements Transport, ChildSpawner
                 $onIdle = $this->keepaliveCallback !== null
                     ? \Closure::fromCallable($this->keepaliveCallback)
                     : null;
-                $opts = new PumpOptions(onIdle: $onIdle);
+                $opts = PumpOptions::sshDefault()->withOnIdle($onIdle);
 
                 $pumpResult = (new PosixPump())->run($master, $stdin, $stdout, $child, $opts);
             } finally {
