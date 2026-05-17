@@ -78,3 +78,4 @@ candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (u
 path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02)
 step 01.07 · PR#502 · candy-shell: RealProcess kept as deprecated alias; Process interface aligned with candy-pty/Contract
 review for step 01.07 · clean · PR#502
+tests-ci for step 01.07 · PR#503 · add stdoutBytes/stderrBytes forwarding tests to FakeProcess
