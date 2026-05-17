@@ -2,10 +2,10 @@
 name: scaffold-library
 description: Scaffolds a new SugarCraft library end-to-end per the AGENTS.md checklist. Creates <slug>/composer.json (path-repo closure copied from sugar-charts), README.md, CALIBER_LEARNINGS.md, phpunit.xml, src/<Class>.php with declare(strict_types=1) + PSR-4 namespace, tests/ stub, and updates root composer.json + MATCHUPS.md + PROJECT_NAMES.md + README.md table + docs/index.html tile + docs/lib/<slug>.html + .github/workflows/ci.yml + .github/workflows/vhs.yml + codecov.yml. Use when user says 'add new library', 'port <upstream>', 'create candy-X', 'create sugar-Y', or 'create honey-Z'. Do NOT use for adding features to an existing lib (follow that lib's CALIBER_LEARNINGS.md instead) or for renaming libs (separate flow).
 paths:
-  - */composer.json
-  - */phpunit.xml
-  - */src/**/*.php
-  - */tests/**/*.php
+  - '*/composer.json'
+  - '*/phpunit.xml'
+  - '*/src/**/*.php'
+  - '*/tests/**/*.php'
   - MATCHUPS.md
   - PROJECT_NAMES.md
   - docs/index.html

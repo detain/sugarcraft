@@ -2,7 +2,7 @@
 name: path-repo-closure
 description: Walks every consuming lib's composer.json to insert a `{type: path, url: "../<dep>", options: {symlink: true}}` entry plus the matching `require["sugarcraft/<dep>"]: "@dev"` whenever a new transitive sugarcraft/* dependency is added. Mirrors the closure shape in sugar-charts/composer.json. Use when user says 'add dep on <slug>', 'wire up <slug>', 'new transitive dep', or edits a `require["sugarcraft/..."]` line. Do NOT use for non-sugarcraft Packagist deps — those need only a `require` bump, no path-repo.
 paths:
-  - **/composer.json
+  - '**/composer.json'
 ---
 # path-repo-closure
 

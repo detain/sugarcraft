@@ -3,10 +3,10 @@ name: add-library-checklist
 description: Walks through the full 14-file touchlist when scaffolding a new SugarCraft port. Creates `<slug>/composer.json`, `<slug>/phpunit.xml`, `<slug>/README.md`, `<slug>/CALIBER_LEARNINGS.md`, `<slug>/src/<Class>.php`, then updates root `composer.json` (`require` + `repositories[]`), `MATCHUPS.md`, `PROJECT_NAMES.md`, root `README.md`, `docs/index.html`, `docs/lib/<slug>.html`, `media/icons/<slug>.png`, `.github/workflows/vhs.yml` matrix, and `codecov.yml` (flags + components). Use when user says 'add a library', 'port <upstream>', 'scaffold lib <slug>', or 'new SugarCraft lib'. Do NOT use to modify an existing lib's metadata — use direct Edit instead.
 paths:
   - composer.json
-  - */composer.json
-  - */phpunit.xml
-  - */src/**/*.php
-  - */tests/**/*.php
+  - '*/composer.json'
+  - '*/phpunit.xml'
+  - '*/src/**/*.php'
+  - '*/tests/**/*.php'
   - MATCHUPS.md
   - PROJECT_NAMES.md
   - docs/index.html
