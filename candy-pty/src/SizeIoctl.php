@@ -136,8 +136,12 @@ final class SizeIoctl
      * Darwin (where the real `ioctl` is variadic and the arm64 ABI
      * mismatch causes our fixed-arg cdef to send the struct pointer
      * to the wrong register); falls back to `ioctl(TIOCSWINSZ)` on
-     * Linux. Centralised here so both legacy `Pty::resize()` and
+     * Linux. On Darwin, if both fail, a final `stty -f /dev/fd/<fd>`
+     * shell fallback is attempted before returning the error code.
+     * Centralised here so both legacy `Pty::resize()` and
      * `PosixMasterPty::resize()` get the fix transparently.
+     *
+     * @see SttyTermios::sttyArgs() for the Darwin `-f` flag convention
      */
     public static function setSizeViaLibc(\FFI $libc, int $fd, \FFI\CData $ws): int
     {
@@ -149,7 +153,42 @@ final class SizeIoctl
                 // on the host (pre-macOS-13 libSystem).
             }
         }
-        return $libc->ioctl($fd, self::setRequest(), $ws);
+        $rc = $libc->ioctl($fd, self::setRequest(), $ws);
+
+        if ($rc !== 0 && \PHP_OS_FAMILY === 'Darwin') {
+            // Darwin final fallback: stty(1) on the fd.
+            $sttyRc = self::sttySetSize($fd, (int) $ws[0], (int) $ws[1]);
+            if ($sttyRc === 0) {
+                return 0;
+            }
+        }
+
+        return $rc;
+    }
+
+    /**
+     * Shell-out to stty(1) to set the terminal size on Darwin.
+     *
+     * Uses `stty -f /dev/fd/<fd> rows <rows> cols <cols>` per the
+     * macOS convention (note `-f`, not Linux's `-F`).
+     *
+     * @see SttyTermios::runStty() for the same pattern
+     */
+    private static function sttySetSize(int $fd, int $rows, int $cols): int
+    {
+        $cmd = ['stty', '-f', '/dev/fd/' . $fd, 'rows', (string) $rows, 'cols', (string) $cols];
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+
+        \fclose($pipes[0]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+
+        return \proc_close($proc);
     }
 
     /**
