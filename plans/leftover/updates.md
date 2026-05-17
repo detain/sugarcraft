@@ -83,6 +83,7 @@ tests-ci for step 01.07 · PR#503 · add stdoutBytes/stderrBytes forwarding test
 step 01.08 · PR#504 · candy-pty: add SUGARCRAFT_PTY_BACKEND env var for backend selection
 fix for step 01.08 · PR#505 · add deferred-backend-exception CALIBER entry
 docs for step 01.08 · PR#506 · document SUGARCRAFT_PTY_BACKEND in end-user/admin/dev docs
+step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + Expect withRecorder
 
 ## Open review findings — 01.08
 
