@@ -7,10 +7,9 @@ declare(strict_types=1);
  * line-by-line through the master end, demonstrating non-blocking
  * read with timeout.
  *
- * Streams `seq 1 N` (or any user-supplied counter command) through
- * the PTY. Each line is read off the master in non-blocking mode
- * and printed immediately, so the example doubles as a smoke test
- * for the read-with-timeout path that PR4 introduced.
+ * Uses the {@see \SugarCraft\Pty\PtySystemFactory} DI-friendly entry
+ * point — same shape as `spawn-bash.php` but with a timed read loop
+ * to exercise `MasterPty::read()`'s timeout argument.
  *
  * Usage:
  *   php examples/pump-output.php
@@ -19,7 +18,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\PtySystemFactory;
 
 $count = (int) ($argv[1] ?? 5);
 if ($count < 1 || $count > 1000) {
@@ -27,28 +26,30 @@ if ($count < 1 || $count > 1000) {
     exit(1);
 }
 
-$pty = Pty::open();
+$pair = PtySystemFactory::default()->open(80, 24);
+$master = $pair->master();
+$slave = $pair->slave();
+
 try {
     // sleep 0.05 between each line so the pump loop has work to do
     // — without it, `seq` finishes faster than we can demonstrate.
     $script = "for i in \$(seq 1 {$count}); do echo \"tick \$i\"; sleep 0.05; done";
 
-    $child = $pty->spawn(
+    $child = $slave->spawn(
         ['/bin/sh', '-c', $script],
         null,
         80,
         24,
     );
 
-    $pty->setBlocking(false);
+    stream_set_blocking($master->stream(), false);
     $linesPrinted = 0;
     $buffer = '';
     $deadline = microtime(true) + 30.0;
 
     while (microtime(true) < $deadline) {
-        $chunk = $pty->read(4096, 0.1);
+        $chunk = $master->read(4096, 0.1);
         if ($chunk === null) {
-            // Idle 100ms — check if the child has exited.
             if ($child->exited()) {
                 break;
             }
@@ -72,5 +73,7 @@ try {
     $child->wait();
     echo "── done — {$linesPrinted} lines pumped ──\n";
 } finally {
-    $pty->close();
+    if (!$master->isClosed()) {
+        $master->close();
+    }
 }

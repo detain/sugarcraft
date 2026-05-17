@@ -54,6 +54,11 @@ final class VimSmokeTest extends TestCase
         if (!\is_executable(self::VIM_PATH)) {
             $this->markTestSkipped(\sprintf('vim not installed at %s', self::VIM_PATH));
         }
+        // candy-vt is require-dev — coverage runners that install only
+        // production deps won't have it. Skip cleanly rather than fatal.
+        if (!\class_exists(Terminal::class)) {
+            $this->markTestSkipped('SugarCraft\\Vt\\Terminal\\Terminal not autoloadable (candy-vt require-dev missing on this runner)');
+        }
 
         // Per-PID + random suffix so concurrent test runs don't collide.
         $scratch = \sprintf(
