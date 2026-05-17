@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "32393d801580c2da315baf0ddbbd741b",
+    "content-hash": "7aee4c3bbef46a42e6f48165fe0a8a97",
     "packages": [
         {
             "name": "react/event-loop",
@@ -79,20 +79,104 @@
             "time": "2025-11-17T20:46:25+00:00"
         },
         {
-            "name": "sugarcraft/candy-core",
-            "version": "dev-master",
+            "name": "react/promise",
+            "version": "v3.3.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/promise.git",
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
+            },
             "dist": {
-                "type": "path",
-                "url": "../candy-core",
-                "reference": "143a8a40aceaf83b4a18362a634f965c9c874901"
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/promise/zipball/23444f53a813a3296c1368bb104793ce8d88f04a",
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a",
+                "shasum": ""
             },
             "require": {
-                "php": "^8.1",
-                "react/event-loop": "^1.6"
+                "php": ">=7.1.0"
             },
             "require-dev": {
+                "phpstan/phpstan": "1.12.28 || 1.4.10",
+                "phpunit/phpunit": "^9.6 || ^7.5"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/functions_include.php"
+                ],
+                "psr-4": {
+                    "React\\Promise\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "A lightweight implementation of CommonJS Promises/A for PHP",
+            "keywords": [
+                "promise",
+                "promises"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/promise/issues",
+                "source": "https://github.com/reactphp/promise/tree/v3.3.0"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-core",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-core.git",
+                "reference": "45f7167ffd5a546fdd9a4e07dbf6cdde63ff0f61"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-core/zipball/45f7167ffd5a546fdd9a4e07dbf6cdde63ff0f61",
+                "reference": "45f7167ffd5a546fdd9a4e07dbf6cdde63ff0f61",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-pty": "@dev"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -103,6 +187,11 @@
                 "psr-4": {
                     "SugarCraft\\Core\\Tests\\": "tests/"
                 }
+            },
+            "scripts": {
+                "analyse": [
+                    "vendor/bin/phpstan analyse src --no-progress"
+                ]
             },
             "license": [
                 "MIT"
@@ -133,6 +222,69 @@
                 "issues": "https://github.com/sugarcraft/candy-core/issues",
                 "source": "https://github.com/sugarcraft/candy-core",
                 "docs": "https://sugarcraft.github.io/lib/candy-core.html"
+            },
+            "time": "2026-05-17T00:32:41+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-pty",
+            "version": "dev-ai/candy-vcr-record-command-skeleton",
+            "dist": {
+                "type": "path",
+                "url": "../candy-pty",
+                "reference": "e12517ab2018d3fc0790929f38fb1161fc3008f0"
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-vcr": "@dev",
+                "sugarcraft/candy-vt": "@dev"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/candy-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-pty/issues",
+                "source": "https://github.com/sugarcraft/candy-pty",
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -1763,18 +1915,25 @@
         {
             "name": "sugarcraft/candy-sprinkles",
             "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-sprinkles.git",
+                "reference": "bbc9d1f9bc02dde9a910b64f1b10618693641651"
+            },
             "dist": {
-                "type": "path",
-                "url": "../candy-sprinkles",
-                "reference": "926b57877341b9607140f0baa83922796ea83d82"
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-sprinkles/zipball/bbc9d1f9bc02dde9a910b64f1b10618693641651",
+                "reference": "bbc9d1f9bc02dde9a910b64f1b10618693641651",
+                "shasum": ""
             },
             "require": {
-                "php": "^8.1",
-                "sugarcraft/candy-core": "@dev"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -1817,27 +1976,31 @@
                 "source": "https://github.com/sugarcraft/candy-sprinkles",
                 "docs": "https://sugarcraft.github.io/lib/candy-sprinkles.html"
             },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "time": "2026-05-15T02:43:11+00:00"
         },
         {
             "name": "sugarcraft/candy-vt",
             "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-vt.git",
+                "reference": "e008c257572245d69e2d9dd282395c3d43aaf09f"
+            },
             "dist": {
-                "type": "path",
-                "url": "../candy-vt",
-                "reference": "0dcaaa21678a77723d9e827e279e67c72fc69459"
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-vt/zipball/e008c257572245d69e2d9dd282395c3d43aaf09f",
+                "reference": "e008c257572245d69e2d9dd282395c3d43aaf09f",
+                "shasum": ""
             },
             "require": {
-                "php": "^8.2",
-                "sugarcraft/candy-core": "@dev",
-                "sugarcraft/candy-sprinkles": "@dev"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -1874,10 +2037,7 @@
                 "source": "https://github.com/sugarcraft/candy-vt",
                 "docs": "https://sugarcraft.github.io/lib/candy-vt.html"
             },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "time": "2026-05-15T02:43:11+00:00"
         },
         {
             "name": "symfony/deprecation-contracts",
@@ -2164,12 +2324,13 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-core": 20,
+        "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-vt": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.2"
+        "php": "^8.3"
     },
     "platform-dev": {},
     "plugin-api-version": "2.6.0"
