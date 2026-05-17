@@ -21,22 +21,47 @@ use SugarCraft\Pty\Posix\PosixPtySystem;
  * tests and bootstrappers alike. The actual PTY syscalls only run
  * when a caller invokes `$system->open()`.
  *
+ * Backend selection is controlled by `SUGARCRAFT_PTY_BACKEND`:
+ * `posix-ffi` (default on POSIX), `sidecar` / `pecl` (deferred to
+ * phase 12, throw now), `auto` (same as unset / default behaviour).
+ *
  * Mirrors charmbracelet/x/xpty.Open()'s platform-resolution layer.
  *
  * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.1)
  */
 final class PtySystemFactory
 {
+    private const VALID_BACKENDS = ['posix-ffi', 'sidecar', 'pecl', 'auto'];
+
     /**
-     * Default factory entry point. Pick the implementation that
-     * matches `PHP_OS_FAMILY`; throw {@see UnsupportedPlatformException}
-     * on platforms where no backend exists.
+     * Default factory entry point. Respects `SUGARCRAFT_PTY_BACKEND`
+     * when set, otherwise falls back to platform-appropriate behaviour.
      *
-     * @throws UnsupportedPlatformException on Windows.
+     * @throws UnsupportedPlatformException on Windows or when an
+     *     unreleased backend (`sidecar`, `pecl`) is selected.
+     * @throws \InvalidArgumentException    on an unrecognised value.
      */
     public static function default(): PtySystem
     {
-        return self::forPlatform(\PHP_OS_FAMILY);
+        $backend = \getenv('SUGARCRAFT_PTY_BACKEND');
+
+        if ($backend === false || $backend === '' || $backend === 'auto') {
+            return self::forPlatform(\PHP_OS_FAMILY);
+        }
+
+        if ($backend === 'posix-ffi') {
+            return self::forPlatform(\PHP_OS_FAMILY);
+        }
+
+        if ($backend === 'sidecar' || $backend === 'pecl') {
+            throw UnsupportedPlatformException::forDeferredBackend($backend);
+        }
+
+        throw new \InvalidArgumentException(\sprintf(
+            'Unknown SUGARCRAFT_PTY_BACKEND value %s. Recognised values: %s.',
+            \var_export($backend, true),
+            \implode(', ', self::VALID_BACKENDS),
+        ));
     }
 
     /**
