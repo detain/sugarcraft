@@ -24,7 +24,7 @@ this before spawning the next subagent.)
 in a follow-up step or a deferred phase. Each entry: one short line +
 the step that surfaced it.)
 
-- sugar-bits, sugar-charts, sugar-dash, candy-sprinkles, candy-vt need path-repo entries for local sugarcraft/* deps to work without GitHub network access (step 01.02)
+- (none currently)
 
 ---
 
@@ -59,3 +59,4 @@ step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
 review for step 01.05 · clean · PR#498
 step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
 candy-core-gitignore · PR#500 · candy-core: add composer.lock to .gitignore (untracked 72KB lock file issue)
+path-repo-5-libs · PR#501 · sugar-bits/sugar-charts/sugar-dash/candy-sprinkles/candy-vt: add path-repo entries for local sugarcraft/* deps (leftover 01.02)
