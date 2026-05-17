@@ -124,6 +124,32 @@ The forwarder defaults to `pcntl_async_signals(true)` so handlers
 fire between PHP opcodes; pass `async: false` if your event loop
 already polls `pcntl_signal_dispatch()` itself.
 
+## Recording sessions (Recorder tap)
+
+`PumpOptions` accepts an optional `SugarCraft\Core\Recorder` —
+when set, `PosixPump` tees stdin chunks (`recordInputBytes`) and
+master-read chunks (`recordOutput`) into the recorder on the same
+loop iteration as the read. Null = zero overhead.
+
+```php
+use SugarCraft\Pty\Posix\PosixPump;
+use SugarCraft\Pty\PumpOptions;
+use SugarCraft\Vcr\Recorder;
+
+$recorder = Recorder::open('/tmp/session.cas');
+$opts     = (new PumpOptions())->withRecorder($recorder);
+$exit     = (new PosixPump())->run($master, STDIN, STDOUT, $child, $opts);
+$recorder->recordQuit();
+$recorder->close();
+// /tmp/session.cas can now be walked via SugarCraft\Vcr\Format\JsonlFormat
+// or driven through SugarCraft\Vcr\Player::play() against a candy-core Program.
+```
+
+Resize events still need a separate `SignalForwarder` callback that
+chains into `$recorder->recordResize($cols, $rows)` — the pump
+itself stays clear of SIGWINCH detection so it can be reused for
+non-interactive recordings.
+
 ## Examples
 
 - [`examples/spawn-bash.php`](examples/spawn-bash.php) — The simplest end-to-end slice: `PtySystemFactory::default()->open()` → `$pair->slave()->spawn(['bash', ...])` → drain master → reap. Start here.
