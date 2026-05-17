@@ -77,6 +77,12 @@ Status legend:
 | [namzug16/gifterm](https://github.com/namzug16/gifterm) | **CandyFlip** | `candy-flip/` | `sugarcraft/candy-flip` | `SugarCraft\Flip` | 🟢 | ASCII GIF viewer (ext-gd) |
 | [kbrgl/flapioca](https://github.com/kbrgl/flapioca) | **HoneyFlap** | `honey-flap/` | `sugarcraft/honey-flap` | `SugarCraft\Flap` | 🟢 | Flappy Bird clone — bird is a HoneyBounce projectile |
 
+<!--
+TODO(leftover-rollout step 01.01): When a Windows ConPTY row is added
+to this table, uncomment the row below and point it at the Windows plan.
+| TBD (ConPTY backend) | **CandyPty.Windows** | `candy-pty/` | `sugarcraft/candy-pty` | `SugarCraft\Pty\Windows` | 🔴 | Windows ConPTY backend — tracked in plans/x-windows.md |
+-->
+
 ---
 
 ## Naming conventions (cheat sheet)
