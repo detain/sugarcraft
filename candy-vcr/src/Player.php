@@ -84,6 +84,12 @@ final class Player
      * @param float          $timeoutSeconds   Hard cap on the loop. Default: cassette duration + 5s.
      * @param EventMatcher|null $matcher       Event matching policy. Defaults to null (no matcher-based filtering).
      * @param float|null      $idleThresholdSeconds If set in REALTIME mode, pauses longer than this (seconds) are clamped to this value for faster CI runs.
+     * @param bool $useRawTimestamps  When true and an event carries `tRaw` (recorded
+     *                                with `--idle-trim`), use `tRaw` for inter-event
+     *                                delays so the replay matches the original cadence
+     *                                rather than the compressed timeline. Has no effect
+     *                                on cassettes recorded without idle-trim. Mirrors
+     *                                the `--no-trim` flag of {@see ReplayCommand}.
      */
     public function play(
         \Closure $programFactory,
@@ -94,6 +100,7 @@ final class Player
         bool $skipFirstResize = true,
         ?EventMatcher $matcher = null,
         ?float $idleThresholdSeconds = null,
+        bool $useRawTimestamps = false,
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
@@ -165,7 +172,9 @@ final class Player
             // event timestamps, clamped to >= 0. If idleThresholdSeconds
             // is set, long pauses are clamped to that value for faster CI.
             if ($speed === self::SPEED_REALTIME) {
-                $delta = max(0.0, $events[$i]->t - $event->t);
+                $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
+                $prevT = self::eventTimestamp($event, $useRawTimestamps);
+                $delta = max(0.0, $thisT - $prevT);
                 if ($idleThresholdSeconds !== null && $delta > $idleThresholdSeconds) {
                     $delta = $idleThresholdSeconds;
                 }
@@ -178,7 +187,7 @@ final class Player
         // Kick off the first event. For REALTIME mode honour its
         // recorded `t`; for INSTANT mode start immediately.
         $firstDelay = ($speed === self::SPEED_REALTIME && $eventCount > 0)
-            ? max(0.0, $events[0]->t)
+            ? max(0.0, self::eventTimestamp($events[0], $useRawTimestamps))
             : 0.0;
         if ($eventCount > 0) {
             $loop->addTimer($firstDelay, $step);
@@ -213,6 +222,21 @@ final class Player
             quitCount: $tally['quit'],
             programQuitCleanly: $programQuitCleanly,
         );
+    }
+
+    /**
+     * Return the wall-clock timestamp to honour for `$event`. With
+     * `$useRaw === true` and a `tRaw` payload key present, the raw
+     * (uncompressed) timestamp wins — that's the recorder's original
+     * time before `--idle-trim` compressed it. Otherwise return `t`,
+     * which is the timeline the cassette stores by default.
+     */
+    private static function eventTimestamp(Event $event, bool $useRaw): float
+    {
+        if ($useRaw && isset($event->payload['tRaw']) && \is_numeric($event->payload['tRaw'])) {
+            return (float) $event->payload['tRaw'];
+        }
+        return $event->t;
     }
 
     /**
