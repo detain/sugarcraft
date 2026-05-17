@@ -86,7 +86,10 @@ docs for step 01.08 · PR#506 · document SUGARCRAFT_PTY_BACKEND in end-user/adm
 step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + Expect withRecorder
 review for step 01.09 · clean · PR#507
 docs for step 01.09 · clean
-step 01.10 · PR#508 · candy-vcr: RecordCommand polish — SIGINT rescue + env-allow-secrets + cassette doc + ShirleyHtopTest
+ step 01.10 · PR#508 · candy-vcr: RecordCommand polish — SIGINT rescue + env-allow-secrets + cassette doc + ShirleyHtopTest
+ review for step 01.10 · clean · PR#508
+ tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkipsAllFiltering for --env-allow-secrets empty-regex path
+ docs for step 01.10 · PR#510 · document --env-allow-secrets in end-user hub-admin dev docs + CALIBER entries
 review for step 01.10 · clean · PR#508
 tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkipsAllFiltering for --env-allow-secrets empty-regex path
 
