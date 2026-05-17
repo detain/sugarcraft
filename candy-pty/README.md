@@ -153,7 +153,8 @@ non-interactive recordings.
 ## Pump callbacks
 
 `PumpOptions` exposes four optional callbacks covering the pump loop
-lifecycle:
+lifecycle, plus a `sshDefault()` named constructor for SSH-session-tuned
+behaviour:
 
 | Callback | Fires when | Use for |
 |---|---|---|
@@ -161,6 +162,16 @@ lifecycle:
 | `onIdle` (step 01.03) | idle tick — every `stream_select` timeout | Keepalive pings, polling housekeeping, any periodic task |
 | `onSigwinch` | terminal dimensions change | Forward host resize into child's TIOCSWINSZ |
 | `onChildExit` | child process exits | Resource cleanup, notification |
+
+`PumpOptions::sshDefault(): self` — SSH-session-tuned preset. Returns a
+`PumpOptions` with the same defaults (`chunkBytes`, `selectTimeoutUs`,
+`flushDeadlineSec`, `stdinEofGraceSec`, `veof`) previously hardcoded in
+`InProcessTransport`. Use when you need SSH-session behaviour outside
+the `candy-wish` transport layer:
+
+```php
+$opts = PumpOptions::sshDefault()->withOnIdle(fn () => error_log('alive'));
+```
 
 **`onIdle` vs `onSigwinch`:** These are independent hooks.
 `onIdle` fires on *every* idle tick (no I/O ready). `onSigwinch`

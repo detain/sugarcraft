@@ -146,6 +146,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>PumpOptions</td><td>withOnSigwinch(fn(cols, rows))</td><td>Register SIGWINCH callback (fires on terminal resize)</td></tr>
 <tr><td>PumpOptions</td><td>withOnChildExit(fn(code))</td><td>Register child-exit callback</td></tr>
 <tr><td>PumpOptions</td><td>withRecorder(recorder)</td><td>Attach session recorder (tee stdin/master bytes)</td></tr>
+<tr><td>PumpOptions</td><td>sshDefault()</td><td>SSH-session-tuned preset — matches values hardcoded in InProcessTransport</td></tr>
 <tr><td>Child</td><td>pid</td><td>Child process ID</td></tr>
 <tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit</td></tr>
 </table>
