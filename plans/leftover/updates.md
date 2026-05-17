@@ -14,7 +14,7 @@ headings present even when empty so nobody has to invent them.
 (Items that stop the current step until resolved. The supervisor checks
 this before spawning the next subagent.)
 
-_none yet_
+- **step 01.06** (slim-deprecated-facades): The step file's approach (`extends Posix\PosixFoo`) is architecturally impossible — all Posix classes are `final`: `PosixMasterPty`, `PosixSlavePty`, `PosixChild`, `PosixPtySystem`, `PosixPtyPair`, `PosixProcess`, `PosixTermios`, `PosixPump`. Cannot extend final classes. Additionally: `Spawn::proc()` is the lower-level primitive that `PosixSlavePty::spawn()` calls (circular), and `Child` is the parent class that `PosixChild` extends (backwards delegation). Attempted Master+PosixMasterPty and Pty+PosixMasterPty delegation — both fail at PHPUnit load time with "cannot extend final class". Needs supervisor decision: (a) unfinal the Posix classes, (b) use composition instead of inheritance, or (c) accept the facades as-is since Child(43 LOC) and Master(24 LOC) are already minimal.
 
 ---
 
@@ -56,4 +56,5 @@ step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named construct
 review for step 01.04 · clean · PR#496
 docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html
 step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
-step 01.06 · PR#<N> · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
+review for step 01.05 · clean · PR#498
+step 01.06 · PR#499 · candy-pty: slim Pty facade via composition (Spawn/Child/Master left at minimal sizes; original step prescription was structurally impossible)
