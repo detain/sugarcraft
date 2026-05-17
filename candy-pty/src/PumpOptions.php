@@ -77,6 +77,16 @@ final class PumpOptions
     public readonly \Closure|null $keepalive;
 
     /**
+     * Called on each idle tick (stream_select returned 0). Use for
+     * keepalive, polling, or any periodic housekeeping. Distinct from
+     * {@see onSigwinch} which carries real terminal-dimension values
+     * and is driven by the consumer's {@see SignalForwarder} callback.
+     *
+     * @var (\Closure(): void)|null
+     */
+    public readonly \Closure|null $onIdle;
+
+    /**
      * Called on SIGWINCH with new dimensions (cols, rows).
      * Null when no callback is registered.
      *
@@ -116,6 +126,7 @@ final class PumpOptions
      * @param float<0, max>                  $flushDeadlineSec
      * @param float<0, max>                  $stdinEofGraceSec
      * @param (\Closure(): void)|null       $keepalive
+     * @param (\Closure(): void)|null       $onIdle
      * @param (\Closure(int, int): void)|null $onSigwinch
      * @param (\Closure(int): void)|null     $onChildExit
      * @param \SugarCraft\Core\Recorder|null $recorder
@@ -127,6 +138,7 @@ final class PumpOptions
         float $stdinEofGraceSec = self::DEFAULT_STDIN_EOF_GRACE_SEC,
         string $veof = self::DEFAULT_VEOF,
         ?\Closure $keepalive = null,
+        ?\Closure $onIdle = null,
         ?\Closure $onSigwinch = null,
         ?\Closure $onChildExit = null,
         ?\SugarCraft\Core\Recorder $recorder = null,
@@ -137,6 +149,7 @@ final class PumpOptions
         $this->stdinEofGraceSec = $stdinEofGraceSec;
         $this->veof = $veof;
         $this->keepalive = $keepalive;
+        $this->onIdle = $onIdle;
         $this->onSigwinch = $onSigwinch;
         $this->onChildExit = $onChildExit;
         $this->recorder = $recorder;
@@ -151,6 +164,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -166,6 +180,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -181,6 +196,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -196,6 +212,7 @@ final class PumpOptions
             stdinEofGraceSec: $v,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -211,6 +228,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $v,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -226,6 +244,23 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $v,
+            onIdle: $this->onIdle,
+            onSigwinch: $this->onSigwinch,
+            onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
+        );
+    }
+
+    public function withOnIdle(?\Closure $v): self
+    {
+        return new self(
+            chunkBytes: $this->chunkBytes,
+            selectTimeoutUs: $this->selectTimeoutUs,
+            flushDeadlineSec: $this->flushDeadlineSec,
+            stdinEofGraceSec: $this->stdinEofGraceSec,
+            veof: $this->veof,
+            keepalive: $this->keepalive,
+            onIdle: $v,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -241,6 +276,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $v,
             onChildExit: $this->onChildExit,
             recorder: $this->recorder,
@@ -256,6 +292,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $v,
             recorder: $this->recorder,
@@ -278,6 +315,7 @@ final class PumpOptions
             stdinEofGraceSec: $this->stdinEofGraceSec,
             veof: $this->veof,
             keepalive: $this->keepalive,
+            onIdle: $this->onIdle,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
             recorder: $v,
