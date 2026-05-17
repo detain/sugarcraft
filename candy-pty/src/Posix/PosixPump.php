@@ -182,6 +182,13 @@ final class PosixPump implements PumpContract
             return true;
         }
         $master->write($bytes);
+        // P6.1 Recorder tap: tee stdin bytes into the recorder after
+        // they've been written to master so a write failure leaves the
+        // cassette consistent with what the child actually saw. Zero
+        // overhead when recorder is null (single null-check per chunk).
+        if ($opts->recorder !== null) {
+            $opts->recorder->recordInputBytes($bytes);
+        }
         return true;
     }
 
@@ -198,7 +205,33 @@ final class PosixPump implements PumpContract
         if ($bytes === null || $bytes === '') {
             return true;
         }
+        // P6.1 Recorder tap: record output BEFORE the fwrite to stdout
+        // so a partial-write at exit doesn't leave the cassette ahead
+        // of what the terminal actually saw — better to over-record
+        // than to under-record (a torn frame still replays as bytes;
+        // a missing chunk replays as a hole).
+        if ($opts->recorder !== null) {
+            $opts->recorder->recordOutput($bytes);
+        }
         $written = @\fwrite($stdoutStream, $bytes);
         return $written !== false;
     }
+
+    // P6.1 Recorder tap — `recordResize` wiring TODO:
+    //
+    // The recorder's resize stream is intentionally NOT wired here.
+    // The current `pump()` idle-tick branch fires `onSigwinch(0, 0)`
+    // every `$opts->selectTimeoutUs` whether or not a real SIGWINCH
+    // arrived — calling `recordResize(0, 0)` from that path would
+    // litter the cassette with zero-dimension noise events.
+    //
+    // The P2.5 audit flagged that real SIGWINCH detection still lives
+    // upstream in candy-wish::InProcessTransport via
+    // {@see \SugarCraft\Pty\SignalForwarder::attachSigwinch}. When the
+    // supervisor wires a real signal-driven callback (P6.5 candy-vcr
+    // record CLI is the first natural consumer), it should chain into
+    // `recorder->recordResize($cols, $rows)` from the same callback
+    // that drives `MasterPty::resize()`. The pump itself stays clear
+    // of SIGWINCH detection so it can be reused outside an interactive
+    // session (e.g. piping a non-tty command into a recording).
 }
