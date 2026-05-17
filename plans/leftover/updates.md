@@ -28,13 +28,11 @@ the step that surfaced it.)
 
 ---
 
-## Open review findings — <step ID>
+## Open review findings — 01.02
 
-(The review subagent writes findings here. The fix subagent clears each
-item by checking it off as it lands. When the section is empty after a
-fix pass, the fix subagent removes the heading entirely.)
-
-_none yet_
+- [ ] [BLOCKER] PRIMARY DELIVERABLE NOT EXECUTED — `find . -maxdepth 2 -name composer.lock -not -path './composer.lock'` returns 46 files; the step was supposed to delete all 46 composer.lock files from sibling libs but zero were removed. The PR only added .gitignore entries and updated CI cache keys. Merge commit: 511a136a.
+- [ ] [MAJOR] Done log entry for step 01.02 is inaccurate — it claims "delete 46 composer.lock files" shipped, but the files are still present. The entry should be removed until the deletion is confirmed.
+- [ ] [MINOR] The `@dev` → `dev-master` changes in candy-pty, candy-shell, candy-vcr, candy-core composer.json files are a separate concern from the lock-file deletion and should have been a separate step or at minimum documented as a separate sub-deliverable.
 
 ---
 
@@ -55,4 +53,4 @@ late-joining session see what already shipped.)
 
 step 01.01 · PR#490 · plans: add x-windows.md stub plan + MATCHUPS.md TODO
 review for step 01.01 · clean · PR#490
-step 01.02 · PR#491 · drop-consumer-locks: delete 46 composer.lock files + add .gitignore + fix @dev→dev-master + update CI cache keys
+step 01.02 · PR#491 · PARTIAL — add .gitignore + @dev→dev-master + CI cache keys; composer.lock deletion NOT executed (see open findings)
