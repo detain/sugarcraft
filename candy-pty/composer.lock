@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "78c573b194f025509a3fb34065091ac1",
+    "content-hash": "6142b10584df86595c50c945c6d2f305",
     "packages": [
         {
             "name": "react/event-loop",
@@ -1907,8 +1907,75 @@
             }
         },
         {
+            "name": "sugarcraft/candy-vcr",
+            "version": "dev-ai/candy-pty-pump-recorder-tap",
+            "dist": {
+                "type": "path",
+                "url": "../candy-vcr",
+                "reference": "dec71960b2a7b260f941ee42837fb1435922c1ff"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-vt": "dev-master",
+                "symfony/yaml": "^6.4 || ^7.0"
+            },
+            "suggest": {
+                "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
+                "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
+            },
+            "bin": [
+                "bin/candy-vcr"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Vcr\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Vcr\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Record and replay candy-core Program sessions into cassettes — bug-repro / regression / fuzzing.",
+            "homepage": "https://github.com/sugarcraft/candy-vcr",
+            "keywords": [
+                "ansi",
+                "cassette",
+                "record",
+                "replay",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vcr"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-vcr/issues",
+                "source": "https://github.com/sugarcraft/candy-vcr",
+                "docs": "https://sugarcraft.github.io/lib/candy-vcr.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-vt",
-            "version": "dev-ai/candy-pty-vim-resize-buffer-tests",
+            "version": "dev-ai/candy-pty-pump-recorder-tap",
             "dist": {
                 "type": "path",
                 "url": "../candy-vt",
@@ -2018,6 +2085,7 @@
     "minimum-stability": "dev",
     "stability-flags": {
         "sugarcraft/candy-core": 20,
+        "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20
     },
     "prefer-stable": true,
