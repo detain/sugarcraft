@@ -227,7 +227,7 @@
         },
         {
             "name": "sugarcraft/candy-pty",
-            "version": "dev-ai/candy-vcr-record-command-skeleton",
+            "version": "dev-master",
             "dist": {
                 "type": "path",
                 "url": "../candy-pty",
