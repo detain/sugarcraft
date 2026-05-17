@@ -45,22 +45,25 @@ final class PosixPtySystem implements PtySystem
 
         $master = new PosixMasterPty($masterFd, $slavePath);
 
-        // macOS xnu rejects TIOCSWINSZ on a master fd whose slave end
-        // has never been opened — the kernel needs the slave touched
-        // at least once before it'll honor winsize ioctls. Linux ptmx
-        // is lenient AND the open()/close() round-trip changes the
-        // empty-PTY read semantics (fread returns '' instead of null
-        // on idle), so the workaround is macOS-only.
+        // macOS xnu requires the slave end to be open for the kernel
+        // to honor TIOCSWINSZ ioctls AND it zeros the winsize again
+        // whenever the slave count drops to 0. Open an anchor slave
+        // fd here and HOLD it for the master's lifetime — that keeps
+        // the kernel-side slave count ≥ 1 across the gap between
+        // open() and the first proc_open() that opens the child's
+        // slave fds, so the resize sticks. Closed in close(). Linux
+        // ptmx doesn't need this AND the open()/close() round-trip
+        // would change empty-PTY read semantics, so it's Darwin-only.
         if (\PHP_OS_FAMILY === 'Darwin') {
             $slaveFd = $libc->open($slavePath, self::O_RDWR | self::oNoCtty());
             if ($slaveFd >= 0) {
-                $libc->close($slaveFd);
+                $master->attachAnchorSlaveFd($slaveFd);
             }
-            // Apply the requested initial size NOW that the slave has
-            // been anchored. Best-effort — fall through on failure.
             try {
                 $master->resize($cols, $rows);
             } catch (\SugarCraft\Pty\PtyException) {
+                // Fall through; later resize calls (e.g. SlavePty::spawn
+                // with controllingTerminal:true) get another chance.
             }
         }
 
