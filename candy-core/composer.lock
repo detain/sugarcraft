@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "f336882726da71ee5ebea7905eec554d",
+    "content-hash": "ab2baff02243124bea4ae9420176cf47",
     "packages": [
         {
             "name": "react/event-loop",
@@ -150,6 +150,71 @@
                 }
             ],
             "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-pty",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-pty",
+                "reference": "0a9472de83bcd1074bfd0648c2aa8c96e7aa6549"
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-vt": "@dev"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/candy-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-pty/issues",
+                "source": "https://github.com/sugarcraft/candy-pty",
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         }
     ],
     "packages-dev": [
@@ -1934,7 +1999,9 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "sugarcraft/candy-pty": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
