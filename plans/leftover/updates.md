@@ -87,6 +87,8 @@ step 01.09 · PR#507 · candy-pty: PtyPool ReactPHP test + MultiPump example + E
 review for step 01.09 · clean · PR#507
 docs for step 01.09 · clean
 step 01.10 · PR#508 · candy-vcr: RecordCommand polish — SIGINT rescue + env-allow-secrets + cassette doc + ShirleyHtopTest
+review for step 01.10 · clean · PR#508
+tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkipsAllFiltering for --env-allow-secrets empty-regex path
 
 ## Open review findings — 01.08
 
