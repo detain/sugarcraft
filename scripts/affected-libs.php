@@ -31,15 +31,11 @@ const WINDOWS_LIBS = [
     'candy-core', 'sugar-prompt', 'sugar-bits', 'candy-shell', 'candy-shine',
 ];
 const MACOS_LIBS = [
-    // candy-pty itself is held out of the macOS pool until the
-    // direct unit/integration tests are debugged on a real Darwin
-    // box: tests 53-63 yield 6 errors + 1 failure, and the suite
-    // hangs at test 64+ until GitHub's 30-min timeout. Coverage of
-    // candy-pty's POSIX surface on macOS comes through its consumers
-    // below (PosixBackend in candy-core, InProcessTransport in
-    // candy-wish — both exercise the same posix_openpt + grantpt +
-    // TIOCSWINSZ syscall chain). See pty-matrix.yml for a separate
-    // macOS-targeted workflow once those tests are stable.
+    // Switched from macos-26-intel to macos-15 (Apple Silicon) in
+    // ci.yml — Intel-on-macOS was being phased out and the candy-pty
+    // FFI tests hung past the 30-min cell timeout there. Put candy-
+    // pty back in the pool to verify on arm64 + the newer libSystem.
+    'candy-pty',
     'candy-core',
     'candy-wish',
 ];
