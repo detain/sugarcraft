@@ -146,7 +146,7 @@ final class Pty implements MasterPty
 
         $libc = Libc::lib();
         $ws = SizeIoctl::pack($rows, $cols);
-        $rc = $libc->ioctl($this->master->fd, SizeIoctl::setRequest(), $ws);
+        $rc = SizeIoctl::setSizeViaLibc($libc, $this->master->fd, $ws);
         if ($rc !== 0) {
             throw new PtyException(Lang::t('resize.failed', [
                 'fd'   => $this->master->fd,
@@ -169,7 +169,7 @@ final class Pty implements MasterPty
 
         $libc = Libc::lib();
         $ws = SizeIoctl::emptyBuffer();
-        $rc = $libc->ioctl($this->master->fd, SizeIoctl::getRequest(), $ws);
+        $rc = SizeIoctl::getSizeViaLibc($libc, $this->master->fd, $ws);
         if ($rc !== 0) {
             throw new PtyException(Lang::t('size.failed', [
                 'fd' => $this->master->fd,
