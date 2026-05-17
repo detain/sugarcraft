@@ -195,7 +195,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-v2-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-${{ matrix.php }}-${{ matrix.lib }}-
 
@@ -241,7 +241,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-win-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-win-v2-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
 
@@ -292,7 +292,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-mac-v2-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-
 
@@ -373,17 +373,22 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-cov-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-cov-v2-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-cov-${{ matrix.lib }}-
 
+      # Cache key version bump — increment when intra-monorepo @dev
+      # deps shift in a lib's composer.json so stale lockfiles cached
+      # under the old key don't shadow committed lock updates. v2 (PTY
+      # plan P0–P5): candy-core, candy-shell, candy-pty gained new
+      # transitive @dev edges that the v1 cache pre-dates.
       - name: Cache composer.lock
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/composer.lock
-          key: lock-cov-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: lock-cov-v2-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            lock-cov-${{ matrix.lib }}-
+            lock-cov-v2-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: |
@@ -472,7 +477,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-stan-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-stan-v2-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
             vendor-stan-${{ matrix.php }}-${{ matrix.lib }}-
             vendor-stan-${{ matrix.lib }}-
