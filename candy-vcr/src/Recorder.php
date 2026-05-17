@@ -46,13 +46,20 @@ final class Recorder implements RecorderInterface
         $this->fh = $fh;
         $this->startTime = $startTime ?? microtime(true);
         $this->hooks = $hooks ?? new HookRegistry();
-        $this->writeLine([
+        $headerLine = [
             'v' => $header->version,
             'created' => $header->createdAt,
             'cols' => $header->cols,
             'rows' => $header->rows,
             'runtime' => $header->runtime,
-        ]);
+        ];
+        if ($header->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
+            $headerLine['timestampMode'] = $header->timestampMode;
+        }
+        if ($header->env !== []) {
+            $headerLine['env'] = $header->env;
+        }
+        $this->writeLine($headerLine);
     }
 
     /**
