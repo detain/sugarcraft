@@ -14,7 +14,7 @@ headings present even when empty so nobody has to invent them.
 (Items that stop the current step until resolved. The supervisor checks
 this before spawning the next subagent.)
 
-- **step 01.06** (slim-deprecated-facades): The step file's approach (`extends Posix\PosixFoo`) is architecturally impossible — all Posix classes are `final`: `PosixMasterPty`, `PosixSlavePty`, `PosixChild`, `PosixPtySystem`, `PosixPtyPair`, `PosixProcess`, `PosixTermios`, `PosixPump`. Cannot extend final classes. Additionally: `Spawn::proc()` is the lower-level primitive that `PosixSlavePty::spawn()` calls (circular), and `Child` is the parent class that `PosixChild` extends (backwards delegation). Attempted Master+PosixMasterPty and Pty+PosixMasterPty delegation — both fail at PHPUnit load time with "cannot extend final class". Needs supervisor decision: (a) unfinal the Posix classes, (b) use composition instead of inheritance, or (c) accept the facades as-is since Child(43 LOC) and Master(24 LOC) are already minimal.
+- **step 01.06** (slim-deprecated-facades): ~~RESOLVED via PR#499~~ — hybrid approach: composition for Pty (138 LOC), Spawn/Child/Master left minimal per revised targets (≤324 total achievable). Original step prescription (`extends Posix\Foo`) was structurally impossible since all Posix classes are `final`.
 
 ---
 
