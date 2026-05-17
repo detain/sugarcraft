@@ -53,4 +53,4 @@ _none yet_
 (One line per completed real step. Helps the supervisor and any
 late-joining session see what already shipped.)
 
-_none yet_
+step 01.01 · PR#490 · plans: add x-windows.md stub plan + MATCHUPS.md TODO
