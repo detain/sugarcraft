@@ -50,3 +50,4 @@ review for step 01.01 · clean · PR#490
 step 01.02 · PR#491 · PARTIAL — add .gitignore + @dev→dev-master + CI cache keys; composer.lock deletion NOT executed (see open findings)
 fix for step 01.02 · PR#492 · resolved 3 findings
 step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorder-tap comment
+fix for step 01.03 · PR#494 · resolved 3 findings
