@@ -285,6 +285,20 @@ The deprecated facades `Pty`, `Spawn`, `Child` (top-level `src/`)
 implement the new contracts as adapters, so consumers on the old
 shape keep working while migrating. They will go away at v2.0.
 
+## Backend selection via `SUGARCRAFT_PTY_BACKEND`
+
+`PtySystemFactory::default()` reads the `SUGARCRAFT_PTY_BACKEND`
+environment variable before picking a backend. On POSIX this defaults
+to `posix-ffi`. Setting it to `sidecar` or `pecl` causes an immediate
+`UnsupportedPlatformException` noting the backend is deferred to
+phase 12. Unrecognised values throw `\InvalidArgumentException` listing
+the four valid options (`posix-ffi`, `sidecar`, `pecl`, `auto`).
+
+This design keeps the door open for phase-12 backends without any
+call-site changes: application code always calls
+`PtySystemFactory::default()`, and only the factory grows new arms
+when those backends are wired in.
+
 ## Further reading
 
 - `bin/pty-shim.php` — the ctty trampoline, ~50 lines of PHP.
