@@ -49,6 +49,30 @@ final class RecordCommand implements Command
     public const FALLBACK_SHELL = '/bin/sh';
 
     /**
+     * Termios snapshot held in static scope so the shutdown-function +
+     * signal handlers from {@see installRescueHandlers()} can reach it
+     * without closures. Wired by P6.5.4 (host termios safety net).
+     */
+    private static ?Termios $rescueSnapshot = null;
+
+    /**
+     * One-shot guard so multiple `record` invocations in the same
+     * process do not stack duplicate `register_shutdown_function` /
+     * `pcntl_signal` registrations.
+     */
+    private static bool $rescueInstalled = false;
+
+    /**
+     * Path under `sys_get_temp_dir()` where the host TTY's device path
+     * is dumped while recording is in flight. If a SIGKILL-class exit
+     * leaves the host termios stuck in raw mode, a separate process
+     * (or the user's next shell) can `stty sane < $tty` against the
+     * device named in this marker file. Cleared by
+     * {@see rescueRestore()} on every clean exit path.
+     */
+    private static string $rescueMarkerPath = '';
+
+    /**
      * @param resource|null $stdin  Host stdin stream — defaults to the
      *                              STDIN constant so the CLI works
      *                              against the real TTY. Tests inject
@@ -94,6 +118,9 @@ final class RecordCommand implements Command
 
         try {
             $savedTermios = $this->captureHostTermios($stderr);
+            if ($savedTermios !== null) {
+                self::installRescueHandlers($savedTermios);
+            }
 
             $system = PtySystemFactory::default();
             $pair = $system->open($cols, $rows);
@@ -151,10 +178,13 @@ final class RecordCommand implements Command
                 try {
                     $savedTermios->restore();
                 } catch (\Throwable) {
-                    // Best-effort restore; the safety-net in P6.5.4
-                    // will additionally cover signal-driven exits.
+                    // Best-effort restore; the P6.5.4 shutdown_function +
+                    // signal handlers cover the still-armed paths.
                 }
             }
+            // Clean up the rescue state — the in-band finally took care
+            // of restoration on the happy / throw paths.
+            self::rescueClear();
         }
 
         \fwrite($stderr, \sprintf(
@@ -295,6 +325,128 @@ final class RecordCommand implements Command
             $shell = self::FALLBACK_SHELL;
         }
         return [$shell, '-l'];
+    }
+
+    /**
+     * Install the safety-net handlers so a SIGTERM, SIGHUP, fatal
+     * error, or unclean exit still restores the host termios. The
+     * snapshot is held statically because shutdown_function and
+     * pcntl_signal cannot capture closures with arbitrary instance
+     * state (in particular, the recorder's own snapshot disappears as
+     * soon as the run() frame unwinds).
+     *
+     * Handlers are signal-safe: no allocation, no logging, just a
+     * direct `restore()` then a marker-file unlink. SIGKILL still
+     * can't be intercepted — that's documented; the marker file at
+     * {@see $rescueMarkerPath} points at the host's tty path so an
+     * external recovery (`stty sane < $tty`) is at least possible.
+     */
+    private static function installRescueHandlers(Termios $snapshot): void
+    {
+        self::$rescueSnapshot = $snapshot;
+        self::writeRescueMarker();
+
+        if (self::$rescueInstalled) {
+            return;
+        }
+        self::$rescueInstalled = true;
+
+        \register_shutdown_function([self::class, 'rescueRestore']);
+
+        if (\function_exists('pcntl_signal') && \function_exists('pcntl_async_signals')) {
+            \pcntl_async_signals(true);
+            \pcntl_signal(\SIGTERM, [self::class, 'handleRescueSignal']);
+            \pcntl_signal(\SIGHUP,  [self::class, 'handleRescueSignal']);
+        }
+    }
+
+    /**
+     * Signal-safe restore. Called both from the shutdown function and
+     * from the SIGTERM / SIGHUP handlers — idempotent so it's safe to
+     * fire from either entry point.
+     *
+     * @internal
+     */
+    public static function rescueRestore(): void
+    {
+        $snapshot = self::$rescueSnapshot;
+        if ($snapshot === null) {
+            return;
+        }
+        self::$rescueSnapshot = null;
+        try {
+            $snapshot->restore();
+        } catch (\Throwable) {
+            // Best-effort: the handler runs after run()'s finally on
+            // every other path. Swallow any late-restore failure.
+        }
+        if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
+            @\unlink(self::$rescueMarkerPath);
+        }
+        self::$rescueMarkerPath = '';
+    }
+
+    /**
+     * SIGTERM / SIGHUP handler. Restores then re-raises with the
+     * default action so the process actually dies with the right
+     * status code instead of being trapped indefinitely.
+     *
+     * @internal
+     */
+    public static function handleRescueSignal(int $signo): void
+    {
+        self::rescueRestore();
+        if (\function_exists('pcntl_signal') && \function_exists('posix_kill') && \function_exists('posix_getpid')) {
+            \pcntl_signal($signo, \SIG_DFL);
+            @\posix_kill(\posix_getpid(), $signo);
+            return;
+        }
+        // Fallback if pcntl/posix are unavailable — exit with the
+        // conventional 128 + signal status so callers can still see
+        // what killed us.
+        exit(128 + $signo);
+    }
+
+    /**
+     * Internal: clear the rescue state without firing restore. Called
+     * from `run()`'s finally after the in-band restore has already
+     * succeeded — we don't want the shutdown_function to run a second
+     * restore against a freed Termios.
+     *
+     * @internal
+     */
+    private static function rescueClear(): void
+    {
+        self::$rescueSnapshot = null;
+        if (self::$rescueMarkerPath !== '' && \file_exists(self::$rescueMarkerPath)) {
+            @\unlink(self::$rescueMarkerPath);
+        }
+        self::$rescueMarkerPath = '';
+    }
+
+    /**
+     * Drop a tiny marker file under sys_get_temp_dir() pointing at
+     * the host's tty path (looked up via posix_ttyname when available).
+     * If a SIGKILL-class exit leaves the terminal in raw mode, the
+     * user can `stty sane < $tty` against the recorded device.
+     */
+    private static function writeRescueMarker(): void
+    {
+        $ttyPath = null;
+        if (\function_exists('posix_ttyname')) {
+            $maybe = @\posix_ttyname(\STDIN);
+            if (\is_string($maybe) && $maybe !== '') {
+                $ttyPath = $maybe;
+            }
+        }
+        if ($ttyPath === null) {
+            return;
+        }
+        $path = \sys_get_temp_dir() . '/candy-vcr-rescue.' . \getmypid();
+        $payload = "tty={$ttyPath}\npid=" . \getmypid() . "\nstarted=" . \date('c') . "\n";
+        if (@\file_put_contents($path, $payload) !== false) {
+            self::$rescueMarkerPath = $path;
+        }
     }
 
     /**
