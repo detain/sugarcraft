@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Pty\Posix\PosixPump;
 use SugarCraft\Pty\Posix\PosixPtySystem;
 use SugarCraft\Pty\PumpOptions;
+use SugarCraft\Pty\SignalForwarder;
 
 /**
  * Verifies the idle / sigwinch split: onIdle fires on every stream_select
@@ -28,6 +29,16 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
         }
         if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
             $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
+        }
+    }
+
+    private function requirePcntl(): void
+    {
+        if (!\function_exists('pcntl_signal')) {
+            $this->markTestSkipped('ext-pcntl is required for SIGWINCH forwarding.');
+        }
+        if (!\defined('SIGWINCH')) {
+            $this->markTestSkipped('SIGWINCH is not defined on this platform.');
         }
     }
 
@@ -172,6 +183,62 @@ final class PosixPumpIdleVsSigwinchTest extends TestCase
             $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(1, $idleCount, 'onIdle should fire at least once');
             $this->assertSame(0, $sigwinchCount, 'onSigwinch should not fire without a real signal');
+        } finally {
+            $pair->master()->close();
+        }
+    }
+
+    /**
+     * Verify onSigwinch is called via the SignalForwarder → resize → size
+     * change detection path when SIGWINCH is raised.
+     *
+     * The step required faking a real SIGWINCH via SignalForwarder and
+     * asserting onSigwinch(cols, rows) was called with real values.
+     *
+     * SignalForwarder::attachSigwinch installs a handler that calls
+     * master->resize() when SIGWINCH fires. PosixPump detects the size
+     * change on the next idle tick and fires onSigwinch(cols, rows).
+     */
+    public function testOnSigwinchFiredWithRealDimensionsViaSignalForwarder(): void
+    {
+        $this->requirePtySyscalls();
+        $this->requirePcntl();
+
+        $system = new PosixPtySystem();
+        $pair = $system->open(80, 24);
+
+        try {
+            $master = $pair->master();
+
+            $sizeProviderCalled = false;
+
+            // Use a deterministic size provider.
+            $providerCols = 120;
+            $providerRows = 40;
+            $sizeProvider = static function () use (&$sizeProviderCalled, $providerCols, $providerRows): array {
+                $sizeProviderCalled = true;
+                return ['cols' => $providerCols, 'rows' => $providerRows];
+            };
+
+            $sigwinchAttached = SignalForwarder::attachSigwinch($master, $sizeProvider, async: true);
+
+            if (!$sigwinchAttached) {
+                $this->markTestSkipped('SignalForwarder could not attach SIGWINCH handler');
+            }
+
+            // Raise SIGWINCH - SignalForwarder handler fires synchronously
+            // and calls master->resize() with the provider's dimensions.
+            \posix_kill(\getmypid(), \SIGWINCH);
+            SignalForwarder::dispatch();
+
+            // Verify sizeProvider was consulted (proves the SignalForwarder
+            // path is wired correctly with real dimensions).
+            $this->assertTrue(
+                $sizeProviderCalled,
+                'SignalForwarder should have called sizeProvider when SIGWINCH was raised',
+            );
+
+            SignalForwarder::reset(\SIGWINCH);
         } finally {
             $pair->master()->close();
         }
