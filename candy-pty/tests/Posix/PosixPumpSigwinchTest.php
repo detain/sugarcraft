@@ -34,7 +34,7 @@ final class PosixPumpSigwinchTest extends TestCase
         }
     }
 
-    public function testOnSigwinchCallbackFiresOnIdleTimeout(): void
+    public function testOnSigwinchNotFiredOnIdleTick(): void
     {
         $this->requirePtySyscalls();
 
@@ -48,36 +48,27 @@ final class PosixPumpSigwinchTest extends TestCase
             $stdin = \fopen('/dev/null', 'r');
             $stdout = \fopen('php://temp', 'r+');
 
-            $sigwinchCalled = false;
-            $capturedCols = -1;
-            $capturedRows = -1;
+            $sigwinchFired = false;
 
+            // onIdle fires on every idle tick; onSigwinch should NOT.
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(50_000)
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCalled, &$capturedCols, &$capturedRows): void {
-                    $sigwinchCalled = true;
-                    $capturedCols = $cols;
-                    $capturedRows = $rows;
+                ->withOnIdle(function (): void {
+                    // idle tick — onIdle fires, onSigwinch must not.
+                })
+                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchFired): void {
+                    $sigwinchFired = true;
                 });
 
             $pump = new PosixPump();
-            $start = \microtime(true);
 
             $exitCode = $pump->run($master, $stdin, $stdout, $child, $opts);
-
-            $elapsed = \microtime(true) - $start;
 
             \fclose($stdin);
             \fclose($stdout);
 
-            // -1 because the `sleep 5` child is still alive when the
-            // pump returns (stdin EOF + grace + flush); pump no
-            // longer blocks on wait().
             $this->assertSame(-1, $exitCode);
-            $this->assertTrue($sigwinchCalled, 'onSigwinch callback should fire at least once during idle pump loop');
-            $this->assertSame(0, $capturedCols, 'onSigwinch cols should be 0 (pump does not track PTY size)');
-            $this->assertSame(0, $capturedRows, 'onSigwinch rows should be 0 (pump does not track PTY size)');
-            $this->assertGreaterThan(0.04, $elapsed, 'pump should run long enough to trigger at least one idle timeout');
+            $this->assertFalse($sigwinchFired, 'onSigwinch must NOT fire on idle ticks — it is driven only by SignalForwarder from the consumer side');
         } finally {
             $pair->master()->close();
         }
@@ -127,16 +118,18 @@ final class PosixPumpSigwinchTest extends TestCase
             $stdin = \fopen('/dev/null', 'r');
             $stdout = \fopen('php://temp', 'r+');
 
+            // Without a real SignalForwarder attached, onSigwinch will not
+            // fire from idle ticks (post-split). onIdle IS called on idle.
+            $idleCount = 0;
             $sigwinchCount = 0;
-            $lastCols = -1;
-            $lastRows = -1;
 
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(30_000)
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCount, &$lastCols, &$lastRows): void {
+                ->withOnIdle(function () use (&$idleCount): void {
+                    $idleCount++;
+                })
+                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCount): void {
                     $sigwinchCount++;
-                    $lastCols = $cols;
-                    $lastRows = $rows;
                 });
 
             $pump = new PosixPump();
@@ -146,11 +139,11 @@ final class PosixPumpSigwinchTest extends TestCase
             \fclose($stdin);
             \fclose($stdout);
 
-            // -1 because the `sleep 5` child is still alive when the
-            // pump returns (stdin EOF + grace + flush); pump no
-            // longer blocks on wait().
             $this->assertSame(-1, $exitCode);
-            $this->assertGreaterThanOrEqual(1, $sigwinchCount, 'onSigwinch should be called at least once per idle iteration');
+            // onIdle fires on every idle tick; onSigwinch does not fire
+            // without a SignalForwarder signal.
+            $this->assertGreaterThanOrEqual(1, $idleCount, 'onIdle should fire at least once per idle iteration');
+            $this->assertSame(0, $sigwinchCount, 'onSigwinch should not fire without a real SIGWINCH signal');
         } finally {
             $pair->master()->close();
         }
