@@ -7,9 +7,6 @@ namespace SugarCraft\Shell\Process;
 use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
- * Thin adapter that satisfies candy-shell's {@see Process} interface
- * by delegating to {@see PosixProcess} from candy-pty.
- *
  * @deprecated since v0.x; new callers should depend on
  *             `SugarCraft\Pty\Posix\PosixProcess` directly. This class
  *             exists to preserve the in-package `Process` shape
@@ -19,7 +16,6 @@ use SugarCraft\Pty\Posix\PosixProcess;
  *             {@see \SugarCraft\Pty\Posix\ChildPollTrait}.
  *
  * @see PosixProcess for the canonical non-PTY spawn handle.
- * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P3.3)
  */
 final class RealProcess implements Process
 {
@@ -30,9 +26,6 @@ final class RealProcess implements Process
         private readonly PosixProcess $inner,
     ) {}
 
-    /**
-     * @param list<string> $command
-     */
     public static function spawn(
         array $command,
         bool $captureStdout = false,
@@ -46,6 +39,10 @@ final class RealProcess implements Process
         ));
     }
 
+    public function pid(): int                  { return $this->inner->pid(); }
+    public function exited(): bool               { return $this->inner->exited(); }
+    public function wait(): int                  { return $this->inner->wait(); }
+    public function kill(int $signal): void     { $this->inner->kill($signal); }
     public function exitCode(): ?int
     {
         if ($this->cachedExit !== null) {
@@ -58,15 +55,10 @@ final class RealProcess implements Process
         return $this->cachedExit;
     }
 
-    public function stdout(): string
-    {
-        return $this->inner->stdoutBytes();
-    }
-
-    public function stderr(): string
-    {
-        return $this->inner->stderrBytes();
-    }
+    public function stdout(): string             { return $this->inner->stdoutBytes(); }
+    public function stderr(): string             { return $this->inner->stderrBytes(); }
+    public function stdoutBytes(): string         { return $this->inner->stdoutBytes(); }
+    public function stderrBytes(): string         { return $this->inner->stderrBytes(); }
 
     public function terminate(): void
     {
@@ -78,12 +70,6 @@ final class RealProcess implements Process
         }
     }
 
-    /**
-     * Reap the OS process handle. Idempotent — second call returns the
-     * cached exit code without re-reaping. Required so SpinModel can
-     * call close() in both happy-path and error-path branches without
-     * worrying about double-reap.
-     */
     public function close(): int
     {
         if ($this->closed) {

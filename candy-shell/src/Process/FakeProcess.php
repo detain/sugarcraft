@@ -17,11 +17,17 @@ final class FakeProcess implements Process
     public string $bufferedStdout = '';
     public string $bufferedStderr = '';
 
-    public function exitCode(): ?int   { return $this->exitCode; }
+    public function pid(): int          { return 12345; }
+    public function exited(): bool      { return $this->exitCode !== null; }
+    public function wait(): int         { $this->closed = true; return $this->exitCode ?? 0; }
+    public function kill(int $signal): void { $this->terminated = true; }
+    public function exitCode(): ?int    { return $this->exitCode; }
     public function terminate(): void  { $this->terminated = true; }
-    public function close(): int       { $this->closed = true; return $this->exitCode ?? 0; }
-    public function stdout(): string   { return $this->bufferedStdout; }
-    public function stderr(): string   { return $this->bufferedStderr; }
+    public function close(): int      { $this->closed = true; return $this->exitCode ?? 0; }
+    public function stdout(): string    { return $this->bufferedStdout; }
+    public function stderr(): string    { return $this->bufferedStderr; }
+    public function stdoutBytes(): string { return $this->bufferedStdout; }
+    public function stderrBytes(): string { return $this->bufferedStderr; }
 
     /** Convenience: simulate the child finishing with the given code. */
     public function finish(int $code = 0): void
