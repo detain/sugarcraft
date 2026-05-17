@@ -55,3 +55,4 @@ tests-ci for step 01.03 · clean
 step 01.04 · PR#496 · candy-pty: add PumpOptions::sshDefault() named constructor
 review for step 01.04 · clean · PR#496
 docs for step 01.04 · PR#497 · document PumpOptions::sshDefault() in README + docs/lib/candy-pty.html
+step 01.05 · PR#498 · candy-core: drop stty shell-outs from PosixBackend
