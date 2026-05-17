@@ -45,10 +45,21 @@ final class PosixSlavePty implements SlavePty
 
         $master = new Master($this->master->fd(), $this->path);
 
+        $child = Spawn::proc($master, $cmd, $env, $controllingTerminal);
+
+        // Apply the requested initial size AFTER proc_open opens the
+        // slave path. macOS xnu zeroes the winsize on every fresh
+        // slave fd open — a pre-spawn TIOCSWINSZ gets clobbered when
+        // proc_open's slave descriptors land. Resizing post-spawn
+        // (with the slave fd live in the child) propagates correctly.
+        // Best-effort; falls through on failure.
         if ($controllingTerminal) {
-            $this->master->resize($cols, $rows);
+            try {
+                $this->master->resize($cols, $rows);
+            } catch (\SugarCraft\Pty\PtyException) {
+            }
         }
 
-        return Spawn::proc($master, $cmd, $env, $controllingTerminal);
+        return $child;
     }
 }
