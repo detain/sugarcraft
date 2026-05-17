@@ -30,7 +30,21 @@
     },
     "repositories": [
         { "type": "vcs", "url": "https://github.com/sugarcraft/candy-core" },
-        { "type": "vcs", "url": "https://github.com/sugarcraft/candy-sprinkles" }
+        { "type": "vcs", "url": "https://github.com/sugarcraft/candy-sprinkles" },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
     ],
     "autoload": {
         "psr-4": {
