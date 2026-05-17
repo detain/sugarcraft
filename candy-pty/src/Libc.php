@@ -89,7 +89,7 @@ final class Libc
      */
     public static function cdef(): string
     {
-        $core = <<<'CPROTO'
+        return <<<'CPROTO'
 int   posix_openpt(int flags);
 int   grantpt(int fd);
 int   unlockpt(int fd);
@@ -109,26 +109,6 @@ int   cfsetospeed(void *termios_p, int speed);
 unsigned int cfgetispeed(void *termios_p);
 int   cfsetispeed(void *termios_p, int speed);
 CPROTO;
-
-        // POSIX 2024 winsize helpers — non-variadic wrappers around
-        // the TIOCSWINSZ/TIOCGWINSZ ioctls. Available in macOS 13+
-        // libSystem but NOT in older glibc (< 2.36). Only declare
-        // them on Darwin so FFI's eager symbol resolution doesn't
-        // error on Linux runners with older glibc.
-        //
-        // Reason we need them: real libc ioctl is variadic, and on
-        // macOS arm64 the variadic ABI puts varargs on the stack
-        // while fixed args go in x0–x7 — our fixed-arg ioctl cdef
-        // pushes the winsize pointer to x2 while the kernel reads
-        // it from the stack, returning -1. tcsetwinsize /
-        // tcgetwinsize have explicit `struct winsize *` pointers,
-        // so the ABI mismatch doesn't apply.
-        if (PHP_OS_FAMILY === 'Darwin') {
-            $core .= "\nint   tcsetwinsize(int fd, void *winsize_p);";
-            $core .= "\nint   tcgetwinsize(int fd, void *winsize_p);";
-        }
-
-        return $core;
     }
 
     /**
