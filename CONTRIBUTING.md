@@ -29,6 +29,11 @@ The libraries are wired together via `composer.json` path repositories,
 so changes to (say) `candy-core/src/Util/Width.php` are reflected
 immediately in `candy-shine`'s test run with no rebuild step.
 
+If your change introduces a new `sugarcraft/* @dev` dep, run
+`php tools/check-path-repos.php --fix` to auto-insert the missing path-repo
+entry before committing. The bare script (`--fix` omitted) is read-only —
+use it to verify closure without making changes.
+
 ## Style guide
 
 - **PHP 8.1+**: fibers, readonly properties, enums, `match`, intersection
