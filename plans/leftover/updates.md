@@ -24,7 +24,7 @@ _none yet_
 in a follow-up step or a deferred phase. Each entry: one short line +
 the step that surfaced it.)
 
-_none yet_
+- sugar-bits, sugar-charts, sugar-dash, candy-sprinkles, candy-vt need path-repo entries for local sugarcraft/* deps to work without GitHub network access (step 01.02)
 
 ---
 
@@ -55,3 +55,4 @@ late-joining session see what already shipped.)
 
 step 01.01 · PR#490 · plans: add x-windows.md stub plan + MATCHUPS.md TODO
 review for step 01.01 · clean · PR#490
+step 01.02 · PR#491 · drop-consumer-locks: delete 46 composer.lock files + add .gitignore + fix @dev→dev-master + update CI cache keys
