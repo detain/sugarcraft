@@ -50,6 +50,35 @@ public surface is identical.
 
 ---
 
+## Resolution note
+
+The original prescription (`final class Foo extends Posix\PosixFoo {}`) was **structurally impossible** for all four facades:
+
+- All `Posix\*` classes are `final` per project convention — cannot be extended.
+- `Spawn::proc()` is the **lower-level primitive** that `PosixSlavePty::spawn()` calls (line 48 of PosixSlavePty.php). Inverting this would create a circular dependency.
+- `Child` is the **parent class** that `PosixChild` extends via `class PosixChild extends Child`. Reversing this would break PosixChild entirely.
+- `Master` is a 24-LOC value object with **no** `PosixMaster` counterpart (PosixMasterPty is a different concept — the active IO handle, not a DTO).
+
+Only `Pty` (388→138 LOC) genuinely duplicated logic from `PosixMasterPty`. The other three were already minimal (Spawn 119, Child 43, Master 24).
+
+### Revised approach (hybrid)
+
+| File | Tactic | LOC before → after |
+|------|--------|---------------------|
+| `Pty.php` | COMPOSITION — delegates I/O to internal `PosixMasterPty` via `$this->impl` | 388 → 138 |
+| `Spawn.php` | LEAVE — it IS the canonical primitive; tightens doc comments only | 119 → 119 |
+| `Child.php` | LEAVE — 43 LOC non-final base with ChildPollTrait; PosixChild extends it | 43 → 43 |
+| `Master.php` | LEAVE — 24 LOC DTO; no Posix counterpart exists | 24 → 24 |
+
+**Total: 574 → 324 LOC** (revised target: ≤280 was aspirational; ≤324 is achievable without behavioral change).
+
+Pty composition notes:
+- `Pty::open()` opens PTY directly (same logic as before, no macOS anchor since original Pty::open() didn't add one)
+- `Pty::master` exposes `Master` DTO to callers; internal `PosixMasterPty $impl` handles all I/O
+- Deleted `read()` EINTR retry loop (lives in PosixMasterPty now), deleted `oNoCtty()`, `readPtsName()` private helpers
+- `spawn()` still calls `Spawn::proc()` with the Master DTO (matches PosixSlavePty pattern)
+- `@deprecated` doc-block preserved
+
 ## Process reminders
 
 - `unset GITHUB_TOKEN` before every `gh` invocation. Always.
