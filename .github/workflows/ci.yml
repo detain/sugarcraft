@@ -383,20 +383,17 @@ jobs:
             vendor-cov-${{ matrix.lib }}-
 
       # Cache key version bump — increment when intra-monorepo @dev
-      # deps shift in a lib's composer.json so stale lockfiles cached
-      # under the old key don't shadow committed lock updates. v2 (PTY
-      # plan P0–P5): candy-core, candy-shell, candy-pty gained new
-      # transitive @dev edges that the v1 cache pre-dates. v3 (PTY
-      # plan P6.5): candy-vcr gained a direct `sugarcraft/candy-pty`
-      # require and its v2-era lock omits the package, so the
-      # restore-keys fallback was shadowing the new committed lock.
-      - name: Cache composer.lock
+      # deps shift in a lib's composer.json so stale cache entries
+      # don't shadow updated deps. v4 (drop-consumer-locks step):
+      # switched from caching composer.lock to composer.json since
+      # consumer libs no longer carry lock files.
+      - name: Cache composer.json
         uses: actions/cache@v5
         with:
-          path: ${{ matrix.lib }}/composer.lock
-          key: lock-cov-v3-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          path: ${{ matrix.lib }}/composer.json
+          key: lock-cov-v4-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            lock-cov-v3-${{ matrix.lib }}-
+            lock-cov-v4-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: |
