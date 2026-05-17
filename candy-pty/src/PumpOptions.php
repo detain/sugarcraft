@@ -93,6 +93,24 @@ final class PumpOptions
     public readonly \Closure|null $onChildExit;
 
     /**
+     * Optional tee target for stdin / master-output / resize events
+     * so a higher-level CLI (candy-vcr's RecordCommand, debug taps,
+     * crash bundlers) can capture a real PTY session without changing
+     * pump semantics.
+     *
+     * Null = no recording overhead — every recorder call in
+     * {@see \SugarCraft\Pty\Posix\PosixPump} is guarded behind a null
+     * check so the pump loop is byte-identical to the pre-recorder
+     * path when this is unset.
+     *
+     * Wired in plan step P6.1 ("PosixPump Recorder tap") and feeds
+     * P6.5's `candy-vcr record` CLI.
+     *
+     * @see \SugarCraft\Core\Recorder  the interface contract.
+     */
+    public readonly ?\SugarCraft\Core\Recorder $recorder;
+
+    /**
      * @param int<1, max>                    $chunkBytes
      * @param int<1, max>                    $selectTimeoutUs
      * @param float<0, max>                  $flushDeadlineSec
@@ -100,6 +118,7 @@ final class PumpOptions
      * @param (\Closure(): void)|null       $keepalive
      * @param (\Closure(int, int): void)|null $onSigwinch
      * @param (\Closure(int): void)|null     $onChildExit
+     * @param \SugarCraft\Core\Recorder|null $recorder
      */
     public function __construct(
         int $chunkBytes = self::DEFAULT_CHUNK_BYTES,
@@ -110,6 +129,7 @@ final class PumpOptions
         ?\Closure $keepalive = null,
         ?\Closure $onSigwinch = null,
         ?\Closure $onChildExit = null,
+        ?\SugarCraft\Core\Recorder $recorder = null,
     ) {
         $this->chunkBytes = $chunkBytes;
         $this->selectTimeoutUs = $selectTimeoutUs;
@@ -119,6 +139,7 @@ final class PumpOptions
         $this->keepalive = $keepalive;
         $this->onSigwinch = $onSigwinch;
         $this->onChildExit = $onChildExit;
+        $this->recorder = $recorder;
     }
 
     public function withChunkBytes(int $v): self
@@ -132,6 +153,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -146,6 +168,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -160,6 +183,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -174,6 +198,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -188,6 +213,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -202,6 +228,7 @@ final class PumpOptions
             keepalive: $v,
             onSigwinch: $this->onSigwinch,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -216,6 +243,7 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $v,
             onChildExit: $this->onChildExit,
+            recorder: $this->recorder,
         );
     }
 
@@ -230,6 +258,29 @@ final class PumpOptions
             keepalive: $this->keepalive,
             onSigwinch: $this->onSigwinch,
             onChildExit: $v,
+            recorder: $this->recorder,
+        );
+    }
+
+    /**
+     * Attach (or detach) a tee target for stdin / output / resize events.
+     * Returns a new {@see PumpOptions} — never mutates `$this`.
+     *
+     * Wired in plan step P6.1; consumers chain like:
+     * `new PumpOptions()->withRecorder(\SugarCraft\Vcr\Recorder::open(...))`.
+     */
+    public function withRecorder(?\SugarCraft\Core\Recorder $v): self
+    {
+        return new self(
+            chunkBytes: $this->chunkBytes,
+            selectTimeoutUs: $this->selectTimeoutUs,
+            flushDeadlineSec: $this->flushDeadlineSec,
+            stdinEofGraceSec: $this->stdinEofGraceSec,
+            veof: $this->veof,
+            keepalive: $this->keepalive,
+            onSigwinch: $this->onSigwinch,
+            onChildExit: $this->onChildExit,
+            recorder: $v,
         );
     }
 }
