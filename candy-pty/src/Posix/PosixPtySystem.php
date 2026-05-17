@@ -43,7 +43,23 @@ final class PosixPtySystem implements PtySystem
 
         $slavePath = self::readPtsName($libc, $masterFd);
 
-        return new PosixPtyPair(new PosixMasterPty($masterFd, $slavePath), $slavePath);
+        $master = new PosixMasterPty($masterFd, $slavePath);
+
+        // Apply the requested initial size NOW, before any caller
+        // materializes the PHP stream wrapper for the master fd. On
+        // macOS xnu the TIOCSWINSZ ioctl is rejected on a master fd
+        // whose PHP stream wrapper has already taken ownership — the
+        // raw libc ioctl path only works on the freshly-opened
+        // descriptor. Linux ptmx is lenient about this; macOS is not.
+        try {
+            $master->resize($cols, $rows);
+        } catch (\SugarCraft\Pty\PtyException) {
+            // Best-effort: a fresh PTY should always accept TIOCSWINSZ;
+            // if it doesn't, fall through and let later callers retry
+            // when they really need a specific size.
+        }
+
+        return new PosixPtyPair($master, $slavePath);
     }
 
     /**
