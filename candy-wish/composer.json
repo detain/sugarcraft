@@ -50,6 +50,11 @@
     },
     "repositories": [
         {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {"symlink": true}
+        },
+        {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/candy-core"
         },

@@ -205,10 +205,10 @@ final class InProcessTransport implements Transport, ChildSpawner
 
             try {
                 $this->master = $master;
-                $keepalive = $this->keepaliveCallback !== null
+                $onIdle = $this->keepaliveCallback !== null
                     ? \Closure::fromCallable($this->keepaliveCallback)
                     : null;
-                $opts = new PumpOptions(keepalive: $keepalive);
+                $opts = new PumpOptions(onIdle: $onIdle);
 
                 $pumpResult = (new PosixPump())->run($master, $stdin, $stdout, $child, $opts);
             } finally {

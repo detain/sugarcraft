@@ -6,7 +6,14 @@ namespace SugarCraft\Pty\Contract;
 
 /**
  * Byte pump that forwards stdin ↔ master PTY with back-pressure,
- * EOF grace, and optional SIGWINCH / keepalive / child-exit callbacks.
+ * EOF grace, and optional onIdle / onSigwinch / child-exit callbacks.
+ *
+ * The {@see run()} loop fires {@see PumpOptions::$onIdle} on every
+ * stream_select idle tick and {@see PumpOptions::$onSigwinch} when a
+ * real terminal-resize signal arrives via the consumer's
+ * {@see SignalForwarder::attachSigwinch} callback. These two hooks
+ * are independent — onIdle is for keepalive / polling / housekeeping;
+ * onSigwinch carries real (cols, rows) from the host TTY.
  *
  * @see portable-pty.Pump
  */
