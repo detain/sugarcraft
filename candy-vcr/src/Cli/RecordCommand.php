@@ -36,6 +36,19 @@ final class RecordCommand implements Command
     public const DEFAULT_ROWS = 24;
 
     /**
+     * Conservative secret-name regex used by `--env` to strip likely
+     * credential vars before they reach the cassette. Matches anywhere
+     * in the key, case-insensitive — `MYSQL_PASSWORD`, `GITHUB_TOKEN`,
+     * `STRIPE_API_KEY` are all stripped. Per the plan's review focus,
+     * we'd rather over-strip than leak; callers needing finer control
+     * can pass `--env-regex=` to override.
+     */
+    public const SECRET_KEY_REGEX = '/(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i';
+
+    /** Fallback shell when `$SHELL` is empty / unset during `--shell`. */
+    public const FALLBACK_SHELL = '/bin/sh';
+
+    /**
      * @param resource|null $stdin  Host stdin stream — defaults to the
      *                              STDIN constant so the CLI works
      *                              against the real TTY. Tests inject
@@ -68,6 +81,8 @@ final class RecordCommand implements Command
         $rows = $opts['rows'];
         $ctty = $opts['ctty'];
         $cmd  = $opts['cmd'];
+        $captureEnv = $opts['captureEnv'];
+        $envRegex   = $opts['envRegex'];
 
         $stdin = $this->stdin ?? \STDIN;
 
@@ -91,9 +106,17 @@ final class RecordCommand implements Command
                 controllingTerminal: $ctty,
             );
 
+            $headerEnv = $captureEnv ? self::filteredHostEnv($envRegex) : [];
             $recorder = Recorder::open(
                 $outputPath,
-                Recorder::defaultHeader($cols, $rows, 'sugarcraft/candy-vcr@record'),
+                new \SugarCraft\Vcr\CassetteHeader(
+                    version: \SugarCraft\Vcr\CassetteHeader::CURRENT_VERSION,
+                    createdAt: \gmdate('Y-m-d\TH:i:s\Z'),
+                    cols: $cols,
+                    rows: $rows,
+                    runtime: 'sugarcraft/candy-vcr@record',
+                    env: $headerEnv,
+                ),
             );
             $recorder->recordResize($cols, $rows);
 
@@ -143,7 +166,7 @@ final class RecordCommand implements Command
      * when usage was printed and the caller should exit 2.
      *
      * @param list<string> $args
-     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>}|null
+     * @return array{output: ?string, cols: int, rows: int, ctty: bool, cmd: list<string>, captureEnv: bool, envRegex: string}|null
      * @param resource $stderr
      */
     private function parseArgs(array $args, $stderr): ?array
@@ -152,6 +175,9 @@ final class RecordCommand implements Command
         $cols = self::DEFAULT_COLS;
         $rows = self::DEFAULT_ROWS;
         $ctty = true;
+        $shell = false;
+        $captureEnv = false;
+        $envRegex = self::SECRET_KEY_REGEX;
         $cmd = [];
         $inOpts = true;
 
@@ -185,6 +211,16 @@ final class RecordCommand implements Command
                     $rows = (int) ($args[++$i] ?? 0);
                 } elseif ($a === '--no-ctty') {
                     $ctty = false;
+                } elseif ($a === '--shell') {
+                    $shell = true;
+                } elseif ($a === '--env') {
+                    $captureEnv = true;
+                } elseif (\str_starts_with($a, '--env-regex=')) {
+                    $captureEnv = true;
+                    $envRegex = \substr($a, 12);
+                    if (@\preg_match($envRegex, '') === false) {
+                        throw new \InvalidArgumentException("--env-regex='{$envRegex}' is not a valid PCRE pattern");
+                    }
                 } elseif (\str_starts_with($a, '--')) {
                     throw new \InvalidArgumentException("unknown option {$a}");
                 } else {
@@ -195,6 +231,13 @@ final class RecordCommand implements Command
                 $cmd[] = $a;
             }
             $i++;
+        }
+
+        if ($shell) {
+            if ($cmd !== []) {
+                throw new \InvalidArgumentException('--shell may not be combined with a positional <cmd>');
+            }
+            $cmd = self::shellCommand();
         }
 
         if ($cmd === []) {
@@ -211,7 +254,62 @@ final class RecordCommand implements Command
             'rows'   => $rows,
             'ctty'   => $ctty,
             'cmd'    => $cmd,
+            'captureEnv' => $captureEnv,
+            'envRegex'   => $envRegex,
         ];
+    }
+
+    /**
+     * Resolve the shell to invoke for `--shell`: honour `$SHELL`,
+     * fall back to {@see FALLBACK_SHELL}. Always passes `-l` so the
+     * recorded session runs as a login shell (sources the user's
+     * profile and reads `$HOME/.profile` chain just like a fresh
+     * terminal login).
+     *
+     * @return list<string>
+     */
+    private static function shellCommand(): array
+    {
+        $shell = (string) (\getenv('SHELL') ?: '');
+        if ($shell === '' || !\is_executable($shell)) {
+            $shell = self::FALLBACK_SHELL;
+        }
+        return [$shell, '-l'];
+    }
+
+    /**
+     * Snapshot the current process env, dropping any key that matches
+     * the configured secret regex. Keys are sorted alphabetically so
+     * the cassette diff stays stable across runs.
+     *
+     * @return array<string, string>
+     */
+    public static function filteredHostEnv(string $regex = self::SECRET_KEY_REGEX): array
+    {
+        // `getenv()` (no args) returns the full process env on PHP 8.3.
+        // Fall back to `$_SERVER` if for some reason it's disabled.
+        $env = \getenv();
+        if (!\is_array($env) || $env === []) {
+            $env = [];
+            foreach ($_SERVER as $k => $v) {
+                if (\is_string($k) && \is_string($v)) {
+                    $env[$k] = $v;
+                }
+            }
+        }
+
+        $kept = [];
+        foreach ($env as $k => $v) {
+            if (!\is_string($k) || $k === '' || !\is_string($v)) {
+                continue;
+            }
+            if (@\preg_match($regex, $k) === 1) {
+                continue;
+            }
+            $kept[$k] = $v;
+        }
+        \ksort($kept);
+        return $kept;
     }
 
     /**
@@ -221,13 +319,23 @@ final class RecordCommand implements Command
     {
         \fwrite(
             $stream,
-            "usage: candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty] -- <cmd> [args...]\n"
+            "usage: candy-vcr record [--output PATH] [--cols N] [--rows N] [--no-ctty]\n"
+            . "                        [--shell] [--env] [--env-regex=PATTERN] -- <cmd> [args...]\n"
             . "\n"
             . "  --output PATH    Cassette file to write (default: session-<timestamp>.cas)\n"
             . "  --cols N         Initial terminal columns (default: 80)\n"
             . "  --rows N         Initial terminal rows (default: 24)\n"
             . "  --no-ctty        Spawn without a controlling terminal (Ctrl+C will not\n"
-            . "                   reach the recorded program; default: ctty enabled)\n",
+            . "                   reach the recorded program; default: ctty enabled)\n"
+            . "  --shell          Spawn \$SHELL -l (or /bin/sh -l) instead of an explicit\n"
+            . "                   <cmd>. Mutually exclusive with positional <cmd>.\n"
+            . "  --env            Capture the host environment into the cassette header.\n"
+            . "                   Off by default — env capture is opt-in to avoid leaking\n"
+            . "                   the caller's full shell environment. Keys matching the\n"
+            . "                   secret regex (see --env-regex) are stripped.\n"
+            . "  --env-regex=RE   Override the secret-stripping regex (default conservative\n"
+            . "                   /(SECRET|TOKEN|KEY|PASSWORD|API|CRED|AUTH|PRIV)/i).\n"
+            . "                   Implies --env.\n",
         );
     }
 
