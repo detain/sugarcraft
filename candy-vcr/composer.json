@@ -28,7 +28,8 @@
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-pty": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5",
@@ -40,6 +41,13 @@
         "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
     },
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "vcs",
             "url": "https://github.com/sugarcraft/candy-core"
