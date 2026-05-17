@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyPty (Developer)</title>
+<meta name="description" content="CandyPty extension points: PtySystem interface, backend conventions, testing.">
+<meta property="og:title" content="SugarCraft — CandyPty (Developer)">
+<link rel="canonical" href="https://sugarcraft.github.io/dev/candy-pty.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/dev/candy-pty.html">
+<link rel="icon" type="image/png" href="../img/icons/candy-pty.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a> / <a href="../lib/candy-pty.html">candy-pty</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-pty.png" alt="CandyPty">
+      <div>
+        <h2>🖥️ CandyPty — Developer Guide</h2>
+        <p class="detail-sub">Extending and testing the PTY backend</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Extension points</h3>
+    <p>The primary extension point is the <code>Contract\PtySystem</code> interface. Implement this interface to provide a custom PTY backend (e.g. Windows ConPTY sidecar, pecl extension):</p>
+    <pre class="code"><code>interface PtySystem
+{
+    public function open(int $cols, int $rows): PtyPair;
+}</code></pre>
+    <p>Where <code>PtyPair</code>, <code>MasterPty</code>, <code>SlavePty</code>, and <code>Child</code> are also contracts in <code>Contract/</code>. See <code>candy-pty/src/Contract/</code> for the full namespace tree.</p>
+
+    <h3 style="margin-top: 32px;">Backend conventions</h3>
+    <p>All backends must be selectable via <code>SUGARCRAFT_PTY_BACKEND</code>. The factory <code>PtySystemFactory::default()</code> reads this env var and dispatches:</p>
+    <table class="api-table">
+      <tr><th>Value</th><th>Backend class</th><th>Status</th></tr>
+      <tr><td><code>posix-ffi</code> (default)</td><td><code>PosixPtySystem</code></td><td>✅ Shipping (Linux + macOS)</td></tr>
+      <tr><td><code>auto</code></td><td>Same as unset</td><td>✅ Equivalent to <code>posix-ffi</code></td></tr>
+      <tr><td><code>sidecar</code></td><td>—</td><td>❌ Throws <code>UnsupportedPlatformException</code> (deferred to phase 12)</td></tr>
+      <tr><td><code>pecl</code></td><td>—</td><td>❌ Throws <code>UnsupportedPlatformException</code> (deferred to phase 12)</td></tr>
+    </table>
+    <p>When implementing a new backend:</p>
+    <ol>
+      <li>Implement <code>Contract\PtySystem</code> (and the full contract tree).</li>
+      <li>Add the dispatch case in <code>PtySystemFactory::default()</code>.</li>
+      <li>Wire the env-var-to-backend mapping in the same method.</li>
+      <li>Remove the <code>UnsupportedPlatformException::forDeferredBackend()</code> throw for that value.</li>
+    </ol>
+
+    <h3 style="margin-top: 32px;">Testing your extension</h3>
+    <p>Use a <code>FakePtySystem</code> that implements <code>PtySystem</code> and returns synthetic <code>PtyPair</code> / <code>Child</code> objects. This lets unit tests run without FFI or real syscalls.</p>
+    <pre class="code"><code>use SugarCraft\Pty\Contract\PtySystem;
+
+final class FakePtySystem implements PtySystem
+{
+    public function open(int $cols, int $rows): PtyPair { /* ... */ }
+}
+
+// In tests:
+$system = new FakePtySystem();
+$pair = $system->open(80, 24);</code></pre>
+    <p>For integration tests that need real PTY behaviour (resize forwarding, SIGWINCH, controlling terminal), use the real <code>PosixPtySystem</code> on CI. Darwin/macOS tests run in a separate CI job (see <code>.github/workflows/ci.yml</code> macos-test matrix).</p>
+
+    <h3 style="margin-top: 32px;">Versioning policy</h3>
+    <ul>
+      <li><strong>@api</strong> — The <code>Contract\*</code> interfaces are stable. Implementing them is the supported extension path.</li>
+      <li><strong>@internal</strong> — All <code>Posix\*</code> classes, <code>PtySystemFactory</code>, and <code>SignalForwarder</code> are internal. Do not extend or call them directly from outside the lib.</li>
+      <li><strong>Backend selection</strong> — The env var dispatch in <code>PtySystemFactory::default()</code> is part of the stable API. Adding new backend values is non-breaking as long as unknown values throw <code>InvalidArgumentException</code>.</li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Namespace tree</h3>
+    <pre class="code"><code>SugarCraft\Pty
+├── Contract           # Stable API interfaces
+│   ├── PtySystem      # open(cols, rows): PtyPair
+│   ├── PtyPair        # master(): MasterPty, slave(): SlavePty
+│   ├── MasterPty      # read/write/resize/size/isClosed/stream/close
+│   ├── SlavePty        # path/spawn
+│   ├── Child          # pid/exited/wait/exitCode/kill
+│   └── Pump           # run(master, stdin, stdout, child?, opts?): int
+├── Exception
+│   └── UnsupportedPlatformException
+├── Posix              # Internal POSIX/FFI implementation
+│   ├── PosixPtySystem
+│   ├── PosixPtyPair
+│   ├── PosixMasterPty
+│   ├── PosixSlavePty
+│   ├── PosixChild
+│   └── PosixPump
+├── PtySystemFactory   # Entry point; SUGARCRAFT_PTY_BACKEND dispatch
+├── SignalForwarder    # SIGWINCH → resize, SIGCHLD → reap
+└── PumpOptions        # Callback holders + sshDefault()</code></pre>
+
+    <h3 style="margin-top: 40px;">Source</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-pty">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-pty/tree/main/src/Contract">Contract interfaces</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../lib/candy-pty.html" class="btn btn-primary">← Back to candy-pty docs</a></p>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-pty">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-pty/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+</body>
+</html>
