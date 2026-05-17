@@ -49,3 +49,4 @@ step 01.01 · PR#490 · plans: add x-windows.md stub plan + MATCHUPS.md TODO
 review for step 01.01 · clean · PR#490
 step 01.02 · PR#491 · PARTIAL — add .gitignore + @dev→dev-master + CI cache keys; composer.lock deletion NOT executed (see open findings)
 fix for step 01.02 · PR#492 · resolved 3 findings
+step 01.03 · PR#493 · candy-pty: split onIdle from onSigwinch; de-TODO recorder-tap comment
