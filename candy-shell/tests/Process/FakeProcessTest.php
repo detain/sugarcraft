@@ -31,4 +31,18 @@ final class FakeProcessTest extends TestCase
         $this->assertSame(0, $p->close());
         $this->assertTrue($p->closed);
     }
+
+    public function testStdoutBytesForwardsToBufferedStdout(): void
+    {
+        $p = new FakeProcess();
+        $p->bufferedStdout = "hello\n";
+        $this->assertSame("hello\n", $p->stdoutBytes());
+    }
+
+    public function testStderrBytesForwardsToBufferedStderr(): void
+    {
+        $p = new FakeProcess();
+        $p->bufferedStderr = "error\n";
+        $this->assertSame("error\n", $p->stderrBytes());
+    }
 }
