@@ -105,7 +105,7 @@ final class PosixPumpKeepaliveTest extends TestCase
         }
     }
 
-    public function testKeepaliveAndOnSigwinchBothFireOnIdleTimeout(): void
+    public function testKeepaliveAndOnIdleBothFireOnIdleTimeout(): void
     {
         $this->requirePtySyscalls();
 
@@ -120,15 +120,15 @@ final class PosixPumpKeepaliveTest extends TestCase
             $stdout = \fopen('php://temp', 'r+');
 
             $keepaliveCount = 0;
-            $sigwinchCount = 0;
+            $idleCount = 0;
 
             $opts = (new PumpOptions())
                 ->withSelectTimeoutUs(50_000)
                 ->withKeepalive(function () use (&$keepaliveCount): void {
                     $keepaliveCount++;
                 })
-                ->withOnSigwinch(function (int $cols, int $rows) use (&$sigwinchCount): void {
-                    $sigwinchCount++;
+                ->withOnIdle(function () use (&$idleCount): void {
+                    $idleCount++;
                 });
 
             $pump = new PosixPump();
@@ -142,11 +142,11 @@ final class PosixPumpKeepaliveTest extends TestCase
             // longer blocks on wait().
             $this->assertSame(-1, $exitCode);
             $this->assertGreaterThanOrEqual(1, $keepaliveCount, 'keepalive should fire at least once');
-            $this->assertGreaterThanOrEqual(1, $sigwinchCount, 'onSigwinch should fire at least once');
+            $this->assertGreaterThanOrEqual(1, $idleCount, 'onIdle should fire at least once');
             $this->assertSame(
                 $keepaliveCount,
-                $sigwinchCount,
-                'onSigwinch and keepalive should fire the same number of times on idle timeouts',
+                $idleCount,
+                'onIdle and keepalive should fire the same number of times on idle timeouts',
             );
         } finally {
             $pair->master()->close();

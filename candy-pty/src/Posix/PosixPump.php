@@ -115,8 +115,8 @@ final class PosixPump implements PumpContract
             }
 
             if ($ready === 0) {
-                if ($opts->onSigwinch !== null) {
-                    ($opts->onSigwinch)(0, 0);
+                if ($opts->onIdle !== null) {
+                    ($opts->onIdle)();
                 }
                 if ($opts->keepalive !== null) {
                     ($opts->keepalive)();
@@ -217,21 +217,13 @@ final class PosixPump implements PumpContract
         return $written !== false;
     }
 
-    // P6.1 Recorder tap — `recordResize` wiring TODO:
+    // Design note — SIGWINCH detection lives in the consumer:
     //
-    // The recorder's resize stream is intentionally NOT wired here.
-    // The current `pump()` idle-tick branch fires `onSigwinch(0, 0)`
-    // every `$opts->selectTimeoutUs` whether or not a real SIGWINCH
-    // arrived — calling `recordResize(0, 0)` from that path would
-    // litter the cassette with zero-dimension noise events.
-    //
-    // The P2.5 audit flagged that real SIGWINCH detection still lives
-    // upstream in candy-wish::InProcessTransport via
-    // {@see \SugarCraft\Pty\SignalForwarder::attachSigwinch}. When the
-    // supervisor wires a real signal-driven callback (P6.5 candy-vcr
-    // record CLI is the first natural consumer), it should chain into
-    // `recorder->recordResize($cols, $rows)` from the same callback
-    // that drives `MasterPty::resize()`. The pump itself stays clear
-    // of SIGWINCH detection so it can be reused outside an interactive
-    // session (e.g. piping a non-tty command into a recording).
+    // Real terminal-resize events are detected and propagated by the
+    // consumer's {@see SignalForwarder::attachSigwinch} callback, which
+    // pipes dimensions into `MasterPty::resize()`. The pump loop fires
+    // {@see PumpOptions::$onIdle} on every idle tick — that is the
+    // correct hook for keepalive / polling, not `onSigwinch`. The pump
+    // itself is reusable outside interactive-session contexts (e.g.
+    // piping a non-tty command into a recording).
 }

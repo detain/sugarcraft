@@ -19,6 +19,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame(PumpOptions::DEFAULT_STDIN_EOF_GRACE_SEC, $opts->stdinEofGraceSec);
         $this->assertSame(PumpOptions::DEFAULT_VEOF, $opts->veof);
         $this->assertNull($opts->keepalive);
+        $this->assertNull($opts->onIdle);
         $this->assertNull($opts->onSigwinch);
         $this->assertNull($opts->onChildExit);
     }
@@ -51,6 +52,15 @@ final class PumpOptionsTest extends TestCase
 
         $this->assertNotNull($opts->onSigwinch);
         $this->assertSame($cb, $opts->onSigwinch);
+    }
+
+    public function testWithOnIdleAcceptsCallable(): void
+    {
+        $cb = fn () => null;
+        $opts = (new PumpOptions())->withOnIdle($cb);
+
+        $this->assertNotNull($opts->onIdle);
+        $this->assertSame($cb, $opts->onIdle);
     }
 
     public function testWithOnChildExitSetsNullExplicitly(): void
@@ -118,6 +128,7 @@ final class PumpOptionsTest extends TestCase
     public function testImmutabilityAllPropertiesPreservedAcrossWithCalls(): void
     {
         $keepaliveCb = fn () => null;
+        $idleCb = fn () => null;
         $sigwinchCb = fn (int $c, int $r) => null;
         $childExitCb = fn (int $ec) => null;
 
@@ -128,6 +139,7 @@ final class PumpOptionsTest extends TestCase
             stdinEofGraceSec: 0.3,
             veof: "\x04",
             keepalive: $keepaliveCb,
+            onIdle: $idleCb,
             onSigwinch: $sigwinchCb,
             onChildExit: $childExitCb,
         );
@@ -139,6 +151,7 @@ final class PumpOptionsTest extends TestCase
             ->withStdinEofGraceSec(0.6)
             ->withVEOF("\x03")
             ->withKeepalive(null)
+            ->withOnIdle(null)
             ->withOnSigwinch(null)
             ->withOnChildExit(null);
 
@@ -148,6 +161,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame(0.3, $original->stdinEofGraceSec);
         $this->assertSame("\x04", $original->veof);
         $this->assertSame($keepaliveCb, $original->keepalive);
+        $this->assertSame($idleCb, $original->onIdle);
         $this->assertSame($sigwinchCb, $original->onSigwinch);
         $this->assertSame($childExitCb, $original->onChildExit);
 
@@ -157,6 +171,7 @@ final class PumpOptionsTest extends TestCase
         $this->assertSame(0.6, $modified->stdinEofGraceSec);
         $this->assertSame("\x03", $modified->veof);
         $this->assertNull($modified->keepalive);
+        $this->assertNull($modified->onIdle);
         $this->assertNull($modified->onSigwinch);
         $this->assertNull($modified->onChildExit);
     }
