@@ -31,11 +31,22 @@ const WINDOWS_LIBS = [
     'candy-core', 'sugar-prompt', 'sugar-bits', 'candy-shell', 'candy-shine',
 ];
 const MACOS_LIBS = [
-    // Switched from macos-26-intel to macos-15 (Apple Silicon) in
-    // ci.yml — Intel-on-macOS was being phased out and the candy-pty
-    // FFI tests hung past the 30-min cell timeout there. Put candy-
-    // pty back in the pool to verify on arm64 + the newer libSystem.
-    'candy-pty',
+    // candy-pty held out of the macOS pool. The split-job debug
+    // workflow (see .github/workflows/macos-debug.yml + branch
+    // `debug/macos-candy-pty` PR #_) narrowed the failure mode to:
+    // TIOCSWINSZ ioctl returns -1 on macOS arm64 master fds via PHP
+    // FFI, independent of slave-anchor / resize-ordering workarounds.
+    // Hypothesised root cause is the variadic-vs-fixed-arg ABI
+    // mismatch (real libc ioctl is variadic; arm64 puts variadic
+    // args on the stack while fixed args sit in x0-x7), but a
+    // variadic FFI cdef breaks Linux because PHP FFI doesn't
+    // auto-convert FFI\CData arrays for variadic params. Real fix
+    // needs either a Darwin-specific shell-out to `stty` for resize
+    // or a different FFI binding. Until then, candy-pty's macOS
+    // coverage flows through its consumers (candy-core's PosixBackend
+    // and candy-wish's InProcessTransport — both exercise the same
+    // posix_openpt + grantpt + TIOCSWINSZ chain, and candy-wish's
+    // tests fail visibly enough to flag regressions).
     'candy-core',
     'candy-wish',
 ];
