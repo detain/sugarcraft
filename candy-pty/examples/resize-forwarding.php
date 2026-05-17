@@ -4,22 +4,17 @@ declare(strict_types=1);
 
 /**
  * resize-forwarding — Wire SignalForwarder to deliver host-side
- * SIGWINCH into the child PTY's TIOCSWINSZ.
- *
- * Replaces the plan's `spawn-vim.php` example — vim depends on
- * Ctrl+C reaching the child via SIGINT, which needs the TIOCSCTTY
- * shim that's deferred until the candy-wish in-process upgrade.
- * Resize forwarding works today and exercises a more meaningful
- * end-to-end slice of the lib.
+ * SIGWINCH into the child PTY's TIOCSWINSZ via the v1 contract API.
  *
  * Demo:
- *  1. Open a PTY at 80×24.
- *  2. Wire SignalForwarder::attachSigwinch with a size provider
- *     that reads cols/rows from CANDY_PTY_COLS / CANDY_PTY_ROWS env.
- *  3. Spawn a bash loop that prints `tput cols / tput lines` every
+ *  1. Open a PTY at 80×24 via {@see \SugarCraft\Pty\PtySystemFactory}.
+ *  2. Wire SignalForwarder::attachSigwinch with a size provider that
+ *     reads cols/rows from a closure-captured pair of variables.
+ *  3. Spawn a bash loop that logs `tput cols / tput lines` every
  *     150 ms for 1.5 seconds.
- *  4. Mid-loop, mutate the env vars and `posix_kill` SIGWINCH to
- *     ourselves so the child sees the new dims on its next tput.
+ *  4. Mid-loop, mutate the captured cols/rows and `posix_kill`
+ *     SIGWINCH to ourselves so the child sees the new dims on its
+ *     next tput.
  *
  * Usage:
  *   php examples/resize-forwarding.php
@@ -27,7 +22,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Pty\Pty;
+use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\SignalForwarder;
 
 if (!SignalForwarder::pcntlReady()) {
@@ -35,15 +30,19 @@ if (!SignalForwarder::pcntlReady()) {
     exit(1);
 }
 
-$pty = Pty::open();
+$cols = 80;
+$rows = 24;
+
+$pair = PtySystemFactory::default()->open($cols, $rows);
+$master = $pair->master();
+$slave = $pair->slave();
+
 try {
-    $cols = 80;
-    $rows = 24;
     $sizeProvider = static function () use (&$cols, &$rows): array {
         return ['cols' => $cols, 'rows' => $rows];
     };
 
-    SignalForwarder::attachSigwinch($pty, $sizeProvider);
+    SignalForwarder::attachSigwinch($master, $sizeProvider);
     echo "SIGWINCH handler installed; starting at {$cols}×{$rows}\n";
 
     $tmp = tempnam(sys_get_temp_dir(), 'candy-pty-resize-');
@@ -51,7 +50,7 @@ try {
               "echo \"tick \$i: \$(tput cols)x\$(tput lines)\" >> {$tmp}; " .
               "sleep 0.15; done";
 
-    $child = $pty->spawn(
+    $child = $slave->spawn(
         ['/bin/sh', '-c', $script],
         ['TERM' => 'xterm-256color', 'PATH' => getenv('PATH') ?: '/usr/bin:/bin'],
         $cols,
@@ -73,5 +72,7 @@ try {
 
     echo "── child saw ──\n{$log}";
 } finally {
-    $pty->close();
+    if (!$master->isClosed()) {
+        $master->close();
+    }
 }
