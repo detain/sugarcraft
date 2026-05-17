@@ -81,10 +81,24 @@ if (!$result-&gt;ok) {
     exit(1);
 }</code></pre>
 
+    <h3 style="margin-top: 32px;">Cassette format</h3>
+    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (timestamp in seconds) and <code>k</code> (event kind). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/main/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure.</p>
+
     <h3 style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code>vendor/bin/candy-vcr inspect session.cas               # list events
 vendor/bin/candy-vcr replay  session.cas --speed=realtime  # stream to stdout
-vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff</code></pre>
+vendor/bin/candy-vcr diff    a.cas b.cas               # structural diff
+vendor/bin/candy-vcr record  --output session.cas -- bash -c 'echo hi'  # record a PTY session</code></pre>
+
+    <h4 style="margin-top: 20px;"><code>record</code> subcommand</h4>
+    <p>The <code>record</code> subcommand spawns a PTY session and captures all I/O to a cassette file:</p>
+    <pre class="code"><code>vendor/bin/candy-vcr record --output session.cas --cols 132 --rows 40 -- bash -l
+vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello'   # non-interactive, no Ctrl+C wiring
+vendor/bin/candy-vcr record --shell                          # spawn $SHELL -l
+vendor/bin/candy-vcr record --env -- bash -c 'echo hi'         # capture filtered host env
+vendor/bin/candy-vcr record --env-regex='/(SECRET|TOKEN)/i' -- bash -c 'echo hi'  # custom filter
+vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering</code></pre>
+    <p style="margin-top: 8px;"><strong>⚠️ <code>--env-allow-secrets</code></strong> disables all secret-key filtering. The cassette will contain credentials verbatim — only use in fully isolated, trusted environments and never share the resulting cassette.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
