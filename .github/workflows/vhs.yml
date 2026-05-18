@@ -40,31 +40,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       libs: ${{ steps.compute.outputs.libs }}
-      vhs_version: ${{ steps.tools.outputs.vhs }}
-      ttyd_version: ${{ steps.tools.outputs.ttyd }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 2   # need HEAD~1 for the diff
-
-      - name: Resolve vhs / ttyd versions
-        id: tools
-        env:
-          # Use the workflow's GITHUB_TOKEN to authenticate API calls.
-          # Unauthenticated api.github.com requests are rate-limited to
-          # 60/hour per runner IP — easily blown by parallel runs across
-          # the org. Authenticated requests get 5000/hour. The previous
-          # curl + retry loop just burned 130s sleeping into HTTP 403s
-          # before exiting the changed job entirely.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          vhs_tag=$(gh release view --repo charmbracelet/vhs --json tagName -q .tagName)
-          ttyd_tag=$(gh release view --repo tsl0922/ttyd --json tagName -q .tagName)
-          echo "vhs=$vhs_tag"
-          echo "ttyd=$ttyd_tag"
-          echo "vhs=$vhs_tag" >> "$GITHUB_OUTPUT"
-          echo "ttyd=$ttyd_tag" >> "$GITHUB_OUTPUT"
 
       - id: compute
         run: |
@@ -117,30 +96,24 @@ jobs:
   render:
     needs: changed
     runs-on: ubuntu-latest
+    # Pre-built image bakes in vhs, ttyd, ffmpeg, PHP 8.3 + required
+    # extensions, and composer — see scripts/vhs-runner/Dockerfile and
+    # .github/workflows/vhs-runner-image.yml. Eliminates per-job
+    # GitHub release API calls (previously up to 2× the matrix size on
+    # cache miss) and the apt-get ffmpeg install.
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
     permissions:
       contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
-        # Single-key matrix — declaring vhs/ttyd versions here would
-        # cartesian-product to 46×N×N jobs and exceed the 256-per-run
-        # limit, blowing up the workflow before any job starts. Version
-        # info is consumed from needs.changed.outputs.{vhs,ttyd}_version.
+        # Single-key matrix — the lib name is the only axis. Tool versions
+        # are pinned by the container image tag rather than per-job inputs.
         lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-dash, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
     steps:
       - uses: actions/checkout@v5
-
-      - name: Setup PHP
-        uses: shivammathur/setup-php@v2
-        with:
-          php-version: '8.3'
-          # ssh2 is required by candy-serve (ext-ssh2 in composer.json).
-          # The other libs that declare ext-* requirements (candy-flip,
-          # candy-pty, candy-query, sugar-skate) install cleanly on the
-          # default Ubuntu runner without explicit extension setup.
-          extensions: mbstring, intl, pcntl, ssh2
-          tools: composer:v2
-          coverage: none
 
       - name: Check if lib needs rendering
         id: check
@@ -176,62 +149,12 @@ jobs:
         working-directory: ${{ matrix.lib }}
         run: composer install --prefer-dist --no-progress
 
-      # Cache the vhs + ttyd binaries by their resolved upstream
-      # version. Saves ~30 seconds of API + tarball + extract per job.
-      - name: Restore cached vhs + ttyd
-        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        id: cache-bins
-        uses: actions/cache@v5
-        with:
-          path: |
-            /usr/local/bin/vhs
-            /usr/local/bin/ttyd
-          key: vhs-${{ needs.changed.outputs.vhs_version }}-ttyd-${{ needs.changed.outputs.ttyd_version }}-linux-amd64
-
-      - name: Install vhs + ttyd (cache miss)
-        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' && steps.cache-bins.outputs.cache-hit != 'true'
-        env:
-          # Same rationale as the changed.tools step — authenticate to
-          # avoid the 60/hour anonymous api.github.com rate limit.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release download --repo charmbracelet/vhs \
-            --pattern '*Linux_x86_64.tar.gz' \
-            --output /tmp/vhs.tar.gz --clobber
-          sudo tar -xz -f /tmp/vhs.tar.gz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs'
-          sudo chmod +x /usr/local/bin/vhs
-
-          gh release download --repo tsl0922/ttyd \
-            --pattern 'ttyd.x86_64' \
-            --output /tmp/ttyd --clobber
-          sudo install -m 0755 /tmp/ttyd /usr/local/bin/ttyd
-
-      - name: Install ffmpeg
-        if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        # Direct apt install instead of awalsh128/cache-apt-pkgs-action.
-        # That action restores cached .deb file contents but doesn't
-        # re-run apt's post-install scripts on cache hit — libblas's
-        # update-alternatives entry never gets recreated, and ffmpeg
-        # crashes at runtime with
-        #   libblas.so.3: cannot open shared object file
-        # Even with execute_install_scripts: true the dpkg --configure
-        # call isn't sufficient to recreate update-alternatives symlinks
-        # (see run 25825814166, candy-shine vs candy-kit). The runner
-        # image has apt cache pre-indexed so a direct install is ~15s,
-        # FASTER than the ~90s cache-apt-pkgs cache-miss path was, and
-        # always runs the real post-install scripts.
-        run: |
-          set -euo pipefail
-          sudo apt-get install -y --no-install-recommends ffmpeg \
-            || (sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg)
-
       - name: Verify tools
         if: steps.check.outputs.needs_render == 'true' && hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != ''
-        # set -o pipefail so `ffmpeg -version | head -1` propagates an
-        # ffmpeg shared-library load failure (exit 127) instead of being
-        # masked by head's success. We had a silent libblas.so.3
-        # cannot-open-shared-object regression slip through here.
+        # Tools are baked into the container image; this is a smoke
+        # check that the image actually has what the render step needs.
+        # Pipefail so an ffmpeg shared-library load failure (exit 127)
+        # propagates instead of being masked by head's success.
         run: |
           set -euo pipefail
           vhs --version
