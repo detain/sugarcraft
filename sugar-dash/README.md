@@ -419,8 +419,10 @@ composer require sugarcraft/sugar-dash
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Module` | Module interface: name/init/update/view/minSize |
-| `BaseModule` | Abstract helper with default behavior |
+| `Module` | Elm-arch interface aligned with `Core\Model`: `init(): ?Closure`, `update(Msg): array{0:Module,1:?Cmd}`, `view(): string`, plus `name(): string`, `minSize(): array{0:int,1:int}` |
+| `BaseModule` | Abstract helper — `withState(array): static` for immutable state, default `update()` returns `[self,null]` |
+| `LegacyModule` | Deprecated array-state interface — superseded by `Module` |
+| `LegacyModuleAdapter` | `@internal` wrapper that adapts `LegacyModule` to the `Module` contract |
 | `ModuleConfig` | Module configuration |
 | `ImagePlacer` | Optional interface for image placements |
 | `ImagePlacement` | Image placement data |
@@ -430,7 +432,7 @@ composer require sugarcraft/sugar-dash
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Registry` | Static register/get/list/reset for modules |
+| `Registry` | Static register/get/list/reset for modules; auto-wraps `LegacyModule` via `LegacyModuleAdapter` |
 
 ## Plugin Namespace (Plugin System)
 
@@ -444,11 +446,12 @@ composer require sugarcraft/sugar-dash
 
 ## Modules Namespace (Built-in Modules)
 
+All built-in modules extend `BaseModule` and use `withState()` for immutable state updates.
+
 | Type | Description |
 |------|-------------|
 | `Clock\ClockModule` | Single-line clock |
 | `System\SystemModule` | CPU/mem/disk stats |
-| `Weather\WeatherModule` | HTTP weather fetcher |
 | `Uptime\UptimeModule` | System uptime |
 | `Greeting\GreetingModule` | Time-of-day greeting |
 | `Generic\GenericModule` | Arbitrary shell command runner |
