@@ -152,6 +152,7 @@ review for step 03.08 · clean · PR#541
   tests-ci for step 03.11 · clean
   docs for step 03.11 · clean
   step 03.12 · PR#556 · sugar-dash: split State/State.php — TransitionType/StateNode/StateTransition/StateMachine to Components/Tree/ (PSR-4 one-class-per-file); add State/Persistence.php (atomic tmp+rename); BC class_alias re-exports; persistState/restoreState wired into FocusManager/Boxer/StackedGrid; 5141 tests green
+  review for step 03.12 · clean · PR#556
 
 ## Open review findings — 03.05
 
