@@ -16,12 +16,13 @@ final class SystemModuleTest extends TestCase
         $this->assertSame('system', $module->name());
     }
 
-    public function testInitReturnsNull(): void
+    public function testInitReturnsTickCmd(): void
     {
         $module = new SystemModule();
         $cmd = $module->init();
-        // New contract: init() returns ?Closure, base returns null
-        $this->assertNull($cmd);
+        // Step 03.06 changed contract: SystemModule returns Cmd::tick(2.0, RefreshMsg) from init()
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
     public function testUpdateReturnsModuleAndNull(): void
