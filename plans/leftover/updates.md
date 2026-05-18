@@ -106,6 +106,8 @@ docs for step 01.13 · clean
 step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
 review for step 01.14 · clean · PR#517
 step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive)
+docs for step 02.01 · PR#520 · document Theme in README/end-user docs/PHPDoc/CALIBER_LEARNINGS.md
+step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (inline [text](fg:red) syntax)
 
 ## Open review findings — 01.08
 
