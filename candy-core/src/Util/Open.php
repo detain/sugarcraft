@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Pty\Posix\PosixProcess;
+use SugarCraft\Pty\PtyException;
+
 /**
  * Cross-platform helper for opening URLs and files in the user's
  * default application. Mirrors charmbracelet/x/exp/open.
@@ -109,25 +112,13 @@ final class Open
     {
         return static function (string $cmd, array $args): bool {
             $argv = array_merge([$cmd], array_values($args));
-            $opts = DIRECTORY_SEPARATOR === '\\' ? ['bypass_shell' => true] : [];
-            $proc = @proc_open(
-                $argv,
-                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
-                $pipes,
-                null,
-                null,
-                $opts,
-            );
-            if (!is_resource($proc)) {
+            try {
+                $proc = PosixProcess::spawn($argv, null, false, false);
+                $proc->wait();
+                return true;
+            } catch (PtyException) {
                 return false;
             }
-            foreach ($pipes as $p) {
-                if (is_resource($p)) {
-                    fclose($p);
-                }
-            }
-            proc_close($proc);
-            return true;
         };
     }
 
