@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Foundation;
 
 /**
- * A fixed-size 2D grid of Cell objects for terminal rendering.
+ * Sugar-dash immutable ANSI renderer Buffer (Sizer/Drawable pattern).
+ * Intentionally distinct from \SugarCraft\Vt\Buffer\Buffer, which is
+ * a mutable VT-output grid (resize/cell/put/each). Different role:
+ * this composes layout output for inline-termui; the VT version
+ * stores terminal state during emulation.
  *
- * Mirrors termui buffer.go
+ * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-buffer-roles].
  */
 final class Buffer implements Drawable, Sizer
 {

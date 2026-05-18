@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Foundation;
 
+use SugarCraft\Core\Util\Color;
+
 /**
  * Parses termui-style inline style strings into Cell arrays.
  *
