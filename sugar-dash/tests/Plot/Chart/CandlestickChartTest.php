@@ -151,4 +151,39 @@ final class CandlestickChartTest extends TestCase
         $result = $chart->withWickColor(\SugarCraft\Core\Util\Color::hex('#0000FF'));
         $this->assertInstanceOf(CandlestickChart::class, $result);
     }
+
+    /**
+     * Regression test: withers must return a new instance with updated state,
+     * not mutate a clone of a readonly property. Previously the clone-mutate
+     * pattern `$clone->color = $color` threw "Cannot modify readonly property"
+     * at runtime because constructor-promoted color params are readonly.
+     */
+    public function testWithersProduceNewInstancesWithUpdatedState(): void
+    {
+        $original = CandlestickChart::new()->setSize(65, 15);
+        $candle = Candlestick::bullish('AAPL', 150.0, 155.0, 149.0, 153.0);
+        $original = $original->withCandle($candle);
+
+        $green = \SugarCraft\Core\Util\Color::hex('#00FF00');
+        $red = \SugarCraft\Core\Util\Color::hex('#FF0000');
+
+        $modified = $original
+            ->withBullishColor($green)
+            ->withBearishColor($red)
+            ->withGridColor($green)
+            ->withTextColor($red)
+            ->withWickColor($green)
+            ->withBackgroundColor($red)
+            ->withShowGrid(false)
+            ->withShowVolume(true)
+            ->withShowLabels(false)
+            ->withPriceRange(100.0, 200.0)
+            ->withStyle('bold');
+
+        // Original must be unchanged
+        $this->assertNotSame($original, $modified);
+        // Modified must have rendered (not throw)
+        $rendered = $modified->render();
+        $this->assertNotEmpty($rendered);
+    }
 }
