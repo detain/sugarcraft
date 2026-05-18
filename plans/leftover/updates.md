@@ -32,6 +32,8 @@ this before spawning the next subagent.)
 
 - **step 01.06** (slim-deprecated-facades): ~~RESOLVED via PR#499~~ — hybrid approach: composition for Pty (138 LOC), Spawn/Child/Master left minimal per revised targets (≤324 total achievable). Original step prescription (`extends Posix\Foo`) was structurally impossible since all Posix classes are `final`.
 
+- **step 01.12** (SignalForwarder tests): ~~RESOLVED via PR#513~~ — NOT a PHP architectural limitation. Two real, narrow candy-pty bugs: (1) `posix_openpt` master fd lacked `FD_CLOEXEC` so the forked child inherited it, keeping the kernel master-side refcount > 0 across parent close; (2) `PosixMasterPty::close()` returned early after `fclose($stream)`, but `fopen('php://fd/N')` dup()s the fd so the original `posix_openpt` fd stayed open. Both required — with only one fix, child still survives 2 s+. With both: `sleep 30` exits ~20 ms after master close. Fixes + the three integration tests (SignalForwarderReactLoop, SIGHUPForwarding, NoControllingTerminal) landed together.
+
 ---
 
 ## Carry-forward
@@ -95,6 +97,7 @@ tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkips
  step 01.11 · PR#511 · tools: add --fix flag to check-path-repos.php
  review for step 01.11 · clean · PR#511
  docs for step 01.11 · PR#512 · document --fix in CONTRIBUTING.md + docblock
+ step 01.12 · PR#513 · candy-pty: SIGHUP delivery fix (FD_CLOEXEC on master fd + libc close after fclose) + SignalForwarderReactLoop/SIGHUPForwarding/NoControllingTerminal integration tests; resolved blocker (was two narrow bugs, not a PHP architectural gap)
 
 ## Open review findings — 01.08
 
