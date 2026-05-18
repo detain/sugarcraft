@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Layout;
 
+use SugarCraft\Dash\State\Persistence;
+
 /**
  * Manages focus state for a layout hierarchy.
  */
@@ -107,6 +109,40 @@ final class FocusManager
         if ($clone->focusedId === $key) {
             $clone->focusedId = null;
         }
+        return $clone;
+    }
+
+    // ─── Persistence ───────────────────────────────────────────────
+
+    /**
+     * Save focus state to disk via the persistence layer.
+     *
+     * Persists focusedId and the focusMap so panel focus survives restart.
+     */
+    public function persistState(Persistence $persistence, string $path): void
+    {
+        $persistence->save($path, [
+            'focusedId' => $this->focusedId,
+            'focusMap' => $this->focusMap,
+        ]);
+    }
+
+    /**
+     * Restore focus state from disk.
+     *
+     * Returns a new FocusManager with restored state, or $this if no
+     * persisted state exists.
+     */
+    public function restoreState(Persistence $persistence, string $path): self
+    {
+        $data = $persistence->load($path);
+        if ($data === null) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $clone->focusedId = $data['focusedId'] ?? null;
+        $clone->focusMap = $data['focusMap'] ?? [$this->rootId => true];
         return $clone;
     }
 }
