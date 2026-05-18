@@ -122,6 +122,7 @@ step 03.02 · PR#528 · sugar-dash: Grid reorg part 2 — delete Grid chart dupl
 review for step 03.02 · clean · PR#528
 docs for step 03.02 · clean
 step 03.03 · PR#529 · sugar-dash: Grid reorg part 3 — events/Keys/State/Foundation moves + delete empty Grid/ dir (Event/Focus/Key* to Events/Keys/State; EdgeStyle/Segment to Foundation; Progress/ProgressRing to Plot/Chart; BC stubs for all moved files; chart duplicates deleted)
+fix for step 03.03 · PR#530 · resolved 2 findings (Key files wrong dir + Grid/ 44 files) + PHP 8.4 type alias compat fix
 
 ## Open review findings — 02.03
 
