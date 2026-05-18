@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         unzip \
         php8.3-cli \
         php8.3-curl \
+        php8.3-gd \
         php8.3-intl \
         php8.3-mbstring \
         php8.3-sqlite3 \
