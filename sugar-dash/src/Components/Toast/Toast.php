@@ -20,6 +20,9 @@ use SugarCraft\Core\Util\Width;
  *
  * Mirrors the toast concept from typical UI toolkits but adapted
  * to PHP with wither-style immutable setters.
+ *
+ * Adapter: `fromNotification()` / `fromQueue()` bridge Notification DTOs
+ * into styled toast output.
  */
 final class Toast implements \SugarCraft\Dash\Foundation\Sizer
 {
@@ -35,6 +38,63 @@ final class Toast implements \SugarCraft\Dash\Foundation\Sizer
         private readonly string $icon = '',
         private readonly int $maxWidth = 60,
     ) {}
+
+    /**
+     * Bridge a Notification DTO into a styled Toast.
+     */
+    public static function fromNotification(Notification $notification): self
+    {
+        return match ($notification->level) {
+            Level::Info => (new self(
+                message: $notification->message,
+                title: $notification->title,
+                backgroundColor: Color::hex('#1E3A5F'),
+                foregroundColor: Color::hex('#E5E7EB'),
+                borderColor: Color::hex('#3B82F6'),
+                icon: Level::Info->icon(),
+                maxWidth: 60,
+            )),
+            Level::Warning => (new self(
+                message: $notification->message,
+                title: $notification->title,
+                backgroundColor: Color::hex('#451A03'),
+                foregroundColor: Color::hex('#FEF3C7'),
+                borderColor: Color::hex('#F59E0B'),
+                icon: Level::Warning->icon(),
+                maxWidth: 60,
+            )),
+            Level::Error => (new self(
+                message: $notification->message,
+                title: $notification->title,
+                backgroundColor: Color::hex('#450A0A'),
+                foregroundColor: Color::hex('#FEE2E2'),
+                borderColor: Color::hex('#EF4444'),
+                icon: Level::Error->icon(),
+                maxWidth: 60,
+            )),
+            Level::Success => (new self(
+                message: $notification->message,
+                title: $notification->title,
+                backgroundColor: Color::hex('#052E16'),
+                foregroundColor: Color::hex('#DCFCE7'),
+                borderColor: Color::hex('#22C55E'),
+                icon: Level::Success->icon(),
+                maxWidth: 60,
+            )),
+        };
+    }
+
+    /**
+     * Bridge a NotificationQueue, rendering its current head as a toast.
+     */
+    public static function fromQueue(NotificationQueue $queue): ?self
+    {
+        $current = $queue->current();
+        if ($current === null) {
+            return null;
+        }
+        return self::fromNotification($current);
+    }
 
     /**
      * Create a new toast with default styling.
