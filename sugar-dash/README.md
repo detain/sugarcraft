@@ -234,7 +234,10 @@ composer require sugarcraft/sugar-dash
 | `LoadingText` | Animated loading text | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/loading-text.gif) |
 | `Skeleton` | Loading skeleton | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/skeleton.gif) |
 | `Spinner` | Loading spinner | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/spinner.gif) |
-| `Toast` | Toast message | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toast.gif) |
+| `Toast` | Toast message | `new()`, `info()`, `success()`, `warning()`, `error()`, `fromNotification()`, `fromQueue()` | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/toast.gif) |
+| `NotificationQueue` | Dual-ring queue: active `items[max 20]` + `history[max 50]` | `new()`, `push()`, `dismiss()`, `current()`, `recent()`, `all()`, `history()`, `count()`, `historyCount()` | |
+| `Level` | Toast level enum: `Info`, `Warning`, `Error`, `Success` | `icon()`, `isError()`, `isHighlighted()` | |
+| `Notification` | Toast notification DTO: `message`, `level`, `title` | `info()`, `warning()`, `error()`, `success()` | |
 | `Tooltip` | Tooltip popup | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tooltip.gif) |
 | `Popover` | Popover content | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/popover.gif) |
 | `NProgress` | npm-style progress bar | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/nprogress.gif) |
