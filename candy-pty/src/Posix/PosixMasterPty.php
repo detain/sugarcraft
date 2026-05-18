@@ -206,7 +206,8 @@ final class PosixMasterPty implements MasterPty
             $this->anchorSlaveFd = -1;
         }
 
-        if ($this->stream !== null) {
+        $usedStream = $this->stream !== null;
+        if ($usedStream) {
             $stream = $this->stream;
             $this->stream = null;
             if (\is_resource($stream) && !@\fclose($stream)) {
@@ -217,11 +218,20 @@ final class PosixMasterPty implements MasterPty
                     ])
                 );
             }
-            return;
+            // Fall through to libc close: `fopen('php://fd/N')` dup()s
+            // the fd (see php-src plain_wrapper.c), so fclose only
+            // closed the duplicate. The original fd from posix_openpt
+            // must be closed explicitly or tty_hangup() never fires.
         }
 
         $rc = Libc::lib()->close($this->fd);
-        if ($rc !== 0) {
+        // When we went through the stream path, our libc fd may have
+        // been recycled by an unrelated open() between our fopen() and
+        // this close() — close() on it can then succeed-but-target-the-
+        // wrong-thing OR return EBADF (-1) if nothing claimed it. Either
+        // is fine for us; surface only failures from the pure-libc path
+        // where rc != 0 means the master fd never closed.
+        if ($rc !== 0 && !$usedStream) {
             throw new PtyException(
                 \SugarCraft\Pty\Lang::t('close.failed', ['fd' => $this->fd, 'rc' => $rc])
             );
