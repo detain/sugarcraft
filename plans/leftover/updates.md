@@ -105,6 +105,7 @@ review for step 01.13 · clean · PR#516
 docs for step 01.13 · clean
 step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
 review for step 01.14 · clean · PR#517
+step 02.01 · PR#519 · candy-sprinkles: Theme class (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized* + with* + adaptive)
 
 ## Open review findings — 01.08
 
