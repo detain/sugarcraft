@@ -1,0 +1,5 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 120x40 (120x40)
+# example: hexDump
+---
+00000000  48 65 6C 6C  6F 20 57 6F  72 6C 64 21               Hello World!

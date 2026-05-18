@@ -1,0 +1,8 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 120x40 (120x40)
+# example: focus
+---
+PHP Fatal error:  Uncaught Error: Class "SugarCraft\Dash\Grid\Focus" not found in /tmp/golden_focus_120x40.php:11
+Stack trace:
+#0 {main}
+  thrown in /tmp/golden_focus_120x40.php on line 11
