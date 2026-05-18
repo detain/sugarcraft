@@ -4,14 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Uptime;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
 /**
  * Uptime module that displays system uptime.
+ *
+ * Uses Cmd::tick() for periodic refresh.
  */
 final class UptimeModule extends BaseModule
 {
+    private const TICK_INTERVAL = 5.0;
+
+    private string $uptime = 'N/A';
+
     public function name(): string
     {
         return 'uptime';
@@ -19,20 +26,22 @@ final class UptimeModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        $this->readUptime();
-        return null;
+        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg());
     }
 
     public function update(Msg $msg): array
     {
-        $uptime = $this->readUptimeFromProc();
-        return [$this->withState(['uptime' => $uptime]), null];
+        $newUptime = $this->readUptimeFromProc();
+        $nextModule = $this->withUptime($newUptime);
+        if ($msg instanceof TickMsg) {
+            return [$nextModule, Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new TickMsg())];
+        }
+        return [$nextModule, null];
     }
 
     public function view(): string
     {
-        $state = $this->getState();
-        return $state['uptime'] ?? 'N/A';
+        return $this->uptime;
     }
 
     public function minSize(): array
@@ -40,9 +49,11 @@ final class UptimeModule extends BaseModule
         return [15, 3];
     }
 
-    private function readUptime(): string
+    private function withUptime(string $uptime): static
     {
-        return $this->readUptimeFromProc();
+        $clone = clone $this;
+        $clone->uptime = $uptime;
+        return $clone;
     }
 
     private function readUptimeFromProc(): string

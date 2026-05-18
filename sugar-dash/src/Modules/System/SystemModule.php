@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\System;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
@@ -11,13 +12,12 @@ use SugarCraft\Dash\Module\BaseModule;
  * System module that displays CPU, memory, and uptime statistics.
  *
  * Mirrors the lattice system module pattern.
+ * Uses Cmd::tick() for periodic refresh.
  */
 final class SystemModule extends BaseModule
 {
-    private float $cpuLoad = 0.0;
-    private float $memLoad = 0.0;
-    private float $gpuLoad = -1.0;
-    private string $uptime = 'unknown';
+    private const HISTORY_SIZE = 30;
+    private const TICK_INTERVAL = 2.0;
 
     /** @var array<int> */
     private array $cpuHistory = [];
@@ -25,7 +25,10 @@ final class SystemModule extends BaseModule
     /** @var array<int> */
     private array $memHistory = [];
 
-    private const HISTORY_SIZE = 30;
+    private float $cpuLoad = 0.0;
+    private float $memLoad = 0.0;
+    private float $gpuLoad = -1.0;
+    private string $uptime = 'unknown';
 
     public function name(): string
     {
@@ -34,21 +37,16 @@ final class SystemModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        $this->fetchSystemData();
-        return null;
+        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg());
     }
 
     public function update(Msg $msg): array
     {
         $this->fetchSystemData();
-        return [$this->withState([
-            'cpuLoad' => $this->cpuLoad,
-            'memLoad' => $this->memLoad,
-            'gpuLoad' => $this->gpuLoad,
-            'uptime' => $this->uptime,
-            'cpuHistory' => $this->cpuHistory,
-            'memHistory' => $this->memHistory,
-        ]), null];
+        if ($msg instanceof RefreshMsg) {
+            return [$this->withSystemState(), Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new RefreshMsg())];
+        }
+        return [$this->withSystemState(), null];
     }
 
     public function view(): string
@@ -57,21 +55,6 @@ final class SystemModule extends BaseModule
         $mem = $this->memLoad;
         $gpu = $this->gpuLoad;
         $uptime = $this->uptime;
-
-        // Use state from last update if available (allows view() without re-fetch)
-        $state = $this->getState();
-        if (isset($state['cpuLoad'])) {
-            $cpu = (float) $state['cpuLoad'];
-        }
-        if (isset($state['memLoad'])) {
-            $mem = (float) $state['memLoad'];
-        }
-        if (isset($state['gpuLoad'])) {
-            $gpu = (float) $state['gpuLoad'];
-        }
-        if (isset($state['uptime'])) {
-            $uptime = (string) $state['uptime'];
-        }
 
         $cpuBar = $this->renderBar($cpu, 70);
         $memBar = $this->renderBar($mem, 70);
@@ -94,6 +77,21 @@ final class SystemModule extends BaseModule
     public function minSize(): array
     {
         return [30, 5];
+    }
+
+    /**
+     * Create a clone with updated system state in the state array.
+     */
+    private function withSystemState(): static
+    {
+        return $this->withState([
+            'cpuLoad' => $this->cpuLoad,
+            'memLoad' => $this->memLoad,
+            'gpuLoad' => $this->gpuLoad,
+            'uptime' => $this->uptime,
+            'cpuHistory' => $this->cpuHistory,
+            'memHistory' => $this->memHistory,
+        ]);
     }
 
     private function fetchSystemData(): void
