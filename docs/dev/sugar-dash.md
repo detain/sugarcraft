@@ -392,6 +392,122 @@ if (Breakpoint::narrow($width, threshold: 100)) { ... }
 
 ---
 
+## State Persistence
+
+`sugar-dash` provides atomic state persistence via the `State\Persistence`
+class, which uses the tmp+rename pattern to ensure saved state is never in a
+partially-written state even if a crash occurs mid-write.
+
+### Persistence class
+
+```php
+use SugarCraft\Dash\State\Persistence;
+
+$p = new Persistence();
+
+// Save state atomically (tmp file + rename)
+$p->save('/path/to/state.json', ['focus' => 'panel-1', 'expanded' => []]);
+
+// Load state (returns null if file doesn't exist yet)
+$state = $p->load('/path/to/state.json'); // array|null
+```
+
+The `save()` method:
+1. Creates the parent directory with `mkdir(..., 0755, true)` if missing.
+2. Writes to a temp file `/.tmp_<randomhex>.<basename>` with `LOCK_EX`.
+3. Atomically renames the temp file to the target path.
+4. Cleans up the temp file on any error.
+
+The `load()` method:
+- Returns `null` if the file does not exist.
+- Throws `RuntimeException` if the file exists but is not valid JSON.
+- Validates the `version` and `data` keys; throws on unknown version.
+
+### Wired persistence — FocusManager, Boxer, StackedGrid
+
+Three layout components expose `persistState()` and `restoreState()` methods
+that delegate to `Persistence`:
+
+| Component | Methods |
+|-----------|---------|
+| `FocusManager` | `persistState(Persistence, path)`, `restoreState(Persistence, path): self` |
+| `Boxer` | `persistState(Persistence, path, collapsedAddresses)`, `restoreState(Persistence, path): array` |
+| `StackedGrid` | `persistState(Persistence, path, collapsedAddresses)`, `restoreState(Persistence, path): array` |
+
+#### FocusManager example
+
+```php
+use SugarCraft\Dash\Layout\FocusManager;
+use SugarCraft\Dash\State\Persistence;
+
+$fm = FocusManager::new($addresses);
+
+// Persist current focus state
+$persistence = new Persistence();
+$fm->persistState($persistence, '/tmp/dash-focus.json');
+
+// Restore on next launch
+$fm = $fm->restoreState($persistence, '/tmp/dash-focus.json');
+```
+
+#### StackedGrid example
+
+```php
+use SugarCraft\Dash\Layout\StackedGrid;
+use SugarCraft\Dash\Layout\Options;
+use SugarCraft\Dash\State\Persistence;
+
+$grid = new StackedGrid(new Options(fitScreen: true));
+
+$persistence = new Persistence();
+
+// Persist collapsed columns (which column indices are collapsed)
+$grid->persistState($persistence, '/tmp/dash-layout.json', [
+    '0.collapsed' => true,
+    '1.collapsed' => false,
+]);
+
+// Restore collapsed state on next launch
+$state = $grid->restoreState($persistence, '/tmp/dash-layout.json');
+// $state === ['0.collapsed' => true, '1.collapsed' => false]
+```
+
+#### Boxer example
+
+```php
+use SugarCraft\Dash\Layout\Boxer\Boxer;
+use SugarCraft\Dash\State\Persistence;
+
+$boxer = Boxer::new()->withNode($rootNode);
+
+$persistence = new Persistence();
+
+// Persist which nodes are collapsed in the tree
+$boxer->persistState($persistence, '/tmp/dash-tree.json', [
+    '/root/panel-1' => true,
+    '/root/panel-2' => false,
+]);
+
+// Restore
+$collapsed = $boxer->restoreState($persistence, '/tmp/dash-tree.json');
+```
+
+### Schema
+
+Saved files use a versioned JSON envelope:
+
+```json
+{
+  "version": 1,
+  "data": { ... }
+}
+```
+
+The `version` field allows future schema migrations without breaking existing
+saved state files.
+
+---
+
 ## Testing your extension
 
 Use `BaseModule` subclasses directly in unit tests:
