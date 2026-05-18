@@ -8,7 +8,7 @@ use SugarCraft\Dash\Layout\Layout;
 use SugarCraft\Dash\Layout\LayoutDirection;
 use SugarCraft\Dash\Layout\LayoutItem;
 use SugarCraft\Dash\Components\Card\Text;
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Layout\HAlign;

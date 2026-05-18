@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\Heatmap;
+use SugarCraft\Dash\Plot\Chart\Heatmap;
 use SugarCraft\Dash\Grid\ChartDataPoint;
 use SugarCraft\Dash\Layout\Grid\Options;
 use SugarCraft\Dash\Layout\Grid\ItemOptions;

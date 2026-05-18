@@ -2,12 +2,7 @@
 
 declare(strict_types=1);
 
+// Re-export for backward compatibility — canonical class moved to Plot\Chart\WaterfallBarType.
 namespace SugarCraft\Dash\Grid;
 
-enum WaterfallBarType: string
-{
-    case Positive = 'positive';
-    case Negative = 'negative';
-    case Total = 'total';
-    case Subtotal = 'subtotal';
-}
+class_alias(\SugarCraft\Dash\Plot\Chart\WaterfallBarType::class, __NAMESPACE__ . '\WaterfallBarType');

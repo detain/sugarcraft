@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Grid;
 
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;

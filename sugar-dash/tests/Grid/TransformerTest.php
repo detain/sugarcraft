@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Grid;
 
-use SugarCraft\Dash\Grid\Transformer;
+use SugarCraft\Dash\Components\Card\Transformer;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use PHPUnit\Framework\TestCase;

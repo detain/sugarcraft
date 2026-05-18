@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Grid;
+namespace SugarCraft\Dash\Components\Card;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
