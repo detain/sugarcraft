@@ -96,6 +96,14 @@ RUN vhs --version \
 # rendered .gif output.
 RUN groupadd -g 1001 vhs \
     && useradd -m -u 1001 -g vhs -s /bin/bash vhs
+
+# Even as non-root, chromium's namespace sandbox can't initialize in a
+# default-seccomp container — it aborts in ZygoteHostImpl::Init().
+# Tell vhs to pass --no-sandbox to chromium, matching the upstream
+# charmbracelet/vhs Dockerfile pattern. The vhs source reads this:
+#   enableNoSandbox := os.Getenv("VHS_NO_SANDBOX") != ""
+ENV VHS_NO_SANDBOX="true"
+
 USER vhs
 
 LABEL org.opencontainers.image.source="https://github.com/detain/sugarcraft"
