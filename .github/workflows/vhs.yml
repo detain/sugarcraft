@@ -103,6 +103,14 @@ jobs:
     # cache miss) and the apt-get ffmpeg install.
     container:
       image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+    # Container jobs default to `sh -e {0}` because GitHub Actions
+    # can't assume bash exists. Ubuntu's /bin/sh is dash, which
+    # rejects `set -o pipefail` — every step using it errored
+    # immediately. The vhs-runner image has /bin/bash from the base
+    # ubuntu:24.04 layer, so force bash for all `run:` steps.
+    defaults:
+      run:
+        shell: bash
     permissions:
       contents: read
       packages: read
