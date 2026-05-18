@@ -319,6 +319,77 @@ $toast = Toast::fromQueue($queue);  // Toast|null
 Each `Level` maps to a distinct colour scheme (Info → blue, Warning → amber,
 Error → red, Success → green). The adapter preserves the `title` if set.
 
+### Breakpoint — responsive layout helper
+
+`Layout\Breakpoint` provides four static methods for responsive layout
+decisions. Default thresholds (90 / 140) are the Homedash convention values.
+
+| Method | Behaviour | Defaults |
+|--------|-----------|----------|
+| `narrow(int $width, int $threshold = 90): bool` | `true` when width is below threshold | threshold 90 |
+| `medium(int $width, int $narrow = 90, int $wide = 140): bool` | `true` when narrow ≤ width < wide | narrow 90, wide 140 |
+| `wide(int $width, int $threshold = 140): bool` | `true` when width ≥ threshold | threshold 140 |
+| `pick(int $width, array $thresholds): string` | Returns first bucket whose bound exceeds `$width`; last `null`-valued entry is catch-all | — |
+
+#### Basic usage
+
+```php
+use SugarCraft\Dash\Layout\Breakpoint;
+
+if (Breakpoint::narrow($width)) {
+    // Collapse multi-column to single-column
+}
+
+if (Breakpoint::medium($width)) {
+    // Standard terminal size
+}
+
+if (Breakpoint::wide($width)) {
+    // Multi-column side-by-side fits
+}
+```
+
+#### Generic pick
+
+```php
+$bucket = Breakpoint::pick($width, [
+    'narrow' => 90,
+    'medium' => 140,
+    'wide'   => null,  // catch-all
+]);
+
+// $bucket === 'narrow' at width < 90
+// $bucket === 'medium' at 90 ≤ width < 140
+// $bucket === 'wide'   at width ≥ 140
+```
+
+#### StackedGrid responsive collapse
+
+`StackedGrid::render()` automatically collapses to a single column when
+`Breakpoint::narrow($this->width)` is `true` — all items from all columns
+are concatenated vertically. This keeps layouts readable on small terminals
+without any additional wiring in the calling code.
+
+```php
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Foundation\Item;
+
+$grid = new StackedGrid(new Options(fitScreen: true));
+
+// Add items to two columns
+$grid->addItem($leftPanel,  new ItemOptions(column: 0));
+$grid->addItem($rightPanel, new ItemOptions(column: 1));
+
+$grid->setSize(80, 24);   // narrow → single column
+$grid->setSize(140, 24);  // wide → two columns side-by-side
+```
+
+Override the collapse threshold by passing a second argument:
+
+```php
+if (Breakpoint::narrow($width, threshold: 100)) { ... }
+```
+
 ---
 
 ## Testing your extension
