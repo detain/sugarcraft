@@ -1,93 +1,416 @@
 {
     "name": "sugarcraft/sugarcraft",
-    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) — install all 13 libraries at once.",
+    "description": "PHP ports of the Charmbracelet TUI ecosystem (umbrella monorepo) \u2014 install all 46 libraries at once.",
     "type": "metapackage",
     "license": "MIT",
     "version": "1.0.0",
     "keywords": [
-        "tui", "terminal", "cli", "console",
-        "bubbletea", "lipgloss", "bubbles", "huh", "gum",
-        "glamour", "glow", "freeze", "harmonica", "ntcharts",
-        "wish", "wishlist", "ssh", "metrics", "telemetry",
+        "tui",
+        "terminal",
+        "cli",
+        "console",
+        "bubbletea",
+        "lipgloss",
+        "bubbles",
+        "huh",
+        "gum",
+        "glamour",
+        "glow",
+        "freeze",
+        "harmonica",
+        "ntcharts",
+        "wish",
+        "wishlist",
+        "ssh",
+        "metrics",
+        "telemetry",
         "sugarcraft"
     ],
     "homepage": "https://github.com/detain/sugarcraft",
     "authors": [
-        { "name": "Joe Huss", "email": "detain@interserver.net", "role": "Maintainer" }
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
     ],
     "support": {
         "issues": "https://github.com/detain/sugarcraft/issues",
         "source": "https://github.com/detain/sugarcraft",
-        "docs":   "https://github.com/detain/sugarcraft/blob/master/CONVERSION.md"
+        "docs": "https://github.com/detain/sugarcraft/blob/master/CONVERSION.md"
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core":      "dev-master",
-        "sugarcraft/candy-vt":        "dev-master",
-        "sugarcraft/candy-vcr":       "dev-master",
-        "sugarcraft/candy-freeze":    "dev-master",
-        "sugarcraft/candy-metrics":   "dev-master",
-        "sugarcraft/candy-kit":       "dev-master",
-        "sugarcraft/candy-pty":       "dev-master",
-        "sugarcraft/candy-shell":     "dev-master",
-        "sugarcraft/candy-shine":     "dev-master",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-flip": "dev-master",
+        "sugarcraft/candy-freeze": "dev-master",
+        "sugarcraft/candy-hermit": "dev-master",
+        "sugarcraft/candy-kit": "dev-master",
+        "sugarcraft/candy-lister": "dev-master",
+        "sugarcraft/candy-log": "dev-master",
+        "sugarcraft/candy-metrics": "dev-master",
+        "sugarcraft/candy-mines": "dev-master",
+        "sugarcraft/candy-mold": "dev-master",
+        "sugarcraft/candy-mosaic": "dev-master",
+        "sugarcraft/candy-palette": "dev-master",
+        "sugarcraft/candy-pty": "dev-master",
+        "sugarcraft/candy-query": "dev-master",
+        "sugarcraft/candy-serve": "dev-master",
+        "sugarcraft/candy-shell": "dev-master",
+        "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-wish":      "dev-master",
-        "sugarcraft/candy-zone":      "dev-master",
-        "sugarcraft/honey-bounce":    "dev-master",
-        "sugarcraft/sugar-bits":      "dev-master",
-        "sugarcraft/sugar-charts":    "dev-master",
-        "sugarcraft/sugar-dash":      "dev-master",
-        "sugarcraft/sugar-glow":      "dev-master",
-        "sugarcraft/sugar-prompt":    "dev-master",
-        "sugarcraft/sugar-spark":     "dev-master",
-        "sugarcraft/sugar-wishlist":  "dev-master"
+        "sugarcraft/candy-tetris": "dev-master",
+        "sugarcraft/candy-vcr": "dev-master",
+        "sugarcraft/candy-vt": "dev-master",
+        "sugarcraft/candy-wish": "dev-master",
+        "sugarcraft/candy-zone": "dev-master",
+        "sugarcraft/honey-bounce": "dev-master",
+        "sugarcraft/honey-flap": "dev-master",
+        "sugarcraft/sugar-bits": "dev-master",
+        "sugarcraft/sugar-boxer": "dev-master",
+        "sugarcraft/sugar-calendar": "dev-master",
+        "sugarcraft/sugar-charts": "dev-master",
+        "sugarcraft/sugar-crumbs": "dev-master",
+        "sugarcraft/sugar-crush": "dev-master",
+        "sugarcraft/sugar-dash": "dev-master",
+        "sugarcraft/sugar-glow": "dev-master",
+        "sugarcraft/sugar-post": "dev-master",
+        "sugarcraft/sugar-prompt": "dev-master",
+        "sugarcraft/sugar-readline": "dev-master",
+        "sugarcraft/sugar-skate": "dev-master",
+        "sugarcraft/sugar-spark": "dev-master",
+        "sugarcraft/sugar-stash": "dev-master",
+        "sugarcraft/sugar-stickers": "dev-master",
+        "sugarcraft/sugar-table": "dev-master",
+        "sugarcraft/sugar-tick": "dev-master",
+        "sugarcraft/sugar-toast": "dev-master",
+        "sugarcraft/sugar-veil": "dev-master",
+        "sugarcraft/sugar-wishlist": "dev-master",
+        "sugarcraft/super-candy": "dev-master"
     },
     "repositories": [
-        { "type": "path", "url": "candy-core",      "options": { "symlink": true } },
-        { "type": "path", "url": "candy-freeze",    "options": { "symlink": true } },
-        { "type": "path", "url": "candy-metrics",   "options": { "symlink": true } },
-        { "type": "path", "url": "candy-kit",       "options": { "symlink": true } },
-        { "type": "path", "url": "candy-pty",       "options": { "symlink": true } },
-        { "type": "path", "url": "candy-shell",     "options": { "symlink": true } },
-        { "type": "path", "url": "candy-shine",     "options": { "symlink": true } },
-        { "type": "path", "url": "candy-sprinkles", "options": { "symlink": true } },
-        { "type": "path", "url": "candy-vt",         "options": { "symlink": true } },
-        { "type": "path", "url": "candy-vcr",       "options": { "symlink": true } },
-        { "type": "path", "url": "candy-wish",      "options": { "symlink": true } },
-        { "type": "path", "url": "candy-zone",      "options": { "symlink": true } },
-        { "type": "path", "url": "honey-bounce",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-bits",      "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-charts",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-dash",      "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-glow",      "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-prompt",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-spark",     "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-wishlist",  "options": { "symlink": true } },
-        { "type": "path", "url": "candy-mosaic",   "options": { "symlink": true } },
-        { "type": "path", "url": "candy-log",      "options": { "symlink": true } },
-        { "type": "path", "url": "candy-palette",  "options": { "symlink": true } },
-        { "type": "path", "url": "candy-lister",   "options": { "symlink": true } },
-        { "type": "path", "url": "candy-mold",     "options": { "symlink": true } },
-        { "type": "path", "url": "candy-tetris",   "options": { "symlink": true } },
-        { "type": "path", "url": "super-candy",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-boxer",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-veil",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-crumbs",  "options": { "symlink": true } },
-        { "type": "path", "url": "candy-hermit",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-stickers",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-toast",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-calendar",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-readline",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-table",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-skate",  "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-post",    "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-stash",   "options": { "symlink": true } },
-        { "type": "path", "url": "candy-query",   "options": { "symlink": true } },
-        { "type": "path", "url": "sugar-tick",    "options": { "symlink": true } },
-        { "type": "path", "url": "candy-mines",   "options": { "symlink": true } },
-        { "type": "path", "url": "honey-flap",    "options": { "symlink": true } },
-        { "type": "path", "url": "candy-serve",   "options": { "symlink": true } }
+        {
+            "type": "path",
+            "url": "candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-flip",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-freeze",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-hermit",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-kit",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-lister",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-log",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-metrics",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-mines",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-mold",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-mosaic",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-palette",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-query",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-serve",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-shell",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-shine",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-tetris",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-vcr",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-vt",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-wish",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-zone",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "honey-bounce",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "honey-flap",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-bits",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-boxer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-calendar",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-charts",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-crumbs",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-crush",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-dash",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-glow",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-post",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-prompt",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-readline",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-skate",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-spark",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-stash",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-stickers",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-table",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-tick",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-toast",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-veil",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-wishlist",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "super-candy",
+            "options": {
+                "symlink": true
+            }
+        }
     ],
     "require-dev": {
         "phpstan/phpstan": "^2.1",
