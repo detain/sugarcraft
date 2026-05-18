@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Layout\Grid;
 
+use SugarCraft\Dash\Layout\Breakpoint;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 
@@ -55,6 +56,10 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
      *
      * Returns "Loading..." until setSize has been called with non-zero
      * dimensions.
+     *
+     * When the terminal is narrower than the breakpoint threshold (90 cells
+     * by default), multi-column layouts are collapsed into a single column
+     * so content remains readable on small terminals.
      */
     public function render(): string
     {
@@ -67,6 +72,17 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
 
         if ($colCount === 0) {
             return '';
+        }
+
+        // Collapse to single column when narrow — all items stacked vertically.
+        if (Breakpoint::narrow($this->width)) {
+            $flattened = [];
+            foreach ($columns as $colItems) {
+                foreach ($colItems as $itemWithOpts) {
+                    $flattened[] = $itemWithOpts;
+                }
+            }
+            return $this->renderColumn($flattened, $this->width);
         }
 
         if ($colCount === 1) {

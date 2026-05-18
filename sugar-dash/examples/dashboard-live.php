@@ -338,7 +338,10 @@ final class DashboardModel implements Model
         );
 
         $boxer = Boxer::tree($root, $items);
-        $boxer = $boxer->setSize(120, 30);
+        // Width can be overridden via COLUMNS env var for responsive testing.
+        // Convention: 80 = narrow (collapses to single column), 120 = wide.
+        $columns = (int) ($_ENV['COLUMNS'] ?? 120);
+        $boxer = $boxer->setSize($columns, 30);
 
         return $boxer->render();
     }
@@ -434,12 +437,16 @@ final class FocusedPanel implements \SugarCraft\Dash\Foundation\Item
     $program = new Program($model, $options);
 
     echo "\n";
+    $cols = (int) ($_ENV['COLUMNS'] ?? 120);
+    $mode = $cols < 90 ? 'NARROW (single-column)' : 'WIDE (multi-column)';
     echo " ╔══════════════════════════════════════════════════════════╗\n";
     echo " ║  SugarDash Interactive Dashboard                       ║\n";
+    echo " ║  COLUMNS={$cols} — {$mode}                             ║\n";
     echo " ║                                                          ║\n";
     echo " ║  [q] or [Ctrl-C]     Quit                               ║\n";
     echo " ║  [Tab] / [Shift-Tab] Rotate focus                       ║\n";
     echo " ║  [Arrow keys]       Navigate panels                     ║\n";
+    echo " ║  COLUMNS=80         Force narrow; COLUMNS=120 force wide  ║\n";
     echo " ╚══════════════════════════════════════════════════════════╝\n";
     echo "\n";
 
