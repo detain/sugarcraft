@@ -8,11 +8,11 @@ declare(strict_types=1);
  * This is the headline SugarDash example. It wires together:
  *   - \SugarCraft\Core\Program running the full event loop
  *   - TermiosFactory + SignalForwarder for raw mode + SIGWINCH
- *   - Registry with Clock / System / stub-Weather modules
+ *   - Registry with Clock / System / Weather modules
  *   - Boxer address-tree layout + FocusManager for panel rotation
  *   - Per-panel Cmd::tick for refresh cadence
  *   - Keyboard: q / Ctrl-C quit, Tab / arrows focus rotation
- *   - 1Hz Clock + System refresh; Weather stub (—°C unavailable)
+ *   - 1Hz Clock + System refresh + 30min Weather (wttr.in, cached)
  *
  * ## Architecture
  *
@@ -33,7 +33,7 @@ declare(strict_types=1);
  *
  *   - Clock   — 1Hz ticking clock (HH:MM:SS)
  *   - System  — CPU/Mem/GPU/Uptime stats (2s refresh)
- *   - Weather — stub returning "—°C unavailable" (real impl in step 03.08)
+ *   - Weather — live wttr.in data (30min refresh, 30min cache TTL)
  *
  * @see \SugarCraft\Core\Program
  * @see \SugarCraft\Dash\Layout\Boxer\Boxer
@@ -58,78 +58,7 @@ use SugarCraft\Dash\Layout\Boxer\Node;
 use SugarCraft\Dash\Layout\FocusManager;
 use SugarCraft\Dash\Modules\Clock\{ClockModule, TickMsg as ClockTickMsg};
 use SugarCraft\Dash\Modules\System\{SystemModule, RefreshMsg as SystemRefreshMsg};
-
-// ─── Stub Weather Module ──────────────────────────────────────────────────────
-
-/**
- * Stub Weather module — returns "—°C unavailable" until step 03.08.
- *
- * Mirrors the lattice weather module pattern. When step 03.08 lands,
- * replace this stub with the real implementation that fetches
- * temperature data from a weather API.
- *
- * @internal This is a temporary stub, not part of the stable API.
- */
-final class WeatherModule implements Module
-{
-    /** Tick every 30 minutes. */
-    private const TICK_INTERVAL = 1800.0;
-
-    private \DateTimeImmutable $lastUpdate;
-
-    public function __construct()
-    {
-        $this->lastUpdate = new \DateTimeImmutable();
-    }
-
-    public function name(): string
-    {
-        return 'weather';
-    }
-
-    public function init(): ?\Closure
-    {
-        // Weather ticks every 30 minutes (long poll interval). Once
-        // the real implementation lands in step 03.08, this will fetch
-        // live weather data. For now we just show a stub.
-        return Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new WeatherTickMsg());
-    }
-
-    public function update(Msg $msg): array
-    {
-        if ($msg instanceof WeatherTickMsg) {
-            // In the real implementation this would fetch live weather.
-            // The stub just returns the same unavailable state.
-            return [$this->withTimestamp(), Cmd::tick(self::TICK_INTERVAL, static fn(): Msg => new WeatherTickMsg())];
-        }
-        return [$this, null];
-    }
-
-    public function view(): string
-    {
-        // Stub: no live data until step 03.08
-        return "—°C unavailable";
-    }
-
-    public function minSize(): array
-    {
-        return [20, 3];
-    }
-
-    private function withTimestamp(): static
-    {
-        $clone = clone $this;
-        $clone->lastUpdate = new \DateTimeImmutable();
-        return $clone;
-    }
-}
-
-/** Msg type for WeatherModule periodic tick. */
-final class WeatherTickMsg implements Msg
-{
-}
-
-// ─── Module Interface (copied from sugar-dash to avoid cross-lib import) ────
+use SugarCraft\Dash\Modules\Weather\{WeatherModule as RealWeatherModule, TickMsg as WeatherTickMsg, WttrInClient};
 
 /**
  * Module contract — mirrors Core\Model but scoped to a single dashboard panel.
@@ -206,17 +135,17 @@ final class DashboardModel implements Model
     /** Boxer layout tree + rendered items. */
     private Boxer $boxer;
 
-    public function __construct()
+    public function __construct(string $weatherLocation = 'auto')
     {
         $this->focus = new FocusManager('root');
 
         // Instantiate the three panels. Clock ticks at 1Hz, System at 2Hz,
-        // Weather at 30min (stub). Each module's init() Cmd is collected
+        // Weather at 30min. Each module's init() Cmd is collected
         // and scheduled below.
         $this->modules = [
             '0' => new ClockModule(),
             '1' => new SystemModule(),
-            '2' => new WeatherModule(),
+            '2' => new RealWeatherModule(new WttrInClient(), $weatherLocation),
         ];
 
         // Register each panel with FocusManager and build the Boxer tree.
@@ -487,11 +416,14 @@ final class FocusedPanel implements \SugarCraft\Dash\Foundation\Item
         return 1;
     }
 
+    // Weather location: WEATHER_LOCATION env var or auto-detect via IP.
+    $weatherLocation = $_ENV['WEATHER_LOCATION'] ?? 'auto';
+
     // Build the program. useAltScreen=true gives us a clean slate.
     // catchInterrupts=true lets Ctrl-C trigger InterruptMsg.
     // openTty=true opens /dev/tty so the program works even when
     // STDIN is piped from a file.
-    $model = new DashboardModel();
+    $model = new DashboardModel($weatherLocation);
     $options = new ProgramOptions(
         useAltScreen: true,
         catchInterrupts: true,
