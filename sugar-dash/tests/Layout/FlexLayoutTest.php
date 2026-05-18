@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Layout;
 
-use SugarCraft\Dash\Grid\AlignItems;
+use SugarCraft\Dash\Layout\AlignItems;
 use SugarCraft\Dash\Layout\FlexDirection;
 use SugarCraft\Dash\Layout\FlexLayout;
 use SugarCraft\Dash\Layout\FlexWrap;
 use SugarCraft\Dash\Foundation\Item;
-use SugarCraft\Dash\Grid\JustifyContent;
+use SugarCraft\Dash\Layout\JustifyContent;
 use SugarCraft\Dash\Foundation\Sizer;
 use PHPUnit\Framework\TestCase;
 

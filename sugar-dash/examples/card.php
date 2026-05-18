@@ -5,8 +5,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\Card\Text;
 use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Layout\Grid\Options;
+use SugarCraft\Dash\Layout\Grid\ItemOptions;
 
 // Card with optional title
 $component = Card::new(new Text("Card Content"));

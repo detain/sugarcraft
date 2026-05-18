@@ -4,8 +4,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Components\Modal\Alert;
 use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Layout\Grid\Options;
+use SugarCraft\Dash\Layout\Grid\ItemOptions;
 
 // Alert message
 $component = Alert::new("Warning: This action cannot be undone.");
