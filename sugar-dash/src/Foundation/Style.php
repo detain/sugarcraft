@@ -4,12 +4,18 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Foundation;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
 /**
- * A parsed inline style from termui-style [text](fg:red,bg:blue) syntax.
+ * Sugar-dash inline-termui Style. Intentionally distinct from
+ * \SugarCraft\Sprinkles\Style — this carries the inline-termui
+ * layout-engine semantics (toAnsi(ColorProfile), inline foreground/
+ * background slots) while Sprinkles\Style carries the lipgloss
+ * padding/margin/borders semantics. Both are canonical for their
+ * lib — do NOT alias one to the other.
  *
- * Mirrors termui state machine parsing for inline style annotations.
+ * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-style-ssot].
  */
 final readonly class Style
 {
