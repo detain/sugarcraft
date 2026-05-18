@@ -6,10 +6,10 @@ namespace SugarCraft\Dash\Tests\Components\GridTable;
 
 use SugarCraft\Dash\Grid\Frame;
 use SugarCraft\Dash\Foundation\Item;
-use SugarCraft\Dash\Grid\ItemOptions;
-use SugarCraft\Dash\Grid\Options;
+use SugarCraft\Dash\Layout\Grid\ItemOptions;
+use SugarCraft\Dash\Layout\Grid\Options;
 use SugarCraft\Dash\Foundation\Sizer;
-use SugarCraft\Dash\Grid\StackedGrid;
+use SugarCraft\Dash\Layout\Grid\StackedGrid;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Core\Util\Color;
 use PHPUnit\Framework\TestCase;

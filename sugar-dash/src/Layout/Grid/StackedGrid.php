@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Grid;
+namespace SugarCraft\Dash\Layout\Grid;
 
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
