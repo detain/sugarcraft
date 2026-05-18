@@ -156,14 +156,19 @@ Use `BaseModule` subclasses directly in unit tests:
 
 ```php
 use SugarCraft\Dash\Modules\Clock\ClockModule;
-use SugarCraft\Core\Msg\TickMsg;
+use SugarCraft\Dash\Modules\Clock\TickMsg;
+use SugarCraft\Core\Msg;
 
 $module = new ClockModule(showDate: true);
 $this->assertSame('clock', $module->name());
 $this->assertSame([20, 5], $module->minSize());
 
 // Drive update cycle
-[$next, $cmd] = $module->update(Msg::tick());
+[$next, $cmd] = $module->update(new TickMsg());
+$this->assertInstanceOf(ClockModule::class, $next);
+
+// Generic Msg also works (module checks instanceof TickMsg internally)
+[$next, $cmd] = $module->update(new class implements Msg {});
 $this->assertInstanceOf(ClockModule::class, $next);
 ```
 
