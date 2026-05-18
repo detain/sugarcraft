@@ -106,6 +106,45 @@ final class DetectTest extends TestCase
         $this->assertTrue($cap->iterm2);
     }
 
+    /**
+     * WezTerm supports both Kitty and iTerm2 protocols but we exclusively
+     * classify it as Kitty (Kitty protocol family wins the precedence).
+     */
+    public function testWezTermIsKittyOnlyNotIterm2(): void
+    {
+        putenv('TERM_PROGRAM=WezTerm');
+        $cap = Detect::probe();
+        $this->assertTrue($cap->kitty, 'WezTerm must be detected as Kitty');
+        $this->assertFalse($cap->iterm2, 'WezTerm must NOT be detected as iTerm2');
+    }
+
+    /**
+     * When probeStdin is a socket pair (non-TTY), the isInteractiveTty() check
+     * inside Detect returns false without invoking posix_isatty(0)/posix_isatty(1).
+     * We verify this indirectly: with a mock non-TTY stdin and no TTY env vars,
+     * the result should fall through to the unknown/halfblock path.
+     */
+    public function testNonTtyIsInteractiveIsFalse(): void
+    {
+        $pair = $this->createStreamPair();
+        Detect::setProbeStdin($pair['read']);
+        Detect::reset();
+        // Explicitly re-enable interactive checks.
+        unset($GLOBALS['__candy_non_interactive']);
+
+        // With no env hints and a non-TTY stdin, DA1 probing runs but
+        // falls back to unknown (halfblock only).
+        $cap = Detect::probe();
+
+        @fclose($pair['write']);
+
+        // No protocol family detected; only halfblock is available.
+        $this->assertFalse($cap->kitty);
+        $this->assertFalse($cap->iterm2);
+        $this->assertFalse($cap->sixel);
+        $this->assertTrue($cap->halfblock);
+    }
+
     public function testSixelViaXtermVersionAndMlterm(): void
     {
         putenv('TERM=mlterm');

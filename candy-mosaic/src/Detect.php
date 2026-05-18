@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use SugarCraft\Core\Util\TtyDetect;
+
 /**
  * Terminal image-protocol capability detection.
  *
@@ -231,10 +233,8 @@ final class Detect
         }
 
         return (
-            is_resource(STDIN)
-            && is_resource(STDOUT)
-            && @posix_isatty(0)
-            && @posix_isatty(1)
+            TtyDetect::isAtty(self::stdinFd())
+            && TtyDetect::isAtty(STDOUT)
         );
     }
 
@@ -392,12 +392,13 @@ final class Detect
             return Capability::kitty(null, $inTmux);
         }
 
-        // iTerm2: iTerm.app, iTerm2, WezTerm, mintty, or LC_TERMINAL=iTerm2.
+        // iTerm2: iTerm.app, iTerm2, mintty, or LC_TERMINAL=iTerm2.
+        // Note: WezTerm is handled exclusively in the Kitty block above
+        // (Kitty protocol family takes precedence; WezTerm is not iTerm2).
         $termProgram = (string) getenv('TERM_PROGRAM');
-        $lcTerminal  = (string) getenv('LC_TERMINAL');
+        $lcTerminal = (string) getenv('LC_TERMINAL');
         if ($termProgram === 'iTerm.app'
             || $termProgram === 'iTerm2'
-            || $termProgram === 'WezTerm'
             || $termProgram === 'mintty'
             || $lcTerminal === 'iTerm2'
         ) {
