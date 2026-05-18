@@ -6,7 +6,7 @@ namespace SugarCraft\Dash\Foundation;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Dash\Components\Card\Text;
 

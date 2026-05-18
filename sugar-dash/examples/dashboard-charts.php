@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, Donut, AreaChart, Chart, ChartType, ChartDataPoint, FunnelChart, Sparkline};
+use SugarCraft\Dash\Grid\ChartDataPoint;
+use SugarCraft\Dash\Grid\Sparkline;
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Plot\Chart\{Donut, AreaChart, Chart, ChartType, FunnelChart};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
 
