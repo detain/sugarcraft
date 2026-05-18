@@ -20,6 +20,8 @@ PHP port of [charmbracelet/colorprofile](https://github.com/charmbracelet/colorp
 - **ProfileWriter**: wrap a stream and automatically degrade color codes to match the terminal
 - **ANSI stripping**: `NoTTY` strips all ANSI sequences from output
 - **Environment-aware**: reads `TERM`, `COLORTERM`, `FORCE_COLOR`, `NO_COLOR`, `TERM_PROGRAM`
+- **Probe class**: static env-detection layer with precedence-ordered rules + infocmp Phase 2 upgrade
+- **ColorProfile enum**: SSOT env-detection enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor) for libs that need raw profile values without constructing a Palette instance
 
 ## Install
 
@@ -77,6 +79,80 @@ $converted = Palette::convert($color, Palette::detect());
 // Manual downgrade
 $ansi256 = Palette::convert($color, Profile::ANSI256);
 $ansi    = Palette::convert($color, Profile::ANSI);
+```
+
+## Probe — Static Environment Detection
+
+The `Probe` class provides precedence-ordered environment probing for terminal color capability and reduced-motion preference. Use it directly when you need raw detection values without constructing a `Palette` instance.
+
+```php
+use SugarCraft\Palette\Probe;
+use SugarCraft\Palette\ColorProfile;
+
+// Detect the negotiated color profile
+$profile = Probe::colorProfile(); // ColorProfile::TrueColor|Ansi256|Ansi|Ascii|NoTTY
+echo $profile->label(); // "TrueColor"
+
+// Check for explicit disable/enable flags
+if (Probe::isNoColor()) {
+    // NO_COLOR env var is set — disable all color output
+}
+if (Probe::isForceColor()) {
+    // CLICOLOR_FORCE=1 — force full color regardless of terminal
+}
+
+// Reduced-motion preference (REDUCE_MOTION or PREFERS_REDUCED_MOTION)
+if (Probe::reducedMotion()) {
+    // Skip animations, spinners, and other motion
+}
+```
+
+**Detection precedence** (mirrors [charmbracelet/colorprofile](https://github.com/charmbracelet/colorprofile)):
+1. `CLICOLOR_FORCE=1` → `TrueColor` (overrides everything)
+2. `NO_COLOR` (any value) → `NoTTY`
+3. `CLICOLOR=0` → `NoTTY`
+4. `TERM=dumb` → `NoTTY`
+5. `COLORTERM=24bit|truecolor|yes` → `TrueColor`
+6. `WT_SESSION` (set) → `TrueColor` (Windows Terminal)
+7. `GOOGLE_CLOUD_SHELL=true` → `TrueColor`
+8. `TMUX`/`STY` + `screen*`/`tmux*` base term → `Ansi256`
+9. `TERM=xterm-kitty|xterm-ghostty|*-256color` → `Ansi256`
+10. `TERM=xterm*|screen*|tmux*` → `Ansi`
+11. Default → `Ansi`, then **Phase 2 infocmp upgrade** → `TrueColor` if `Tc`/`RGB` capability found
+
+## ColorProfile Enum
+
+`ColorProfile` is the SSOT enum for environment-driven color capability. It is used by `Probe` and consumed by libs that need the raw profile value (candy-log, candy-mosaic, candy-freeze, candy-vt).
+
+```php
+use SugarCraft\Palette\ColorProfile;
+
+$profile = Probe::colorProfile();
+
+// Human-readable label
+echo $profile->label(); // "TrueColor"
+```
+
+| Case      | Value       | Label        |
+|-----------|-------------|--------------|
+| `NoTTY`  | `'notty'`    | No TTY       |
+| `Ascii`  | `'ascii'`    | ASCII        |
+| `Ansi`   | `'ansi'`     | ANSI         |
+| `Ansi256` | `'ansi256'`  | ANSI 256     |
+| `TrueColor` | `'truecolor'` | TrueColor  |
+
+## Architecture
+
+```
+SugarCraft\Palette\
+├── Color          — RGBA color value object with conversion methods
+├── Palette        — instance-based detection + degradation + ProfileWriter
+├── Profile         — legacy detection enum (richest→simplest order)
+├── ColorProfile    — new SSOT detection enum (simplest→richest order, Probe-driven)
+├── Probe           — static env-probe layer (colorProfile/isNoColor/isForceColor/reducedMotion)
+├── StandardColors  — ANSI/ANSI256 standard palette
+├── ProfileWriter  — stream wrapper for automatic color degradation
+└── Lang           — i18n strings
 ```
 
 ## License
