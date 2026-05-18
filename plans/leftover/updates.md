@@ -119,6 +119,9 @@ step 03.01 · PR#526 · sugar-dash: Grid reorg part 1 — move Foundation primit
 review for step 03.01 · clean · PR#526
 docs for step 03.01 · clean · PR#527
 step 03.02 · PR#528 · sugar-dash: Grid reorg part 2 — delete Grid chart duplicates (keep Plot/), move Features/Transformer to Card, delete Graph (canonical is Plot/Graph/), backward-compat re-exports for ChartDataPoint/WaterfallItem/WaterfallBarType; Grid Sparkline/SparkArea retained due to Plot API incompatibility
+review for step 03.02 · clean · PR#528
+docs for step 03.02 · clean
+step 03.03 · PR#529 · sugar-dash: Grid reorg part 3 — events/Keys/State/Foundation moves + delete empty Grid/ dir (Event/Focus/Key* to Events/Keys/State; EdgeStyle/Segment to Foundation; Progress/ProgressRing to Plot/Chart; BC stubs for all moved files; chart duplicates deleted)
 
 ## Open review findings — 02.03
 
