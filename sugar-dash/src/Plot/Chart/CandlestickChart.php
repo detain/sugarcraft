@@ -332,9 +332,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withBullishColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->bullishColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $color,
+            bearishColor: $this->bearishColor,
+            wickColor: $this->wickColor,
+            gridColor: $this->gridColor,
+            textColor: $this->textColor,
+            backgroundColor: $this->backgroundColor,
+            style: $this->style,
+        );
     }
 
     /**
@@ -342,9 +349,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withBearishColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->bearishColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $color,
+            wickColor: $this->wickColor,
+            gridColor: $this->gridColor,
+            textColor: $this->textColor,
+            backgroundColor: $this->backgroundColor,
+            style: $this->style,
+        );
     }
 
     /**
@@ -352,9 +366,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withWickColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->wickColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $this->bearishColor,
+            wickColor: $color,
+            gridColor: $this->gridColor,
+            textColor: $this->textColor,
+            backgroundColor: $this->backgroundColor,
+            style: $this->style,
+        );
     }
 
     /**
@@ -362,9 +383,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withGridColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->gridColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $this->bearishColor,
+            wickColor: $this->wickColor,
+            gridColor: $color,
+            textColor: $this->textColor,
+            backgroundColor: $this->backgroundColor,
+            style: $this->style,
+        );
     }
 
     /**
@@ -372,9 +400,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withTextColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->textColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $this->bearishColor,
+            wickColor: $this->wickColor,
+            gridColor: $this->gridColor,
+            textColor: $color,
+            backgroundColor: $this->backgroundColor,
+            style: $this->style,
+        );
     }
 
     /**
@@ -382,9 +417,16 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withBackgroundColor(?Color $color): self
     {
-        $clone = clone $this;
-        $clone->backgroundColor = $color;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $this->bearishColor,
+            wickColor: $this->wickColor,
+            gridColor: $this->gridColor,
+            textColor: $this->textColor,
+            backgroundColor: $color,
+            style: $this->style,
+        );
     }
 
     /**
@@ -392,8 +434,15 @@ final class CandlestickChart implements \SugarCraft\Dash\Foundation\Sizer
      */
     public function withStyle(string $style): self
     {
-        $clone = clone $this;
-        $clone->style = $style;
-        return $clone;
+        return new self(
+            maxCandles: $this->maxCandles,
+            bullishColor: $this->bullishColor,
+            bearishColor: $this->bearishColor,
+            wickColor: $this->wickColor,
+            gridColor: $this->gridColor,
+            textColor: $this->textColor,
+            backgroundColor: $this->backgroundColor,
+            style: $style,
+        );
     }
 }
