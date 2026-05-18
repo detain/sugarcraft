@@ -11,16 +11,13 @@ use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Dash\Components\Card\Text;
 
 /**
- * Theme management for consistent styling across components.
+ * Sugar-dash inline-termui Theme (10 colour slots + helper methods
+ * bar(), text(), fg(), bg(), color(), highlight()). Intentionally
+ * distinct from \SugarCraft\Sprinkles\Theme (13 colour slots: adds
+ * muted, info, border, separator, cursor; readonly properties only,
+ * no helper methods). Both are canonical for their lib.
  *
- * Features:
- * - Pre-defined themes (Tokyo Night, Dracula, One Dark, etc.)
- * - Custom theme creation
- * - Style retrieval for components
- * - Editor/Syntax highlighting theme support
- *
- * Mirrors theming from bubble-lipgloss but adapted to PHP
- * with wither-style immutable setters.
+ * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-theme-ssot].
  */
 final class Theme
 {

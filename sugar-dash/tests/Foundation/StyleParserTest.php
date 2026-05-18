@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Dash\Foundation\StyleParser;
 use SugarCraft\Dash\Foundation\Style;
 use SugarCraft\Dash\Foundation\Cell;
-use SugarCraft\Dash\Foundation\Color;
+use SugarCraft\Core\Util\Color;
 
 final class StyleParserTest extends TestCase
 {
