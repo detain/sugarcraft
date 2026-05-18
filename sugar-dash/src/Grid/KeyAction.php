@@ -2,30 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\KeyAction
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Represents an action triggered by a key combination.
- *
- * @template T of \SugarCraft\Dash\Grid\Item
- */
-final class KeyAction
-{
-    /**
-     * @param callable(Key): T $execute
-     */
-    public function __construct(
-        public readonly string $name,
-        public readonly mixed $execute,
-    ) {}
+use SugarCraft\Dash\Events\KeyAction as CanonicalKeyAction;
 
-    /**
-     * Execute the action with the given key.
-     *
-     * @return T
-     */
-    public function execute(Key $key): \SugarCraft\Dash\Foundation\Item
-    {
-        return ($this->execute)($key);
-    }
-}
+class_alias(CanonicalKeyAction::class, __NAMESPACE__ . '\KeyAction');

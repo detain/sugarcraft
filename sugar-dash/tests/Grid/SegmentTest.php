@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Grid;
 
-use SugarCraft\Dash\Grid\Segment;
+use SugarCraft\Dash\Foundation\Segment;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Ansi;

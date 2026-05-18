@@ -2,23 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\ResizeEvent
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Resize event.
- */
-final class ResizeEvent extends Event
-{
-    public function __construct(
-        int $timestamp,
-        public readonly int $width,
-        public readonly int $height,
-    ) {
-        parent::__construct($timestamp);
-    }
+use SugarCraft\Dash\Events\ResizeEvent as CanonicalResizeEvent;
 
-    public function getType(): string
-    {
-        return 'resize';
-    }
-}
+class_alias(CanonicalResizeEvent::class, __NAMESPACE__ . '\ResizeEvent');

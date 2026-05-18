@@ -2,27 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\Event
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Base event class for all events.
- */
-abstract class Event
-{
-    public function __construct(
-        public readonly int $timestamp,
-    ) {}
+use SugarCraft\Dash\Events\Event as CanonicalEvent;
 
-    /**
-     * Get the event type name.
-     */
-    abstract public function getType(): string;
-
-    /**
-     * Check if this event matches a given type.
-     */
-    public function isType(string $type): bool
-    {
-        return $this->getType() === $type;
-    }
-}
+class_alias(CanonicalEvent::class, __NAMESPACE__ . '\Event');
