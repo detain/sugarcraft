@@ -505,6 +505,7 @@ cd sugar-dash && composer install && vendor/bin/phpunit
 
 | Demo | Description |
 |------|-------------|
+| ![Dashboard Live](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-live.gif) | **Interactive dashboard** — Clock/System/Weather panels with keyboard focus rotation (Tab/arrows), q/Ctrl-C quit |
 | ![Dashboard Layout](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-layout.gif) | Layout containers demo |
 | ![Dashboard Charts](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-charts.gif) | Charts demo |
 | ![Dashboard Form](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-form.gif) | Form demo |
@@ -526,6 +527,7 @@ The `examples/` directory contains standalone demo files that showcase individua
 
 | Demo | Description |
 |------|-------------|
+| `dashboard-live.php` | **Interactive dashboard** — the headline demo. Program event loop, raw mode, Clock/System/Weather modules, Boxer layout, FocusManager, per-panel tick, keyboard navigation (Tab/arrows), quit (q/Ctrl-C). Run with `php examples/dashboard-live.php` |
 | `dashboard-showcase.php` | Multi-component server dashboard with gauges, charts, timeline, breadcrumb, avatar group |
 | `dashboard-complex.php` | Full-featured analytics dashboard with charts, stats, funnel, sparkline |
 | `dashboard-interactive.php` | Accordion and timeline components |

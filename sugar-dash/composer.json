@@ -40,7 +40,8 @@
         "sugarcraft/candy-pty": "@dev"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-vcr": "@dev"
     },
     "autoload": {
         "psr-4": {
@@ -56,6 +57,13 @@
         {
             "type": "path",
             "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-vcr",
             "options": {
                 "symlink": true
             }
