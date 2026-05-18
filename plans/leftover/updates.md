@@ -131,7 +131,7 @@ step 03.04 · PR#532 · sugar-dash: fix ExternalModule proc_get_status pipes bug
 review for step 03.04 · clean · PR#532
 tests-ci for step 03.04 · clean
 docs for step 03.04 · clean
-step 03.05 · sugar-dash: Color.php replaced with class_alias shim; Style/Theme/Rect/Buffer/Cell docblocks added; StyleParser kept (not drop-in compatible — see Blockers); CALIBER_LEARNINGS entries added
+step 03.05 · PR#533 · sugar-dash: Color.php replaced with class_alias shim → Core\Util\Color; Style/Theme/Rect/Buffer/Cell docblocks added (dual-SSOT clarified); StyleParser kept (not drop-in compatible — see Blockers); 6 CALIBER_LEARNINGS entries
 
 ## Open review findings — 02.03
 
