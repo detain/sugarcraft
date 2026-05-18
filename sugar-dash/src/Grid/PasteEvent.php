@@ -2,22 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\PasteEvent
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Paste event.
- */
-final class PasteEvent extends Event
-{
-    public function __construct(
-        int $timestamp,
-        public readonly string $text,
-    ) {
-        parent::__construct($timestamp);
-    }
+use SugarCraft\Dash\Events\PasteEvent as CanonicalPasteEvent;
 
-    public function getType(): string
-    {
-        return 'paste';
-    }
-}
+class_alias(CanonicalPasteEvent::class, __NAMESPACE__ . '\PasteEvent');

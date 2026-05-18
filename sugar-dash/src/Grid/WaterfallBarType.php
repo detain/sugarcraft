@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-// Re-export for backward compatibility — canonical class moved to Plot\Chart\WaterfallBarType.
+/**
+ * @deprecated Use SugarCraft\Dash\Plot\Chart\WaterfallBarType
+ */
 namespace SugarCraft\Dash\Grid;
 
-class_alias(\SugarCraft\Dash\Plot\Chart\WaterfallBarType::class, __NAMESPACE__ . '\WaterfallBarType');
+use SugarCraft\Dash\Plot\Chart\WaterfallBarType as CanonicalWaterfallBarType;
+
+class_alias(CanonicalWaterfallBarType::class, __NAMESPACE__ . '\WaterfallBarType');
