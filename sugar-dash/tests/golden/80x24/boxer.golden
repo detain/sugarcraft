@@ -2,4 +2,28 @@ PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
 # dimensions: 80x24 (80x24)
 # example: boxer
 ---
-Boxed Content
+○ Panel A Status: idle     ◉ Panel [B] Status: FOCUSED○ Panel C Status: idle    
+──────────────────────     ──────────────────────     ──────────────────────    
+Content area for panel A   Content area for panel B   Content area for panel C  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+Focus: [A] ○  [B] ◉  [C] ○   ← Tab to rotate focus
