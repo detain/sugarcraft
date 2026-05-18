@@ -6,7 +6,7 @@ namespace SugarCraft\Dash\Tests\Layout;
 
 use SugarCraft\Dash\Layout\Screen;
 use SugarCraft\Dash\Components\Card\Text;
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use PHPUnit\Framework\TestCase;

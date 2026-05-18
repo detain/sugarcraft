@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Foundation;
 
 use SugarCraft\Dash\Foundation\Theme;
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Components\Card\Text;
 use SugarCraft\Dash\Layout\HAlign;
 use SugarCraft\Core\Util\Color;
