@@ -119,7 +119,7 @@ final class Buffer implements Drawable, Sizer
      * @param Style  $style The style to apply to each character
      * @return self A new Buffer with the string set
      */
-    public function setString(int $x, int $y, string $str, Style $style = null): self
+    public function setString(int $x, int $y, string $str, ?Style $style = null): self
     {
         $style ??= new Style();
 

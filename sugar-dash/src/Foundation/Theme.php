@@ -329,7 +329,6 @@ final class Theme
      */
     public function withPrimary(Color $color): self
     {
-        $clone = clone $this;
         return new self(
             name: $this->name,
             foreground: $this->foreground,
