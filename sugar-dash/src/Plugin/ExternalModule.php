@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plugin;
 
-use SugarCraft\Dash\Module\Module;
+use SugarCraft\Dash\Module\LegacyModule;
 
 /**
  * Wraps an external binary as a Module.
@@ -13,8 +13,10 @@ use SugarCraft\Dash\Module\Module;
  * over stdin/stdout, and schedules periodic updates if Interval > 0.
  *
  * Mirrors the lattice ExternalModule pattern.
+ *
+ * Uses the legacy array-state update pattern kept for backwards compat.
  */
-final class ExternalModule implements Module
+final class ExternalModule implements LegacyModule
 {
     private array $state = [];
     private int $interval = 0;

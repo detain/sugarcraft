@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Generic;
 
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
 /**
@@ -21,24 +22,20 @@ final class GenericModule extends BaseModule
         return 'generic';
     }
 
-    public function init(): array
+    public function init(): ?\Closure
     {
-        return [
-            'name' => $this->name(),
-            'minSize' => [20, 3],
-            'interval' => $this->intervalSeconds,
-        ];
+        return null;
     }
 
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
         $output = $this->runCommand();
-        $state['output'] = $output;
-        return $state;
+        return [$this->withState(['output' => $output]), null];
     }
 
-    public function view(array $state, int $width, int $height): string
+    public function view(): string
     {
+        $state = $this->getState();
         return $state['output'] ?? '';
     }
 

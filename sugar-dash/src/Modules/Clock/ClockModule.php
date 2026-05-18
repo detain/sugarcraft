@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Clock;
 
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
-use SugarCraft\Dash\Foundation\Item;
 
 /**
  * Clock module that displays the current time.
@@ -28,32 +28,27 @@ final class ClockModule extends BaseModule
         return 'clock';
     }
 
-    public function init(): array
+    public function init(): ?\Closure
     {
-        return [
-            'name' => $this->name(),
-            'minSize' => $this->minSize(),
-            'interval' => 1,
-        ];
+        return null;
     }
 
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
-        $this->time = $this->createTime();
-        $state['time'] = $this->time->format('H:i:s');
+        $newTime = $this->createTime();
+        $state = ['time' => $newTime->format('H:i:s')];
         if ($this->showDate) {
-            $state['date'] = $this->time->format('l, M d');
+            $state['date'] = $newTime->format('l, M d');
         }
-        return $state;
+        return [$this->withState($state), null];
     }
 
-    public function view(array $state, int $width, int $height): string
+    public function view(): string
     {
-        $time = $this->time;
-        $timeStr = $time->format('H:i:s');
+        $timeStr = $this->time->format('H:i:s');
 
         if ($this->showDate) {
-            $dateStr = $time->format('l, M d');
+            $dateStr = $this->time->format('l, M d');
             return $timeStr . "\n" . $dateStr;
         }
 

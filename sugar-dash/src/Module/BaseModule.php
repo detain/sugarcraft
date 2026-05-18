@@ -4,34 +4,50 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Module;
 
+use SugarCraft\Core\Msg;
+
 /**
- * Abstract base class for modules with default behavior.
+ * Abstract base class for modules with default behaviour.
  *
  * Provides sensible defaults for all Module interface methods.
- * Subclasses only need to implement the core name(), view(), and update() methods.
+ * Subclasses only need to implement name(), update(), and view().
+ *
+ * State is kept as a private array. Use withState(...) to produce
+ * a clone with updated fields — the immutable with*() pattern.
  */
 abstract class BaseModule implements Module
 {
-    protected array $state = [];
+    /** @var array<string, mixed> */
+    private array $state = [];
 
     /**
      * {@inheritdoc}
      */
-    public function init(): array
+    public function init(): ?\Closure
     {
-        return [
-            'name' => $this->name(),
-            'minSize' => $this->minSize(),
-            'interval' => 0,
-        ];
+        return null;
     }
 
     /**
      * {@inheritdoc}
+     *
+     * Base implementation returns [self, null] — subclasses override
+     * to return a new instance with updated state via withState(...).
      */
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
-        return $state;
+        return [$this, null];
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Base implementation returns empty string — subclasses override
+     * to render their current state.
+     */
+    public function view(): string
+    {
+        return '';
     }
 
     /**
@@ -44,17 +60,24 @@ abstract class BaseModule implements Module
 
     /**
      * Get current module state.
+     *
+     * @return array<string, mixed>
      */
-    protected function getState(): array
+    public function getState(): array
     {
         return $this->state;
     }
 
     /**
-     * Set current module state.
+     * Create a clone of this module with the given state merged in.
+     *
+     * @param array<string, mixed> $overrides State fields to merge
+     * @return static A new instance with merged state
      */
-    protected function setState(array $state): void
+    protected function withState(array $overrides): static
     {
-        $this->state = $state;
+        $clone = clone $this;
+        $clone->state = array_merge($this->state, $overrides);
+        return $clone;
     }
 }

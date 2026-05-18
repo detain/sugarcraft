@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\System;
 
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
 /**
@@ -31,37 +32,49 @@ final class SystemModule extends BaseModule
         return 'system';
     }
 
-    public function init(): array
+    public function init(): ?\Closure
     {
         $this->fetchSystemData();
-        return [
-            'name' => $this->name(),
-            'minSize' => [30, 5],
-            'interval' => 2,
-        ];
+        return null;
     }
 
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
         $this->fetchSystemData();
-        $state['cpuLoad'] = $this->cpuLoad;
-        $state['memLoad'] = $this->memLoad;
-        $state['gpuLoad'] = $this->gpuLoad;
-        $state['uptime'] = $this->uptime;
-        $state['cpuHistory'] = $this->cpuHistory;
-        $state['memHistory'] = $this->memHistory;
-        return $state;
+        return [$this->withState([
+            'cpuLoad' => $this->cpuLoad,
+            'memLoad' => $this->memLoad,
+            'gpuLoad' => $this->gpuLoad,
+            'uptime' => $this->uptime,
+            'cpuHistory' => $this->cpuHistory,
+            'memHistory' => $this->memHistory,
+        ]), null];
     }
 
-    public function view(array $state, int $width, int $height): string
+    public function view(): string
     {
         $cpu = $this->cpuLoad;
         $mem = $this->memLoad;
         $gpu = $this->gpuLoad;
         $uptime = $this->uptime;
 
-        $cpuBar = $this->renderBar($cpu, $width - 10);
-        $memBar = $this->renderBar($mem, $width - 10);
+        // Use state from last update if available (allows view() without re-fetch)
+        $state = $this->getState();
+        if (isset($state['cpuLoad'])) {
+            $cpu = (float) $state['cpuLoad'];
+        }
+        if (isset($state['memLoad'])) {
+            $mem = (float) $state['memLoad'];
+        }
+        if (isset($state['gpuLoad'])) {
+            $gpu = (float) $state['gpuLoad'];
+        }
+        if (isset($state['uptime'])) {
+            $uptime = (string) $state['uptime'];
+        }
+
+        $cpuBar = $this->renderBar($cpu, 70);
+        $memBar = $this->renderBar($mem, 70);
 
         $lines = sprintf("CPU %3.0f%% %s\nMEM %3.0f%% %s",
             $cpu, $cpuBar,
@@ -69,7 +82,7 @@ final class SystemModule extends BaseModule
         );
 
         if ($gpu >= 0) {
-            $gpuBar = $this->renderBar($gpu, $width - 10);
+            $gpuBar = $this->renderBar($gpu, 70);
             $lines .= sprintf("\nGPU %3.0f%% %s", $gpu, $gpuBar);
         }
 
@@ -85,19 +98,11 @@ final class SystemModule extends BaseModule
 
     private function fetchSystemData(): void
     {
-        // Read CPU load from /proc/stat
         $this->cpuLoad = $this->readCpuLoad();
-
-        // Read memory from /proc/meminfo
         $this->memLoad = $this->readMemLoad();
-
-        // Read GPU load via nvidia-smi if available
         $this->gpuLoad = $this->readGpuLoad();
-
-        // Read uptime
         $this->uptime = $this->readUptime();
 
-        // Update history
         $this->cpuHistory[] = (int) $this->cpuLoad;
         $this->memHistory[] = (int) $this->memLoad;
         if (count($this->cpuHistory) > self::HISTORY_SIZE) {
@@ -204,9 +209,9 @@ final class SystemModule extends BaseModule
 
     private function formatUptime(float $seconds): string
     {
-        $days = (int) ($seconds / 86400);
-        $hours = (int) (($seconds % 86400) / 3600);
-        $minutes = (int) (($seconds % 3600) / 60);
+        $days = intval($seconds / 86400);
+        $hours = intval(($seconds % 86400) / 3600);
+        $minutes = intval(($seconds % 3600) / 60);
 
         if ($days > 0) {
             return "{$days}d {$hours}h {$minutes}m";

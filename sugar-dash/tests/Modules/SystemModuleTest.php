@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Tests\Modules;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Modules\System\SystemModule;
 
 final class SystemModuleTest extends TestCase
@@ -15,26 +16,35 @@ final class SystemModuleTest extends TestCase
         $this->assertSame('system', $module->name());
     }
 
-    public function testInitReturnsMetadata(): void
+    public function testInitReturnsNull(): void
     {
         $module = new SystemModule();
-        $meta = $module->init();
+        $cmd = $module->init();
+        // New contract: init() returns ?Closure, base returns null
+        $this->assertNull($cmd);
+    }
 
-        $this->assertSame('system', $meta['name']);
-        $this->assertArrayHasKey('minSize', $meta);
-        $this->assertArrayHasKey('interval', $meta);
-        $this->assertGreaterThan(0, $meta['interval']);
+    public function testUpdateReturnsModuleAndNull(): void
+    {
+        $module = new SystemModule();
+        $msg = new class implements Msg {};
+
+        $result = $module->update($msg);
+
+        $this->assertIsArray($result);
+        $this->assertCount(2, $result);
+        [$nextModule, $cmd] = $result;
+        $this->assertInstanceOf(SystemModule::class, $nextModule);
+        $this->assertNull($cmd);
     }
 
     public function testViewRendersProcData(): void
     {
         $module = new SystemModule();
-        $module->init();
+        $msg = new class implements Msg {};
 
-        $state = [];
-        $state = $module->update($state);
-
-        $view = $module->view($state, 80, 24);
+        [$nextModule] = $module->update($msg);
+        $view = $nextModule->view();
 
         // Should contain CPU and MEM labels
         $this->assertStringContainsString('CPU', $view);
@@ -54,10 +64,10 @@ final class SystemModuleTest extends TestCase
     public function testStateContainsLoadValues(): void
     {
         $module = new SystemModule();
-        $module->init();
+        $msg = new class implements Msg {};
 
-        $state = [];
-        $state = $module->update($state);
+        [$nextModule] = $module->update($msg);
+        $state = $nextModule->getState();
 
         $this->assertArrayHasKey('cpuLoad', $state);
         $this->assertArrayHasKey('memLoad', $state);
@@ -70,14 +80,27 @@ final class SystemModuleTest extends TestCase
     public function testStateContainsHistory(): void
     {
         $module = new SystemModule();
-        $module->init();
+        $msg = new class implements Msg {};
 
-        $state = [];
-        $state = $module->update($state);
+        [$nextModule] = $module->update($msg);
+        $state = $nextModule->getState();
 
         $this->assertArrayHasKey('cpuHistory', $state);
         $this->assertArrayHasKey('memHistory', $state);
         $this->assertIsArray($state['cpuHistory']);
         $this->assertIsArray($state['memHistory']);
+    }
+
+    public function testMultipleUpdatesAccumulateState(): void
+    {
+        $module = new SystemModule();
+        $msg = new class implements Msg {};
+
+        [$next1] = $module->update($msg);
+        [$next2] = $next1->update($msg);
+
+        // Each update returns a new instance
+        $this->assertNotSame($module, $next1);
+        $this->assertNotSame($next1, $next2);
     }
 }
