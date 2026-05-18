@@ -28,6 +28,7 @@ final class Theme
      * @param Color $border     Border / divider colour
      * @param Color $separator  Row / column separator (lighter than border)
      * @param Color $cursor     Caret / pointer colour
+     * @return self
      */
     public function __construct(
         public readonly Color $foreground,
@@ -264,7 +265,10 @@ final class Theme
 
     // ─── Fluent withers ──────────────────────────────────────────────────
 
-    /** Returns a new Theme with the foreground colour replaced. */
+    /**
+     * Returns a new Theme with the foreground colour replaced.
+     * @return self
+     */
     public function withForeground(Color $foreground): self
     {
         return new self(
@@ -284,7 +288,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the background colour replaced. */
+    /**
+     * Returns a new Theme with the background colour replaced.
+     * @return self
+     */
     public function withBackground(Color $background): self
     {
         return new self(
@@ -304,7 +311,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the primary colour replaced. */
+    /**
+     * Returns a new Theme with the primary colour replaced.
+     * @return self
+     */
     public function withPrimary(Color $primary): self
     {
         return new self(
@@ -324,7 +334,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the secondary colour replaced. */
+    /**
+     * Returns a new Theme with the secondary colour replaced.
+     * @return self
+     */
     public function withSecondary(Color $secondary): self
     {
         return new self(
@@ -344,7 +357,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the accent colour replaced. */
+    /**
+     * Returns a new Theme with the accent colour replaced.
+     * @return self
+     */
     public function withAccent(Color $accent): self
     {
         return new self(
@@ -364,7 +380,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the muted colour replaced. */
+    /**
+     * Returns a new Theme with the muted colour replaced.
+     * @return self
+     */
     public function withMuted(Color $muted): self
     {
         return new self(
@@ -384,7 +403,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the error colour replaced. */
+    /**
+     * Returns a new Theme with the error colour replaced.
+     * @return self
+     */
     public function withError(Color $error): self
     {
         return new self(
@@ -404,7 +426,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the warning colour replaced. */
+    /**
+     * Returns a new Theme with the warning colour replaced.
+     * @return self
+     */
     public function withWarning(Color $warning): self
     {
         return new self(
@@ -424,7 +449,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the success colour replaced. */
+    /**
+     * Returns a new Theme with the success colour replaced.
+     * @return self
+     */
     public function withSuccess(Color $success): self
     {
         return new self(
@@ -444,7 +472,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the info colour replaced. */
+    /**
+     * Returns a new Theme with the info colour replaced.
+     * @return self
+     */
     public function withInfo(Color $info): self
     {
         return new self(
@@ -464,7 +495,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the border colour replaced. */
+    /**
+     * Returns a new Theme with the border colour replaced.
+     * @return self
+     */
     public function withBorder(Color $border): self
     {
         return new self(
@@ -484,7 +518,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the separator colour replaced. */
+    /**
+     * Returns a new Theme with the separator colour replaced.
+     * @return self
+     */
     public function withSeparator(Color $separator): self
     {
         return new self(
@@ -504,7 +541,10 @@ final class Theme
         );
     }
 
-    /** Returns a new Theme with the cursor colour replaced. */
+    /**
+     * Returns a new Theme with the cursor colour replaced.
+     * @return self
+     */
     public function withCursor(Color $cursor): self
     {
         return new self(

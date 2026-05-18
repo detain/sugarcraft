@@ -146,6 +146,7 @@ echo Tree::new()
 
 ## Public API
 
+- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `primary`/`secondary` are aliased as `accent`/`muted`. Every `with*($color)` setter returns a new `Theme`. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
 - **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
@@ -255,6 +256,50 @@ Inheritable properties: `bold` / `italic` / `underline` / `strike` /
 (width / height / padding / margin / border / borderSides) **don't**
 inherit — every component is layout-independent. This matches
 lipgloss v2's "explicit wins" rule.
+
+## Theme — canonical colour palette
+
+`Theme` is the single source of truth for terminal colour schemes
+across SugarCraft consumer libs. Port of `charmbracelet/lipgloss.Theme`.
+
+```php
+use SugarCraft\Sprinkles\Theme;
+
+// Pick a built-in theme
+$dark = Theme::dark();
+$tokyo = Theme::tokyoNight();
+$dracula = Theme::dracula();
+
+// Auto-detect from $COLORFGBG (falls back to dark)
+$theme = Theme::adaptive();
+
+// Override one or more colours (all with*() return new Theme)
+$custom = $dark->withPrimary(Color::hex('#ff5f87'))
+                ->withError(Color::ansi(1));
+
+// Read colours
+echo $custom->primary;   // Color('#ff5f87')
+echo $custom->foreground; // Color('#c5c9d4') — kept from dark()
+```
+
+Available factories:
+
+| Method | Palette |
+|---|---|
+| `Theme::dark()` | Dark, high-contrast |
+| `Theme::light()` | Light theme |
+| `Theme::dracula()` | Dracula |
+| `Theme::tokyoNight()` | Tokyo Night |
+| `Theme::oneDark()` | One Dark |
+| `Theme::githubDark()` | GitHub Dark |
+| `Theme::solarizedDark()` | Solarized Dark |
+| `Theme::solarizedLight()` | Solarized Light |
+| `Theme::ansi()` | Terminal ANSI 8-colour |
+| `Theme::adaptive()` | Auto-detect via `COLORFGBG` env var |
+
+All themes expose 13 colour slots: `foreground`, `background`,
+`primary` (alias `accent`), `secondary` (alias `muted`), `error`,
+`warning`, `success`, `info`, `border`, `separator`, `cursor`.
 
 ## Measurement utilities
 
