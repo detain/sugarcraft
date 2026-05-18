@@ -1,0 +1,8 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: timeline
+---
+[38;2;203;166;247m○ [9:00 AM][0m
+[38;2;108;112;134m││││││││││││││││││││││││││││││││││││││││││││││││││││││││││││[0m
+[38;2;203;166;247m○ [10:00 AM][0mPHP Warning:  Undefined array key "title" in /home/sites/sugarcraft/sugar-dash/src/Components/Tree/Timeline.php on line 121
+PHP Warning:  Undefined array key "title" in /home/sites/sugarcraft/sugar-dash/src/Components/Tree/Timeline.php on line 121
