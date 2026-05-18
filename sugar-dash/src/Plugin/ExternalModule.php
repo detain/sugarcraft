@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Plugin;
 
 use SugarCraft\Dash\Module\LegacyModule;
+use SugarCraft\Pty\Posix\PosixProcess;
 
 /**
  * Wraps an external binary as a Module.
@@ -20,7 +21,19 @@ final class ExternalModule implements LegacyModule
 {
     private array $state = [];
     private int $interval = 0;
+
+    /** @var resource|null */
+    private $stdin = null;
+
+    /** @var resource|null */
+    private $stdout = null;
+
+    /** @var resource|null */
+    private $stderr = null;
+
+    /** @var resource|null */
     private $process = null;
+
     private bool $running = false;
 
     public function __construct(
@@ -126,6 +139,10 @@ final class ExternalModule implements LegacyModule
             throw new \RuntimeException("Failed to start process: {$this->command}");
         }
 
+        $this->stdin = $pipes[0];
+        $this->stdout = $pipes[1];
+        $this->stderr = $pipes[2];
+
         $this->running = true;
     }
 
@@ -134,13 +151,12 @@ final class ExternalModule implements LegacyModule
      */
     private function sendRequest(Request $request): void
     {
-        if (!$this->running || $this->process === null) {
+        if (!$this->running || $this->stdin === null) {
             return;
         }
 
-        $pipes = proc_get_status($this->process)['pipes'];
-        fwrite($pipes[0], $request->toJson() . "\n");
-        fflush($pipes[0]);
+        fwrite($this->stdin, $request->toJson() . "\n");
+        fflush($this->stdin);
     }
 
     /**
@@ -148,12 +164,11 @@ final class ExternalModule implements LegacyModule
      */
     private function readResponse(): Response
     {
-        if (!$this->running || $this->process === null) {
+        if (!$this->running || $this->stdout === null) {
             return Response::error('Process not running');
         }
 
-        $pipes = proc_get_status($this->process)['pipes'];
-        $line = fgets($pipes[1]);
+        $line = fgets($this->stdout);
 
         if ($line === false) {
             $this->running = false;
@@ -168,9 +183,38 @@ final class ExternalModule implements LegacyModule
      */
     public function __destruct()
     {
+        $this->closeStdout();
+        $this->closeStderr();
+        $this->closeStdin();
+
         if ($this->process !== null && is_resource($this->process)) {
             $this->running = false;
             proc_close($this->process);
+            $this->process = null;
+        }
+    }
+
+    private function closeStdin(): void
+    {
+        if ($this->stdin !== null && is_resource($this->stdin)) {
+            fclose($this->stdin);
+            $this->stdin = null;
+        }
+    }
+
+    private function closeStdout(): void
+    {
+        if ($this->stdout !== null && is_resource($this->stdout)) {
+            fclose($this->stdout);
+            $this->stdout = null;
+        }
+    }
+
+    private function closeStderr(): void
+    {
+        if ($this->stderr !== null && is_resource($this->stderr)) {
+            fclose($this->stderr);
+            $this->stderr = null;
         }
     }
 }
