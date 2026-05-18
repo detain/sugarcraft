@@ -11,5 +11,9 @@ namespace SugarCraft\Dash\Registry;
  * and returns a Module instance.
  *
  * @see Registry::register()
+ *
+ * @note PHP 8.3: use callable. This interface serves as documentation.
  */
-type Constructor = callable;
+interface Constructor
+{
+}

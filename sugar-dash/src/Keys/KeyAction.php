@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Events;
+namespace SugarCraft\Dash\Keys;
 
 /**
  * Represents an action triggered by a key combination.
