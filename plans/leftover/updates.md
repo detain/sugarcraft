@@ -166,6 +166,9 @@ review for step 03.08 · clean · PR#541
   tests-ci for step 03.12 · clean
   docs for step 03.12 · clean · PR#557
   step 03.14 · PR#558 · sugar-dash: fix TD-1 CandlestickChart readonly withers (clone-mutate → new self()); regression test; TD-2..TD-8 already fixed in prior sessions
+  review for step 03.14 · clean · PR#558
+  tests-ci for step 03.14 · clean
+  docs for step 03.14 · clean
 
 ## Open review findings — 03.05
 
