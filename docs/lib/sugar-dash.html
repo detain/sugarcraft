@@ -52,10 +52,10 @@
     <pre class="code"><code>composer require sugarcraft/sugar-dash</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Dash\Grid\StackedGrid;
-use SugarCraft\Dash\Grid\Frame;
-use SugarCraft\Dash\Grid\ItemOptions;
-use SugarCraft\Dash\Grid\Options;
+    <pre class="code"><code>use SugarCraft\Dash\Layout\Grid\StackedGrid;
+use SugarCraft\Dash\Layout\Frame;
+use SugarCraft\Dash\Layout\Grid\ItemOptions;
+use SugarCraft\Dash\Layout\Grid\Options;
 
 $grid = new StackedGrid(new Options(fitScreen: true));
 $grid->addItem(new SomePanel(), new ItemOptions(column: 0));

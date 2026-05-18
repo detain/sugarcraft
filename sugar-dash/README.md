@@ -461,8 +461,8 @@ All built-in modules extend `BaseModule` and use `withState()` for immutable sta
 ## Usage Example
 
 ```php
-use SugarCraft\Dash\Layout\{StackedGrid, Frame, VStack, Panel};
-use SugarCraft\Dash\Layout\Grid\{Options, ItemOptions};
+use SugarCraft\Dash\Layout\{Frame, VStack, Panel};
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dash\Components\Text;
 
 // Create a stacked grid layout
