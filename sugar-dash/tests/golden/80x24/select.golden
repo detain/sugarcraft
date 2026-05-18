@@ -1,0 +1,7 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: select
+---
+[38;2;135;75;253m▶ Option 1[0m
+[38;2;127;127;127m○ Option 2[0m
+[38;2;127;127;127m○ Option 3[0m[0m

@@ -1,0 +1,5 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: badge
+---
+[48;2;49;50;68m[38;2;205;214;244m[ NEW ][0m

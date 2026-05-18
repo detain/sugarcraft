@@ -1,0 +1,12 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: listComponent
+---
+● Array
+○ Array
+○ ArrayPHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 167
+PHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 167
+PHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 167
+PHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 97
+PHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 97
+PHP Warning:  Array to string conversion in /home/sites/sugarcraft/sugar-dash/src/Components/Calendar/ListComponent.php on line 97

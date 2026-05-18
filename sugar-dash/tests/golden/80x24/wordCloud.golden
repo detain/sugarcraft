@@ -1,0 +1,11 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: wordCloud
+---
+PHP Fatal error:  Uncaught TypeError: SugarCraft\Dash\Plot\Chart\WordCloud::SugarCraft\Dash\Plot\Chart\{closure}(): Argument #1 ($item) must be of type array, int given in /home/sites/sugarcraft/sugar-dash/src/Plot/Chart/WordCloud.php:46
+Stack trace:
+#0 [internal function]: SugarCraft\Dash\Plot\Chart\WordCloud::SugarCraft\Dash\Plot\Chart\{closure}()
+#1 /home/sites/sugarcraft/sugar-dash/src/Plot/Chart/WordCloud.php(46): array_map()
+#2 /tmp/golden_wordCloud_80x24.php(11): SugarCraft\Dash\Plot\Chart\WordCloud::new()
+#3 {main}
+  thrown in /home/sites/sugarcraft/sugar-dash/src/Plot/Chart/WordCloud.php on line 46
