@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Grid;
+namespace SugarCraft\Dash\Layout\Grid;
 
 /**
  * Per-item placement options within a StackedGrid.
