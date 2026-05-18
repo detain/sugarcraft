@@ -1,0 +1,7 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: leaderboard
+---
+[38;2;249;226;175m 1. [0mAlice        
+[38;2;148;226;213m 2. [0mBob          
+[38;2;203;166;247m 3. [0mCharlie      

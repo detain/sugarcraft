@@ -1,0 +1,7 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: radio
+---
+[38;2;135;75;253m>◉ Option A[0m
+[38;2;127;127;127m ○ Option B[0m
+[38;2;127;127;127m ○ Option C[0m[0m
