@@ -139,7 +139,7 @@ step 03.06 · PR#536 · sugar-dash: built-in modules rewritten to Core\Model con
 docs for step 03.06 · PR#537 · fix broken code example in sugar-dash dev guide (non-existent Core\Msg\TickMsg import + Msg::tick() call replaced with Clock\TickMsg + anonymous Msg)
 review for step 03.06 · clean · PR#536
 step 03.07 · PR#538 · sugar-dash: dashboard-live.php interactive demo + VHS tape + README update
-fix for step 03.07 · <PR#> · resolved 1 finding (dashboard-live already covered by sugar-dash in all=(...) matrix at line 83; VHS matrix is lib-level, not demo-level; acceptance criterion #4 satisfied)
+fix for step 03.07 · PR#539 · resolved 1 finding (dashboard-live already covered by sugar-dash in all=(...) matrix at line 83; VHS matrix is lib-level, not demo-level; acceptance criterion #4 satisfied)
 
 ## Open review findings — 03.05
 
