@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Core\Util;
 
+use SugarCraft\Pty\Posix\PosixProcess;
+
 /**
  * Spawn the user's `$EDITOR` against a seeded temp file and return the
  * edited contents. Mirrors charmbracelet/x/editor.Cmd.
@@ -197,17 +199,8 @@ final class Editor
     private static function defaultRunner(): \Closure
     {
         return static function (array $argv): int {
-            $descriptors = [
-                0 => defined('STDIN')  ? STDIN  : ['file', '/dev/tty', 'r'],
-                1 => defined('STDOUT') ? STDOUT : ['file', '/dev/tty', 'w'],
-                2 => defined('STDERR') ? STDERR : ['file', '/dev/tty', 'w'],
-            ];
-            $opts = DIRECTORY_SEPARATOR === '\\' ? ['bypass_shell' => true] : [];
-            $proc = @proc_open($argv, $descriptors, $pipes, null, null, $opts);
-            if (!is_resource($proc)) {
-                throw new \RuntimeException('Failed to spawn editor: ' . implode(' ', $argv));
-            }
-            return proc_close($proc);
+            $proc = PosixProcess::spawn($argv);
+            return $proc->wait();
         };
     }
 }
