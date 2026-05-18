@@ -125,6 +125,8 @@ step 03.03 · PR#529 · sugar-dash: Grid reorg part 3 — events/Keys/State/Foun
 fix for step 03.03 · PR#530 · resolved 2 findings (Key files wrong dir + Grid/ 44 files) + PHP 8.4 type alias compat fix
 fix for step 03.03 · clean · PR#530
 docs for step 03.03 · clean · PR#531
+step 03.04 · PR#532 · sugar-dash: fix ExternalModule proc_get_status pipes bug + migrate to PosixProcess + integration test
+review for step 03.04 · clean · PR#532
 
 ## Open review findings — 02.03
 
