@@ -98,6 +98,7 @@ tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkips
  review for step 01.11 · clean · PR#511
  docs for step 01.11 · PR#512 · document --fix in CONTRIBUTING.md + docblock
  step 01.12 · PR#513 · candy-pty: SIGHUP delivery fix (FD_CLOEXEC on master fd + libc close after fclose) + SignalForwarderReactLoop/SIGHUPForwarding/NoControllingTerminal integration tests; resolved blocker (was two narrow bugs, not a PHP architectural gap)
+ tests-ci for step 01.12 · clean
 
 ## Open review findings — 01.08
 
