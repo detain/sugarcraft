@@ -8,7 +8,7 @@ use SugarCraft\Dash\Events\Key;
 use SugarCraft\Dash\Events\KeyAction;
 use SugarCraft\Dash\Events\KeyMap;
 use SugarCraft\Dash\Components\Card\Text;
-use SugarCraft\Dash\Grid\Bar;
+use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use PHPUnit\Framework\TestCase;

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Plot\Chart;
 
-use SugarCraft\Dash\Grid\Features;
+use SugarCraft\Dash\Components\Card\Features;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Color;
