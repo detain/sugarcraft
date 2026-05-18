@@ -33,6 +33,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         php8.3-xml \
         php8.3-zip \
         php-ssh2 \
+        # Headless Chromium runtime deps. VHS uses go-rod, which
+        # downloads its own chromium binary at first launch — we just
+        # need the shared libraries on the PATH. Canonical Puppeteer
+        # /Playwright list for Ubuntu 24.04 (t64 suffix on the libs
+        # that gained 64-bit time_t in noble). Without these every
+        # render fails with `libnss3.so: cannot open shared object`.
+        fonts-liberation \
+        libasound2t64 \
+        libatk-bridge2.0-0t64 \
+        libatk1.0-0t64 \
+        libcairo2 \
+        libcups2t64 \
+        libdbus-1-3 \
+        libdrm2 \
+        libgbm1 \
+        libglib2.0-0t64 \
+        libgtk-3-0t64 \
+        libnspr4 \
+        libnss3 \
+        libpango-1.0-0 \
+        libx11-6 \
+        libxcb1 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxkbcommon0 \
+        libxrandr2 \
+        libvulkan1 \
+        xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sS https://getcomposer.org/installer | php -- \
