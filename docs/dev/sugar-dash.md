@@ -148,6 +148,86 @@ $ext = ExternalModule::fromCommand('my-dashboard-module --width %d --height %d')
 // $ext implements Module
 ```
 
+### WeatherModule — built-in module example
+
+`Modules\Weather\WeatherModule` demonstrates a production-ready `Module`
+implementation with network fetch, caching, and graceful degradation.
+
+#### Architecture
+
+```
+WeatherModule
+├── HttpClient (interface — fetch(string $location): WeatherSnapshot)
+│   └── WttrInClient (implements HttpClient; hits https://wttr.in/<loc>?format=j1)
+├── WeatherSnapshot (readonly DTO: tempC, condition, location, fetchedAt)
+└── TickMsg (internal Msg; 30-minute refresh interval)
+```
+
+The module ticks every 30 minutes (`Cmd::tick(1800.0, ...)`). On each
+`TickMsg`, `fetchWeather()` is called:
+
+1. **Cache check** — read `~/.cache/sugar-dash/weather.json`. If the cached
+   snapshot is younger than 1800 s (TTL), return it immediately.
+2. **Live fetch** — call `$httpClient->fetch($location)` (default `"auto"`,
+   IP-based detection). On success, write the snapshot to the cache atomically
+   (temp file + `rename`).
+3. **Fallback** — if the live fetch throws a `RuntimeException` and a stale
+   cache exists, return the stale cache (no upper age limit — network outages
+   are served stale indefinitely). If no cache exists, re-throw.
+
+The `view()` method renders `"{temp}°C {condition}\n{location}"` or
+`"—°C unavailable"` when no data is available at all.
+
+#### WEATHER_LOCATION environment variable
+
+Set `WEATHER_LOCATION` in the environment to override the default IP-based
+detection. Examples: `"Seattle"`, `"London"`, `"37.7749,-122.4194"`
+(coordinates), `"~Tokyo"` (airport code):
+
+```bash
+WEATHER_LOCATION=Seattle php examples/dashboard-live.php
+```
+
+The value is passed directly to the `WeatherModule` constructor as the
+`$location` argument. The `WttrInClient` URL-encodes it via
+`rawurlencode()` before appending to `https://wttr.in/`.
+
+#### Cache location
+
+`WeatherModule::cachePath()` returns
+`"~/.cache/sugar-dash/weather.json"`. The directory is created with
+`mkdir(..., 0755, true)` on first write. Override in tests by subclassing
+`WeatherModule` and overriding `cachePath()` to return a temporary path.
+
+#### Extending or replacing the HTTP client
+
+Swap the HTTP layer without touching `WeatherModule`:
+
+```php
+use SugarCraft\Dash\Modules\Weather\WeatherModule;
+use SugarCraft\Dash\Modules\Weather\HttpClient;
+use SugarCraft\Dash\Modules\Weather\WeatherSnapshot;
+
+final class MockWeatherClient implements HttpClient
+{
+    public function fetch(string $location): WeatherSnapshot
+    {
+        return new WeatherSnapshot(
+            tempC: 22.0,
+            condition: 'Partly cloudy',
+            location: $location,
+            fetchedAt: new \DateTimeImmutable(),
+        );
+    }
+}
+
+// In your model:
+$weather = new WeatherModule(new MockWeatherClient(), 'test-location');
+```
+
+`HttpClient::fetch()` throws `RuntimeException` on network failure; the module
+catches it and falls back to cache.
+
 ---
 
 ## Testing your extension
