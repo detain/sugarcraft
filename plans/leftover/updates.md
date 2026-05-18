@@ -104,6 +104,7 @@ step 01.13 · PR#516 · candy-mosaic + candy-core: TtyDetect static helper (Term
 review for step 01.13 · clean · PR#516
 docs for step 01.13 · clean
 step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
+review for step 01.14 · clean · PR#517
 
 ## Open review findings — 01.08
 
