@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Tests\Foundation;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Dash\Foundation\Buffer;
 use SugarCraft\Dash\Foundation\Cell;
-use SugarCraft\Dash\Foundation\Color;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Dash\Foundation\Style;
 use SugarCraft\Dash\Foundation\Rect;
 use SugarCraft\Dash\Foundation\Drawable;

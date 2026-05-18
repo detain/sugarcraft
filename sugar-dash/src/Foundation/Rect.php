@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Foundation;
 
 /**
- * A 2D axis-aligned rectangle.
+ * Sugar-dash Rect uses the charmbracelet/rectmath bounds model
+ * (minX, minY, maxX, maxY). Intentionally distinct from
+ * \SugarCraft\Core\Rect, which uses the ratatui offset+size model
+ * (x, y, width, height). Both are canonical for their lib — choose
+ * by which upstream semantics the consumer needs.
  *
- * Mirrors github.com/charmbracelet/rectmath rect.Rect.
+ * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-rect-models].
  */
 final readonly class Rect
 {
