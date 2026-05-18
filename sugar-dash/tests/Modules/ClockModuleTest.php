@@ -16,12 +16,13 @@ final class ClockModuleTest extends TestCase
         $this->assertSame('clock', $module->name());
     }
 
-    public function testInitReturnsNull(): void
+    public function testInitReturnsTickCmd(): void
     {
         $module = new ClockModule();
         $cmd = $module->init();
-        // New contract: init() returns ?Closure, base returns null
-        $this->assertNull($cmd);
+        // Step 03.06 changed contract: ClockModule returns Cmd::tick(1.0, TickMsg) from init()
+        $this->assertNotNull($cmd);
+        $this->assertInstanceOf(\Closure::class, $cmd);
     }
 
     public function testUpdateReturnsModuleAndNull(): void
