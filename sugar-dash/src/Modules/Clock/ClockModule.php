@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Clock;
 
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
@@ -11,6 +12,7 @@ use SugarCraft\Dash\Module\BaseModule;
  * Clock module that displays the current time.
  *
  * Mirrors the lattice clock module pattern.
+ * Uses Cmd::tick(1.0) for 1Hz refresh.
  */
 final class ClockModule extends BaseModule
 {
@@ -30,17 +32,16 @@ final class ClockModule extends BaseModule
 
     public function init(): ?\Closure
     {
-        return null;
+        return Cmd::tick(1.0, static fn(): Msg => new TickMsg());
     }
 
     public function update(Msg $msg): array
     {
         $newTime = $this->createTime();
-        $state = ['time' => $newTime->format('H:i:s')];
-        if ($this->showDate) {
-            $state['date'] = $newTime->format('l, M d');
+        if ($msg instanceof TickMsg) {
+            return [$this->withTime($newTime), Cmd::tick(1.0, static fn(): Msg => new TickMsg())];
         }
-        return [$this->withState($state), null];
+        return [$this->withTime($newTime), null];
     }
 
     public function view(): string
@@ -58,6 +59,16 @@ final class ClockModule extends BaseModule
     public function minSize(): array
     {
         return $this->showDate ? [20, 5] : [12, 3];
+    }
+
+    /**
+     * Create a clone of this module with the given time.
+     */
+    private function withTime(\DateTimeImmutable $time): static
+    {
+        $clone = clone $this;
+        $clone->time = $time;
+        return $clone;
     }
 
     private function createTime(): \DateTimeImmutable

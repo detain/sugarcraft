@@ -9,6 +9,8 @@ use SugarCraft\Dash\Module\BaseModule;
 
 /**
  * Greeting module that displays a time-of-day based greeting.
+ *
+ * Static module - greeting is determined at render time.
  */
 final class GreetingModule extends BaseModule
 {
@@ -24,14 +26,13 @@ final class GreetingModule extends BaseModule
 
     public function update(Msg $msg): array
     {
-        $greeting = $this->getGreeting();
-        return [$this->withState(['greeting' => $greeting]), null];
+        // Static module - no state changes after construction
+        return [$this, null];
     }
 
     public function view(): string
     {
-        $state = $this->getState();
-        return $state['greeting'] ?? $this->getGreeting();
+        return $this->getGreeting();
     }
 
     public function minSize(): array
