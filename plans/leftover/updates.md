@@ -117,6 +117,7 @@ step 02.04 · PR#524 · sugar-dash: Module aligned with Core Model (update retur
 docs for step 02.04 · clean · PR#525
 step 03.01 · PR#526 · sugar-dash: Grid reorg part 1 — move Foundation primitives + Layout enums from Grid/ (Options, ItemOptions, ItemWithOptions, StackedGrid, JustifyContent, AlignItems to Layout/; delete duplicate Grid/Buffer; update 91 example imports)
 review for step 03.01 · clean · PR#526
+docs for step 03.01 · clean · PR#527
 
 ## Open review findings — 02.03
 
