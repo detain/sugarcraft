@@ -10,16 +10,6 @@
             "description": "Caliber: finalizing session learnings"
           }
         ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "/home/my/.nvm/versions/node/v24.15.0/bin/caliber refresh --quiet",
-            "description": "Caliber: auto-refreshing docs based on code changes"
-          }
-        ]
       }
     ],
     "PostToolUse": [
@@ -66,30 +56,6 @@
             "type": "command",
             "command": ".claude/hooks/caliber-check-sync.sh",
             "description": "Caliber: offer setup if not configured"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/caliber-session-freshness.sh",
-            "description": "Caliber: check config freshness on session start"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/caliber-freshness-notify.sh",
-            "description": "Caliber: warn when agent configs are stale"
           }
         ]
       }
