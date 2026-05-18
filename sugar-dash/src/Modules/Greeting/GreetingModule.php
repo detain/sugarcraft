@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Greeting;
 
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
 /**
@@ -11,33 +12,26 @@ use SugarCraft\Dash\Module\BaseModule;
  */
 final class GreetingModule extends BaseModule
 {
-    private string $greeting = '';
-
     public function name(): string
     {
         return 'greeting';
     }
 
-    public function init(): array
+    public function init(): ?\Closure
     {
-        $this->greeting = $this->getGreeting();
-        return [
-            'name' => $this->name(),
-            'minSize' => [15, 3],
-            'interval' => 300,
-        ];
+        return null;
     }
 
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
-        $this->greeting = $this->getGreeting();
-        $state['greeting'] = $this->greeting;
-        return $state;
+        $greeting = $this->getGreeting();
+        return [$this->withState(['greeting' => $greeting]), null];
     }
 
-    public function view(array $state, int $width, int $height): string
+    public function view(): string
     {
-        return $this->greeting;
+        $state = $this->getState();
+        return $state['greeting'] ?? $this->getGreeting();
     }
 
     public function minSize(): array

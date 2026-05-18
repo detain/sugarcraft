@@ -22,7 +22,7 @@ final class RegistryTest extends TestCase
         $constructor = function(): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'test'; }
-                public function view(array $state, int $width, int $height): string { return ''; }
+                public function view(): string { return ''; }
             };
         };
 
@@ -37,7 +37,7 @@ final class RegistryTest extends TestCase
         $constructor = function(): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'test'; }
-                public function view(array $state, int $width, int $height): string { return ''; }
+                public function view(): string { return ''; }
             };
         };
 
@@ -54,13 +54,13 @@ final class RegistryTest extends TestCase
         $ctor1 = function(): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'module1'; }
-                public function view(array $state, int $width, int $height): string { return ''; }
+                public function view(): string { return ''; }
             };
         };
         $ctor2 = function(): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'module2'; }
-                public function view(array $state, int $width, int $height): string { return ''; }
+                public function view(): string { return ''; }
             };
         };
 
@@ -79,7 +79,7 @@ final class RegistryTest extends TestCase
         $constructor = function(): Module {
             return new class extends BaseModule {
                 public function name(): string { return 'test'; }
-                public function view(array $state, int $width, int $height): string { return ''; }
+                public function view(): string { return ''; }
             };
         };
 
