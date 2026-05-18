@@ -2,126 +2,126 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Tests\State;
+namespace SugarCraft\Dash\Tests\Components\Tree;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Dash\State\State;
-use SugarCraft\Dash\State\StateNode;
-use SugarCraft\Dash\State\StateTransition;
-use SugarCraft\Dash\State\TransitionType;
+use SugarCraft\Dash\Components\Tree\StateMachine;
+use SugarCraft\Dash\Components\Tree\StateNode;
+use SugarCraft\Dash\Components\Tree\StateTransition;
+use SugarCraft\Dash\Components\Tree\TransitionType;
 
-final class StateTest extends TestCase
+final class StateMachineTest extends TestCase
 {
     public function testNewCreatesDefaultInstance(): void
     {
-        $state = State::new();
-        $this->assertInstanceOf(State::class, $state);
+        $state = StateMachine::new();
+        $this->assertInstanceOf(StateMachine::class, $state);
     }
 
     public function testSetSizeReturnsSizerInterface(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->setSize(60, 20);
         $this->assertInstanceOf(\SugarCraft\Dash\Foundation\Sizer::class, $result);
     }
 
     public function testRenderReturnsNonEmptyString(): void
     {
-        $state = State::new()->setSize(60, 20);
+        $state = StateMachine::new()->setSize(60, 20);
         $rendered = $state->render();
         $this->assertNotEmpty($rendered);
     }
 
     public function testRenderContainsBorderCharacters(): void
     {
-        $state = State::new()->setSize(60, 20);
+        $state = StateMachine::new()->setSize(60, 20);
         $rendered = $state->render();
         $this->assertStringContainsString('─', $rendered);
     }
 
     public function testWithState(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $node = StateNode::state('idle', 'Idle');
         $result = $state->withState($node);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testAddState(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->addState('active', 'Active');
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithStates(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $states = [
             'idle' => StateNode::state('idle', 'Idle'),
             'active' => StateNode::state('active', 'Active'),
         ];
         $result = $state->withStates($states);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithTransition(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $transition = new StateTransition('t1', 'idle', 'active', 'start');
         $result = $state->withTransition($transition);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testAddTransition(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->addTransition('idle', 'active', 'start');
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithTransitions(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $transitions = [
             new StateTransition('t1', 'idle', 'active', 'start'),
             new StateTransition('t2', 'active', 'idle', 'stop'),
         ];
         $result = $state->withTransitions($transitions);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithInitialState(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withInitialState('idle');
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithShowActions(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withShowActions(false);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithShowLabels(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withShowLabels(false);
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithStyle(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withStyle('bold');
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testGetInnerSize(): void
     {
-        $state = State::new()->setSize(60, 20);
+        $state = StateMachine::new()->setSize(60, 20);
         $size = $state->getInnerSize();
         $this->assertIsArray($size);
         $this->assertCount(2, $size);
@@ -131,37 +131,37 @@ final class StateTest extends TestCase
 
     public function testSmallDimensionsReturnEmpty(): void
     {
-        $state = State::new()->setSize(10, 5);
+        $state = StateMachine::new()->setSize(10, 5);
         $rendered = $state->render();
         $this->assertSame('', $rendered);
     }
 
     public function testWithStateColor(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withStateColor(\SugarCraft\Core\Util\Color::hex('#FF0000'));
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithInitialColor(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withInitialColor(\SugarCraft\Core\Util\Color::hex('#00FF00'));
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithFinalColor(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withFinalColor(\SugarCraft\Core\Util\Color::hex('#0000FF'));
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testWithTransitionColor(): void
     {
-        $state = State::new();
+        $state = StateMachine::new();
         $result = $state->withTransitionColor(\SugarCraft\Core\Util\Color::hex('#FFFF00'));
-        $this->assertInstanceOf(State::class, $result);
+        $this->assertInstanceOf(StateMachine::class, $result);
     }
 
     public function testStateNodeHelpers(): void

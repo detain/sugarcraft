@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Layout\Grid;
 
 use SugarCraft\Dash\Layout\Breakpoint;
+use SugarCraft\Dash\State\Persistence;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 
@@ -277,5 +278,38 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
             return mb_substr($s, 0, 1, 'UTF-8');
         }
         return $result;
+    }
+
+    // ─── Persistence ─────────────────────────────────────────────
+
+    /**
+     * Persist stacked grid state to disk.
+     *
+     * Note: Item content is not directly serializable. Callers should
+     * persist collapsed panel identifiers through this hook; items must
+     * be re-built by the application on restore.
+     *
+     * @param list<string> $collapsedAddresses Addresses of collapsed panels.
+     */
+    public function persistState(Persistence $persistence, string $path, array $collapsedAddresses = []): void
+    {
+        $persistence->save($path, [
+            'collapsedAddresses' => $collapsedAddresses,
+        ]);
+    }
+
+    /**
+     * Restore stacked grid state from disk.
+     *
+     * @return list<string> Addresses that were collapsed.
+     */
+    public function restoreState(Persistence $persistence, string $path): array
+    {
+        $data = $persistence->load($path);
+        if ($data === null) {
+            return [];
+        }
+
+        return $data['collapsedAddresses'] ?? [];
     }
 }
