@@ -6,6 +6,7 @@ namespace SugarCraft\Dash\Layout\Boxer;
 
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\State\Persistence;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -238,5 +239,42 @@ final class Boxer implements Item, Sizer
     public function getNode(string $address): ?Node
     {
         return $this->findNode($this->root, $address);
+    }
+
+    // ─── Persistence ─────────────────────────────────────────────
+
+    /**
+     * Persist boxer layout addresses to disk.
+     *
+     * Note: Item content in modelMap is not directly serializable.
+     * Callers should persist any collapsed-panel identifiers (addresses)
+     * through this hook; the modelMap items themselves must be re-built
+     * by the application on restore.
+     *
+     * @param list<string> $collapsedAddresses Addresses of collapsed panels.
+     */
+    public function persistState(Persistence $persistence, string $path, array $collapsedAddresses = []): void
+    {
+        $persistence->save($path, [
+            'collapsedAddresses' => $collapsedAddresses,
+        ]);
+    }
+
+    /**
+     * Restore boxer state from disk.
+     *
+     * Returns the persisted collapsed-addresses list so callers can
+     * rebuild the modelMap appropriately.
+     *
+     * @return list<string> Addresses that were collapsed.
+     */
+    public function restoreState(Persistence $persistence, string $path): array
+    {
+        $data = $persistence->load($path);
+        if ($data === null) {
+            return [];
+        }
+
+        return $data['collapsedAddresses'] ?? [];
     }
 }

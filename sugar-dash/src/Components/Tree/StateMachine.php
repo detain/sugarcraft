@@ -2,121 +2,12 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\State;
+namespace SugarCraft\Dash\Components\Tree;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
-
-/**
- * State machine transition types.
- */
-enum TransitionType: string
-{
-    case Normal = 'normal';
-    case Guard = 'guard';
-    case Internal = 'internal';
-}
-
-/**
- * A state in a state machine diagram.
- */
-final class StateNode
-{
-    /** @var list<string> */
-    public array $entryActions = [];
-
-    /** @var list<string> */
-    public array $exitActions = [];
-
-    /** @var list<string> */
-    public array $internalActions = [];
-
-    public function __construct(
-        public readonly string $id,
-        public readonly string $label,
-        public readonly bool $isInitial = false,
-        public readonly bool $isFinal = false,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Add an entry action.
-     */
-    public function withEntry(string $action): self
-    {
-        $clone = clone $this;
-        $clone->entryActions[] = $action;
-        return $clone;
-    }
-
-    /**
-     * Add an exit action.
-     */
-    public function withExit(string $action): self
-    {
-        $clone = clone $this;
-        $clone->exitActions[] = $action;
-        return $clone;
-    }
-
-    /**
-     * Add an internal action.
-     */
-    public function withInternal(string $action): self
-    {
-        $clone = clone $this;
-        $clone->internalActions[] = $action;
-        return $clone;
-    }
-
-    /**
-     * Create an initial state.
-     */
-    public static function initial(string $id, string $label): self
-    {
-        return new self($id, $label, true, false);
-    }
-
-    /**
-     * Create a final state.
-     */
-    public static function final(string $id, string $label): self
-    {
-        return new self($id, $label, false, true);
-    }
-
-    /**
-     * Create a normal state.
-     */
-    public static function state(string $id, string $label): self
-    {
-        return new self($id, $label, false, false);
-    }
-}
-
-/**
- * A transition between states in a state machine diagram.
- */
-final class StateTransition
-{
-    public function __construct(
-        public readonly string $id,
-        public readonly string $from,
-        public readonly string $to,
-        public readonly string $label,
-        public readonly TransitionType $type = TransitionType::Normal,
-        public readonly ?Color $color = null,
-    ) {}
-
-    /**
-     * Create a guard transition (conditional).
-     */
-    public static function guard(string $id, string $from, string $to, string $label): self
-    {
-        return new self($id, $from, $to, $label, TransitionType::Guard);
-    }
-}
+use SugarCraft\Dash\Foundation\Sizer;
 
 /**
  * A state machine diagram component for visualizing system states and transitions.
@@ -131,7 +22,7 @@ final class StateTransition
  * Mirrors UML state machine diagram patterns adapted to PHP with
  * wither-style immutable setters.
  */
-final class State implements \SugarCraft\Dash\Foundation\Sizer
+final class StateMachine implements Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -174,7 +65,7 @@ final class State implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Set the allocated dimensions for this state diagram.
      */
-    public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer
+    public function setSize(int $width, int $height): Sizer
     {
         $clone = clone $this;
         $clone->width = $width;
