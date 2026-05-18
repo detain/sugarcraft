@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Grid;
+namespace SugarCraft\Dash\Layout\Grid;
 
 /**
  * Internal pairing of an item with its placement options.
