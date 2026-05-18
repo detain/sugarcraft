@@ -119,7 +119,10 @@ jobs:
       matrix:
         # Single-key matrix — the lib name is the only axis. Tool versions
         # are pinned by the container image tag rather than per-job inputs.
-        lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-dash, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
+        # sugar-dash is excluded here and rendered by the dedicated
+        # render-sugar-dash job below; it has 153 tapes (~10× the next
+        # biggest lib) and gets parallelized into 4 batches.
+        lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
     steps:
       - uses: actions/checkout@v5
 
@@ -193,11 +196,74 @@ jobs:
           include-hidden-files: true
           retention-days: 1
 
+  # sugar-dash has 153 tapes — ~10× the next biggest lib — so a single
+  # render job blows out the 30+ minute wall time. Split into 4 parallel
+  # batches by NR % 4 across the sorted tape list. Each batch produces
+  # its own gifs-sugar-dash-batch-<n> artifact; the commit job's
+  # artifact-move loop strips the -batch-<n> suffix to merge them back
+  # into sugar-dash/.vhs/.
+  render-sugar-dash:
+    needs: changed
+    if: ${{ contains(fromJSON(needs.changed.outputs.libs), 'sugar-dash') }}
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+    defaults:
+      run:
+        shell: bash
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        batch: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v5
+        with:
+          path: |
+            sugar-dash/vendor/
+            ~/.composer/cache/
+          key: composer-sugar-dash-${{ hashFiles('sugar-dash/composer.json') }}
+          restore-keys: |
+            composer-sugar-dash-
+
+      - name: Install lib deps
+        working-directory: sugar-dash
+        run: composer install --prefer-dist --no-progress
+
+      - name: Render batch ${{ matrix.batch }}/4
+        working-directory: sugar-dash
+        env:
+          BATCH: ${{ matrix.batch }}
+        run: |
+          set -euo pipefail
+          tapes=$(ls .vhs/*.tape | sort | awk -v n=4 -v i="$BATCH" 'NR % n == i')
+          count=$(printf '%s\n' "$tapes" | grep -c . || true)
+          echo "Batch $BATCH/4 — rendering $count tapes"
+          printf '%s\n' "$tapes" | while read -r tape; do
+            [ -z "$tape" ] && continue
+            echo "▶ rendering $tape"
+            vhs "$tape"
+          done
+
+      - name: Upload rendered GIFs as artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: gifs-sugar-dash-batch-${{ matrix.batch }}
+          path: sugar-dash/.vhs/*.gif
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 1
+
   # Single aggregate-commit job. Runs once after every render finishes.
   # Replaces the per-job push that race-collided when 16 parallel jobs
   # each tried to push to master at the same time.
   commit:
-    needs: render
+    needs: [render, render-sugar-dash]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
@@ -228,6 +294,10 @@ jobs:
           shopt -s nullglob
           for d in /tmp/gifs/gifs-*; do
             lib="${d#/tmp/gifs/gifs-}"
+            # sugar-dash uploads in 4 parallel batches as
+            # gifs-sugar-dash-batch-{0..3}; strip the suffix so all
+            # four artifacts merge back into the same sugar-dash/.vhs/.
+            lib="${lib%-batch-*}"
             echo "Processing artifact dir: $d -> lib: $lib"
             mkdir -p "$lib/.vhs"
             echo "Contents of $d:"
