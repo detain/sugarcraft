@@ -140,6 +140,26 @@ final class BrailleCanvas implements Sizer
     }
 
     /**
+     * Iterate over all cells that have dots set.
+     *
+     * Yields arrays of [cellX, cellY, bits, ?Color] for each cell
+     * where at least one dot bit is set.
+     *
+     * @return \Generator<array{0:int, 1:int, 2:int, 3:\SugarCraft\Core\Util\Color|null}>
+     */
+    public function cells(): \Generator
+    {
+        for ($cellY = 0; $cellY < $this->cellHeight; $cellY++) {
+            for ($cellX = 0; $cellX < $this->cellWidth; $cellX++) {
+                $bits = $this->cells[$cellY][$cellX];
+                if ($bits !== 0) {
+                    yield [$cellX, $cellY, $bits, $this->colors[$cellY][$cellX]];
+                }
+            }
+        }
+    }
+
+    /**
      * Render the canvas as a string of braille characters.
      */
     public function render(?ColorProfile $profile = null): string

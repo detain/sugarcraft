@@ -18,7 +18,7 @@ final class Buffer implements Drawable, Sizer
     /**
      * @var list<list<Cell|null>>
      */
-    private array $grid;
+    public array $grid;
 
     private int $width;
     private int $height;
