@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Foundation\EdgeStyle
+ */
 namespace SugarCraft\Dash\Grid;
 
-enum EdgeStyle: string
-{
-    case Solid = 'solid';
-    case Dashed = 'dashed';
-    case Dotted = 'dotted';
-    case Bold = 'bold';
-}
+use SugarCraft\Dash\Foundation\EdgeStyle as CanonicalEdgeStyle;
+
+class_alias(CanonicalEdgeStyle::class, __NAMESPACE__ . '\EdgeStyle');
