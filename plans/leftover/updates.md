@@ -148,8 +148,10 @@ review for step 03.08 · clean · PR#541
   tests-ci for step 03.10 · clean
   docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse)
   step 03.11 · PR#555 · sugar-dash: Plot::draw(Buffer) writes cells directly — BrailleCanvas::cells() generator + rewrite draw() to write Cell objects via $buffer->grid mutation (matching Buffer::draw() pattern); Buffer::$grid made public; 7 new tests in PlotDrawIntoBufferTest.php; 5136 tests green
- review for step 03.11 · clean · PR#555
- docs for step 03.11 · clean
+  review for step 03.11 · clean · PR#555
+  tests-ci for step 03.11 · clean
+  docs for step 03.11 · clean
+  step 03.12 · PR#556 · sugar-dash: split State/State.php — TransitionType/StateNode/StateTransition/StateMachine to Components/Tree/ (PSR-4 one-class-per-file); add State/Persistence.php (atomic tmp+rename); BC class_alias re-exports; persistState/restoreState wired into FocusManager/Boxer/StackedGrid; 5141 tests green
 
 ## Open review findings — 03.05
 
