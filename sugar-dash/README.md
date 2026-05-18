@@ -350,6 +350,10 @@ composer require sugarcraft/sugar-dash
 |------|-------------|----------------------|-----|
 | `Tree` | Tree structure | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/tree.gif) |
 | `TreeNode` | Tree node | | |
+| `StateMachine` | UML-style state machine diagram | `new()`, `addState()`, `addTransition()`, `addGuard()`, `withInitialState()` | |
+| `StateNode` | Node in a state machine (id/label/isInitial/isFinal/entryActions/exitActions) | | |
+| `StateTransition` | Transition between states (from/to/label/trigger/action/guard/type) | | |
+| `TransitionType` | Enum: `Normal`, `Guard`, `Internal` | | |
 
 ### Components\Table (Table Components)
 
@@ -401,9 +405,12 @@ composer require sugarcraft/sugar-dash
 
 ## State Namespace (State Management)
 
-| Type | Description | Key Properties |
-|------|-------------|----------------|
-| `State` | Application state |
+| Type | Description | Key Methods |
+|------|-------------|-------------|
+| `State` | Application state diagram | |
+| `Persistence` | Atomic tmp+rename state save/load | `save(path, data)`, `load(path): ?array` |
+
+> **Note:** `TransitionType`, `StateNode`, `StateTransition`, and `StateMachine` moved to `Components\Tree\` namespace (PSR-4 one-class-per-file). The `State\*` classes are retained as `@internal` backward-compatibility re-exports via `class_alias`.
 
 ## Position Namespace (ANSI-Aware Geometry)
 
