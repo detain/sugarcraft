@@ -42,33 +42,6 @@
     "suggest": {
         "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-vt",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-vcr",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/candy-core"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "SugarCraft\\Pty\\": "src/"
