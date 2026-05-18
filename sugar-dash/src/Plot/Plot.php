@@ -10,6 +10,7 @@ use SugarCraft\Dash\Foundation\Rect;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
 
 /**
  * A line/scatter chart rendered using braille characters for 2x4 resolution.
@@ -147,18 +148,113 @@ final class Plot implements Sizer, Drawable
 
     public function draw(Buffer $buffer): void
     {
-        $rendered = $this->render();
-        $lines = explode("\n", $rendered);
+        [$bufWidth, $bufHeight] = $buffer->getInnerSize();
+
+        $innerWidth = $this->width - ($this->showAxes ? 2 : 0);
+        $innerHeight = $this->height - ($this->showAxes ? 2 : 0);
+
+        if ($innerWidth <= 0 || $innerHeight <= 0) {
+            return;
+        }
 
         $rect = $this->getRect();
-        $style = $this->color !== null ? new \SugarCraft\Dash\Foundation\Style(foreground: $this->color->toHex()) : new \SugarCraft\Dash\Foundation\Style();
+        $globalStyle = $this->color !== null
+            ? new \SugarCraft\Dash\Foundation\Style(foreground: $this->color)
+            : new \SugarCraft\Dash\Foundation\Style();
 
-        foreach ($lines as $y => $line) {
-            $posY = $rect->minY + $y;
-            if ($posY > $rect->maxY) {
+        // Canvas origin offset within the buffer
+        $originX = $rect->minX + ($this->showAxes ? 2 : 0);
+        $originY = $rect->minY + ($this->showAxes ? 1 : 0);
+
+        // Build canvas with same math as render()
+        $dotWidth = $innerWidth * 2;
+        $dotHeight = $innerHeight * 4;
+        $canvas = BrailleCanvas::new($dotWidth, $dotHeight);
+
+        $prevX = null;
+        $prevY = null;
+
+        foreach ($this->data as $i => $value) {
+            if ($value === null) {
+                $prevX = null;
+                $prevY = null;
+                continue;
+            }
+
+            $x = $i * $this->horizontalScale * 2;
+            $rawY = intdiv((int)(($value - $this->minValue) / max(0.001, ($this->maxValue - $this->minValue) / max(1, $innerHeight - 1))), 1) * 4;
+            $y = ($dotHeight - 1) - $rawY;
+            $x = max(0, min($x, $dotWidth - 1));
+            $y = max(0, min($y, $dotHeight - 1));
+
+            if ($this->mode === self::MODE_LINE && $prevX !== null && $prevY !== null) {
+                $canvas = $canvas->setLine($prevX, $prevY, $x, $y, $this->color);
+            } else {
+                $canvas = $canvas->setPoint($x, $y, $this->color);
+            }
+
+            $prevX = $x;
+            $prevY = $y;
+        }
+
+        // Write braille cells directly into the buffer grid (in-place mutation, matching Buffer::draw() pattern)
+        foreach ($canvas->cells() as [$cellX, $cellY, $bits, $cellColor]) {
+            $targetX = $originX + $cellX;
+            $targetY = $originY + $cellY;
+
+            if ($targetX < 0 || $targetY < 0 || $targetX >= $bufWidth || $targetY >= $bufHeight) {
+                continue;
+            }
+
+            $rune = BrailleMatrix::rune($bits);
+
+            // Per-cell color overrides global color only when no global color is set
+            $style = ($cellColor !== null && $this->color === null)
+                ? $globalStyle->withForeground($cellColor)
+                : $globalStyle;
+
+            $buffer->grid[$targetY][$targetX] = new \SugarCraft\Dash\Foundation\Cell($rune, $style);
+        }
+
+        // Axes labels via setString (faster for text than per-cell setCell)
+        // Only write axes when there is data (matching render() behavior)
+        $dataCount = count(array_filter($this->data, fn($v) => $v !== null));
+        if ($this->showAxes && $dataCount > 0) {
+            $yLabels = $this->generateYLabels($innerHeight);
+
+            // Y-axis labels (left column, 2 chars wide)
+            for ($y = 0; $y < $innerHeight && $y < count($yLabels); $y++) {
+                $posY = $rect->minY + 1 + $y;
+                if ($posY > $rect->maxY) {
+                    break;
+                }
+                $this->writeString($buffer, $rect->minX, $posY, str_pad($yLabels[$y], 2), $globalStyle, $bufWidth, $bufHeight);
+            }
+
+            // X-axis labels (bottom two rows)
+            $xLabels = $this->generateXLabels($dataCount, $innerWidth);
+            $xLabelLine1 = '  ' . ($xLabels[0] ?? '');
+            $xLabelLine2 = '  ' . ($xLabels[1] ?? '');
+            $this->writeString($buffer, $rect->minX, $rect->minY + 1 + $innerHeight, $xLabelLine1, $globalStyle, $bufWidth, $bufHeight);
+            $this->writeString($buffer, $rect->minX, $rect->minY + 2 + $innerHeight, $xLabelLine2, $globalStyle, $bufWidth, $bufHeight);
+        }
+    }
+
+    /**
+     * Write a string directly into the buffer grid (in-place, matching Buffer::draw() pattern).
+     */
+    private function writeString(Buffer $buffer, int $x, int $y, string $str, \SugarCraft\Dash\Foundation\Style $style, int $bufWidth, int $bufHeight): void
+    {
+        if ($x < 0 || $y < 0 || $x >= $bufWidth || $y >= $bufHeight) {
+            return;
+        }
+
+        foreach (mb_str_split($str) as $i => $char) {
+            $posX = $x + $i;
+            if ($posX >= $bufWidth) {
                 break;
             }
-            $buffer->setString($rect->minX, $posY, $line, $style);
+            $buffer->grid[$y][$posX] = new \SugarCraft\Dash\Foundation\Cell($char, $style);
         }
     }
 
