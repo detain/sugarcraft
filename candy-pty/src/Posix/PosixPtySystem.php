@@ -22,6 +22,25 @@ final class PosixPtySystem implements PtySystem
     /** `FD_CLOEXEC` — close-on-exec fd flag. Linux + macOS = 1. */
     private const FD_CLOEXEC = 1;
 
+    /**
+     * Open a new PTY pair and resize the master to the requested dimensions.
+     *
+     * The master fd is created with `FD_CLOEXEC` set so it is closed on
+     * any subsequent `proc_open` in the child — without this flag the child
+     * inherits the master fd, keeping the kernel's master-side refcount > 0
+     * after the parent closes the master, preventing `tty_hangup()` from
+     * firing (no SIGHUP for the session leader).
+     *
+     * On macOS an anchor slave fd is also opened and held for the master's
+     * lifetime to prevent the kernel from zeroing the PTY winsize between
+     * this call and the first `proc_open` that wires the child's stdio.
+     *
+     * @param int $cols Terminal column count (default 80).
+     * @param int $rows Terminal row count (default 24).
+     * @return PtyPair
+     * @see creack/pty.Open()
+     * @see portable-pty.PtySystem
+     */
     public function open(int $cols = 80, int $rows = 24): PtyPair
     {
         $libc = \SugarCraft\Pty\Libc::lib();
