@@ -40,35 +40,6 @@
         "sugarcraft/candy-vt": "Enables ScreenAssertion for cell-grid frame comparison; ByteAssertion is used otherwise.",
         "symfony/yaml": "Enables YamlFormat for human-readable cassettes (test fixtures, hand-written replays); JsonlFormat is the primary format."
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../candy-pty",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/candy-core"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/candy-sprinkles"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/candy-vt"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/honey-bounce"
-        },
-        {
-            "type": "vcs",
-            "url": "https://github.com/sugarcraft/candy-zone"
-        }
-    ],
     "autoload": {
         "psr-4": {
             "SugarCraft\\Vcr\\": "src/"
