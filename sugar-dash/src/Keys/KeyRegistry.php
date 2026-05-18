@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Keys;
 
-use SugarCraft\Dash\Events\Key;
+use SugarCraft\Dash\Keys\Key;
 
 /**
  * Central registry for key bindings.

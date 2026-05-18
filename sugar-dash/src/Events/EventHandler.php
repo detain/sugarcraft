@@ -10,5 +10,9 @@ namespace SugarCraft\Dash\Events;
  * @template T of Event
  * @param T $event
  * @return void
+ *
+ * @note PHP 8.3: use callable. This interface serves as documentation.
  */
-type EventHandler = callable;
+interface EventHandler
+{
+}
