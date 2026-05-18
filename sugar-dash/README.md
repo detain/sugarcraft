@@ -112,6 +112,7 @@ composer require sugarcraft/sugar-dash
 | `Screen` | Terminal screen container | | |
 | `Viewport` | Scrollable viewport | | |
 | `Sidebar` | Sidebar navigation panel | | ![](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/sidebar.gif) |
+| `Breakpoint` | Static helpers for responsive breakpoints — `narrow()`/`medium()`/`wide()`/`pick()` (default thresholds 90/140, Homedash convention) | `narrow(int $width, int $threshold = 90): bool`, `medium(int $width, int $narrow = 90, int $wide = 140): bool`, `wide(int $width, int $threshold = 140): bool`, `pick(int $width, array $thresholds): string` | |
 | `Pad` | Padding wrapper (formerly Boxer) | | |
 
 ---
