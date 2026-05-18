@@ -4,8 +4,8 @@ require_once __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Dash\Components\Card\Comment;
 use SugarCraft\Dash\Grid\ChartDataPoint;
-use SugarCraft\Dash\Grid\Options;
-use SugarCraft\Dash\Grid\ItemOptions;
+use SugarCraft\Dash\Layout\Grid\Options;
+use SugarCraft\Dash\Layout\Grid\ItemOptions;
 
 // Comment display
 $component = Comment::create("John Doe", "Great work on this project!");

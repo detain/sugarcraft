@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Layout\AlignItems;
+use SugarCraft\Dash\Layout\JustifyContent;
 
 /**
  * A flexbox-style layout component.
@@ -29,8 +31,8 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         private readonly array $items = [],
         private readonly FlexDirection $direction = FlexDirection::Row,
         private readonly FlexWrap $wrap = FlexWrap::NoWrap,
-        private readonly \SugarCraft\Dash\Grid\JustifyContent $justify = \SugarCraft\Dash\Grid\JustifyContent::Start,
-        private readonly \SugarCraft\Dash\Grid\AlignItems $alignItems = \SugarCraft\Dash\Grid\AlignItems::Start,
+        private readonly JustifyContent $justify = JustifyContent::Start,
+        private readonly AlignItems $alignItems = AlignItems::Start,
         private readonly int $gap = 0,
     ) {}
 
@@ -45,8 +47,8 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
             items: $items,
             direction: FlexDirection::Row,
             wrap: FlexWrap::NoWrap,
-            justify: \SugarCraft\Dash\Grid\JustifyContent::Start,
-            alignItems: \SugarCraft\Dash\Grid\AlignItems::Start,
+            justify: JustifyContent::Start,
+            alignItems: AlignItems::Start,
             gap: 0,
         );
     }
@@ -62,8 +64,8 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
             items: $items,
             direction: FlexDirection::Column,
             wrap: FlexWrap::NoWrap,
-            justify: \SugarCraft\Dash\Grid\JustifyContent::Start,
-            alignItems: \SugarCraft\Dash\Grid\AlignItems::Start,
+            justify: JustifyContent::Start,
+            alignItems: AlignItems::Start,
             gap: 0,
         );
     }
@@ -370,12 +372,12 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         $extraSpace = $totalWidth - $contentWidth - $totalGapWidth;
 
         return match ($this->justify) {
-            \SugarCraft\Dash\Grid\JustifyContent::Start, \SugarCraft\Dash\Grid\JustifyContent::FlexStart => $itemWidths,
-            \SugarCraft\Dash\Grid\JustifyContent::End, \SugarCraft\Dash\Grid\JustifyContent::FlexEnd => $itemWidths, // Right-aligned via padding in render
-            \SugarCraft\Dash\Grid\JustifyContent::Center => $itemWidths, // Centered via padding in render
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceBetween => $this->distributeSpaceBetween($itemWidths, $extraSpace),
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceAround => $this->distributeSpaceAround($itemWidths, $extraSpace),
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceEvenly => $this->distributeSpaceEvenly($itemWidths, $extraSpace),
+            JustifyContent::Start, JustifyContent::FlexStart => $itemWidths,
+            JustifyContent::End, JustifyContent::FlexEnd => $itemWidths, // Right-aligned via padding in render
+            JustifyContent::Center => $itemWidths, // Centered via padding in render
+            JustifyContent::SpaceBetween => $this->distributeSpaceBetween($itemWidths, $extraSpace),
+            JustifyContent::SpaceAround => $this->distributeSpaceAround($itemWidths, $extraSpace),
+            JustifyContent::SpaceEvenly => $this->distributeSpaceEvenly($itemWidths, $extraSpace),
         };
     }
 
@@ -398,12 +400,12 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         $extraSpace = $totalHeight - $contentHeight - $totalGapHeight;
 
         return match ($this->justify) {
-            \SugarCraft\Dash\Grid\JustifyContent::Start, \SugarCraft\Dash\Grid\JustifyContent::FlexStart => $itemHeights,
-            \SugarCraft\Dash\Grid\JustifyContent::End, \SugarCraft\Dash\Grid\JustifyContent::FlexEnd => $itemHeights,
-            \SugarCraft\Dash\Grid\JustifyContent::Center => $itemHeights,
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceBetween => $this->distributeSpaceBetween($itemHeights, $extraSpace),
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceAround => $this->distributeSpaceAround($itemHeights, $extraSpace),
-            \SugarCraft\Dash\Grid\JustifyContent::SpaceEvenly => $this->distributeSpaceEvenly($itemHeights, $extraSpace),
+            JustifyContent::Start, JustifyContent::FlexStart => $itemHeights,
+            JustifyContent::End, JustifyContent::FlexEnd => $itemHeights,
+            JustifyContent::Center => $itemHeights,
+            JustifyContent::SpaceBetween => $this->distributeSpaceBetween($itemHeights, $extraSpace),
+            JustifyContent::SpaceAround => $this->distributeSpaceAround($itemHeights, $extraSpace),
+            JustifyContent::SpaceEvenly => $this->distributeSpaceEvenly($itemHeights, $extraSpace),
         };
     }
 
@@ -471,11 +473,11 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         $top = match ($this->alignItems) {
-            \SugarCraft\Dash\Grid\AlignItems::Start, \SugarCraft\Dash\Grid\AlignItems::FlexStart => 0,
-            \SugarCraft\Dash\Grid\AlignItems::End, \SugarCraft\Dash\Grid\AlignItems::FlexEnd => $padding,
-            \SugarCraft\Dash\Grid\AlignItems::Center => (int) floor($padding / 2),
-            \SugarCraft\Dash\Grid\AlignItems::Stretch => 0,
-            \SugarCraft\Dash\Grid\AlignItems::Baseline => 0,
+            AlignItems::Start, AlignItems::FlexStart => 0,
+            AlignItems::End, AlignItems::FlexEnd => $padding,
+            AlignItems::Center => (int) floor($padding / 2),
+            AlignItems::Stretch => 0,
+            AlignItems::Baseline => 0,
         };
 
         // Add top padding
@@ -510,9 +512,9 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
         $padding = $totalWidth - $lineWidth;
 
         return match ($this->justify) {
-            \SugarCraft\Dash\Grid\JustifyContent::Start, \SugarCraft\Dash\Grid\JustifyContent::FlexStart => $line . str_repeat(' ', $padding),
-            \SugarCraft\Dash\Grid\JustifyContent::End, \SugarCraft\Dash\Grid\JustifyContent::FlexEnd => str_repeat(' ', $padding) . $line,
-            \SugarCraft\Dash\Grid\JustifyContent::Center => $this->centerAlign($line, $lineWidth, $totalWidth),
+            JustifyContent::Start, JustifyContent::FlexStart => $line . str_repeat(' ', $padding),
+            JustifyContent::End, JustifyContent::FlexEnd => str_repeat(' ', $padding) . $line,
+            JustifyContent::Center => $this->centerAlign($line, $lineWidth, $totalWidth),
             default => $line . str_repeat(' ', $padding),
         };
     }
@@ -638,7 +640,7 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Set the justify content property.
      */
-    public function withJustify(\SugarCraft\Dash\Grid\JustifyContent $justify): self
+    public function withJustify(JustifyContent $justify): self
     {
         return new self(
             items: $this->items,
@@ -653,7 +655,7 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
     /**
      * Set the align items property.
      */
-    public function withAlignItems(\SugarCraft\Dash\Grid\AlignItems $alignItems): self
+    public function withAlignItems(AlignItems $alignItems): self
     {
         return new self(
             items: $this->items,
