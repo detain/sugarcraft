@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Components\GridTable;
 
-use SugarCraft\Dash\Grid\Frame;
+use SugarCraft\Dash\Layout\Frame;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Layout\Grid\ItemOptions;
 use SugarCraft\Dash\Layout\Grid\Options;

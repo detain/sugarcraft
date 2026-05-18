@@ -2,22 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\FocusEvent
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Focus event.
- */
-final class FocusEvent extends Event
-{
-    public function __construct(
-        int $timestamp,
-        public readonly bool $gained,
-    ) {
-        parent::__construct($timestamp);
-    }
+use SugarCraft\Dash\Events\FocusEvent as CanonicalFocusEvent;
 
-    public function getType(): string
-    {
-        return 'focus';
-    }
-}
+class_alias(CanonicalFocusEvent::class, __NAMESPACE__ . '\FocusEvent');
