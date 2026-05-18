@@ -111,6 +111,11 @@ step 02.02 · PR#521 · candy-sprinkles: StyleParser SSOT port from sugar-dash (
 review for step 02.02 · clean · PR#521
 docs for step 02.02 · clean
 step 02.03 · PR#522 · candy-palette: Probe class (colorProfile/isNoColor/isForceColor/reducedMotion) + ColorProfile enum (NoTTY/Ascii/Ansi/Ansi256/TrueColor)
+review for step 02.03 · clean · PR#522
+
+## Open review findings — 02.03
+
+- [ ] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry)
 
 ## Open review findings — 01.08
 
