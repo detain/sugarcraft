@@ -50,13 +50,15 @@ composer require sugarcraft/sugar-dash
 
 | Type | Description | Key Methods |
 |------|-------------|-------------|
-| `Cell` | Single terminal cell (rune + style) | |
-| `Buffer` | Cell grid buffer for drawing | `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
-| `Rect` | Rectangle geometry | `contains()`, `intersect()`, `dx()`, `dy()` |
-| `Style` | Terminal styling (colors, attributes) | `fg()`, `bg()`, `bold()`, etc. |
-| `StyleParser` | ParseStyles inline syntax `[text](fg:red,bg:blue)` | |
-| `Color` | Color representation | |
-| `Theme` | Pre-defined theme palettes | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+| `Cell` | Single terminal cell (rune + Style) — sugar-dash SSOT, distinct from `\SugarCraft\Vt\Cell\Cell` | |
+| `Buffer` | Cell grid buffer for drawing — sugar-dash SSOT, distinct from `\SugarCraft\Vt\Buffer\Buffer` | `getCell(x,y)`, `setCell(x,y,Cell)`, `fill(rect,Cell)` |
+| `Rect` | Rectangle geometry (rectmath bounds model: minX/minY/maxX/maxY) — distinct from `\SugarCraft\Core\Rect` (offset+size model) | `contains()`, `intersect()`, `dx()`, `dy()` |
+| `Style` | Terminal styling (inline foreground/background Color slots) — sugar-dash SSOT, distinct from `\SugarCraft\Sprinkles\Style` (lipgloss padding/margin/borders) | `fg()`, `bg()`, `bold()`, etc. |
+| `StyleParser` | Parses `[text](fg:red,bg:blue)` into Dash Cell arrays — sugar-dash SSOT, NOT drop-in compatible with `\SugarCraft\Sprinkles\StyleParser` | |
+| `Color` | Backward-compat alias for `\SugarCraft\Core\Util\Color` (true duplicate, replaced by `class_alias` shim — prefer Core import in new code) | |
+| `Theme` | Pre-defined theme palettes (10 colour slots + helpers) — sugar-dash SSOT, distinct from `\SugarCraft\Sprinkles\Theme` (13 slots, readonly only) | `dark()`, `dracula()`, `oneDark()`, `githubDark()`, `light()` |
+
+> **Dual-SSOT note.** Five Foundation primitives (`Style`/`Theme`/`Rect`/`Buffer`/`Cell`) plus `StyleParser` are intentionally distinct from same-named canonical types in `candy-sprinkles`/`candy-core`/`candy-vt`. The lineage differs (charmbracelet/inline-termui for sugar-dash, lipgloss/ratatui/VT-emulator for the others) and the API shapes diverge. Only `Color` was a true duplicate and is now a `class_alias` to `\SugarCraft\Core\Util\Color`. See `CALIBER_LEARNINGS.md` entries `[pattern:dual-foundation-ssot]`, `[pattern:dual-style-ssot]`, `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`, `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]`.
 
 ---
 
