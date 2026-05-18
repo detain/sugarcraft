@@ -535,6 +535,9 @@ cd sugar-dash && composer install && vendor/bin/phpunit
 | ![Dashboard Interactive](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-interactive.gif) | Interactive components demo |
 | ![Dashboard Media](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-media.gif) | Media components demo |
 | ![Dashboard Metrics](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-metrics.gif) | Metrics display demo |
+| ![Boxer](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/boxer.gif) | **Three-panel Boxer layout** — horizontal split with three named leaves and visual focus indicator |
+| ![GridTable](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/gridtable.gif) | **Sortable/filterable GridTable** — pagination, column sort, text filter across 25 rows |
+| ![Plot Braille](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/plot-braille.gif) | **Plot marker comparison** — side-by-side MarkerDot vs MarkerBraille rendering |
 
 ## Example Demos
 
