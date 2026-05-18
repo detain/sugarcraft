@@ -1,0 +1,64 @@
+# syntax=docker/dockerfile:1.7
+#
+# VHS demo runner — used by .github/workflows/vhs.yml.
+#
+# Bakes in: vhs, ttyd, ffmpeg, PHP 8.3 + required extensions, composer.
+# The render job in vhs.yml uses this image so it never has to hit
+# GitHub release APIs at render time. Image is rebuilt weekly (Monday
+# 06:00 UTC) by .github/workflows/vhs-runner-image.yml, which resolves
+# the latest vhs + ttyd tags and passes them as build args.
+#
+# Build locally for testing:
+#   docker build \
+#       --build-arg VHS_VERSION=v0.10.0 \
+#       --build-arg TTYD_VERSION=1.7.7 \
+#       -t vhs-runner:local scripts/vhs-runner
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        ffmpeg \
+        git \
+        jq \
+        unzip \
+        php8.3-cli \
+        php8.3-curl \
+        php8.3-intl \
+        php8.3-mbstring \
+        php8.3-sqlite3 \
+        php8.3-xml \
+        php8.3-zip \
+        php-ssh2 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sS https://getcomposer.org/installer | php -- \
+        --install-dir=/usr/local/bin --filename=composer
+
+ARG VHS_VERSION
+ARG TTYD_VERSION
+
+RUN test -n "$VHS_VERSION" && test -n "$TTYD_VERSION" \
+    && vhs_ver="${VHS_VERSION#v}" \
+    && curl -fsSL -o /tmp/vhs.tar.gz \
+        "https://github.com/charmbracelet/vhs/releases/download/${VHS_VERSION}/vhs_${vhs_ver}_Linux_x86_64.tar.gz" \
+    && tar -xz -f /tmp/vhs.tar.gz -C /usr/local/bin --strip-components=1 --wildcards '*/vhs' \
+    && rm /tmp/vhs.tar.gz \
+    && chmod +x /usr/local/bin/vhs
+
+RUN curl -fsSL -o /usr/local/bin/ttyd \
+        "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.x86_64" \
+    && chmod +x /usr/local/bin/ttyd
+
+RUN vhs --version \
+    && ttyd --version \
+    && ffmpeg -version | head -1 \
+    && php --version \
+    && composer --version
+
+LABEL org.opencontainers.image.source="https://github.com/detain/sugarcraft"
+LABEL org.opencontainers.image.description="VHS demo runner — vhs + ttyd + ffmpeg + PHP 8.3"
+LABEL org.opencontainers.image.licenses="MIT"
