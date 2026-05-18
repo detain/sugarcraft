@@ -228,6 +228,97 @@ $weather = new WeatherModule(new MockWeatherClient(), 'test-location');
 `HttpClient::fetch()` throws `RuntimeException` on network failure; the module
 catches it and falls back to cache.
 
+### NotificationQueue — dual-ring pattern
+
+`Components\Toast\NotificationQueue` implements a dual-ring queue per
+Homedash pattern:
+
+```
+items[max 20]  ── active, dismissable ring
+history[max 50] ── append-only ring
+```
+
+At small max sizes, two plain PHP arrays with `array_shift`/`[]=` achieve
+O(1) amortized push and O(1) dismiss — no true ring buffer required.
+Do NOT use `list` type hint (PHP 8.4 only — project is PHP 8.3); use `array`
+with `@var list<T>` doc annotation.
+
+#### Core operations
+
+```php
+use SugarCraft\Dash\Components\Toast\{NotificationQueue, Notification, Level};
+
+// Push a notification onto the active ring
+$queue = NotificationQueue::new()
+    ->push(Notification::info('System online'))
+    ->push(Notification::warning('CPU > 80%', title: 'High Load'))
+    ->push(Notification::error('Disk full', title: 'Storage Alert'));
+
+// Peek at the head (oldest active notification)
+$current = $queue->current();  // Notification|null
+
+// Dismiss the head — moves it to history
+$queue = $queue->dismiss();    // returns same instance if items is empty
+
+// Fetch recent history (newest-first)
+$recent = $queue->recent(5);   // list<Notification>
+
+// All active items / all history
+$all = $queue->all();          // list<Notification>
+$hist = $queue->history();    // list<Notification>, oldest-first
+```
+
+#### Capacity eviction
+
+When `items` is at capacity (20), pushing a new notification evicts the
+oldest item into `history` before adding the new one. When `history` exceeds
+50, its oldest entry is evicted. Both rings are bounded independently.
+
+```php
+// Adjust ring sizes
+$queue = (new NotificationQueue(maxItems: 10, maxHistory: 25))
+    ->push(Notification::info('msg'));
+
+// Clone with different limits
+$queue = $queue->withMaxItems(5)->withMaxHistory(100);
+```
+
+#### Level enum
+
+`Level` is a PHP 8.1 enum with four cases:
+
+```php
+use SugarCraft\Dash\Components\Toast\Level;
+
+Level::Info->icon();          // 'ℹ'
+Level::Warning->icon();       // '⚠'
+Level::Error->icon();        // '✖'
+Level::Success->icon();      // '✓'
+
+Level::Error->isError();    // true
+Level::Warning->isHighlighted();  // true (Warning|Error)
+Level::Info->isHighlighted();   // false
+```
+
+#### Toast adapters
+
+`Toast` provides two factory adapters to bridge the Notification DTO into
+styled toast output:
+
+```php
+use SugarCraft\Dash\Components\Toast\{Toast, NotificationQueue, Notification};
+
+// From a single notification
+$toast = Toast::fromNotification(Notification::warning('Check the logs'));
+
+// From a queue — renders the current head, or null if queue is empty
+$queue = NotificationQueue::new()->push(Notification::success('Done!'));
+$toast = Toast::fromQueue($queue);  // Toast|null
+```
+
+Each `Level` maps to a distinct colour scheme (Info → blue, Warning → amber,
+Error → red, Success → green). The adapter preserves the `title` if set.
+
 ---
 
 ## Testing your extension
