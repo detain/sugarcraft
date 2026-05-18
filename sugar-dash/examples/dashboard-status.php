@@ -8,7 +8,9 @@ use SugarCraft\Dash\Components\Card\{Text, Card};
 use SugarCraft\Dash\Components\Feedback\{Spinner, Skeleton};
 use SugarCraft\Dash\Components\System\{NProgress, ProgressBar};
 use SugarCraft\Dash\Components\Toast\Toast;
-use SugarCraft\Dash\Components\Modal\{Alert, Notification};
+use SugarCraft\Dash\Components\Toast\Notification;
+use SugarCraft\Dash\Components\Toast\NotificationQueue;
+use SugarCraft\Dash\Components\Modal\{Alert, Notification as ModalNotification};
 
 /**
  * Dashboard Status - showcasing status and feedback components
@@ -82,16 +84,24 @@ $grid->addItem(
 // ============================================
 // ROW 3: Notifications (3 columns)
 // ============================================
-$toast = Toast::new('Changes saved successfully!');
-$toastFrame = Card::titled($toast, 'Toast');
-
 $alert = Alert::new('Warning: Your subscription expires in 3 days.');
 $alertFrame = Card::titled($alert, 'Alert');
 
-$notification = Notification::new('5 new messages');
-$notificationFrame = Card::titled($notification, 'Notification');
+$modalNotification = ModalNotification::new('5 new messages');
+$modalNotificationFrame = Card::titled($modalNotification, 'Notification');
 
-$notificationRow = HStack::spaced(1, $toastFrame, $alertFrame, $notificationFrame);
+// NotificationQueue demo — push 5 notifications then render current head
+$queue = NotificationQueue::new()
+    ->push(Notification::success('Deployment complete'))
+    ->push(Notification::info('Sync started', 'Background'))
+    ->push(Notification::warning('Cache nearly full'))
+    ->push(Notification::error('Connection timeout'))
+    ->push(Notification::info('User session renewed'));
+
+$queueToast = Toast::fromQueue($queue);
+$toastFrame = Card::titled($queueToast ?? Toast::new('Queue empty'), 'NotificationQueue (5 items)');
+
+$notificationRow = HStack::spaced(1, $toastFrame, $alertFrame, $modalNotificationFrame);
 $grid->addItem(
     $notificationRow,
     new ItemOptions(column: 0, expandVertical: false)

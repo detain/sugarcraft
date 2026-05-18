@@ -5,184 +5,202 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Components\Toast;
 
 /**
- * Manages a queue of toast notifications for sequential display.
+ * Dual-ring notification queue per Homedash pattern.
  *
- * Handles:
- * - Adding toasts to the queue
- * - Retrieving next toast to display
- * - Tracking position and timing
- * - Dismissing toasts
+ * - items[max 20]  — active, dismissable ring.
+ * - history[max 50] — append-only ring.
+ *
+ * Uses two-slice semantics (not a true ring buffer) — appropriate for
+ * the small max sizes. New items push onto items; dismissing moves the
+ * head to history. Both rings evict oldest entries when full.
  */
 final class NotificationQueue
 {
     /**
-     * @var array<int, Toast>
+     * @var list<Notification>
      */
-    private array $queue = [];
-
-    private int $currentIndex = 0;
-
-    private ?NoticePosition $position = null;
-
-    private int $maxVisible = 3;
-
-    public function __construct(
-        private readonly int $displayDuration = 3000,
-    ) {}
+    private array $items;
 
     /**
-     * Add a toast to the queue.
+     * @var list<Notification>
      */
-    public function add(Toast $toast): self
+    private array $history;
+
+    public function __construct(
+        /**
+         * Maximum active notifications kept in the items ring.
+         */
+        private readonly int $maxItems = 20,
+        /**
+         * Maximum historical notifications kept in the history ring.
+         */
+        private readonly int $maxHistory = 50,
+    ) {
+        $this->items = [];
+        $this->history = [];
+    }
+
+    public static function new(): self
     {
-        $clone = clone $this;
-        $clone->queue[] = $toast;
+        return new self();
+    }
+
+    /**
+     * Push a notification onto the items ring.
+     *
+     * If items is at capacity, the oldest item is evicted to history
+     * before the new one is added.
+     */
+    public function push(Notification $notification): self
+    {
+        $clone = $this->mutate();
+
+        if (count($clone->items) >= $this->maxItems) {
+            $evicted = array_shift($clone->items);
+            if ($evicted !== null) {
+                $clone->history[] = $evicted;
+                if (count($clone->history) > $clone->maxHistory) {
+                    array_shift($clone->history);
+                }
+            }
+        }
+
+        $clone->items[] = $notification;
+
         return $clone;
     }
 
     /**
-     * Add a toast with a specific level to the queue.
+     * Dismiss the head of the items ring, moving it to history.
+     *
+     * Returns a new instance. If items is empty, returns same instance.
      */
-    public function addWithLevel(string $message, Level $level): self
+    public function dismiss(): self
     {
-        $toast = match ($level) {
-            Level::Info => Toast::info($message),
-            Level::Warning => Toast::warning($message),
-            Level::Error => Toast::error($message),
-            Level::Success => Toast::success($message),
-        };
+        if ($this->items === []) {
+            return $this;
+        }
 
-        return $this->add($toast);
+        $clone = $this->mutate();
+        $dismissed = array_shift($clone->items);
+
+        if ($dismissed !== null) {
+            $clone->history[] = $dismissed;
+            if (count($clone->history) > $clone->maxHistory) {
+                array_shift($clone->history);
+            }
+        }
+
+        return $clone;
     }
 
     /**
-     * Get all queued toasts.
+     * Return the head of the items ring, or null if empty.
+     */
+    public function current(): ?Notification
+    {
+        return $this->items[0] ?? null;
+    }
+
+    /**
+     * Return the last $n notifications from history, newest-first.
      *
-     * @return array<int, Toast>
+     * @return list<Notification>
+     */
+    public function recent(int $n): array
+    {
+        if ($n <= 0 || $this->history === []) {
+            return [];
+        }
+
+        $count = min($n, count($this->history));
+        return array_slice(array_reverse($this->history), 0, $count);
+    }
+
+    /**
+     * Return all active items.
+     *
+     * @return list<Notification>
      */
     public function all(): array
     {
-        return $this->queue;
+        return $this->items;
     }
 
     /**
-     * Get the number of toasts in the queue.
+     * Return all history items, oldest-first.
+     *
+     * @return list<Notification>
+     */
+    public function history(): array
+    {
+        return $this->history;
+    }
+
+    /**
+     * Return the number of active items.
      */
     public function count(): int
     {
-        return count($this->queue);
+        return count($this->items);
     }
 
     /**
-     * Check if the queue is empty.
+     * Return the number of history items.
+     */
+    public function historyCount(): int
+    {
+        return count($this->history);
+    }
+
+    /**
+     * Check if the items ring is empty.
      */
     public function isEmpty(): bool
     {
-        return empty($this->queue);
+        return $this->items === [];
     }
 
     /**
-     * Get the next toast to display.
+     * Check if history has any entries.
      */
-    public function next(): ?Toast
+    public function hasHistory(): bool
     {
-        if ($this->currentIndex >= count($this->queue)) {
-            return null;
-        }
-
-        return $this->queue[$this->currentIndex];
+        return $this->history !== [];
     }
 
     /**
-     * Advance to the next toast in the queue.
+     * Create a new instance with a different maxItems.
      */
-    public function advance(): self
+    public function withMaxItems(int $maxItems): self
     {
-        $clone = clone $this;
-        $clone->currentIndex++;
+        $clone = $this->mutate();
+        return new self(
+            maxItems: $maxItems,
+            maxHistory: $clone->maxHistory,
+        );
+    }
+
+    /**
+     * Create a new instance with a different maxHistory.
+     */
+    public function withMaxHistory(int $maxHistory): self
+    {
+        $clone = $this->mutate();
+        return new self(
+            maxItems: $clone->maxItems,
+            maxHistory: $maxHistory,
+        );
+    }
+
+    private function mutate(): self
+    {
+        $clone = new self(
+            maxItems: $this->maxItems,
+            maxHistory: $this->maxHistory,
+        );
+        $clone->items = $this->items;
+        $clone->history = $this->history;
         return $clone;
-    }
-
-    /**
-     * Reset the queue to the beginning.
-     */
-    public function reset(): self
-    {
-        $clone = clone $this;
-        $clone->currentIndex = 0;
-        return $clone;
-    }
-
-    /**
-     * Clear all toasts from the queue.
-     */
-    public function clear(): self
-    {
-        $clone = clone $this;
-        $clone->queue = [];
-        $clone->currentIndex = 0;
-        return $clone;
-    }
-
-    /**
-     * Get the display duration in milliseconds.
-     */
-    public function getDisplayDuration(): int
-    {
-        return $this->displayDuration;
-    }
-
-    /**
-     * Set the position for toasts.
-     */
-    public function withPosition(NoticePosition $position): self
-    {
-        $clone = clone $this;
-        $clone->position = $position;
-        return $clone;
-    }
-
-    /**
-     * Get the position for toasts.
-     */
-    public function getPosition(): ?NoticePosition
-    {
-        return $this->position;
-    }
-
-    /**
-     * Set the maximum number of visible toasts at once.
-     */
-    public function withMaxVisible(int $max): self
-    {
-        $clone = clone $this;
-        $clone->maxVisible = $max;
-        return $clone;
-    }
-
-    /**
-     * Get the maximum number of visible toasts at once.
-     */
-    public function getMaxVisible(): int
-    {
-        return $this->maxVisible;
-    }
-
-    /**
-     * Check if there are more toasts to display.
-     */
-    public function hasMore(): bool
-    {
-        return $this->currentIndex < count($this->queue);
-    }
-
-    /**
-     * Get visible toasts (for multi-toast display).
-     *
-     * @return array<int, Toast>
-     */
-    public function getVisible(): array
-    {
-        return array_slice($this->queue, $this->currentIndex, $this->maxVisible);
     }
 }
