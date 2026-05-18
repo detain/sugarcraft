@@ -188,6 +188,18 @@ final class PosixMasterPty implements MasterPty
     }
 
     /**
+     * Close the master PTY fd.
+     *
+     * If a stream was materialised via {@see stream()}, `fclose()` is
+     * called first. Because `fopen('php://fd/N')` dup()s the fd (php-src
+     * plain_wrapper.c), `fclose` only closes the duplicate — the original
+     * fd from `posix_openpt` remains open and must be closed explicitly
+     * or the kernel's master-side refcount never reaches 0 and
+     * `tty_hangup()` never fires (no SIGHUP for the session leader).
+     * The fall-through libc `close()` handles the original fd.
+     *
+     * Idempotent — subsequent calls are no-ops.
+     *
      * @see creack/pty.Close()
      */
     public function close(): void
