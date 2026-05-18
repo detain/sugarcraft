@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Modules\Uptime;
 
+use SugarCraft\Core\Msg;
 use SugarCraft\Dash\Module\BaseModule;
 
 /**
@@ -11,33 +12,27 @@ use SugarCraft\Dash\Module\BaseModule;
  */
 final class UptimeModule extends BaseModule
 {
-    private string $uptime = 'unknown';
-
     public function name(): string
     {
         return 'uptime';
     }
 
-    public function init(): array
+    public function init(): ?\Closure
     {
-        $this->uptime = $this->readUptime();
-        return [
-            'name' => $this->name(),
-            'minSize' => [15, 3],
-            'interval' => 60,
-        ];
+        $this->readUptime();
+        return null;
     }
 
-    public function update(array $state): array
+    public function update(Msg $msg): array
     {
-        $this->uptime = $this->readUptime();
-        $state['uptime'] = $this->uptime;
-        return $state;
+        $uptime = $this->readUptimeFromProc();
+        return [$this->withState(['uptime' => $uptime]), null];
     }
 
-    public function view(array $state, int $width, int $height): string
+    public function view(): string
     {
-        return $this->uptime;
+        $state = $this->getState();
+        return $state['uptime'] ?? 'N/A';
     }
 
     public function minSize(): array
@@ -46,6 +41,11 @@ final class UptimeModule extends BaseModule
     }
 
     private function readUptime(): string
+    {
+        return $this->readUptimeFromProc();
+    }
+
+    private function readUptimeFromProc(): string
     {
         $uptimeData = @file_get_contents('/proc/uptime');
         if ($uptimeData === false) {
@@ -58,9 +58,9 @@ final class UptimeModule extends BaseModule
 
     private function formatUptime(float $seconds): string
     {
-        $days = (int) ($seconds / 86400);
-        $hours = (int) (($seconds % 86400) / 3600);
-        $minutes = (int) (($seconds % 3600) / 60);
+        $days = intval($seconds / 86400);
+        $hours = intval(($seconds % 86400) / 3600);
+        $minutes = intval(($seconds % 3600) / 60);
 
         if ($days > 0) {
             return "{$days}d {$hours}h {$minutes}m";
