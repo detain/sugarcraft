@@ -99,7 +99,8 @@ tests-ci for step 01.10 · PR#509 · add testFilteredHostEnvWithEmptyStringSkips
  docs for step 01.11 · PR#512 · document --fix in CONTRIBUTING.md + docblock
 step 01.12 · PR#513 · candy-pty: SIGHUP delivery fix (FD_CLOEXEC on master fd + libc close after fclose) + SignalForwarderReactLoop/SIGHUPForwarding/NoControllingTerminal integration tests; resolved blocker (was two narrow bugs, not a PHP architectural gap)
 tests-ci for step 01.12 · clean
-docs for step 01.12 · PR#515 · improve PHPDoc on PosixMasterPty::close() + PosixPtySystem::open(); log fd-dup-close-after-fclose and fd-cloexec-on-master in CALIBER
+ docs for step 01.12 · PR#515 · improve PHPDoc on PosixMasterPty::close() + PosixPtySystem::open(); log fd-dup-close-after-fclose and fd-cloexec-on-master in CALIBER
+step 01.13 · PR#516 · candy-mosaic + candy-core: TtyDetect static helper (TermiosFactory::open->isAtty) + WezTerm detection fix (Kitty only, not both Kitty+iTerm2) + tests
 
 ## Open review findings — 01.08
 
