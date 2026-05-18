@@ -145,8 +145,9 @@ docs for step 03.07 · PR#540 · document dashboard-live architecture in docs/de
 review for step 03.08 · clean · PR#541
  step 03.10 · PR#545 · sugar-dash: Breakpoint helper (narrow/medium/wide/pick) + StackedGrid collapse-to-single-column at width < 90; COLUMNS env var in dashboard-live
  review for step 03.10 · clean · PR#545
- tests-ci for step 03.10 · clean
- docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse)
+  tests-ci for step 03.10 · clean
+  docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse)
+ step 03.11 · PR#555 · sugar-dash: Plot::draw(Buffer) writes cells directly — BrailleCanvas::cells() generator + rewrite draw() to write Cell objects via $buffer->grid mutation (matching Buffer::draw() pattern); Buffer::$grid made public; 7 new tests in PlotDrawIntoBufferTest.php; 5136 tests green
 
 ## Open review findings — 03.05
 
