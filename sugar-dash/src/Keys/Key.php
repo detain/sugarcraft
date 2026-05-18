@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Dash\Events;
+namespace SugarCraft\Dash\Keys;
 
 /**
  * Represents a keyboard key combination.

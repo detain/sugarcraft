@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Events;
 
-use SugarCraft\Dash\Events\Key;
-use SugarCraft\Dash\Events\KeyAction;
-use SugarCraft\Dash\Events\KeyMap;
+use SugarCraft\Dash\Keys\Key;
+use SugarCraft\Dash\Keys\KeyAction;
+use SugarCraft\Dash\Keys\KeyMap;
 use SugarCraft\Dash\Components\Card\Text;
 use SugarCraft\Dash\Plot\Chart\Bar;
 use SugarCraft\Dash\Foundation\Item;
