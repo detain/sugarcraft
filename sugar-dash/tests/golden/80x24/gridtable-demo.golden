@@ -1,0 +1,29 @@
+PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
+# dimensions: 80x24 (80x24)
+# example: gridtable-demo
+---
+┏━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ID      ┃Name      ┃Email                 ┃Department      ┃Score     ┃Status        ┃
+┣━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━┫
+┃1       ┃Alice     ┃alice@acme.io         ┃Engineering     ┃103       ┃active        ┃
+┃2       ┃Bob       ┃bob@example.com       ┃Design          ┃106       ┃pending       ┃
+┃3       ┃Carol     ┃carol@test.org        ┃Product         ┃94        ┃inactive      ┃
+┃4       ┃Dave      ┃dave@demo.net         ┃Marketing       ┃97        ┃suspended     ┃
+┃5       ┃Eve       ┃eve@acme.io           ┃Sales           ┃100       ┃active        ┃
+┃6       ┃Frank     ┃frank@example.com     ┃Engineering     ┃88        ┃pending       ┃
+┃7       ┃Grace     ┃grace@test.org        ┃Design          ┃91        ┃inactive      ┃
+┃9       ┃Ivan      ┃ivan@acme.io          ┃Marketing       ┃82        ┃active        ┃
+┃10      ┃Judy      ┃judy@example.com      ┃Sales           ┃85        ┃pending       ┃
+┃12      ┃Laura     ┃laura@demo.net        ┃Design          ┃76        ┃suspended     ┃
+┃13      ┃Alice     ┃alice@acme.io         ┃Product         ┃79        ┃active        ┃
+┃14      ┃Bob       ┃bob@example.com       ┃Marketing       ┃82        ┃pending       ┃
+┃15      ┃Carol     ┃carol@test.org        ┃Sales           ┃70        ┃inactive      ┃
+┃16      ┃Dave      ┃dave@demo.net         ┃Engineering     ┃73        ┃suspended     ┃
+┃17      ┃Eve       ┃eve@acme.io           ┃Design          ┃76        ┃active        ┃
+┃18      ┃Frank     ┃frank@example.com     ┃Product         ┃64        ┃pending       ┃
+┃19      ┃Grace     ┃grace@test.org        ┃Marketing       ┃67        ┃inactive      ┃
+┃21      ┃Ivan      ┃ivan@acme.io          ┃Engineering     ┃58        ┃active        ┃
+┃22      ┃Judy      ┃judy@example.com      ┃Design          ┃61        ┃pending       ┃
+┃24      ┃Laura     ┃laura@demo.net        ┃Marketing       ┃52        ┃suspended     ┃
+┣━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━┫
+┗━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━┛
