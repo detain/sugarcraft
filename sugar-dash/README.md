@@ -457,6 +457,10 @@ All built-in modules extend `BaseModule` and use `withState()` for immutable sta
 | `Uptime\UptimeModule` | System uptime |
 | `Greeting\GreetingModule` | Time-of-day greeting |
 | `Generic\GenericModule` | Arbitrary shell command runner |
+| `Weather\WeatherModule` | Live weather from wttr.in + 30min cache + stale fallback |
+| `Weather\WttrInClient` | wttr.in J1 JSON API client implementing `HttpClient` |
+| `Weather\HttpClient` | Interface for weather fetch — allows test doubles |
+| `Weather\WeatherSnapshot` | Readonly DTO: `tempC`, `condition`, `location`, `fetchedAt` |
 
 ---
 
