@@ -102,6 +102,8 @@ tests-ci for step 01.12 · clean
  docs for step 01.12 · PR#515 · improve PHPDoc on PosixMasterPty::close() + PosixPtySystem::open(); log fd-dup-close-after-fclose and fd-cloexec-on-master in CALIBER
 step 01.13 · PR#516 · candy-mosaic + candy-core: TtyDetect static helper (TermiosFactory::open->isAtty) + WezTerm detection fix (Kitty only, not both Kitty+iTerm2) + tests
 review for step 01.13 · clean · PR#516
+docs for step 01.13 · clean
+step 01.14 · PR#517 · candy-core: Editor + Open use PosixProcess (leftover-rollout step 01.14)
 
 ## Open review findings — 01.08
 
