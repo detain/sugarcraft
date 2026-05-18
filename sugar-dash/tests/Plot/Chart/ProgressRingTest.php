@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Tests\Plot\Chart;
 
-use SugarCraft\Dash\Grid\ProgressRing;
+use SugarCraft\Dash\Plot\Chart\ProgressRing;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\Ansi;

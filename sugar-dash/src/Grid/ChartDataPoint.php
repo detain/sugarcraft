@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-// Re-export for backward compatibility — canonical class moved to Plot\Chart\ChartDataPoint.
+/**
+ * @deprecated Use SugarCraft\Dash\Plot\Chart\ChartDataPoint
+ */
 namespace SugarCraft\Dash\Grid;
 
-class_alias(\SugarCraft\Dash\Plot\Chart\ChartDataPoint::class, __NAMESPACE__ . '\ChartDataPoint');
+use SugarCraft\Dash\Plot\Chart\ChartDataPoint as CanonicalChartDataPoint;
+
+class_alias(CanonicalChartDataPoint::class, __NAMESPACE__ . '\ChartDataPoint');

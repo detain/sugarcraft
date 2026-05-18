@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
+/**
+ * @deprecated Use SugarCraft\Dash\Events\EventHandler
+ */
 namespace SugarCraft\Dash\Grid;
 
-/**
- * Event handler function type.
- *
- * @template T of Event
- * @param T $event
- * @return void
- */
+use SugarCraft\Dash\Events\EventHandler as CanonicalEventHandler;
+
+class_alias(CanonicalEventHandler::class, __NAMESPACE__ . '\EventHandler');
