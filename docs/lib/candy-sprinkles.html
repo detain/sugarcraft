@@ -50,7 +50,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Style, Border, Table, List, Tree, Layout::join, Place, multi-layer Canvas. Pure rendering — no I/O — so you can render frames inside a unit test.</p>
+    <p class="lede" style="margin-top: 28px;">Style, Border, Table, List, Tree, Layout::join, Place, multi-layer Canvas, and Theme — the canonical colour palette for all SugarCraft libs. Pure rendering — no I/O — so you can render frames inside a unit test.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-sprinkles</code></pre>
@@ -83,6 +83,7 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
       <div class="feature"><strong>List + Tree</strong><span>Bulleted lists and ASCII trees with custom enumerators.</span></div>
       <div class="feature"><strong>Layout</strong><span><code>joinHorizontal</code>, <code>joinVertical</code>, <code>place</code>, <code>placeOverlay</code> for popovers.</span></div>
       <div class="feature"><strong>Canvas</strong><span>Multi-layer compositor. Z-ordered overlays, alpha-aware merge, ideal for modals + tooltips.</span></div>
+      <div class="feature"><strong>Theme</strong><span>SSOT colour palette. 10 named factories (dark/light/dracula/tokyoNight/oneDark/githubDark/solarized*/ansi/adaptive). 13 colour slots (foreground/background/primary/secondary/accent/muted/error/warning/success/info/border/separator/cursor). All <code>with*()</code> setters return a new Theme.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -98,6 +99,8 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Theme</td><td>dark() / light() / dracula() / tokyoNight() / oneDark() / githubDark() / solarizedDark() / solarizedLight() / ansi() / adaptive()</td><td>Named theme factories</td></tr>
+<tr><td>Theme</td><td>withPrimary($c) / withForeground($c) / withBackground($c) / withError($c) / …</td><td>13 colour slot setters — all return a new Theme</td></tr>
 <tr><td>Style</td><td>new()</td><td>Create a new style</td></tr>
 <tr><td>Style</td><td>foreground(color)</td><td>Set foreground color</td></tr>
 <tr><td>Style</td><td>background(color)</td><td>Set background color</td></tr>
