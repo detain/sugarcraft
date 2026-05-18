@@ -98,6 +98,13 @@ int   close(int fd);
 int   open(const char *path, int flags);
 int   ioctl(int fd, unsigned long request, void *arg);
 
+/* fcntl is varargs in <fcntl.h> on Linux/macOS, but the int-arg form
+   (used here for F_SETFD/FD_CLOEXEC) is ABI-compatible with this
+   fixed-prototype cdef on every System V calling convention candy-pty
+   targets. Do NOT call commands that take a struct flock * through this
+   declaration — add a separate `int fcntl_lock(...)` cdef if needed. */
+int   fcntl(int fd, int cmd, int arg);
+
 /* termios — struct termios is treated as opaque (≥80 bytes) because
    layout differs across glibc/musl (60 bytes) and Darwin (72 bytes).
    Only call cfmakeraw/tcgetattr/tcsetattr; do NOT read individual fields. */

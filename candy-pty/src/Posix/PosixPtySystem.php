@@ -16,6 +16,12 @@ final class PosixPtySystem implements PtySystem
     /** `O_RDWR` flag — value identical on Linux and macOS. */
     private const O_RDWR = 0x0002;
 
+    /** `F_SETFD` — fcntl cmd to set the fd flags. Linux + macOS = 2. */
+    private const F_SETFD = 2;
+
+    /** `FD_CLOEXEC` — close-on-exec fd flag. Linux + macOS = 1. */
+    private const FD_CLOEXEC = 1;
+
     public function open(int $cols = 80, int $rows = 24): PtyPair
     {
         $libc = \SugarCraft\Pty\Libc::lib();
@@ -26,6 +32,13 @@ final class PosixPtySystem implements PtySystem
                 \SugarCraft\Pty\Lang::t('open.posix_openpt_failed', ['rc' => $masterFd])
             );
         }
+
+        // FD_CLOEXEC: proc_open wires fds 0-2 via descriptor spec; every
+        // other parent fd inherits across fork+exec. Without this the
+        // child holds an open reference to the master, the kernel's
+        // master-side refcount never drops to 0 on parent close, and
+        // tty_hangup() never fires (no SIGHUP for the session leader).
+        $libc->fcntl($masterFd, self::F_SETFD, self::FD_CLOEXEC);
 
         if ($libc->grantpt($masterFd) !== 0) {
             $libc->close($masterFd);
@@ -57,6 +70,10 @@ final class PosixPtySystem implements PtySystem
         if (\PHP_OS_FAMILY === 'Darwin') {
             $slaveFd = $libc->open($slavePath, self::O_RDWR | self::oNoCtty());
             if ($slaveFd >= 0) {
+                // Same fork+exec leak as the master fd above — the
+                // anchor only exists to keep the kernel slave-count ≥ 1
+                // in the PARENT, so it must not survive into the child.
+                $libc->fcntl($slaveFd, self::F_SETFD, self::FD_CLOEXEC);
                 $master->attachAnchorSlaveFd($slaveFd);
             }
             try {
