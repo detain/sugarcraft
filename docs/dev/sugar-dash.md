@@ -226,3 +226,59 @@ See `sugar-dash/CALIBER_LEARNINGS.md` entries
 `[pattern:dual-theme-ssot]`, `[pattern:dual-rect-models]`,
 `[pattern:dual-buffer-roles]`, `[pattern:dual-cell-shapes]` for the full
 investigation log.
+
+---
+
+## Interactive dashboard example (`examples/dashboard-live.php`)
+
+`sugar-dash/examples/dashboard-live.php` is the canonical end-to-end example
+of the `Module` + `Core\Model` + `Program` stack. It wires together:
+
+| Component | Role |
+|-----------|------|
+| `DashboardModel` implements `Model` | Root model driven by `Program`; holds modules, `FocusManager`, `Boxer` |
+| `Boxer` | Address-tree layout engine; `Node::horizontal()` assembles panels |
+| `FocusManager` | Tracks which panel has keyboard focus; `focusNext()`/`focusPrevious()` for Tab/arrow rotation |
+| `ClockModule` / `SystemModule` / `WeatherModule` | Three panels each implementing `Module` (init/update/view) |
+| `ProgramOptions` | `useAltScreen`, `catchInterrupts`, `hideCursor`, `openTty` for TTY session |
+| `Cmd::tick` | Per-panel periodic refresh: Clock at 1Hz, System at 2Hz, Weather at 30min |
+
+### Message routing
+
+`DashboardModel::update()` uses `msgToAddress()` to direct tick Msgs to the
+correct module:
+
+```php
+private function msgToAddress(Msg $msg): ?string
+{
+    return match (true) {
+        $msg instanceof ClockTickMsg => '0',
+        $msg instanceof SystemRefreshMsg => '1',
+        $msg instanceof WeatherTickMsg => '2',
+        default => null,  // broadcast to all
+    };
+}
+```
+
+Unknown Msgs (or `WindowSizeMsg`) are **broadcast** to all modules — they
+each return `[self, null]` if they don't handle the msg.
+
+### Keyboard handling
+
+`handleKey()` intercepts `KeyMsg` before routing:
+
+- `q` / `Ctrl-C` → return `false` so `update()` handles `QuitMsg`/`InterruptMsg`
+- `Tab` / `Shift+Tab` → `FocusManager::focusNext()`/`focusPrevious()`
+- `Up/Down/Left/Right` → `FocusManager::focusNext()` (all four cycle)
+
+`DashboardModel` does **not** keep its own tick — it just routes tick Cmds
+from the individual modules.
+
+### Running the example
+
+```bash
+php examples/dashboard-live.php
+```
+
+The example checks `stream_isatty(STDOUT)` and exits cleanly in CI/pipe
+environments rather than blocking on TTY input.
