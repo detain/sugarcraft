@@ -143,6 +143,10 @@ fix for step 03.07 · PR#539 · resolved 1 finding (dashboard-live already cover
 docs for step 03.07 · PR#540 · document dashboard-live architecture in docs/dev/sugar-dash.md (Boxer+FocusManager+DashboardModel pattern, per-panel tick routing, keyboard handling)
  step 03.08 · PR#541 · sugar-dash: WeatherModule with wttr.in fetch + 30min cache + fallback + 15 tests (leftover-rollout step 03.08)
 review for step 03.08 · clean · PR#541
+ step 03.10 · PR#545 · sugar-dash: Breakpoint helper (narrow/medium/wide/pick) + StackedGrid collapse-to-single-column at width < 90; COLUMNS env var in dashboard-live
+ review for step 03.10 · clean · PR#545
+ tests-ci for step 03.10 · clean
+ docs for step 03.10 · PR#546 · sugar-dash: document Breakpoint in README + dev docs (narrow/medium/wide/pick, thresholds 90/140, StackedGrid collapse)
 
 ## Open review findings — 03.05
 
