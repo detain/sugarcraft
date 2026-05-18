@@ -22,18 +22,26 @@ final class FocusManager
         $this->focusMap[$rootId] = true;
     }
 
-    public function focus(string $id): self
+    /**
+     * Set focus to a panel.
+     *
+     * Note: $id is not type-hinted as string because PHP array_keys()
+     * returns int for numeric string keys. Callers must cast to string
+     * before passing, or this method will coerce internally.
+     */
+    public function focus(string|int $id): self
     {
+        $key = (string) $id;
         $clone = clone $this;
-        $clone->focusedId = $id;
-        $clone->focusMap[$id] = true;
+        $clone->focusedId = $key;
+        $clone->focusMap[$key] = true;
         return $clone;
     }
 
     public function blur(string $id): self
     {
         $clone = clone $this;
-        $clone->focusMap[$id] = false;
+        $clone->focusMap[(string) $id] = false;
         if ($clone->focusedId === $id) {
             $clone->focusedId = null;
         }
@@ -42,7 +50,7 @@ final class FocusManager
 
     public function isFocused(string $id): bool
     {
-        return $this->focusedId === $id && ($this->focusMap[$id] ?? false);
+        return $this->focusedId === (string) $id && ($this->focusMap[(string) $id] ?? false);
     }
 
     public function getFocusedId(): ?string
@@ -80,21 +88,23 @@ final class FocusManager
         return $this->focus($ids[$prevIndex]);
     }
 
-    public function register(string $id): self
+    public function register(string|int $id): self
     {
-        if (isset($this->focusMap[$id])) {
+        $key = (string) $id;
+        if (isset($this->focusMap[$key])) {
             return $this;
         }
         $clone = clone $this;
-        $clone->focusMap[$id] = false;
+        $clone->focusMap[$key] = false;
         return $clone;
     }
 
-    public function unregister(string $id): self
+    public function unregister(string|int $id): self
     {
+        $key = (string) $id;
         $clone = clone $this;
-        unset($clone->focusMap[$id]);
-        if ($clone->focusedId === $id) {
+        unset($clone->focusMap[$key]);
+        if ($clone->focusedId === $key) {
             $clone->focusedId = null;
         }
         return $clone;
