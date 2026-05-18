@@ -12,6 +12,14 @@ use SugarCraft\Core\Util\Color;
  * Format: [text](fg:red,bg:blue,bold,italic,underline)
  *
  * Mirrors termui's style parsing state machine.
+ *
+ * Sugar-dash SSOT. Intentionally distinct from \SugarCraft\Sprinkles\StyleParser
+ * — this parser produces Dash\Foundation\Cell/Style (public readonly ?Color
+ * $foreground on Style), while Sprinkles\StyleParser produces Sprinkles\Cell/Style
+ * (private $fg/$bg; no public Color field). Tests access $cell->style->foreground->r
+ * which requires the Dash Style shape. Do NOT alias to Sprinkles\StyleParser.
+ *
+ * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-foundation-ssot].
  */
 final class StyleParser
 {
