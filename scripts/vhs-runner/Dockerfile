@@ -89,6 +89,15 @@ RUN vhs --version \
     && php --version \
     && composer --version
 
+# Chromium refuses to launch as root (crbug.com/638180), so vhs renders
+# fail in container jobs unless we drop privileges. Match the
+# github-hosted runner's UID/GID (1001:1001) so the workspace
+# bind-mount permissions stay correct for composer install and the
+# rendered .gif output.
+RUN groupadd -g 1001 vhs \
+    && useradd -m -u 1001 -g vhs -s /bin/bash vhs
+USER vhs
+
 LABEL org.opencontainers.image.source="https://github.com/detain/sugarcraft"
 LABEL org.opencontainers.image.description="VHS demo runner — vhs + ttyd + ffmpeg + PHP 8.3"
 LABEL org.opencontainers.image.licenses="MIT"
