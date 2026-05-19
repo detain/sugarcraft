@@ -297,4 +297,43 @@ $server = Server::new()
 
 **Note:** `AuthMethods` writes to STDOUT and `KeyboardInteractive` reads from STDIN — these are the only middleware that perform I/O before the terminal middleware. Both are safe under either transport, but be aware that in `InProcessTransport` STDIN is the sshd PTY slave (not the caller's terminal) so this I/O is connection-scoped.
 
+### Subsystem extension point
+
+The `Subsystem` middleware + `SubsystemHandler` interface let you implement
+named SSH subsystems (RFC 4254 §6.5 — e.g. `subsystem sftp`):
+
+```php
+use SugarCraft\Wish\Middleware\Subsystem;
+use SugarCraft\Wish\Middleware\Subsystem\SubsystemHandler;
+use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Session;
+
+final class SftpSubsystem implements SubsystemHandler
+{
+    public function handle(Context $ctx, Session $session): void
+    {
+        // Speak SFTP over $session->tty stdin/stdout
+    }
+}
+
+$subsystem = new Subsystem();
+$subsystem->register('sftp', new SftpSubsystem());
+
+Server::new()
+    ->use($subsystem)  // terminal — stops the chain when subsystem request matches
+    ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
+    ->serve();
+```
+
+`Subsystem` is terminal: it calls the registered handler and does **not**
+invoke `$next`. Non-subsystem commands (no `subsystem ` prefix, or no handler
+registered for the requested name) pass through to `$next` unchanged — so
+it can safely sit before `Spawn` in the stack.
+
+| Class | Role |
+|-------|------|
+| `Subsystem` | Middleware — parses `$session->command`, dispatches to registered handler |
+| `SubsystemHandler` | Interface — implement `handle(Context, Session): void` |
+| `SftpStub` | Example stub impl — not a real SFTP server |
+
 | Cassette / state file format (RateLimit buckets) | Additive only — new optional fields are backwards-compatible |
