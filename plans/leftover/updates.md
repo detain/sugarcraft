@@ -233,6 +233,7 @@ docs for step 06.01 · clean · PR#582
 fix for step 06.02 · PR#584 · resolved 2 findings (add ScreenStack CALIBER entries + fix heredoc style)
 tests-ci for step 06.02 · clean
 docs for step 06.02 · PR#586 · document ScreenStack API in README (Architecture + new section + example) + end-user doc feature grid + PHPDoc @see cross-refs
+step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest
 
 ## Open review findings — 03.05
 
