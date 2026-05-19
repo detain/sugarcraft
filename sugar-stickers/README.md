@@ -30,6 +30,19 @@ PHP port of [76creates/stickers](https://github.com/76creates/stickers) — Lipg
 - **Cell styling** — per-column ANSI style support
 - **Cursor tracking** — get current row/cell on selection
 
+### Viewport
+- **Scrollable viewport** — composes `sugar-bits` `Viewport` (SSOT)
+- **Keyboard navigation** — line-up/down, page-up/down, goto-top/bottom
+- **Mouse wheel** support with configurable delta
+- **Horizontal scrolling** with step-based navigation
+- **Smooth scroll** and scrollbar toggle
+- Sticky header/footer positioning is deferred to step 10.12.
+
+### Scrollbar
+- **Scrollbar** — composes `sugar-bits` `Scrollbar` (SSOT)
+- **Vertical and horizontal** scrollbars with configurable thumb/track characters
+- **Arrow toggling** for scrollbar ends
+
 ## Install
 
 ```bash
@@ -68,6 +81,19 @@ $table->sortBy(0);  // sort by Name column
 $table->filter('a'); // filter rows
 
 echo $table->render();
+```
+
+## Viewport Quick Start
+
+```php
+use SugarCraft\Stickers\Viewport;
+use SugarCraft\Stickers\Scrollbar;
+
+$viewport = Viewport::withContent(str_repeat("Line\n", 50), 80, 24);
+$viewport = $viewport->withScrollbar(true);
+
+// Use as a model in your BubbleTea app
+$model = $viewport;
 ```
 
 ## License

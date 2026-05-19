@@ -46,7 +46,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, justify, align. Plus a simple table with sort, filter, cursor nav, and column styling.</p>
+    <p class="lede" style="margin-top: 28px;">FlexBox layout engine for terminal grids — ratio-based item sizing, gap, justify, align. Plus a simple table with sort, filter, cursor nav, and column styling. Viewport and Scrollbar compose the sugar-bits SSOT.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/sugar-stickers</code></pre>
@@ -70,6 +70,8 @@ $table = (new Table())
     <div class="feature-grid">
       <div class="feature"><strong>FlexBox</strong><span>Ratio-based row / column layout. Justify: SpaceBetween, Center, Start, End. Align: Center, Start, End, Stretch.</span></div>
             <div class="feature"><strong>Table</strong><span>Sort by column (asc/desc toggle), filter by text, cursor navigation, per-column style.</span></div>
+            <div class="feature"><strong>Viewport</strong><span>Scrollable viewport composes sugar-bits Viewport (SSOT). Keyboard nav, mouse wheel, smooth scroll, scrollbar. Sticky headers/footers deferred.</span></div>
+            <div class="feature"><strong>Scrollbar</strong><span>Scrollbar composes sugar-bits Scrollbar (SSOT). Vertical/horizontal, configurable thumb/track chars.</span></div>
             <div class="feature"><strong>Immutability</strong><span>All builders return new instances.</span></div>
             
     </div>
@@ -96,6 +98,14 @@ $table = (new Table())
 <tr><td>Table</td><td>addColumn(col)</td><td>Add table column</td></tr>
 <tr><td>Table</td><td>addRow(cells)</td><td>Add table row</td></tr>
 <tr><td>Table</td><td>sortBy(col, asc)</td><td>Sort by column</td></tr>
+<tr><td>Viewport</td><td>new(w, h)</td><td>Create viewport (80×24 default)</td></tr>
+<tr><td>Viewport</td><td>withContent(str, w, h)</td><td>Create with string content</td></tr>
+<tr><td>Viewport</td><td>withScrollbar(bool)</td><td>Toggle scrollbar display</td></tr>
+<tr><td>Viewport</td><td>lineUp/Down(n)</td><td>Scroll by n lines</td></tr>
+<tr><td>Viewport</td><td>gotoTop/Bottom()</td><td>Jump to start/end</td></tr>
+<tr><td>Scrollbar</td><td>vertical()</td><td>Vertical scrollbar</td></tr>
+<tr><td>Scrollbar</td><td>horizontal()</td><td>Horizontal scrollbar</td></tr>
+<tr><td>Scrollbar</td><td>view(state, height)</td><td>Render scrollbar</td></tr>
 </table>
   </div>
 </section>
