@@ -158,7 +158,7 @@ final class Mosaic
     }
 
     /**
-     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'chafa'.
+     * Stable backend name: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock' | 'chafa'.
      */
     public function protocol(): string
     {
