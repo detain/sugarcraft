@@ -58,13 +58,63 @@ final class Counter implements Model
 
 ## Architecture
 
-- **`Model`** — your app implements `init()`, `update(Msg)`, `view()`.
+- **`Model`** — your app implements `init()`, `update(Msg)`, `view()`, `subscriptions()`.
 - **`Msg`** — marker interface for events. Built-ins: `KeyMsg`, `WindowSizeMsg`, `QuitMsg`.
 - **`Cmd`** — `Closure(): ?Msg`. Async work whose result is dispatched as a Msg. Helpers in `Cmd::quit()`, `Cmd::batch()`, `Cmd::send()`.
 - **`Program`** — orchestrator. Sets up TTY, runs the ReactPHP event loop, dispatches Msgs, drives renders at the configured framerate.
 - **`InputReader`** — stateful byte-stream parser; handles split escape sequences across reads.
 - **`Renderer`** — minimal cursor-home + erase + write. Diff-based renderer is a follow-up.
 - **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `Open` foundation utilities, shared with CandySprinkles.
+- **`Subscription`** — value object: id, Kind, params, produce closure.
+- **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
+- **`Kind`** — backed enum: Tick / Key / Signal / Custom.
+- **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
+
+## Subscriptions
+
+Elm-style subscription reconciliation lets a Model declare recurring events
+(ticks, key events, signals) without managing timers manually. After each
+`update()` cycle the runtime diffs the returned `Subscriptions` set against
+the active one — new subscriptions start, dropped ones cancel, stable ones
+keep running.
+
+```php
+use SugarCraft\Core\{Kind, Model, Msg, Program, Subscriptions};
+use SugarCraft\Core\Cmd\SubscribeCmd;
+
+final class Clock implements Model
+{
+    public function __construct(public readonly int $ticks = 0) {}
+
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        // tick handling...
+        return [$this, null];
+    }
+
+    public function view(): string { return "ticks: $this->ticks\n"; }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return (new Subscriptions())->withTick('clock-tick', 1.0, fn () => new TickMsg());
+    }
+}
+```
+
+The `SubscriptionCapable` trait satisfies `Model::subscriptions()` with a null
+default — use it in Models that don't need subscriptions:
+
+```php
+use SugarCraft\Core\{Model, SubscriptionCapable};
+
+final class StaticModel implements Model
+{
+    use SubscriptionCapable;
+    // ... no subscriptions() needed
+}
+```
 
 ## Demos
 
