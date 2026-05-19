@@ -312,6 +312,23 @@ And cleared by `EraseHandler` when it handles `CSI 3 J` (erase
 scrollback). The ring is replaced wholesale on `Terminal::withScrollbackSize()`
 — existing content is dropped, not preserved at a different capacity.
 
+## SGR underline styles CSI 4:N mapping (step 07.05)
+
+`Sgr::$underlineStyle` is an `UnderlineStyle` enum. `SgrHandler::underlineStyle()`
+handles the CSI `4:N` dispatch:
+
+- `4` (no subparam) or `4:1` → `UnderlineStyle::Single`
+- `4:0` → `UnderlineStyle::None`
+- `4:2` → `UnderlineStyle::Double`
+- `4:3` → `UnderlineStyle::Curly`
+- `4:4` → `UnderlineStyle::Dotted`
+- `4:5` → `UnderlineStyle::Dashed`
+- `24` → `withUnderline(false)->withUnderlineStyle(UnderlineStyle::None)` (clears any underline style)
+
+`Sgr::withUnderlineStyle()` automatically sets `$underline = ($style !== UnderlineStyle::None)`
+so the legacy boolean `$underline` flag stays consistent with the enum. `equals()` compares
+both fields.
+
 ## Stream writes
 
 Never `ftruncate; rewind;` between writes — slice deltas with
