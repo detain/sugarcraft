@@ -33,12 +33,12 @@ final class Renderer
                 ->render($a->branchSummary !== '' ? "[{$a->branchSummary}]" : '');
 
         $help = Style::new()->foreground(Color::hex('#7d6e98'))
-            ->render('tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit');
+            ->render(Lang::t('help.keyhints'));
 
         $err = '';
         if ($a->error !== null) {
             $err = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
-                ->render('error: ' . $a->error);
+                ->render(Lang::t('ui.error_prefix') . $a->error);
         }
 
         return $header . "\n" . $body . "\n " . $help . $err . "\n";
@@ -64,7 +64,7 @@ final class Renderer
         }
         if ($rows === []) {
             $rows[] = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('clean working tree');
+                ->render(Lang::t('status.clean'));
         }
         return self::frame($a, Pane::Status, ' status ', implode("\n", $rows), 36);
     }
@@ -85,7 +85,7 @@ final class Renderer
             $rows[] = $st->render($line);
         }
         if ($rows === []) {
-            $rows[] = '(no branches)';
+            $rows[] = Lang::t('branches.empty');
         }
         return self::frame($a, Pane::Branches, ' branches ', implode("\n", $rows), 36);
     }
@@ -106,7 +106,7 @@ final class Renderer
             $rows[] = $line;
         }
         if ($rows === []) {
-            $rows[] = '(empty log)';
+            $rows[] = Lang::t('log.empty');
         }
         return self::frame($a, Pane::Log, ' log ', implode("\n", $rows), 36);
     }
