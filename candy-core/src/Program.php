@@ -481,6 +481,13 @@ final class Program
             $wanted = ($this->options->subscriptions)($this->model);
             $this->reconcileSubscriptions($wanted ?? new Subscriptions());
         }
+
+        // Reconcile component lifecycle hooks after every update cycle.
+        // Composite models accumulate mount/unmount Cmds during update();
+        // drain them here so onMount/onUnmount side-effects fire promptly.
+        if ($this->model instanceof Composite) {
+            $this->drainCompositePendingCmds();
+        }
     }
 
     /**
@@ -971,5 +978,23 @@ final class Program
             $this->loop->cancelTimer($timer);
         }
         $this->activeSubscriptions = [];
+    }
+
+    /**
+     * Drain and execute any pending lifecycle Cmds accumulated in the
+     * current Composite model, then clear them for the next cycle.
+     */
+    private function drainCompositePendingCmds(): void
+    {
+        $cmds = $this->model->pendingCmds();
+        if ($cmds === []) {
+            return;
+        }
+        // Create a new Composite with the same children but no pending Cmds,
+        // so they are not re-drained on the next tick.
+        $this->model = new Composite($this->model->children());
+        foreach ($cmds as $cmd) {
+            $this->scheduleCmd($cmd);
+        }
     }
 }
