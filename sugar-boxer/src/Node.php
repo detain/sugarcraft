@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Boxer;
 
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\VAlign;
+
 /**
  * Immutable layout tree node.
  *
@@ -17,6 +22,12 @@ namespace SugarCraft\Boxer;
  * @property int                   $padding      Inner padding (cells)
  * @property bool                  $border       Whether to draw box border
  * @property int                   $spacing      Gap between children (cells)
+ * @property Border|null           $borderStyle  Canonical border chars (candy-sprinkles)
+ * @property Style|null            $style        Canonical style (candy-sprinkles)
+ * @property string                $title        Box title text
+ * @property array<int,int,int,int> $margin      Outer spacing (top/right/bottom/left)
+ * @property Align|null            $alignH       Horizontal text alignment
+ * @property VAlign|null           $alignV       Vertical text alignment
  */
 final class Node
 {
@@ -35,7 +46,17 @@ final class Node
     public readonly int $padding;
     public readonly bool $border;
     public readonly int $spacing;
+    public readonly ?Border $borderStyle;
+    public readonly ?Style $style;
+    public readonly string $title;
+    /** @var array<int,int,int,int> */
+    public readonly array $margin;
+    public readonly ?Align $alignH;
+    public readonly ?VAlign $alignV;
 
+    /**
+     * @param array<int,int,int,int> $margin top, right, bottom, left
+     */
     private function __construct(
         string $kind,
         string $content = '',
@@ -47,6 +68,12 @@ final class Node
         int $padding = 0,
         bool $border = true,
         int $spacing = 0,
+        ?Border $borderStyle = null,
+        ?Style $style = null,
+        string $title = '',
+        array $margin = [0, 0, 0, 0],
+        ?Align $alignH = null,
+        ?VAlign $alignV = null,
     ) {
         $this->kind        = $kind;
         $this->content     = $content;
@@ -58,6 +85,12 @@ final class Node
         $this->padding     = $padding;
         $this->border      = $border;
         $this->spacing     = $spacing;
+        $this->borderStyle = $borderStyle;
+        $this->style       = $style;
+        $this->title       = $title;
+        $this->margin      = $margin;
+        $this->alignH       = $alignH;
+        $this->alignV       = $alignV;
     }
 
     // -------------------------------------------------------------------------
@@ -118,12 +151,78 @@ final class Node
 
     public function withBorder(bool $show): self
     {
-        return $this->with(border: $show);
+        // When enabling the border, use rounded chars as default if no
+        // borderStyle is set.  When disabling, leave borderStyle untouched —
+        // it can still be composed via withBorderStyle() later.
+        $borderStyle = $show
+            ? ($this->borderStyle ?? Border::rounded())
+            : $this->borderStyle;
+        return $this->with(border: $show, borderStyle: $borderStyle);
     }
 
     public function withSpacing(int $cells): self
     {
         return $this->with(spacing: $cells);
+    }
+
+    /**
+     * Set the border character set from candy-sprinkles.
+     * Passing null clears the border style (border bool still controls visibility).
+     */
+    public function withBorderStyle(?Border $b): self
+    {
+        // Pass sentinel to preserve all other properties via with()'s fallback
+        return $this->with(borderStyle: $b, style: self::nop(), alignH: self::nop(), alignV: self::nop());
+    }
+
+    /**
+     * Set the canonical style from candy-sprinkles.
+     */
+    public function withStyle(?Style $s): self
+    {
+        return $this->with(style: $s, borderStyle: self::nop(), alignH: self::nop(), alignV: self::nop());
+    }
+
+    /**
+     * Set the box title text.
+     */
+    public function withTitle(string $t): self
+    {
+        return $this->with(title: $t, borderStyle: self::nop(), style: self::nop(), alignH: self::nop(), alignV: self::nop());
+    }
+
+    /**
+     * Set outer margin (top, right, bottom, left).
+     * sugar-boxer-specific: candy-sprinkles Style does not ship margin as a
+     * first-class concept.
+     *
+     * @param int $top
+     * @param int $right  Defaults to 0 (uses $top)
+     * @param int $bottom Defaults to 0 (uses $top)
+     * @param int $left   Defaults to 0 (uses $right)
+     */
+    public function withMargin(int $top, int $right = 0, int $bottom = 0, int $left = 0): self
+    {
+        $right  = $right  ?: $top;
+        $bottom = $bottom ?: $top;
+        $left   = $left   ?: $right;
+        return $this->with(margin: [$top, $right, $bottom, $left], borderStyle: self::nop(), style: self::nop(), alignH: self::nop(), alignV: self::nop());
+    }
+
+    /**
+     * Set horizontal text alignment (sugar-boxer-specific).
+     */
+    public function withAlignH(Align $a): self
+    {
+        return $this->with(alignH: $a, borderStyle: self::nop(), style: self::nop(), alignV: self::nop());
+    }
+
+    /**
+     * Set vertical text alignment (sugar-boxer-specific).
+     */
+    public function withAlignV(VAlign $v): self
+    {
+        return $this->with(alignV: $v, borderStyle: self::nop(), style: self::nop(), alignH: self::nop());
     }
 
     public function withContent(string $content): self
@@ -194,6 +293,17 @@ final class Node
     // Private
     // -------------------------------------------------------------------------
 
+    /**
+     * Sentinel for "do not change" vs explicit null.
+     * Using a private static method as a sentinel factory to avoid passing
+     * an instance into the constructor and to keep the type clean.
+     */
+    private static function nop(): \stdClass
+    {
+        static $sentinel;
+        return $sentinel ??= new \stdClass();
+    }
+
     private function with(
         int $minWidth = 0,
         int $maxWidth = 0,
@@ -202,7 +312,31 @@ final class Node
         int $padding = 0,
         bool $border = true,
         int $spacing = 0,
+        mixed $borderStyle = null,
+        mixed $style = null,
+        string $title = '',
+        array $margin = [0, 0, 0, 0],
+        mixed $alignH = null,
+        mixed $alignV = null,
     ): self {
+        // Preserve existing value when sentinel is passed (no arg).
+        // Explicitly pass null to clear.
+        $resolvedBorderStyle = $borderStyle === self::nop()
+            ? $this->borderStyle
+            : ($borderStyle ?? ($this->borderStyle ?? null));
+
+        $resolvedStyle = $style === self::nop()
+            ? $this->style
+            : ($style ?? $this->style);
+
+        $resolvedAlignH = $alignH === self::nop()
+            ? $this->alignH
+            : ($alignH ?? $this->alignH);
+
+        $resolvedAlignV = $alignV === self::nop()
+            ? $this->alignV
+            : ($alignV ?? $this->alignV);
+
         return new self(
             $this->kind,
             $this->content,
@@ -214,6 +348,12 @@ final class Node
             $padding     ?: $this->padding,
             $border,
             $spacing     ?: $this->spacing,
+            $resolvedBorderStyle,
+            $resolvedStyle,
+            $title       ?: $this->title,
+            $margin      !== [0, 0, 0, 0] ? $margin : $this->margin,
+            $resolvedAlignH,
+            $resolvedAlignV,
         );
     }
 }
