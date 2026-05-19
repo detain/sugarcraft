@@ -88,6 +88,50 @@ git branch | candyshell filter</code></pre>
       <div class="feature"><strong>join</strong><span>Concatenate styled strings horizontally / vertically.</span></div>
     </div>
 
+    <h3 style="margin-top: 32px;">Auto-discovery</h3>
+    <p>CandyShell uses PHP attributes to auto-discover commands at runtime. Mark any class extending <code>Symfony\Component\Console\Command\Command</code> with <code>#[Command]</code> and it will be picked up by <code>Application::scan()</code>:</p>
+    <pre class="code"><code>use SugarCraft\Shell\Attribute\Command;
+use SugarCraft\Shell\Attribute\Flag;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[Command(name: 'mycmd', description: 'Does something useful.', descriptionSection: 'Longer help text.')]
+final class MyCommand extends Command
+{
+    #[Flag(name: 'format', short: 'f', description: 'Output format.', enum: FormatType::class)]
+    protected function configure(): void
+    {
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $format = $input->getOption('format');
+        // ...
+        return self::SUCCESS;
+    }
+}
+
+enum FormatType: string
+{
+    case Json = 'json';
+    case Yaml = 'yaml';
+}</code></pre>
+    <p>Register the namespace in your bootstrap:</p>
+    <pre class="code"><code>$app = new \SugarCraft\Shell\Application();
+$app->scan('My\\Namespace\\');  // discovers all #[Command] classes
+$app->run();</code></pre>
+
+    <h3 style="margin-top: 40px;">New attribute types (step 06.05)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>Command</code></td><td><code>SugarCraft\Shell\Attribute\Command</code></td><td>#[Attribute] for auto-registering commands</td></tr>
+    <tr><td><code>Flag</code></td><td><code>SugarCraft\Shell\Attribute\Flag</code></td><td>#[Attribute] for declarative CLI options</td></tr>
+    <tr><td><code>ValueEnum</code></td><td><code>SugarCraft\Shell\Attribute\ValueEnum</code></td><td>Constrained enum for flag values</td></tr>
+    <tr><td><code>CommandScanner</code></td><td><code>SugarCraft\Shell\Discovery\CommandScanner</code></td><td>Namespace scanner for #[Command] classes</td></tr>
+    <tr><td><code>Application::scan()</code></td><td><code>SugarCraft\Shell\Application</code></td><td>Opt-in discovery method</td></tr>
+    </table>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-shell">Source on GitHub</a></li>
