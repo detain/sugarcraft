@@ -231,6 +231,7 @@ review for step 06.01 · clean · PR#581
 tests-ci for step 06.01 · clean
 docs for step 06.01 · clean · PR#582
 fix for step 06.02 · PR#584 · resolved 2 findings (add ScreenStack CALIBER entries + fix heredoc style)
+tests-ci for step 06.02 · clean
 
 ## Open review findings — 03.05
 
