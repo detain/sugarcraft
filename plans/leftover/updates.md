@@ -334,6 +334,7 @@ tests-ci for step 11.04 · clean
 docs for step 11.04 · clean
 step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, immutable + fluent) + AnimationDriver (Model + Cmd::tick frame timing + delete+render cycle) + KittyRenderer::renderFrame() + FrameTickMsg + tests (leftover-rollout step 07.15)
 fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
+docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame() in README (Animation section + Architecture) + end-user HTML (feature grid + API table) + dev guide (new docs/dev/candy-mosaic.md) + PHPDoc on 6 methods
 
 ## Open review findings — 03.05
 
