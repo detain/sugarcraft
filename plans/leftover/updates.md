@@ -271,6 +271,7 @@ step 06.12 · PR#613 · candy-wish: add session metadata (sessionId/authMethod/k
 review for step 06.12 · clean · PR#613
 tests-ci for step 06.12 · clean
 docs for step 06.12 · PR#614 · document sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata() in README + end-user/admin/dev docs
+step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface accepts void|PromiseInterface, transport dispatches await via event loop, AsyncMiddleware abstract base (leftover-rollout step 06.13)
 
 ## Open review findings — 03.05
 
