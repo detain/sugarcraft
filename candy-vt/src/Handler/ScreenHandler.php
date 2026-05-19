@@ -104,12 +104,21 @@ final class ScreenHandler implements Handler
             return;
         }
 
-        // Wide chars need room for the trailing continuation cells. If
-        // they don't fit, clamp without writing — auto-wrap lands once
-        // DECSTBM margins are wired.
+        // If the char doesn't fit at all (too wide even at col 0), clamp.
         if ($c + $width > $this->buffer->cols) {
-            $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
-            return;
+            if ($this->mode->autoWrap) {
+                $this->cursor = $this->lineFeedNext();
+                $r = $this->cursor->row;
+                $c = $this->cursor->col;
+                // If still doesn't fit after wrap, clamp.
+                if ($c + $width > $this->buffer->cols) {
+                    $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
+                    return;
+                }
+            } else {
+                $this->cursor = $this->cursor->withCol($this->buffer->cols - 1);
+                return;
+            }
         }
 
         $cell = new Cell(
@@ -122,7 +131,15 @@ final class ScreenHandler implements Handler
             $this->buffer->put($r, $c + $i, Cell::continuation($cell));
         }
 
-        $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $c + $width));
+        $nextCol = $c + $width;
+        // With DECAWM auto-wrap, if cursor would advance past the right
+        // edge, wrap to the next line first for the NEXT character.
+        if ($this->mode->autoWrap && $nextCol >= $this->buffer->cols) {
+            $this->cursor = $this->cursor->withCol($nextCol);
+            $this->cursor = $this->lineFeedNext();
+        } else {
+            $this->cursor = $this->cursor->withCol(min($this->buffer->cols - 1, $nextCol));
+        }
     }
 
     public function execute(int $byte): void
@@ -253,6 +270,20 @@ final class ScreenHandler implements Handler
     private function nextLine(): void
     {
         $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
+    }
+
+    /**
+     * Move cursor to column 0 of the next line, scrolling if at the
+     * bottom of the scroll region. Returns the new cursor.
+     */
+    private function lineFeedNext(): Cursor
+    {
+        return $this->scrollHandler->nextLine(
+            $this->buffer,
+            $this->cursor->withCol(0),
+            $this->scrollRegionTop,
+            $this->scrollRegionBottom,
+        );
     }
 
     /**
