@@ -338,6 +338,7 @@ docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame(
 step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage
 fix for step 07.16 · PR#670 · resolved 2 findings (CALIBER openpty-darwin-first + openpty-libutil-linux pattern entries; README API table + Platform behaviour section surfaces openpty() Darwin-first path)
 docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::open() feature description) + admin HTML (platform behaviour section) + dev HTML (internal PTY allocation section) + Libc::libutil() @return PHPDoc fix
+step 07.17 · PR#672 · candy-pty: add waitpid() FFI for fast process-exit detection (<1ms vs 10ms poll) + ChildPollWaitpidTest (5 tests) + signal-exit handling (128+signal)
 
 ## Open review findings — 07.16
 
