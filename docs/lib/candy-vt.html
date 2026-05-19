@@ -79,6 +79,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
       <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 sync, 7 auto-wrap (DECAWM).</span></div>
       <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events.</span></div>
       <div class="feature"><strong>Width-aware</strong><span>CJK + most emoji take 2 cells with a continuation marker. Delegates to <code>candy-core</code>'s <code>Util\Width</code> for grapheme width.</span></div>
+      <div class="feature"><strong>Scrollback buffer</strong><span>Ring buffer (default 1000 rows) captures scrolled-off content. Access via <code>Screen::scrollback()</code>. Configure size with <code>Terminal::withScrollbackSize()</code>. Erased by <code>CSI 3 J</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Use it for</h3>
@@ -107,7 +108,9 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 <tr><td>Terminal</td><td>cursor()</td><td>Get cursor position</td></tr>
 <tr><td>Terminal</td><td>mode()</td><td>Get terminal mode state (includes autoWrap)</td></tr>
 <tr><td>Terminal</td><td>windowTitle()</td><td>Get window title from OSC</td></tr>
+<tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
 <tr><td>Screen</td><td>cell(col, row)</td><td>Get cell at position</td></tr>
+<tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
 <tr><td>Cell</td><td>grapheme, sgr, foreground(), background()</td><td>Cell content and style</td></tr>
 <tr><td>Mode</td><td>autoWrap, withAutoWrap(bool)</td><td>DECAWM auto-wrap state and setter</td></tr>
 </table>
