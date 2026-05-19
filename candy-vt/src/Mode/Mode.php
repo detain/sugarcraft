@@ -42,6 +42,30 @@ final readonly class Mode
          * When false, characters at the rightmost column are discarded.
          */
         public bool $autoWrap = false,
+        /**
+         * DECOM — origin mode (CSI ?6 h/l).
+         *
+         * When true, cursor addressing is relative to the scroll region
+         * (top-left of the DECSTBM region). When false, cursor addressing
+         * is relative to the absolute screen origin (0, 0).
+         */
+        public bool $originMode = false,
+        /**
+         * DECSCUSR — cursor shape (set via CSI Ps SP q).
+         *
+         * Stores the configured cursor shape as an integer (0-6).
+         * Actual shape is applied to Cursor::$shape via withShape().
+         *
+         * @see \SugarCraft\Vt\CursorShape
+         */
+        public int $cursorShape = 0,
+        /**
+         * Focus event reporting (CSI ?1004 h/l).
+         *
+         * When true, the terminal records focus-in (CSI I) and
+         * focus-out (CSI O) events to the focusEvents list.
+         */
+        public bool $reportFocusEvents = false,
     ) {}
 
     public function withAltScreen(bool $v): self
@@ -57,6 +81,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $v ? self::ALT_FULL : self::ALT_NONE,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -78,6 +106,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $variant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -102,6 +134,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -118,6 +154,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -134,6 +174,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -150,6 +194,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -166,6 +214,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -182,6 +234,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $v,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -198,6 +254,10 @@ final readonly class Mode
             syncUpdate: $this->syncUpdate,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -215,6 +275,9 @@ final readonly class Mode
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
             autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
         );
     }
 
@@ -237,6 +300,84 @@ final readonly class Mode
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
             autoWrap: $v,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
+        );
+    }
+
+    /**
+     * Set DECOM origin mode.
+     *
+     * @param bool $v True to enable origin mode (CSI ?6 h), false to disable (CSI ?6 l)
+     */
+    public function withOriginMode(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+            altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $v,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $this->reportFocusEvents,
+        );
+    }
+
+    /**
+     * Set DECSCUSR cursor shape.
+     *
+     * @param int $v Cursor shape value 0-6 (see CursorShape enum)
+     */
+    public function withCursorShape(int $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+            altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $v,
+            reportFocusEvents: $this->reportFocusEvents,
+        );
+    }
+
+    /**
+     * Set focus event reporting mode.
+     *
+     * @param bool $v True to enable focus reporting (CSI ?1004 h), false to disable (CSI ?1004 l)
+     */
+    public function withReportFocusEvents(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+            altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+            originMode: $this->originMode,
+            cursorShape: $this->cursorShape,
+            reportFocusEvents: $v,
         );
     }
 
@@ -252,6 +393,9 @@ final readonly class Mode
             && $this->syncUpdate === $other->syncUpdate
             && $this->mouseExtended === $other->mouseExtended
             && $this->altScreenVariant === $other->altScreenVariant
-            && $this->autoWrap === $other->autoWrap;
+            && $this->autoWrap === $other->autoWrap
+            && $this->originMode === $other->originMode
+            && $this->cursorShape === $other->cursorShape
+            && $this->reportFocusEvents === $other->reportFocusEvents;
     }
 }
