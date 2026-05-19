@@ -317,6 +317,7 @@ docs for step 07.14 · PR#648 · document HalfBlockRenderer transparent-pixel do
 fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 docs for step 07.13 · clean · PR#646 · document virtual-image (a=p) + zlib compression (f=1) in README/end-user HTML/PHPDoc/CALIBER_LEARNINGS.md
 step 11.01 · PR#649 · plans: sugar-post-identity decision memo (Option A/B/C; recommendation: A — stay an email tool, finish upstream Pop TUI surface; awaiting user decision)
+fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/pop LOC 50→221, §2 "misread"→"pivot" framing, Email.php cite L17–L32→L21–L32)
 
 ## Open review findings — 03.05
 
@@ -332,12 +333,5 @@ step 11.01 · PR#649 · plans: sugar-post-identity decision memo (Option A/B/C; 
 ## Open review findings — 01.08
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
-
-## Open review findings — 11.01
-
-- [x] plans/sugar-post-identity.md: locale count internally inconsistent — says "17 locales" in 5 places (TL;DR L36, §3 "Why A is cheap" L166, §4 i18n rewrite row L221, §4 risk #5 L243, §7 criterion 3 L357) and "16 locales" in 3 places (§1 table L56, §4 row L205, §6 rationale L310). `ls sugar-post/lang/*.php | wc -l` = **16** (ar cs de en es fr it ja ko nl pl pt pt-br ru tr zh-cn). The "17" number was inherited from `docs/research/libraries/sugar-post-research.md:L40` which is itself wrong. Pick 16 and replace all five "17" sites; §7 criterion 3's "~3 weeks saved on retranslation" estimate stays approximately correct either way but should be edited for consistency.
-- [x] plans/sugar-post-identity.md §4 L224: bin/pop described as "~50 lines — trivial to rewrite." Actual `wc -l sugar-post/bin/pop` = **221 lines**. Conclusion (CLI parser is small enough to rewrite) is unaffected, but the specific number is incorrect — replace with the real LOC or drop the parenthetical estimate.
-- [x] plans/sugar-post-identity.md §2 L96–L98: plan asserts the research doc "misread 'Pop' as a microblog metaphor" and that the social-media framing "comes from reading 'Pop' as a microblog verb." The research doc actually opens (L11) with a "Critical Finding" naming sugar-post as an email client and explicitly cites `charmbracelet/pop` as the upstream throughout. The research doc proposes a microblog *pivot* as a future strategic alternative, not as a misreading of the current lib. Soften §2 to "the research doc proposed a microblog pivot whose framing reads sugar-post as a social-media TUI" rather than "misread." This does not change the recommendation but improves accuracy of the framing critique.
-- [x] plans/sugar-post-identity.md §1 L78: cite reads `sugar-post/src/Email.php:L17–L32 — immutable readonly props`. Actual `readonly` declaration block runs L21–L32 (L17–L20 are PHPDoc `@property` lines; L21 is `final class Email`). Adjust to `L21–L32` or `L7–L32` if intending to cover the PHPDoc block as well.
 
 
