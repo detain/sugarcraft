@@ -96,10 +96,17 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Manager</td><td>newGlobal()</td><td>Create global manager</td></tr>
+<tr><td>Manager</td><td>newPrefix(?prefix)</td><td>Create prefixed manager for isolation</td></tr>
 <tr><td>Manager</td><td>mark(name, rendered)</td><td>Wrap output with zone marker</td></tr>
 <tr><td>Manager</td><td>scan(output)</td><td>Record positions, strip markers</td></tr>
+<tr><td>Manager</td><td>anyInBounds(mouseMsg)</td><td>Return first zone under the mouse</td></tr>
 <tr><td>Manager</td><td>get(name)</td><td>Get zone by name</td></tr>
 <tr><td>Zone</td><td>inBounds(mouseMsg)</td><td>Test if mouse is inside zone</td></tr>
+<tr><td>ZoneHoverTracker</td><td>new(manager)</td><td>Track hover state over a manager</td></tr>
+<tr><td>ZoneHoverTracker</td><td>update(mouseMsg)</td><td>Process mouse event, return enter/exit msg</td></tr>
+<tr><td>ZoneHoverTracker</td><td>currentZone()</td><td>Get the hovered Zone or null</td></tr>
+<tr><td>ZoneEnterMsg</td><td>zone</td><td>Zone the cursor just entered</td></tr>
+<tr><td>ZoneExitMsg</td><td>zone</td><td>Zone the cursor just left</td></tr>
 <tr><td>Style</td><td>new()</td><td>Create style builder</td></tr>
 <tr><td>Style</td><td>padding(top, bottom)</td><td>Set zone padding</td></tr>
 </table>
