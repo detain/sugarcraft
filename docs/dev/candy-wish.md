@@ -266,4 +266,35 @@ $server->serve($mySyntheticSession);
 | `CancellationException`, `DeadlineExceededException` | Stable |
 | `InProcessTransport`, `HostSshdTransport` internals | `@internal` |
 | `Transport::run()` default implementation details | `@internal` |
+### Auth middleware extension points
+
+The `Middleware\Auth\*` classes provide pluggable SSH authentication:
+
+| Class | What it does | Seams for custom logic |
+|-------|--------------|-----------------------|
+| `PasswordAuth` | Validates `(user, password)` against a callback; reads `SSH_PASSWORD` env var | Inject any `callable(string, string): bool` |
+| `CertificateAuth` | Validates X.509 PEM cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` / `CERTIFICATE` env vars | Inject any `callable(string, Session): bool`; `$required` flag controls behaviour when no cert is present |
+| `AuthMethods` | Writes `SSH_AUTH_METHODS <list>` banner to STDOUT and stores the method list in Context under `auth.methods` | `AuthMethods::fromContext($ctx)` lets downstream middleware inspect which method succeeded |
+| `KeyboardInteractive` | Sends challenge prompts to STDOUT, reads newline-delimited responses from STDIN (RFC 4256 format) | Inject `callable(list<string>): bool|null` to validate responses |
+
+**AuthMethods usage pattern:**
+
+```php
+use SugarCraft\Wish\Middleware\Auth\AuthMethods;
+use SugarCraft\Wish\Middleware\Auth\PasswordAuth;
+use SugarCraft\Wish\Middleware\Auth\KeyboardInteractive;
+
+$server = Server::new()
+    // Declare what the server accepts — runs early, before any credential checks
+    ->use(new AuthMethods(['publickey', 'password', 'keyboard-interactive']))
+    // AuthMethods stores the list in Context so downstream middleware can read it
+    ->use(new PasswordAuth(fn ($user, $pw) => verify($user, $pw)))
+    ->use(new KeyboardInteractive([
+        ['prompt' => 'OTP Code: ', 'echo' => false],
+    ], fn ($responses) => verifyTotp($responses[0])))
+    ->use(new Spawn(...));
+```
+
+**Note:** `AuthMethods` writes to STDOUT and `KeyboardInteractive` reads from STDIN — these are the only middleware that perform I/O before the terminal middleware. Both are safe under either transport, but be aware that in `InProcessTransport` STDIN is the sshd PTY slave (not the caller's terminal) so this I/O is connection-scoped.
+
 | Cassette / state file format (RateLimit buckets) | Additive only — new optional fields are backwards-compatible |
