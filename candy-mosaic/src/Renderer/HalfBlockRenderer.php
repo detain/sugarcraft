@@ -19,6 +19,14 @@ use SugarCraft\Mosaic\PixelGrid;
  * near-square pixels because ▀ occupies roughly the top half of the
  * cell height, and the doubled vertical resolution compensates for the
  * cell aspect ratio.
+ *
+ * **Transparent pixels:** When a pixel's alpha is fully transparent
+ * (GD alpha 127 → `null` in the PixelGrid cell tuple), no SGR codes are
+ * emitted for that half of the cell, letting the terminal default show
+ * through. Both-transparent cells emit ▀ with no SGR at all. For a cell
+ * where only one half is transparent the renderer emits the opposite
+ * half-block glyph (▄ for bottom-transparent, ▀ for top-transparent)
+ * with only the visible half's SGR codes.
  */
 final class HalfBlockRenderer implements Renderer
 {
