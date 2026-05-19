@@ -30,3 +30,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   - Interface constants defined in `Kernel32Interface` (don't require instantiation)
   - The actual Windows console integration is tested via `FakeKernel32` in `WindowsBackendTest` which provides a test double implementing the interface without FFI.
   - On a real Windows box with kernel32.dll, the full suite could be run for true coverage.
+
+- **[pattern:interface-default-trait]** PHP interfaces cannot carry default method implementations. When an interface method has a sensible default (e.g., `subscriptions(): null`), provide a trait that implements the default and have concrete classes `use` the trait. This avoids forcing every implementor to repeat the boilerplate. Example: `SubscriptionCapable` trait provides `subscriptions(): null` for `Model` implementors that don't need subscriptions — the trait satisfies the interface contract with zero per-class code.
