@@ -270,6 +270,7 @@ docs for step 06.11 · PR#612 · document Subsystem/SubsystemHandler/SftpStub in
 step 06.12 · PR#613 · candy-wish: add session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata)
 review for step 06.12 · clean · PR#613
 tests-ci for step 06.12 · clean
+docs for step 06.12 · PR#614 · document sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata() in README + end-user/admin/dev docs
 
 ## Open review findings — 03.05
 
