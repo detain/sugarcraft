@@ -138,6 +138,37 @@ stdin/stdout.
 - Parse the JSONL with `jq 'select(.event == "end") | .duration_ms'` to graph p95 session durations.
 - Rate-limit state file (`/var/lib/wish/buckets.json`) is human-readable JSON — monitor its size to gauge active-bucket count.
 
+### Protocol metadata for audit logging
+
+After the SSH handshake, transports populate protocol metadata on the `Session`
+via `withProtocolMetadata()`: `sessionId`, `authMethod`, `keyFingerprint`,
+`clientVersion`, `serverVersion`. Custom logging middleware can read these
+fields and include them in audit logs for security analysis:
+
+```php
+final class AuditLogger implements Middleware
+{
+    public function handle(Context $ctx, Session $s, callable $next): void
+    {
+        $audit = [
+            'event'         => 'session_start',
+            'session_id'    => $s->sessionId,
+            'auth_method'   => $s->authMethod,
+            'client_fp'     => $s->keyFingerprint,
+            'client_ver'    => $s->clientVersion,
+            'server_ver'    => $s->serverVersion,
+            'user'          => $s->user,
+            'client_host'   => $s->clientHost,
+        ];
+        $this->logger->info(json_encode($audit));
+        $next($ctx, $s);
+    }
+}
+```
+
+These fields are also useful for correlating across multiple proxy hops
+(session ID remains stable across the full SSH session lifetime).
+
 ### Healthcheck
 
 ```bash
