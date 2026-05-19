@@ -76,7 +76,7 @@ final class Spawn implements Middleware
         $this->transport = $transport;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         if ($this->transport === null) {
             throw new \RuntimeException(Lang::t('spawn.no_transport'));
