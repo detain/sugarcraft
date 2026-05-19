@@ -332,6 +332,7 @@ step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo
 fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3426; MosaicBuilder row merged into Mosaic.php note; §6.1+§6.4 phantom sugar-dash/sugar-charts consumers reframed to "no current consumers"; §4.1 withFrame() body filled in with clone-mutate pattern + sketch pointer; §3 divergence note explaining Option A→C deviation from step file framing)
 tests-ci for step 11.04 · clean
 docs for step 11.04 · clean
+step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, immutable + fluent) + AnimationDriver (Model + Cmd::tick frame timing + delete+render cycle) + KittyRenderer::renderFrame() + FrameTickMsg + tests (leftover-rollout step 07.15)
 
 ## Open review findings — 03.05
 
