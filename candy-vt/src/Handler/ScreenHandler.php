@@ -64,6 +64,15 @@ final class ScreenHandler implements Handler
     private ?Cursor $savedCursor = null;
     private ?Sgr $savedSgr = null;
 
+    /**
+     * Synchronized-output (DEC 2026) mutation queue.
+     * When $mode->syncUpdate is true, all buffer mutations are held here
+     * and flushed atomically when the mode is disabled.
+     *
+     * @var list<array{row: int, col: int, cell: Cell}>
+     */
+    private array $pendingMutations = [];
+
     private SgrHandler $sgrHandler;
     private CursorHandler $cursorHandler;
     private EraseHandler $eraseHandler;
@@ -107,9 +116,12 @@ final class ScreenHandler implements Handler
 
         $width = Width::string($rune);
         if ($width <= 0) {
-            // Zero-width: combining marks, ZWJ, etc. We don't compose
-            // them onto the previous cell yet — silently skip so they
-            // don't desync the column count.
+            // Zero-width: combining marks (U+0300–U+036F), ZWJ, etc.
+            // Attach combining marks to the previous cell so they
+            // render as a single composed glyph in that column.
+            if ($this->isCombiningChar($rune)) {
+                $this->attachCombiningChar($rune);
+            }
             return;
         }
 
@@ -135,9 +147,9 @@ final class ScreenHandler implements Handler
             sgr: $this->sgr,
             hyperlink: $this->currentHyperlink,
         );
-        $this->buffer->put($r, $c, $cell);
+        $this->putCell($r, $c, $cell);
         for ($i = 1; $i < $width; $i++) {
-            $this->buffer->put($r, $c + $i, Cell::continuation($cell));
+            $this->putCell($r, $c + $i, Cell::continuation($cell));
         }
 
         $nextCol = $c + $width;
@@ -189,7 +201,8 @@ final class ScreenHandler implements Handler
                 $this->cursor = $this->cursorHandler->apply($final, $params, $this->cursor, $this->buffer);
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
-                $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor);
+                $pending = $this->mode->syncUpdate ? $this->pendingMutations : null;
+                $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor, $this->sgr, $pending);
                 return;
             case 'S': case 'T':
                 $first = $params[0] ?? -1;
@@ -223,12 +236,24 @@ final class ScreenHandler implements Handler
                 return;
             case 'h':
                 if ($prefix === ord('?')) {
+                    $wasSync = $this->mode->syncUpdate;
                     $this->modeHandler->apply($params, true, $this);
+                    // DEC 2026 sync-update: flush pending mutations when
+                    // exiting synchronized mode (was on, now off).
+                    if ($wasSync && !$this->mode->syncUpdate) {
+                        $this->flushPendingMutations();
+                    }
                 }
                 return;
             case 'l':
                 if ($prefix === ord('?')) {
+                    $wasSync = $this->mode->syncUpdate;
                     $this->modeHandler->apply($params, false, $this);
+                    // DEC 2026 sync-update: flush pending mutations when
+                    // exiting synchronized mode (was on, now off).
+                    if ($wasSync && !$this->mode->syncUpdate) {
+                        $this->flushPendingMutations();
+                    }
                 }
                 return;
             default:
@@ -521,5 +546,77 @@ final class ScreenHandler implements Handler
         $this->savedCursor = null;
         // Do NOT restore buffer or SGR
         $this->mode = $this->mode->withAltScreenVariant(Mode::ALT_NONE);
+    }
+
+    /**
+     * Return true if $rune is a Unicode combining character (U+0300–U+036F
+     * combining diacritical marks).
+     *
+     * Mirrors charmbracelet/x/vt.isCombining.
+     */
+    private function isCombiningChar(string $rune): bool
+    {
+        $cp = mb_ord($rune, 'UTF-8');
+        return $cp !== false && $cp >= 0x0300 && $cp <= 0x036F;
+    }
+
+    /**
+     * Append a combining character to the previous cell (column cur-1).
+     * If the previous cell is out of bounds or is a continuation cell,
+     * the combining mark is silently dropped.
+     *
+     * When synchronized-output (DEC 2026) mode is active, the mutation is
+     * queued for later flush; otherwise it is applied immediately.
+     */
+    private function attachCombiningChar(string $combining): void
+    {
+        $r = $this->cursor->row;
+        $c = $this->cursor->col - 1;
+
+        if ($c < 0) {
+            return; // Nothing before cursor to attach to.
+        }
+
+        $prev = $this->buffer->cell($r, $c);
+
+        // Don't attach to a wide-char continuation cell — skip.
+        if ($prev->continuation) {
+            return;
+        }
+
+        $updated = $prev->withCombining($combining);
+
+        if ($this->mode->syncUpdate) {
+            $this->pendingMutations[] = ['row' => $r, 'col' => $c, 'cell' => $updated];
+            return;
+        }
+        $this->buffer->put($r, $c, $updated);
+    }
+
+    /**
+     * Write a cell to the buffer, or queue it when synchronized output
+     * (DEC 2026) mode is active.
+     *
+     * @see flushPendingMutations()
+     */
+    private function putCell(int $row, int $col, Cell $cell): void
+    {
+        if ($this->mode->syncUpdate) {
+            $this->pendingMutations[] = ['row' => $row, 'col' => $col, 'cell' => $cell];
+            return;
+        }
+        $this->buffer->put($row, $col, $cell);
+    }
+
+    /**
+     * Replay all pending mutations accumulated during synchronized-output
+     * (DEC 2026) mode and clear the queue.
+     */
+    private function flushPendingMutations(): void
+    {
+        foreach ($this->pendingMutations as $mutation) {
+            $this->buffer->put($mutation['row'], $mutation['col'], $mutation['cell']);
+        }
+        $this->pendingMutations = [];
     }
 }
