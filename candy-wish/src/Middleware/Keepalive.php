@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -75,11 +76,11 @@ final class Keepalive implements Middleware
         });
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         // Keepalive is passive — it only acts via the transport's
         // pump loop callback registered in setTransport.
-        $next();
+        $next($ctx, $session);
     }
 
     /**

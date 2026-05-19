@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Tests\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\Logger;
 use SugarCraft\Wish\Session;
 use PHPUnit\Framework\TestCase;
@@ -25,7 +26,7 @@ final class LoggerTest extends TestCase
         $this->assertNotFalse($log);
         $l = new Logger($log);
         $reached = false;
-        $l->handle($this->session(), function (Session $s) use (&$reached): void {
+        $l->handle(Context::background(), $this->session(), function (Context $c, Session $s) use (&$reached): void {
             $reached = true;
         });
         rewind($log);
@@ -49,7 +50,7 @@ final class LoggerTest extends TestCase
         $this->assertNotFalse($log);
         $l = new Logger($log);
         try {
-            $l->handle($this->session(), function (): void {
+            $l->handle(Context::background(), $this->session(), function (Context $c, Session $s): void {
                 throw new \RuntimeException('boom');
             });
             $this->fail('expected exception');

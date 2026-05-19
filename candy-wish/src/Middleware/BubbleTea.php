@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -81,7 +82,7 @@ final class BubbleTea implements Middleware
         $this->inProcessMode = true;
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->inProcessMode) {
             throw new \RuntimeException(Lang::t('bubbletea.requires_host_sshd'));

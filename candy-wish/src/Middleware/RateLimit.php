@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -55,14 +56,14 @@ final class RateLimit implements Middleware
         $this->stderr = $stderr;
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $key = $session->clientHost === '' ? '_unknown' : $session->clientHost;
         if (!$this->take($key)) {
             fwrite($this->stderr, "Rate limit exceeded. Try again later.\n");
             return;
         }
-        $next($session);
+        $next($ctx, $session);
     }
 
     private function take(string $key): bool

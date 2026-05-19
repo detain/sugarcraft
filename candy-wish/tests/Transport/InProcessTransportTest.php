@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Tests\Transport;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\InProcessTransport;
@@ -32,24 +33,24 @@ final class InProcessTransportTest extends TestCase
         $log = [];
         $a = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'a-pre';
-                $next($s);
+                $next($ctx, $s);
                 $this->log[] = 'a-post';
             }
         };
         $b = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'b-pre';
-                $next($s);
+                $next($ctx, $s);
                 $this->log[] = 'b-post';
             }
         };
 
-        (new InProcessTransport())->run($this->fakeSession(), [$a, $b]);
+        (new InProcessTransport())->run(Context::background(), $this->fakeSession(), [$a, $b]);
 
         $this->assertSame(['a-pre', 'b-pre', 'b-post', 'a-post'], $log);
     }
@@ -59,27 +60,27 @@ final class InProcessTransportTest extends TestCase
         $log = [];
         $gate = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'gate-block';
             }
         };
         $never = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'never';
             }
         };
 
-        (new InProcessTransport())->run($this->fakeSession(), [$gate, $never]);
+        (new InProcessTransport())->run(Context::background(), $this->fakeSession(), [$gate, $never]);
 
         $this->assertSame(['gate-block'], $log);
     }
 
     public function testEmptyStackIsHarmless(): void
     {
-        (new InProcessTransport())->run($this->fakeSession(), []);
+        (new InProcessTransport())->run(Context::background(), $this->fakeSession(), []);
         $this->assertTrue(true);
     }
 }

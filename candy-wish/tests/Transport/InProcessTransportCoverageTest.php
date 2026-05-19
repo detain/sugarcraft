@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Tests\Transport;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\InProcessTransport;
 
@@ -91,9 +92,9 @@ final class InProcessTransportCoverageTest extends TestCase
 
             public function __construct(private mixed &$captured) {}
 
-            public function handle(\SugarCraft\Wish\Session $s, callable $next): void
+            public function handle(\SugarCraft\Wish\Context $ctx, \SugarCraft\Wish\Session $s, callable $next): void
             {
-                $next($s);
+                $next($ctx, $s);
             }
 
             public function setTransport(\SugarCraft\Wish\Transport\ChildSpawner $t): void
@@ -108,7 +109,7 @@ final class InProcessTransportCoverageTest extends TestCase
             }
         };
 
-        $transport->run($this->fakeSession(), [$middlewareWithCapture]);
+        $transport->run(\SugarCraft\Wish\Context::background(), $this->fakeSession(), [$middlewareWithCapture]);
 
         $this->assertNotNull($capturedTransport, 'Middleware setTransport should have been called');
         $this->assertSame($transport, $capturedTransport, 'Should receive the InProcessTransport instance');
@@ -121,15 +122,14 @@ final class InProcessTransportCoverageTest extends TestCase
 
         $middlewareWithoutSetTransport = new class($nextCalled) implements \SugarCraft\Wish\Middleware {
             public function __construct(private mixed &$nextCalled) {}
-            public function handle(\SugarCraft\Wish\Session $s, callable $next): void
+            public function handle(\SugarCraft\Wish\Context $ctx, \SugarCraft\Wish\Session $s, callable $next): void
             {
-                // This middleware does NOT have setTransport
                 $this->nextCalled = true;
-                $next($s);
+                $next($ctx, $s);
             }
         };
 
-        $transport->run($this->fakeSession(), [$middlewareWithoutSetTransport]);
+        $transport->run(\SugarCraft\Wish\Context::background(), $this->fakeSession(), [$middlewareWithoutSetTransport]);
 
         $this->assertTrue($nextCalled, 'Middleware without setTransport should still work');
     }
@@ -172,20 +172,17 @@ final class InProcessTransportCoverageTest extends TestCase
     {
         $transport = new InProcessTransport();
 
-        // Empty stack should be handled by dispatch returning early
-        // This is tested via run() with empty stack in InProcessTransportTest
-        // But let's verify dispatch behavior directly via run()
         $called = false;
         $middleware = new class($called) implements \SugarCraft\Wish\Middleware {
             public function __construct(private mixed &$called) {}
-            public function handle(\SugarCraft\Wish\Session $s, callable $next): void
+            public function handle(\SugarCraft\Wish\Context $ctx, \SugarCraft\Wish\Session $s, callable $next): void
             {
                 $this->called = true;
-                $next($s);
+                $next($ctx, $s);
             }
         };
 
-        $transport->run($this->fakeSession(), [$middleware]);
+        $transport->run(\SugarCraft\Wish\Context::background(), $this->fakeSession(), [$middleware]);
         $this->assertTrue($called);
     }
 }
