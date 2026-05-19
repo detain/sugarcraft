@@ -35,6 +35,10 @@ final class PosixPtySystem implements PtySystem
      * lifetime to prevent the kernel from zeroing the PTY winsize between
      * this call and the first `proc_open` that wires the child's stdio.
      *
+     * On Darwin, `openpty()` is attempted first as a single-call alternative
+     * to the `posix_openpt + grantpt + unlockpt + ptsname_r` quartet. If it
+     * returns -1 the quartet is used as fallback.
+     *
      * @param int $cols Terminal column count (default 80).
      * @param int $rows Terminal row count (default 24).
      * @return PtyPair
@@ -45,7 +49,7 @@ final class PosixPtySystem implements PtySystem
     {
         $libc = \SugarCraft\Pty\Libc::lib();
 
-        $masterFd = $libc->posix_openpt(self::O_RDWR | self::oNoCtty());
+        $masterFd = $this->openPtyMaster($libc);
         if ($masterFd < 0) {
             throw new \SugarCraft\Pty\PtyException(
                 \SugarCraft\Pty\Lang::t('open.posix_openpt_failed', ['rc' => $masterFd])
@@ -123,6 +127,38 @@ final class PosixPtySystem implements PtySystem
     private static function oNoCtty(): int
     {
         return PHP_OS_FAMILY === 'Darwin' ? 0x20000 : 0o400;
+    }
+
+    /**
+     * Open the master PTY fd.
+     *
+     * On Darwin, `openpty()` is attempted first as a single-call alternative.
+     * If it returns -1 (not available or failed), falls back to `posix_openpt`.
+     */
+    private function openPtyMaster(\FFI $libc): int
+    {
+        if (\PHP_OS_FAMILY === 'Darwin') {
+            $masterFdPtr = $libc->new('int[1]');
+            $slaveFdPtr = $libc->new('int[1]');
+
+            $rc = $libc->openpty(
+                \FFI::addr($masterFdPtr[0]),
+                \FFI::addr($slaveFdPtr[0]),
+                null,
+                null,
+                null,
+            );
+
+            // Discard the slave fd — we only need the master for the
+            // parent; the child gets its stdio wired via proc_open.
+            if ($rc === 0) {
+                $libc->close($slaveFdPtr[0]);
+                return $masterFdPtr[0];
+            }
+            // fall through to quartet on -1
+        }
+
+        return $libc->posix_openpt(self::O_RDWR | self::oNoCtty());
     }
 
     /**
