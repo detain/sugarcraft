@@ -86,9 +86,38 @@ $t = $t->CurrentRow();                  // get selected RowData
 ## Pagination
 
 ```php
-$t = $t->WithPageSize(25)               // 25 rows per page
-    ->WithPage(2);                      // show page 2
-echo $t->PageFooter();                  // 'Page 2 of 4'
+$t = $t->withPageSize(25)               // 25 rows per page
+    ->withPage(2);                      // show page 2
+echo $t->PageFooter();                  // 'Page 2 of 4' (i18n-aware)
+```
+
+## Internationalization
+
+User-facing strings are internationalized via `SugarCraft\Table\Lang::t()`.
+All translatable strings live in `lang/en.php` under the `'table'` namespace.
+
+**Available keys** (`lang/en.php`):
+
+| Key            | Default string                    | Parameters            |
+|----------------|-----------------------------------|-----------------------|
+| `page_of`      | `Page {page} of {total}`          | `{page}`, `{total}`   |
+| `no_data`      | `No data`                         | —                     |
+| `showing_rows` | `Showing {from} to {to} of {total} rows` | `{from}`, `{to}`, `{total}` |
+| `sort`         | `Sort`                            | —                     |
+| `filter`       | `Filter`                          | —                     |
+
+To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
+values. The lookup chain follows `SugarCraft\Core\I18n\T`:
+exact locale → base language → `en` → raw key.
+
+**Adding new translatable strings:**
+
+```php
+// In any source file:
+use SugarCraft\Table\Lang;
+
+$label = Lang::t('sort');                  // 'Sort'
+$pager = Lang::t('page_of', ['page' => 2, 'total' => 4]); // 'Page 2 of 4'
 ```
 
 ## License
