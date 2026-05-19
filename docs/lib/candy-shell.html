@@ -141,6 +141,17 @@ $app->run();</code></pre>
     <tr><td><code>TypoSuggester</code></td><td><code>SugarCraft\Shell\Help\TypoSuggester</code></td><td>Levenshtein distance ≤ 2 typo suggestions for unknown commands</td></tr>
     </table>
 
+    <h3 style="margin-top: 40px;">Shell completions + version (step 06.07)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>BashCompletion</code></td><td><code>SugarCraft\Shell\Completion\BashCompletion</code></td><td>Bash completion script generator</td></tr>
+    <tr><td><code>ZshCompletion</code></td><td><code>SugarCraft\Shell\Completion\ZshCompletion</code></td><td>Zsh completion script generator</td></tr>
+    <tr><td><code>FishCompletion</code></td><td><code>SugarCraft\Shell\Completion\FishCompletion</code></td><td>Fish completion script generator</td></tr>
+    <tr><td><code>CompletionCommand</code></td><td><code>SugarCraft\Shell\CompletionCommand</code></td><td>Built-in <code>completion [--shell bash|zsh|fish]</code> subcommand</td></tr>
+    <tr><td><code>Application::versionFromComposer()</code></td><td><code>SugarCraft\Shell\Application</code></td><td>Reads version from root composer.json</td></tr>
+    </table>
+    <p>CandyShell also respects <code>CANDYSHELL_*</code> env var fallbacks — prefix any option name with <code>CANDYSHELL_</code> in uppercase to set it when no explicit CLI flag is provided.</p>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-shell">Source on GitHub</a></li>
@@ -154,6 +165,7 @@ $app->run();</code></pre>
     <h3 style="margin-top: 32px;">CLI Commands</h3>
 <table class="api-table">
 <tr><th>Command</th><th>Description</th></tr>
+<tr><td>completion</td><td>Emit shell completion script (bash · zsh · fish)</td></tr>
 <tr><td>style</td><td>Apply Sprinkles styling to text</td></tr>
 <tr><td>choose</td><td>Pick one item from a list</td></tr>
 <tr><td>confirm</td><td>Yes/no confirmation</td></tr>
