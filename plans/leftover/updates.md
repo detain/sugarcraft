@@ -337,6 +337,11 @@ fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
 docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame() in README (Animation section + Architecture) + end-user HTML (feature grid + API table) + dev guide (new docs/dev/candy-mosaic.md) + PHPDoc on 6 methods
 step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage
 
+## Open review findings — 07.16
+
+- [ ] candy-pty/CALIBER_LEARNINGS.md: openpty Darwin-first fallback pattern not logged — `openpty()` primary on Darwin, quartet fallback, and `libutil.so.1` Linux path are new FFI patterns that future PTY implementers should find documented (e.g. `[pattern:openpty-darwin-first]`, `[pattern:libutil-linux-symbol]`)
+- [ ] candy-pty/README.md: `openpty()` Darwin path not surfaced in API docs — the Mirrors table and API-at-a-glance table only mention `posix_openpt + grantpt + unlockpt + ptsname_r`; the new `openpty` first path on Darwin is not mentioned anywhere in the README
+
 ## Open review findings — 03.05
 
 - [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
