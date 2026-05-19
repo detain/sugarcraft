@@ -171,6 +171,11 @@ review for step 03.08 · clean · PR#541
   docs for step 03.14 · clean
   step 03.17 · PR#561 · sugar-dash: Drawable::withTheme + layout containers fan theme to children + Badge/Card/NProgress opt-in + dashboard-live Ctrl-T toggle (leftover-rollout step 03.17)
 
+## Open review findings — 03.17
+
+- [ ] Acceptance Criterion #1 (grep near-nothing) NOT met — 705 non-exempt hardcoded hex color lines remain in `sugar-dash/src/Components/` (Modal/Modal.php, Modal/Notification.php, Modal/Alert.php, Gauge.php, Bullet.php, and other families). The step only touched Badge.php, Card.php, NProgress.php. Bulk find/replace across ALL Components widgets was not executed. Per step 03.17 acceptance: "grep -rn '#[0-9a-fA-F]\{6\}' sugar-dash/src/Components returns near-nothing (only documentation strings)" — this is not satisfied.
+- [ ] 5 of 12 layout containers from Deliverable not modified — TileLayout.php, GridLayout.php, ZStack.php, Panel.php, Frame.php listed in "Modify" section but absent from PR diff. They lack `withTheme()` and won't participate in theme propagation if used in isolation. Confirmed by git diff 6dbb3d80 showing only Boxer.php, FlexLayout.php, StackedGrid.php, HStack.php, Split.php, Stack.php, VStack.php were touched.
+
 ## Open review findings — 03.05
 
 - [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
