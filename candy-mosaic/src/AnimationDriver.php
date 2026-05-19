@@ -97,16 +97,25 @@ final class AnimationDriver implements Model
         return null;
     }
 
+    /**
+     * Advance to a specific frame index without changing pause state.
+     */
     public function withIndex(int $index): self
     {
         return $this->mutate(index: $index);
     }
 
+    /**
+     * Pause or unpause animation playback.
+     */
     public function withPaused(bool $paused): self
     {
         return $this->mutate(paused: $paused);
     }
 
+    /**
+     * Change the image id used for targeted delete+redraw on Kitty/iTerm2.
+     */
     public function withImageId(int $imageId): self
     {
         return $this->mutate(imageId: $imageId);

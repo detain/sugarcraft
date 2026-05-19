@@ -48,11 +48,17 @@ final class Animation
         return new self($frames, array_fill(0, count($frames), $delayMs));
     }
 
+    /**
+     * Number of frames in the animation.
+     */
     public function frameCount(): int
     {
         return count($this->frames);
     }
 
+    /**
+     * Sum of all per-frame delays in milliseconds.
+     */
     public function totalDurationMs(): int
     {
         return array_sum($this->delaysMs);
