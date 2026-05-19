@@ -260,6 +260,7 @@ step 06.09 · PR#607 · candy-wish: ChannelHandler interface + DefaultChannelHan
 tests-ci for step 06.09 · clean
 docs for step 06.09 · PR#608 · document ChannelHandler/ChannelMsg/Msg classes in README + end-user API table + dev extension point + new hub-admin guide + CALIBER pattern
 step 06.10 · PR#609 · candy-wish: add PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive auth middleware (leftover-rollout step 06.10)
+review for step 06.10 · clean · PR#609
 
 ## Open review findings — 03.05
 
