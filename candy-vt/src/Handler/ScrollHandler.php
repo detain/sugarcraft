@@ -11,9 +11,9 @@ use SugarCraft\Vt\Cursor\Cursor;
 /**
  * Vertical scrolling primitives — SU/SD plus IND/RI/NEL.
  *
- * Operates on the full screen; per-region scroll margins (DECSTBM)
- * land in a later slice. Scrolled-off rows are dropped — there's no
- * scrollback yet.
+ * Scrolling operates within a scroll region defined by DECSTBM
+ * (CSI r). Defaults to the full screen when no margin is set.
+ * Scrolled-off rows are dropped — there's no scrollback yet.
  */
 final class ScrollHandler
 {
@@ -22,37 +22,37 @@ final class ScrollHandler
      *
      * @param list<int> $params
      */
-    public function applyCsi(int $final, array $params, Buffer $buffer): void
+    public function applyCsi(int $final, array $params, Buffer $buffer, int $scrollTop, int $scrollBottom): void
     {
         $first = $params[0] ?? -1;
         $count = $first === -1 ? 1 : max(1, $first);
 
         match (chr($final)) {
-            'S' => $this->scrollUp($buffer, $count),
-            'T' => $this->scrollDown($buffer, $count),
+            'S' => $this->scrollUp($buffer, $scrollTop, $scrollBottom, $count),
+            'T' => $this->scrollDown($buffer, $scrollTop, $scrollBottom, $count),
             default => null,
         };
     }
 
     /**
-     * IND (index) — move down, scroll up if at the bottom.
+     * IND (index) — move down, scroll up if at the bottom of the region.
      */
-    public function index(Buffer $buffer, Cursor $cursor): Cursor
+    public function index(Buffer $buffer, Cursor $cursor, int $scrollTop, int $scrollBottom): Cursor
     {
-        if ($cursor->row >= $buffer->rows - 1) {
-            $this->scrollUp($buffer, 1);
+        if ($cursor->row >= $scrollBottom) {
+            $this->scrollUp($buffer, $scrollTop, $scrollBottom, 1);
             return $cursor;
         }
         return $cursor->withRow($cursor->row + 1);
     }
 
     /**
-     * RI (reverse index) — move up, scroll down if at the top.
+     * RI (reverse index) — move up, scroll down if at the top of the region.
      */
-    public function reverseIndex(Buffer $buffer, Cursor $cursor): Cursor
+    public function reverseIndex(Buffer $buffer, Cursor $cursor, int $scrollTop, int $scrollBottom): Cursor
     {
-        if ($cursor->row <= 0) {
-            $this->scrollDown($buffer, 1);
+        if ($cursor->row <= $scrollTop) {
+            $this->scrollDown($buffer, $scrollTop, $scrollBottom, 1);
             return $cursor;
         }
         return $cursor->withRow($cursor->row - 1);
@@ -61,45 +61,57 @@ final class ScrollHandler
     /**
      * NEL (next line) — CR + IND.
      */
-    public function nextLine(Buffer $buffer, Cursor $cursor): Cursor
+    public function nextLine(Buffer $buffer, Cursor $cursor, int $scrollTop, int $scrollBottom): Cursor
     {
-        return $this->index($buffer, $cursor->withCol(0));
+        return $this->index($buffer, $cursor->withCol(0), $scrollTop, $scrollBottom);
     }
 
-    public function scrollUp(Buffer $buffer, int $count): void
+    /**
+     * Scroll the region up by $count rows (SU).
+     *
+     * @param int $scrollTop    Top row of the scroll region (0-indexed inclusive).
+     * @param int $scrollBottom Bottom row of the scroll region (0-indexed inclusive).
+     */
+    public function scrollUp(Buffer $buffer, int $scrollTop, int $scrollBottom, int $count): void
     {
-        $rows = $buffer->rows;
-        $count = min($count, $rows);
+        $height = $scrollBottom - $scrollTop + 1;
+        $count = min($count, $height);
         if ($count <= 0) {
             return;
         }
 
-        for ($r = 0; $r < $rows - $count; $r++) {
+        for ($r = $scrollTop; $r <= $scrollBottom - $count; $r++) {
             for ($c = 0; $c < $buffer->cols; $c++) {
                 $buffer->put($r, $c, $buffer->cell($r + $count, $c));
             }
         }
-        for ($r = $rows - $count; $r < $rows; $r++) {
+        for ($r = $scrollBottom - $count + 1; $r <= $scrollBottom; $r++) {
             for ($c = 0; $c < $buffer->cols; $c++) {
                 $buffer->put($r, $c, Cell::empty());
             }
         }
     }
 
-    public function scrollDown(Buffer $buffer, int $count): void
+    /**
+     * Scroll the region down by $count rows (SD).
+     *
+     * @param int $scrollTop    Top row of the scroll region (0-indexed inclusive).
+     * @param int $scrollBottom Bottom row of the scroll region (0-indexed inclusive).
+     */
+    public function scrollDown(Buffer $buffer, int $scrollTop, int $scrollBottom, int $count): void
     {
-        $rows = $buffer->rows;
-        $count = min($count, $rows);
+        $height = $scrollBottom - $scrollTop + 1;
+        $count = min($count, $height);
         if ($count <= 0) {
             return;
         }
 
-        for ($r = $rows - 1; $r >= $count; $r--) {
+        for ($r = $scrollBottom; $r >= $scrollTop + $count; $r--) {
             for ($c = 0; $c < $buffer->cols; $c++) {
                 $buffer->put($r, $c, $buffer->cell($r - $count, $c));
             }
         }
-        for ($r = 0; $r < $count; $r++) {
+        for ($r = $scrollTop; $r < $scrollTop + $count; $r++) {
             for ($c = 0; $c < $buffer->cols; $c++) {
                 $buffer->put($r, $c, Cell::empty());
             }

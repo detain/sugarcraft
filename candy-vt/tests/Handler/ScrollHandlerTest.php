@@ -41,7 +41,8 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 4);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC', 'DDD']);
-        (new ScrollHandler())->scrollUp($buf, 2);
+        // Full-screen scroll region [0, 3].
+        (new ScrollHandler())->scrollUp($buf, 0, 3, 2);
         $this->assertSame('CCC', $this->rowChars($buf, 0));
         $this->assertSame('DDD', $this->rowChars($buf, 1));
         $this->assertSame('   ', $this->rowChars($buf, 2));
@@ -52,7 +53,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        (new ScrollHandler())->scrollUp($buf, 3);
+        (new ScrollHandler())->scrollUp($buf, 0, 2, 3);
         $this->assertSame('   ', $this->rowChars($buf, 0));
         $this->assertSame('   ', $this->rowChars($buf, 2));
     }
@@ -61,7 +62,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 2);
         $this->fillBuffer($buf, ['AAA', 'BBB']);
-        (new ScrollHandler())->scrollUp($buf, 99);
+        (new ScrollHandler())->scrollUp($buf, 0, 1, 99);
         $this->assertSame('   ', $this->rowChars($buf, 0));
         $this->assertSame('   ', $this->rowChars($buf, 1));
     }
@@ -72,7 +73,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 4);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC', 'DDD']);
-        (new ScrollHandler())->scrollDown($buf, 2);
+        (new ScrollHandler())->scrollDown($buf, 0, 3, 2);
         $this->assertSame('   ', $this->rowChars($buf, 0));
         $this->assertSame('   ', $this->rowChars($buf, 1));
         $this->assertSame('AAA', $this->rowChars($buf, 2));
@@ -85,7 +86,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        (new ScrollHandler())->applyCsi(ord('S'), [1], $buf);
+        (new ScrollHandler())->applyCsi(ord('S'), [1], $buf, 0, 2);
         $this->assertSame('BBB', $this->rowChars($buf, 0));
         $this->assertSame('CCC', $this->rowChars($buf, 1));
         $this->assertSame('   ', $this->rowChars($buf, 2));
@@ -95,7 +96,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        (new ScrollHandler())->applyCsi(ord('T'), [1], $buf);
+        (new ScrollHandler())->applyCsi(ord('T'), [1], $buf, 0, 2);
         $this->assertSame('   ', $this->rowChars($buf, 0));
         $this->assertSame('AAA', $this->rowChars($buf, 1));
         $this->assertSame('BBB', $this->rowChars($buf, 2));
@@ -105,7 +106,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        (new ScrollHandler())->applyCsi(ord('S'), [], $buf);
+        (new ScrollHandler())->applyCsi(ord('S'), [], $buf, 0, 2);
         $this->assertSame('BBB', $this->rowChars($buf, 0));
     }
 
@@ -115,7 +116,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 4);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC', 'DDD']);
-        $cursor = (new ScrollHandler())->index($buf, new Cursor(row: 1, col: 2));
+        $cursor = (new ScrollHandler())->index($buf, new Cursor(row: 1, col: 2), 0, 3);
         $this->assertSame(2, $cursor->row);
         $this->assertSame(2, $cursor->col);
         // Buffer unchanged.
@@ -126,7 +127,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        $cursor = (new ScrollHandler())->index($buf, new Cursor(row: 2, col: 1));
+        $cursor = (new ScrollHandler())->index($buf, new Cursor(row: 2, col: 1), 0, 2);
         $this->assertSame(2, $cursor->row); // stays at last row
         $this->assertSame(1, $cursor->col);
         $this->assertSame('BBB', $this->rowChars($buf, 0));
@@ -139,7 +140,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 4);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC', 'DDD']);
-        $cursor = (new ScrollHandler())->reverseIndex($buf, new Cursor(row: 2, col: 1));
+        $cursor = (new ScrollHandler())->reverseIndex($buf, new Cursor(row: 2, col: 1), 0, 3);
         $this->assertSame(1, $cursor->row);
         $this->assertSame('AAA', $this->rowChars($buf, 0));
     }
@@ -148,7 +149,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        $cursor = (new ScrollHandler())->reverseIndex($buf, new Cursor(row: 0, col: 1));
+        $cursor = (new ScrollHandler())->reverseIndex($buf, new Cursor(row: 0, col: 1), 0, 2);
         $this->assertSame(0, $cursor->row); // stays at top
         $this->assertSame('   ', $this->rowChars($buf, 0));
         $this->assertSame('AAA', $this->rowChars($buf, 1));
@@ -159,7 +160,7 @@ final class ScrollHandlerTest extends TestCase
     public function testNextLineMovesCursorToColZeroAndDown(): void
     {
         $buf = new Buffer(3, 4);
-        $cursor = (new ScrollHandler())->nextLine($buf, new Cursor(row: 1, col: 2));
+        $cursor = (new ScrollHandler())->nextLine($buf, new Cursor(row: 1, col: 2), 0, 3);
         $this->assertSame(2, $cursor->row);
         $this->assertSame(0, $cursor->col);
     }
@@ -168,7 +169,7 @@ final class ScrollHandlerTest extends TestCase
     {
         $buf = new Buffer(3, 3);
         $this->fillBuffer($buf, ['AAA', 'BBB', 'CCC']);
-        $cursor = (new ScrollHandler())->nextLine($buf, new Cursor(row: 2, col: 2));
+        $cursor = (new ScrollHandler())->nextLine($buf, new Cursor(row: 2, col: 2), 0, 2);
         $this->assertSame(2, $cursor->row);
         $this->assertSame(0, $cursor->col);
         $this->assertSame('BBB', $this->rowChars($buf, 0));
