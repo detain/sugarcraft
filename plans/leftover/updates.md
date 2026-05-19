@@ -44,7 +44,9 @@ this before spawning the next subagent.)
   - `Chart.php` in sugar-dash = concrete self-contained bar/line chart (ANSI-rendered); sugar-charts Chart = abstract base class with legend/title/label composition — **completely different class hierarchy**
   - `LineChart.php` does not exist in sugar-dash/src/Plot/Chart/
 
-  This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct. Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)?
+  This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct.   Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)?
+
+- **step 07.15** (candy-mosaic animation support): **BLOCKED** — step 11.04 (strategic plan for candy-flip/mosaic split) has NOT shipped. The strategic plan `plans/candy-flip-mosaic-split.md` does not exist and step 11.04 has no done-log entry. Step 07.15 explicitly blocks on 11.04: "This step assumes step 11.04 (strategic plan for candy-flip/mosaic split) has landed first or its conclusions are stable. If unclear, block this step until 11.04 ships." The step 11.04 file itself notes a sequencing bug — it should have landed before 07.15 but was placed in a later phase. **ACTION NEEDED**: Either execute step 11.04 first (write the strategic plan), or re-sequence so 11.04 precedes 07.15.
 
 ---
 
@@ -314,6 +316,7 @@ tests-ci for step 07.14 · clean
 docs for step 07.14 · PR#648 · document HalfBlockRenderer transparent-pixel docblock + SixelRenderer::maxColors() docblock + end-user HTML feature grid + API table entries
 fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 docs for step 07.13 · clean · PR#646 · document virtual-image (a=p) + zlib compression (f=1) in README/end-user HTML/PHPDoc/CALIBER_LEARNINGS.md
+step 11.01 · plans/sugar-post-identity.md · strategic decision memo (Option A/B/C; recommendation: A — stay an email tool, finish upstream Pop TUI surface; awaiting user decision)
 
 ## Open review findings — 03.05
 
