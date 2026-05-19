@@ -129,6 +129,7 @@ final class Server
     public function serve(?Session $session = null): void
     {
         $session ??= Session::fromEnvironment();
-        $this->transport->run($session, $this->stack);
+        $ctx = Context::background();
+        $this->transport->run($ctx, $session, $this->stack);
     }
 }

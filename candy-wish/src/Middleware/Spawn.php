@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -75,7 +76,7 @@ final class Spawn implements Middleware
         $this->transport = $transport;
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->transport === null) {
             throw new \RuntimeException(Lang::t('spawn.no_transport'));

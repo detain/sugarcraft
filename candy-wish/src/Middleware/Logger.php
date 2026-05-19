@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -61,7 +62,7 @@ final class Logger implements Middleware
         }
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         $start = microtime(true);
         $this->write([
@@ -71,7 +72,7 @@ final class Logger implements Middleware
         ]);
 
         try {
-            $next($session);
+            $next($ctx, $session);
         } finally {
             $this->write([
                 'event'  => 'session.end',
