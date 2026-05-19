@@ -47,7 +47,7 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Layer | Class | Role |
 |---|---|---|
 | Facade | `Terminal\Terminal` | Owns a Parser + ScreenHandler; `feed()` drives bytes in |
-| Parser | `Parser\Parser` | VT500 state machine — Paul-Williams algorithm, handles partial input |
+| Parser | `Parser\Parser` | VT500 state machine — Paul-Williams algorithm, handles partial input, parses subparameters (`:) |
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
 | Screen | `Screen\Screen` | Immutable snapshot — read current grid after feeding bytes |
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |

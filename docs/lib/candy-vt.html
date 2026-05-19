@@ -73,7 +73,7 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls.</span></div>
+      <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
       <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles.</span></div>
       <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
       <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 sync, 7 auto-wrap (DECAWM).</span></div>
