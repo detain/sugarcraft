@@ -95,6 +95,7 @@ final class Counter implements Model {
       <div class="feature"><strong>Signal handling</strong><span>Ctrl+C, SIGTERM, SIGWINCH (resize) all surface as Msgs in your update().</span></div>
       <div class="feature"><strong>Screen / ScreenStack</strong><span>Immutable stack for modal / drill-down flows. <code>RootModelWithScreenStack</code> + <code>ScreenStackCapable</code> delegate <code>init/update/view</code> to the active screen automatically.</span></div>
       <div class="feature"><strong>Component / Composite</strong><span>Parent-child lifecycle model. <code>Component</code> interface adds <code>onMount()</code>/<code>onUnmount()</code>; <code>Composite</code> owns children and drains lifecycle Cmds during reconcile.</span></div>
+      <div class="feature"><strong>WorkerPool</strong><span>Bounded-concurrency pool (default 4 workers) for CPU-bound tasks. <code>WorkerCmd::run($pool, $task)</code> dispatches a callable and yields a <code>WorkerResultMsg</code> on completion.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
