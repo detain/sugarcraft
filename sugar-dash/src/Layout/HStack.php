@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A horizontal stack layout component.
@@ -256,6 +258,27 @@ final class HStack implements \SugarCraft\Dash\Foundation\Sizer
             items: $this->items,
             spacing: $this->spacing,
             alignment: $alignment,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof Drawable) {
+                $themedItems[] = $item->withTheme($theme);
+            } else {
+                $themedItems[] = $item;
+            }
+        }
+
+        return new self(
+            items: $themedItems,
+            spacing: $this->spacing,
+            alignment: $this->alignment,
         );
     }
 }

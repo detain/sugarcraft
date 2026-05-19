@@ -8,6 +8,10 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Buffer;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Rect;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A card / container component with optional header and footer.
@@ -18,11 +22,12 @@ use SugarCraft\Core\Util\Width;
  * - Optional footer with border
  * - Customizable border style (single, double, rounded)
  * - Padding around content
+ * - Theme-aware: withTheme() uses the theme's primary color
  *
  * Mirrors the card concept from typical UI toolkits but adapted
  * to PHP with wither-style immutable setters.
  */
-final class Card implements \SugarCraft\Dash\Foundation\Sizer
+final class Card implements \SugarCraft\Dash\Foundation\Sizer, Drawable
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -461,5 +466,40 @@ final class Card implements \SugarCraft\Dash\Foundation\Sizer
             style: $this->style,
             padding: $padding,
         );
+    }
+
+    /**
+     * Apply a theme to this card, using the theme's primary color
+     * for border and title.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return new self(
+            content: $this->content,
+            title: $this->title,
+            footer: $this->footer,
+            borderColor: $theme->primary(),
+            titleColor: $theme->primary(),
+            style: $this->style,
+            padding: $this->padding,
+        );
+    }
+
+    // ─── Drawable implementation ──────────────────────────────────
+
+    public function getRect(): Rect
+    {
+        [$w, $h] = $this->getInnerSize();
+        return new Rect(0, 0, $w - 1, $h - 1);
+    }
+
+    public function setRect(Rect $rect): self
+    {
+        return $this;
+    }
+
+    public function draw(Buffer $buffer): void
+    {
+        // Cards render to strings, not into Buffer grids
     }
 }

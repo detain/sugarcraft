@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Layout\Boxer;
 
+use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\State\Persistence;
 use SugarCraft\Core\Util\Width;
 
@@ -276,5 +278,22 @@ final class Boxer implements Item, Sizer
         }
 
         return $data['collapsedAddresses'] ?? [];
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedMap = [];
+        foreach ($this->modelMap as $addr => $item) {
+            if ($item instanceof Drawable) {
+                $themedMap[$addr] = $item->withTheme($theme);
+            } else {
+                $themedMap[$addr] = $item;
+            }
+        }
+
+        return new self($this->root, $themedMap, $this->width, $this->height);
     }
 }

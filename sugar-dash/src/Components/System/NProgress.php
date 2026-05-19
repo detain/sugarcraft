@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A YouTube-style thin progress bar component.
@@ -241,6 +242,20 @@ final class NProgress implements \SugarCraft\Dash\Foundation\Sizer
             color: $this->color,
             trackColor: $this->trackColor,
             showPercentage: $show,
+        );
+    }
+
+    /**
+     * Apply a theme to this progress bar, using the theme's primary color
+     * for the bar and background for the track.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return new self(
+            ratio: $this->ratio,
+            color: $theme->primary(),
+            trackColor: $theme->background(),
+            showPercentage: $this->showPercentage,
         );
     }
 }

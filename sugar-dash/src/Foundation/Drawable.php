@@ -24,6 +24,16 @@ interface Drawable
     public function setRect(Rect $rect): self;
 
     /**
+     * Apply a theme to this drawable, returning a new instance with
+     * the theme's colors. Default implementation returns $this
+     * (no-op) so existing drawables continue to work unchanged.
+     *
+     * Layout containers should fan the theme down to their children
+     * via their own withTheme() implementations.
+     */
+    public function withTheme(Theme $theme): self;
+
+    /**
      * Draw the content into the provided buffer.
      */
     public function draw(Buffer $buffer): void;
