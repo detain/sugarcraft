@@ -15,11 +15,12 @@
 
 The shipped `sugar-post` is a faithful PHP port of **charmbracelet/pop**
 — a CLI mailer that sends email via Resend HTTP API or direct SMTP. The
-research doc (`docs/research/libraries/sugar-post-research.md`) framed
-the library as a **"social-media TUI"** and benchmarked it against
-Mastodon clients like Perch, Mastui, Toot, and Tootles. That framing
-appears to be a misread of the name "Pop" (which is an email TUI in the
-Charm ecosystem, not a microblog client).
+research doc (`docs/research/libraries/sugar-post-research.md`) names
+the shipped lib an email client up front, then proposes a strategic
+pivot toward a **"social-media TUI"** and benchmarks the latter
+framing against Mastodon clients like Perch, Mastui, Toot, and Tootles.
+That pivot framing reads sugar-post as a microblog client even though
+"Pop" in the Charm ecosystem is an email TUI.
 
 Three options:
 
@@ -33,7 +34,7 @@ Three options:
 
 **Recommendation:** **Option A** (see §6). The research doc's social-
 media framing should be retired; the shipped artifact tracks the real
-upstream and i18n coverage is already done across 17 locales.
+upstream and i18n coverage is already done across 16 locales.
 
 ---
 
@@ -75,7 +76,7 @@ Everything else upstream Pop does has a matching PHP surface.
 **Source citations:**
 - `sugar-post/README.md:L13` — "PHP port of charmbracelet/pop"
 - `sugar-post/composer.json:L2` — `sugarcraft/sugar-post`
-- `sugar-post/src/Email.php:L17–L32` — immutable readonly props
+- `sugar-post/src/Email.php:L21–L32` — immutable readonly props
 - `sugar-post/src/SmtpTransport.php` — full MIME builder
 
 ---
@@ -93,13 +94,15 @@ adding OAuth flows, multi-account stores, vim keybindings,
 post composers with content warnings, virtual-scroll timelines, SSE
 streaming, and Kitty / iTerm2 / Sixel image rendering.
 
-The framing comes from reading "Pop" as a microblog verb ("post a
-pop") rather than as the upstream tool's actual name. **No
+The research doc proposes a microblog *pivot* as a strategic
+alternative — its framing reads sugar-post as a social-media TUI even
+though the doc itself names the shipped lib an email client up front
+and cites `charmbracelet/pop` as the upstream throughout. **No
 charmbracelet repo named `post` exists.** The actual upstream is
 [`charmbracelet/pop`](https://github.com/charmbracelet/pop) (2.8 k
 stars), an email TUI — exactly what the shipped lib ports.
 
-The research doc itself notes this implicitly in Part 2 §2.1, which
+The research doc itself makes this explicit in Part 2 §2.1, which
 quotes Pop's `Model` struct with `From`, `To`, `Subject`, `Body`,
 `Attachments`, `Cc`, `Bcc` text inputs and concludes Pop is "the
 reference implementation" for "email TUI port from Pop."
@@ -163,7 +166,7 @@ roadmap).
 
 ### Why A is cheap
 
-- The 17-locale i18n surface stays intact.
+- The 16-locale i18n surface stays intact.
 - Tests stay intact.
 - `MATCHUPS.md` row stays 🟢; only sub-status moves from "library
   surface complete" to "library surface + TUI complete."
@@ -218,10 +221,10 @@ Honestly: **almost nothing.**
   Email-shaped `send(Email)` signature does not. A `Post` and an
   `Email` share no fields beyond "body string + zero-or-more
   attachments."
-- The 17 i18n files would need full re-translation (all current keys
+- The 16 i18n files would need full re-translation (all current keys
   are email-specific).
 - The CLI argument parser in `bin/pop` is generic enough to keep, but
-  it's ~50 lines — trivial to rewrite.
+  it's 221 lines — small enough to rewrite.
 
 ### Risks
 
@@ -240,7 +243,7 @@ Honestly: **almost nothing.**
    (macOS), or rolling a file-based fallback with explicit warnings.
 4. **Bluesky AT-protocol churn.** API was still mutating as of late
    2025; binding now risks rework.
-5. **Discards working software.** A green, tested, 17-language email
+5. **Discards working software.** A green, tested, 16-language email
    tool gets deleted to start over.
 
 ---
@@ -302,8 +305,9 @@ surface.**
 
 1. **The shipped artifact is correct.** MATCHUPS.md row, composer
    description, README, source — all consistent with the real upstream
-   `charmbracelet/pop`. The research doc misread "Pop" as a microblog
-   metaphor; reverting the framing costs zero code.
+   `charmbracelet/pop`. The research doc's microblog-pivot framing
+   recasts "Pop" as a social-media surface; retiring that framing
+   costs zero code.
 2. **Cheap to finish.** ~2 weeks adds the Bubble Tea TUI layer that
    matches upstream Pop's Model/View/Update flow. No new dependencies
    outside the monorepo.
@@ -354,7 +358,7 @@ If none of those hold, A is the correct call.
    - If yes → C is still wrong (separate library), but B becomes
      plausible if the email use-case is itself low value.
 
-3. **Is the existing 17-language i18n investment worth keeping?**
+3. **Is the existing 16-language i18n investment worth keeping?**
    - If yes → A (or C, but C still has all of B's risks).
    - If no → B becomes cheaper (~3 weeks saved on retranslation).
 
