@@ -8,6 +8,8 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A panel component with header and footer sections.
@@ -451,6 +453,37 @@ final class Panel implements \SugarCraft\Dash\Foundation\Sizer
             borderColor: $this->borderColor,
             titleColor: $this->titleColor,
             style: $style,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $content = $this->content;
+        if ($content instanceof Drawable) {
+            $content = $content->withTheme($theme);
+        }
+
+        $header = $this->header;
+        if ($header instanceof Drawable) {
+            $header = $header->withTheme($theme);
+        }
+
+        $footer = $this->footer;
+        if ($footer instanceof Drawable) {
+            $footer = $footer->withTheme($theme);
+        }
+
+        return new self(
+            content: $content,
+            title: $this->title,
+            header: $header,
+            footer: $footer,
+            borderColor: $this->borderColor,
+            titleColor: $this->titleColor,
+            style: $this->style,
         );
     }
 }
