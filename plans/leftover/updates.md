@@ -194,6 +194,7 @@ review for step 03.08 · clean · PR#541
   step 04.02 · PR#566 · sugar-stickers: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
 review for step 04.02 · clean · PR#566
 docs for step 04.02 · PR#567 · document Viewport/Scrollbar SSOT in README + docs/lib/sugar-stickers.html
+step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb rendering + candy-zone dep
 
 ## Open review findings — 03.05
 
