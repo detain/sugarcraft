@@ -53,7 +53,7 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
 | Cursor | `Cursor\Cursor` | Position + visibility + origin mode tracking |
 | SGR | `Sgr\Sgr` | Current graphics rendition: foreground / background / attributes |
-| Mode | `Mode\Mode` | Dec private mode (`DECSET`/`DECRST`) flags |
+| Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 
 ### Parser handlers
@@ -64,7 +64,7 @@ Each handler translates parser actions into handler state mutations:
 - `SgrHandler` — SGR sequences (colour + attributes)
 - `EraseHandler` — ED, EL, ECH, DECSCA
 - `ScrollHandler` — SU, SD, DECSTBM
-- `ModeHandler` — DECSET/DECRST/DECMODESET/DECMODERST
+- `ModeHandler` — DECSET/DECRST/DECMODESET/DECMODERST (includes DECAWM mode 7)
 - `TabHandler` — TBC, HTS
 - `OscHandler` — OSC window title, hyperlink, colour palette
 - `ScreenHandler` — orchestrates all of the above; owns the Buffer
@@ -83,6 +83,30 @@ foreach ($before->diff($after) as $change) {
     echo "{$row},{$col}: '{$prev->grapheme}' → '{$next->grapheme}'\n";
 }
 ```
+
+## Auto-wrap (DECAWM)
+
+DECAWM (`CSI ? 7 h` / `CSI ? 7 l`) controls whether the cursor
+automatically wraps to the next line when a character is printed at the
+rightmost column. The `Mode` object exposes this as:
+
+```php
+// Query the current state.
+$mode = $vt->mode();
+var_dump($mode->autoWrap);  // bool
+
+// Build a new mode with auto-wrap forced on/off.
+$wrapped = $mode->withAutoWrap(true);
+```
+
+When auto-wrap is **off** (the default), characters written at the
+rightmost column are silently discarded. When **on**, the cursor moves
+to column 0 of the next row before writing — and if that row is within a
+scroll region the region scrolls up by one line, matching VT100 behavior.
+
+Scroll regions (DECSTBM, `CSI r`) and auto-wrap interact correctly:
+wrapping at the bottom of a scroll region triggers a scroll within that
+region, not on the whole buffer.
 
 ## Test
 
