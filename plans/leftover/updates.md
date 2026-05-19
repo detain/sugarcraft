@@ -192,6 +192,7 @@ review for step 03.08 · clean · PR#541
   step 04.01 · PR#564 · sugar-boxer: compose candy-sprinkles Border/Style (leftover-rollout step 04.01)
   docs for step 04.01 · PR#565 · sugar-boxer: document withBorderStyle/withStyle/withTitle/withMargin/withAlignH/withAlignV in README + add CALIBER_LEARNINGS.md + fix docs/lib/sugar-boxer.html quickstart + API table
   step 04.02 · PR#566 · sugar-stickers: compose sugar-bits Viewport + Scrollbar (leftover-rollout step 04.02)
+review for step 04.02 · clean · PR#566
 
 ## Open review findings — 03.05
 
