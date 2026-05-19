@@ -43,7 +43,31 @@ flag list per command.
 
 CandyShell uses PHP attributes to auto-discover commands at runtime.
 Mark any class extending `Symfony\Component\Console\Command\Command` with
-`#[Command]` and it will be picked up by `Application::scan()`:
+`#[Command]` and it will be picked up by `Application::scan()`.
+
+### Help attributes
+
+Two additional attributes enrich the `--help` output of your commands:
+
+- **`#[Alias('name')]`** — registers an alternative name for the command
+  (e.g. `choose` → `cho`). Multiple aliases are supported via repeated
+  attributes.
+- **`#[Example('usage', 'description')]`** — adds an example line to the
+  command's help block. The `description` parameter is optional. Multiple
+  examples are supported via repeated attributes.
+
+The `HelpFormatter` class renders these automatically when `--help` is
+invoked. It reads `#[Alias]` and `#[Example]` attributes via
+`ReflectionClass::getAttributes()` and formats them alongside the
+standard Symfony description and help text.
+
+### Typo suggestion
+
+When a user types an unknown command name, `Application::find()` runs it
+through a `TypoSuggester` that computes Levenshtein distance against all
+registered command names. If a match is found within distance ≤ 2, the
+error message suggests the nearest alternative (e.g. "Did you mean
+`choose`?"). Beyond distance 2 the original error propagates silently.
 
 ```php
 use SugarCraft\Shell\Attribute\Command;

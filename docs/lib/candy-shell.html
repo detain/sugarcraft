@@ -132,6 +132,15 @@ $app->run();</code></pre>
     <tr><td><code>Application::scan()</code></td><td><code>SugarCraft\Shell\Application</code></td><td>Opt-in discovery method</td></tr>
     </table>
 
+    <h3 style="margin-top: 40px;">Enhanced help (step 06.06)</h3>
+    <table class="api-table">
+    <tr><th>Type</th><th>Namespace</th><th>Role</th></tr>
+    <tr><td><code>Alias</code></td><td><code>SugarCraft\Shell\Attribute\Alias</code></td><td>#[Attribute] registering CLI command aliases</td></tr>
+    <tr><td><code>Example</code></td><td><code>SugarCraft\Shell\Attribute\Example</code></td><td>#[Attribute] adding example usage to help output</td></tr>
+    <tr><td><code>HelpFormatter</code></td><td><code>SugarCraft\Shell\Help\HelpFormatter</code></td><td>Renders enhanced help from #[Alias]/#[Example] attributes</td></tr>
+    <tr><td><code>TypoSuggester</code></td><td><code>SugarCraft\Shell\Help\TypoSuggester</code></td><td>Levenshtein distance ≤ 2 typo suggestions for unknown commands</td></tr>
+    </table>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-shell">Source on GitHub</a></li>
