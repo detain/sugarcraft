@@ -33,6 +33,7 @@ final readonly class Mode
         public bool $syncUpdate = false,
         public bool $mouseExtended = false,
         public int $altScreenVariant = self::ALT_NONE,
+        public bool $autoWrap = false,
     ) {}
 
     public function withAltScreen(bool $v): self
@@ -205,6 +206,24 @@ final readonly class Mode
             syncUpdate: $v,
             mouseExtended: $this->mouseExtended,
             altScreenVariant: $this->altScreenVariant,
+            autoWrap: $this->autoWrap,
+        );
+    }
+
+    public function withAutoWrap(bool $v): self
+    {
+        return new self(
+            altScreen: $this->altScreen,
+            cursorVisible: $this->cursorVisible,
+            bracketedPaste: $this->bracketedPaste,
+            mouseSgr: $this->mouseSgr,
+            mouseAny: $this->mouseAny,
+            mouseHighlights: $this->mouseHighlights,
+            mouseCellMotion: $this->mouseCellMotion,
+            syncUpdate: $this->syncUpdate,
+            mouseExtended: $this->mouseExtended,
+            altScreenVariant: $this->altScreenVariant,
+            autoWrap: $v,
         );
     }
 
@@ -219,6 +238,7 @@ final readonly class Mode
             && $this->mouseCellMotion === $other->mouseCellMotion
             && $this->syncUpdate === $other->syncUpdate
             && $this->mouseExtended === $other->mouseExtended
-            && $this->altScreenVariant === $other->altScreenVariant;
+            && $this->altScreenVariant === $other->altScreenVariant
+            && $this->autoWrap === $other->autoWrap;
     }
 }
