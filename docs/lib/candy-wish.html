@@ -132,7 +132,8 @@ Server::new()
 <tr><td>Session</td><td>withProtocolMetadata(string $sessionId, string $authMethod, ?string $keyFingerprint, string $clientVersion, string $serverVersion): self</td><td>Return a new Session with protocol-handshake metadata attached (called by transports after SSH handshake)</td></tr>
 <tr><td>Session</td><td>isInteractive(): bool</td><td>True when a TTY is attached</td></tr>
 <tr><td>Session</td><td>toLogContext(): array</td><td>Array of session fields for logging</td></tr>
-<tr><td>Middleware</td><td>handle(Context, Session, callable): void</td><td>All middleware receive Context first, Session second</td></tr>
+<tr><td>Middleware</td><td>handle(Context, Session, callable): void|PromiseInterface</td><td>All middleware receive Context first, Session second; may return void (sync) or PromiseInterface (async — transport awaits before continuing chain)</td></tr>
+<tr><td>AsyncMiddleware</td><td>extends Middleware</td><td>Abstract base for promise-returning middleware — override handleAsync() to perform async I/O (LDAP, OAuth, database auth); 30-second timeout enforced via await()</td></tr>
 <tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
 <tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
 <tr><td>Auth</td><td>new(array $users, array $keyFingerprints)</td><td>Username and/or key allowlist middleware</td></tr>
