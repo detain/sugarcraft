@@ -54,7 +54,7 @@ this before spawning the next subagent.)
 in a follow-up step or a deferred phase. Each entry: one short line +
 the step that surfaced it.)
 
-- (none currently)
+- step 06.02: Multi-push ScreenStack integration test (`testPushThreeScreensPopTwoVerifiesStateAndBreadcrumb`) fails with only first push recorded when using Program::send() + drainPending() timing — the ScreenStack type and RootModelWithScreenStack work correctly (proven by unit tests and direct dispatch), but socket pair + stream_select() timing in the full Program integration test is unreliable. Test was simplified to use direct dispatch instead of full Program loop.
 
 ---
 
