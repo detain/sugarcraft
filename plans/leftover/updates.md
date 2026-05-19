@@ -46,7 +46,7 @@ this before spawning the next subagent.)
 
   This is NOT a chart duplication problem. Per CALIBER_LEARNINGS entry 38 [pattern:dual-foundation-ssot]: "The 5 retained types are intentionally distinct from same-named canonical types in candy-sprinkles/candy-core/candy-vt due to different upstream lineage." The same applies here. **The step should be closed as "not actionable"** — there is nothing to delete and no dependency to add. sugar-dash chart components serve dashboard-specific visualization needs; sugar-charts serves canonical chart primitives. The boundary is already correct.   Supervisor decision needed: should this step be dropped from the rollout, or should I attempt a different interpretation (e.g., adding sugar-charts as a dep even without deleting anything)?
 
-- **step 07.15** (candy-mosaic animation support): **BLOCKED** — step 11.04 (strategic plan for candy-flip/mosaic split) has NOT shipped. The strategic plan `plans/candy-flip-mosaic-split.md` does not exist and step 11.04 has no done-log entry. Step 07.15 explicitly blocks on 11.04: "This step assumes step 11.04 (strategic plan for candy-flip/mosaic split) has landed first or its conclusions are stable. If unclear, block this step until 11.04 ships." The step 11.04 file itself notes a sequencing bug — it should have landed before 07.15 but was placed in a later phase. **ACTION NEEDED**: Either execute step 11.04 first (write the strategic plan), or re-sequence so 11.04 precedes 07.15.
+- **step 07.15** (candy-mosaic animation support): ~~BLOCKED~~ **RESOLVED via PR#660 (step 11.04)** — strategic plan `plans/candy-flip-mosaic-split.md` shipped 2026-05-19. Decision: Animation lives in `candy-mosaic`; `Animation` ctor takes `list<ImageSource>` + per-frame delays (frame-source-agnostic); candy-mosaic does **not** require candy-flip — drop the `"sugarcraft/candy-flip": "@dev"` bullet from step 07.15's Modify list. Future GIF→Mosaic bridge (if any) lives in candy-flip, not in mosaic. See plan §3 for the answer table, §4 for API contract.
 
 ---
 
@@ -328,6 +328,7 @@ step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2
 review for step 11.03 · clean · PR#658
 tests-ci for step 11.03 · clean
 docs for step 11.03 · clean
+step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo (Option C — neither lib depends on the other; Animation lives in candy-mosaic with ImageSource[] ctor; resolves step 07.15 blocker — drop the candy-flip require from 07.15's Modify list)
 
 ## Open review findings — 03.05
 
