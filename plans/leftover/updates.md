@@ -308,6 +308,7 @@ docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + 
   step 07.12 · PR#642 · candy-mosaic: Renderer::delete() API (Kitty APC delete / iTerm2 Pop / empty for text fallbacks) + Ansi::iterm2Delete() helper + WezTerm detection verified (leftover-rollout step 07.12)
   docs for step 07.12 · clean · PR#643 · document Renderer::delete() in README (per-renderer table) + end-user HTML API table + CALIBER pattern entry
   step 07.13 · PR#644 · candy-mosaic: useVirtual flag (a=p) + gzcompress payload when compress=1 + 10 new tests (leftover-rollout step 07.13)
+  fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 
 ## Open review findings — 03.05
 
@@ -323,9 +324,5 @@ docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + 
 ## Open review findings — 01.08
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
-
-## Open review findings — 07.13
-
-- [x] candy-mosaic/src/Renderer/KittyRenderer.php:146-149: orphaned docblock — `/** Split base64 string into protocol-compliant chunks (max 4092 bytes).` with no closing `*/`, followed by an empty line then another `/**` for `ensurePng()`. The `chunk()` method at line 187 has its own correct docblock; this stray one has no associated code element (trivial cleanup, no functional impact; 167 tests pass cleanly).
 
 
