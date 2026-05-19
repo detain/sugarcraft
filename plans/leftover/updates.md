@@ -211,6 +211,9 @@ review for step 05.03 · clean · PR#573
 tests-ci for step 05.03 · clean
 docs for step 05.03 · PR#574 · document i18n surface in README + CALIBER_LEARNINGS.md + docs/lib/sugar-toast.html
 step 05.04 · PR#575 · sugar-boxer: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
+review for step 05.04 · clean · PR#575
+tests-ci for step 05.04 · clean
+docs for step 05.04 · clean
 
 ## Open review findings — 03.05
 
