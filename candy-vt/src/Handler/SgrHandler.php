@@ -6,6 +6,7 @@ namespace SugarCraft\Vt\Handler;
 
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Sgr\Sgr;
+use SugarCraft\Vt\Sgr\UnderlineStyle;
 
 /**
  * Applies CSI m (Select Graphic Rendition) parameters to an Sgr value.
@@ -14,6 +15,15 @@ use SugarCraft\Vt\Sgr\Sgr;
  * blink/reverse/hidden/strikethrough toggles, 16-color and bright fg/bg,
  * 256-color via 38;5;N / 48;5;N, truecolor via 38;2;R;G;B / 48;2;R;G;B,
  * and the matching off-toggles.
+ *
+ * SGR underline styles via subparameters:
+ *   4:0 = none (underline off)
+ *   4:1 = single underline (also plain 4 with no subparam)
+ *   4:2 = double underline
+ *   4:3 = curly underline
+ *   4:4 = dotted underline
+ *   4:5 = dashed underline
+ *   24   = underline off (any style)
  *
  * Mirrors charmbracelet/x/vt SGR parser semantics. Default params (-1
  * sentinel from the parser) are treated as 0 = reset.
@@ -55,14 +65,14 @@ final class SgrHandler
             $p === 1 => [$sgr->withBold(true), $i + 1],
             $p === 2 => [$sgr->withDim(true), $i + 1],
             $p === 3 => [$sgr->withItalic(true), $i + 1],
-            $p === 4 => [$sgr->withUnderline(true), $i + 1],
+            $p === 4 => $this->underlineStyle($i, $params, $sgr),
             $p === 5, $p === 6 => [$sgr->withBlink(true), $i + 1], // slow + rapid both fold to blink
             $p === 7 => [$sgr->withReverse(true), $i + 1],
             $p === 8 => [$sgr->withHidden(true), $i + 1],
             $p === 9 => [$sgr->withStrikethrough(true), $i + 1],
             $p === 22 => [$sgr->withBold(false)->withDim(false), $i + 1],
             $p === 23 => [$sgr->withItalic(false), $i + 1],
-            $p === 24 => [$sgr->withUnderline(false), $i + 1],
+            $p === 24 => [$sgr->withUnderline(false)->withUnderlineStyle(UnderlineStyle::None), $i + 1],
             $p === 25 => [$sgr->withBlink(false), $i + 1],
             $p === 27 => [$sgr->withReverse(false), $i + 1],
             $p === 28 => [$sgr->withHidden(false), $i + 1],
@@ -81,6 +91,39 @@ final class SgrHandler
 
             default => [$sgr, $i + 1],
         };
+    }
+
+    /**
+     * Handle CSI 4 (underline) with optional subparameter N in 4:N.
+     *
+     * @param list<int> $params
+     * @return array{0: Sgr, 1: int}
+     */
+    private function underlineStyle(int $i, array $params, Sgr $sgr): array
+    {
+        $sub = $params[$i + 1] ?? -1;
+        $hasSubparam = isset($params[$i + 1]) && $params[$i + 1] !== -1;
+        if (!$hasSubparam || $sub === 1) {
+            // Plain 4 (no subparam) or 4:1 → single underline (existing behavior)
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 1];
+        }
+        if ($sub === 0) {
+            return [$sgr->withUnderlineStyle(UnderlineStyle::None), $i + 2];
+        }
+        if ($sub === 2) {
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Double), $i + 2];
+        }
+        if ($sub === 3) {
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Curly), $i + 2];
+        }
+        if ($sub === 4) {
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Dotted), $i + 2];
+        }
+        if ($sub === 5) {
+            return [$sgr->withUnderlineStyle(UnderlineStyle::Dashed), $i + 2];
+        }
+        // Unknown subparameter — treat as single underline
+        return [$sgr->withUnderlineStyle(UnderlineStyle::Single), $i + 2];
     }
 
     /**

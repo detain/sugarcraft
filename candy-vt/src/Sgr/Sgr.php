@@ -17,6 +17,7 @@ final readonly class Sgr
         public bool $bold = false,
         public bool $italic = false,
         public bool $underline = false,
+        public UnderlineStyle $underlineStyle = UnderlineStyle::None,
         public bool $strikethrough = false,
         public bool $blink = false,
         public bool $reverse = false,
@@ -38,6 +39,7 @@ final readonly class Sgr
             bold: $v,
             italic: $this->italic,
             underline: $this->underline,
+            underlineStyle: $this->underlineStyle,
             strikethrough: $this->strikethrough,
             blink: $this->blink,
             reverse: $this->reverse,
@@ -53,7 +55,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $v,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -65,7 +68,22 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $v, strikethrough: $this->strikethrough,
+            underline: $v, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
+            blink: $this->blink, reverse: $this->reverse,
+            dim: $this->dim, hidden: $this->hidden,
+            invisible: $this->invisible,
+            foreground: $this->foreground, background: $this->background,
+        );
+    }
+
+    public function withUnderlineStyle(UnderlineStyle $style): self
+    {
+        return new self(
+            bold: $this->bold, italic: $this->italic,
+            underline: $style !== UnderlineStyle::None,
+            underlineStyle: $style,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -77,7 +95,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $v,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $v,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -89,7 +108,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $v, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -101,7 +121,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $v,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -113,7 +134,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $v, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -125,7 +147,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $v,
             invisible: $this->invisible,
@@ -137,7 +160,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -149,7 +173,8 @@ final readonly class Sgr
     {
         return new self(
             bold: $this->bold, italic: $this->italic,
-            underline: $this->underline, strikethrough: $this->strikethrough,
+            underline: $this->underline, underlineStyle: $this->underlineStyle,
+            strikethrough: $this->strikethrough,
             blink: $this->blink, reverse: $this->reverse,
             dim: $this->dim, hidden: $this->hidden,
             invisible: $this->invisible,
@@ -162,6 +187,7 @@ final readonly class Sgr
         if ($this->bold !== $other->bold) return false;
         if ($this->italic !== $other->italic) return false;
         if ($this->underline !== $other->underline) return false;
+        if ($this->underlineStyle !== $other->underlineStyle) return false;
         if ($this->strikethrough !== $other->strikethrough) return false;
         if ($this->blink !== $other->blink) return false;
         if ($this->reverse !== $other->reverse) return false;
