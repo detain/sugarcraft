@@ -323,6 +323,7 @@ docs for step 11.01 · clean
 step 11.02 · PR#653 · plans: candy-serve-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
 fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); sugar-stash 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
+docs for step 11.02 · clean
 
 ## Open review findings — 03.05
 
