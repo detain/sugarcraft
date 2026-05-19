@@ -10,6 +10,13 @@ namespace SugarCraft\Crumbs;
  * Push new items to go deeper; pop to go back up.
  * The top of the stack is the "current" screen/section.
  *
+ * ## Click dispatch (step 10.21)
+ *
+ * When a {@see \SugarCraft\Zone\MsgZoneInBounds} is received for a crumb
+ * zone (e.g. `crumb-0`, `crumb-1`), the parent component should dispatch
+ * to this stack's `pushDirectory()` / `view()` — the actual wiring is
+ * implemented in step 10.21.
+ *
  * Port of KevM/bubbleo NavStack.
  *
  * @see https://github.com/KevM/bubbleo
