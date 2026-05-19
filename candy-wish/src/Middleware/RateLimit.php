@@ -56,7 +56,7 @@ final class RateLimit implements Middleware
         $this->stderr = $stderr;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         $key = $session->clientHost === '' ? '_unknown' : $session->clientHost;
         if (!$this->take($key)) {
