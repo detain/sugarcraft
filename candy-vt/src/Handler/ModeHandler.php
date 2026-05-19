@@ -9,6 +9,7 @@ namespace SugarCraft\Vt\Handler;
  *
  * Recognised modes (and their `Mode` field):
  *
+ * - `7`    DECAWM auto-wrap        → `autoWrap`
  * - `25`   cursor visibility       → `cursorVisible`
  * - `1001` X10 mouse (button only) → `mouseHighlights`
  * - `1000` X11 mouse (button only) → `mouseAny`
@@ -46,6 +47,7 @@ final class ModeHandler
     private function applyOne(int $mode, bool $set, ScreenHandler $h): void
     {
         match ($mode) {
+            7 => $h->mode = $h->mode->withAutoWrap($set),
             25 => $this->setCursorVisible($set, $h),
             1001 => $h->mode = $h->mode->withMouseHighlights($set),
             1000 => $h->mode = $h->mode->withMouseAny($set),
