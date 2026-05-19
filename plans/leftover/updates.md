@@ -238,6 +238,17 @@ fix for step 06.03 · PR#588 · resolved 3 findings (@return ?Closure fix + [pat
 tests-ci for step 06.03 · clean
 docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user page feature grid
 
+## Open review findings — 06.04
+
+- [ ] **BLOCKER — PR #591 never merged**: `git log origin/master` shows HEAD as `a4a836b` (step 06.03 docs). PR #591 does not exist on GitHub (`gh api` returns NOT_FOUND). The `ai/core-worker-pool` branch has no remote counterpart (`git ls-remote origin refs/heads/ai/core-worker-pool` returns empty). Four files exist only as **untracked** (never committed): `candy-core/src/WorkerPool.php`, `candy-core/src/Cmd/WorkerCmd.php`, `candy-core/src/Msg/WorkerResultMsg.php`, `candy-core/tests/WorkerPoolTest.php`. The work must be committed, pushed, and merged before this review can be completed.
+
+### Substantive issues (visible in untracked files, must be fixed before merge):
+
+- [ ] candy-core/tests/WorkerPoolTest.php:160,162: `error_log(...)` debug statements in `testPoolConcurrencyIsBounded` — must be removed before merge.
+- [ ] candy-core/src/WorkerPool.php:449: `WorkerState` properties `$idle`, `$currentJobId`, `$buffer` are `public` without annotation; should be `public readonly` per AGENTS.md convention for state properties.
+- [ ] candy-core/src/WorkerPool.php:436: `proc_close($worker->process)` called unconditionally after `@fclose` on stdin/stdout/stderr — if `$worker->process` is `null` (as in the `handleWorkerDeath` call at line 263 where `process: null`), this is a no-op but the `is_resource` guard is redundant since `proc_close` already accepts non-resource ints/nulls; however the current code is not wrong per se. Minor style nits.
+- [ ] candy-core/src/Msg/WorkerResultMsg.php: `public readonly` class — but `$error` is nullable without `?` prefix in constructor param; appears to be `?Throwable $error` in the docblock but `?Throwable` is missing from the actual param declaration (`public ?\Throwable $error`). Should be `public readonly ?\Throwable $error`.
+
 ## Open review findings — 03.05
 
 - [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
