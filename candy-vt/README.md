@@ -56,6 +56,7 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
+| Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I/O, mode 1004) |
 
 ### Parser handlers
 
@@ -177,6 +178,73 @@ $scrollback->all()       // array<int, array<int, Cell>> — all rows oldest→n
 The scrollback is consumed by `ScreenHandler`'s scroll-up and scroll-down
 operations (SU/SD/IND/RI/NEL). Erase-of-scrollback (`CSI 3 J`) clears the
 ring buffer.
+
+## Origin mode (DECOM)
+
+DECOM (`CSI ?6 h` / `CSI ?6 l`) controls whether cursor addressing is
+relative to the absolute screen origin or to the scroll region defined by
+DECSTBM. The `Mode` object exposes this as:
+
+```php
+$mode = $vt->mode();
+var_dump($mode->originMode);  // bool
+
+$origin = $mode->withOriginMode(true);
+```
+
+When origin mode is **on**, the cursor is constrained to the scroll region
+and cursor-addressing commands (`CSI row;col H`, `CSI row;col f`) treat
+`(1,1)` as the top-left of the DECSTBM region. When **off** (the default),
+`(1,1)` is the absolute top-left of the screen. DECSTBM must be reset
+when leaving origin mode — both happen together via `CSI ?6 l`.
+
+## Cursor shape (DECSCUSR)
+
+DECSCUSR (`CSI Ps SP q`) sets the terminal cursor shape. The `Mode` object
+stores this as an integer and exposes it via the `CursorShape` enum:
+
+```php
+use SugarCraft\Vt\Mode\Mode;
+use SugarCraft\Vt\CursorShape;
+
+$mode = $vt->mode();
+var_dump($mode->cursorShape);  // int (0–6)
+
+// Build a new mode with a specific cursor shape.
+$bar = $mode->withCursorShape(CursorShape::SteadyBar->toInt());
+```
+
+`CursorShape` values map to VT sequences:
+
+| Enum value      | Value | CSI sequence   | Description            |
+|-----------------|-------|----------------|------------------------|
+| `BlinkingBlock`  | 0/1   | `CSI 0 SP q`   | Blinking block         |
+| `SteadyBlock`    | 2     | `CSI 2 SP q`   | Steady block           |
+| `BlinkingUnderline` | 3 | `CSI 3 SP q`   | Blinking underline    |
+| `SteadyUnderline`  | 4  | `CSI 4 SP q`   | Steady underline       |
+| `BlinkingBar`    | 5     | `CSI 5 SP q`   | Blinking vertical bar  |
+| `SteadyBar`       | 6     | `CSI 6 SP q`   | Steady vertical bar    |
+
+`CursorShape::fromInt()` normalises both `0` and `1` to `BlinkingBlock`
+to match the VT spec.
+
+## Focus events (mode 1004)
+
+When focus event reporting is enabled (`CSI ?1004 h` / `CSI ?1004 l`),
+the terminal records focus-in (`CSI I`) and focus-out (`CSI O`) events.
+The `Mode` object tracks the reporting flag:
+
+```php
+$mode = $vt->mode();
+var_dump($mode->reportFocusEvents);  // bool
+
+$tracking = $mode->withReportFocusEvents(true);
+```
+
+Events are accumulated on the internal `ScreenHandler::$focusEvents`
+array as `FocusInMsg` / `FocusOutMsg` value objects. A consumer can
+inspect the array directly or wire the handler to dispatch events to
+an event loop.
 
 ## Test
 
