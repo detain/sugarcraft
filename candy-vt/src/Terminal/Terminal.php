@@ -10,6 +10,7 @@ use SugarCraft\Vt\Handler\ScreenHandler;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Parser\Parser;
 use SugarCraft\Vt\Screen\Screen;
+use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
 /**
@@ -23,6 +24,7 @@ final class Terminal
 {
     private Parser $parser;
     private ScreenHandler $handler;
+    private int $scrollbackSize;
 
     public function __construct(
         int $cols,
@@ -30,12 +32,15 @@ final class Terminal
         ?Buffer $buffer = null,
         ?Cursor $cursor = null,
         ?Mode $mode = null,
+        int $scrollbackSize = 1000,
     ) {
+        $this->scrollbackSize = $scrollbackSize;
         $this->handler = new ScreenHandler(
             buffer: $buffer ?? new Buffer($cols, $rows),
             cursor: $cursor,
             sgr: Sgr::empty(),
             mode: $mode,
+            scrollback: new Scrollback($scrollbackSize),
         );
         $this->parser = new Parser($this->handler);
     }
@@ -62,7 +67,7 @@ final class Terminal
 
     public function screen(): Screen
     {
-        return Screen::fromBuffer($this->handler->buffer);
+        return Screen::fromBuffer($this->handler->buffer, $this->handler->scrollback);
     }
 
     public function cursor(): Cursor
@@ -164,6 +169,21 @@ final class Terminal
             }
         }
         $clone->handler->tabStops = $stops;
+        return $clone;
+    }
+
+    /**
+     * Return a new Terminal with a different scrollback buffer size.
+     * The new size applies to future scrolling; existing scrollback is kept.
+     */
+    public function withScrollbackSize(int $size): self
+    {
+        if ($size < 1) {
+            throw new \InvalidArgumentException('scrollbackSize must be >= 1');
+        }
+        $clone = clone $this;
+        $clone->scrollbackSize = $size;
+        $clone->handler->scrollback = new Scrollback($size);
         return $clone;
     }
 
