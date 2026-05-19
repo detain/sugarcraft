@@ -224,6 +224,12 @@ review for step 05.07 · PR#578 · 3 files (lang/en.php, src/Renderer.php, tests
 tests-ci for step 05.07 · clean
 docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/sugar-stash.html + create CALIBER_LEARNINGS.md
 step 05.08 · PR#580 · sugar-stickers: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no user-facing strings — purely computational lib)
+review for step 05.08 · clean · PR#580
+tests-ci for step 05.08 · clean
+docs for step 05.08 · clean
+review for step 06.01 · clean · PR#581
+tests-ci for step 06.01 · clean
+docs for step 06.01 · clean · PR#582
 
 ## Open review findings — 03.05
 
