@@ -55,7 +55,7 @@ final class Renderer
             "%s  [%s%s]",
             self::truncate($pane->cwd, 30),
             $pane->sort->value,
-            $pane->showHidden ? '+hidden' : '',
+            $pane->showHidden ? ' ' . Lang::t('pane.hidden_suffix') : '',
         );
 
         $rows = [];
@@ -80,7 +80,7 @@ final class Renderer
 
     private static function keyHelp(): string
     {
-        return 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle';
+        return Lang::t('keyhelp.default');
     }
 
     private static function renderSearch(Manager $m): string
@@ -94,14 +94,14 @@ final class Renderer
         $total = count($m->searchResults);
         foreach ($m->searchResults as $i => $entry) {
             $prefix = $i === $m->searchCursor ? '> ' : '  ';
-            $type = $entry->isDir ? '[DIR]' : '[FILE]';
+            $type = $entry->isDir ? Lang::t('search.type_dir') : Lang::t('search.type_file');
             $lines[] = "{$prefix}{$type} {$entry->name}";
         }
         if ($total === 0) {
-            $lines[] = '  (no matches)';
+            $lines[] = '  ' . Lang::t('search.no_match');
         } else {
             $current = $m->searchCursor + 1;
-            $lines[] = "  ({$current}/{$total})";
+            $lines[] = '  ' . Lang::t('search.counter', ['current' => $current, 'total' => $total]);
         }
         return implode("\n", $lines) . "\n\n";
     }
