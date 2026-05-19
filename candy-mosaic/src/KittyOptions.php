@@ -6,8 +6,6 @@ namespace SugarCraft\Mosaic;
 
 /**
  * Options for the Kitty graphics protocol renderer.
- *
- * @experimental Upstream marks z-index and virtual images as experimental.
  */
 final class KittyOptions
 {
@@ -26,6 +24,7 @@ final class KittyOptions
         private readonly int $cellHeight,
         private readonly int $offsetX,
         private readonly int $offsetY,
+        private readonly bool $useVirtual,
     ) {}
 
     /**
@@ -42,6 +41,7 @@ final class KittyOptions
             cellHeight: 0,
             offsetX:    0,
             offsetY:    0,
+            useVirtual: false,
         );
     }
 
@@ -63,6 +63,7 @@ final class KittyOptions
             cellHeight: 0,
             offsetX:    $x,
             offsetY:    $y,
+            useVirtual: false,
         );
     }
 
@@ -80,6 +81,7 @@ final class KittyOptions
             cellHeight: $this->cellHeight,
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
         );
     }
 
@@ -97,6 +99,25 @@ final class KittyOptions
             cellHeight: $this->cellHeight,
             offsetX:    $this->offsetX,
             offsetY:    $this->offsetY,
+            useVirtual: $this->useVirtual,
+        );
+    }
+
+    /**
+     * Enable virtual-image placement mode (a=p instead of a=T).
+     */
+    public function withUseVirtual(bool $useVirtual = true): self
+    {
+        return new self(
+            action:     $this->action,
+            imageId:    $this->imageId,
+            zIndex:     $this->zIndex,
+            compress:   $this->compress,
+            cellWidth:  $this->cellWidth,
+            cellHeight: $this->cellHeight,
+            offsetX:    $this->offsetX,
+            offsetY:    $this->offsetY,
+            useVirtual: $useVirtual,
         );
     }
 
@@ -119,5 +140,11 @@ final class KittyOptions
     public function isPlace(): bool
     {
         return $this->action === self::ACTION_PLACE;
+    }
+
+    /** @internal */
+    public function useVirtual(): bool
+    {
+        return $this->useVirtual;
     }
 }
