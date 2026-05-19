@@ -21,6 +21,14 @@ final class KittyRenderer implements Renderer
 {
     private const CHUNK_SIZE = 4092;
 
+    /**
+     * Render an image as a Kitty graphics protocol sequence.
+     *
+     * @param ImageSource $image  Source image (PNG/JPEG/GIF)
+     * @param int         $width  Target cell width
+     * @param int|null    $height Target cell height (defaults to width/aspect-ratio)
+     * @return string              APC sequence to transmit the image
+     */
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
         if ($width <= 0) {
