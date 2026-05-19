@@ -7,6 +7,7 @@ via ext-gd and rendered via the best available protocol:
 - **Kitty graphics protocol** — kitty, ghostty, wezterm
 - **iTerm2 inline images** (OSC 1337) — iTerm2, wezterm, mintty
 - **Half-block Unicode** (▀ + 24-bit fg/bg) — universal fallback
+- **Quarter-block Unicode** (░▒▓█ 2×2) — higher fidelity than half-block
 
 ```sh
 composer require sugarcraft/candy-mosaic
@@ -27,6 +28,8 @@ echo $ansi;
 ## API
 
 ```php
+use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
+
 // Probe terminal once, pick best protocol
 $mosaic = Mosaic::probe();
 
@@ -41,7 +44,7 @@ $ansi = $mosaic->render($image, width: 40, height: 20);
 
 // Builder for fine-grained control
 $mosaic = Mosaic::builder()
-    ->withRenderer(new HalfBlockRenderer())
+    ->withRenderer(new QuarterBlockRenderer())
     ->withResize(width: 40, height: 20)
     ->build();
 ```

@@ -16,3 +16,10 @@ Accumulated patterns and gotchas specific to this library.
 - **[Animated GIFs]** This lib handles static frames only. Animated
   GIF support lives in `candy-flip`, which calls `HalfBlockRenderer`
   per frame.
+- **[QuarterBlockRenderer 2×2 sub-pixel]** Uses `PixelGrid::fromGdQuarter`
+  to scale the GD image to `cellW*2 × cellH*2` pixels, then samples four
+  quadrants (ul/ur/ll/lr) per cell. A 4-bit mask (1 bit per quadrant; 1 =
+  bright if any RGB channel > 10) indexes a 16-glyph map (░▒▓█ shades).
+  All four quadrants share the same source pixel colour — bright quadrants
+  render as foreground, dim as background, both via 24-bit ANSI SGR.
+  `supportsAlpha()` returns `false` — no transparency blending.
