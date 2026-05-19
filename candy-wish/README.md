@@ -171,6 +171,26 @@ $s->isInteractive();
 $s->toLogContext();
 ```
 
+After the SSH handshake completes, transports call `withProtocolMetadata()`
+to populate protocol-level fields:
+
+```php
+$s->sessionId;        // SSH session ID (hex string)
+$s->authMethod;       // 'publickey' | 'password' | 'keyboard-interactive' | ...
+$s->keyFingerprint;   // SHA256 host-key fingerprint of the connected client
+$s->clientVersion;    // SSH client version string (e.g. 'SSH-2.0-OpenSSH_9.0')
+$s->serverVersion;    // SSH server version string (e.g. 'SSH-2.0-OpenSSH_9.0')
+
+// Build a new Session with protocol metadata attached
+$s = $s->withProtocolMetadata(
+    sessionId:       $sessionId,
+    authMethod:      $authMethod,
+    keyFingerprint:  $keyFingerprint,
+    clientVersion:   $clientVersion,
+    serverVersion:   $serverVersion,
+);
+```
+
 ## Context propagation
 
 Every request starts with a root {@see Context} created by `Context::background()`.

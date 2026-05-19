@@ -219,6 +219,44 @@ public function handle(Context $ctx, Session $session, callable $next): void
 
 ---
 
+## Session metadata
+
+`Session` carries two logical groups of fields:
+
+**Environment fields** — populated by `Session::fromEnvironment()` from sshd
+environment variables (`USER`, `SSH_CONNECTION`, `TERM`, `SSH_TTY`, etc.):
+`user`, `clientHost`, `clientPort`, `serverHost`, `serverPort`, `term`,
+`cols`, `rows`, `tty`, `command`, `lang`.
+
+**Protocol fields** — populated by `withProtocolMetadata()` (called by
+transports after the SSH handshake completes):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sessionId` | `?string` | SSH session ID (hex string assigned by the transport) |
+| `authMethod` | `?string` | Auth method used — `publickey`, `password`, `keyboard-interactive`, etc. |
+| `keyFingerprint` | `?string` | SHA256 fingerprint of the client's host key |
+| `clientVersion` | `?string` | SSH client version string (e.g. `SSH-2.0-OpenSSH_9.0`) |
+| `serverVersion` | `?string` | SSH server version string (e.g. `SSH-2.0-OpenSSH_9.0`) |
+
+Middleware that needs protocol-level information (e.g. audit logging,
+anomaly detection, rate-limiting per session ID) reads these fields after
+`withProtocolMetadata()` has been called by the transport.
+
+```php
+public function handle(Context $ctx, Session $session, callable $next): void
+{
+    // sessionId / authMethod are null before withProtocolMetadata() is called
+    if ($session->sessionId !== null) {
+        $ctx = $ctx->withValue('session.id', $session->sessionId);
+        $ctx = $ctx->withValue('session.auth_method', $session->authMethod);
+    }
+    $next($ctx, $session);
+}
+```
+
+---
+
 ## Testing your extension
 
 **Unit-test a custom middleware** directly by instantiating it and calling
