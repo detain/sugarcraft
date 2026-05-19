@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A vertical stack layout component with alignment options.
@@ -220,6 +222,30 @@ final class VStack implements \SugarCraft\Dash\Foundation\Sizer
             items: $this->items,
             spacing: $this->spacing,
             alignment: $alignment,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     *
+     * Children that implement Drawable will receive the theme via withTheme().
+     * Non-themed children are passed through unchanged.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof Drawable) {
+                $themedItems[] = $item->withTheme($theme);
+            } else {
+                $themedItems[] = $item;
+            }
+        }
+
+        return new self(
+            items: $themedItems,
+            spacing: $this->spacing,
+            alignment: $this->alignment,
         );
     }
 }

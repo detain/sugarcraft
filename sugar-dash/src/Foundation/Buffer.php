@@ -289,4 +289,12 @@ final class Buffer implements Drawable, Sizer
         $clone->height = $height;
         return $clone;
     }
+
+    /**
+     * Buffers are passive drawing surfaces — theme application is a pass-through.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return $this;
+    }
 }

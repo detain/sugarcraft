@@ -7,6 +7,10 @@ namespace SugarCraft\Dash\Components\Card;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dash\Foundation\Buffer;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Rect;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A badge/tag component for displaying labels and statuses.
@@ -17,10 +21,11 @@ use SugarCraft\Core\Util\ColorProfile;
  * - Different sizes (sm, md, lg)
  * - Customizable colors
  * - Optional icon prefix
+ * - Theme-aware: withTheme() uses the theme's primary color
  *
  * Mirrors badge/tag patterns adapted to PHP with wither-style immutable setters.
  */
-final class Badge implements \SugarCraft\Dash\Foundation\Sizer
+final class Badge implements \SugarCraft\Dash\Foundation\Sizer, Drawable
 {
     private ?int $width = null;
     private ?int $height = null;
@@ -297,5 +302,38 @@ final class Badge implements \SugarCraft\Dash\Foundation\Sizer
             size: $this->size,
             icon: $icon,
         );
+    }
+
+    /**
+     * Apply a theme to this badge, using the theme's primary color.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return new self(
+            text: $this->text,
+            bgColor: $theme->primary(),
+            textColor: $theme->foreground(),
+            style: $this->style,
+            size: $this->size,
+            icon: $this->icon,
+        );
+    }
+
+    // ─── Drawable implementation ──────────────────────────────────
+
+    public function getRect(): Rect
+    {
+        [$w, $h] = $this->getInnerSize();
+        return new Rect(0, 0, $w - 1, $h - 1);
+    }
+
+    public function setRect(Rect $rect): self
+    {
+        return $this;
+    }
+
+    public function draw(Buffer $buffer): void
+    {
+        // Badges render to strings, not into Buffer grids
     }
 }
