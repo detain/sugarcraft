@@ -265,6 +265,7 @@ tests-ci for step 06.10 · clean
 docs for step 06.10 · PR#610 · document PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive in README + end-user/admin/dev docs
 step 06.11 · PR#611 · candy-wish: Subsystem middleware (Subsystem/SubsystemHandler/SftpStub + 6 tests; leftover-rollout step 06.11)
 review for step 06.11 · clean · PR#611
+tests-ci for step 06.11 · clean
 
 ## Open review findings — 03.05
 
