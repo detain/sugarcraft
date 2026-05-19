@@ -31,7 +31,7 @@ final class CommandScanner
         foreach ($this->findClassesInNamespace($namespace) as $class) {
             $ref = new ReflectionClass($class);
 
-            $commandAttr = $ref->getAttributes(Command::class)[0 ?? -1] ?? null;
+            $commandAttr = $ref->getAttributes(Command::class)[0] ?? null;
             if ($commandAttr === null) {
                 continue;
             }
