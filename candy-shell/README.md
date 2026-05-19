@@ -39,6 +39,56 @@ candyshell confirm "Really delete $file?" && rm "$file"
 All 13 gum subcommands ship. Run `candyshell <cmd> --help` for the full
 flag list per command.
 
+## Auto-discovery
+
+CandyShell uses PHP attributes to auto-discover commands at runtime.
+Mark any class extending `Symfony\Component\Console\Command\Command` with
+`#[Command]` and it will be picked up by `Application::scan()`:
+
+```php
+use SugarCraft\Shell\Attribute\Command;
+use SugarCraft\Shell\Attribute\Flag;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[Command(name: 'mycmd', description: 'Does something useful.', descriptionSection: 'Longer help text.')]
+final class MyCommand extends Command
+{
+    #[Flag(name: 'format', short: 'f', description: 'Output format.', enum: FormatType::class)]
+    protected function configure(): void
+    {
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $format = $input->getOption('format');
+        // ...
+        return self::SUCCESS;
+    }
+}
+
+enum FormatType: string
+{
+    case Json = 'json';
+    case Yaml = 'yaml';
+}
+```
+
+Register the namespace in your bootstrap:
+
+```php
+$app = new \SugarCraft\Shell\Application();
+$app->scan('My\\Namespace\\');  // discovers all #[Command] classes
+$app->run();
+```
+
+`Application::scan($namespace)` iterates all already-loaded classes
+under that namespace, picks those bearing `#[Command]`, and registers
+them into the application. Classes must be autoloaded (or `require`d)
+before `scan()` can find them — the scanner uses `get_declared_classes()`
+and does not trigger autoloading.
+
 | Command   | Role |
 |-----------|------|
 | `choose`  | Pick one or many items from a list. |
