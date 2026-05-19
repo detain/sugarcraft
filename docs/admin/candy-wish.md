@@ -103,6 +103,25 @@ Server::new()
     ->serve();
 ```
 
+### Async middleware
+
+Middleware that returns a `\React\Promise\PromiseInterface` (e.g. custom
+middleware extending `AsyncMiddleware`) is awaited synchronously by the
+transport before the chain continues. Key operational notes:
+
+- **Timeout:** `AsyncMiddleware::await()` enforces a hard 30-second
+  timeout on the promise. If the async operation (LDAP lookup, OAuth
+  token exchange, database query) does not settle within 30 seconds, a
+  `RuntimeException("Async middleware timed out after 30 seconds")` is
+  thrown and the connection is closed.
+- **Event loop blocking:** The await uses `React\EventLoop\Loop::run()`
+  in a spin — it blocks the PHP process for the duration of the async
+  operation. Do not use async middleware for long-running operations in
+  low-concurrency deployments.
+- **Short-circuit on rejection:** If the promise rejects, the exception
+  propagates up through the middleware stack and the session is
+  terminated with a 500-class SSH disconnect message.
+
 ### Subsystem
 
 The `Subsystem` middleware handles SSH subsystem requests (RFC 4254 §6.5).
