@@ -33,6 +33,14 @@ final readonly class Mode
         public bool $syncUpdate = false,
         public bool $mouseExtended = false,
         public int $altScreenVariant = self::ALT_NONE,
+        /**
+         * DECAWM — auto-wrap mode (CSI ?7 h/l).
+         *
+         * When true, printing a character at the rightmost column advances
+         * the cursor to column 0 of the next row (triggering a scroll if
+         * the cursor is at the bottom of the DECSTBM scroll region).
+         * When false, characters at the rightmost column are discarded.
+         */
         public bool $autoWrap = false,
     ) {}
 
@@ -210,6 +218,11 @@ final readonly class Mode
         );
     }
 
+    /**
+     * Set DECAWM auto-wrap mode.
+     *
+     * @param bool $v True to enable auto-wrap (CSI ?7 h), false to disable (CSI ?7 l)
+     */
     public function withAutoWrap(bool $v): self
     {
         return new self(

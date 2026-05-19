@@ -67,12 +67,33 @@ shape so they unit-test in isolation.
 
 ## Auto-wrap is deferred; scroll lives in ScrollHandler (PR4)
 
-`ScreenHandler::printChar()` still clamps the cursor at the right edge
-rather than auto-wrapping — that lands once we have DECSTBM scroll
-margins. Vertical scroll IS in PR4: `LF` (and `IND`, `NEL`, `ESC D`,
-`ESC E`) at the bottom row scroll the buffer up by one and keep the
-cursor at the bottom. `RI` / `ESC M` at the top scroll the buffer
-down. Scrolled-off rows are dropped; scrollback comes later.
+> **DEPRECATED — DECAWM is now implemented (step 07.02).**
+> This entry is retained for historical context only.
+
+`ScreenHandler::printChar()` used to clamp the cursor at the right edge
+rather than auto-wrapping. Vertical scroll lived in PR4: `LF` (and
+`IND`, `NEL`, `ESC D`, `ESC E`) at the bottom row scrolled the buffer
+up by one and kept the cursor at the bottom. `RI` / `ESC M` at the top
+scrolled the buffer down. Scrolled-off rows were dropped; scrollback
+comes later.
+
+## DECAWM auto-wrap implementation (step 07.02)
+
+DECAWM (`CSI ? 7 h` / `CSI ? 7 l`) is implemented as:
+
+- `Mode::$autoWrap` — public readonly property on `Mode`
+- `Mode::withAutoWrap(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?7` dispatch — maps 7 → `withAutoWrap($set)`
+- `ScreenHandler::printChar()` — when `$mode->autoWrap && $nextCol >= $cols`:
+  wrap cursor to `(row + 1, 0)` then write; if the cursor is at
+  `$scrollRegionBottom`, a scroll is triggered before the write so
+  the new content appears on the newly scrolled-in line.
+
+The scroll-region-aware path is: `printChar` detects wrap → calls
+`ScrollHandler::index()` to scroll the region if needed → moves cursor
+to column 0 of the next row → writes. This ensures wrapping at the
+bottom of a scroll region scrolls that region, not the whole buffer —
+matching VT100/xterm behavior.
 
 ## EraseHandler erases to empty cells, not background-colored
 
