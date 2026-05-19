@@ -14,18 +14,30 @@ use SugarCraft\Mosaic\Lang;
  *
  * Algorithm (per plan):
  *   1. Resize image to ($width × $effectiveHeight) via GD
- *   2. Quantize: extract pixels → median-cut → max 256 palette entries
+ *   2. Quantize: extract pixels → median-cut → max $maxColors palette entries
  *   3. Error-diffusion dithering (optional, per Dither enum)
  *   4. Build index grid: grid[row][col] = palette index
  *   5. For each 6-row band:
  *        For each color used in band: emit color introducer + sixel data
  *        (RLE applied: "!" + count prefix before runs of same sixel byte)
+ *
+ * The Sixel protocol supports a maximum of 256 colors. Pass
+ * {@see maxColors()} to limit the palette when 256-color fallback is
+ * desired (e.g. terminals that advertise Sixel but have limited
+ * truecolor support).
  */
 final class SixelRenderer implements Renderer
 {
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
-    ) {}
+        private readonly int $maxColors = 256,
+    ) {
+        if ($maxColors < 1 || $maxColors > 256) {
+            throw new \InvalidArgumentException(
+                Lang::t('sixel.max_colors_out_of_range', ['maxColors' => $maxColors])
+            );
+        }
+    }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
@@ -69,7 +81,7 @@ final class SixelRenderer implements Renderer
 
         try {
             $pixels  = $this->extractPixels($resized);
-            $palette = $this->medianCut($pixels, 256);
+            $palette = $this->medianCut($pixels, $this->maxColors);
 
             // Apply error-diffusion dithering before building the index grid.
             $grid = $this->dither === Dither::None
@@ -117,6 +129,11 @@ final class SixelRenderer implements Renderer
     public function dither(): Dither
     {
         return $this->dither;
+    }
+
+    public function maxColors(): int
+    {
+        return $this->maxColors;
     }
 
     // ─── Pixel extraction ─────────────────────────────────────────────────────
