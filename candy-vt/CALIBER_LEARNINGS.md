@@ -104,13 +104,18 @@ to column 0 of the next row → writes. This ensures wrapping at the
 bottom of a scroll region scrolls that region, not the whole buffer —
 matching VT100/xterm behavior.
 
-## EraseHandler erases to empty cells, not background-colored
+## EraseHandler erase fills with BCE behavior (step 07.07)
 
-`CSI K`, `CSI J`, `CSI X`, `CSI P`, `CSI @` all replace cells with
-`Cell::empty()` regardless of the current SGR pen. Real-world
-"background-color erase" (BCE) — where the erased region inherits the
-current background — can land later if a TUI relies on it; charm's
-default vt has the same simple behavior so this matches upstream.
+`CSI K`, `CSI J`, `CSI X` erase operations fill cells via `fillRow()`:
+
+- When `$sgr?->background !== null` (BCE mode, CSI ?12 h was sent):
+  creates `Cell(grapheme: ' ', sgr: $sgr)` — blank cell carrying the
+  current SGR so the erased region inherits the background color.
+- When no SGR background is set: creates `Cell::empty()` — plain blank
+  cell with no styling.
+
+`CSI P` (DCH) and `CSI @` (ICH) always use `Cell::empty()` since they
+shift cells rather than erasing a region.
 
 ## Mode field ↔ DEC private mode mapping (PR5)
 
@@ -126,7 +131,7 @@ default vt has the same simple behavior so this matches upstream.
 | 1006     | `mouseSgr`         | SGR coordinate format              |
 | 1049     | `altScreen`        | + buffer/cursor/sgr swap           |
 | 2004     | `bracketedPaste`   |                                    |
-| 2026     | `syncUpdate`       | toggle only — no actual buffering  |
+| 2026     | `syncUpdate`       | batch queue + flush on disable    |
 
 `Mode::$mouseHighlights` is reserved for 1001 (highlight tracking)
 but no handler currently sets it. Don't read it as "highlights mode is
@@ -186,7 +191,7 @@ to keep the most-significant byte. We also accept the CSS-style
 `#RRGGBB` shorthand. Other formats (named colors, hsl, etc.) are
 rejected — the entry is silently dropped.
 
-## Width-aware printChar: wide chars take 2 cells, zero-width chars skip (PR8)
+## Width-aware printChar: wide chars take 2 cells, combining marks attach (step 07.07)
 
 `ScreenHandler::printChar()` consults `SugarCraft\Core\Util\Width::string`
 for each rune the parser emits.
@@ -196,11 +201,10 @@ for each rune the parser emits.
   most emoji land here. The continuation inherits the original cell's
   SGR + hyperlink so style spans look right.
 - `width == 1`: usual ASCII path.
-- `width == 0`: combining marks (e.g. U+0301), ZWJ (U+200D), variation
-  selectors. Currently skipped silently — they don't compose onto the
-  preceding cell's grapheme yet. ZWJ-joined emoji (👨‍👩‍👧) therefore
-  render as multiple separate emoji at the cell-grid level. Renderers
-  that want the joined glyph need to do clustering at the consumer.
+- `width == 0`: combining marks (U+0300–U+036F) and certain ZWJ sequences
+  that don't contribute width but should still render as part of the
+  preceding character. These call `attachCombiningChar()` to modify the
+  previous cell's grapheme rather than being silently discarded.
 - Wide char that doesn't fit at the right edge: clamp cursor at
   `cols - 1` without writing. Auto-wrap lands when DECSTBM margins do.
 
@@ -382,6 +386,26 @@ Focus event reporting (`CSI ?1004 h` / `CSI ?1004 l`) is implemented as:
 No `Terminal` accessor is wired for `$focusEvents` in this step; the array
 is accessible via `$vt->{internal handler reference}->focusEvents` or can
 be exposed via a future `Terminal::focusEvents()` accessor.
+
+## BCE background-color erase in EraseHandler (step 07.07)
+
+When CSI ?12 h (BCE mode) is active, `EraseHandler::fillRow()` creates
+`Cell(grapheme: ' ', sgr: $sgr)` — a blank cell carrying the full
+current SGR, so the erased region visually inherits the background
+color instead of going dark. When BCE is off or no background is set,
+`Cell::empty()` is used. The `$sgr` is passed into `apply()` from
+`ScreenHandler::csiDispatch()`.
+
+## Combining-character composition via attachCombiningChar (step 07.07)
+
+`ScreenHandler::attachCombiningChar()` appends a zero-width combining mark
+(U+0300–U+036F) to the cell at `(row, col-1)` — the previous column:
+
+- Silently dropped if `col == 0` (nothing before cursor to attach to).
+- Silently dropped if the previous cell is a wide-char continuation cell.
+- When DEC 2026 synchronized-output mode is active, the mutation is
+  queued in `$pendingMutations[]` instead of written directly.
+- Otherwise applied immediately via `$buffer->put()`.
 
 ## Stream writes
 
