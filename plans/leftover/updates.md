@@ -273,6 +273,11 @@ tests-ci for step 06.12 · clean
 docs for step 06.12 · PR#614 · document sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata() in README + end-user/admin/dev docs
 step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface accepts void|PromiseInterface, transport dispatches await via event loop, AsyncMiddleware abstract base (leftover-rollout step 06.13)
 
+## Open review findings — 06.13
+
+- [ ] `candy-wish/README.md` — new AsyncMiddleware public API not documented: no mention of async/PromiseInterface-returning middleware, AsyncMiddleware abstract base, or the `Middleware::handle()` void|PromiseInterface contract. This is a new public feature; README should document it (parallel to docs PR#610 for step 06.10, docs PR#612 for step 06.11).
+- [ ] Step spec deviation: step file says "Modify: `candy-wish/src/Server.php` — awaits promises before continuing the chain" but Server.php was not modified. Promise-awaiting logic landed in `InProcessTransport::dispatch()` and `HostSshdTransport::dispatch()` instead. Functionally equivalent (Server delegates to Transport), but a future implementer tracing the spec would not find the await logic where stated.
+
 ## Open review findings — 03.05
 
 - [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
