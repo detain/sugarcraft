@@ -48,4 +48,15 @@ interface Model
      * @return string|View
      */
     public function view(): string|View;
+
+    /**
+     * Declare the subscriptions this model wants.
+     *
+     * The runtime calls this after each {@see update()} cycle and
+     * reconciles the active subscription set: new subscriptions are
+     * started, dropped ones are cancelled, stable ones are kept.
+     *
+     * Return null when the model needs no subscriptions.
+     */
+    public function subscriptions(): ?Subscriptions;
 }
