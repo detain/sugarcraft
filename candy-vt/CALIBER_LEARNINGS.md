@@ -329,6 +329,60 @@ handles the CSI `4:N` dispatch:
 so the legacy boolean `$underline` flag stays consistent with the enum. `equals()` compares
 both fields.
 
+## DECOM origin mode implementation (step 07.06)
+
+DECOM (`CSI ?6 h` / `CSI ?6 l`) is implemented as:
+
+- `Mode::$originMode` — public readonly bool on `Mode`
+- `Mode::withOriginMode(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?6` dispatch — maps 6 → `withOriginMode($set)`
+- When `$originMode` is true, cursor-addressing commands (CUP, HVP)
+  treat `(1,1)` as the top-left of the DECSTBM scroll region rather
+  than the absolute screen origin.
+
+DECOM and DECSTBM interact: setting a scroll region with DECSTBM, then
+enabling DECOM, resets the cursor to the top-left of that region. The
+cursor is confined within the region while origin mode is active.
+Leaving origin mode (`CSI ?6 l`) does NOT reset the scroll region —
+the two must be handled explicitly by the consumer if both are active.
+
+## DECSCUSR cursor shape implementation (step 07.06)
+
+DECSCUSR (`CSI Ps SP q`) sets the cursor shape. Implemented as:
+
+- `Mode::$cursorShape` — public readonly int (0–6) on `Mode`
+- `Mode::withCursorShape(int)` — fluent setter returning new `Mode`
+- `CursorShape` enum at root namespace (`SugarCraft\Vt\CursorShape`)
+  with values: `BlinkingBlock=0/1`, `SteadyBlock=2`, `BlinkingUnderline=3`,
+  `SteadyUnderline=4`, `BlinkingBar=5`, `SteadyBar=6`
+- `CursorShape::fromInt(int)` — normalises `0` and `1` to `BlinkingBlock`
+  per VT spec; unknown values fall back to `BlinkingBlock`
+- `CursorShape::toInt()` — returns `$this->value`
+
+`ModeHandler` handles CSI Ps SP q dispatch by calling
+`withCursorShape($ps)` where Ps is the raw parameter. The shape is stored
+in `Mode`; consumers that need the `CursorShape` enum call
+`CursorShape::fromInt($mode->cursorShape)`.
+
+## Focus event reporting implementation (step 07.06)
+
+Focus event reporting (`CSI ?1004 h` / `CSI ?1004 l`) is implemented as:
+
+- `Mode::$reportFocusEvents` — public readonly bool on `Mode`
+- `Mode::withReportFocusEvents(bool)` — fluent setter returning new `Mode`
+- `ModeHandler` CSI `?1004` dispatch — maps 1004 → `withReportFocusEvents($set)`
+- `ScreenHandler::$focusEvents` — public `array` accumulating `FocusInMsg` /
+  `FocusOutMsg` value objects
+- `FocusInMsg` / `FocusOutMsg` — `final readonly` value objects in the
+  `Msg` namespace (`SugarCraft\Vt\Msg\FocusInMsg`)
+- `ScreenHandler::focusIn()` — appends `FocusInMsg` to `$focusEvents`
+  when `$mode->reportFocusEvents` is true
+- `ScreenHandler::focusOut()` — same for `FocusOutMsg`
+
+No `Terminal` accessor is wired for `$focusEvents` in this step; the array
+is accessible via `$vt->{internal handler reference}->focusEvents` or can
+be exposed via a future `Terminal::focusEvents()` accessor.
+
 ## Stream writes
 
 Never `ftruncate; rewind;` between writes — slice deltas with
