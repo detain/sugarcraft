@@ -69,12 +69,14 @@ final class Counter implements Model
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — backed enum: Tick / Key / Signal / Custom.
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
-- **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`.
-- **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
-- **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
-- **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
-- **`PushScreenCmd`** / **`PopScreenCmd`** — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
-- **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through `Program::send()`.
+ - **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`.
+ - **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
+ - **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
+ - **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
+ - **`PushScreenCmd`** / **`PopScreenCmd`** — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
+ - **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through `Program::send()`.
+ - **`Component`** — interface extending `Model`; adds `onMount(): ?Closure` (fired when mounted into a `Composite`) and `onUnmount(): ?Closure` (fired when removed). Return a `Cmd` to run immediately or `null` for no-op.
+ - **`Composite`** — `Model` that manages a list of child `Component`s. Tracks `pendingCmds` and drains them during reconcile, calling child `onMount()`/`onUnmount()` Cmds synchronously. Children are reconciled by ordinal position — reordering triggers lifecycle events on affected children.
 
 ## Subscriptions
 
