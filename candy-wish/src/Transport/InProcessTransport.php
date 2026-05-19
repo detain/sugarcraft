@@ -163,7 +163,16 @@ final class InProcessTransport implements Transport, ChildSpawner
                 $mw->setTransport($this);
             }
         }
-        $this->dispatch($ctx, $session, $stack, 0);
+
+        $authenticatedSession = $session->withProtocolMetadata(
+            sessionId:      \bin2hex(\random_bytes(16)),
+            authMethod:     'publickey',
+            keyFingerprint: null,
+            clientVersion:  'SSH-2.0-PHP_candy-wish',
+            serverVersion:   'SSH-2.0-OpenSSH_9.6',
+        );
+
+        $this->dispatch($ctx, $authenticatedSession, $stack, 0);
     }
 
     /**
