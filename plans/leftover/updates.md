@@ -354,18 +354,18 @@ Blocker entry for 07.15 holds. Minor accuracy nits below (non-blocking
 — do not require a fix subagent unless future plan revisions touch
 the affected sections):
 
-- [ ] §1.2 totals are stale: "candy-mosaic/src/ (3,236 LOC over 21
+- [x] §1.2 totals are stale: "candy-mosaic/src/ (3,236 LOC over 21
       files)" — actual is **3,426 LOC over 22 files** (per `find
       candy-mosaic/src -name '*.php' | wc -l`). The plan landed
       2026-05-19, one day after step 07.14 expanded HalfBlockRenderer
       (transparency) and SixelRenderer (maxColors). Individual row
       LOC figures still match; only the totals are out of date.
-- [ ] §1.2 table lists `MosaicBuilder.php` as a separate row even
+- [x] §1.2 table lists `MosaicBuilder.php` as a separate row even
       though the note correctly says "(in same file)" — counting it
       separately is what makes the table appear to be 23 rows while
       `find` returns 22 files. Cosmetic; resolved by either dropping
       the row or making the in-file annotation more prominent.
-- [ ] §6.1 and §6.4 cite "sugar-dash, sugar-charts" as consumers of
+- [x] §6.1 and §6.4 cite "sugar-dash, sugar-charts" as consumers of
       `candy-mosaic`. `grep -l candy-mosaic */composer.json` returns
       only `candy-mosaic/composer.json` itself; no library currently
       requires it. The Option C rationale still holds (in fact more
@@ -374,12 +374,12 @@ the affected sections):
       claim should be reframed as "no current consumers, so future
       consumers inherit a clean closure". A future docs sub-step
       could correct this; not blocking for step 07.15.
-- [ ] §4.1 `withFrame()` body is truncated to a comment ("Standard
+- [x] §4.1 `withFrame()` body is truncated to a comment ("Standard
       mutate() helper omitted for brevity"). Fine for a plan, but
       step 07.15's implementer will need the full pattern from
       `candy-sprinkles/Style.php` — worth a one-line hint pointer in
       the snippet when 07.15 lands.
-- [ ] Step file 11.04 originally listed the deliverable as "API
+- [x] Step file 11.04 originally listed the deliverable as "API
       contract — candy-flip::Frame[] → candy-mosaic::Animation"
       (Option A framing). The plan correctly diverges to Option C
       and explains why; the step's Acceptance criteria are

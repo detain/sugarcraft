@@ -76,12 +76,11 @@ research backlog item — that item is the subject of this memo.
 
 ### 1.2 candy-mosaic today (the protocol-output renderer)
 
-`candy-mosaic/src/` (3,236 LOC over 21 files; 7 of those under `Renderer/`):
+`candy-mosaic/src/` (3,426 LOC over 22 files; 7 of those under `Renderer/`):
 
 | File | LOC | Role |
 |---|---|---|
-| `Mosaic.php` | 407 | Public facade — `probe() / halfBlock() / sixel() / kitty() / iterm2() / chafa() / builder()`; the `Picker` from `ratatui-image` |
-| `MosaicBuilder.php` | (in same file) | Fluent builder with `withRenderer/withResize/withDither/withScale` |
+| `Mosaic.php` | 407 | Public facade — `probe() / halfBlock() / sixel() / kitty() / iterm2() / chafa() / builder()`; the `Picker` from `ratatui-image`. Also hosts the `MosaicBuilder` fluent builder (`withRenderer/withResize/withDither/withScale`) in the same file. |
 | `ImageSource.php` | 243 | Decoded image value: raw bytes + format MIME + pixel W/H; `fromFile() / fromString() / crop() / resize() / aspectRatio()` |
 | `PixelGrid.php` | 171 | RGB grid extraction from `ImageSource` for half-block / quarter-block paths |
 | `Capability.php` | 77 | Detected terminal capability snapshot (sixel/kitty/iterm2/halfblock/chafa + cellSize + inTmux) |
@@ -267,6 +266,20 @@ For the step 07.15 blocker specifically, the answers are:
 Step 07.15's draft already gets most of this right — the one bullet
 to drop is the composer.json edit.
 
+> **Note on divergence from step 11.04's stated deliverable.** The step
+> file (`plans/leftover/phase-11-strategic-plans/step-04-candy-flip-mosaic-split.md`)
+> originally framed the API contract as "`candy-flip::Frame[]` →
+> `candy-mosaic::Animation` → `Renderer`" — i.e. Option A in §2.1
+> above. After working through the three options, this memo
+> deliberately diverges to Option C: `Animation` accepts
+> `ImageSource[]`, not `Frame[]`, and `candy-mosaic` does not depend
+> on `candy-flip`. Rationale: avoids inverting the dependency
+> direction (see §2.1 Cons), keeps `Animation` reusable for non-GIF
+> frame sources (MP4, procedural, live video), and lets step 07.15
+> ship without any composer.json edits. The step file's acceptance
+> criteria are still met (boundary documented + step 07.15 unblocked);
+> only the shape of the contract changed.
+
 ---
 
 ## 4. API contract
@@ -321,15 +334,41 @@ final class Animation
 
     public function withFrame(int $index, ImageSource $frame, int $delayMs): self
     {
-        // Standard mutate() helper omitted for brevity — same pattern as
-        // candy-sprinkles/Style.php.
+        if ($index < 0 || $index >= count($this->frames)) {
+            throw new \OutOfRangeException(Lang::t('animation.index_out_of_range', ['index' => $index]));
+        }
+        $frames = $this->frames;
+        $delays = $this->delaysMs;
+        $frames[$index] = $frame;
+        $delays[$index] = $delayMs;
+        return $this->mutate(frames: $frames, delaysMs: $delays);
+    }
+
+    /**
+     * Private clone-and-replace helper. Mirrors the canonical
+     * `with()` pattern in candy-sprinkles/src/Style.php: each named
+     * parameter defaults to null and the body falls back to the
+     * existing `$this->*` field when the argument is omitted. Keeps
+     * `with*()` callers terse without giving up immutability.
+     */
+    private function mutate(?array $frames = null, ?array $delaysMs = null): self
+    {
+        return new self(
+            frames:   $frames   ?? $this->frames,
+            delaysMs: $delaysMs ?? $this->delaysMs,
+        );
     }
 }
 ```
 
 Follows the standard SugarCraft pattern: `final`, `readonly` props,
 `with*()` via private `mutate()`. Factory methods mirror nothing
-upstream (no upstream exists for this surface).
+upstream (no upstream exists for this surface). The snippet above is
+a plan-only **sketch** — the actual implementation in step 07.15
+should follow `candy-sprinkles/src/Style.php`'s named-parameter
+`with()` helper for the canonical shape, including a `bool $XSet`
+sentinel companion if the type ever grows a nullable field that needs
+"explicit null" vs "omitted" disambiguation.
 
 ### 4.2 `candy-mosaic\AnimationDriver` shape
 
@@ -560,7 +599,7 @@ different one.
 |---|---|
 | `candy-mosaic` | **none** (no new requires; the animation code is internal and uses only existing deps) |
 | `candy-flip` | **none** (step 07.15 does not touch candy-flip) |
-| Any consumer of `candy-mosaic` (sugar-dash, sugar-charts, etc.) | **none** (existing constraints already cover the new types) |
+| Any future consumer of `candy-mosaic` (sugar-dash, sugar-charts, candy-glow, etc. — none today; `grep -l candy-mosaic */composer.json` returns only `candy-mosaic/composer.json` itself) | **none** (the addition is purely additive; future consumers inherit a clean closure) |
 
 ### 6.2 Path-repo closure
 
@@ -577,8 +616,12 @@ PNG path. The animation code does not add a new extension dep.
 
 The 07.15 PR is purely additive to candy-mosaic's public API. No
 existing renderer changes shape. No constructor signature changes.
-sugar-dash's existing image-preview integration (which uses
-`ImageSource` + a `Renderer` directly) is unaffected.
+No library currently requires `sugarcraft/candy-mosaic`
+(`grep -l candy-mosaic */composer.json` returns only `candy-mosaic`'s
+own manifest), so the migration risk is zero — future consumers
+(sugar-dash preview pane, sugar-charts inline-image axis, hypothetical
+candy-glow image-in-markdown) inherit the animation surface for free
+when they take the dep.
 
 ---
 
