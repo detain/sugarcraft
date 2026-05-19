@@ -13,6 +13,9 @@ use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Wish\Channel\ChannelHandler;
+use SugarCraft\Wish\Channel\DefaultChannelHandler;
+use SugarCraft\Wish\Channel\Msg\WindowChangeMsg;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
@@ -74,6 +77,12 @@ final class InProcessTransport implements Transport, ChildSpawner
      */
     private ?MasterPty $master = null;
 
+    /**
+     * Channel handler for dispatching SSH channel-level messages.
+     * Defaults to {@see DefaultChannelHandler} when not set.
+     */
+    private ?ChannelHandler $channelHandler = null;
+
     public function __construct(?PtySystem $system = null)
     {
         $this->system = $system ?? PtySystemFactory::default();
@@ -107,6 +116,29 @@ final class InProcessTransport implements Transport, ChildSpawner
     public function setKeepaliveCallback(callable $callback): void
     {
         $this->keepaliveCallback = $callback;
+    }
+
+    /**
+     * Set the channel handler for dispatching SSH channel messages.
+     *
+     * The handler receives window-change events (forwarded from SIGWINCH
+     * when the host PTY is resized) and can be queried by the
+     * transport for current dimensions when spawning the child PTY.
+     *
+     * If not set, a {@see DefaultChannelHandler} is used.
+     */
+    public function setChannelHandler(ChannelHandler $handler): void
+    {
+        $this->channelHandler = $handler;
+    }
+
+    /**
+     * Return the active channel handler, creating a default one if
+     * none has been set.
+     */
+    private function channelHandler(Session $session): ChannelHandler
+    {
+        return $this->channelHandler ?? new DefaultChannelHandler($this, $session);
     }
 
     /**
@@ -170,11 +202,12 @@ final class InProcessTransport implements Transport, ChildSpawner
             throw new \InvalidArgumentException(Lang::t('transport.bad_stdout'));
         }
 
-        // Fall back to a sensible 80×24 if the Session reports 0×0
-        // (caveat 5 in the plan — ForceCommand deployments often
-        // arrive without COLUMNS / LINES set).
-        $cols = $session->cols > 0 ? $session->cols : 80;
-        $rows = $session->rows > 0 ? $session->rows : 24;
+        $handler = $this->channelHandler($session);
+
+        // Consult the channel handler for dimensions — it may have
+        // received a window-change message before this call.
+        $cols = $handler->cols() > 0 ? $handler->cols() : ($session->cols > 0 ? $session->cols : 80);
+        $rows = $handler->rows() > 0 ? $handler->rows() : ($session->rows > 0 ? $session->rows : 24);
 
         $pair = $this->system->open($cols, $rows);
         $master = $pair->master();
@@ -195,13 +228,25 @@ final class InProcessTransport implements Transport, ChildSpawner
             );
 
             // SIGWINCH forwarding — when sshd resizes the supervisor's
-            // PTY, the kernel sends SIGWINCH to us; the handler queries
-            // the new dimensions via the size provider and propagates
-            // them into the inner candy-pty via $master->resize().
+            // PTY, the kernel sends SIGWINCH to us; dispatch a
+            // WindowChangeMsg through the handler so it can update its
+            // state, then apply the resize to the master PTY.
             $sigwinchAttached = false;
             if (SignalForwarder::pcntlReady() && \defined('SIGWINCH')) {
-                $provider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
-                $sigwinchAttached = SignalForwarder::attachSigwinch($master, $provider);
+                $sizeProvider = $this->sizeProvider ?? fn (): array => $this->readHostStdinSize($stdin, $cols, $rows);
+                $sigwinchAttached = SignalForwarder::attachSigwinch(
+                    $master,
+                    function () use ($handler, $session, $master, $sizeProvider): array {
+                        $size = $sizeProvider();
+                        $msg = new WindowChangeMsg(
+                            cols: $size['cols'],
+                            rows: $size['rows'],
+                        );
+                        $handler->handleWindowChange($msg, $session);
+                        $master->resize($size['cols'], $size['rows']);
+                        return $size;
+                    },
+                );
             }
 
             try {
