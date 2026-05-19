@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Shell\Discovery;
 
 use ReflectionClass;
+use SugarCraft\Shell\Attribute\Alias;
 use SugarCraft\Shell\Attribute\Command;
+use SugarCraft\Shell\Attribute\Example;
 use SugarCraft\Shell\Attribute\Flag;
 use SugarCraft\Shell\Attribute\ValueEnum;
 use Symfony\Component\Console\Application;
@@ -55,6 +57,13 @@ final class CommandScanner
                     /** @var Flag */
                     $flag = $flagAttr->newInstance();
                     $this->applyFlag($instance, $flag);
+                }
+
+                $aliasAttrs = $ref->getAttributes(Alias::class);
+                foreach ($aliasAttrs as $aliasAttr) {
+                    /** @var Alias */
+                    $alias = $aliasAttr->newInstance();
+                    $instance->setAliases([...$instance->getAliases(), $alias->name]);
                 }
 
                 $application->add($instance);
