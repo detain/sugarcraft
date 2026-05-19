@@ -42,6 +42,51 @@ sugar-stash    # run inside any git working tree
 
 `SugarStash` is intentionally read-mostly: every git mutation that goes beyond stage / unstage shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config. Anything more (interactive rebase, cherry-pick, bisect) belongs in a follow-up release.
 
+## Internationalization
+
+User-facing strings are internationalized via `SugarCraft\Stash\Lang::t()`.
+All translatable strings live in `lang/en.php` under the `'stash'` namespace.
+
+**Available keys** (`lang/en.php`):
+
+| Key                    | Default string                                                    | Parameters  |
+|------------------------|-------------------------------------------------------------------|------------|
+| `git.spawn_failed`      | `git: failed to spawn`                                           | —          |
+| `git.error`            | `git: {stderr}`                                                  | `{stderr}` |
+| `cli.not_a_repo`       | `sugar-stash: not a git repository (no .git in {cwd})`             | `{cwd}`    |
+| `ui.error_prefix`      | `error: `                                                        | —          |
+| `status.clean`          | `clean working tree`                                            | —          |
+| `branches.empty`       | `(no branches)`                                                  | —          |
+| `log.empty`            | `(empty log)`                                                    | —          |
+| `help.keyhints`         | `tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit` | —    |
+
+To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
+values. The lookup chain follows `SugarCraft\Core\I18n\T`:
+exact locale → base language → `en` → raw key.
+
+**Using the facade:**
+
+```php
+use SugarCraft\Stash\Lang;
+
+$msg = Lang::t('status.clean');                 // 'clean working tree'
+$hint = Lang::t('help.keyhints');               // 'tab  switch pane  ·  ...'
+$err = Lang::t('ui.error_prefix') . $error;     // 'error: <msg>'
+```
+
+**Adding new translatable strings:**
+
+```php
+// In any source file:
+use SugarCraft\Stash\Lang;
+
+// Simple key:
+$msg = Lang::t('status.clean');
+
+// With placeholder:
+$msg = Lang::t('git.error', ['stderr' => $stderr]);
+```
+
 ## Demos
 
 ### Staging workflow

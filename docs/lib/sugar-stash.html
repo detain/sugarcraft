@@ -75,7 +75,23 @@ $git = new Git(getcwd());
       <div class="feature"><strong>Stage / unstage</strong><span><code>s</code> in the status pane toggles staging via <code>git add</code> / <code>git restore --staged</code>.</span></div>
       <div class="feature"><strong>Pluggable driver</strong><span><code>GitDriver</code> interface lets tests inject a fixture-backed driver without staging real repos.</span></div>
       <div class="feature"><strong>Refresh on demand</strong><span><code>R</code> reloads from disk; cursors are clamped if the row count shrinks.</span></div>
+      <div class="feature"><strong>Internationalization</strong><span>All user-facing strings use <code>Lang::t()</code> — key hints, error labels, empty-state messages, git error text.</span></div>
     </div>
+
+    <h3 style="margin-top: 32px;">Internationalization</h3>
+    <p>User-facing strings use <code>SugarCraft\Stash\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>stash</code> namespace.</p>
+    <table class="api-table">
+<tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
+<tr><td>git.spawn_failed</td><td>git: failed to spawn</td><td>—</td></tr>
+<tr><td>git.error</td><td>git: {stderr}</td><td>{stderr}</td></tr>
+<tr><td>cli.not_a_repo</td><td>sugar-stash: not a git repository (no .git in {cwd})</td><td>{cwd}</td></tr>
+<tr><td>ui.error_prefix</td><td>error: </td><td>—</td></tr>
+<tr><td>status.clean</td><td>clean working tree</td><td>—</td></tr>
+<tr><td>branches.empty</td><td>(no branches)</td><td>—</td></tr>
+<tr><td>log.empty</td><td>(empty log)</td><td>—</td></tr>
+<tr><td>help.keyhints</td><td>tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit</td><td>—</td></tr>
+</table>
+    <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
