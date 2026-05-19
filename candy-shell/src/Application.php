@@ -18,7 +18,10 @@ use SugarCraft\Shell\Command\StyleCommand;
 use SugarCraft\Shell\Command\TableCommand;
 use SugarCraft\Shell\Command\WriteCommand;
 use SugarCraft\Shell\Discovery\CommandScanner;
+use SugarCraft\Shell\Help\TypoSuggester;
 use Symfony\Component\Console\Application as SymfonyApplication;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Exception\CommandNotFoundException;
 
 /**
  * Top-level Symfony Console application registering each subcommand.
@@ -56,5 +59,29 @@ final class Application extends SymfonyApplication
     {
         $scanner = new CommandScanner();
         return $scanner->scan($namespace, $this);
+    }
+
+    public function find(string $name): Command
+    {
+        try {
+            return parent::find($name);
+        } catch (CommandNotFoundException $e) {
+            $commandNames = array_keys($this->all());
+            $suggester = new TypoSuggester($commandNames);
+            $suggestion = $suggester->suggest($name);
+
+            if ($suggestion !== null) {
+                throw new CommandNotFoundException(
+                    sprintf(
+                        'Command "%s" not found. Did you mean <info>%s</info>?',
+                        $name,
+                        $suggestion
+                    ),
+                    array_values($this->all())
+                );
+            }
+
+            throw $e;
+        }
     }
 }
