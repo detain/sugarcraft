@@ -103,6 +103,62 @@ interface ChildSpawner
 }
 ```
 
+### ChannelHandler interface
+
+`InProcessTransport` dispatches SSH channel-level messages (RFC 4254:
+pty-req, window-change, shell, exec, signal, env, break) to a
+`ChannelHandler` rather than handling them inline. Implement the interface
+to customise channel-level behaviour — replacing PTY allocation, signal
+delivery, shell spawning, etc.
+
+```php
+use SugarCraft\Wish\Channel\ChannelHandler;
+use SugarCraft\Wish\Channel\Msg\PtyReqMsg;
+use SugarCraft\Wish\Channel\Msg\WindowChangeMsg;
+use SugarCraft\Wish\Channel\Msg\ShellMsg;
+use SugarCraft\Wish\Channel\Msg\ExecMsg;
+use SugarCraft\Wish\Channel\Msg\SignalMsg;
+use SugarCraft\Wish\Channel\Msg\EnvMsg;
+use SugarCraft\Wish\Channel\Msg\BreakMsg;
+use SugarCraft\Wish\Session;
+
+interface ChannelHandler
+{
+    public function handlePtyReq(PtyReqMsg $msg, Session $session): void;
+    public function handleWindowChange(WindowChangeMsg $msg, Session $session): void;
+    public function handleShell(ShellMsg $msg, Session $session): void;
+    public function handleExec(ExecMsg $msg, Session $session): void;
+    public function handleSignal(SignalMsg $msg, Session $session): void;
+    public function handleEnv(EnvMsg $msg, Session $session): void;
+    public function handleBreak(BreakMsg $msg, Session $session): void;
+}
+```
+
+**Built-in handler:** `DefaultChannelHandler` is the default implementation.
+It tracks per-session PTY state (dims, env vars, pending command) and drives
+a `ChildSpawner` when a shell or exec request arrives.
+
+Pass a custom handler to `InProcessTransport`:
+
+```php
+use SugarCraft\Wish\Transport\InProcessTransport;
+
+$transport = new InProcessTransport($ptySystem, new MyCustomChannelHandler());
+Server::new()->withTransport($transport)->serve();
+```
+
+The `ChannelMsg` hierarchy:
+
+| Message | Fields | When sent |
+|---------|--------|-----------|
+| `PtyReqMsg` | `wantPty`, `term`, `cols`, `rows`, `widthPx`, `heightPx` | SSH client requests/releases PTY |
+| `WindowChangeMsg` | `cols`, `rows`, `widthPx`, `heightPx` | SSH client resizes terminal |
+| `ShellMsg` | `wantShell`, `subsystem` | SSH client requests login shell |
+| `ExecMsg` | `command` (raw string) | SSH client runs a command |
+| `SignalMsg` | `signalName` | SSH client sends signal to process |
+| `EnvMsg` | `name`, `value` | SSH client sets env var |
+| `BreakMsg` | — | SSH client sends break |
+
 ---
 
 ## Backend conventions
@@ -206,6 +262,7 @@ $server->serve($mySyntheticSession);
 |---------|-----------|
 | `Server`, `Session`, `Context`, `Middleware` | Stable |
 | `Transport` interface, `ChildSpawner` interface | Stable |
+| `ChannelHandler` interface, `ChannelMsg` base | Stable |
 | `CancellationException`, `DeadlineExceededException` | Stable |
 | `InProcessTransport`, `HostSshdTransport` internals | `@internal` |
 | `Transport::run()` default implementation details | `@internal` |
