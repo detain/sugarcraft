@@ -128,7 +128,8 @@ Server::new()
 <tr><td>Context</td><td>done(): bool</td><td>True when cancelled or deadline-exceeded</td></tr>
 <tr><td>Context</td><td>err(): ?Throwable</td><td>CancellationException, DeadlineExceededException, or null</td></tr>
 <tr><td>Context</td><td>value(string $k): mixed</td><td>Walk parent chain looking for $k; null if not found</td></tr>
-<tr><td>Session</td><td>user, term, cols, rows, clientHost, clientPort, tty, command</td><td>Session metadata</td></tr>
+<tr><td>Session</td><td>user, term, cols, rows, clientHost, clientPort, serverHost, serverPort, tty, command, lang, sessionId, authMethod, keyFingerprint, clientVersion, serverVersion</td><td>Session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion populated by withProtocolMetadata() after SSH handshake)</td></tr>
+<tr><td>Session</td><td>withProtocolMetadata(string $sessionId, string $authMethod, ?string $keyFingerprint, string $clientVersion, string $serverVersion): self</td><td>Return a new Session with protocol-handshake metadata attached (called by transports after SSH handshake)</td></tr>
 <tr><td>Session</td><td>isInteractive(): bool</td><td>True when a TTY is attached</td></tr>
 <tr><td>Session</td><td>toLogContext(): array</td><td>Array of session fields for logging</td></tr>
 <tr><td>Middleware</td><td>handle(Context, Session, callable): void</td><td>All middleware receive Context first, Session second</td></tr>
