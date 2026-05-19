@@ -55,6 +55,7 @@ in a follow-up step or a deferred phase. Each entry: one short line +
 the step that surfaced it.)
 
 - step 06.02: Multi-push ScreenStack integration test (`testPushThreeScreensPopTwoVerifiesStateAndBreadcrumb`) fails with only first push recorded when using Program::send() + drainPending() timing — the ScreenStack type and RootModelWithScreenStack work correctly (proven by unit tests and direct dispatch), but socket pair + stream_select() timing in the full Program integration test is unreliable. Test was simplified to use direct dispatch instead of full Program loop.
+- step 06.05 (review-fix): `Flag::$enum` dead code — `applyFlag()` never uses the enum property; Symfony `InputOption` has no native allowed-values mode for options; full wiring needs a normalizer or execute()-time validation post-processing pass (architectural work deferred beyond this review-fix).
 
 ---
 
@@ -241,6 +242,7 @@ fix for step 06.04 · PR#591 · resolved 3 findings (error_log removed; WorkerRe
 tests-ci for step 06.04 · clean
 docs for step 06.04 · clean · PR#593
 step 06.05 · PR#594 · candy-shell: #[Command]/#[Flag]/#[ValueEnum] attributes + CommandScanner discovery + Application::scan() method
+fix for step 06.05 · PR#595 · resolved 3 findings (descriptionSection forward + README auto-discovery docs + CALIBER entry); Flag::$enum wiring deferred to Carry-forward
 
 ## Open review findings — 03.05
 
@@ -252,13 +254,6 @@ step 06.05 · PR#594 · candy-shell: #[Command]/#[Flag]/#[ValueEnum] attributes 
 ## Open review findings — 02.03
 
 - [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
-
-## Open review findings — 06.05
-
-- [ ] candy-shell/src/Discovery/CommandScanner.php:108: `Flag::$enum` property is stored on the `Flag` attribute but never used in `applyFlag()` — Symfony `InputOption` is created without allowed values and `ValueEnum::validate()` is never called. The enum wiring is dead code in the discovery flow. Either wire `applyFlag()` to call `ValueEnum::validate()` during option registration (making the enum constraint live), or remove `Flag::$enum` to avoid misleading future implementers.
-- [ ] candy-shell/README.md: `Application::scan()` method and the `#[Command]`/`#[Flag]`/`#[ValueEnum]` attribute-based discovery system are not documented. A "Auto-discovery" section explaining that commands bearing `#[Command]` are picked up by `Application::scan($namespace)` would help end users wire their own command namespaces.
-- [ ] candy-shell/src/Discovery/CommandScanner.php:32: `descriptionSection` on `#[Command]` is stored and accessible but never applied to the Symfony command instance — only `name` and `description` are forwarded.
-- [ ] candy-shell/CALIBER_LEARNINGS.md: no `[pattern:command-attribute-discovery]` entry. The `get_declared_classes()` scope limitation (scan only finds already-loaded classes; requires autoloader or explicit `require_once` before `scan()`) and the `enum` dead-code risk are worth documenting so future implementers don't stumble on these.
 
 ## Open review findings — 01.08
 
