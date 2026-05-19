@@ -36,7 +36,7 @@ $targetDimensions = [
  */
 $interactiveExamples = [
     'dashboard-live'       => 'interactive TUI that blocks on keyboard input',
-    'dashboard-interactive' => 'interactive dashboard demo',
+    'dashboard-accordion-timeline' => 'accordion and timeline demo',
     'dashboard-charts'     => 'interactive dashboard demo',
     'dashboard-complex'    => 'interactive dashboard demo',
     'dashboard-data'        => 'interactive dashboard demo',
