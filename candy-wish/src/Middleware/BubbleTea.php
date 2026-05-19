@@ -82,7 +82,7 @@ final class BubbleTea implements Middleware
         $this->inProcessMode = true;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         if ($this->inProcessMode) {
             throw new \RuntimeException(Lang::t('bubbletea.requires_host_sshd'));

@@ -19,12 +19,20 @@ namespace SugarCraft\Wish;
  * never calls `$next`, it just runs the program until the user
  * disconnects.
  *
- * @deprecated Use the Context-aware signature: handle(Context $ctx, Session $session, callable $next): void
+ * Middleware may also return a `\React\Promise\PromiseInterface`,
+ * allowing async back-ends (LDAP, OAuth, database auth) to stall
+ * the chain without blocking. Use {@see AsyncMiddleware} as a base
+ * for promise-returning middleware.
  */
 interface Middleware
 {
     /**
-     * @deprecated Use handle(Context $ctx, Session $session, callable $next): void
+     * May return void (synchronous) or a
+     * \React\Promise\PromiseInterface (asynchronous). The transport
+     * will wait for the promise to settle before continuing the
+     * chain.
+     *
+     * @return void|\React\Promise\PromiseInterface
      */
-    public function handle(Context $ctx, Session $session, callable $next): void;
+    public function handle(Context $ctx, Session $session, callable $next);
 }

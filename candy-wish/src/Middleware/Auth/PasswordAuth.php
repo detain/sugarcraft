@@ -49,7 +49,7 @@ final class PasswordAuth implements Middleware
         $this->stderr = $stderr;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         $password = isset($_SERVER['SSH_PASSWORD']) && $_SERVER['SSH_PASSWORD'] !== ''
             ? $_SERVER['SSH_PASSWORD']
