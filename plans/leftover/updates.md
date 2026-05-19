@@ -285,6 +285,7 @@ step 07.03 · PR#623 · candy-vt: CSI subparameter parsing — Parser::param() t
 review for step 07.03 · clean · PR#623
 tests-ci for step 07.03 · clean
 docs for step 07.03 · PR#624 · document CSI subparameter parsing in CALIBER_LEARNINGS/README/end-user HTML
+step 07.04 · PR#625 · candy-vt: scrollback buffer — Scrollback ring-buffer class + Screen scrollback accessor + Terminal withScrollbackSize() + ScreenHandler scrollUp/Down push to scrollback + 10 ScrollbackTest tests (leftover-rollout step 07.04)
 
 ## Open review findings — 03.05
 
