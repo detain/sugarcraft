@@ -47,6 +47,9 @@ final class CommandScanner
                 if ($commandMeta->description !== '') {
                     $instance->setDescription($commandMeta->description);
                 }
+                if ($commandMeta->descriptionSection !== '') {
+                    $instance->setHelp($commandMeta->descriptionSection);
+                }
 
                 foreach ($flagAttrs as $flagAttr) {
                     /** @var Flag */
