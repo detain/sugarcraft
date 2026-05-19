@@ -74,11 +74,11 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>VT500 parser</strong><span>15-state Paul-Williams state machine. Direct port of charmbracelet/x/ansi/parser. Handles partial input across <code>feed()</code> calls and CSI subparameters (<code>:</code> separator per VT500 spec).</span></div>
-      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles; SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed).</span></div>
+      <div class="feature"><strong>Full SGR</strong><span>16-color, bright, 256-color, and truecolor for fg + bg; bold / italic / underline / strikethrough / blink / reverse / dim / hidden toggles; SGR underline styles 4:0–4:5 (single / double / curly / dotted / dashed); BCE (CSI ?12 h) — erase fills inherit current background color.</span></div>
       <div class="feature"><strong>Cursor + erase + scroll</strong><span>CUU/CUD/CUF/CUB/CUP/CHA/VPA, DECSC/DECRC, EL/ED/ECH/DCH/ICH, SU/SD, IND/RI/NEL.</span></div>
-      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 sync, 7 auto-wrap (DECAWM).</span></div>
+      <div class="feature"><strong>DEC modes</strong><span>1049 alt screen + cursor save, 25 cursor visibility, 1000/1002/1003/1006 mouse, 2004 bracketed paste, 2026 synchronized output (batch queue + flush on disable), 7 auto-wrap (DECAWM).</span></div>
       <div class="feature"><strong>OSC dispatch</strong><span>0/1/2 window title, 4 palette set, 8 hyperlinks (per-cell attribution), 52 clipboard write/read events.</span></div>
-      <div class="feature"><strong>Width-aware</strong><span>CJK + most emoji take 2 cells with a continuation marker. Delegates to <code>candy-core</code>'s <code>Util\Width</code> for grapheme width.</span></div>
+      <div class="feature"><strong>Width-aware + combining</strong><span>CJK + most emoji take 2 cells with a continuation marker. Zero-width combining marks (U+0300–U+036F) attach to the preceding cell via <code>Cell::$combining</code> so composed graphemes render correctly in a single column.</span></div>
       <div class="feature"><strong>Scrollback buffer</strong><span>Ring buffer (default 1000 rows) captures scrolled-off content. Access via <code>Screen::scrollback()</code>. Configure size with <code>Terminal::withScrollbackSize()</code>. Erased by <code>CSI 3 J</code>.</span></div>
     </div>
 
@@ -111,8 +111,9 @@ $term-&gt;mode()-&gt;altScreen;             // true</code></pre>
 <tr><td>Terminal</td><td>withScrollbackSize(n)</td><td>New terminal with scrollback buffer size N</td></tr>
 <tr><td>Screen</td><td>cell(col, row)</td><td>Get cell at position</td></tr>
 <tr><td>Screen</td><td>scrollback()</td><td>Get scrollback buffer (ring buffer of scrolled-off rows)</td></tr>
-<tr><td>Cell</td><td>grapheme, sgr, foreground(), background()</td><td>Cell content and style</td></tr>
-<tr><td>Mode</td><td>autoWrap, withAutoWrap(bool)</td><td>DECAWM auto-wrap state and setter</td></tr>
+<tr><td>Cell</td><td>grapheme, sgr, combining, foreground(), background()</td><td>Cell content, style, and combining marks</td></tr>
+<tr><td>Cell</td><td>withCombining(string)</td><td>New cell with additional combining marks appended</td></tr>
+<tr><td>Mode</td><td>autoWrap, syncUpdate, withAutoWrap(bool)</td><td>DECAWM auto-wrap and synchronized-output (DEC 2026) state</td></tr>
 <tr><td>Sgr</td><td>underlineStyle, withUnderlineStyle(UnderlineStyle)</td><td>SGR underline style (None/Single/Double/Curly/Dotted/Dashed)</td></tr>
 <tr><td>UnderlineStyle</td><td>None / Single / Double / Curly / Dotted / Dashed</td><td>Enum — CSI 4:N map (4:0–4:5)</td></tr>
 </table>
