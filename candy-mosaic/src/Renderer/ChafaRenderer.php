@@ -103,4 +103,13 @@ final class ChafaRenderer implements Renderer
     {
         return true;
     }
+
+    /**
+     * Chafa invokes an external command — no persistent image identity
+     * to delete. Returns the empty string.
+     */
+    public function delete(string $imageId): string
+    {
+        return '';
+    }
 }

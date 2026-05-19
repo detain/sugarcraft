@@ -105,6 +105,15 @@ final class SixelRenderer implements Renderer
         return false;
     }
 
+    /**
+     * Sixel has no standard delete mechanism — DECSIXEL does not support
+     * removing individual images after emission. Returns the empty string.
+     */
+    public function delete(string $imageId): string
+    {
+        return '';
+    }
+
     public function dither(): Dither
     {
         return $this->dither;

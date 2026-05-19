@@ -568,6 +568,17 @@ final class Ansi
     }
 
     /**
+     * Remove the most recently displayed iTerm2 / WezTerm inline image
+     * via the "Pop" action (OSC 1337).
+     *
+     * Mirrors charmbracelet/x/ansi. Iterm2Renderer.
+     */
+    public static function iterm2Delete(): string
+    {
+        return self::OSC . '1337;Pop' . self::BEL;
+    }
+
+    /**
      * Begin a Kitty graphics protocol (AGM) APC sequence.
      *
      * Mirrors charmbracelet/x/ansi. KittyRenderer.
