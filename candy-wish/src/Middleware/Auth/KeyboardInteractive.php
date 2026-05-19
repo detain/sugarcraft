@@ -101,7 +101,7 @@ final class KeyboardInteractive implements Middleware
         }
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         $this->writeChallenges();
         $responses = $this->readResponses();

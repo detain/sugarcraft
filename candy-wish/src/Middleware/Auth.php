@@ -58,7 +58,7 @@ final class Auth implements Middleware
         $this->stderr = $stderr;
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
             $this->reject('user not allowed: ' . $session->user);

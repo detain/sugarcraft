@@ -62,7 +62,7 @@ final class Logger implements Middleware
         }
     }
 
-    public function handle(Context $ctx, Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         $start = microtime(true);
         $this->write([
