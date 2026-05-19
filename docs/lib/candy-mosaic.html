@@ -94,6 +94,8 @@ $mosaic = Mosaic::builder()
       <div class="feature"><strong>Unicode quarter-block</strong><span>Higher fidelity using ░▒▓█ 2×2 sub-pixel rendering.</span></div>
       <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG, static GIF via GD (imagecreatefrompng, imagecreatefromjpeg, imagecreatefromgif).</span></div>
       <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and DA1 capability query. Cached per-process.</span></div>
+      <div class="feature"><strong>Kitty virtual-image placement</strong><span>Transmit once (<code>a=T</code>), then place at multiple offsets (<code>a=p</code>) to reduce bandwidth. Use <code>KittyOptions::transmit()</code> then <code>KittyOptions::place()</code>.</span></div>
+      <div class="feature"><strong>Kitty zlib compression</strong><span>Compress PNG payload with zlib (<code>f=1</code>) before base64-encoding via <code>KittyOptions::withCompression(1)</code>. Useful for large images.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -114,6 +116,9 @@ $mosaic = Mosaic::builder()
 <tr><td>Mosaic</td><td>render(image, width, height)</td><td>Render image to ANSI string</td></tr>
 <tr><td>Mosaic</td><td>builder()</td><td>Create builder for fine-grained control</td></tr>
 <tr><td>Renderer</td><td>delete(imageId)</td><td>Remove a previously rendered image (Kitty=APC delete; iTerm2=OSC 1337 Pop; others=empty)</td></tr>
+<tr><td>KittyRenderer</td><td>renderWithOptions(image, width, height, KittyOptions)</td><td>Render with Kitty protocol options (virtual-image a=p, compression f=1)</td></tr>
+<tr><td>KittyOptions</td><td>transmit(id), place(id, x, y)</td><td>Factory: transmit inline or place a previously transmitted virtual image</td></tr>
+<tr><td>KittyOptions</td><td>withZIndex(z), withCompression(f), withUseVirtual(bool)</td><td>Builder: z-index stacking, zlib compression (f=1), virtual-image mode (a=p)</td></tr>
 <tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
 <tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
 <tr><td>ImageSource</td><td>fromGd(image)</td><td>Create from GD resource</td></tr>
