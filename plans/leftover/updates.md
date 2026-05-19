@@ -329,6 +329,7 @@ review for step 11.03 · clean · PR#658
 tests-ci for step 11.03 · clean
 docs for step 11.03 · clean
 step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo (Option C — neither lib depends on the other; Animation lives in candy-mosaic with ImageSource[] ctor; resolves step 07.15 blocker — drop the candy-flip require from 07.15's Modify list)
+fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3426; MosaicBuilder row merged into Mosaic.php note; §6.1+§6.4 phantom sugar-dash/sugar-charts consumers reframed to "no current consumers"; §4.1 withFrame() body filled in with clone-mutate pattern + sketch pointer; §3 divergence note explaining Option A→C deviation from step file framing)
 
 ## Open review findings — 03.05
 
@@ -344,52 +345,4 @@ step 11.04 · PR#660 · plans: candy-flip / candy-mosaic image-output split memo
 ## Open review findings — 01.08
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
-
-## Open review findings — 11.04
-
-The plan (`plans/candy-flip-mosaic-split.md`, PR#660) is substantively
-correct: §3 unambiguously answers every open question step 07.15
-asks, the dependency-direction decision is sound, and the updates.md
-Blocker entry for 07.15 holds. Minor accuracy nits below (non-blocking
-— do not require a fix subagent unless future plan revisions touch
-the affected sections):
-
-- [x] §1.2 totals are stale: "candy-mosaic/src/ (3,236 LOC over 21
-      files)" — actual is **3,426 LOC over 22 files** (per `find
-      candy-mosaic/src -name '*.php' | wc -l`). The plan landed
-      2026-05-19, one day after step 07.14 expanded HalfBlockRenderer
-      (transparency) and SixelRenderer (maxColors). Individual row
-      LOC figures still match; only the totals are out of date.
-- [x] §1.2 table lists `MosaicBuilder.php` as a separate row even
-      though the note correctly says "(in same file)" — counting it
-      separately is what makes the table appear to be 23 rows while
-      `find` returns 22 files. Cosmetic; resolved by either dropping
-      the row or making the in-file annotation more prominent.
-- [x] §6.1 and §6.4 cite "sugar-dash, sugar-charts" as consumers of
-      `candy-mosaic`. `grep -l candy-mosaic */composer.json` returns
-      only `candy-mosaic/composer.json` itself; no library currently
-      requires it. The Option C rationale still holds (in fact more
-      strongly — no current consumer means zero migration risk), but
-      the phantom "sugar-dash's existing image-preview integration"
-      claim should be reframed as "no current consumers, so future
-      consumers inherit a clean closure". A future docs sub-step
-      could correct this; not blocking for step 07.15.
-- [x] §4.1 `withFrame()` body is truncated to a comment ("Standard
-      mutate() helper omitted for brevity"). Fine for a plan, but
-      step 07.15's implementer will need the full pattern from
-      `candy-sprinkles/Style.php` — worth a one-line hint pointer in
-      the snippet when 07.15 lands.
-- [x] Step file 11.04 originally listed the deliverable as "API
-      contract — candy-flip::Frame[] → candy-mosaic::Animation"
-      (Option A framing). The plan correctly diverges to Option C
-      and explains why; the step's Acceptance criteria are
-      satisfied (boundary documented + step 07.15 unblocked) so this
-      is a deliberate, explained deviation, not a gap.
-
-Mechanical checks: plan-only deliverable — no `tools/check-path-repos.php`
-implications, no composer.json edits, no test runs required. PR#660
-diff is `plans/candy-flip-mosaic-split.md` (new file) + PR#661 was
-the updates.md bookkeeping append (Blocker resolution line landed in
-that follow-up). Verified PR#660 merged via `gh pr view 660`.
-
 
