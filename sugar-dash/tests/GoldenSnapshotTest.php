@@ -42,7 +42,7 @@ final class GoldenSnapshotTest extends TestCase
     /** @var array<string, string> slug => reason */
     private const SKIPPED = [
         'dashboard-live'          => 'interactive TUI (VHS in part 2)',
-        'dashboard-interactive'   => 'interactive demo (VHS in part 2)',
+        'dashboard-accordion-timeline'   => 'accordion and timeline demo',
         'dashboard-charts'         => 'interactive dashboard demo',
         'dashboard-complex'         => 'interactive dashboard demo',
         'dashboard-data'            => 'interactive dashboard demo',
