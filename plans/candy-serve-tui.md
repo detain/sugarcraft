@@ -92,13 +92,13 @@ candy-core  Program             (existing — Bubble Tea runtime)
 candy-serve  RepoListModel ←→ ChildModels (NEW — phases 1–5)
     │
     ├── candy-sprinkles  Style          (border, fg, bg, padding)
-    ├── sugar-boxer      Frame          (titled boxes / split panes)
+    ├── sugar-boxer      SugarBoxer     (titled boxes / split panes)
     ├── sugar-stickers   Viewport       (scrolling lists, scrollbar)
     ├── candy-shine      Renderer       (markdown → ANSI for README)
     ├── candy-shine      SyntaxHighlighter (file viewer colourisation)
     ├── sugar-stash      Git            (`log`, `show`, `cat-file`, `ls-tree`)
+    ├── candy-core       Cmd::setClipboard()   (OSC 52 emitter, phase 5)
     └── candy-vt         (terminal-state model used by candy-core writer)
-                          OSC 52 helper for clipboard (phase 5)
 ```
 
 ### 2.1 SSH → TUI plumbing (candy-wish handles it)
@@ -141,9 +141,12 @@ PTY-resize handling for free (candy-wish ships those Msgs since step
 
 candy-core ships `Program` (event loop) + `Model` (interface) + `Msg`
 hierarchy. The TUI's root model holds a stack of child models, one per
-"screen". The ScreenStack helper landed in step 06.02 (`candy-core/
-src/Program/ScreenStack.php`) — TUI navigation uses
-`ScreenStack::push()` / `pop()` rather than re-implementing nav.
+"screen". The ScreenStack helper landed in step 06.02
+(`candy-core/src/ScreenStack.php`, plus
+`candy-core/src/ScreenStackCapable.php`,
+`candy-core/src/RootModelWithScreenStack.php`, and the
+`candy-core/src/Msg/ScreenStackPushedMsg.php` event) — TUI navigation
+uses `ScreenStack::push()` / `pop()` rather than re-implementing nav.
 
 ### 2.3 Git access (sugar-stash)
 
@@ -154,14 +157,17 @@ will use sugar-stash's `Git` driver for `log` / `branch` / `tag` /
 shell-out path**; if a helper is missing in sugar-stash it gets added
 upstream there and consumed here.
 
-`Repo.php` already shells out for the bare-repo metadata it needs
-(`isPublic`, `setDescription`, `readme`). Those stay in place; the TUI
-just composes them.
+`Repo.php` already exposes the bare-repo metadata the TUI needs:
+`Repo::$isPublic` (readonly bool property), `Repo::withDescription()`
+(immutable+fluent setter — there is no `setDescription()`), and
+`Repo::readme()` (method, `candy-serve/src/Repo.php:L251`). Those stay
+in place; the TUI just composes them.
 
 ### 2.4 Layout primitives
 
-- **sugar-boxer** — titled bordered boxes; we use it for the outer
-  frame around each pane.
+- **sugar-boxer** — titled bordered boxes via `SugarBoxer`
+  (`sugar-boxer/src/SugarBoxer.php`); we use it for the outer frame
+  around each pane.
 - **sugar-stickers** — `Viewport` for the scrollable lists (repo list,
   file tree, commit log) and `Scrollbar` to render the indicator.
 - **candy-sprinkles** — `Style` for inline runs (highlight selected
@@ -362,9 +368,15 @@ and the repo-list screen.
   by `RepoListModel::view()`.
 - `candy-serve/src/Tui/Theme.php` — palette wrapper around
   candy-sprinkles `Theme`.
-- `candy-serve/cmd/tui.php` — `soft-serve tui` subcommand that opens
+- `candy-serve/bin/soft-serve-tui` — TUI entry-point script that opens
   the TUI on stdin/stdout (used by candy-wish channel handler and as a
-  standalone debug command).
+  standalone debug command). Lives under `bin/` next to the existing
+  `bin/soft-serve` per current candy-serve precedent. (The original
+  draft proposed a new top-level `cmd/` directory; review folded it
+  back into `bin/` to avoid introducing a new convention. A future
+  step may also expose this as a `soft-serve tui` subcommand inside
+  the existing `bin/soft-serve` dispatcher — either path is fine as
+  long as both live under `bin/`.)
 - `candy-serve/src/SSH/TuiChannelHandler.php` — `ChannelHandler` that
   delegates exec to existing `UploadPack`/`ReceivePack` and otherwise
   pipes the candy-core Program over the channel.
@@ -419,15 +431,16 @@ and the repo-list screen.
 - `candy-serve/lang/*.php` — strings for branches / tags / collabs /
   clone-cmd labels.
 
-**Dependencies:**
+**Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::branches()`, `Git::tags()` (verify present; if
-  missing, surface as a sugar-stash carry-forward in `updates.md` and
-  stub locally until shipped).
+- sugar-stash `Git::branches()` ✅ already ships.
+- sugar-stash `Git::tags()` — **NOT YET SHIPPED**. Phase 2 cannot open
+  until the sugar-stash `tags()` PR has merged. Do **not** start
+  phase-2 step files until §6.1 reports that row green.
 
 **Tests (≥ 20):** snapshot tests for the three sub-panes; behaviour
 test for `tab` focus rotation; behaviour test for `c` emitting the
-clone-URL OSC-52 Cmd.
+clone-URL OSC-52 Cmd (via candy-core `Cmd::setClipboard()`).
 
 **Acceptance:** drilling into any repo shows branches / tags /
 collaborators panes; `c` copies clone URL; `Esc` returns to list with
@@ -448,10 +461,11 @@ The chunkiest phase — two new screens plus syntax highlighting.
 - `candy-serve/src/Tui/LanguageDetector.php` — map extension → language
   string consumed by candy-shine `SyntaxHighlighter`.
 
-**Dependencies:**
+**Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::lsTree($ref, $path)` + `Git::catFile($ref,
-  $path)` — verify shipped; same carry-forward rule as phase 2 if not.
+- sugar-stash `Git::lsTree($ref, $path)` — **NOT YET SHIPPED**.
+- sugar-stash `Git::catFile($ref, $path)` — **NOT YET SHIPPED**.
+  Phase 3 cannot open until **both** sugar-stash patches have merged.
 - candy-shine `SyntaxHighlighter::highlight($source, $lang)` — already
   shipped; verify per-language fallback (returns plain text if `$lang`
   unknown).
@@ -479,12 +493,15 @@ syntax-highlight, show placeholder); files >1 MB refuse to load.
 - `candy-serve/src/Tui/DiffModel.php`
 - `candy-serve/src/Tui/DiffView.php`
 
-**Dependencies:**
+**Dependencies (hard preconditions — see §6.1):**
 
-- sugar-stash `Git::log($ref, $skip, $limit)` — windowed log (so
-  the TUI does not load all 10k commits up front). Verify present in
-  sugar-stash; if missing, ship there first (carry-forward).
-- sugar-stash `Git::show($sha)` — already exists.
+- sugar-stash `Git::log($ref, $skip, $limit)` — **NOT YET SHIPPED**.
+  The current signature is `log(int $limit = 25)`; it needs to broaden
+  to accept `$ref` + `$skip` (backwards compatible). Required so the
+  TUI does not load all 10k commits up front.
+- sugar-stash `Git::show($sha)` — **NOT YET SHIPPED** (the existing
+  `Git.php` has no `show()` method). Required for `DiffView`.
+  Phase 4 cannot open until both have merged.
 
 **Tests (≥ 25):**
 
@@ -505,11 +522,10 @@ diff with file-level colourisation.
 - README markdown rendering on `RepoDetailView` via candy-shine
   `Renderer` (the `README` block in the §4.2 mock-up).
 - OSC 52 clipboard for the `c` keybind on both `RepoListView` and
-  `RepoDetailView`. **Depends on** candy-vt landing an OSC 52 emitter
-  (`leftover_updates_later.md` lists this as candy-serve §3 polish but
-  ownership belongs to candy-vt — see §6 below). If candy-vt has not
-  shipped OSC 52 by phase-5 time, emit the raw escape directly from
-  candy-serve (`"\x1b]52;c;" . base64_encode($payload) . "\x1b\\"`).
+  `RepoDetailView` — consume candy-core's existing
+  `Cmd::setClipboard($url, 'c')` (`candy-core/src/Cmd.php:L267`,
+  shipped). No candy-vt prerequisite (candy-vt has OSC 52 *read*
+  support; emit lives in candy-core via `Util/Ansi::setClipboard`).
 - HelpPanel modal (`?` keybind from any screen).
 - Theme polish — pick default theme; map keyboard cues consistently
   across all screens (current Charm convention: dim grey for hints,
@@ -537,35 +553,58 @@ Pre-conditions that **must** be true before phase-1 ships:
 | candy-wish ChannelHandler API | ✅ landed step 06.09 (PR #607) | `candy-wish/src/Channel/` | needed for TUI vs exec routing |
 | candy-wish Session metadata | ✅ landed step 06.12 (PR #613) | `candy-wish/src/Session.php` | user-id, key-fingerprint surface |
 | candy-wish async Middleware | ✅ landed step 06.13 (PR #615) | `candy-wish/src/Middleware.php` | TUI session is long-lived |
-| candy-core ScreenStack | ✅ landed step 06.02 (PR #581) | `candy-core/src/Program/ScreenStack.php` | TUI nav stack |
+| candy-core ScreenStack | ✅ landed step 06.02 (PR #583) | `candy-core/src/ScreenStack.php` | TUI nav stack |
 | candy-core Component lifecycle | ✅ landed step 06.03 (PR #587) | `candy-core/src/Component.php` | onMount / onUnmount for modals |
+| candy-core OSC 52 emitter | ✅ shipped | `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) | clipboard for `c` keybind (phase 5) |
 | candy-shine Renderer | ✅ shipped | `candy-shine/src/Renderer.php` | README block |
 | candy-shine SyntaxHighlighter | ✅ shipped | `candy-shine/src/SyntaxHighlighter.php` | file viewer |
 | sugar-stickers Viewport | ✅ shipped | `sugar-stickers/src/Viewport.php` | scrollable lists |
 | sugar-stickers FlexBox | ✅ shipped | `sugar-stickers/src/Flex/FlexBox.php` | 3-pane layout on RepoDetailView |
-| sugar-boxer Frame | ✅ shipped | `sugar-boxer/src/Frame.php` | bordered panes |
-| sugar-stash Git | ✅ shipped (verify completeness) | `sugar-stash/src/Git.php` | log / branches / lsTree / catFile |
+| sugar-boxer SugarBoxer | ✅ shipped | `sugar-boxer/src/SugarBoxer.php` | bordered panes |
+| sugar-stash Git | 🟡 partial — phases 2–4 blocked on patches | `sugar-stash/src/Git.php` | only `status()`, `branches()`, `log(int $limit)`, `stage()`, `unstage()` shipped. Missing `tags()`, `show()`, `lsTree()`, `catFile()` and the `log($ref, $skip, $limit)` windowed signature — see §6.1 sugar-stash blockers below |
 
-**Carry-forwards to sugar-stash (must confirm during phase-1 scoping):**
+### 6.1 sugar-stash blockers (hard preconditions for phases 2–4)
 
-- `Git::lsTree($ref, $path)` — file tree at any ref. Phase 3 blocker if
-  missing.
-- `Git::log($ref, $skip, $limit)` — windowed log. Phase 4 blocker if
-  missing.
-- `Git::branches()` / `Git::tags()` — phase 2 blockers if missing.
+The sugar-stash `Git` driver (`sugar-stash/src/Git.php`) and its
+interface (`sugar-stash/src/GitDriver.php`) currently expose only
+`status()`, `branches()`, `log(int $limit = 25)`, `stage()`, and
+`unstage()`. Each of the following methods is a **hard precondition**
+for the phase it gates — phase work cannot start until the matching
+sugar-stash patch has shipped (separate PR, landed before candy-serve
+phase-N branch opens). Do **not** invent a parallel `git`-shell-out
+path inside candy-serve.
 
-If any of these is absent, the implementer **ships the missing pieces
-in sugar-stash first** (separate PR) before consuming them in
-candy-serve. Do **not** invent a parallel git-shell-out path inside
-candy-serve.
+| sugar-stash API | Phase blocked | What it must do |
+|---|---|---|
+| `GitDriver::tags(): array` + `Git::tags()` | **Phase 2** | mirror `branches()` shape, returning `[['name' => …, 'sha' => …, …]]` from `for-each-ref refs/tags`. |
+| `GitDriver::show(string $sha): array` + `Git::show()` | **Phase 4** | invoke `git show $sha` and return a structured diff (file list + hunks). Powers `DiffView`. |
+| `GitDriver::lsTree(string $ref, string $path = ''): array` + `Git::lsTree()` | **Phase 3** | run `git ls-tree -l $ref -- $path`, return rows with type (`blob`/`tree`), mode, size, name. Drives `FileTreeModel`. |
+| `GitDriver::catFile(string $ref, string $path): string` + `Git::catFile()` | **Phase 3** | `git cat-file blob $ref:$path` (or `--filters` for text), return raw body. Drives `FileViewerModel`. |
+| `GitDriver::log()` — broadened signature `log(string $ref = 'HEAD', int $skip = 0, int $limit = 25)` | **Phase 4** | extend existing `log(int $limit)` to accept `$ref` + `$skip` for windowed paging. Drives `CommitLogModel` paging. **Backwards compatible** — keep `$limit` as the third positional and default the first two. |
 
-**Carry-forwards to candy-vt:**
+Each of these is a separate sugar-stash PR with its own tests. Phase-1
+of candy-serve does **not** depend on any of them (only `branches()`
+which already ships). Phases 2–4 are gated:
 
-- OSC 52 emitter helper for phase 5. Tracked separately in
-  `plans/leftover/phase-11-strategic-plans/step-03-candy-vt-graphics.md`
-  (broader candy-vt P3 plan); if that lands first, consume it. If not,
-  emit raw bytes from candy-serve and carry-forward an extraction
-  note.
+- **Phase 2 cannot open** until `tags()` ships in sugar-stash.
+- **Phase 3 cannot open** until `lsTree()` + `catFile()` both ship.
+- **Phase 4 cannot open** until `show()` ships *and* `log()` accepts
+  `$ref` + `$skip`.
+
+Recommend a single sugar-stash umbrella step (e.g. "sugar-stash Git
+driver: tags / show / lsTree / catFile / windowed log") with five
+sub-PRs, scheduled ahead of candy-serve phase-2 kickoff. The
+candy-serve phase-1 plan files should reference that step ID once
+authored.
+
+**candy-core OSC 52 emitter — already shipped:**
+
+`candy-core/src/Cmd.php:L267` already exposes
+`Cmd::setClipboard($text, $selection = 'c')`, which emits the OSC 52
+escape (via `candy-core/src/Util/Ansi.php:L400` `Ansi::setClipboard`).
+Phase 5 consumes this directly — there is **no candy-vt prerequisite**
+for the clipboard emitter. (candy-vt has OSC 52 *read* support; emit
+lives in candy-core.)
 
 ---
 
@@ -743,10 +782,15 @@ the wire-protocol port — the marquee TUI feature has not been built.
   SSH server + channel API.
 - `candy-core/src/Program.php` + `candy-core/src/Model.php` — Bubble
   Tea runtime.
-- `candy-core/src/Program/ScreenStack.php` — nav stack (step 06.02).
+- `candy-core/src/ScreenStack.php` (+ `ScreenStackCapable.php`,
+  `RootModelWithScreenStack.php`, `Msg/ScreenStackPushedMsg.php`) —
+  nav stack (step 06.02, PR #583).
+- `candy-core/src/Cmd.php` (`Cmd::setClipboard()`, L267) +
+  `candy-core/src/Util/Ansi.php` (`Ansi::setClipboard()`, L400) —
+  OSC 52 emitter helper used by phase-5 clipboard keybind.
 - `candy-sprinkles/src/Style.php` + `candy-sprinkles/src/Theme.php` —
   styling.
-- `sugar-boxer/src/Frame.php` — bordered titled boxes.
+- `sugar-boxer/src/SugarBoxer.php` — bordered titled boxes.
 - `sugar-stickers/src/Viewport.php` + `sugar-stickers/src/Scrollbar.php`
   + `sugar-stickers/src/Flex/FlexBox.php` — scrolling lists + layout.
 - `candy-shine/src/Renderer.php` — README markdown.
