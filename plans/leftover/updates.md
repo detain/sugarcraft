@@ -220,6 +220,9 @@ tests-ci for step 05.05 · clean
 docs for step 05.05 · clean
 step 05.06 · PR#577 · super-candy: add i18n via Lang::t() (Lang.php facade + lang/en.php + LangCoverageTest + status/keyhelp/search translations in Manager/Renderer)
 step 05.07 · PR#578 · sugar-stash: add i18n via Lang::t() (key-hints, error prefix, empty-state messages + LangCoverageTest)
+review for step 05.07 · PR#578 · 3 files (lang/en.php, src/Renderer.php, tests/LangCoverageTest.php); all Lang::t() keys in src/ verified present in lang/en.php; READMEs missing i18n section
+tests-ci for step 05.07 · clean
+docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/sugar-stash.html + create CALIBER_LEARNINGS.md
 
 ## Open review findings — 03.05
 
