@@ -131,6 +131,13 @@ final class SixelRenderer implements Renderer
         return $this->dither;
     }
 
+    /**
+     * The maximum number of colors in the quantized Sixel palette.
+     *
+     * The Sixel protocol supports at most 256 colors. Values below 256
+     * invoke the 256-color fallback — useful for terminals that advertise
+     * Sixel but have limited truecolor support.
+     */
     public function maxColors(): int
     {
         return $this->maxColors;

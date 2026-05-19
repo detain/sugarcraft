@@ -96,6 +96,8 @@ $mosaic = Mosaic::builder()
       <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and DA1 capability query. Cached per-process.</span></div>
       <div class="feature"><strong>Kitty virtual-image placement</strong><span>Transmit once (<code>a=T</code>), then place at multiple offsets (<code>a=p</code>) to reduce bandwidth. Use <code>KittyOptions::transmit()</code> then <code>KittyOptions::place()</code>.</span></div>
       <div class="feature"><strong>Kitty zlib compression</strong><span>Compress PNG payload with zlib (<code>f=1</code>) before base64-encoding via <code>KittyOptions::withCompression(1)</code>. Useful for large images.</span></div>
+      <div class="feature"><strong>Half-block transparency</strong><span>Transparent pixels (alpha=127) emit no SGR codes — terminal default background shows through. Enables overlay compositing on existing terminal content.</span></div>
+      <div class="feature"><strong>Sixel 256-color fallback</strong><span>Pass <code>maxColors</code> (1–256) to <code>SixelRenderer</code> constructor to limit palette size for terminals with limited truecolor support.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -120,6 +122,8 @@ $mosaic = Mosaic::builder()
 <tr><td>KittyOptions</td><td>transmit(id), place(id, x, y)</td><td>Factory: transmit inline or place a previously transmitted virtual image</td></tr>
 <tr><td>KittyOptions</td><td>withZIndex(z), withCompression(f), withUseVirtual(bool)</td><td>Builder: z-index stacking, zlib compression (f=1), virtual-image mode (a=p)</td></tr>
 <tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
+<tr><td>HalfBlockRenderer</td><td>new, supportsAlpha()</td><td>Unicode ▀ renderer with transparent-pixel handling (null alpha skips SGR codes, letting terminal default show through). <code>supportsAlpha()</code> returns <code>false</code> — transparency is rendered by omitting SGR, not blending.</td></tr>
+<tr><td>SixelRenderer</td><td>new(dither, maxColors), maxColors(), dither()</td><td>DEC sixel renderer with median-cut quantizer (up to 256 colors). Constructor accepts <code>maxColors</code> (1–256, default 256) to limit palette size for limited-truecolor terminals. Dither enum: <code>FloydSteinberg</code>, <code>Stucki</code>, <code>Atkinson</code>, <code>None</code>.</td></tr>
 <tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
 <tr><td>ImageSource</td><td>fromGd(image)</td><td>Create from GD resource</td></tr>
 </table>
