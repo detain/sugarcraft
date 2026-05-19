@@ -250,12 +250,7 @@ fix for step 06.06 · PR#598 · resolved 3 findings ([0??-1] dead code + 2 CALIB
 tests-ci for step 06.06 · clean
 docs for step 06.06 · PR#600 · document #[Example]/#[Alias]/HelpFormatter/TypoSuggester in README + end-user page
 step 06.07 · PR#601 · candy-shell: completions (Bash/Zsh/Fish) + versionFromComposer() + env-var fallbacks via CANDYSHELL_* prefix
-
-## Open review findings — 06.07
-
-- [ ] candy-shell/CALIBER_LEARNINGS.md: not updated — two new significant patterns missing entries: `[pattern:env-var-fallback]` (CANDYSHELL_* prefix + applyEnvVarFallbackToInput in doRun) and `[pattern:version-from-composer]` (versionFromComposer + findRootComposer walking up to root composer.json). Per AGENTS.md: new patterns must be logged in the touched lib's CALIBER_LEARNINGS.md.
-- [ ] candy-shell/README.md: not updated — three new public API elements undocumented: `completion` command, `CANDYSHELL_*` env var fallback mechanism, and `versionFromComposer()` dynamic version behavior. Per review template: README must reflect new public API.
-- [ ] EnvVarFallbackTest::testExplicitOptionIsUsedWhenProvided: test name promises "explicit option is used" but assertion only checks `getStatusCode() === 0`; it never asserts the explicit `--timeout` value (5) was actually used vs the lingering `CANDYSHELL_TIMEOUT=30` from the prior test. Passes only because StyleCommand's `--timeout` is a no-op in this execution path — not a genuine verification of the override behavior.
+fix for step 06.07 · PR#602 · resolved 3 findings (CALIBER patterns + README docs + EnvVarFallbackTest)
 
 ## Open review findings — 03.05
 
