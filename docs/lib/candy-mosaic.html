@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CandyMosaic · SugarCraft</title>
-<meta name="description" content="CandyMosaic: Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block.">
+    <meta name="description" content="CandyMosaic: Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.">
 <meta property="og:title" content="CandyMosaic · SugarCraft">
-<meta property="og:description" content="Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block.">
+    <meta property="og:description" content="Image-to-cell renderer for terminal — Sixel, Kitty, iTerm2, Unicode half-block and quarter-block.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mosaic.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-mosaic.html">
 <meta property="og:type" content="website">
@@ -50,7 +50,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG/JPEG/static GIF decoded via ext-gd and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, or Unicode half-block fallback.</p>
+    <p class="lede" style="margin-top: 28px;">Image-to-cell renderer for the terminal. PNG/JPEG/static GIF decoded via ext-gd and rendered via the best available protocol: Sixel, Kitty graphics, iTerm2 inline images, Unicode half-block, or quarter-block fallback.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-mosaic</code></pre>
@@ -65,7 +65,9 @@ $ansi   = $mosaic->render($image, width: 40, height: 20);
 echo $ansi;</code></pre>
 
     <h3 style="margin-top: 32px;">API</h3>
-    <pre class="code"><code>// Probe terminal once, pick best protocol
+    <pre class="code"><code>use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
+
+// Probe terminal once, pick best protocol
 $mosaic = Mosaic::probe();
 
 // Force a specific backend
@@ -79,7 +81,7 @@ $ansi = $mosaic->render($image, width: 40, height: 20);
 
 // Builder for fine-grained control
 $mosaic = Mosaic::builder()
-    ->withRenderer(new HalfBlockRenderer())
+    ->withRenderer(new QuarterBlockRenderer())
     ->withResize(width: 40, height: 20)
     ->build();</code></pre>
 
@@ -89,6 +91,7 @@ $mosaic = Mosaic::builder()
       <div class="feature"><strong>Kitty graphics protocol</strong><span>kitty, ghostty, wezterm support.</span></div>
       <div class="feature"><strong>iTerm2 inline images</strong><span>OSC 1337 support for iTerm2, wezterm, mintty.</span></div>
       <div class="feature"><strong>Unicode half-block</strong><span>Universal fallback using ▀ + 24-bit fg/bg.</span></div>
+      <div class="feature"><strong>Unicode quarter-block</strong><span>Higher fidelity using ░▒▓█ 2×2 sub-pixel rendering.</span></div>
       <div class="feature"><strong>ext-gd integration</strong><span>PNG, JPEG, static GIF via GD (imagecreatefrompng, imagecreatefromjpeg, imagecreatefromgif).</span></div>
       <div class="feature"><strong>Protocol detection</strong><span><code>Mosaic::probe()</code> checks environment variables and DA1 capability query. Cached per-process.</span></div>
     </div>
@@ -110,6 +113,7 @@ $mosaic = Mosaic::builder()
 <tr><td>Mosaic</td><td>sixel(), kitty(), iterm2(), halfBlock()</td><td>Force specific renderer</td></tr>
 <tr><td>Mosaic</td><td>render(image, width, height)</td><td>Render image to ANSI string</td></tr>
 <tr><td>Mosaic</td><td>builder()</td><td>Create builder for fine-grained control</td></tr>
+<tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
 <tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
 <tr><td>ImageSource</td><td>fromGd(image)</td><td>Create from GD resource</td></tr>
 </table>

@@ -27,7 +27,7 @@ interface Renderer
     public function render(ImageSource $image, int $width, ?int $height = null): string;
 
     /**
-     * Stable backend identifier: 'sixel' | 'kitty' | 'iterm2' | 'halfblock'.
+     * Stable backend identifier: 'sixel' | 'kitty' | 'iterm2' | 'halfblock' | 'quarterblock'.
      */
     public function name(): string;
 
