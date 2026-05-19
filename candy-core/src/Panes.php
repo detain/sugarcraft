@@ -106,4 +106,9 @@ final readonly class Panes implements Model
     {
         return $this->panes;
     }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
+    }
 }
