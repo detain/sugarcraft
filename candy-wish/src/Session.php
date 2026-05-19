@@ -35,17 +35,22 @@ namespace SugarCraft\Wish;
 final class Session
 {
     public function __construct(
-        public readonly string $user,
-        public readonly string $clientHost,
-        public readonly int    $clientPort,
-        public readonly string $serverHost,
-        public readonly int    $serverPort,
-        public readonly string $term,
-        public readonly int    $cols,
-        public readonly int    $rows,
+        public readonly string  $user,
+        public readonly string  $clientHost,
+        public readonly int     $clientPort,
+        public readonly string  $serverHost,
+        public readonly int     $serverPort,
+        public readonly string  $term,
+        public readonly int     $cols,
+        public readonly int     $rows,
         public readonly ?string $tty,
         public readonly ?string $command,
-        public readonly string $lang,
+        public readonly string  $lang,
+        public readonly ?string $sessionId = null,
+        public readonly ?string $authMethod = null,
+        public readonly ?string $keyFingerprint = null,
+        public readonly ?string $clientVersion = null,
+        public readonly ?string $serverVersion = null,
     ) {}
 
     /**
@@ -93,6 +98,40 @@ final class Session
     public function isInteractive(): bool
     {
         return $this->tty !== null && $this->tty !== '';
+    }
+
+    /**
+     * Create a new Session with protocol-handshake metadata populated.
+     *
+     * Called by transports after the SSH handshake completes so that
+     * middleware has visibility into sessionId, authMethod,
+     * keyFingerprint, clientVersion, and serverVersion.
+     */
+    public function withProtocolMetadata(
+        string $sessionId,
+        string $authMethod,
+        ?string $keyFingerprint,
+        string $clientVersion,
+        string $serverVersion,
+    ): self {
+        return new self(
+            user:             $this->user,
+            clientHost:       $this->clientHost,
+            clientPort:       $this->clientPort,
+            serverHost:       $this->serverHost,
+            serverPort:       $this->serverPort,
+            term:             $this->term,
+            cols:             $this->cols,
+            rows:             $this->rows,
+            tty:              $this->tty,
+            command:          $this->command,
+            lang:             $this->lang,
+            sessionId:        $sessionId,
+            authMethod:        $authMethod,
+            keyFingerprint:   $keyFingerprint,
+            clientVersion:    $clientVersion,
+            serverVersion:    $serverVersion,
+        );
     }
 
     /**
