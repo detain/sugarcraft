@@ -79,6 +79,26 @@ final class Manager
         return $this->enabled;
     }
 
+    /**
+     * Toggle mouse motion reporting.
+     *
+     * When `$on` is true, returns the escape sequence that enables
+     * SGR Mouse mode 1003 (all motion events reported on movement).
+     * When false, returns the sequence that disables it.
+     *
+     * The caller writes the returned string to the terminal to
+     * activate/deactivate motion reporting. This manager does not
+     * directly emit to the TTY — it is a text-processing component.
+     *
+     * Mirrors bubblezone's `Manager::SetMotionTracking`.
+     */
+    public function setMotionTracking(bool $on): string
+    {
+        // CSI ? 1003 h = enable all event mode
+        // CSI ? 1003 l = disable
+        return $on ? "\x1b[?1003h" : "\x1b[?1003l";
+    }
+
     /** Read-only accessor for the prefix this manager prepends to ids. */
     public function prefix(): string
     {
