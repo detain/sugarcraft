@@ -243,6 +243,8 @@ tests-ci for step 06.04 · clean
 docs for step 06.04 · clean · PR#593
 step 06.05 · PR#594 · candy-shell: #[Command]/#[Flag]/#[ValueEnum] attributes + CommandScanner discovery + Application::scan() method
 fix for step 06.05 · PR#595 · resolved 3 findings (descriptionSection forward + README auto-discovery docs + CALIBER entry); Flag::$enum wiring deferred to Carry-forward
+tests-ci for step 06.05 · clean
+docs for step 06.05 · PR#596 · add auto-discovery types table to candy-shell end-user page
 
 ## Open review findings — 03.05
 
