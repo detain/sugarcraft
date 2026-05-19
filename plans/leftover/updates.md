@@ -202,6 +202,10 @@ step 05.01 · PR#570 · sugar-calendar: add i18n via Lang::t() (lang/en.php + La
 review for step 05.01 · clean · PR#570
 tests-ci for step 05.01 · clean
 docs for step 05.01 · clean
+step 05.02 · PR#571 · sugar-table: add i18n via Lang::t() (Lang.php + lang/en.php + PageFooter + LangCoverageTest + candy-core dep)
+review for step 05.02 · clean · PR#571
+tests-ci for step 05.02 · clean
+docs for step 05.02 · PR#572 · add i18n section to README (Lang::t() pattern + keys) + fix pagination example + create CALIBER_LEARNINGS.md
 
 ## Open review findings — 03.05
 
