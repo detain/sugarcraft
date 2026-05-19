@@ -21,7 +21,7 @@ interface Component extends Model
      * Return a Cmd to run immediately (e.g. to start a subscription),
      * or null for no-op.
      *
-     * @return null|\Closure
+     * @return ?Closure
      */
     public function onMount(): ?\Closure;
 
@@ -30,7 +30,7 @@ interface Component extends Model
      * Return a Cmd to run immediately (e.g. to cancel a subscription),
      * or null for no-op.
      *
-     * @return null|\Closure
+     * @return ?Closure
      */
     public function onUnmount(): ?\Closure;
 }
