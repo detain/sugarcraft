@@ -198,6 +198,7 @@ step 04.03 · PR#568 · sugar-crumbs: wire Zone::mark() emit/exit in Breadcrumb 
 review for step 04.03 · clean · PR#568
 tests-ci for step 04.03 · clean
 docs for step 04.03 · PR#569 · document withZoneManager() in README + CALIBER_LEARNINGS.md + docs/lib/sugar-crumbs.html
+step 05.01 · PR#570 · sugar-calendar: add i18n via Lang::t() (lang/en.php + Lang.php facade + DatePicker.php refactor + LangCoverageTest)
 
 ## Open review findings — 03.05
 
