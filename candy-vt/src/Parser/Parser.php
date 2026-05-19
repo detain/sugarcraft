@@ -154,9 +154,11 @@ final class Parser
 
     private function param(int $byte): void
     {
-        if ($byte === 0x3B) { // ';' — start a new param slot
+        // ';' (0x3B) and ':' (0x3A) both start a new param slot.
+        // ':' is the sub-parameter separator per VT500 spec.
+        if ($byte === 0x3B || $byte === 0x3A) {
             if (empty($this->params)) {
-                $this->params[] = -1; // implicit default before the ';'
+                $this->params[] = -1; // implicit default before the separator
             }
             $this->params[] = -1;
             return;
