@@ -69,6 +69,12 @@ final class Counter implements Model
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — backed enum: Tick / Key / Signal / Custom.
 - **`SubscriptionCapable`** — trait providing the default `subscriptions(): null`.
+- **`ScreenStack`** — immutable stack with `push()` / `pop()` / `current()` / `breadcrumb()` / `isEmpty()` / `count()`.
+- **`Screen`** — value object: `model`, optional `title`, `onEnter` closure, `onExit` closure.
+- **`ScreenStackCapable`** — interface: `screens(): ScreenStack`. Implement to activate screen-stack routing.
+- **`RootModelWithScreenStack`** — concrete root model owning a `ScreenStack`; routes `ScreenStackPushedMsg` / `ScreenStackPoppedMsg` internally, delegates `view()` to the active screen.
+- **`PushScreenCmd`** / **`PopScreenCmd`** — Cmd factories that emit `ScreenStackPushedMsg` / `ScreenStackPoppedMsg`.
+- **`ScreenStackPushedMsg`** / **`ScreenStackPoppedMsg`** — infrastructure messages dispatched through `Program::send()`.
 
 ## Subscriptions
 
@@ -115,6 +121,70 @@ final class StaticModel implements Model
     // ... no subscriptions() needed
 }
 ```
+
+## Screen / ScreenStack
+
+Modal and sub-screen workflows use an immutable `ScreenStack` owned by a
+`ScreenStackCapable` root model. The `Program` routes `init()` / `update()` /
+`view()` to the active screen automatically, while infrastructure messages
+(`ScreenStackPushedMsg` / `ScreenStackPoppedMsg`) stay in the root model.
+
+```php
+use SugarCraft\Core\{Cmd, KeyType, Model, Msg, Program, RootModelWithScreenStack, Screen, ScreenStack};
+use SugarCraft\Core\Cmd\{PushScreenCmd, PopScreenCmd};
+use SugarCraft\Core\Msg\{KeyMsg, ScreenStackPushedMsg, ScreenStackPoppedMsg};
+
+final class DetailScreen implements Model
+{
+    public function __construct(public readonly string $id) {}
+    public function init(): ?\Closure { return null; }
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof KeyMsg && $msg->rune === 'b') {
+            return [$this, Cmd::pop()];
+        }
+        return [$this, null];
+    }
+    public function view(): string { return "Detail: {$this->id}\n(press b to go back)\n"; }
+}
+
+// Root model owns the stack and handles infrastructure messages.
+final class App implements Model, \SugarCraft\Core\ScreenStackCapable
+{
+    use \SugarCraft\Core\SubscriptionCapable;
+    public function __construct(public ScreenStack $screens = new ScreenStack()) {}
+    public function screens(): ScreenStack { return $this->screens; }
+    public function init(): ?\Closure { return null; }
+
+    public function update(Msg $msg): array
+    {
+        if ($msg instanceof ScreenStackPushedMsg) {
+            return [new self($this->screens->push($msg->screen)), null];
+        }
+        if ($msg instanceof ScreenStackPoppedMsg) {
+            if ($this->screens->isEmpty()) return [$this, null];
+            $popped = $this->screens->current();
+            return [new self($this->screens->pop()), null];
+        }
+        if ($msg instanceof KeyMsg && $msg->rune === 'n') {
+            return [$this, new PushScreenCmd(new Screen(new DetailScreen('item-1'), title: 'Item 1'))];
+        }
+        return [$this, null];
+    }
+
+    public function view(): string
+    {
+        $active = $this->screens->isEmpty()
+            ? new \SugarCraft\Core\Model\Anonymous(fn() => "Push a screen with n\n")
+            : $this->screens->current()->model;
+        return $active->view();
+    }
+}
+
+(new Program(new App()))->run();
+```
+
+`examples/screen-stack.php` is a runnable demo showing 3-deep push / pop.
 
 ## Demos
 

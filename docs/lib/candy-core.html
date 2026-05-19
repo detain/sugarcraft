@@ -93,6 +93,7 @@ final class Counter implements Model {
       <div class="feature"><strong>Cursed renderer</strong><span>Cell-diff rendering ported from Bubble Tea v2. ≥15% bandwidth savings on a 50-tick test.</span></div>
       <div class="feature"><strong>ReactPHP loop</strong><span>Mirrors goroutine semantics for input, signals, render tick, command execution.</span></div>
       <div class="feature"><strong>Signal handling</strong><span>Ctrl+C, SIGTERM, SIGWINCH (resize) all surface as Msgs in your update().</span></div>
+      <div class="feature"><strong>Screen / ScreenStack</strong><span>Immutable stack for modal / drill-down flows. <code>RootModelWithScreenStack</code> + <code>ScreenStackCapable</code> delegate <code>init/update/view</code> to the active screen automatically.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>

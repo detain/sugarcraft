@@ -8,6 +8,10 @@ namespace SugarCraft\Core;
  * Concrete root model that owns a ScreenStack and delegates view
  * to the active screen while routing all ScreenStackPushedMsg /
  * ScreenStackPoppedMsg infrastructure messages through its own update().
+ *
+ * @see ScreenStackCapable
+ * @see ScreenStackPushedMsg
+ * @see ScreenStackPoppedMsg
  */
 final class RootModelWithScreenStack implements Model, ScreenStackCapable
 {
