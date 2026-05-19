@@ -33,6 +33,8 @@ use React\EventLoop\StreamSelectLoop;
  */
 final class RecordingModel implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @var list<Msg> */
     public array $log = [];
 
@@ -355,6 +357,8 @@ final class ProgramTest extends TestCase
             windowTitle: 'demo',
         );
         $model = new class($view) implements \SugarCraft\Core\Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             public function __construct(private readonly View $v) {}
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
@@ -400,6 +404,8 @@ final class ProgramTest extends TestCase
             backgroundColor: Color::hex('#00ff00'),
         );
         $model = new class($view) implements \SugarCraft\Core\Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             public function __construct(private readonly View $v) {}
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
@@ -443,6 +449,8 @@ final class ProgramTest extends TestCase
             bracketedPaste: true,
         );
         $model = new class($view) implements \SugarCraft\Core\Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             public function __construct(private readonly View $v) {}
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
@@ -569,6 +577,8 @@ final class ProgramTest extends TestCase
 
         $view = new View(body: 'x', cursor: null);
         $model = new class($view) implements \SugarCraft\Core\Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             public function __construct(private readonly View $v) {}
             public function init(): ?\Closure { return null; }
             public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }

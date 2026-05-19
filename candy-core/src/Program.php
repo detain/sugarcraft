@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\InterruptMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\ResumeMsg;
+use SugarCraft\Core\Msg\SubscriptionsMsg;
 use SugarCraft\Core\Msg\SuspendMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
@@ -58,6 +59,8 @@ final class Program
     private ?bool $activeFocusReporting = null;
     private ?bool $activeBracketedPaste = null;
     private ?Recorder $recorder = null;
+    /** @var array<string, array{0: mixed, 1: Subscription}> */
+    private array $activeSubscriptions = [];
 
     /**
      * Wrap a {@see Model} with runtime options.
@@ -140,8 +143,15 @@ final class Program
         // Drain any messages queued via send() before run().
         $this->drainPending();
 
+        // Initial subscription reconciliation — start whatever the model wants.
+        if ($this->options->subscriptions !== null) {
+            $wanted = ($this->options->subscriptions)($this->model);
+            $this->reconcileSubscriptions($wanted ?? new Subscriptions());
+        }
+
         // Pending dispatch may have already requested quit. Skip the loop.
         if (!$this->running) {
+            $this->cancelAllSubscriptions();
             $this->teardownTerminal();
             return $this->model;
         }
@@ -189,6 +199,7 @@ final class Program
 
         $this->loop->cancelTimer($tickTimer);
         $this->loop->removeReadStream($this->input);
+        $this->cancelAllSubscriptions();
 
         $this->teardownTerminal();
         $this->recorder?->close();
@@ -410,6 +421,10 @@ final class Program
             });
             return;
         }
+        if ($msg instanceof SubscriptionsMsg) {
+            $this->reconcileSubscriptions($msg->subscriptions);
+            return;
+        }
 
         // WithFilter pre-processor.
         if ($this->options->filter !== null) {
@@ -425,6 +440,12 @@ final class Program
         $this->dirty = true;
         if ($cmd !== null) {
             $this->scheduleCmd($cmd);
+        }
+
+        // Reconcile subscriptions after every update cycle.
+        if ($this->options->subscriptions !== null) {
+            $wanted = ($this->options->subscriptions)($this->model);
+            $this->reconcileSubscriptions($wanted ?? new Subscriptions());
         }
     }
 
@@ -817,5 +838,104 @@ final class Program
                 $this->send(new ResumeMsg());
             });
         }
+    }
+
+    /**
+     * Diff the currently-active subscriptions against the wanted set
+     * and reconcile: cancel any not in $wanted, start any new ones.
+     */
+    private function reconcileSubscriptions(Subscriptions $wanted): void
+    {
+        $wantedIds = [];
+        foreach ($wanted->all() as $sub) {
+            $wantedIds[$sub->id] = true;
+            if (!isset($this->activeSubscriptions[$sub->id])) {
+                $this->activeSubscriptions[$sub->id] = [
+                    $this->startSubscription($sub),
+                    $sub,
+                ];
+            }
+        }
+        // Cancel subscriptions that are no longer wanted.
+        foreach ($this->activeSubscriptions as $id => [$timer, ]) {
+            if (!isset($wantedIds[$id])) {
+                $this->loop->cancelTimer($timer);
+                unset($this->activeSubscriptions[$id]);
+            }
+        }
+    }
+
+    /**
+     * Start a subscription and return its timer handle.
+     *
+     * @return \React\EventLoop\TimerInterface|\React\EventLoop\Timer\TimerInterface
+     */
+    private function startSubscription(Subscription $sub): mixed
+    {
+        return match ($sub->kind) {
+            Kind::Tick => $this->loop->addPeriodicTimer(
+                $sub->params['seconds'],
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+            Kind::Key => $this->loop->addPeriodicTimer(
+                0.1,
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+            Kind::Signal => $this->installSignalSubscription($sub),
+            Kind::Custom => $this->loop->addPeriodicTimer(
+                $sub->params['interval'] ?? 1.0,
+                function () use ($sub): void {
+                    $msg = ($sub->produce)();
+                    if ($msg !== null) {
+                        $this->dispatch($msg);
+                    }
+                },
+            ),
+        };
+    }
+
+    /**
+     * Install a signal handler for the given subscription.
+     *
+     * @return \React\EventLoop\TimerInterface|\React\EventLoop\Timer\TimerInterface
+     */
+    private function installSignalSubscription(Subscription $sub): mixed
+    {
+        $signo = $sub->params['signo'] ?? 0;
+        $handler = static function (int $signo) use ($sub): void {
+            $msg = ($sub->produce)();
+            if ($msg !== null) {
+                $this->dispatch($msg);
+            }
+        };
+        if (function_exists('pcntl_signal')) {
+            pcntl_signal($signo, $handler);
+        }
+        // Return a no-op timer to satisfy the return type; signal handlers
+        // are managed via pcntl_signal directly.
+        return $this->loop->addPeriodicTimer(86400, static function (): void {
+            // No-op: signal handlers fire via pcntl_signal, not this timer.
+        });
+    }
+
+    /**
+     * Cancel all active subscriptions. Called during teardown.
+     */
+    private function cancelAllSubscriptions(): void
+    {
+        foreach ($this->activeSubscriptions as [$timer, ]) {
+            $this->loop->cancelTimer($timer);
+        }
+        $this->activeSubscriptions = [];
     }
 }

@@ -19,6 +19,8 @@ use SugarCraft\Core\Util\Ansi;
  */
 final class StringModel implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(private string $content) {}
 
     public function init(): ?\Closure
@@ -42,6 +44,8 @@ final class StringModel implements Model
  */
 final class CountingModel implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     public function __construct(private int $count = 0) {}
 
     public function init(): ?\Closure
@@ -178,6 +182,8 @@ final class PanesTest extends TestCase
         $lines = ["line one", "line two", "line three"];
         $model = new class($lines) implements Model
         {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             public function __construct(private array $lines) {}
 
             public function init(): ?\Closure { return null; }
