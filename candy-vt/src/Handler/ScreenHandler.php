@@ -47,6 +47,12 @@ final class ScreenHandler implements Handler
     /** @var array<int, bool> Active tab stops, keyed by column. */
     public array $tabStops;
 
+    /** Top row of the DECSTBM scroll region (0-indexed inclusive). */
+    public int $scrollRegionTop = 0;
+
+    /** Bottom row of the DECSTBM scroll region (0-indexed inclusive). */
+    public int $scrollRegionBottom;
+
     private ?Buffer $savedBuffer = null;
     private ?Cursor $savedCursor = null;
     private ?Sgr $savedSgr = null;
@@ -77,6 +83,8 @@ final class ScreenHandler implements Handler
         $this->oscHandler = new OscHandler();
         $this->tabHandler = new TabHandler();
         $this->tabStops = TabHandler::defaults($buffer->cols);
+        $this->scrollRegionTop = 0;
+        $this->scrollRegionBottom = $buffer->rows - 1;
     }
 
     public function printChar(string $rune): void
@@ -146,7 +154,10 @@ final class ScreenHandler implements Handler
                 $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor);
                 return;
             case 'S': case 'T':
-                $this->scrollHandler->applyCsi($final, $params, $this->buffer);
+                $this->scrollHandler->applyCsi($final, $params, $this->buffer, $this->scrollRegionTop, $this->scrollRegionBottom);
+                return;
+            case 'r':
+                $this->setScrollRegion($params);
                 return;
             case 'I': case 'Z':
                 $this->cursor = $this->cursor->withCol(
@@ -231,17 +242,46 @@ final class ScreenHandler implements Handler
 
     private function index(): void
     {
-        $this->cursor = $this->scrollHandler->index($this->buffer, $this->cursor);
+        $this->cursor = $this->scrollHandler->index($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
     }
 
     private function reverseIndex(): void
     {
-        $this->cursor = $this->scrollHandler->reverseIndex($this->buffer, $this->cursor);
+        $this->cursor = $this->scrollHandler->reverseIndex($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
     }
 
     private function nextLine(): void
     {
-        $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor);
+        $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
+    }
+
+    /**
+     * DECSTBM — set top and bottom margins of the scroll region.
+     *
+     * Params: [top;bottom] where 1 is the topmost row.
+     * Defaults: top=1, bottom=rows.
+     * A missing or identical top/bottom resets to the full screen.
+     *
+     * @param list<int> $params
+     */
+    private function setScrollRegion(array $params): void
+    {
+        $top = ($params[0] ?? -1) === -1 ? 1 : (int) $params[0];
+        $bottom = ($params[1] ?? -1) === -1 ? $this->buffer->rows : (int) $params[1];
+
+        // Clamp to valid range (VT100 spec: top >= 1, bottom <= rows).
+        if ($top < 1) {
+            $top = 1;
+        }
+        if ($bottom > $this->buffer->rows) {
+            $bottom = $this->buffer->rows;
+        }
+        if ($top > $bottom) {
+            return; // Invalid; ignore.
+        }
+
+        $this->scrollRegionTop = $top - 1;       // Convert to 0-indexed.
+        $this->scrollRegionBottom = $bottom - 1;  // Convert to 0-indexed.
     }
 
     /**
