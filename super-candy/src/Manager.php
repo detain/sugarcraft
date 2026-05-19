@@ -277,7 +277,7 @@ final class Manager implements Model
         $selectedCount = count($this->activePane()->selected);
         $current = $this->activePane()->currentEntry();
         if ($selectedCount === 0 && ($current === null || $current->isParentSentinel())) {
-            return $this->withStatus('nothing to delete');
+            return $this->withStatus(Lang::t('status.nothing_to_delete'));
         }
         $names = $selectedCount > 0
             ? "{$selectedCount} selected entries"
@@ -289,7 +289,7 @@ final class Manager implements Model
     {
         $confirmed = $msg->type === KeyType::Char && $msg->rune === 'y';
         if (!$confirmed) {
-            return $this->withConfirm(ConfirmState::None, 'cancelled');
+            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
         }
         return $this->performDelete();
     }
@@ -319,8 +319,8 @@ final class Manager implements Model
             }
         }
         $msg = $errors === 0
-            ? 'deleted ' . count($names) . ' entries'
-            : "deleted with {$errors} errors";
+            ? Lang::t('status.deleted', ['count' => count($names)])
+            : Lang::t('status.deleted_with_errors', ['errors' => $errors]);
         // Build new undo stack with this deletion
         $newUndoStack = $this->undoStack;
         if ($deletedItems !== []) {
@@ -510,7 +510,7 @@ final class Manager implements Model
     {
         $index ??= $this->tabIndex;
         if ($this->tabs === [] || count($this->tabs) <= 1) {
-            return $this->withStatus('Cannot close last tab');
+            return $this->withStatus(Lang::t('status.cannot_close_last_tab'));
         }
         $newTabs = $this->tabs;
         array_splice($newTabs, $index, 1);
@@ -579,17 +579,17 @@ final class Manager implements Model
     public function undo(): self
     {
         if ($this->undoStack === []) {
-            return $this->withStatus('nothing to undo');
+            return $this->withStatus(Lang::t('status.nothing_to_undo'));
         }
         $newUndoStack = $this->undoStack;
         $action = array_pop($newUndoStack);
         if ($action === null) {
-            return $this->withStatus('nothing to undo');
+            return $this->withStatus(Lang::t('status.nothing_to_undo'));
         }
         $errors = $this->reverseAction($action);
         $msg = $errors === 0
-            ? "undone: {$action->description}"
-            : "undo {$action->description} with {$errors} error(s)";
+            ? Lang::t('status.undone', ['description' => $action->description])
+            : Lang::t('status.undo_with_errors', ['description' => $action->description, 'errors' => $errors]);
         // Push to redo stack
         $newRedoStack = [...$this->redoStack, $action];
         return $this
