@@ -295,9 +295,10 @@ step 07.07 · PR#631 · candy-vt: BCE (SGR bg erase) + combining-char compositio
 review for step 07.07 · PR#631 · code clean, 467 tests pass; 4 CALIBER_LEARNINGS issues (see Open review findings — 07.07)
 fix for step 07.07 · PR#632 · resolved 4 findings (CALIBER_LEARNINGS: BCE/combining/sync updated + 2 new entries)
 docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + docs/lib/candy-vt.html feature grid + API table
-step 07.08 · PR#634 · candy-zone: ZoneHoverTracker + ZoneEnterMsg/ZoneExitMsg (leftover-rollout step 07.08)
-review for step 07.08 · clean · PR#634
-docs for step 07.08 · clean · PR#635
+ step 07.08 · PR#634 · candy-zone: ZoneHoverTracker + ZoneEnterMsg/ZoneExitMsg (leftover-rollout step 07.08)
+ review for step 07.08 · clean · PR#634
+ docs for step 07.08 · clean · PR#635
+ step 07.09 · PR#636 · candy-zone: DragTracker + ZoneDragStartMsg/ZoneDragMoveMsg/ZoneDragEndMsg (leftover-rollout step 07.09)
 
 ## Open review findings — 03.05
 
