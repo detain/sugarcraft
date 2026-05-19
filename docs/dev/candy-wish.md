@@ -59,6 +59,43 @@ final class RequestIdMiddleware implements Middleware
 }
 ```
 
+### Async middleware extension point
+
+`Middleware::handle()` may return `void` (synchronous) or a
+`\React\Promise\PromiseInterface`. The transport awaits the promise
+before continuing the chain, enabling async back-ends (LDAP, OAuth,
+database auth) without blocking the event loop.
+
+Extend `SugarCraft\Wish\Middleware\AsyncMiddleware` for async middleware:
+
+```php
+use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Middleware\AsyncMiddleware;
+use SugarCraft\Wish\Session;
+use React\Promise\PromiseInterface;
+
+abstract class MyAsyncAuth extends AsyncMiddleware
+{
+    protected function handleAsync(
+        Context $ctx,
+        Session $session,
+        callable $next,
+    ): PromiseInterface {
+        // Return a promise — resolve to continue the chain,
+        // reject to short-circuit.
+        return $this->ldap->verify($session->user)->then(
+            fn () => $next($ctx, $session),
+            fn (\Throwable $e) => throw new AuthFailedException($e->getMessage()),
+        );
+    }
+}
+```
+
+`handleAsync()` returning a promise that resolves allows the chain to
+continue to `$next`; rejecting the promise short-circuits the chain.
+`await()` (called internally) enforces a 30-second timeout to prevent
+async middleware from hanging indefinitely.
+
 ### Transport interface
 
 The `Transport` interface plugs into `Server::withTransport()` to change
