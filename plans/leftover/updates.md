@@ -280,6 +280,7 @@ fix for step 07.01 · PR#620 · resolved 2 findings
 docs for step 07.01 · clean
 step 07.02 · PR#621 · candy-vt: DECAWM auto-wrap (CSI ? 7 h/l) — Mode::autoWrap + withAutoWrap(), ModeHandler mode 7, ScreenHandler printChar wrap logic, 15 AutoWrapTest tests (leftover-rollout step 07.02)
 review for step 07.02 · clean · PR#621
+docs for step 07.02 · PR#622 · document DECAWM in README/end-user HTML/Mode PHPDoc/CALIBER_LEARNINGS.md
 
 ## Open review findings — 03.05
 
