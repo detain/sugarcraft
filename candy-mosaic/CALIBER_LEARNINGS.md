@@ -30,9 +30,23 @@ Accumulated patterns and gotchas specific to this library.
   and the terminal handles scaling.
 - **[Kitty chunk size]** Protocol specifies max 4096 bytes per chunk.
   Round down to 4092 to account for base64 padding overhead.
-- **[Animated GIFs]** This lib handles static frames only. Animated
-  GIF support lives in `candy-flip`, which calls `HalfBlockRenderer`
-  per frame.
+- **[Animated GIFs]** (step 11.04 / PR#660) Animation lives in
+  `candy-mosaic` — not `candy-flip`. `Animation` is frame-source-agnostic:
+  ctor takes `list<ImageSource>` (any grid-backed image, not just GIFs).
+  candy-mosaic does **not** depend on candy-flip. A future GIF→Mosaic bridge
+  (decoding GIF frames into `ImageSource[]`) lives in candy-flip if needed.
+- **[pattern:animation-value-object]** `Animation` is an immutable
+  readonly value object: `list<ImageSource> $frames` + `list<int> $delaysMs`.
+  Construction validates via `Lang::t()` that frames is non-empty and
+  `$delaysMs` count matches frame count (mismatch → validation error).
+  All state is `readonly`. Mutations return new instances via a private
+  `mutate()` helper; public `withFrame()`/`withDelay()` methods are fluent.
+  `AnimationDriver` is a `final` class implementing `Model`: it composes
+  `Animation` (read-only) + current-frame index + tick counter; uses
+  `Cmd::tick()` for per-frame timing; drives a delete+render cycle per
+  `View` call (delete prior frame via `Renderer::delete()`, render current
+  frame via `Renderer::renderFrame()`, matching the step 07.12 API contract).
+  Do not subclass `Animation` — extend via composition instead.
 - **[QuarterBlockRenderer 2×2 sub-pixel]** Uses `PixelGrid::fromGdQuarter`
   to scale the GD image to `cellW*2 × cellH*2` pixels, then samples four
   quadrants (ul/ur/ll/lr) per cell. A 4-bit mask (1 bit per quadrant; 1 =
