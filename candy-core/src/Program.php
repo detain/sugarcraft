@@ -135,7 +135,7 @@ final class Program
         $this->dispatch(new EnvMsg($this->options->environment ?? $this->collectEnv()));
         $this->dispatch(new ColorProfileMsg($this->options->colorProfile ?? ColorProfile::detect()));
 
-        $initCmd = $this->model->init();
+        $initCmd = $this->activeModel()->init();
         if ($initCmd !== null) {
             $this->scheduleCmd($initCmd);
         }
@@ -345,6 +345,21 @@ final class Program
         return true;
     }
 
+    /**
+     * Return the model that should receive update/view calls.
+     * If the root model exposes screens(), route to the active screen.
+     */
+    private function activeModel(): Model
+    {
+        if ($this->model instanceof ScreenStackCapable) {
+            $screens = $this->model->screens();
+            if (!$screens->isEmpty()) {
+                return $screens->current()->model;
+            }
+        }
+        return $this->model;
+    }
+
     private function dispatch(Msg $msg): void
     {
         if ($msg instanceof BatchMsg) {
@@ -435,8 +450,27 @@ final class Program
             $msg = $filtered;
         }
 
-        [$nextModel, $cmd] = $this->model->update($msg);
-        $this->model = $nextModel;
+        // ScreenStack infrastructure messages are always routed to the
+        // root model (which owns the ScreenStack), not to the active screen.
+        if ($msg instanceof ScreenStackPushedMsg || $msg instanceof ScreenStackPoppedMsg) {
+            if ($this->model instanceof ScreenStackCapable) {
+                [$nextModel, $cmd] = $this->model->update($msg);
+                $this->model = $nextModel;
+                $this->dirty = true;
+                if ($cmd !== null) {
+                    $this->scheduleCmd($cmd);
+                }
+            }
+            return;
+        }
+
+        $active = $this->activeModel();
+        [$nextModel, $cmd] = $active->update($msg);
+        if ($active === $this->model) {
+            // Active model is the root model (not a nested screen), so
+            // its update() returned the updated root model.
+            $this->model = $nextModel;
+        }
         $this->dirty = true;
         if ($cmd !== null) {
             $this->scheduleCmd($cmd);
@@ -684,10 +718,10 @@ final class Program
             // Headless mode: still call view() so the model's
             // computation runs (and any errors surface) but skip
             // emitting any output.
-            $this->model->view();
+            $this->activeModel()->view();
             return;
         }
-        $rendered = $this->model->view();
+        $rendered = $this->activeModel()->view();
         if ($rendered instanceof View) {
             $this->applyViewSideEffects($rendered);
             $body = $rendered->body;
