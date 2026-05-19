@@ -318,6 +318,9 @@ fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 docs for step 07.13 · clean · PR#646 · document virtual-image (a=p) + zlib compression (f=1) in README/end-user HTML/PHPDoc/CALIBER_LEARNINGS.md
 step 11.01 · PR#649 · plans: sugar-post-identity decision memo (Option A/B/C; recommendation: A — stay an email tool, finish upstream Pop TUI surface; awaiting user decision)
 fix for step 11.01 · PR#651 · resolved 4 findings (locale count 17→16, bin/pop LOC 50→221, §2 "misread"→"pivot" framing, Email.php cite L17–L32→L21–L32)
+tests-ci for step 11.01 · clean
+docs for step 11.01 · clean
+step 11.02 · PR#653 · plans: candy-serve-tui interactive SSH TUI milestone plan (5 phases — repo list / detail / file browser / commit log / polish; ~8 weeks; awaiting user authorization for phase-1 step files)
 
 ## Open review findings — 03.05
 
