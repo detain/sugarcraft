@@ -230,6 +230,7 @@ docs for step 05.08 · clean
 review for step 06.01 · clean · PR#581
 tests-ci for step 06.01 · clean
 docs for step 06.01 · clean · PR#582
+fix for step 06.02 · PR#584 · resolved 2 findings (add ScreenStack CALIBER entries + fix heredoc style)
 
 ## Open review findings — 03.05
 
@@ -241,11 +242,6 @@ docs for step 06.01 · clean · PR#582
 ## Open review findings — 02.03
 
 - [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
-
-## Open review findings — 06.02
-
-- [ ] candy-core/CALIBER_LEARNINGS.md: no entries added for the new ScreenStack patterns (immutable stack type, Screen value object with lifecycle closures, Program screen-routing via ScreenStackCapable, RootModelWithScreenStack concrete model). These are significant enough to warrant [pattern:screen-stack] entries so future implementers have context.
-- [ ] candy-core/examples/screen-stack.php:117: heredoc contains embedded PHP concatenation (`"Pushed: " . implode(...)`) inconsistent with the rest of the heredoc using `{$expr}` interpolation — works correctly but stylistically odd.
 
 ## Open review findings — 01.08
 
