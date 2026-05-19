@@ -32,4 +32,9 @@ return [
 
     // Sixel
     'sixel.max_colors_out_of_range' => 'maxColors must be 1-256, got {maxColors}',
+
+    // Animation
+    'animation.empty'                 => 'Animation requires at least one frame',
+    'animation.delay_count_mismatch'  => 'Frame count ({frameCount}) and delay count ({delayCount}) must match',
+    'animation.index_out_of_range'    => 'Frame index {index} is out of range for this animation',
 ];
