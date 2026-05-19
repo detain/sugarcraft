@@ -113,21 +113,22 @@ them into the application. Classes must be autoloaded (or `require`d)
 before `scan()` can find them — the scanner uses `get_declared_classes()`
 and does not trigger autoloading.
 
-| Command   | Role |
-|-----------|------|
-| `choose`  | Pick one or many items from a list. |
-| `confirm` | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
-| `file`    | Interactive file picker. |
-| `filter`  | Fuzzy filter over stdin lines (single- or multi-select). |
-| `format`  | Render Markdown / code / template / emoji to the terminal. |
-| `input`   | Read a single line; supports `--password` masking. |
-| `join`    | Concatenate two styled fragments side-by-side or stacked. |
-| `log`     | Levelled / structured log output (text · json · logfmt). |
-| `pager`   | Scrollable viewer for long input. |
-| `spin`    | Run an external command behind a spinner. |
-| `style`   | Apply Sprinkles styling to argv (or stdin). |
-| `table`   | Render a CSV / TSV table. |
-| `write`   | Multi-line text editor. |
+| Command    | Role |
+|------------|------|
+| `choose`   | Pick one or many items from a list. |
+| `completion` | Emit shell completion script (bash · zsh · fish). |
+| `confirm`  | Yes/no prompt — exit `0` on confirm, `1` on cancel. |
+| `file`     | Interactive file picker. |
+| `filter`   | Fuzzy filter over stdin lines (single- or multi-select). |
+| `format`   | Render Markdown / code / template / emoji to the terminal. |
+| `input`    | Read a single line; supports `--password` masking. |
+| `join`     | Concatenate two styled fragments side-by-side or stacked. |
+| `log`      | Levelled / structured log output (text · json · logfmt). |
+| `pager`    | Scrollable viewer for long input. |
+| `spin`     | Run an external command behind a spinner. |
+| `style`    | Apply Sprinkles styling to argv (or stdin). |
+| `table`    | Render a CSV / TSV table. |
+| `write`    | Multi-line text editor. |
 
 ## Flag reference (selected highlights)
 
@@ -162,6 +163,38 @@ CandyShell respects standard CLI colour conventions:
   redirected.
 - **`FORCE_COLOR=1|2|3`** forces a specific tier (16 / 256 /
   TrueColor).
+
+### `CANDYSHELL_*` env var fallbacks
+
+Any command option can be given via an environment variable using the
+`CANDYSHELL_` prefix followed by the option name in uppercase with
+non-alphanumeric characters replaced by `_`. For example:
+
+```sh
+# Equivalent to: candyshell style --foreground=#ff0000 --bold "Hello"
+CANDYSHELL_FOREGROUND=#ff0000 CANDYSHELL_BOLD=1 candyshell style "Hello"
+```
+
+The fallback is applied when no explicit CLI option is provided. An
+explicit flag on the command line always takes precedence over the env var.
+
+### Shell completion
+
+```sh
+candyshell completion --shell=bash
+candyshell completion --shell=zsh
+candyshell completion --shell=fish
+```
+
+Emit a shell completion script for bash, zsh, or fish. Source the output
+directly or drop it into the appropriate completion directory.
+
+### Version
+
+`candyshell --version` reports the version read from the monorepo root
+`composer.json` via `Application::versionFromComposer()`. The version is
+discovered by walking up from the package directory to find the nearest
+`composer.json` with a non-empty `version` field.
 
 ## Exit codes
 
