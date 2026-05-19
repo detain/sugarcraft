@@ -46,6 +46,15 @@ fresh from Ground.
 handlers downstream should resolve to spec-defined defaults
 (`?: 1` for cursor moves, `?: 0` for SGR, etc.).
 
+## CSI subparameters — ':' as sub-param separator (step 07.03)
+
+VT500 sequences use `:` as a sub-parameter separator (e.g. `CSI 38:2:R:G:B`
+for truecolor with subparams). In `Parser::param()`, both `;` (0x3B) and
+`:` (0x3A) start a new param slot. Subparams surface as additional entries
+in `$this->params` — handlers that need them consume them from the param
+array directly. No separate subparam storage is maintained; the flat
+`params` array is passed as-is to `csiDispatch`.
+
 ## ScreenHandler holds mutable state; Terminal delegates
 
 `ScreenHandler` owns `Buffer` (mutable in place), `Cursor` / `Sgr` /
