@@ -79,4 +79,12 @@ enum ToastType: string
             SymbolSet::Ascii    => $this->asciiPrefix(),
         };
     }
+
+    /**
+     * Translated label for this toast type (i18n surface).
+     */
+    public function label(): string
+    {
+        return Lang::t('type.' . $this->value);
+    }
 }
