@@ -274,6 +274,7 @@ docs for step 06.12 · PR#614 · document sessionId/authMethod/keyFingerprint/cl
 step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface accepts void|PromiseInterface, transport dispatches await via event loop, AsyncMiddleware abstract base (leftover-rollout step 06.13)
 fix for step 06.13 · PR#616 · resolved 2 findings (AsyncMiddleware docs in README + promise-awaiting clarification note in Server.php)
 tests-ci for step 06.13 · clean
+docs for step 06.13 · PR#618 · add AsyncMiddleware to end-user API table + async middleware extension point in dev guide + operational notes in hub-admin guide
 
 ## Open review findings — 03.05
 
