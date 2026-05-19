@@ -159,7 +159,7 @@ final class Transitions
         $setRange($DE, 0x1C, 0x1F, Action::None->value, $DE);
         $set($DE, 0x7F, Action::None->value, $DE);
         $setRange($DE, 0x20, 0x2F, Action::Collect->value, $DI);
-        $setRange($DE, 0x30, 0x3B, Action::Param->value, $DP);
+        $setRange($DE, 0x30, 0x3B, Action::Param->value, $DP); // ':' and ';' are param bytes per VT500
         $setRange($DE, 0x3C, 0x3F, Action::Prefix->value, $DP);
         $setRange($DE, 0x08, 0x0D, Action::Put->value, $DS);
         $set($DE, 0x1B, Action::Put->value, $DS); // Tmux passthrough quirk
@@ -178,7 +178,7 @@ final class Transitions
         $setRange($DP, 0x00, 0x17, Action::None->value, $DP);
         $set($DP, 0x19, Action::None->value, $DP);
         $setRange($DP, 0x1C, 0x1F, Action::None->value, $DP);
-        $setRange($DP, 0x30, 0x3B, Action::Param->value, $DP);
+        $setRange($DP, 0x30, 0x3B, Action::Param->value, $DP); // ':' and ';' are param bytes per VT500
         $set($DP, 0x7F, Action::None->value, $DP);
         $setRange($DP, 0x3C, 0x3F, Action::None->value, $DP);
         $setRange($DP, 0x20, 0x2F, Action::Collect->value, $DI);
@@ -199,7 +199,7 @@ final class Transitions
         $setRange($CP, 0x00, 0x17, Action::Execute->value, $CP);
         $set($CP, 0x19, Action::Execute->value, $CP);
         $setRange($CP, 0x1C, 0x1F, Action::Execute->value, $CP);
-        $setRange($CP, 0x30, 0x3B, Action::Param->value, $CP);
+        $setRange($CP, 0x30, 0x3B, Action::Param->value, $CP); // ':' and ';' are param bytes per VT500
         $set($CP, 0x7F, Action::None->value, $CP);
         $setRange($CP, 0x3C, 0x3F, Action::None->value, $CP);
         $setRange($CP, 0x40, 0x7E, Action::Dispatch->value, $G);
@@ -221,7 +221,7 @@ final class Transitions
         $set($CE, 0x7F, Action::None->value, $CE);
         $setRange($CE, 0x40, 0x7E, Action::Dispatch->value, $G);
         $setRange($CE, 0x20, 0x2F, Action::Collect->value, $CI);
-        $setRange($CE, 0x30, 0x3B, Action::Param->value, $CP);
+        $setRange($CE, 0x30, 0x3B, Action::Param->value, $CP); // ':' and ';' are param bytes per VT500
         $setRange($CE, 0x3C, 0x3F, Action::Prefix->value, $CP);
 
         // OscString
