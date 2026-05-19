@@ -135,6 +135,10 @@ Server::new()
 <tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
 <tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
 <tr><td>Auth</td><td>new(array $users, array $keyFingerprints)</td><td>Username and/or key allowlist middleware</td></tr>
+<tr><td>PasswordAuth</td><td>new(callable, ?resource)</td><td>Validates (user, password) against callback; reads `SSH_PASSWORD` env var</td></tr>
+<tr><td>CertificateAuth</td><td>new(callable, bool $required, ?resource)</td><td>Validates X.509 cert from `SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars</td></tr>
+<tr><td>AuthMethods</td><td>new(list&lt;string&gt;, ?resource)</td><td>Advertises auth methods via `SSH_AUTH_METHODS` STDOUT banner; stores list in Context</td></tr>
+<tr><td>KeyboardInteractive</td><td>new(list&lt;array{prompt:string,echo?:bool}&gt;, ?callable, ?resources)</td><td>Challenge-response prompts (RFC 4256); reads responses from STDIN</td></tr>
 <tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
 <tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
 <tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>

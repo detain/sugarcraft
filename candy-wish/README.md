@@ -122,14 +122,18 @@ ssh wishuser@your-host
 
 ## Middleware
 
-| Middleware    | Transport       | Purpose                                                                            |
-|---------------|-----------------|------------------------------------------------------------------------------------|
-| `Logger`      | both            | One-line JSON event at session start + end, with elapsed time and connection meta. |
-| `Auth`        | both            | Username allowlist, public-key fingerprint allowlist (or both).                    |
-| `RateLimit`   | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.          |
-| `Keepalive`   | both            | Sends SSH-level keepalive messages at a configurable interval.                     |
-| `Spawn`       | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.         |
-| `BubbleTea`   | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.       |
+| Middleware           | Transport       | Purpose                                                                                              |
+|----------------------|-----------------|------------------------------------------------------------------------------------------------------|
+| `Logger`             | both            | One-line JSON event at session start + end, with elapsed time and connection meta.                  |
+| `Auth`               | both            | Username allowlist, public-key fingerprint allowlist (or both).                                       |
+| `PasswordAuth`       | both            | Validates user+password against a caller-supplied callback (`SSH_PASSWORD` env var).                 |
+| `CertificateAuth`    | both            | Validates X.509 peer certificate (`SSL_CLIENT_CERT` / `SSH_CLIENT_CERT` env vars).                   |
+| `AuthMethods`        | both            | Declares accepted auth methods; writes `SSH_AUTH_METHODS` banner to STDOUT; stores list in Context. |
+| `KeyboardInteractive`| both            | Challenge-response — writes prompts to STDOUT, reads responses from STDIN (RFC 4256).                |
+| `RateLimit`          | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.                            |
+| `Keepalive`          | both            | Sends SSH-level keepalive messages at a configurable interval.                                      |
+| `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
+| `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 
 All middleware receives a {@see Context} as the first argument, along with
 the {@see Session} and a `$next` continuation. Implement `SugarCraft\Wish\Middleware`:
