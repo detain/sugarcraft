@@ -15,6 +15,8 @@ namespace SugarCraft\Table;
  *
  * @see https://github.com/Evertras/bubble-table
  */
+use SugarCraft\Table\Lang;
+
 final class Table
 {
     // -------------------------------------------------------------------------
@@ -429,7 +431,7 @@ final class Table
 
     public function PageFooter(): string
     {
-        return \sprintf('Page %d of %d', $this->page + 1, $this->TotalPages());
+        return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->TotalPages()]);
     }
 
     // -------------------------------------------------------------------------
