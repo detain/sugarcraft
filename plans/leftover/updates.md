@@ -240,6 +240,7 @@ docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user 
 fix for step 06.04 · PR#591 · resolved 3 findings (error_log removed; WorkerResultMsg already had correct ?Throwable; WorkerState kept mutable — readonly requires architectural refactoring)
 tests-ci for step 06.04 · clean
 docs for step 06.04 · clean · PR#593
+step 06.05 · PR#594 · candy-shell: #[Command]/#[Flag]/#[ValueEnum] attributes + CommandScanner discovery + Application::scan() method
 
 ## Open review findings — 03.05
 
