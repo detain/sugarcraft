@@ -88,7 +88,19 @@ echo $toast-&gt;render();</code></pre>
 <tr><td>Toast</td><td>withPosition(pos)</td><td>Set position (top/bottom)</td></tr>
 <tr><td>Toast</td><td>render()</td><td>Render ANSI notification</td></tr>
 <tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
+<tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
+<tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
 </table>
+
+    <h3 style="margin-top: 32px;">Internationalization</h3>
+    <p>User-facing strings use <code>SugarCraft\Toast\Lang::t()</code>. All keys are in <code>lang/en.php</code> under the <code>toast</code> namespace.</p>
+    <table class="api-table">
+<tr><th>Key</th><th>Default</th><th>Parameters</th></tr>
+<tr><td>type.info / type.warning / type.error / type.success</td><td>Info / Warning / Error / Success</td><td>—</td></tr>
+<tr><td>dismiss</td><td>Press any key to dismiss</td><td>—</td></tr>
+<tr><td>count</td><td>{count} notification(s)</td><td>{count}</td></tr>
+</table>
+    <p>To localize, copy <code>lang/en.php</code> to <code>lang/&lt;code&gt;.php</code> and translate the values.</p>
   </div>
 </section>
 
