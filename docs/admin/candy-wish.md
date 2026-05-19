@@ -69,6 +69,40 @@ Server::new()
     ->serve();
 ```
 
+### Authentication methods
+
+`candy-wish` ships four authentication middleware. They are orthogonal —
+compose them based on what your deployment needs:
+
+| Middleware | How it authenticates | Env vars read |
+|-----------|---------------------|---------------|
+| `Auth` | Username allowlist + SHA256 key fingerprint allowlist | `SSH_USER_KEY_FINGERPRINT`, `SSH_USER_AUTH`, `KEY_FINGERPRINT` |
+| `PasswordAuth` | Caller-supplied `callable(string $user, string $pw): bool` | `SSH_PASSWORD` |
+| `CertificateAuth` | Caller-supplied `callable(string $pemCert, Session $s): bool` | `SSL_CLIENT_CERT`, `SSH_CLIENT_CERT`, `CERTIFICATE` |
+| `KeyboardInteractive` | Challenge-response prompts written to STDOUT, responses read from STDIN (RFC 4256) | — |
+| `AuthMethods` | Writes `SSH_AUTH_METHODS <list>` banner to STDOUT; stores list in Context under `auth.methods` for downstream inspection | — |
+
+**`AuthMethods` operational note:** This middleware writes one line to STDOUT (`SSH_AUTH_METHODS publickey password keyboard-interactive`) before passing control down the chain. This is the RFC 4252 banner that tells the SSH client which methods are available. It runs once per session, early in the middleware chain, before any credential-checking middleware.
+
+**`KeyboardInteractive` operational note:** This middleware performs blocking STDIN reads during the authentication phase. The prompts and responses are exchange-based (RFC 4256) — the middleware writes all prompts to STDOUT, then reads exactly N lines from STDIN before passing control to the next middleware. It is not suitable for use with `BubbleTea` (which also consumes STDIN/STDOUT) and should only be used with `Spawn` under `InProcessTransport`.
+
+**Example — composing PasswordAuth + KeyboardInteractive:**
+
+```php
+use SugarCraft\Wish\Middleware\Auth\PasswordAuth;
+use SugarCraft\Wish\Middleware\Auth\KeyboardInteractive;
+use SugarCraft\Wish\Middleware\Auth\AuthMethods;
+
+Server::new()
+    ->use(new AuthMethods(['password', 'keyboard-interactive']))
+    ->use(new PasswordAuth(fn ($u, $p) => verifyPassword($u, $p)))
+    ->use(new KeyboardInteractive([
+        ['prompt' => 'OTP: ', 'echo' => false],
+    ], fn ($responses) => verifyTotp($responses[0])))
+    ->use(new Spawn(...))
+    ->serve();
+```
+
 ---
 
 ## Monitoring
