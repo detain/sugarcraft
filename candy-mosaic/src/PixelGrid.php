@@ -11,11 +11,12 @@ namespace SugarCraft\Mosaic;
  * {@see fromGd()} directly for testing.
  *
  * @phpstan-type RgbCell array{0:int,1:int,2:int}
+ * @phpstan-type RgbaCell array{0:int,1:int,2:int,3:?int}  // alpha=0 means fully transparent
  */
 final class PixelGrid
 {
     /**
-     * @param list<list<RgbCell>> $cells  rows top→bottom, cols left→right
+     * @param list<list<RgbaCell>> $cells  rows top→bottom, cols left→right
      */
     private function __construct(
         public readonly array $cells,
@@ -31,7 +32,9 @@ final class PixelGrid
      *                         imagepalettetotruecolor() first if needed)
      * @param int      $cellW  Number of cells wide
      * @param int      $cellH  Number of cells tall
-     * @return self            2-D grid of `[r, g, b]` triples
+     * @return self            2-D grid of `[r, g, b, ?int]` triples; alpha
+     *                         is null for fully-transparent pixels, 0 for
+     *                         fully-opaque pixels, 1-126 for semi-transparent
      */
     public static function fromGd(\GdImage $img, int $cellW, int $cellH): self
     {
@@ -42,6 +45,11 @@ final class PixelGrid
         if ($scaled === false) {
             throw new \RuntimeException(Lang::t('pixel_grid.alloc_failed'));
         }
+
+        // Initialize all pixels to fully-opaque black so un-resampled
+        // pixels (if any) have a deterministic alpha=0 rather than garbage.
+        $opaqueBlack = imagecolorallocatealpha($scaled, 0, 0, 0, 0);
+        imagefill($scaled, 0, 0, $opaqueBlack);
 
         // Disable alpha blending so we get exact pixel values from imagecolorat.
         imagesavealpha($scaled, false);
@@ -60,18 +68,18 @@ final class PixelGrid
             $row = [];
             for ($cx = 0; $cx < $cellW; $cx++) {
                 // Top half of the cell pair (upper pixel).
-                $topRgb = imagecolorat($scaled, $cx, $cy * 2);
-                $topR = ($topRgb >> 16) & 0xff;
-                $topG = ($topRgb >>  8) & 0xff;
-                $topB =  $topRgb        & 0xff;
+                $topIdx = imagecolorat($scaled, $cx, $cy * 2);
+                $topC   = imagecolorsforindex($scaled, $topIdx);
+                // GD alpha: 0 = fully opaque, 127 = fully transparent.
+                // Map: alpha=127 → null (transparent), alpha=0 → non-null (opaque).
+                $topA   = $topC['alpha'] === 127 ? null : $topC['alpha'];
                 // Bottom half of the cell pair (lower pixel).
-                $botRgb = imagecolorat($scaled, $cx, $cy * 2 + 1);
-                $botR = ($botRgb >> 16) & 0xff;
-                $botG = ($botRgb >>  8) & 0xff;
-                $botB =  $botRgb        & 0xff;
+                $botIdx = imagecolorat($scaled, $cx, $cy * 2 + 1);
+                $botC   = imagecolorsforindex($scaled, $botIdx);
+                $botA   = $botC['alpha'] === 127 ? null : $botC['alpha'];
                 $row[] = [
-                    [$topR, $topG, $topB],
-                    [$botR, $botG, $botB],
+                    [$topC['red'], $topC['green'], $topC['blue'], $topA],
+                    [$botC['red'], $botC['green'], $botC['blue'], $botA],
                 ];
             }
             $rows[] = $row;
