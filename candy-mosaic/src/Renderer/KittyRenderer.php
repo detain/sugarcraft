@@ -63,6 +63,13 @@ final class KittyRenderer implements Renderer
 
     /**
      * Render with explicit Kitty protocol options.
+     *
+     * @param KittyOptions $opts  Use {@see KittyOptions::transmit()} for inline
+     *                            transmission (a=T), {@see KittyOptions::place()}
+     *                            for virtual-image placement (a=p), or chain
+     *                            withUseVirtual(true) on transmit to store+place
+     *                            in one step. Use withCompression(1) to gzip
+     *                            the PNG payload before base64-encoding (f=1).
      */
     public function renderWithOptions(
         ImageSource $image,
