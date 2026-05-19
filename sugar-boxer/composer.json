@@ -24,9 +24,19 @@
         "issues": "https://github.com/sugarcraft/sugar-boxer/issues",
         "source": "https://github.com/sugarcraft/sugar-boxer"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "@dev"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
