@@ -69,7 +69,7 @@ final class HelpFormatter
         }
 
         $ref = new ReflectionClass($command);
-        $commandAttr = $ref->getAttributes(Command::class)[0 ?? -1] ?? null;
+        $commandAttr = $ref->getAttributes(Command::class)[0] ?? null;
         if ($commandAttr !== null) {
             /** @var Command */
             $meta = $commandAttr->newInstance();
