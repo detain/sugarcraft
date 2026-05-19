@@ -306,6 +306,7 @@ docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + 
   docs for step 07.10 · PR#639 · document ClickCounter/DoubleClickMsg/TripleClickMsg/setMotionTracking in README + end-user HTML + CALIBER
   step 07.11 · PR#640 · candy-mosaic: QuarterBlockRenderer (░▒▓█ 2×2 pixel rendering) + PixelGrid::fromGdQuarter() + 12 tests (leftover-rollout step 07.11)
   step 07.12 · PR#642 · candy-mosaic: Renderer::delete() API (Kitty APC delete / iTerm2 Pop / empty for text fallbacks) + Ansi::iterm2Delete() helper + WezTerm detection verified (leftover-rollout step 07.12)
+  docs for step 07.12 · clean · PR#643 · document Renderer::delete() in README (per-renderer table) + end-user HTML API table + CALIBER pattern entry
 
 ## Open review findings — 03.05
 
