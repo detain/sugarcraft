@@ -133,5 +133,12 @@ final class ProgramOptions
          * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.4)
          */
         public readonly ?Termios $termios = null,
+        /**
+         * Optional callback that returns the model's subscriptions.
+         * Called after each update cycle to reconcile the active set.
+         *
+         * @var ?\Closure(Model): ?Subscriptions
+         */
+        public readonly ?\Closure $subscriptions = null,
     ) {}
 }
