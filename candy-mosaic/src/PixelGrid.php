@@ -99,4 +99,65 @@ final class PixelGrid
         imagedestroy($img);
         return $grid;
     }
+
+    /**
+     * Resize the source GD image to cellW*2 × cellH*2 pixels and read
+     * back four quadrant values per cell (ul, ur, ll, lr).  Used by
+     * QuarterBlockRenderer for 2×2 sub-pixel rendering.
+     *
+     * @param \GdImage $img    Source image (must be truecolor)
+     * @param int      $cellW  Number of terminal cells wide
+     * @param int      $cellH  Number of terminal cells tall
+     * @return self            2-D grid of 4-element [ul, ur, ll, lr] RGB triples
+     * @phpstan-return list<list<array{0:int,1:int,2:int}>>  // 4 entries per cell
+     */
+    public static function fromGdQuarter(\GdImage $img, int $cellW, int $cellH): self
+    {
+        $srcW = imagesx($img);
+        $srcH = imagesy($img);
+
+        $scaled = imagecreatetruecolor($cellW * 2, $cellH * 2);
+        if ($scaled === false) {
+            throw new \RuntimeException(Lang::t('pixel_grid.alloc_failed'));
+        }
+
+        imagesavealpha($scaled, false);
+        imagealphablending($scaled, false);
+
+        imagecopyresampled(
+            $scaled, $img,
+            0, 0,       // dst x, y
+            0, 0,       // src x, y
+            $cellW * 2, $cellH * 2,  // dst w, h  (2×2 quads per cell)
+            $srcW, $srcH,            // src w, h
+        );
+
+        $rows = [];
+        for ($cy = 0; $cy < $cellH; $cy++) {
+            $row = [];
+            for ($cx = 0; $cx < $cellW; $cx++) {
+                $quads = [];
+                // Read 4 quadrants: ul, ur, ll, lr
+                $offsets = [
+                    [$cx * 2,     $cy * 2],     // upper-left
+                    [$cx * 2 + 1, $cy * 2],     // upper-right
+                    [$cx * 2,     $cy * 2 + 1], // lower-left
+                    [$cx * 2 + 1, $cy * 2 + 1], // lower-right
+                ];
+                foreach ($offsets as list($ox, $oy)) {
+                    $rgb = imagecolorat($scaled, $ox, $oy);
+                    $r = ($rgb >> 16) & 0xff;
+                    $g = ($rgb >>  8) & 0xff;
+                    $b =  $rgb        & 0xff;
+                    $quads[] = [$r, $g, $b];
+                }
+                $row[] = $quads;
+            }
+            $rows[] = $row;
+        }
+
+        imagedestroy($scaled);
+
+        return new self($rows, $cellW, $cellH);
+    }
 }
