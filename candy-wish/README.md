@@ -127,18 +127,24 @@ ssh wishuser@your-host
 | `Logger`      | both            | One-line JSON event at session start + end, with elapsed time and connection meta. |
 | `Auth`        | both            | Username allowlist, public-key fingerprint allowlist (or both).                    |
 | `RateLimit`   | both            | Per-IP token-bucket persisted to a JSON state file with `flock(LOCK_EX)`.          |
+| `Keepalive`   | both            | Sends SSH-level keepalive messages at a configurable interval.                     |
 | `Spawn`       | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.         |
 | `BubbleTea`   | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.       |
 
-You can write your own — implement `SugarCraft\Wish\Middleware`:
+All middleware receives a {@see Context} as the first argument, along with
+the {@see Session} and a `$next` continuation. Implement `SugarCraft\Wish\Middleware`:
 
 ```php
+use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Middleware;
+use SugarCraft\Wish\Session;
+
 final class HelloBanner implements Middleware
 {
-    public function handle(Session $s, callable $next): void
+    public function handle(Context $ctx, Session $s, callable $next): void
     {
         echo "Welcome, {$s->user}!\n";
-        $next($s);
+        $next($ctx, $s);
     }
 }
 ```
@@ -160,12 +166,54 @@ $s->isInteractive();
 $s->toLogContext();
 ```
 
+## Context propagation
+
+Every request starts with a root {@see Context} created by `Context::background()`.
+The context is immutable — each `with*()` method returns a new derived
+context that forms a parent chain. Middleware can attach key-value metadata
+via `withValue()`, set a deadline via `withDeadline()`, or make the context
+cancellable via `withCancelable()`. The terminal middleware (Spawn /
+BubbleTea) never call `$next`, short-circuiting the chain.
+
+| Context method | What it does |
+|---------------|-------------|
+| `Context::background()` | Root context — never done, no values, not cancelable |
+| `->withValue(string $k, mixed $v)` | Return a new context with `$k → $v` attached |
+| `->withDeadline(\DateTimeImmutable)` | Return a new cancelable context that is done when the deadline passes |
+| `->withCancelable()` | Return a new cancelable context (no deadline; must call `->cancel()` explicitly) |
+| `->cancel(?\Throwable $reason)` | Mark the context (and all derived contexts) as cancelled |
+| `->done()` | Returns `true` when cancelled or deadline-exceeded |
+| `->err()` | Returns the cancellation error or `DeadlineExceededException` / `CancellationException` |
+| `->value(string $k)` | Walk the parent chain looking for `$k`; returns `null` if not found |
+
+```php
+use SugarCraft\Wish\Context;
+
+// Derive a cancelable context with a 30-second deadline
+$ctx = Context::background()
+    ->withValue('requestId', $uuid)
+    ->withDeadline(new \DateTimeImmutable('+30 seconds'));
+
+if ($ctx->done()) {
+    throw $ctx->err(); // DeadlineExceededException or CancellationException
+}
+```
+
+## Exceptions
+
+| Exception | When it's thrown |
+|-----------|-----------------|
+| `CancellationException` | `Context->cancel()` was called, or `done()` returns true with no deadline |
+| `DeadlineExceededException` | The context deadline (`withDeadline()`) has passed |
+
+Both extend `\RuntimeException`.
+
 ## ext-ssh2
 
 The PECL `ssh2` extension is optional and used only if you want a middleware that opens *outbound* SSH connections from inside the session (e.g. SFTP file pickers, remote-control agents). Standard server-side use does not require it.
 
 ## Status
 
-Phase 9+ — first cut. Five middleware classes, 19 tests / 65 assertions, ready for v0 deployment.
+Phase 9+ — with Context propagation. Seven middleware classes, 25+ tests / 80+ assertions, Context + CancellationException + DeadlineExceededException, ready for v0 deployment.
 
 See [`examples/hello-server.php`](examples/hello-server.php) for a runnable banner-only stack you can ForceCommand against.
