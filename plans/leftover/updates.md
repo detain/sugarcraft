@@ -219,6 +219,7 @@ review for step 05.05 · clean · PR#576
 tests-ci for step 05.05 · clean
 docs for step 05.05 · clean
 step 05.06 · PR#577 · super-candy: add i18n via Lang::t() (Lang.php facade + lang/en.php + LangCoverageTest + status/keyhelp/search translations in Manager/Renderer)
+step 05.07 · PR#578 · sugar-stash: add i18n via Lang::t() (key-hints, error prefix, empty-state messages + LangCoverageTest)
 
 ## Open review findings — 03.05
 
