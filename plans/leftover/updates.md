@@ -235,6 +235,7 @@ tests-ci for step 06.02 · clean
 docs for step 06.02 · PR#586 · document ScreenStack API in README (Architecture + new section + example) + end-user doc feature grid + PHPDoc @see cross-refs
 step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest
 fix for step 06.03 · PR#588 · resolved 3 findings (@return ?Closure fix + [pattern:component-lifecycle] CALIBER entry + Component/Composite README docs)
+tests-ci for step 06.03 · clean
 
 ## Open review findings — 03.05
 
