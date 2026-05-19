@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Dash\Layout;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A layered stack layout component.
@@ -272,6 +274,27 @@ final class ZStack implements \SugarCraft\Dash\Foundation\Sizer
             items: $this->items,
             alignment: $this->alignment,
             vAlignment: $alignment,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof Drawable) {
+                $themedItems[] = $item->withTheme($theme);
+            } else {
+                $themedItems[] = $item;
+            }
+        }
+
+        return new self(
+            items: $themedItems,
+            alignment: $this->alignment,
+            vAlignment: $this->vAlignment,
         );
     }
 }

@@ -10,6 +10,8 @@ use SugarCraft\Sprinkles\VAlign;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A bordered frame that wraps any Item.
@@ -269,6 +271,26 @@ final class Frame implements \SugarCraft\Dash\Foundation\Sizer
             padding: $this->padding,
             title: $this->title,
             verticalAlign: $align,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $content = $this->content;
+        if ($content instanceof Drawable) {
+            $content = $content->withTheme($theme);
+        }
+
+        return new self(
+            content: $content,
+            border: $this->border,
+            borderColor: $this->borderColor,
+            padding: $this->padding,
+            title: $this->title,
+            verticalAlign: $this->verticalAlign,
         );
     }
 }
