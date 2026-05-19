@@ -228,6 +228,36 @@ CJK and emoji graphemes occupy 2 cells. The second cell is marked with
 `Cell::continuation()`. Width queries delegate to `SugarCraft\Core\Util\Width`
 to stay consistent with the rest of the stack.
 
+## Scroll region lives on ScreenHandler, not Screen (DECSTBM pattern)
+
+`ScreenHandler` holds two public properties tracking the DECSTBM scroll region:
+
+| Property              | Type   | Meaning                                    |
+|-----------------------|--------|--------------------------------------------|
+| `$scrollRegionTop`    | `int`  | Top row of scroll region (0-indexed incl.)|
+| `$scrollRegionBottom`| `int`  | Bottom row of scroll region (0-indexed incl.)|
+
+`Screen` is a **readonly immutable snapshot** constructed from a `Buffer` copy
+— it has no scroll region state and no setter. All mutable scroll region
+state lives on `ScreenHandler`, which is the correct place for it.
+
+The scroll region is set via CSI `r` dispatch → `ScreenHandler::setScrollRegion()`:
+
+- Params: `[top;bottom]` (1-indexed, VT100 spec defaults top=1, bottom=rows)
+- Reset when top == bottom or either is out of range
+- Converted to 0-indexed inclusive bounds and stored on the handler
+
+Scroll-region-aware movement primitives (all in `ScrollHandler`):
+
+- `index()`        — IND / `ESC D` / LF / `CSI S`: move down; at bottom of region → scroll up
+- `reverseIndex()` — RI / `ESC M`: move up; at top of region → scroll down
+- `nextLine()`     — NEL / `CSI E`: CR + IND
+- `applyCsi()`     — SU (`CSI S`) / SD (`CSI T`): scroll region by N rows
+
+All four operations pass `scrollRegionTop` / `scrollRegionBottom` explicitly so
+`ScreenHandler` doesn't need to maintain a separate scroll-mode flag. The
+handler initializes to the full screen (`rows - 1`) on construction.
+
 ## Stream writes
 
 Never `ftruncate; rewind;` between writes — slice deltas with
