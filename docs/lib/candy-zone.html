@@ -80,6 +80,8 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
       <div class="feature"><strong>ANSI-aware</strong><span>Width calculation honours SGR + Unicode grapheme widths; emojis, CJK, combining marks all account correctly.</span></div>
       <div class="feature"><strong>Manager isolation</strong><span>Manager::newGlobal() for app-wide; or per-component managers for nested mouse handling.</span></div>
       <div class="feature"><strong>Plays with SugarCraft</strong><span>Drop into your Model — every <code>view()</code> call rescans, every MouseMsg routes.</span></div>
+      <div class="feature"><strong>Hover tracking</strong><span><code>ZoneHoverTracker</code> emits <code>ZoneEnterMsg</code> / <code>ZoneExitMsg</code> on cursor boundary crossings.</span></div>
+      <div class="feature"><strong>Drag tracking</strong><span><code>DragTracker</code> tracks press → move → release drags across zones; emits <code>ZoneDragStartMsg</code> / <code>ZoneDragMoveMsg</code> / <code>ZoneDragEndMsg</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -107,6 +109,13 @@ if ($z-&gt;get('btn:ok')?-&gt;inBounds($mouseMsg)) {
 <tr><td>ZoneHoverTracker</td><td>currentZone()</td><td>Get the hovered Zone or null</td></tr>
 <tr><td>ZoneEnterMsg</td><td>zone</td><td>Zone the cursor just entered</td></tr>
 <tr><td>ZoneExitMsg</td><td>zone</td><td>Zone the cursor just left</td></tr>
+<tr><td>DragTracker</td><td>new(manager)</td><td>Track drag sequences over a manager</td></tr>
+<tr><td>DragTracker</td><td>update(mouseMsg)</td><td>Process mouse event, return drag msg</td></tr>
+<tr><td>DragTracker</td><td>originZone()</td><td>Get the origin Zone or null</td></tr>
+<tr><td>DragTracker</td><td>currentZone()</td><td>Get the current Zone or null</td></tr>
+<tr><td>ZoneDragStartMsg</td><td>originZone / currentZone</td><td>Zone where drag started; zone at current cursor</td></tr>
+<tr><td>ZoneDragMoveMsg</td><td>originZone / currentZone</td><td>Fixed origin zone; zone cursor just crossed into</td></tr>
+<tr><td>ZoneDragEndMsg</td><td>originZone / currentZone</td><td>Zone drag started from; zone at release</td></tr>
 <tr><td>Style</td><td>new()</td><td>Create style builder</td></tr>
 <tr><td>Style</td><td>padding(top, bottom)</td><td>Set zone padding</td></tr>
 </table>
