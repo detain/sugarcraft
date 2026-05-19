@@ -207,6 +207,9 @@ review for step 05.02 · clean · PR#571
 tests-ci for step 05.02 · clean
 docs for step 05.02 · PR#572 · add i18n section to README (Lang::t() pattern + keys) + fix pagination example + create CALIBER_LEARNINGS.md
 step 05.03 · PR#573 · sugar-toast: add i18n via Lang::t() (Lang.php facade + lang/en.php + ToastType::label() + LangCoverageTest + candy-core dep)
+review for step 05.03 · clean · PR#573
+tests-ci for step 05.03 · clean
+docs for step 05.03 · PR#574 · document i18n surface in README + CALIBER_LEARNINGS.md + docs/lib/sugar-toast.html
 
 ## Open review findings — 03.05
 
