@@ -161,6 +161,46 @@ the transition before routing the next enter.
 - `withZoneIds(?string $origin, ?string $current)` — restore from
   a serialized state
 
+## Click tracking
+
+`ClickCounter` wraps a `Manager` and tracks double/triple click
+streaks inside zones. It emits `DoubleClickMsg` on the second press
+and `TripleClickMsg` on the third press — all within a configurable
+click interval (default 500 ms). The streak resets when the interval
+expires or when the cursor moves to a different zone:
+
+```php
+use SugarCraft\Zone\Manager;
+use SugarCraft\Zone\ClickCounter;
+use SugarCraft\Zone\Msg\DoubleClickMsg;
+use SugarCraft\Zone\Msg\TripleClickMsg;
+
+$counter = new ClickCounter($manager);
+// $manager must already have run scan() to populate zone registry.
+
+[$counter, $msg] = $counter->update($mouseMsg);
+if ($msg instanceof DoubleClickMsg) {
+    // second press in same zone within interval
+} elseif ($msg instanceof TripleClickMsg) {
+    // third press in same zone within interval
+}
+```
+
+**State accessors:**
+- `clickCount()` — current streak count (0 when no streak is active)
+- `withManager(Manager)` — rebind to a different manager
+- `$counter->manager` / `$counter->clickIntervalMs` — public
+  constructor params for rebinding / tuning
+
+## Motion tracking escape sequences
+
+`Manager::setMotionTracking(bool $on)` returns the terminal escape
+sequence that enables (`\x1b[?1003h`) or disables (`\x1b[?1003l`)
+SGR mouse mode 1003 (all motion events). Write the returned string to
+the TTY to activate motion reporting before processing mouse move
+events. This manager does not directly emit — it is a
+text-processing component that produces the raw CSI sequence.
+
 ## Tips
 
 - Each id should be unique within a `Manager`. Use
@@ -177,6 +217,36 @@ the transition before routing the next enter.
 - The PHP port has a synchronous `scan()` (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
+
+## API summary
+
+| Class | Method | Description |
+|---|---|---|
+| `Manager` | `newGlobal()` | Create global manager |
+| `Manager` | `newPrefix(?prefix)` | Create prefixed manager for isolation |
+| `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
+| `Manager` | `scan(output)` | Record positions, strip markers |
+| `Manager` | `anyInBounds(mouseMsg)` | Return first zone under the mouse |
+| `Manager` | `get(name)` | Get zone by name |
+| `Manager` | `setMotionTracking(bool)` | Return CSI 1003 h/l escape sequence |
+| `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |
+| `ZoneHoverTracker` | `new(manager)` | Track hover state over a manager |
+| `ZoneHoverTracker` | `update(mouseMsg)` | Process mouse event, return enter/exit msg |
+| `ZoneHoverTracker` | `currentZone()` | Get the hovered Zone or null |
+| `ZoneEnterMsg` | `zone` | Zone the cursor just entered |
+| `ZoneExitMsg` | `zone` | Zone the cursor just left |
+| `DragTracker` | `new(manager)` | Track drag sequences over a manager |
+| `DragTracker` | `update(mouseMsg)` | Process mouse event, return drag msg |
+| `DragTracker` | `originZone()` | Get the origin Zone or null |
+| `DragTracker` | `currentZone()` | Get the current Zone or null |
+| `ZoneDragStartMsg` | `originZone / currentZone` | Zone where drag started; zone at current cursor |
+| `ZoneDragMoveMsg` | `originZone / currentZone` | Fixed origin zone; zone cursor just crossed into |
+| `ZoneDragEndMsg` | `originZone / currentZone` | Zone drag started from; zone at release |
+| `ClickCounter` | `new(manager, clickIntervalMs)` | Track double/triple click streaks |
+| `ClickCounter` | `update(mouseMsg)` | Process press event, return double/triple msg |
+| `ClickCounter` | `clickCount()` | Current streak count (0 = no streak) |
+| `DoubleClickMsg` | `zone` | Zone of the second press |
+| `TripleClickMsg` | `zone` | Zone of the third press |
 
 ## Test
 
