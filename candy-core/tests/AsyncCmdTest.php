@@ -28,6 +28,8 @@ final class SecondMsg implements Msg {}
  */
 final class MessageRecordingModel implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     /** @var list<Msg> */
     public array $log = [];
 
@@ -166,6 +168,8 @@ final class AsyncCmdTest extends TestCase
         });
 
         $model = new class($initCmd) implements Model {
+            use \SugarCraft\Core\SubscriptionCapable;
+
             /** @var list<Msg> */
             public array $log = [];
             private int $phase = 0;
