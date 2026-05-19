@@ -103,6 +103,33 @@ Server::new()
     ->serve();
 ```
 
+### Subsystem
+
+The `Subsystem` middleware handles SSH subsystem requests (RFC 4254 §6.5).
+When a client sends `subsystem <name>` as the original command, the
+middleware looks up the registered `SubsystemHandler` for `<name>`, invokes
+it, and stops the chain — handlers are terminal. Non-subsystem commands
+pass through to `$next`.
+
+```php
+use SugarCraft\Wish\Middleware\Subsystem;
+use SugarCraft\Wish\Middleware\Subsystem\SftpStub;
+
+$subsystem = new Subsystem();
+$subsystem->register('sftp', new SftpStub());
+
+Server::new()
+    ->use($subsystem)  // handles subsystem sftp; others fall through to Spawn
+    ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
+    ->serve();
+```
+
+**Operational note:** `Subsystem` is terminal — it does not call `$next`
+when a handler is found. Place it before `Spawn` so non-subsystem requests
+continue to the shell. A production SFTP handler would implement
+`SubsystemHandler` to speak the SFTP protocol over the session's
+stdin/stdout.
+
 ---
 
 ## Monitoring
