@@ -57,6 +57,13 @@
       <tr><td><code>SUGARCRAFT_LIBC</code></td><td>Path to libc shared object</td><td>Override the libc path for FFI. Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Useful for musl/Alpine or custom sysroots.</td></tr>
     </table>
 
+    <h3 style="margin-top: 32px;">Platform behaviour — PTY allocation</h3>
+    <ul>
+      <li><strong>macOS</strong> — <code>openpty(3)</code> is attempted first (single call that opens both master and slave fds). On failure it falls back to the POSIX quartet: <code>posix_openpt + grantpt + unlockpt + ptsname_r</code>.</li>
+      <li><strong>Linux</strong> — Uses the POSIX quartet directly. The <code>openpty(3)</code> symbol lives in <code>libutil.so.1</code> on most distributions — a separate FFI handle is opened specifically for it. If <code>libutil.so.1</code> is unavailable, the quartet is used instead.</li>
+    </ul>
+    <p>This distinction matters for debugging: if macOS PTY allocation fails, check whether <code>openpty</code> or the quartet path was taken (enable FFI tracing or check the return code path in <code>PosixPtySystem::openPtyMaster()</code>).</p>
+
     <h3 style="margin-top: 32px;">Failure modes</h3>
     <ul>
       <li><strong><code>UnsupportedPlatformException</code></strong> — Thrown by <code>PtySystemFactory::default()</code> on Windows (v1 is POSIX-only), or when <code>SUGARCRAFT_PTY_BACKEND</code> is set to <code>sidecar</code> or <code>pecl</code> (not yet implemented).</li>

@@ -153,6 +153,7 @@ CPROTO;
      *
      * @throws PtyException if the platform is unsupported or the
      *                      library cannot be loaded
+     * @return \FFI the libutil FFI handle (contains openpty on Linux)
      */
     public static function libutil(): \FFI
     {
