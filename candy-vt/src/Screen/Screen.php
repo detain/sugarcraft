@@ -20,14 +20,23 @@ final readonly class Screen
         private array $grid,
         public readonly int $cols,
         public readonly int $rows,
+        private ?Scrollback $scrollback = null,
     ) {}
 
     /**
      * Build a Screen snapshot from the current Buffer state.
      */
-    public static function fromBuffer(Buffer $buf): self
+    public static function fromBuffer(Buffer $buf, ?Scrollback $scrollback = null): self
     {
-        return new self($buf->copy(), $buf->cols, $buf->rows);
+        return new self($buf->copy(), $buf->cols, $buf->rows, $scrollback);
+    }
+
+    /**
+     * Return the scrollback buffer holding rows that have scrolled off-screen.
+     */
+    public function scrollback(): ?Scrollback
+    {
+        return $this->scrollback;
     }
 
     public function cell(int $row, int $col): Cell
