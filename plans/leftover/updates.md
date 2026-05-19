@@ -324,6 +324,7 @@ step 11.02 · PR#653 · plans: candy-serve-tui interactive SSH TUI milestone pla
 fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; sugar-boxer SugarBoxer; Repo $isPublic property + withDescription(); sugar-stash 🟡 + §6.1 blockers gating phases 2-4; OSC 52 → candy-core Cmd::setClipboard(); bin/ over cmd/)
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
+step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
 
 ## Open review findings — 03.05
 
