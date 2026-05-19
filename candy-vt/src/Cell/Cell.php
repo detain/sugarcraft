@@ -86,6 +86,7 @@ final readonly class Cell
         $sgrEqual = $thisSgr->bold === $otherSgr->bold
             && $thisSgr->italic === $otherSgr->italic
             && $thisSgr->underline === $otherSgr->underline
+            && $thisSgr->underlineStyle === $otherSgr->underlineStyle
             && $thisSgr->strikethrough === $otherSgr->strikethrough
             && $thisSgr->blink === $otherSgr->blink
             && $thisSgr->reverse === $otherSgr->reverse
