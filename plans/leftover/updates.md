@@ -325,6 +325,8 @@ fix for step 11.02 · PR#656 · resolved 8 findings (ScreenStack path/PR#583; su
 tests-ci for step 11.02 · clean
 docs for step 11.02 · clean
 step 11.03 · PR#658 · plans: candy-vt-graphics P3 strategic memo (Kitty/iTerm2/Sixel receive-side decode; 6 phases ~17-23 weeks; recommendation: defer past 1.0 — no current consumer triggers §7 hard-trigger criteria)
+review for step 11.03 · clean · PR#658
+tests-ci for step 11.03 · clean
 
 ## Open review findings — 03.05
 
