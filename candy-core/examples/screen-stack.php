@@ -111,12 +111,13 @@ final class DemoRootModel implements Model, \SugarCraft\Core\ScreenStackCapable
     {
         $active = $this->currentModel ?? new ScreenModel(0);
         $crumb = implode(' > ', $this->screens->breadcrumb());
+        $pushed = implode(', ', $this->pushedIds);
         return <<<VIEW
 Screen Stack Demo — 3-deep drill-down
 
 Current: Level {$active->view()}
 Breadcrumb: [{$crumb}]
-Pushed: " . implode(', ', $this->pushedIds) . "
+Pushed: {$pushed}
 
 Controls:
   p  — push next level screen
