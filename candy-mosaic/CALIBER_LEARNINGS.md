@@ -4,9 +4,26 @@ Accumulated patterns and gotchas specific to this library.
 
 - **[ext-gd colorspace]** GD reads PNG as truecolor by default; palette
   PNGs need `imagepalettetotruecolor()` first. Handle in `PixelGrid::fromGd`.
+- **[GD alpha and imagecopyresampled]** `imagecopyresampled` applies
+  alpha-weighted interpolation during resize — it averages alpha channels
+  of neighboring pixels, corrupting transparency information. Even with
+  `imagealphablending($dst, false)` set, the interpolation step blends alphas.
+  Workaround: ensure source image dimensions match cell dimensions
+  (1:1 pixel mapping) so `imagecopyresampled` performs no interpolation.
+  Alternatively, use manual nearest-neighbor sampling with `imagecolorat` +
+  `imagecolorsforindex` to preserve exact alpha.
+- **[HalfBlock transparent pixels]** Alpha=127 (GD fully transparent)
+  maps to `null` in the PixelGrid cell tuple; alpha=0 (opaque) maps to `0`
+  (non-null). `HalfBlockRenderer` skips SGR codes for `null`-alpha pixels,
+  letting the terminal default show through. For a cell where only one
+  half is transparent, the renderer emits the opposite half-block glyph
+  (`▀` for bottom-transparent, `▄` for top-transparent) with only the
+  visible half's SGR codes.
 - **[Sixel quantization]** Median-cut produces ≤256 colors per image.
   The protocol limit is 256; if the image has more colors the renderer
-  still works but quality may be reduced.
+  still works but quality may be reduced. `SixelRenderer` accepts a
+  `maxColors` constructor parameter (1-256, default 256) for palette
+  limiting in terminals with limited color support.
 - **[Terminal cell aspect]** Terminal cells are roughly 1:2 (wide:tall).
   The half-block renderer doubles vertical resolution → near-square
   pixels. Sixel/Kitty operate in pixel space; we set cell dimensions
