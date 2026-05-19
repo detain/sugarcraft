@@ -8,9 +8,16 @@ use SugarCraft\Dash\Foundation\Buffer;
 use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\Layout\FlexLayout;
+use SugarCraft\Dash\Layout\GridLayout;
 use SugarCraft\Dash\Layout\HStack;
 use SugarCraft\Dash\Layout\VStack;
 use SugarCraft\Dash\Layout\Stack;
+use SugarCraft\Dash\Layout\ZStack;
+use SugarCraft\Dash\Layout\Panel;
+use SugarCraft\Dash\Layout\Frame;
+use SugarCraft\Dash\Layout\Tile\TileLayout;
+use SugarCraft\Dash\Layout\Tile\Tile;
+use SugarCraft\Dash\Layout\Tile\Size;
 use SugarCraft\Dash\Components\Card\Badge;
 use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\System\NProgress;
@@ -181,5 +188,100 @@ final class DrawableThemeTest extends TestCase
             $darkBg->r . ',' . $darkBg->g . ',' . $darkBg->b,
             $lightBg->r . ',' . $lightBg->g . ',' . $lightBg->b
         );
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Theme propagation through previously-missing layout containers
+    // ═══════════════════════════════════════════════════════════════
+
+    public function testZStackWithThemeReturnsNewInstance(): void
+    {
+        $item = Badge::new('test');
+        $zstack = ZStack::new($item);
+        $themed = $zstack->withTheme($this->dark);
+
+        $this->assertNotSame($zstack, $themed);
+    }
+
+    public function testZStackWithThemeAppliesToChildren(): void
+    {
+        $badge = Badge::new('test');
+        $zstack = ZStack::new($badge);
+        $themed = $zstack->withTheme($this->dark);
+
+        $reflection = new \ReflectionClass($themed);
+        $itemsProp = $reflection->getProperty('items');
+        $itemsProp->setAccessible(true);
+        $items = $itemsProp->getValue($themed);
+
+        $this->assertCount(1, $items);
+        $themedBadge = $items[0];
+
+        // The themed badge should have different colors
+        $origReflection = new \ReflectionClass($badge);
+        $bgOrig = $origReflection->getProperty('bgColor')->getValue($badge);
+        $bgThemed = $origReflection->getProperty('bgColor')->getValue($themedBadge);
+
+        $this->assertNotEquals($bgOrig, $bgThemed);
+    }
+
+    public function testGridLayoutWithThemeReturnsNewInstance(): void
+    {
+        $item = Badge::new('test');
+        $grid = GridLayout::columns(1, [$item]);
+        $themed = $grid->withTheme($this->dark);
+
+        $this->assertNotSame($grid, $themed);
+    }
+
+    public function testPanelWithThemeReturnsNewInstance(): void
+    {
+        $panel = Panel::new('content');
+        $themed = $panel->withTheme($this->dark);
+
+        $this->assertNotSame($panel, $themed);
+    }
+
+    public function testFrameWithThemeReturnsNewInstance(): void
+    {
+        $frame = Frame::new(Badge::new('test'));
+        $themed = $frame->withTheme($this->dark);
+
+        $this->assertNotSame($frame, $themed);
+    }
+
+    public function testTileLayoutWithThemeReturnsNewInstance(): void
+    {
+        $badge = Badge::new('test');
+        $tile = new Tile('test', new Size(), $badge);
+        $tilelayout = TileLayout::horizontal('root')->withTile($tile);
+        $themed = $tilelayout->withTheme($this->dark);
+
+        $this->assertNotSame($tilelayout, $themed);
+    }
+
+    public function testTileLayoutWithThemeAppliesToTileContent(): void
+    {
+        $badge = Badge::new('test');
+        $tile = new Tile('test', new Size(), $badge);
+        $tilelayout = TileLayout::horizontal('root')->withTile($tile);
+        $themed = $tilelayout->withTheme($this->dark);
+
+        // Get the themed tiles
+        $reflection = new \ReflectionClass($themed);
+        $tilesProp = $reflection->getProperty('tiles');
+        $tilesProp->setAccessible(true);
+        $tiles = $tilesProp->getValue($themed);
+
+        $this->assertCount(1, $tiles);
+        $themedTile = $tiles[0];
+        $themedBadge = $themedTile->getContent();
+
+        // The themed badge should have different colors
+        $origReflection = new \ReflectionClass($badge);
+        $bgOrig = $origReflection->getProperty('bgColor')->getValue($badge);
+        $bgThemed = $origReflection->getProperty('bgColor')->getValue($themedBadge);
+
+        $this->assertNotEquals($bgOrig, $bgThemed);
     }
 }

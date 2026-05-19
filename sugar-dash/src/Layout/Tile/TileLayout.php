@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Layout\Tile;
 
+use SugarCraft\Dash\Foundation\Drawable;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A tile-based layout that arranges tiles horizontally or vertically.
@@ -223,6 +225,37 @@ final class TileLayout implements Item, Sizer
             tiles: $this->tiles,
             baseSize: $this->baseSize,
             gap: $gap,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedTiles = [];
+        foreach ($this->tiles as $tile) {
+            $content = $tile->getContent();
+            if ($content instanceof Drawable) {
+                $themedContent = $content->withTheme($theme);
+                // Reconstruct tile with themed content - need to build new Tile
+                $themedTile = new Tile(
+                    name: $tile instanceof \SugarCraft\Dash\Layout\Tile\BaseTile ? $tile->getName() : '',
+                    size: $tile instanceof \SugarCraft\Dash\Layout\Tile\BaseTile ? $tile->getSize() : new Size(),
+                    content: $themedContent,
+                );
+                $themedTiles[] = $themedTile;
+            } else {
+                $themedTiles[] = $tile;
+            }
+        }
+
+        return new self(
+            name: $this->name,
+            direction: $this->direction,
+            tiles: $themedTiles,
+            baseSize: $this->baseSize,
+            gap: $this->gap,
         );
     }
 }
