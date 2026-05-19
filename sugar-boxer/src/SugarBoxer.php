@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace SugarCraft\Boxer;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\VAlign;
 
 /**
  * Box-drawing layout renderer.
@@ -18,21 +22,6 @@ use SugarCraft\Core\Util\Width;
  */
 final class SugarBoxer
 {
-    // Box-drawing characters
-    private const TL = '╭';  // top-left
-    private const TR = '╮';  // top-right
-    private const BL = '╰';  // bottom-left
-    private const BR = '╯';  // bottom-right
-    private const H  = '─';  // horizontal line
-    private const V  = '│';  // vertical line
-    private const CR = '┬';  // cross (top join)
-    private const CL = '┤';  // cross (right join)
-    private const CA = '├';  // cross (left join)
-    private const CB = '┴';  // cross (bottom join)
-    private const XX = '┼';  // center cross
-
-    private const HL = '─';
-
     /**
      * Create a new SugarBoxer instance.
      */
@@ -148,7 +137,7 @@ final class SugarBoxer
         if ($pcw <= 0 || $pch <= 0) return;
 
         if ($node->border) {
-            $this->drawBorder($x, $y, $w, $h, $cells);
+            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
         }
 
         $this->renderContent($node->content, $pcx, $pcy, $pcw, $pch, $cells);
@@ -176,7 +165,7 @@ final class SugarBoxer
 
         // Draw outer border first
         if ($node->border) {
-            $this->drawBorder($x, $y, $w, $h, $cells);
+            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
         }
 
         // Render each child. distribute() already bakes the border pad into
@@ -194,7 +183,7 @@ final class SugarBoxer
 
             // Draw vertical separator between children (inside the outer border)
             if ($i < $n - 1 && $sp === 0) {
-                $this->drawVLine($x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
+                $this->drawVLine($node->borderStyle, $x + $offsets[$i + 1] - 1, $y + $b, $availableH, $cells);
             }
         }
     }
@@ -219,7 +208,7 @@ final class SugarBoxer
         $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
 
         if ($node->border) {
-            $this->drawBorder($x, $y, $w, $h, $cells);
+            $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
         }
 
         for ($i = 0; $i < $n; $i++) {
@@ -232,7 +221,7 @@ final class SugarBoxer
             $this->renderNode($child, $x + $b, $oy, $availableW, $oh, $cells);
 
             if ($i < $n - 1 && $sp === 0) {
-                $this->drawHLine($x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
+                $this->drawHLine($node->borderStyle, $x + $b, $y + $offsets[$i + 1] - 1, $availableW, $cells);
             }
         }
     }
@@ -322,40 +311,48 @@ final class SugarBoxer
     // Border drawing
     // -------------------------------------------------------------------------
 
-    private function drawBorder(int $x, int $y, int $w, int $h, array &$cells): void
+    /**
+     * Draw a border using the characters from the given Border object.
+     * Uses Border::rounded() as default when $border is null.
+     */
+    private function drawBorder(?Border $border, int $x, int $y, int $w, int $h, array &$cells): void
     {
         if ($w < 2 || $h < 2) return;
 
+        $b = $border ?? Border::rounded();
+
         // Corners
-        $this->setChar($x,           $y,           self::TL, $cells);
-        $this->setChar($x + $w - 1,  $y,           self::TR, $cells);
-        $this->setChar($x,           $y + $h - 1,  self::BL, $cells);
-        $this->setChar($x + $w - 1,  $y + $h - 1,  self::BR, $cells);
+        $this->setChar($x,           $y,           $b->topLeft,     $cells);
+        $this->setChar($x + $w - 1,  $y,           $b->topRight,    $cells);
+        $this->setChar($x,           $y + $h - 1,  $b->bottomLeft,  $cells);
+        $this->setChar($x + $w - 1,  $y + $h - 1,  $b->bottomRight, $cells);
 
         // Top/bottom edges
         for ($i = 1; $i < $w - 1; $i++) {
-            $this->setChar($x + $i, $y,           self::H, $cells);
-            $this->setChar($x + $i, $y + $h - 1,  self::H, $cells);
+            $this->setChar($x + $i, $y,           $b->top,    $cells);
+            $this->setChar($x + $i, $y + $h - 1,  $b->bottom, $cells);
         }
 
         // Left/right edges
         for ($j = 1; $j < $h - 1; $j++) {
-            $this->setChar($x,           $y + $j, self::V, $cells);
-            $this->setChar($x + $w - 1,  $y + $j, self::V, $cells);
+            $this->setChar($x,           $y + $j, $b->left,  $cells);
+            $this->setChar($x + $w - 1,  $y + $j, $b->right, $cells);
         }
     }
 
-    private function drawVLine(int $x, int $y, int $h, array &$cells): void
+    private function drawVLine(?Border $border, int $x, int $y, int $h, array &$cells): void
     {
+        $b = $border ?? Border::rounded();
         for ($j = 0; $j < $h; $j++) {
-            $this->setChar($x, $y + $j, self::V, $cells);
+            $this->setChar($x, $y + $j, $b->left, $cells);
         }
     }
 
-    private function drawHLine(int $x, int $y, int $w, array &$cells): void
+    private function drawHLine(?Border $border, int $x, int $y, int $w, array &$cells): void
     {
+        $b = $border ?? Border::rounded();
         for ($i = 0; $i < $w; $i++) {
-            $this->setChar($x + $i, $y, self::H, $cells);
+            $this->setChar($x + $i, $y, $b->top, $cells);
         }
     }
 
