@@ -257,6 +257,8 @@ review for step 06.08 · clean · PR#605
 tests-ci for step 06.08 · clean
 docs for step 06.08 · PR#606 · document Context API in README + docs/lib/candy-wish.html + new docs/dev/candy-wish.md
 step 06.09 · PR#607 · candy-wish: ChannelHandler interface + DefaultChannelHandler (PtyReq/WindowChange/Shell/Exec/Signal/Env/Break Msg classes) + InProcessTransport dispatch wiring + 16 tests
+tests-ci for step 06.09 · clean
+docs for step 06.09 · PR#608 · document ChannelHandler/ChannelMsg/Msg classes in README + end-user API table + dev extension point + new hub-admin guide + CALIBER pattern
 
 ## Open review findings — 03.05
 
