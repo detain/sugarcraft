@@ -284,6 +284,7 @@ docs for step 07.02 · PR#622 · document DECAWM in README/end-user HTML/Mode PH
 step 07.03 · PR#623 · candy-vt: CSI subparameter parsing — Parser::param() treats ':' as sub-param separator (same as ';'), 9 SubparamTest tests (leftover-rollout step 07.03)
 review for step 07.03 · clean · PR#623
 tests-ci for step 07.03 · clean
+docs for step 07.03 · PR#624 · document CSI subparameter parsing in CALIBER_LEARNINGS/README/end-user HTML
 
 ## Open review findings — 03.05
 
