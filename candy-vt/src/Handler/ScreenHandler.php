@@ -12,6 +12,7 @@ use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Hyperlink\Hyperlink;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Parser\Handler;
+use SugarCraft\Vt\Screen\Scrollback;
 use SugarCraft\Vt\Sgr\Sgr;
 
 /**
@@ -34,6 +35,7 @@ final class ScreenHandler implements Handler
     public Sgr $sgr;
     public Mode $mode;
     public ?string $windowTitle = null;
+    public Scrollback $scrollback;
 
     /** @var array<int, Color> Indexed palette overrides set via OSC 4. */
     public array $palette = [];
@@ -70,11 +72,13 @@ final class ScreenHandler implements Handler
         ?Cursor $cursor = null,
         ?Sgr $sgr = null,
         ?Mode $mode = null,
+        ?Scrollback $scrollback = null,
     ) {
         $this->buffer = $buffer;
         $this->cursor = $cursor ?? new Cursor();
         $this->sgr = $sgr ?? Sgr::empty();
         $this->mode = $mode ?? new Mode();
+        $this->scrollback = $scrollback ?? new Scrollback();
         $this->sgrHandler = new SgrHandler();
         $this->cursorHandler = new CursorHandler();
         $this->eraseHandler = new EraseHandler();
@@ -171,7 +175,13 @@ final class ScreenHandler implements Handler
                 $this->eraseHandler->apply($final, $params, $this->buffer, $this->cursor);
                 return;
             case 'S': case 'T':
-                $this->scrollHandler->applyCsi($final, $params, $this->buffer, $this->scrollRegionTop, $this->scrollRegionBottom);
+                $first = $params[0] ?? -1;
+                $count = $first === -1 ? 1 : max(1, $first);
+                if (chr($final) === 'S') {
+                    $this->scrollUp($count);
+                } else {
+                    $this->scrollDown($count);
+                }
                 return;
             case 'r':
                 $this->setScrollRegion($params);
@@ -259,17 +269,26 @@ final class ScreenHandler implements Handler
 
     private function index(): void
     {
-        $this->cursor = $this->scrollHandler->index($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
+        if ($this->cursor->row >= $this->scrollRegionBottom) {
+            $this->scrollUp(1);
+        } else {
+            $this->cursor = $this->cursor->withRow($this->cursor->row + 1);
+        }
     }
 
     private function reverseIndex(): void
     {
-        $this->cursor = $this->scrollHandler->reverseIndex($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
+        if ($this->cursor->row <= $this->scrollRegionTop) {
+            $this->scrollDown(1);
+        } else {
+            $this->cursor = $this->cursor->withRow($this->cursor->row - 1);
+        }
     }
 
     private function nextLine(): void
     {
-        $this->cursor = $this->scrollHandler->nextLine($this->buffer, $this->cursor, $this->scrollRegionTop, $this->scrollRegionBottom);
+        $this->cursor = $this->cursor->withCol(0);
+        $this->index();
     }
 
     /**
@@ -278,12 +297,13 @@ final class ScreenHandler implements Handler
      */
     private function lineFeedNext(): Cursor
     {
-        return $this->scrollHandler->nextLine(
-            $this->buffer,
-            $this->cursor->withCol(0),
-            $this->scrollRegionTop,
-            $this->scrollRegionBottom,
-        );
+        $this->cursor = $this->cursor->withCol(0);
+        if ($this->cursor->row >= $this->scrollRegionBottom) {
+            $this->scrollUp(1);
+            return $this->cursor;
+        }
+        $this->cursor = $this->cursor->withRow($this->cursor->row + 1);
+        return $this->cursor;
     }
 
     /**
@@ -313,6 +333,68 @@ final class ScreenHandler implements Handler
 
         $this->scrollRegionTop = $top - 1;       // Convert to 0-indexed.
         $this->scrollRegionBottom = $bottom - 1;  // Convert to 0-indexed.
+    }
+
+    /**
+     * Push the top $count rows of the scroll region into scrollback,
+     * then delegate the actual buffer shift to ScrollHandler.
+     */
+    private function scrollUp(int $count): void
+    {
+        $height = $this->scrollRegionBottom - $this->scrollRegionTop + 1;
+        $count = min($count, $height);
+        if ($count <= 0) {
+            return;
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->scrollback->push($this->rowAt($this->scrollRegionTop + $i));
+        }
+
+        $this->scrollHandler->scrollUp(
+            $this->buffer,
+            $this->scrollRegionTop,
+            $this->scrollRegionBottom,
+            $count,
+        );
+    }
+
+    /**
+     * Push the bottom $count rows of the scroll region into scrollback,
+     * then delegate the actual buffer shift to ScrollHandler.
+     */
+    private function scrollDown(int $count): void
+    {
+        $height = $this->scrollRegionBottom - $this->scrollRegionTop + 1;
+        $count = min($count, $height);
+        if ($count <= 0) {
+            return;
+        }
+
+        for ($i = 0; $i < $count; $i++) {
+            $this->scrollback->push($this->rowAt($this->scrollRegionBottom - $i));
+        }
+
+        $this->scrollHandler->scrollDown(
+            $this->buffer,
+            $this->scrollRegionTop,
+            $this->scrollRegionBottom,
+            $count,
+        );
+    }
+
+    /**
+     * Copy the row at the given absolute index as `array<int, Cell>`.
+     *
+     * @return array<int, Cell>
+     */
+    private function rowAt(int $row): array
+    {
+        $cells = [];
+        for ($c = 0; $c < $this->buffer->cols; $c++) {
+            $cells[] = $this->buffer->cell($row, $c);
+        }
+        return $cells;
     }
 
     /**
