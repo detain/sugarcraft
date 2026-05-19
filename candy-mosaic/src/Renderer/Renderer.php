@@ -36,4 +36,13 @@ interface Renderer
      * Half-block does not; Sixel and Kitty do.
      */
     public function supportsAlpha(): bool;
+
+    /**
+     * Emit the protocol-specific sequence to delete a previously rendered
+     * image identified by `$imageId`.
+     *
+     * @param string $imageId  Numeric or named image identifier
+     * @return string          Raw ANSI escape bytes — write directly to stdout
+     */
+    public function delete(string $imageId): string;
 }
