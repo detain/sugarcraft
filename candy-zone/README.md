@@ -82,6 +82,42 @@ useful in tests (`Zones::setDefaultManager(null)` flushes state) or
 when you want every package-level call routed through a prefixed
 manager.
 
+## Hover tracking
+
+`ZoneHoverTracker` wraps a `Manager` and tracks which zone the cursor
+is in across `MouseMsg` events. It emits `ZoneEnterMsg` when the cursor
+crosses into a zone and `ZoneExitMsg` when it leaves — ideal for
+tooltips, highlights, or data-fetch-on-hover:
+
+```php
+use SugarCraft\Zone\Manager;
+use SugarCraft\Zone\ZoneHoverTracker;
+use SugarCraft\Zone\Msg\ZoneEnterMsg;
+use SugarCraft\Zone\Msg\ZoneExitMsg;
+
+$tracker = new ZoneHoverTracker($manager);
+// $manager must already have run scan() to populate zone registry.
+
+[$tracker, $msg] = $tracker->update($mouseMsg);
+if ($msg instanceof ZoneEnterMsg) {
+    // cursor entered $msg->zone
+} elseif ($msg instanceof ZoneExitMsg) {
+    // cursor left $msg->zone
+}
+```
+
+**Boundary crossing:** moving directly from zone A to zone B produces
+an exit for A first; call `update()` again to receive the enter for B.
+This two-step pattern lets the Program animate the exit before routing
+the enter.
+
+**State accessors:**
+- `currentZoneId()` — id of the hovered zone, or null
+- `currentZone()` — `Zone` object, or null
+- `withManager(Manager)` — rebind to a different manager (e.g. a
+  prefixed manager in a sub-component)
+- `withCurrentZoneId(string)` — restore from a serialized state
+
 ## Tips
 
 - Each id should be unique within a `Manager`. Use
