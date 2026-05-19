@@ -71,6 +71,24 @@ Each handler translates parser actions into handler state mutations:
 - `OscHandler` — OSC window title, hyperlink, colour palette
 - `ScreenHandler` — orchestrates all of the above; owns the Buffer
 
+## Background Color Erase (BCE)
+
+When BCE mode is enabled (`CSI ?12 h`), erase operations (`CSI K`, `CSI J`,
+`CSI X`) fill cleared cells with the current SGR background color instead of
+a plain blank cell. This prevents "ghosting" in terminals with colored
+backgrounds — the erased area retains its visual background rather than going
+black.
+
+```php
+$vt = Terminal::create(cols: 80, rows: 24);
+$vt->feed("\x1b[48;5;196m\x1b[?12h");  // red background + BCE on
+$vt->feed("\x1b[2J");                   // erase screen — cells carry red bg
+echo $vt->screen()->cell(0, 0)->background()?->toInt(); // 196
+```
+
+BCE state is tracked via the `Sgr` object's background color — the pen
+must be set before the erase sequence for the background to carry through.
+
 ## Diff API
 
 After feeding bytes, snapshot the screen and compare:
@@ -245,6 +263,57 @@ Events are accumulated on the internal `ScreenHandler::$focusEvents`
 array as `FocusInMsg` / `FocusOutMsg` value objects. A consumer can
 inspect the array directly or wire the handler to dispatch events to
 an event loop.
+
+## Combining characters and wide characters
+
+`ScreenHandler::printChar()` categorises every incoming rune by width:
+
+- **Wide (width ≥ 2):** CJK and most emoji occupy 2 cells. A `Cell::continuation()`
+  marker is written to the second cell and inherits SGR + hyperlink from the
+  base cell. The cursor advances by the full width.
+- **Normal (width 1):** Written to a single cell.
+- **Combining mark (width 0):** Zero-width Unicode combining diacritical marks
+  (U+0300–U+036F) are not silently discarded. Instead they are attached to
+  the preceding cell via `Cell::withCombining()` so the base character and
+  its combining marks render as a single composed grapheme in one column:
+
+```php
+$vt->feed("\x1b[31me\xcc\x81");  // 'e' + combining acute accent → 'é'
+$cell = $vt->screen()->cell(0, 0);
+echo $cell->grapheme;   // 'e'
+echo $cell->combining;  // "\xcc\x81" — attach to grapheme for full cluster
+```
+
+`Cell::$combining` is a plain string; `$cell->withCombining($mark)` appends
+to it. The `$combining` field is compared in `Cell::equals()` so snapshots
+that include composed characters compare correctly.
+
+Combining marks that arrive at column 0 or immediately after a wide-char
+continuation cell are silently dropped — nothing in the preceding column
+to attach to.
+
+## Synchronized output (DEC 2026)
+
+DEC 2026 (`CSI ?2026 h` / `CSI ?2026 l`) enables **synchronized output
+mode**. While active, all buffer mutations (character writes, combining
+attachments, erase fills) are held in a queue on `ScreenHandler` instead
+of being applied immediately. When the mode is disabled (`CSI ?2026 l`),
+all queued mutations are replayed atomically. This prevents mid-sequence
+screen updates from being visible to the user, matching xterm's batched
+update behavior.
+
+```php
+$mode = $vt->mode();
+var_dump($mode->syncUpdate);  // bool
+
+$vt->feed("\x1b[?2026h");    // enter sync-update mode
+$vt->feed("\x1b[31mA\x1b[0m"); // queued, not yet visible
+$vt->feed("\x1b[?2026l");    // flush → both cells appear together
+```
+
+Mutations are queued in `ScreenHandler::$pendingMutations` and flushed by
+`flushPendingMutations()` when sync mode is exited. BCE erase (CSI ?12 h)
+and combining-char attachments are both eligible for queued writes.
 
 ## Test
 
