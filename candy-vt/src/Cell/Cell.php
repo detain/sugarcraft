@@ -12,6 +12,11 @@ use SugarCraft\Vt\Sgr\Sgr;
  * A single cell in the terminal grid.
  *
  * Readonly snapshot — instances are always newly constructed by Buffer.
+ * `combining` holds trailing Unicode combining marks (U+0300–U+036F) that
+ * attach to the base `grapheme` — stored separately so the grid width
+ * logic (each cell = one column) stays correct and renderers can opt in
+ * to full grapheme-cluster composition.
+ *
  * Mirrors charmbracelet/x/vt Cell.
  */
 final readonly class Cell
@@ -21,12 +26,29 @@ final readonly class Cell
         public ?Sgr $sgr = null,
         public bool $continuation = false,
         public ?Hyperlink $hyperlink = null,
+        /** Non-empty string when one or more combining marks (U+0300–U+036F) follow the base grapheme in the same cell. */
+        public string $combining = '',
     ) {}
 
     public static function empty(): self
     {
         static $empty = null;
-        return $empty ??= new self();
+        return $empty ??= new self(grapheme: ' ', combining: '');
+    }
+
+    /**
+     * Return a new Cell with additional combining marks appended.
+     * Mirrors charmbracelet/x/vt Cell::WithCombining.
+     */
+    public function withCombining(string $combining): self
+    {
+        return new self(
+            grapheme: $this->grapheme,
+            sgr: $this->sgr,
+            continuation: $this->continuation,
+            hyperlink: $this->hyperlink,
+            combining: $this->combining . $combining,
+        );
     }
 
     /** Second cell of a wide character — carries no grapheme, marks continuation. */
@@ -60,6 +82,7 @@ final readonly class Cell
         if ($this->grapheme !== $other->grapheme) return false;
         if ($this->continuation !== $other->continuation) return false;
         if ((string)($this->hyperlink?->id ?? '') !== (string)($other->hyperlink?->id ?? '')) return false;
+        if ($this->combining !== $other->combining) return false;
 
         $thisFg = $this->foreground();
         $otherFg = $other->foreground();
