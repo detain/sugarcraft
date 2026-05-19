@@ -118,6 +118,49 @@ the enter.
   prefixed manager in a sub-component)
 - `withCurrentZoneId(string)` — restore from a serialized state
 
+## Drag tracking
+
+`DragTracker` wraps a `Manager` and tracks press → move → release
+drag sequences within and across zones. It emits a `ZoneDragStartMsg` on
+button-down inside a zone, `ZoneDragMoveMsg` when the cursor crosses a
+zone boundary while dragging, and `ZoneDragEndMsg` on button release:
+
+```php
+use SugarCraft\Zone\Manager;
+use SugarCraft\Zone\DragTracker;
+use SugarCraft\Zone\Msg\ZoneDragStartMsg;
+use SugarCraft\Zone\Msg\ZoneDragMoveMsg;
+use SugarCraft\Zone\Msg\ZoneDragEndMsg;
+
+$tracker = new DragTracker($manager);
+// $manager must already have run scan() to populate zone registry.
+
+[$tracker, $msg] = $tracker->update($mouseMsg);
+if ($msg instanceof ZoneDragStartMsg) {
+    // drag started in $msg->originZone
+} elseif ($msg instanceof ZoneDragMoveMsg) {
+    // cursor crossed from $msg->originZone into $msg->currentZone
+} elseif ($msg instanceof ZoneDragEndMsg) {
+    // drag ended; started at $msg->originZone, released at $msg->currentZone
+}
+```
+
+**Origin vs. current zone:** the origin zone is fixed for the entire
+drag and never changes. The current zone updates whenever the cursor
+crosses a zone boundary during the drag.
+
+**Boundary crossing:** moving directly from zone A to zone B while
+dragging produces a move message for A first; call `update()` again to
+receive the move for B. This two-step pattern lets the Program animate
+the transition before routing the next enter.
+
+**State accessors:**
+- `originZoneId()` / `originZone()` — zone the drag started from, or null
+- `currentZoneId()` / `currentZone()` — zone the cursor is in, or null
+- `withManager(Manager)` — rebind to a different manager
+- `withZoneIds(?string $origin, ?string $current)` — restore from
+  a serialized state
+
 ## Tips
 
 - Each id should be unique within a `Manager`. Use
