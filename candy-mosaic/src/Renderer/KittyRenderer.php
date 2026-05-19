@@ -144,9 +144,6 @@ final class KittyRenderer implements Renderer
     }
 
     /**
-     * Split base64 string into protocol-compliant chunks (max 4092 bytes).
-     *
-    /**
      * Ensure PNG bytes, re-encoding if the source format is not PNG.
      *
      * Uses php://temp to handle GD builds that write to output instead of
