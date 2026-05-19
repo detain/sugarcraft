@@ -23,3 +23,11 @@ Accumulated patterns and gotchas specific to this library.
   All four quadrants share the same source pixel colour — bright quadrants
   render as foreground, dim as background, both via 24-bit ANSI SGR.
   `supportsAlpha()` returns `false` — no transparency blending.
+
+- **[Renderer::delete()]** Each renderer implements
+  `Renderer::delete(string $imageId): string` for removing a previously
+  rendered image. Kitty uses APC `a=d` (specific id); iTerm2 uses OSC
+  1337 Pop (top-of-stack, ignores id); Sixel/HalfBlock/QuarterBlock/Chafa
+  return `''` (no delete mechanism). When adding a new renderer, implement
+  `delete()` even if it only returns `''` — the interface contract
+  requires it.

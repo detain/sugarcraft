@@ -61,3 +61,20 @@ $mosaic = Mosaic::builder()
 `Mosaic::probe()` checks environment variables and (when interactive)
 sends a DA1 capability query to determine the best protocol. Results
 are cached per-process.
+
+## Delete
+
+Every renderer implements `Renderer::delete(string $imageId): string`
+which emits the protocol-specific sequence to remove a previously
+rendered image. The `$imageId` is the numeric image identifier passed
+during rendering (Kitty) or a placeholder for interface compatibility
+(iTerm2 Pop ignores it).
+
+| Renderer | Sequence | Notes |
+|---------|----------|-------|
+| Kitty | APC `a=d` | Deletes specific image by id |
+| iTerm2 | OSC 1337 Pop | Removes topmost image from stack; `$imageId` ignored |
+| Sixel | _(none)_ | DECSIXEL has no delete command; returns `''` |
+| HalfBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
+| QuarterBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
+| Chafa | _(none)_ | External command; no persistent image identity; returns `''` |

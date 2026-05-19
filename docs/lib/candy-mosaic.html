@@ -113,6 +113,7 @@ $mosaic = Mosaic::builder()
 <tr><td>Mosaic</td><td>sixel(), kitty(), iterm2(), halfBlock()</td><td>Force specific renderer</td></tr>
 <tr><td>Mosaic</td><td>render(image, width, height)</td><td>Render image to ANSI string</td></tr>
 <tr><td>Mosaic</td><td>builder()</td><td>Create builder for fine-grained control</td></tr>
+<tr><td>Renderer</td><td>delete(imageId)</td><td>Remove a previously rendered image (Kitty=APC delete; iTerm2=OSC 1337 Pop; others=empty)</td></tr>
 <tr><td>QuarterBlockRenderer</td><td>new</td><td>2×2 sub-pixel renderer via <code>Mosaic::builder()-&gt;withRenderer(new QuarterBlockRenderer())</code></td></tr>
 <tr><td>ImageSource</td><td>fromFile(path)</td><td>Load image from file</td></tr>
 <tr><td>ImageSource</td><td>fromGd(image)</td><td>Create from GD resource</td></tr>
