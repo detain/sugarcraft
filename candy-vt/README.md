@@ -109,6 +109,35 @@ Scroll regions (DECSTBM, `CSI r`) and auto-wrap interact correctly:
 wrapping at the bottom of a scroll region triggers a scroll within that
 region, not on the whole buffer.
 
+## SGR underline styles
+
+SGR `CSI 4:N` controls the underline style. The `Sgr` object exposes
+this as an `UnderlineStyle` enum and a fluent setter:
+
+```php
+use SugarCraft\Vt\Sgr\Sgr;
+use SugarCraft\Vt\Sgr\UnderlineStyle;
+
+// Build an Sgr state with a specific underline style.
+$sgr = Sgr::empty()->withUnderlineStyle(UnderlineStyle::Double);
+echo $sgr->underline;           // true
+echo $sgr->underlineStyle->value; // 2 (Double)
+```
+
+`UnderlineStyle` values map to CSI sequences as follows:
+
+| Enum value | CSI sequence | Description         |
+|------------|--------------|---------------------|
+| `None`     | `CSI 4:0 m`  | No underline        |
+| `Single`   | `CSI 4:1 m`  | Single underline   |
+| `Double`  | `CSI 4:2 m`  | Double underline   |
+| `Curly`   | `CSI 4:3 m`  | Curly underline    |
+| `Dotted`  | `CSI 4:4 m`  | Dotted underline   |
+| `Dashed`  | `CSI 4:5 m`  | Dashed underline   |
+
+`CSI 24 m` clears underline (any style). Plain `CSI 4 m` (no subparam)
+is equivalent to `4:1` (single).
+
 ## Scrollback buffer
 
 When the screen scrolls (LF at the bottom, DECSTBM scroll region, or
