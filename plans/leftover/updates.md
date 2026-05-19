@@ -223,6 +223,7 @@ step 05.07 · PR#578 · sugar-stash: add i18n via Lang::t() (key-hints, error pr
 review for step 05.07 · PR#578 · 3 files (lang/en.php, src/Renderer.php, tests/LangCoverageTest.php); all Lang::t() keys in src/ verified present in lang/en.php; READMEs missing i18n section
 tests-ci for step 05.07 · clean
 docs for step 05.07 · PR#579 · add i18n section to README + docs/lib/sugar-stash.html + create CALIBER_LEARNINGS.md
+step 05.08 · PR#580 · sugar-stickers: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no user-facing strings — purely computational lib)
 
 ## Open review findings — 03.05
 
