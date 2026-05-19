@@ -6,6 +6,25 @@
 
 ---
 
+> ## ⚠️ Decision update — 2026-05-19
+>
+> **sugar-post is staying an email tool.** A social-media TUI pivot
+> was considered and rejected. See
+> [`plans/sugar-post-identity.md`](../../../plans/sugar-post-identity.md)
+> for the full memo and rationale.
+>
+> Treat the social-media sections of this doc (§2.2 onward, including
+> Mastodon / Bluesky / X client benchmarks like Perch, Mastui, Toot,
+> Unrager, Tootles, TerminalRant) as **archival reference for a
+> hypothetical future `sugar-toot` / `sugar-feed` library** — not as
+> the sugar-post roadmap. The shipped sugar-post correctly tracks
+> [`charmbracelet/pop`](https://github.com/charmbracelet/pop) (email
+> TUI); the next sugar-post work is the upstream Pop TUI surface
+> (Bubble Tea Model + filepicker + spinner + markdown preview), not
+> microblog features.
+
+---
+
 ## Executive Summary
 
 **Critical Finding:** sugar-post is currently an **email client** (sending via Resend API or SMTP), not a social media TUI. The README and source confirm it's a direct port of `charmbracelet/pop` for sending emails. This research examines the current architecture and provides recommendations for either enhancing it as an email TUI or pivoting toward a social media TUI implementation.

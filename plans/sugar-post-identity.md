@@ -1,13 +1,17 @@
 # sugar-post identity — strategic decision
 
-**Status:** awaiting user decision · **Owner:** product call · **Branch:** `ai/plan-sugar-post-identity`
+**Status:** ✅ **DECIDED — Option A (stay an email tool)** · 2026-05-19 ·
+chosen by Joe Huss · **Branch:** `ai/sugar-post-option-a-decision`
 
 **Origin:** `plans/leftover_updates_later.md` §6 strategic decisions ·
 `plans/leftover/phase-11-strategic-plans/step-01-sugar-post-identity.md`
 
-> This document does **not** ship code. It is a decision memo. Pick A,
-> B, or C below, then subsequent sugar-post step files draw from the
-> chosen path.
+> This document does **not** ship code. It is a decision memo. The
+> decision is now Option A: finish the upstream Pop TUI surface
+> (~2 weeks of work) and shelve all social-media-pivot ideas
+> indefinitely. Options B and C remain documented below as the
+> alternatives that were considered and rejected. See §6 / §8 / §9 for
+> the actionable next steps.
 
 ---
 
@@ -35,6 +39,11 @@ Three options:
 **Recommendation:** **Option A** (see §6). The research doc's social-
 media framing should be retired; the shipped artifact tracks the real
 upstream and i18n coverage is already done across 16 locales.
+
+**Outcome (2026-05-19):** Option A chosen. Options B/C shelved
+indefinitely; no microblog work is planned. If a microblog TUI is ever
+wanted, it becomes a separate `sugar-<name>` library — not a sugar-post
+rewrite.
 
 ---
 
@@ -296,10 +305,14 @@ with an asterisk.
 
 ---
 
-## 6. Recommendation (awaiting user decision)
+## 6. Recommendation — Option A picked (2026-05-19)
 
-**Recommend Option A — stay an email tool, finish the upstream Pop TUI
-surface.**
+**Decision: Option A — stay an email tool, finish the upstream Pop TUI
+surface.** Joe Huss confirmed on 2026-05-19. Options B and C are
+shelved; no microblog work is planned. If a microblog TUI is ever
+wanted, it spawns a separate `sugar-<name>` library (probably
+`sugar-toot` / `sugar-feed`) — sugar-post stays a 1:1 port of
+`charmbracelet/pop`.
 
 ### Rationale
 
@@ -326,25 +339,27 @@ surface.**
    working software. Option C creates a frankenpackage. Both burn 10+
    weeks chasing a misframed problem.
 
-### Conditions that would flip the recommendation
+### Conditions that would have flipped the recommendation
 
-The recommendation is conditional. Pick B / C instead if **any** of
-these hold:
+The recommendation was conditional on **none** of these holding (they
+did not, as of 2026-05-19):
 
-- The user explicitly states "I never wanted an email tool; I want a
-  microblog client." (We have not heard this — the leftover-updates
-  doc only says "pick one before adding features.")
-- A specific downstream consumer (SugarCraft app or external user) has
-  a hard requirement for a microblog TUI and no other PHP option
-  exists.
-- The Charm ecosystem ships a `charmbracelet/post` repo that we want
-  to track. (At the time of writing, no such repo exists.)
+- The user explicitly stating "I never wanted an email tool; I want a
+  microblog client." (Did not happen.)
+- A specific downstream consumer (SugarCraft app or external user)
+  having a hard requirement for a microblog TUI and no other PHP
+  option existing. (No such consumer surfaced.)
+- The Charm ecosystem shipping a `charmbracelet/post` repo we wanted
+  to track. (No such repo exists.)
 
-If none of those hold, A is the correct call.
+None held → Option A confirmed.
 
 ---
 
-## 7. Decision criteria — questions the user needs to answer
+## 7. Decision criteria — answered 2026-05-19
+
+The following questions guided the call. Recording the answers as a
+post-decision audit trail.
 
 1. **Was the original intent of `sugar-post` ever a microblog client,
    or has the slug always meant "send a message" (= email)?**
@@ -376,45 +391,35 @@ If none of those hold, A is the correct call.
 
 ---
 
-## 8. Next steps (post-decision)
+## 8. Next steps (post-decision — Option A)
 
-### If Option A is picked
-
-1. Update `docs/research/libraries/sugar-post-research.md` with a
-   prefatory note: "Research doc misframed sugar-post as a social-media
-   TUI. The shipped artifact correctly tracks `charmbracelet/pop`
-   (email). Sections on Mastodon / Bluesky / X clients are archival
-   reference for a hypothetical future `sugar-toot` / `sugar-feed`
-   library, not for sugar-post." Mark the social-media §2.2–§5
-   sections **DEFERRED — wrong library**.
-2. Spawn step files under `plans/leftover/phase-NN-sugar-post-tui/`
-   (a new phase, or fold into a deferred slot) covering:
+1. ✅ **(this PR)** Annotate `docs/research/libraries/sugar-post-research.md`
+   with a prefatory note flagging the social-media framing as a
+   rejected pivot path. Sections on Mastodon / Bluesky / X clients are
+   archival reference for a hypothetical future `sugar-toot` /
+   `sugar-feed` library, not for sugar-post.
+2. ✅ **(this PR)** Close `plans/leftover_updates_later.md` §6
+   sugar-post bullet — mark resolved with a pointer to this memo.
+3. ⏭️ **(follow-up)** Spawn step files under a new
+   `plans/leftover/phase-NN-sugar-post-tui/` directory (or fold into a
+   later phase slot) covering:
    - step `01` — Bubble Tea Model + state enum + form fields
    - step `02` — Filepicker integration
    - step `03` — Send spinner + Markdown preview
    - step `04` — TUI tests + VHS tape + docs
-3. Close `plans/leftover_updates_later.md` §6 sugar-post bullet by
-   appending `✅ shipped (PR #NNN) — sugar-post stays an email tool;
-   see plans/sugar-post-identity.md`.
 
-### If Option B is picked
+Item #3 is **deferred until the user explicitly authorises** — the
+current leftover rollout still has 7.15 → 11 phases to land before
+adding a new TUI program. Hold for a follow-up plan PR.
 
-1. Open a sister plan `plans/sugar-post-pivot.md` that defines the
-   microblog scope (which networks, which features, P0/P1/P2 ladder).
-2. Decide the deprecation path for the current shipped surface
-   (delete vs publish as `sugarcraft/sugar-mail` first, then redirect
-   sugar-post).
-3. Spawn the 14-week step file series. Most of `phase-11-strategic-plans/`
-   ordering needs revisiting because sugar-post becomes a multi-PR
-   program of its own.
+### Options B and C — archived
 
-### If Option C is picked
-
-1. Open `plans/sugar-post-bimodal.md` covering namespace split,
-   bin entries, composer description rewrite, MATCHUPS row structure.
-2. Be explicit that the recommendation is **against** C because the
-   honest version is "ship A, then ship a separate microblog
-   library." If the user still wants C, document why.
+Options B (pivot) and C (bundle both) are not on the roadmap. The §4
+and §5 sections are kept for the audit trail but should be treated as
+historical alternatives, not actionable plans. If a future product
+call ever re-opens the microblog question, the right move is a fresh
+plan in a separate file (`plans/sugar-toot-scope.md` or similar) — not
+re-litigating this memo.
 
 ---
 
@@ -478,4 +483,4 @@ mailer) and `bin/sugar-post` (new, microblog).
 
 ---
 
-*End of memo. Awaiting product decision.*
+*End of memo. Decision recorded 2026-05-19 — Option A.*
