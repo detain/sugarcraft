@@ -64,6 +64,14 @@
       <li>Remove the <code>UnsupportedPlatformException::forDeferredBackend()</code> throw for that value.</li>
     </ol>
 
+    <h3 style="margin-top: 32px;">Internal PTY allocation — openpty vs quartet</h3>
+    <p>The <code>PosixPtySystem</code> backend uses two platform-specific code paths internally when allocating the master fd:</p>
+    <ul>
+      <li><strong>Darwin (macOS)</strong> — <code>openpty(3)</code> is attempted first (single libc call opening both master and slave). If it returns -1, falls back to the POSIX quartet: <code>posix_openpt + grantpt + unlockpt + ptsname_r</code>. The slave fd returned by <code>openpty()</code> is closed immediately — the child gets its stdio via <code>proc_open</code>.</li>
+      <li><strong>Linux</strong> — The POSIX quartet is used directly. The <code>openpty(3)</code> symbol on Linux lives in <code>libutil.so.1</code> rather than libc; <code>Libc::libutil()</code> loads it as a separate FFI handle specifically for this symbol. Most Linux systems have both, so the Darwin-first path is not normally exercised on Linux.</li>
+    </ul>
+    <p>This internal detail is documented here for developers extending <code>PosixPtySystem</code> or implementing a parallel backend. Consumer code is fully abstracted by <code>Pty::open()</code> and the <code>PtySystem</code> interface.</p>
+
     <h3 style="margin-top: 32px;">Testing your extension</h3>
     <p>Use a <code>FakePtySystem</code> that implements <code>PtySystem</code> and returns synthetic <code>PtyPair</code> / <code>Child</code> objects. This lets unit tests run without FFI or real syscalls.</p>
     <pre class="code"><code>use SugarCraft\Pty\Contract\PtySystem;
