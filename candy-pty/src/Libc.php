@@ -21,11 +21,17 @@ final class Libc
     /** Default Linux libc shared object. */
     public const DEFAULT_LINUX = 'libc.so.6';
 
+    /** Default Linux libutil shared object (contains openpty on some distros). */
+    public const DEFAULT_LINUX_UTILS = 'libutil.so.1';
+
     /** Default macOS libc shared object. */
     public const DEFAULT_DARWIN = '/usr/lib/libSystem.B.dylib';
 
     /** Lazily-loaded FFI handle, shared per-process. */
     private static ?\FFI $ffi = null;
+
+    /** Lazily-loaded libutil FFI handle (Linux only, for openpty). */
+    private static ?\FFI $ffiUtil = null;
 
     /**
      * Return the cached FFI handle, loading the libc cdef on first call.
@@ -86,15 +92,24 @@ final class Libc
      *
      * Kept as a constant-like static so tests can introspect it without
      * loading the FFI runtime.
+     *
+     * On Darwin, `openpty` is included (provided by libSystem.B.dylib).
+     * On Linux it is NOT declared here — it lives in libutil.so and is
+     * loaded via a separate FFI handle in {@see libutil()} to avoid
+     * eager-symbol-resolution failures when loading libc.so.6.
      */
     public static function cdef(): string
     {
-        return <<<'CPROTO'
+        $openpty = \PHP_OS_FAMILY === 'Darwin'
+            ? "int   openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);\n"
+            : '';
+
+        return <<<CPROTO
 int   posix_openpt(int flags);
 int   grantpt(int fd);
 int   unlockpt(int fd);
 int   ptsname_r(int fd, char *buf, unsigned long buflen);
-int   close(int fd);
+{$openpty}int   close(int fd);
 int   open(const char *path, int flags);
 int   ioctl(int fd, unsigned long request, void *arg);
 
@@ -127,6 +142,50 @@ CPROTO;
     public static function reset(): void
     {
         self::$ffi = null;
+        self::$ffiUtil = null;
+    }
+
+    /**
+     * Return the libutil FFI handle on Linux (contains openpty).
+     *
+     * On Darwin this method returns the regular libc handle since
+     * openpty is already in libSystem.B.dylib. On Windows it throws.
+     *
+     * @throws PtyException if the platform is unsupported or the
+     *                      library cannot be loaded
+     */
+    public static function libutil(): \FFI
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            throw new PtyException(
+                'candy-pty requires POSIX libc; use ConPTY on Windows (not yet ported).'
+            );
+        }
+
+        if (PHP_OS_FAMILY === 'Darwin') {
+            return self::lib();
+        }
+
+        if (self::$ffiUtil !== null) {
+            return self::$ffiUtil;
+        }
+
+        $libutilCdef = <<<'CPROTO'
+int openpty(int *amaster, int *aslave, char *name, void *termp, void *winp);
+int close(int fd);
+CPROTO;
+
+        try {
+            self::$ffiUtil = \FFI::cdef($libutilCdef, self::DEFAULT_LINUX_UTILS);
+        } catch (\FFI\Exception $e) {
+            throw new PtyException(
+                'Failed to load libutil from \'' . self::DEFAULT_LINUX_UTILS . '\': ' . $e->getMessage(),
+                0,
+                $e,
+            );
+        }
+
+        return self::$ffiUtil;
     }
 
     private function __construct() {}
