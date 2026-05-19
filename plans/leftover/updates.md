@@ -253,6 +253,13 @@ step 06.05 · PR#594 · candy-shell: #[Command]/#[Flag]/#[ValueEnum] attributes 
 
 - [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
 
+## Open review findings — 06.05
+
+- [ ] candy-shell/src/Discovery/CommandScanner.php:108: `Flag::$enum` property is stored on the `Flag` attribute but never used in `applyFlag()` — Symfony `InputOption` is created without allowed values and `ValueEnum::validate()` is never called. The enum wiring is dead code in the discovery flow. Either wire `applyFlag()` to call `ValueEnum::validate()` during option registration (making the enum constraint live), or remove `Flag::$enum` to avoid misleading future implementers.
+- [ ] candy-shell/README.md: `Application::scan()` method and the `#[Command]`/`#[Flag]`/`#[ValueEnum]` attribute-based discovery system are not documented. A "Auto-discovery" section explaining that commands bearing `#[Command]` are picked up by `Application::scan($namespace)` would help end users wire their own command namespaces.
+- [ ] candy-shell/src/Discovery/CommandScanner.php:32: `descriptionSection` on `#[Command]` is stored and accessible but never applied to the Symfony command instance — only `name` and `description` are forwarded.
+- [ ] candy-shell/CALIBER_LEARNINGS.md: no `[pattern:command-attribute-discovery]` entry. The `get_declared_classes()` scope limitation (scan only finds already-loaded classes; requires autoloader or explicit `require_once` before `scan()`) and the `enum` dead-code risk are worth documenting so future implementers don't stumble on these.
+
 ## Open review findings — 01.08
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
