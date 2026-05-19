@@ -532,7 +532,7 @@ cd sugar-dash && composer install && vendor/bin/phpunit
 | ![Dashboard Complex](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-complex.gif) | Complex layout demo |
 | ![Dashboard Data](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-data.gif) | Data display demo |
 | ![Dashboard Devtools](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-devtools.gif) | Devtools demo |
-| ![Dashboard Interactive](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-interactive.gif) | Interactive components demo |
+| ![Dashboard Accordion Timeline](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-accordion-timeline.gif) | Accordion and timeline components |
 | ![Dashboard Media](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-media.gif) | Media components demo |
 | ![Dashboard Metrics](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/dashboard-metrics.gif) | Metrics display demo |
 | ![Boxer](https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-dash/.vhs/boxer.gif) | **Three-panel Boxer layout** — horizontal split with three named leaves and visual focus indicator |
@@ -548,7 +548,7 @@ The `examples/` directory contains standalone demo files that showcase individua
 | `dashboard-live.php` | **Interactive dashboard** — the headline demo. Program event loop, raw mode, Clock/System/Weather modules, Boxer layout, FocusManager, per-panel tick, keyboard navigation (Tab/arrows), quit (q/Ctrl-C). Run with `php examples/dashboard-live.php` |
 | `dashboard-showcase.php` | Multi-component server dashboard with gauges, charts, timeline, breadcrumb, avatar group |
 | `dashboard-complex.php` | Full-featured analytics dashboard with charts, stats, funnel, sparkline |
-| `dashboard-interactive.php` | Accordion and timeline components |
+| `dashboard-accordion-timeline.php` | Accordion and timeline components |
 | `dashboard-metrics.php` | Key statistics and status indicators |
 | `dashboard-status.php` | Spinners, progress bars, gauges, alerts |
 | `dashboard-charts.php` | Chart components including area, donut, radar, heatmap |
