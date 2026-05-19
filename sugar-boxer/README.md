@@ -72,6 +72,65 @@ $node->withMinWidth(20)
 $boxer->noBorder(Node): Node
 ```
 
+## Styling with candy-sprinkles
+
+sugar-boxer composes canonical styling primitives from
+[`candy-sprinkles`](https://github.com/sugarcraft/candy-sprinkles):
+
+```php
+use SugarCraft\Sprinkles\{Align, Border, Style, VAlign};
+
+// Set border character set (rounded / sharp / double / ascii / ...)
+// Passing null clears the style but preserves border visibility.
+$node->withBorderStyle(Border::rounded());  // ╭ ╮ ╰ ╯ │
+$node->withBorderStyle(Border::double());    // ╔ ╗ ╚ ╝ ║ ═
+$node->withBorderStyle(null);                // clear explicit style
+
+// Apply foreground/background colors and attributes via Style
+$node->withStyle(new Style(fg: 'cyan', bg: 'black'));
+
+// Box title text rendered in the top border
+$node->withTitle('My Panel');
+
+// Outer spacing (top, right, bottom, left) — sugar-boxer-specific
+$node->withMargin(1);                  // all sides
+$node->withMargin(1, 2);               // top/bottom=1, left/right=2
+$node->withMargin(1, 2, 1, 2);         // explicit all four
+
+// Text alignment within the content area
+$node->withAlignH(Align::CENTER);
+$node->withAlignH(Align::RIGHT);
+$node->withAlignV(VAlign::MIDDLE);
+$node->withAlignV(VAlign::BOTTOM);
+```
+
+## API Reference
+
+| Method | Description |
+|--------|-------------|
+| `$boxer->leaf(string)` | Leaf node with string content |
+| `$boxer->horizontal(Node ...)` | Horizontal (row) layout |
+| `$boxer->vertical(Node ...)` | Vertical (column) layout |
+| `$boxer->noBorder(Node)` | Flat layout without separators |
+| `$boxer->render(Node, int $width, int $height)` | Render to ANSI string |
+| `Node::leaf(string)` | Static leaf constructor |
+| `Node::horizontal(Node ...)` | Static horizontal constructor |
+| `Node::vertical(Node ...)` | Static vertical constructor |
+| `Node::noBorder(Node)` | Static no-border constructor |
+| `->withMinWidth(int)` | Minimum width hint |
+| `->withMaxWidth(int)` | Maximum width hint |
+| `->withMinHeight(int)` | Minimum height hint |
+| `->withMaxHeight(int)` | Maximum height hint |
+| `->withPadding(int)` | Inner padding (cells) |
+| `->withBorder(bool)` | Show/hide box border |
+| `->withSpacing(int)` | Gap between children (cells) |
+| `->withBorderStyle(?Border)` | Border char set from candy-sprinkles |
+| `->withStyle(?Style)` | Style (color, attributes) from candy-sprinkles |
+| `->withTitle(string)` | Box title text |
+| `->withMargin(int $top, ...)` | Outer margin (top/right/bottom/left) |
+| `->withAlignH(Align)` | Horizontal text alignment |
+| `->withAlignV(VAlign)` | Vertical text alignment |
+
 ## Border Characters
 
 ```
