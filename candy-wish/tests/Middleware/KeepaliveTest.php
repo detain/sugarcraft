@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Tests\Middleware;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\Keepalive;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
@@ -90,7 +91,7 @@ final class KeepaliveTest extends TestCase
     {
         $nextCalled = false;
         $mw = new Keepalive(60);
-        $mw->handle($this->session(), function () use (&$nextCalled): void {
+        $mw->handle(Context::background(), $this->session(), function () use (&$nextCalled): void {
             $nextCalled = true;
         });
         $this->assertTrue($nextCalled, 'Keepalive must call $next');
@@ -115,14 +116,14 @@ final class KeepaliveTest extends TestCase
             {
                 $this->captured = $t;
             }
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 // Don't invoke $next.
             }
         };
 
         $transport = new InProcessTransport();
-        $transport->run($this->session(), [$probe]);
+        $transport->run(Context::background(), $this->session(), [$probe]);
 
         $this->assertSame($transport, $observed, 'InProcessTransport must inject itself via setTransport');
     }

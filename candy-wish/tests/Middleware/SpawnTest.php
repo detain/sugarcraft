@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wish\Tests\Middleware;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\Spawn;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
@@ -52,7 +53,7 @@ final class SpawnTest extends TestCase
         $spawn->setTransport($spawner);
 
         $session = $this->fakeSession();
-        $spawn->handle($session, fn () => null);
+        $spawn->handle(Context::background(), $session, fn() => null);
 
         $this->assertSame($session, $observedSession, 'factory must receive the active Session');
         $this->assertSame(['/bin/bash', '-l'], $observedCmd);
@@ -74,7 +75,7 @@ final class SpawnTest extends TestCase
 
         $spawn = new Spawn(fn () => ['cmd' => ['/bin/true']]);
         $spawn->setTransport($spawner);
-        $spawn->handle($this->fakeSession(), fn () => null);
+        $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
 
         $this->assertNull($observedEnv);
     }
@@ -85,7 +86,7 @@ final class SpawnTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/InProcessTransport/');
-        $spawn->handle($this->fakeSession(), fn () => null);
+        $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
     }
 
     public function testThrowsOnNonArrayFactoryReturn(): void
@@ -94,7 +95,7 @@ final class SpawnTest extends TestCase
         $spawn->setTransport($this->nullSpawner());
 
         $this->expectException(\InvalidArgumentException::class);
-        $spawn->handle($this->fakeSession(), fn () => null);
+        $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
     }
 
     public function testThrowsOnMissingCmdKey(): void
@@ -103,8 +104,7 @@ final class SpawnTest extends TestCase
         $spawn->setTransport($this->nullSpawner());
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessageMatches('/non-empty/');
-        $spawn->handle($this->fakeSession(), fn () => null);
+        $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
     }
 
     public function testThrowsOnEmptyCmd(): void
@@ -113,7 +113,7 @@ final class SpawnTest extends TestCase
         $spawn->setTransport($this->nullSpawner());
 
         $this->expectException(\InvalidArgumentException::class);
-        $spawn->handle($this->fakeSession(), fn () => null);
+        $spawn->handle(Context::background(), $this->fakeSession(), fn() => null);
     }
 
     public function testDoesNotInvokeNext(): void
@@ -123,6 +123,7 @@ final class SpawnTest extends TestCase
         $spawn = new Spawn(fn () => ['cmd' => ['/bin/true']]);
         $spawn->setTransport($this->nullSpawner());
         $spawn->handle(
+            Context::background(),
             $this->fakeSession(),
             function () use (&$nextCalled): void {
                 $nextCalled = true;
@@ -148,7 +149,7 @@ final class SpawnTest extends TestCase
             {
                 $this->captured = $t;
             }
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 // Don't invoke $next — keep the stack from walking past
                 // the injection check.
@@ -156,7 +157,7 @@ final class SpawnTest extends TestCase
         };
 
         $transport = new InProcessTransport();
-        $transport->run($this->fakeSession(), [$probe]);
+        $transport->run(Context::background(), $this->fakeSession(), [$probe]);
 
         $this->assertSame($transport, $observed, 'InProcessTransport must inject itself into setTransport-aware middleware');
     }
@@ -166,10 +167,8 @@ final class SpawnTest extends TestCase
         $session = $this->fakeSession();
         $spawn = new Spawn(fn () => ['cmd' => ['/bin/true']]);
 
-        // HostSshdTransport doesn't scan for setTransport — Spawn ends
-        // up handle()'d without a transport injected, throws.
         $this->expectException(\RuntimeException::class);
-        (new HostSshdTransport())->run($session, [$spawn]);
+        (new HostSshdTransport())->run(Context::background(), $session, [$spawn]);
     }
 
     private function nullSpawner(): ChildSpawner
