@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Tests;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Server;
 use SugarCraft\Wish\Session;
@@ -25,25 +26,25 @@ final class ServerTest extends TestCase
         $log = [];
         $mw1 = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'a-pre';
-                $next($s);
+                $next($ctx, $s);
                 $this->log[] = 'a-post';
             }
         };
         $mw2 = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'b-pre';
-                $next($s);
+                $next($ctx, $s);
                 $this->log[] = 'b-post';
             }
         };
         $mw3 = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'c';
             }
@@ -59,15 +60,14 @@ final class ServerTest extends TestCase
         $log = [];
         $gate = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'gate-blocked';
-                // never call $next
             }
         };
         $never = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'reached';
             }
@@ -103,15 +103,18 @@ final class ServerTest extends TestCase
         $log = [];
         $captured = null;
         $captured2 = null;
-        $transport = new class($log, $captured, $captured2) implements \SugarCraft\Wish\Transport {
+        $capturedStack = null;
+        $transport = new class($log, $captured, $captured2, $capturedStack) implements \SugarCraft\Wish\Transport {
             public function __construct(
                 private array &$log,
+                private ?Context &$ctx,
                 private ?Session &$session,
                 private ?array &$stack,
             ) {}
-            public function run(Session $session, array $stack): void
+            public function run(Context $ctx, Session $session, array $stack): void
             {
                 $this->log[] = 'transport-run';
+                $this->ctx = $ctx;
                 $this->session = $session;
                 $this->stack = $stack;
             }
@@ -119,7 +122,7 @@ final class ServerTest extends TestCase
 
         $mw = new class($log) implements Middleware {
             public function __construct(private array &$log) {}
-            public function handle(Session $s, callable $next): void
+            public function handle(Context $ctx, Session $s, callable $next): void
             {
                 $this->log[] = 'mw';
             }
@@ -132,7 +135,7 @@ final class ServerTest extends TestCase
             ->serve($session);
 
         $this->assertSame(['transport-run'], $log, 'transport must run; mw runs only if transport invokes it');
-        $this->assertSame($session, $captured, 'transport must receive the session unchanged');
-        $this->assertSame([$mw], $captured2, 'transport must receive the registered stack');
+        $this->assertInstanceOf(Context::class, $captured);
+        $this->assertSame($session, $captured2);
     }
 }

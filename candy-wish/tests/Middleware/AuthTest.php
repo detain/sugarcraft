@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Tests\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\Auth;
 use SugarCraft\Wish\Session;
 use PHPUnit\Framework\TestCase;
@@ -51,7 +52,7 @@ final class AuthTest extends TestCase
         [$err] = $this->stderr();
         $a = new Auth([], [], $err);
         $reached = false;
-        $a->handle($this->session('anybody'), function () use (&$reached): void {
+        $a->handle(Context::background(), $this->session('anybody'), function () use (&$reached): void {
             $reached = true;
         });
         $this->assertTrue($reached);
@@ -62,7 +63,7 @@ final class AuthTest extends TestCase
         [$err, $read] = $this->stderr();
         $a = new Auth(['alice', 'bob'], [], $err);
         $reached = false;
-        $a->handle($this->session('eve'), function () use (&$reached): void {
+        $a->handle(Context::background(), $this->session('eve'), function () use (&$reached): void {
             $reached = true;
         });
         $this->assertFalse($reached);
@@ -75,7 +76,7 @@ final class AuthTest extends TestCase
         [$err] = $this->stderr();
         $a = new Auth(['alice'], [], $err);
         $reached = false;
-        $a->handle($this->session('alice'), function () use (&$reached): void {
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
             $reached = true;
         });
         $this->assertTrue($reached);
@@ -86,7 +87,7 @@ final class AuthTest extends TestCase
         [$err, $read] = $this->stderr();
         $a = new Auth([], ['SHA256:abc'], $err);
         $reached = false;
-        $a->handle($this->session('alice'), function () use (&$reached): void {
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
             $reached = true;
         });
         $this->assertFalse($reached);
@@ -99,7 +100,7 @@ final class AuthTest extends TestCase
         [$err] = $this->stderr();
         $a = new Auth([], ['SHA256:goodfinger'], $err);
         $reached = false;
-        $a->handle($this->session('alice'), function () use (&$reached): void {
+        $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
             $reached = true;
         });
         $this->assertTrue($reached);

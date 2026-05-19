@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Tests\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\BubbleTea;
 use SugarCraft\Wish\Session;
 use PHPUnit\Framework\TestCase;
@@ -30,8 +31,9 @@ final class BubbleTeaTest extends TestCase
                 public function run(): void { $this->ran = true; }
             };
         };
+        $ctx = Context::background();
         $mw = new BubbleTea($factory);
-        $mw->handle($this->session(), fn() => null);
+        $mw->handle($ctx, $this->session(), fn() => null);
         $this->assertNotNull($observed);
         $this->assertSame('alice', $observed->user);
         $this->assertTrue($ran);
@@ -42,7 +44,7 @@ final class BubbleTeaTest extends TestCase
         $mw = new BubbleTea(fn() => new \stdClass());
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('run()');
-        $mw->handle($this->session(), fn() => null);
+        $mw->handle(Context::background(), $this->session(), fn() => null);
     }
 
     public function testThrowsWhenTransportInjectsItself(): void
@@ -67,7 +69,7 @@ final class BubbleTeaTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessageMatches('/HostSshd|InProcess/');
-        $mw->handle($this->session(), fn () => null);
+        $mw->handle(Context::background(), $this->session(), fn() => null);
     }
 
     public function testWorksWhenNoTransportInjectedHostSshdMode(): void
@@ -84,7 +86,7 @@ final class BubbleTeaTest extends TestCase
             };
         };
         $mw = new BubbleTea($factory);
-        $mw->handle($this->session(), fn () => null);
+        $mw->handle(Context::background(), $this->session(), fn() => null);
         $this->assertTrue($ran, 'BubbleTea must run inline when no transport injected');
     }
 
