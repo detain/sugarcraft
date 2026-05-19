@@ -333,6 +333,7 @@ fix for step 11.04 · PR#662 · resolved 5 findings (§1.2 totals 21/3236→22/3
 tests-ci for step 11.04 · clean
 docs for step 11.04 · clean
 step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, immutable + fluent) + AnimationDriver (Model + Cmd::tick frame timing + delete+render cycle) + KittyRenderer::renderFrame() + FrameTickMsg + tests (leftover-rollout step 07.15)
+fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
 
 ## Open review findings — 03.05
 
