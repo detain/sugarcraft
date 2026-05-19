@@ -289,6 +289,7 @@ step 07.04 · PR#625 · candy-vt: scrollback buffer — Scrollback ring-buffer c
 review for step 07.04 · clean · PR#625
 step 07.05 · PR#627 · candy-vt: SGR underline styles 4:1–4:5 (UnderlineStyle enum + withUnderlineStyle/SgrHandler/Cell::equals + 20 SgrUnderlineStylesTest tests)
 step 07.06 · PR#629 · candy-vt: DECOM (mode 6) + DECSCUSR cursor shape (CSI Ps SP q) + focus events 1004 (CSI I/O) — CursorShape enum + FocusInMsg/FocusOutMsg + 38 tests
+review for step 07.06 · clean · PR#629
 
 ## Open review findings — 03.05
 
