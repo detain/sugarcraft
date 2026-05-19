@@ -55,6 +55,7 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | SGR | `Sgr\Sgr` | Current graphics rendition: foreground / background / attributes |
 | Mode | `Mode\Mode` | DEC private mode flags (`DECSET`/`DECRST`) including DECAWM auto-wrap |
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
+| Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
 
 ### Parser handlers
 
@@ -107,6 +108,46 @@ scroll region the region scrolls up by one line, matching VT100 behavior.
 Scroll regions (DECSTBM, `CSI r`) and auto-wrap interact correctly:
 wrapping at the bottom of a scroll region triggers a scroll within that
 region, not on the whole buffer.
+
+## Scrollback buffer
+
+When the screen scrolls (LF at the bottom, DECSTBM scroll region, or
+auto-wrap at the bottom of a region), rows pushed off the top are stored
+in a ring-buffer `Scrollback`. Access it via:
+
+```php
+$screen = $vt->screen();
+$scrollback = $screen->scrollback();
+
+foreach ($scrollback->all() as $rowIndex => $row) {
+    // $row is array<int, Cell>
+    echo "scrollback row $rowIndex\n";
+}
+```
+
+The default capacity is 1000 rows. Configure it at construction or
+retrospectively:
+
+```php
+// Set at construction.
+$vt = Terminal::create(cols: 80, rows: 24, scrollbackSize: 5000);
+
+// Retrospective change — existing scrollback is replaced.
+$vt = $vt->withScrollbackSize(5000);
+```
+
+Available `Scrollback` accessors:
+
+```php
+$scrollback->count()    // int — rows currently stored
+$scrollback->maxSize()  // int — configured capacity
+$scrollback->at($n)     // array<int, Cell>|null — row offset N from oldest
+$scrollback->all()       // array<int, array<int, Cell>> — all rows oldest→newest
+```
+
+The scrollback is consumed by `ScreenHandler`'s scroll-up and scroll-down
+operations (SU/SD/IND/RI/NEL). Erase-of-scrollback (`CSI 3 J`) clears the
+ring buffer.
 
 ## Test
 
