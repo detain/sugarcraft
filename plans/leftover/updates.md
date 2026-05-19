@@ -247,6 +247,7 @@ tests-ci for step 06.05 · clean
 docs for step 06.05 · PR#596 · add auto-discovery types table to candy-shell end-user page
 step 06.06 · PR#597 · candy-shell: #[Example]/#[Alias] attributes + HelpFormatter + TypoSuggester (Levenshtein ≤ 2) + Application::find() override for typo suggestion
 fix for step 06.06 · PR#598 · resolved 3 findings ([0??-1] dead code + 2 CALIBER patterns + status command added to examples/cli.php)
+tests-ci for step 06.06 · clean
 
 ## Open review findings — 03.05
 
