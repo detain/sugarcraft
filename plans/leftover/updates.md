@@ -235,6 +235,12 @@ tests-ci for step 06.02 · clean
 docs for step 06.02 · PR#586 · document ScreenStack API in README (Architecture + new section + example) + end-user doc feature grid + PHPDoc @see cross-refs
 step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest
 
+## Open review findings — 06.03
+
+- [ ] candy-core/src/Component.php:24,33: `@return null|\Closure` — non-canonical PHPDoc; the codebase uses `?\Closure` everywhere (e.g. Cmd.php, AsyncCmd.php, TickRequest.php); should be `?Closure` for consistency
+- [ ] candy-core/CALIBER_LEARNINGS.md: Component/Composite patterns (onMount/onUnmount, pendingCmds, drainCompositePendingCmds) not logged — needs [pattern:component-lifecycle] entry so future implementers know the lifecycle-during-reconcile pattern
+- [~] candy-core/README.md: Component interface and Composite model not documented — new public API surface missing from README; likely needs a docs sub-step (matching the docs-separated pattern from 06.02 PR#586)
+
 ## Open review findings — 03.05
 
 - [x] sugar-dash/src/Foundation/StyleParser.php: missing dual-SSOT clarifying docblock (all other 5 retained types got one; StyleParser is the riskiest omission — future dev could swap in Sprinkles\StyleParser and break $cell->style->foreground->r assertions)
