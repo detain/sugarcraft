@@ -47,6 +47,7 @@ final class ModeHandler
     private function applyOne(int $mode, bool $set, ScreenHandler $h): void
     {
         match ($mode) {
+            6 => $h->mode = $h->mode->withOriginMode($set),
             7 => $h->mode = $h->mode->withAutoWrap($set),
             25 => $this->setCursorVisible($set, $h),
             1001 => $h->mode = $h->mode->withMouseHighlights($set),
@@ -56,6 +57,7 @@ final class ModeHandler
             1005 => $h->mode = $h->mode->withMouseHighlights($set),
             1006 => $h->mode = $h->mode->withMouseSgr($set),
             1015 => $h->mode = $h->mode->withMouseHighlights($set),
+            1004 => $h->mode = $h->mode->withReportFocusEvents($set),
             47 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
             1047 => $set ? $h->enterAltScreenNoSave() : $h->leaveAltScreenNoSave(),
             1048 => $set ? $h->enterAltScreenCursorOnly() : $h->leaveAltScreenCursorOnly(),

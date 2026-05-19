@@ -10,6 +10,8 @@ use SugarCraft\Vt\Cell\Cell;
 use SugarCraft\Vt\Color\Color;
 use SugarCraft\Vt\Cursor\Cursor;
 use SugarCraft\Vt\Hyperlink\Hyperlink;
+use SugarCraft\Vt\Msg\FocusInMsg;
+use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Vt\Mode\Mode;
 use SugarCraft\Vt\Parser\Handler;
 use SugarCraft\Vt\Screen\Scrollback;
@@ -48,6 +50,9 @@ final class ScreenHandler implements Handler
 
     /** @var array<int, bool> Active tab stops, keyed by column. */
     public array $tabStops;
+
+    /** Focus events recorded when DECSET 1004 is active (CSI I / CSI O). */
+    public array $focusEvents = [];
 
     /** Top row of the DECSTBM scroll region (0-indexed inclusive). */
     public int $scrollRegionTop = 0;
@@ -163,7 +168,19 @@ final class ScreenHandler implements Handler
 
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
     {
-        switch (chr($final)) {
+        $finalChar = chr($final);
+
+        // Handle focus events first (CSI I / CSI O) when DECSET 1004 is active.
+        if ($finalChar === 'I' && $this->mode->reportFocusEvents) {
+            $this->focusEvents[] = new FocusInMsg();
+            return;
+        }
+        if ($finalChar === 'O' && $this->mode->reportFocusEvents) {
+            $this->focusEvents[] = new FocusOutMsg();
+            return;
+        }
+
+        switch ($finalChar) {
             case 'm':
                 $this->sgr = $this->sgrHandler->apply($params, $this->sgr);
                 return;
@@ -177,7 +194,7 @@ final class ScreenHandler implements Handler
             case 'S': case 'T':
                 $first = $params[0] ?? -1;
                 $count = $first === -1 ? 1 : max(1, $first);
-                if (chr($final) === 'S') {
+                if ($finalChar === 'S') {
                     $this->scrollUp($count);
                 } else {
                     $this->scrollDown($count);
@@ -194,6 +211,15 @@ final class ScreenHandler implements Handler
             case 'g':
                 $mode = $params[0] ?? -1;
                 $this->tabStops = $this->tabHandler->clear($mode === -1 ? 0 : $mode, $this->cursor->col, $this->tabStops);
+                return;
+            case 'q':
+                // DECSCUSR — cursor shape (CSI Ps SP q).
+                // intermediate 0x20 = space (SP), final = 'q' (0x71).
+                if ($intermediate === ord(' ') && $prefix === 0) {
+                    $shape = $params[0] ?? 0;
+                    $this->cursor = $this->cursor->withShape($shape);
+                    $this->mode = $this->mode->withCursorShape($shape);
+                }
                 return;
             case 'h':
                 if ($prefix === ord('?')) {
