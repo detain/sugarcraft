@@ -30,6 +30,55 @@ trait ChildPollTrait
 
     private ?int $exitCode = null;
 
+    private const WNOHANG = 1;
+
+    /**
+     * Try to reap an exited child via waitpid() FFI (non-blocking).
+     *
+     * Returns the exit code if the child has exited, null if still
+     * running or FFI is unavailable (falls back to proc_get_status).
+     *
+     * @internal
+     */
+    private function tryWaitpid(int $pid): ?int
+    {
+        static $libc = null;
+        if ($libc === null) {
+            try {
+                $libc = \SugarCraft\Pty\Libc::lib();
+            } catch (\Throwable) {
+                return null;
+            }
+        }
+
+        try {
+            // Allocate int[1] array, pass addr of first element as int*.
+            $statusArray = $libc->new('int[1]');
+            $result = $libc->waitpid($pid, \FFI::addr($statusArray[0]), self::WNOHANG);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        // result > 0 means the child has exited (returns the pid)
+        // result === 0 means WNOHANG and child hasn't exited yet
+        // result < 0 means error
+        if ($result <= 0) {
+            return null;
+        }
+
+        // $statusArray[0] is the int that waitpid wrote to.
+        // For normally-exited process: status = exit_code (0-255)
+        // For signal-terminated process: status = signal_number (1-127)
+        // Convention: exit code for signal death is 128 + signal_number.
+        $statusVal = (int)$statusArray[0];
+        $signal = $statusVal & 0x7F;
+        if ($signal !== 0) {
+            // Signal-terminated: 128 + signal number.
+            return 128 + $signal;
+        }
+        return ($statusVal >> 8) & 0xFF;
+    }
+
     /**
      * @see creack/pty.Cmd.ProcessState
      */
@@ -42,9 +91,23 @@ trait ChildPollTrait
             return true;
         }
 
+        // Fast path: use waitpid FFI for sub-millisecond detection.
+        $exitCode = $this->tryWaitpid($this->pid);
+        if ($exitCode !== null) {
+            $this->exitCode = $exitCode;
+            return true;
+        }
+
+        // Fallback: proc_get_status poll.
         $status = \proc_get_status($this->process);
         if ($status['running'] === false) {
-            $this->exitCode = (int) $status['exitcode'];
+            // Note: exitcode is -1 if the child has already been reaped
+            // by a prior waitpid call; only use it if it's a real exit code
+            // and we haven't already captured the exit code.
+            $code = (int) $status['exitcode'];
+            if ($code >= 0 && $this->exitCode === null) {
+                $this->exitCode = $code;
+            }
             return true;
         }
         return false;
@@ -62,10 +125,31 @@ trait ChildPollTrait
             return $this->exitCode ?? 0;
         }
 
+        // Fast path: use waitpid FFI for sub-millisecond detection.
+        $exitCode = $this->tryWaitpid($this->pid);
+        if ($exitCode !== null) {
+            $this->exitCode = $exitCode;
+            \proc_close($this->process);
+            $this->process = null;
+            return $this->exitCode;
+        }
+
         while (true) {
+            // Try waitpid first on each iteration.
+            $exitCode = $this->tryWaitpid($this->pid);
+            if ($exitCode !== null) {
+                $this->exitCode = $exitCode;
+                break;
+            }
             $status = \proc_get_status($this->process);
             if ($status['running'] === false) {
-                $this->exitCode = (int) $status['exitcode'];
+                // Note: exitcode is -1 if the child has already been reaped
+                // by a prior waitpid call; only use it if it's a real exit code
+                // and we haven't already captured the exit code.
+                $code = (int) $status['exitcode'];
+                if ($code >= 0 && $this->exitCode === null) {
+                    $this->exitCode = $code;
+                }
                 break;
             }
             \usleep(10_000);
