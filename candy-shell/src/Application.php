@@ -22,15 +22,20 @@ use SugarCraft\Shell\Help\TypoSuggester;
 use Symfony\Component\Console\Application as SymfonyApplication;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Top-level Symfony Console application registering each subcommand.
  */
 final class Application extends SymfonyApplication
 {
+    private const ENV_PREFIX = 'CANDYSHELL_';
+
     public function __construct()
     {
-        parent::__construct('candyshell', '0.4.0');
+        parent::__construct('candyshell', $this->versionFromComposer());
         $this->addCommands([
             new StyleCommand(),
             new ChooseCommand(),
@@ -45,7 +50,86 @@ final class Application extends SymfonyApplication
             new PagerCommand(),
             new SpinCommand(),
             new FormatCommand(),
+            new CompletionCommand(),
         ]);
+    }
+
+    /**
+     * Reads the version from the root composer.json file.
+     */
+    public function versionFromComposer(): string
+    {
+        $rootComposer = $this->findRootComposer();
+        if ($rootComposer === null) {
+            return '0.0.0';
+        }
+
+        $json = json_decode(file_get_contents($rootComposer), true);
+        if (!is_array($json)) {
+            return '0.0.0';
+        }
+
+        return $json['version'] ?? '0.0.0';
+    }
+
+    private function findRootComposer(): ?string
+    {
+        $dir = __DIR__;
+        while ($dir !== dirname($dir)) {
+            $composerPath = $dir . '/composer.json';
+            if (file_exists($composerPath)) {
+                $json = json_decode(file_get_contents($composerPath), true);
+                if (is_array($json) && ($json['version'] ?? '') !== '') {
+                    return $composerPath;
+                }
+            }
+            $dir = dirname($dir);
+        }
+        return null;
+    }
+
+    public function run(InputInterface $input = null, OutputInterface $output = null): int
+    {
+        $this->setAutoExit(false);
+        return parent::run($input, $output);
+    }
+
+    public function doRun(InputInterface $input, OutputInterface $output): int
+    {
+        $command = $this->find($input->getFirstArgument() ?? '');
+        if ($command instanceof Command) {
+            $this->applyEnvVarFallbackToInput($input, $command);
+        }
+        return parent::doRun($input, $output);
+    }
+
+    private function applyEnvVarFallbackToInput(InputInterface $input, Command $command): void
+    {
+        $definition = $command->getDefinition();
+        foreach ($definition->getOptions() as $option) {
+            $envVar = $this->optionToEnvVar($option);
+            $envValue = getenv($envVar);
+            if ($envValue === false) {
+                continue;
+            }
+            if ($option->isNegatable()) {
+                continue;
+            }
+            if (!$option->acceptValue()) {
+                if (in_array(strtolower($envValue), ['1', 'true', 'yes'], true)) {
+                    $input->setOption($option->getName(), true);
+                }
+            } else {
+                $input->setOption($option->getName(), $envValue);
+            }
+        }
+    }
+
+    private function optionToEnvVar(InputOption $option): string
+    {
+        $name = strtoupper($option->getName());
+        $name = preg_replace('/[^A-Z0-9_]/', '_', $name) ?: $name;
+        return self::ENV_PREFIX . $name;
     }
 
     /**
