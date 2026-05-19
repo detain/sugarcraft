@@ -276,6 +276,7 @@ fix for step 06.13 · PR#616 · resolved 2 findings (AsyncMiddleware docs in REA
 tests-ci for step 06.13 · clean
 docs for step 06.13 · PR#618 · add AsyncMiddleware to end-user API table + async middleware extension point in dev guide + operational notes in hub-admin guide
 step 07.01 · PR#619 · candy-vt: DECSTBM scroll margins — ScrollHandler accepts region bounds, ScreenHandler tracks scrollRegionTop/Bottom, CSI r wired (leftover-rollout step 07.01)
+fix for step 07.01 · PR#620 · resolved 2 findings
 
 ## Open review findings — 03.05
 
@@ -292,7 +293,4 @@ step 07.01 · PR#619 · candy-vt: DECSTBM scroll margins — ScrollHandler accep
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
 
-## Open review findings — 07.01
 
-- [ ] candy-vt/src/Screen/Screen.php: listed in step file "Files → Modify" section with "`scrollRegion(int $top, int $bottom)` setter/getter" but was NOT touched. The spec was based on an incorrect premise — Screen is a readonly immutable snapshot and is the wrong place for mutable scroll region state. Implementation correctly uses public properties on ScreenHandler instead. Acceptance criteria (--filter Decstbm green) is satisfied; no functional gap, but step file was inaccurate.
-- [ ] candy-vt/CALIBER_LEARNINGS.md: new DECSTBM pattern (scrollRegionTop/Bottom on ScreenHandler, CSI 'r' dispatch to setScrollRegion, scroll-region-aware index/reverseIndex/nextLine) not yet logged. Prior PRs (PR4, PR6, PR7, PR8) all added CALIBER entries for new patterns — this one should too for future implementers working in the scroll-margin area.
