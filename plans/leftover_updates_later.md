@@ -874,8 +874,10 @@ until a real profiler trace flags the cost.
 
 ## 6. Strategic-decision items (need a product call before any code)
 
-- **sugar-post identity** — research describes a social-media TUI; the
-  shipped lib is an email client. Pick one before adding features.
+- **sugar-post identity** — ✅ **RESOLVED 2026-05-19** — Option A
+  chosen: sugar-post stays an email tool, finishes the upstream Pop TUI
+  surface. See `plans/sugar-post-identity.md`. Social-media pivot ideas
+  are shelved; a future microblog TUI would be a separate library.
 - **candy-serve TUI scope** — soft-serve's marquee feature is the
   interactive SSH-served repo browser. That is a substantial TUI app on
   its own; merits a `plans/candy-serve-tui.md` milestone doc.
