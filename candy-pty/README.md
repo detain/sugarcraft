@@ -69,7 +69,7 @@ Tests can swap in a stub `PtySystem` without touching libc.
 
 | Call | What it does |
 |---|---|
-| `Pty::open(): Pty` | `posix_openpt + grantpt + unlockpt + ptsname_r`. Returns a Pty exposing `master` (readonly fd + slavePath). |
+| `Pty::open(): Pty` | On Darwin: `openpty()` first (single call), falls back to quartet on -1. On Linux: `posix_openpt + grantpt + unlockpt + ptsname_r`. Returns a Pty exposing `master` (readonly fd + slavePath). |
 | `$pty->spawn(array $cmd, ?array $env, int $cols=80, int $rows=24, bool $controllingTerminal=false): Child` | `proc_open` with slave-path descriptors + initial TIOCSWINSZ. Pass `controllingTerminal: true` to route through `bin/pty-shim.php` so the child claims the slave PTY as its ctty (Ctrl+C → SIGINT, job control); requires ext-pcntl. |
 | `$pty->read(int $len=8192, ?float $timeout=null): ?string` | `null` on timeout, `''` on EOF, bytes otherwise. EINTR-safe. |
 | `$pty->write(string $bytes): int` | Returns bytes written. |
@@ -331,8 +331,24 @@ environment variable to select which PTY backend to use:
 Unrecognised values throw `\InvalidArgumentException` naming the
 valid options.
 
-The termios backend follows the same pattern via `SUGARCRAFT_TERMIOS`
-(`posix-ffi` / `stty`).
+ The termios backend follows the same pattern via `SUGARCRAFT_TERMIOS`
+ (`posix-ffi` / `stty`).
+
+### Platform behaviour — `openpty` vs quartet
+
+On macOS (Darwin), `PosixPtySystem::openPtyMaster()` attempts `openpty(3)`
+first — a single libc call that opens both master and slave and returns
+both file descriptors. If it returns -1 (symbol unavailable on a given
+Darwin build), the code falls back to the standard POSIX quartet:
+`posix_openpt + grantpt + unlockpt + ptsname_r`.
+
+On Linux, the quartet is used directly. The `openpty` symbol on Linux
+lives in `libutil.so.1` rather than `libc.so.6`; `Libc::libutil()` loads
+it as a fallback specifically for this symbol. Most Linux systems have
+both, so the Darwin-first path is not normally exercised on Linux.
+
+This behaviour is internal to `PosixPtySystem` and requires no consumer
+action — `Pty::open()` abstracts it away completely.
 
 ### Library layout
 
