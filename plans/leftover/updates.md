@@ -251,6 +251,7 @@ tests-ci for step 06.06 · clean
 docs for step 06.06 · PR#600 · document #[Example]/#[Alias]/HelpFormatter/TypoSuggester in README + end-user page
 step 06.07 · PR#601 · candy-shell: completions (Bash/Zsh/Fish) + versionFromComposer() + env-var fallbacks via CANDYSHELL_* prefix
 fix for step 06.07 · PR#602 · resolved 3 findings (CALIBER patterns + README docs + EnvVarFallbackTest)
+tests-ci for step 06.07 · PR#603 · add CompletionCommandTest (5 tests covering bash/zsh/fish wiring + unsupported/default shell paths)
 
 ## Open review findings — 03.05
 
