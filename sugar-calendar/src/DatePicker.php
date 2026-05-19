@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Calendar;
 
+use SugarCraft\Calendar\Lang;
+
 /**
  * Interactive date picker component.
  *
@@ -42,12 +44,25 @@ final class DatePicker
     private string $cursorStyle       = '7';     // reverse
     private string $normalDayStyle    = '';
 
-    private const DAY_NAMES = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-    private const MONTH_NAMES = [
-        1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
-        5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
-        9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
-    ];
+    // -------------------------------------------------------------------------
+    // i18n helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param int $dow 0=Sun … 6=Sat
+     */
+    private static function dayName(int $dow): string
+    {
+        return Lang::t('day.' . $dow);
+    }
+
+    /**
+     * @param int $month 1=Jan … 12=Dec
+     */
+    private static function monthName(int $month): string
+    {
+        return Lang::t('month.' . $month);
+    }
 
     // -------------------------------------------------------------------------
     // Factory
@@ -267,8 +282,8 @@ final class DatePicker
 
         // Day names row
         $dayRow = '    ';
-        foreach (self::DAY_NAMES as $d) {
-            $dayRow .= ' ' . $this->ansi($d, $this->dayNameStyle) . ' ';
+        for ($dow = 0; $dow < 7; $dow++) {
+            $dayRow .= ' ' . $this->ansi(self::dayName($dow), $this->dayNameStyle) . ' ';
         }
         $lines[] = $dayRow;
         $lines[] = '   ' . \str_repeat('───', 7);
@@ -325,7 +340,7 @@ final class DatePicker
 
     private function renderHeader(): string
     {
-        $monthName = self::MONTH_NAMES[$this->viewMonth] ?? '';
+        $monthName = self::monthName($this->viewMonth);
         $title = \sprintf('%s %d', $monthName, $this->viewYear);
         return $this->ansi($title, $this->headerStyle);
     }
