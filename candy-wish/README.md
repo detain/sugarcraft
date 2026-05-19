@@ -212,8 +212,81 @@ Both extend `\RuntimeException`.
 
 The PECL `ssh2` extension is optional and used only if you want a middleware that opens *outbound* SSH connections from inside the session (e.g. SFTP file pickers, remote-control agents). Standard server-side use does not require it.
 
+## Channel handler (InProcessTransport)
+
+The `InProcessTransport` dispatches SSH channel-level messages through a
+`ChannelHandler` rather than handling them inline. This lets you replace the
+default PTY/shell wiring with a custom implementation.
+
+| Class | Purpose |
+|-------|---------|
+| `ChannelHandler` | Interface — implement to handle pty-req, window-change, shell, exec, signal, env, break |
+| `ChannelMsg` | Abstract base for all channel messages (RFC 4254) |
+| `DefaultChannelHandler` | Default impl — tracks PTY state, env vars, cols/rows, drives `ChildSpawner` on shell/exec |
+| `PtyReqMsg` | `wantPty`, `term`, `cols`, `rows`, `widthPx`, `heightPx` |
+| `WindowChangeMsg` | `cols`, `rows`, `widthPx`, `heightPx` |
+| `ShellMsg` | `wantShell`, `subsystem` |
+| `ExecMsg` | `command` (raw string — parsed by `DefaultChannelHandler::parseCommandString()`) |
+| `SignalMsg` | `signalName` |
+| `EnvMsg` | `name`, `value` |
+| `BreakMsg` | Break request (no fields) |
+
+```php
+use SugarCraft\Wish\Channel\ChannelHandler;
+use SugarCraft\Wish\Channel\ChannelMsg;
+use SugarCraft\Wish\Channel\Msg\PtyReqMsg;
+use SugarCraft\Wish\Channel\Msg\WindowChangeMsg;
+use SugarCraft\Wish\Channel\Msg\ShellMsg;
+use SugarCraft\Wish\Channel\Msg\ExecMsg;
+use SugarCraft\Wish\Channel\Msg\SignalMsg;
+use SugarCraft\Wish\Channel\Msg\EnvMsg;
+use SugarCraft\Wish\Channel\Msg\BreakMsg;
+use SugarCraft\Wish\Session;
+
+final class DebugChannelHandler implements ChannelHandler
+{
+    public function handlePtyReq(PtyReqMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "pty-req: wantPty={$msg->wantPty} cols={$msg->cols} rows={$msg->rows}\n");
+    }
+
+    public function handleWindowChange(WindowChangeMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "window-change: cols={$msg->cols} rows={$msg->rows}\n");
+    }
+
+    public function handleShell(ShellMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "shell: wantShell={$msg->wantShell}\n");
+    }
+
+    public function handleExec(ExecMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "exec: {$msg->command}\n");
+    }
+
+    public function handleSignal(SignalMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "signal: {$msg->signalName}\n");
+    }
+
+    public function handleEnv(EnvMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "env: {$msg->name}={$msg->value}\n");
+    }
+
+    public function handleBreak(BreakMsg $msg, Session $session): void
+    {
+        fwrite(STDERR, "break\n");
+    }
+}
+
+// Pass to InProcessTransport
+new InProcessTransport($ptySystem, new DebugChannelHandler());
+```
+
 ## Status
 
-Phase 9+ — with Context propagation. Seven middleware classes, 25+ tests / 80+ assertions, Context + CancellationException + DeadlineExceededException, ready for v0 deployment.
+Phase 9+ — with Context propagation + ChannelHandler dispatch. Seven middleware classes, ChannelHandler/ChannelMsg + 7 message classes, 25+ tests / 80+ assertions, ready for v0 deployment.
 
 See [`examples/hello-server.php`](examples/hello-server.php) for a runnable banner-only stack you can ForceCommand against.

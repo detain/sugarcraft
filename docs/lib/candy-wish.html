@@ -138,8 +138,18 @@ Server::new()
 <tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
 <tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
 <tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
-<tr><td>InProcessTransport</td><td>new(?PtySystem)</td><td>Default transport — PTY supervisor + candy-pty</td></tr>
+<tr><td>InProcessTransport</td><td>new(?PtySystem, ?ChannelHandler)</td><td>Default transport — PTY supervisor + candy-pty; optional custom ChannelHandler</td></tr>
 <tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
+<tr><td>ChannelHandler</td><td>handlePtyReq / handleWindowChange / handleShell / handleExec / handleSignal / handleEnv / handleBreak</td><td>Interface for custom channel-level message handling (InProcessTransport only)</td></tr>
+<tr><td>ChannelMsg</td><td>abstract base</td><td>Base for all SSH channel messages (RFC 4254)</td></tr>
+<tr><td>DefaultChannelHandler</td><td>new(?ChildSpawner, ?Session)</td><td>Default impl — tracks PTY dims, env vars, drives ChildSpawner on shell/exec</td></tr>
+<tr><td>PtyReqMsg</td><td>wantPty, term, cols, rows, widthPx, heightPx</td><td>PTY allocation request</td></tr>
+<tr><td>WindowChangeMsg</td><td>cols, rows, widthPx, heightPx</td><td>Terminal resize (SIGWINCH equivalent)</td></tr>
+<tr><td>ShellMsg</td><td>wantShell, subsystem</td><td>Login-shell request</td></tr>
+<tr><td>ExecMsg</td><td>command</td><td>Exec request — raw command string</td></tr>
+<tr><td>SignalMsg</td><td>signalName</td><td>Signal delivery (SIGINT, SIGTERM, etc.)</td></tr>
+<tr><td>EnvMsg</td><td>name, value</td><td>Environment variable request</td></tr>
+<tr><td>BreakMsg</td><td>(empty)</td><td>Break request</td></tr>
 <tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is cancelled</td></tr>
 <tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
 </table>
