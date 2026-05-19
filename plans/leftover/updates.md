@@ -291,6 +291,7 @@ step 07.05 · PR#627 · candy-vt: SGR underline styles 4:1–4:5 (UnderlineStyle
 step 07.06 · PR#629 · candy-vt: DECOM (mode 6) + DECSCUSR cursor shape (CSI Ps SP q) + focus events 1004 (CSI I/O) — CursorShape enum + FocusInMsg/FocusOutMsg + 38 tests
 review for step 07.06 · clean · PR#629
 docs for step 07.06 · PR#630 · document DECOM/DECSCUSR/focus events in README + CALIBER_LEARNINGS.md
+step 07.07 · PR#631 · candy-vt: BCE (SGR bg erase) + combining-char composition (Cell::combining + attachCombiningChar) + synchronized output 2026 queue/flush (leftover-rollout step 07.07)
 
 ## Open review findings — 03.05
 
