@@ -336,11 +336,13 @@ step 07.15 · PR#666 · candy-mosaic: add Animation (ImageSource[] + delays, imm
 fix for step 07.15 · PR#667 · resolved 2 CALIBER findings
 docs for step 07.15 · PR#668 · document Animation/AnimationDriver/renderFrame() in README (Animation section + Architecture) + end-user HTML (feature grid + API table) + dev guide (new docs/dev/candy-mosaic.md) + PHPDoc on 6 methods
 step 07.16 · PR#669 · candy-pty: add openpty() FFI binding for Darwin (primary) with quartet fallback; libutil.so.1 path on Linux for future extension; OpenptyTest coverage
+fix for step 07.16 · PR#670 · resolved 2 findings (CALIBER openpty-darwin-first + openpty-libutil-linux pattern entries; README API table + Platform behaviour section surfaces openpty() Darwin-first path)
+docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::open() feature description) + admin HTML (platform behaviour section) + dev HTML (internal PTY allocation section) + Libc::libutil() @return PHPDoc fix
 
 ## Open review findings — 07.16
 
-- [ ] candy-pty/CALIBER_LEARNINGS.md: openpty Darwin-first fallback pattern not logged — `openpty()` primary on Darwin, quartet fallback, and `libutil.so.1` Linux path are new FFI patterns that future PTY implementers should find documented (e.g. `[pattern:openpty-darwin-first]`, `[pattern:libutil-linux-symbol]`)
-- [ ] candy-pty/README.md: `openpty()` Darwin path not surfaced in API docs — the Mirrors table and API-at-a-glance table only mention `posix_openpt + grantpt + unlockpt + ptsname_r`; the new `openpty` first path on Darwin is not mentioned anywhere in the README
+- [x] candy-pty/CALIBER_LEARNINGS.md: openpty Darwin-first fallback pattern not logged — `openpty()` primary on Darwin, quartet fallback, and `libutil.so.1` Linux path are new FFI patterns that future PTY implementers should find documented (e.g. `[pattern:openpty-darwin-first]`, `[pattern:libutil-linux-symbol]`) — ✅ resolved PR#670
+- [x] candy-pty/README.md: `openpty()` Darwin path not surfaced in API docs — the Mirrors table and API-at-a-glance table only mention `posix_openpt + grantpt + unlockpt + ptsname_r`; the new `openpty` first path on Darwin is not mentioned anywhere in the README — ✅ resolved PR#670
 
 ## Open review findings — 03.05
 
