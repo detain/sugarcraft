@@ -125,6 +125,15 @@ final class Server
      * middleware chain. Returns when the chain finishes — for a
      * terminal subprocess (Spawn / BubbleTea) that's when the
      * inner process exits or the SSH client disconnects.
+     *
+     * **Note on async middleware.** Promise-returning middleware is
+     * supported: if a middleware's `handle()' returns a
+     * `\React\Promise\PromiseInterface`, the transport's dispatcher
+     * (`InProcessTransport::dispatch()` / `HostSshdTransport::dispatch()`)
+     * calls `->wait()` before continuing the chain. This is
+     * functionally equivalent to awaiting in Server::serve() but
+     * delegates to the transport so each transport can control the
+     * event loop integration point.
      */
     public function serve(?Session $session = null): void
     {

@@ -135,6 +135,7 @@ ssh wishuser@your-host
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
 | `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
+| `AsyncMiddleware`    | both            | Abstract base for middleware that needs async I/O (LDAP, OAuth, database auth) — return a `PromiseInterface` from `handleAsync()`. The transport waits for the promise to settle before continuing the chain. |
 
 All middleware receives a {@see Context} as the first argument, along with
 the {@see Session} and a `$next` continuation. Implement `SugarCraft\Wish\Middleware`:
@@ -153,6 +154,41 @@ final class HelloBanner implements Middleware
     }
 }
 ```
+
+## Async middleware
+
+Middleware `handle()` may return `void` (synchronous) or a
+`\React\Promise\PromiseInterface`. The transport waits for the promise
+to settle before continuing the chain, enabling async back-ends like
+LDAP, OAuth, or database authentication.
+
+Extend `SugarCraft\Wish\Middleware\AsyncMiddleware` to implement async
+middleware. Override `handleAsync()` to perform async work and return
+a promise; resolve the promise (or let it reject) to control whether
+the chain continues.
+
+```php
+use SugarCraft\Wish\Context;
+use SugarCraft\Wish\Middleware\AsyncMiddleware;
+use SugarCraft\Wish\Session;
+use React\Promise\PromiseInterface;
+
+final class LdapAuth extends AsyncMiddleware
+{
+    protected function handleAsync(Context $ctx, Session $session, callable $next): PromiseInterface
+    {
+        return $this->ldap->verify($session->user)->then(
+            fn () => $next($ctx, $session),
+            fn (\Throwable $e) => throw new AuthFailedException($e->getMessage()),
+        );
+    }
+}
+```
+
+The promise returned by `handleAsync()` resolves when async work is
+done and the chain should proceed to `$next`; rejects to short-circuit
+the chain. The 30-second timeout is enforced by
+`AsyncMiddleware::await()`.
 
 ## Session metadata
 
