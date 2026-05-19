@@ -311,6 +311,7 @@ step 07.14 · PR#647 · candy-mosaic: transparent HalfBlock bg (alpha→null, sk
 review for step 07.14 · clean · PR#647
 step 07.13 · PR#644 · candy-mosaic: useVirtual flag (a=p) + gzcompress payload when compress=1 + 10 new tests (leftover-rollout step 07.13)
 tests-ci for step 07.14 · clean
+docs for step 07.14 · PR#648 · document HalfBlockRenderer transparent-pixel docblock + SixelRenderer::maxColors() docblock + end-user HTML feature grid + API table entries
 fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 docs for step 07.13 · clean · PR#646 · document virtual-image (a=p) + zlib compression (f=1) in README/end-user HTML/PHPDoc/CALIBER_LEARNINGS.md
 
