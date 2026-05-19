@@ -17,6 +17,7 @@ use SugarCraft\Shell\Command\SpinCommand;
 use SugarCraft\Shell\Command\StyleCommand;
 use SugarCraft\Shell\Command\TableCommand;
 use SugarCraft\Shell\Command\WriteCommand;
+use SugarCraft\Shell\Discovery\CommandScanner;
 use Symfony\Component\Console\Application as SymfonyApplication;
 
 /**
@@ -42,5 +43,18 @@ final class Application extends SymfonyApplication
             new SpinCommand(),
             new FormatCommand(),
         ]);
+    }
+
+    /**
+     * Scan a namespace for classes bearing the #[Command] attribute
+     * and register them into this application.
+     *
+     * @param class-string $namespace Fully-qualified namespace prefix to scan.
+     * @return list<class-string> Names of the discovered command classes.
+     */
+    public function scan(string $namespace): array
+    {
+        $scanner = new CommandScanner();
+        return $scanner->scan($namespace, $this);
     }
 }
