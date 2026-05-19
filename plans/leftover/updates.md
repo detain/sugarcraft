@@ -238,6 +238,7 @@ fix for step 06.03 · PR#588 · resolved 3 findings (@return ?Closure fix + [pat
 tests-ci for step 06.03 · clean
 docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user page feature grid
 fix for step 06.04 · PR#591 · resolved 3 findings (error_log removed; WorkerResultMsg already had correct ?Throwable; WorkerState kept mutable — readonly requires architectural refactoring)
+tests-ci for step 06.04 · clean
 
 ## Open review findings — 03.05
 
