@@ -236,6 +236,7 @@ docs for step 06.02 · PR#586 · document ScreenStack API in README (Architectur
 step 06.03 · PR#587 · candy-core: Component interface (onMount/onUnmount) + Composite Model + lifecycle draining in Program + ComponentLifecycleTest
 fix for step 06.03 · PR#588 · resolved 3 findings (@return ?Closure fix + [pattern:component-lifecycle] CALIBER entry + Component/Composite README docs)
 tests-ci for step 06.03 · clean
+docs for step 06.03 · PR#590 · add Component/Composite to candy-core end-user page feature grid
 
 ## Open review findings — 03.05
 
