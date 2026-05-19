@@ -7,6 +7,8 @@ namespace SugarCraft\Dash\Layout;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A container that splits the available space between multiple components.
@@ -369,6 +371,30 @@ final class Split implements \SugarCraft\Dash\Foundation\Sizer
             direction: $this->direction,
             ratios: $this->ratios,
             dividerColor: $color,
+            showDividers: $this->showDividers,
+            dividerSize: $this->dividerSize,
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedPanes = [];
+        foreach ($this->panes as $pane) {
+            if ($pane instanceof Drawable) {
+                $themedPanes[] = $pane->withTheme($theme);
+            } else {
+                $themedPanes[] = $pane;
+            }
+        }
+
+        return new self(
+            panes: $themedPanes,
+            direction: $this->direction,
+            ratios: $this->ratios,
+            dividerColor: $this->dividerColor,
             showDividers: $this->showDividers,
             dividerSize: $this->dividerSize,
         );

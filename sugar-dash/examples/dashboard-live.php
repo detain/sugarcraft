@@ -53,6 +53,7 @@ use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\Layout\Boxer\Boxer;
 use SugarCraft\Dash\Layout\Boxer\Node;
 use SugarCraft\Dash\Layout\FocusManager;
@@ -135,9 +136,13 @@ final class DashboardModel implements Model
     /** Boxer layout tree + rendered items. */
     private Boxer $boxer;
 
+    /** Current theme for the dashboard. */
+    private Theme $theme;
+
     public function __construct(string $weatherLocation = 'auto')
     {
         $this->focus = new FocusManager('root');
+        $this->theme = Theme::dark(); // Default to dark theme
 
         // Instantiate the three panels. Clock ticks at 1Hz, System at 2Hz,
         // Weather at 30min. Each module's init() Cmd is collected
@@ -273,6 +278,14 @@ final class DashboardModel implements Model
             return false; // Let update() handle InterruptMsg
         }
 
+        // Ctrl-T → toggle between dark and light themes
+        if ($msg->ctrl && $msg->type === KeyType::Char && $msg->rune === 't') {
+            $this->theme = $this->theme->getName() === 'dark'
+                ? Theme::light()
+                : Theme::dark();
+            return true;
+        }
+
         // Tab → focus next panel
         if ($msg->type === KeyType::Tab && !$msg->shift) {
             $this->focus = $this->focus->focusNext();
@@ -326,7 +339,7 @@ final class DashboardModel implements Model
 
             // Render the panel with a focus indicator border.
             // When focused, show a bright border. Otherwise a dim border.
-            $items[$addr] = new FocusedPanel($addr, $view, $focused, $module->minSize());
+            $items[$addr] = new FocusedPanel($addr, $view, $focused, $module->minSize(), $this->theme);
         }
 
         // Rebuild the boxer with fresh content + proper sizing.
@@ -342,6 +355,9 @@ final class DashboardModel implements Model
         // Convention: 80 = narrow (collapses to single column), 120 = wide.
         $columns = (int) ($_ENV['COLUMNS'] ?? 120);
         $boxer = $boxer->setSize($columns, 30);
+
+        // Apply theme to boxer for theme propagation to children
+        $boxer = $boxer->withTheme($this->theme);
 
         return $boxer->render();
     }
@@ -363,15 +379,17 @@ final class FocusedPanel implements \SugarCraft\Dash\Foundation\Item
         private readonly string $content,
         private readonly bool $focused,
         private readonly array $minSize,
+        private readonly Theme $theme,
     ) {}
 
     public function render(): string
     {
-        $borderChar = $this->focused ? '█' : '─';
-        $idLabel = $this->focused ? "[{$this->id}]" : $this->id;
-
         $lines = explode("\n", $this->content);
         $width = $this->minSize()[0] ?? 20;
+
+        // Use theme colors for focus indication
+        $focusColor = $this->theme->primary();
+        $dimColor = $this->focused ? '' : $this->theme->foreground()->withAlpha(0.4)->toFg();
 
         $output = '';
         foreach ($lines as $line) {
@@ -380,9 +398,11 @@ final class FocusedPanel implements \SugarCraft\Dash\Foundation\Item
                 ? mb_substr($line, 0, $width)
                 : $line . str_repeat(' ', $width - mb_strlen($line));
 
-            $prefix = $this->focused ? "▓ " : "  ";
-            $suffix = $this->focused ? " ▓" : "  ";
-            $output .= $prefix . $display . $suffix . "\n";
+            if ($this->focused) {
+                $output .= $focusColor->toFg() . "▓ " . $display . " ▓\x1b[0m\n";
+            } else {
+                $output .= $dimColor . "  " . $display . "  \x1b[0m\n";
+            }
         }
 
         return $output;
@@ -444,6 +464,7 @@ final class FocusedPanel implements \SugarCraft\Dash\Foundation\Item
     echo " ║  COLUMNS={$cols} — {$mode}                             ║\n";
     echo " ║                                                          ║\n";
     echo " ║  [q] or [Ctrl-C]     Quit                               ║\n";
+    echo " ║  [Ctrl-T]           Toggle dark/light theme              ║\n";
     echo " ║  [Tab] / [Shift-Tab] Rotate focus                       ║\n";
     echo " ║  [Arrow keys]       Navigate panels                     ║\n";
     echo " ║  COLUMNS=80         Force narrow; COLUMNS=120 force wide  ║\n";
