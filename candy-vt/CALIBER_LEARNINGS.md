@@ -288,6 +288,30 @@ All four operations pass `scrollRegionTop` / `scrollRegionBottom` explicitly so
 `ScreenHandler` doesn't need to maintain a separate scroll-mode flag. The
 handler initializes to the full screen (`rows - 1`) on construction.
 
+## Scrollback ring buffer (step 07.04)
+
+`ScreenHandler::$scrollback` is a `Scrollback` ring buffer that stores rows
+scrolled off the top of the screen. The ring is fixed-capacity (default
+1000 rows, configurable via `Terminal::withScrollbackSize()` or the
+`scrollbackSize` constructor param). Once full, new pushes silently
+overwrite the oldest entry (tail advances). Iteration yields rows from
+oldest to newest.
+
+`Screen::fromBuffer()` receives the current handler's `Scrollback` reference,
+so `Screen::scrollback()` exposes it as a read-only accessor on the
+immutable snapshot.
+
+The scrollback is pushed by `ScrollHandler` operations:
+
+- `index()` / `reverseIndex()` — when LF at bottom or RI at top would
+  scroll the region
+- `nextLine()` — NEL (CR + IND)
+- `applyCsi()` — SU (`CSI S`) / SD (`CSI T`)
+
+And cleared by `EraseHandler` when it handles `CSI 3 J` (erase
+scrollback). The ring is replaced wholesale on `Terminal::withScrollbackSize()`
+— existing content is dropped, not preserved at a different capacity.
+
 ## Stream writes
 
 Never `ftruncate; rewind;` between writes — slice deltas with
