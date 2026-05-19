@@ -288,6 +288,7 @@ docs for step 07.03 · PR#624 · document CSI subparameter parsing in CALIBER_LE
 step 07.04 · PR#625 · candy-vt: scrollback buffer — Scrollback ring-buffer class + Screen scrollback accessor + Terminal withScrollbackSize() + ScreenHandler scrollUp/Down push to scrollback + 10 ScrollbackTest tests (leftover-rollout step 07.04)
 review for step 07.04 · clean · PR#625
 step 07.05 · PR#627 · candy-vt: SGR underline styles 4:1–4:5 (UnderlineStyle enum + withUnderlineStyle/SgrHandler/Cell::equals + 20 SgrUnderlineStylesTest tests)
+step 07.06 · PR#629 · candy-vt: DECOM (mode 6) + DECSCUSR cursor shape (CSI Ps SP q) + focus events 1004 (CSI I/O) — CursorShape enum + FocusInMsg/FocusOutMsg + 38 tests
 
 ## Open review findings — 03.05
 
