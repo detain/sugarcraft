@@ -52,17 +52,20 @@
     <pre class="code"><code>composer require sugarcraft/sugar-boxer</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Boxer\{Boxer, BoxerNode};
+    <pre class="code"><code>use SugarCraft\Boxer\SugarBoxer;
+use SugarCraft\Sprinkles\{Align, Border};
 
-$layout = Boxer::row()
-    -&gt;addH(Panel::new('Sidebar', 20))
-    -&gt;addV(
-        Panel::new('Header', 3),
-        Panel::new('Content', null),
-        Panel::new('Footer', 1),
-    );
+$boxer = SugarBoxer::new();
 
-echo $layout-&gt;render(80, 24);</code></pre>
+$layout = $boxer-&gt;vertical(
+    $boxer-&gt;horizontal(
+        $boxer-&gt;leaf('Left panel'),
+        $boxer-&gt;leaf('Right panel'),
+    ),
+    $boxer-&gt;leaf('Bottom bar'),
+);
+
+echo $boxer-&gt;render($layout, 60, 20);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -86,12 +89,29 @@ echo $layout-&gt;render(80, 24);</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Boxer</td><td>row()</td><td>Create horizontal row layout</td></tr>
-<tr><td>Boxer</td><td>column()</td><td>Create vertical column layout</td></tr>
-<tr><td>Boxer</td><td>addH(node)</td><td>Add horizontal panel</td></tr>
-<tr><td>Boxer</td><td>addV(node)</td><td>Add vertical panel</td></tr>
-<tr><td>Boxer</td><td>render(width, height)</td><td>Render layout</td></tr>
-<tr><td>Panel</td><td>new(title, size)</td><td>Create a panel</td></tr>
+<tr><td>SugarBoxer</td><td>new()</td><td>Create a boxer instance</td></tr>
+<tr><td>SugarBoxer</td><td>leaf(string)</td><td>Leaf node with string content</td></tr>
+<tr><td>SugarBoxer</td><td>horizontal(Node ...)</td><td>Horizontal (row) layout</td></tr>
+<tr><td>SugarBoxer</td><td>vertical(Node ...)</td><td>Vertical (column) layout</td></tr>
+<tr><td>SugarBoxer</td><td>noBorder(Node)</td><td>Flat layout without separators</td></tr>
+<tr><td>SugarBoxer</td><td>render(Node, int $width, int $height)</td><td>Render to ANSI string</td></tr>
+<tr><td>Node</td><td>leaf(string)</td><td>Static leaf constructor</td></tr>
+<tr><td>Node</td><td>horizontal(Node ...)</td><td>Static horizontal constructor</td></tr>
+<tr><td>Node</td><td>vertical(Node ...)</td><td>Static vertical constructor</td></tr>
+<tr><td>Node</td><td>noBorder(Node)</td><td>Static no-border constructor</td></tr>
+<tr><td>Node</td><td>withMinWidth(int)</td><td>Minimum width hint</td></tr>
+<tr><td>Node</td><td>withMaxWidth(int)</td><td>Maximum width hint</td></tr>
+<tr><td>Node</td><td>withMinHeight(int)</td><td>Minimum height hint</td></tr>
+<tr><td>Node</td><td>withMaxHeight(int)</td><td>Maximum height hint</td></tr>
+<tr><td>Node</td><td>withPadding(int)</td><td>Inner padding (cells)</td></tr>
+<tr><td>Node</td><td>withBorder(bool)</td><td>Show/hide box border</td></tr>
+<tr><td>Node</td><td>withSpacing(int)</td><td>Gap between children (cells)</td></tr>
+<tr><td>Node</td><td>withBorderStyle(?Border)</td><td>Border char set from candy-sprinkles</td></tr>
+<tr><td>Node</td><td>withStyle(?Style)</td><td>Style (color, attributes) from candy-sprinkles</td></tr>
+<tr><td>Node</td><td>withTitle(string)</td><td>Box title text</td></tr>
+<tr><td>Node</td><td>withMargin(int $top, ...)</td><td>Outer margin (top/right/bottom/left)</td></tr>
+<tr><td>Node</td><td>withAlignH(Align)</td><td>Horizontal text alignment</td></tr>
+<tr><td>Node</td><td>withAlignV(VAlign)</td><td>Vertical text alignment</td></tr>
 </table>
   </div>
 </section>
