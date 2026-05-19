@@ -301,6 +301,7 @@ docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + 
  step 07.09 · PR#636 · candy-zone: DragTracker + ZoneDragStartMsg/ZoneDragMoveMsg/ZoneDragEndMsg (leftover-rollout step 07.09)
  review for step 07.09 · clean · PR#636
  docs for step 07.09 · clean · PR#637
+ step 07.10 · PR#638 · candy-zone: ClickCounter (DoubleClickMsg/TripleClickMsg) + Manager::setMotionTracking (leftover-rollout step 07.10)
 
 ## Open review findings — 03.05
 
