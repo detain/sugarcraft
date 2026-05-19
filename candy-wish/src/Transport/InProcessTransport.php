@@ -13,6 +13,7 @@ use SugarCraft\Pty\PtySystemFactory;
 use SugarCraft\Pty\PumpOptions;
 use SugarCraft\Pty\SignalForwarder;
 use SugarCraft\Pty\SizeIoctl;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -123,14 +124,14 @@ final class InProcessTransport implements Transport, ChildSpawner
         return $this->master;
     }
 
-    public function run(Session $session, array $stack): void
+    public function run(Context $ctx, Session $session, array $stack): void
     {
         foreach ($stack as $mw) {
             if (\method_exists($mw, 'setTransport')) {
                 $mw->setTransport($this);
             }
         }
-        $this->dispatch($session, $stack, 0);
+        $this->dispatch($ctx, $session, $stack, 0);
     }
 
     /**
@@ -291,14 +292,17 @@ final class InProcessTransport implements Transport, ChildSpawner
     /**
      * @param list<Middleware> $stack
      */
-    private function dispatch(Session $session, array $stack, int $idx): void
+    private function dispatch(Context $ctx, Session $session, array $stack, int $idx): void
     {
         if ($idx >= \count($stack)) {
             return;
         }
-        $next = function (Session $s) use ($stack, $idx): void {
-            $this->dispatch($s, $stack, $idx + 1);
+        if ($ctx->done()) {
+            return;
+        }
+        $next = function (Context $c, Session $s) use ($stack, $idx): void {
+            $this->dispatch($c, $s, $stack, $idx + 1);
         };
-        $stack[$idx]->handle($session, $next);
+        $stack[$idx]->handle($ctx, $session, $next);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Lang;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
@@ -57,7 +58,7 @@ final class Auth implements Middleware
         $this->stderr = $stderr;
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next): void
     {
         if ($this->users !== [] && !in_array($session->user, $this->users, true)) {
             $this->reject('user not allowed: ' . $session->user);
@@ -70,7 +71,7 @@ final class Auth implements Middleware
                 return;
             }
         }
-        $next($session);
+        $next($ctx, $session);
     }
 
     private function fingerprint(): ?string

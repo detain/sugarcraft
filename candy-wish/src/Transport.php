@@ -39,7 +39,7 @@ interface Transport
      *
      * @param list<Middleware> $stack Registered middleware in
      *        registration order; the transport is responsible for
-     *        invoking them (`->handle($session, $next)` style).
+     *        invoking them (`->handle($ctx, $session, $next)` style).
      */
-    public function run(Session $session, array $stack): void;
+    public function run(Context $ctx, Session $session, array $stack): void;
 }

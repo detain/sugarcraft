@@ -10,6 +10,7 @@ use SugarCraft\Pty\Contract\MasterPty;
 use SugarCraft\Pty\Contract\PtyPair;
 use SugarCraft\Pty\Contract\PtySystem;
 use SugarCraft\Pty\Contract\SlavePty;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware\Spawn;
 use SugarCraft\Wish\Session;
 use SugarCraft\Wish\Transport\InProcessTransport;
@@ -52,7 +53,7 @@ final class SpawnPtySystemIntegrationTest extends TestCase
         // Stack-walk pre-step: InProcessTransport::run() injects itself
         // via setTransport. We drive it the same way the production
         // server bootstrap would.
-        $transport->run($session, [
+        $transport->run(Context::background(), $session, [
             new class($transport, $session, $spawn, $stdin, $stdout) implements \SugarCraft\Wish\Middleware {
                 public function __construct(
                     private InProcessTransport $transport,
@@ -61,12 +62,9 @@ final class SpawnPtySystemIntegrationTest extends TestCase
                     private mixed $stdin,
                     private mixed $stdout,
                 ) {}
-                public function handle(Session $s, callable $next): void
+                public function handle(Context $ctx, Session $s, callable $next): void
                 {
-                    // Drive Spawn manually with the (stub) stdin/stdout
-                    // resources — production code passes STDIN/STDOUT.
                     $this->spawn->setTransport($this->transport);
-                    $cfg = $this->spawn; // capture pre-bound factory
                     $this->transport->runChild(
                         $this->session,
                         ['/usr/bin/env'],
