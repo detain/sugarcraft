@@ -259,6 +259,7 @@ docs for step 06.08 · PR#606 · document Context API in README + docs/lib/candy
 step 06.09 · PR#607 · candy-wish: ChannelHandler interface + DefaultChannelHandler (PtyReq/WindowChange/Shell/Exec/Signal/Env/Break Msg classes) + InProcessTransport dispatch wiring + 16 tests
 tests-ci for step 06.09 · clean
 docs for step 06.09 · PR#608 · document ChannelHandler/ChannelMsg/Msg classes in README + end-user API table + dev extension point + new hub-admin guide + CALIBER pattern
+step 06.10 · PR#609 · candy-wish: add PasswordAuth/CertificateAuth/AuthMethods/KeyboardInteractive auth middleware (leftover-rollout step 06.10)
 
 ## Open review findings — 03.05
 
