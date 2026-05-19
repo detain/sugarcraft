@@ -31,3 +31,18 @@ Accumulated patterns and gotchas specific to this library.
   return `''` (no delete mechanism). When adding a new renderer, implement
   `delete()` even if it only returns `''` — the interface contract
   requires it.
+
+- **[Kitty virtual-image placement (a=p)]** The Kitty protocol supports
+  two-phase rendering: transmit once with a specific image ID and action
+  `a=p` to store the PNG data in the terminal, then reference the stored
+  copy at arbitrary cell offsets with `a=p` + `i=<id>` + `x=`/`y=` (see
+  `KittyOptions::transmit()` then `KittyOptions::place()`). This avoids
+  re-transmitting the full image data for multi-instance display. The
+  terminal manages the stored image lifetime — no explicit cleanup unless
+  `Renderer::delete(id)` is needed.
+
+- **[Kitty zlib compression (f=1)]** Pass `KittyOptions::withCompression(1)`
+  to compress the PNG payload with `gzcompress()` before base64-encoding.
+  The `f=1`传输 field signals zlib decompression to the terminal. Worthwhile
+  for large images on slow links; adds modest CPU overhead on both sides.
+  Compression level 1 (fastest) is the Kitty spec minimum and sufficient.

@@ -28,6 +28,7 @@ echo $ansi;
 ## API
 
 ```php
+use SugarCraft\Mosaic\KittyOptions;
 use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
 
 // Probe terminal once, pick best protocol
@@ -47,6 +48,19 @@ $mosaic = Mosaic::builder()
     ->withRenderer(new QuarterBlockRenderer())
     ->withResize(width: 40, height: 20)
     ->build();
+
+// Kitty: virtual-image placement (transmit once, place at multiple offsets)
+// Step 1 — transmit with a specific id and store as virtual (a=p)
+$renderer = (Mosaic::kitty())->renderer();
+$opts = KittyOptions::transmit(1)->withUseVirtual(true);
+$transmitted = $renderer->renderWithOptions($image, 40, null, $opts);
+// Step 2 — place the same image at a different cell offset (a=p, same id)
+$opts = KittyOptions::place(1, x: 5, y: 10)->withZIndex(5);
+$placed = $renderer->renderWithOptions($image, 40, null, $opts);
+
+// Kitty: zlib compression (f=1) for large images
+$opts = KittyOptions::transmit()->withCompression(1);
+$compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 ```
 
 ## Supported image formats
@@ -56,13 +70,38 @@ $mosaic = Mosaic::builder()
 - Palette PNGs are automatically converted to truecolor before
   processing.
 
+## KittyOptions — virtual-image placement and compression
+
+The Kitty renderer supports two advanced options via `KittyOptions`:
+
+- **Virtual-image placement** (`a=p`): Transmit an image once with
+  `withUseVirtual(true)`, then place it at multiple on-screen locations
+  using `withUseVirtual(true)` with the same image ID. The first render
+  stores the image data in the terminal; subsequent renders reference it
+  by ID and offset, reducing bandwidth.
+
+- **Zlib compression** (`f=1`): Pass `withCompression(1)` to compress
+  the PNG payload with zlib before base64-encoding. Useful for large
+  images on slow links; adds modest CPU overhead.
+
+```php
+use SugarCraft\Mosaic\KittyOptions;
+
+// Transmit once (a=T, the default)
+$opts = KittyOptions::transmit(imageId: 1);
+$first = $renderer->renderWithOptions($image, 40, null, $opts);
+
+// Place at a different cell offset using the same transmitted image (a=p)
+$opts = KittyOptions::place(imageId: 1, x: 5, y: 10)
+    ->withZIndex(5);           // z-index for stacking order
+$placed = $renderer->renderWithOptions($image, 40, null, $opts);
+
+// Zlib-compressed transmit
+$opts = KittyOptions::transmit()->withCompression(1);
+$compressed = $renderer->renderWithOptions($image, 40, null, $opts);
+```
+
 ## Protocol detection
-
-`Mosaic::probe()` checks environment variables and (when interactive)
-sends a DA1 capability query to determine the best protocol. Results
-are cached per-process.
-
-## Delete
 
 Every renderer implements `Renderer::delete(string $imageId): string`
 which emits the protocol-specific sequence to remove a previously
