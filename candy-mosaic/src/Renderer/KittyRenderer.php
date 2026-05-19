@@ -151,6 +151,28 @@ final class KittyRenderer implements Renderer
     }
 
     /**
+     * Render a single animation frame with a stable image id.
+     *
+     * The id is what {@see delete()} later targets, so calling
+     * `delete($id)` followed by `renderFrame(..., $id)` yields a clean
+     * per-frame redraw on Kitty-capable terminals.
+     *
+     * Internally calls {@see renderWithOptions()} with
+     * {@see \SugarCraft\Mosaic\KittyOptions::transmit($imageId)}.
+     *
+     * Mirrors charmbracelet/x/mosaic frame-render API (conceptual).
+     */
+    public function renderFrame(ImageSource $image, int $width, ?int $height, int $imageId): string
+    {
+        return $this->renderWithOptions(
+            $image,
+            $width,
+            $height,
+            KittyOptions::transmit($imageId),
+        );
+    }
+
+    /**
      * Ensure PNG bytes, re-encoding if the source format is not PNG.
      *
      * Uses php://temp to handle GD builds that write to output instead of
