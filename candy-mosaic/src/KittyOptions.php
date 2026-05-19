@@ -24,6 +24,14 @@ final class KittyOptions
         private readonly int $cellHeight,
         private readonly int $offsetX,
         private readonly int $offsetY,
+        /**
+         * When true, renders with action 'p' (place virtual image) instead
+         * of 'T' (transmit). On first render with a given image id this stores
+         * the image in the terminal; subsequent renders with the same id+offset
+         * reference the stored copy.
+         *
+         * @see https://sw.kovidgoyal.net/kitty/graphics-protocol/#transmission
+         */
         private readonly bool $useVirtual,
     ) {}
 
@@ -86,7 +94,10 @@ final class KittyOptions
     }
 
     /**
-     * Set compression: 100 = none, 1 = zlib.
+     * Set compression level for the PNG payload.
+     *
+     * @param int $compress  100 = none (default), 1 = zlib compressed (f=1).
+     *                        zlib is worthwhile for large images on slow links.
      */
     public function withCompression(int $compress): self
     {
