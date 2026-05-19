@@ -22,9 +22,17 @@
         "issues": "https://github.com/sugarcraft/sugar-crumbs/issues",
         "source": "https://github.com/sugarcraft/sugar-crumbs"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-zone",
+            "options": { "symlink": true }
+        }
+    ],
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-zone": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
