@@ -99,7 +99,7 @@ Server::new()
       <div class="feature"><strong>Spawn middleware (InProcess only)</strong><span>Terminal — produces cmd[] from Session via factory. Drives runChild() on the active transport.</span></div>
       <div class="feature"><strong>BubbleTea middleware (HostSshd only)</strong><span>Terminal — mounts a SugarCraft Program inline reading STDIN/STDOUT. Transport-aware: throws clearly under InProcess.</span></div>
       <div class="feature"><strong>Logger / Auth / RateLimit</strong><span>Transport-agnostic. Same composition surface under either mode.</span></div>
-      <div class="feature"><strong>Custom middleware</strong><span>Anything implementing <code>Middleware::handle($session, $next)</code>.</span></div>
+      <div class="feature"><strong>Custom middleware</strong><span>Anything implementing <code>Middleware::handle(Context $ctx, Session $session, callable $next): void</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -117,13 +117,31 @@ Server::new()
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Server</td><td>new()</td><td>Create a new SSH server</td></tr>
 <tr><td>Server</td><td>use(Middleware)</td><td>Add middleware to the pipeline</td></tr>
-<tr><td>Server</td><td>serve()</td><td>Start the server</td></tr>
-<tr><td>Session</td><td>term, user, cols, rows</td><td>Session metadata</td></tr>
-<tr><td>Spawn</td><td>new(factory)</td><td>Terminal middleware for subprocess spawning</td></tr>
-<tr><td>BubbleTea</td><td>new(factory)</td><td>Terminal middleware for Program mount</td></tr>
-<tr><td>Auth</td><td>new(users)</td><td>Authentication middleware</td></tr>
-<tr><td>RateLimit</td><td>new(limit, window)</td><td>Rate limiting middleware</td></tr>
-<tr><td>Logger</td><td>new(path)</td><td>Request logging middleware</td></tr>
+<tr><td>Server</td><td>withTransport(Transport)</td><td>Override the active transport (default: InProcessTransport)</td></tr>
+<tr><td>Server</td><td>withKeepalive(int)</td><td>Add keepalive middleware with the given interval</td></tr>
+<tr><td>Server</td><td>serve(?Session)</td><td>Start the server (builds root Context automatically)</td></tr>
+<tr><td>Context</td><td>background()</td><td>Root context — never done, not cancelable</td></tr>
+<tr><td>Context</td><td>withValue(string $k, mixed $v)</td><td>Return a new context with $k → $v attached</td></tr>
+<tr><td>Context</td><td>withDeadline(DateTimeImmutable)</td><td>Return a new cancelable context that is done when deadline passes</td></tr>
+<tr><td>Context</td><td>withCancelable()</td><td>Return a new cancelable context (call cancel() to trigger)</td></tr>
+<tr><td>Context</td><td>cancel(?Throwable)</td><td>Mark the context as cancelled</td></tr>
+<tr><td>Context</td><td>done(): bool</td><td>True when cancelled or deadline-exceeded</td></tr>
+<tr><td>Context</td><td>err(): ?Throwable</td><td>CancellationException, DeadlineExceededException, or null</td></tr>
+<tr><td>Context</td><td>value(string $k): mixed</td><td>Walk parent chain looking for $k; null if not found</td></tr>
+<tr><td>Session</td><td>user, term, cols, rows, clientHost, clientPort, tty, command</td><td>Session metadata</td></tr>
+<tr><td>Session</td><td>isInteractive(): bool</td><td>True when a TTY is attached</td></tr>
+<tr><td>Session</td><td>toLogContext(): array</td><td>Array of session fields for logging</td></tr>
+<tr><td>Middleware</td><td>handle(Context, Session, callable): void</td><td>All middleware receive Context first, Session second</td></tr>
+<tr><td>Spawn</td><td>new(callable)</td><td>Terminal middleware for subprocess spawning (InProcess only)</td></tr>
+<tr><td>BubbleTea</td><td>new(callable)</td><td>Terminal middleware for Program mount (HostSshd only)</td></tr>
+<tr><td>Auth</td><td>new(array $users, array $keyFingerprints)</td><td>Username and/or key allowlist middleware</td></tr>
+<tr><td>RateLimit</td><td>new(string $statePath, int $burst, float $ratePerSec)</td><td>Per-IP token-bucket rate limiter</td></tr>
+<tr><td>Logger</td><td>new(string|resource|null)</td><td>JSON one-line logger to file or stderr</td></tr>
+<tr><td>Keepalive</td><td>new(int $intervalSeconds)</td><td>Sends SSH keepalive messages at the given interval</td></tr>
+<tr><td>InProcessTransport</td><td>new(?PtySystem)</td><td>Default transport — PTY supervisor + candy-pty</td></tr>
+<tr><td>HostSshdTransport</td><td>new()</td><td>Legacy transport — inline middleware, Program on STDIN/STDOUT</td></tr>
+<tr><td>CancellationException</td><td>extends RuntimeException</td><td>Thrown when Context is cancelled</td></tr>
+<tr><td>DeadlineExceededException</td><td>extends RuntimeException</td><td>Thrown when Context deadline passes</td></tr>
 </table>
   </div>
 </section>

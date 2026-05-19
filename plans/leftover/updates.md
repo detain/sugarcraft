@@ -253,6 +253,8 @@ step 06.07 · PR#601 · candy-shell: completions (Bash/Zsh/Fish) + versionFromCo
 fix for step 06.07 · PR#602 · resolved 3 findings (CALIBER patterns + README docs + EnvVarFallbackTest)
 tests-ci for step 06.07 · PR#603 · add CompletionCommandTest (5 tests covering bash/zsh/fish wiring + unsupported/default shell paths)
 docs for step 06.07 · PR#604 · add step 06.07 completion types to candy-shell end-user page
+review for step 06.08 · clean · PR#605
+tests-ci for step 06.08 · clean
 
 ## Open review findings — 03.05
 
