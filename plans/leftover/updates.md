@@ -169,6 +169,7 @@ review for step 03.08 · clean · PR#541
   review for step 03.14 · clean · PR#558
   tests-ci for step 03.14 · clean
   docs for step 03.14 · clean
+  step 03.17 · PR#561 · sugar-dash: Drawable::withTheme + layout containers fan theme to children + Badge/Card/NProgress opt-in + dashboard-live Ctrl-T toggle (leftover-rollout step 03.17)
 
 ## Open review findings — 03.05
 
