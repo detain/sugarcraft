@@ -66,6 +66,25 @@ $stack->push('Display');
 echo $bc->render($stack);  // "Home › Settings › Display"
 ```
 
+### Click-Region Tracking
+
+Attach a `Manager` from `sugarcraft/candy-zone` to enable mouse-click routing:
+
+```php
+use SugarCraft\Crumbs\Breadcrumb;
+use SugarCraft\Zone\Manager;
+
+$manager = new Manager();
+$bc = (new Breadcrumb())->withZoneManager($manager);
+
+echo $bc->render($stack);
+// Each crumb is wrapped in a named APC zone: "crumb-0", "crumb-1", …
+// The parent calls Manager::scan() on the output to record bounds,
+// then routes MouseMsg through Manager::anyInBoundsAndUpdate().
+```
+
+Detach by passing `null`: `(new Breadcrumb())->withZoneManager(null)`.
+
 ## License
 
 [MIT](LICENSE)
