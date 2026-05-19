@@ -57,12 +57,33 @@ final class HalfBlockRenderer implements Renderer
         foreach ($grid->cells as $row) {
             $line = '';
             foreach ($row as $pairs) {
-                [$topR, $topG, $topB] = $pairs[0];
-                [$botR, $botG, $botB] = $pairs[1];
-                $line .= Ansi::fgRgb($topR, $topG, $topB)
-                    . Ansi::bgRgb($botR, $botG, $botB)
-                    . "\u{2580}"
-                    . Ansi::reset();
+                [$topR, $topG, $topB, $topA] = $pairs[0];
+                [$botR, $botG, $botB, $botA] = $pairs[1];
+                $topTransparent = ($topA === null);
+                $botTransparent = ($botA === null);
+                if ($topTransparent && $botTransparent) {
+                    // Both transparent: emit upper-half block with no SGR,
+                    // leaving the cell blank (terminal default background).
+                    $line .= "\u{2580}";
+                } elseif ($topTransparent) {
+                    // Top pixel transparent, bottom opaque: show bottom half
+                    // only via lower-half block (▄) with bg color.
+                    $line .= Ansi::bgRgb($botR, $botG, $botB)
+                        . "\u{2584}"
+                        . Ansi::reset();
+                } elseif ($botTransparent) {
+                    // Bottom pixel transparent, top opaque: show top half
+                    // only via upper-half block (▀) with fg color.
+                    $line .= Ansi::fgRgb($topR, $topG, $topB)
+                        . "\u{2580}"
+                        . Ansi::reset();
+                } else {
+                    // Both opaque: standard half-block rendering
+                    $line .= Ansi::fgRgb($topR, $topG, $topB)
+                        . Ansi::bgRgb($botR, $botG, $botB)
+                        . "\u{2580}"
+                        . Ansi::reset();
+                }
             }
             $lines[] = $line;
         }
