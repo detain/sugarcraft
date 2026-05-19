@@ -215,6 +215,10 @@ review for step 05.04 · clean · PR#575
 tests-ci for step 05.04 · clean
 docs for step 05.04 · clean
 step 05.05 · PR#576 · sugar-crumbs: add i18n infrastructure (Lang.php facade + lang/en.php + LangCoverageTest; no src/ strings to translate — purely computational library)
+review for step 05.05 · clean · PR#576
+tests-ci for step 05.05 · clean
+docs for step 05.05 · clean
+step 05.06 · PR#577 · super-candy: add i18n via Lang::t() (Lang.php facade + lang/en.php + LangCoverageTest + status/keyhelp/search translations in Manager/Renderer)
 
 ## Open review findings — 03.05
 
