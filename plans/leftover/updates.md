@@ -267,6 +267,7 @@ step 06.11 · PR#611 · candy-wish: Subsystem middleware (Subsystem/SubsystemHan
 review for step 06.11 · clean · PR#611
 tests-ci for step 06.11 · clean
 docs for step 06.11 · PR#612 · document Subsystem/SubsystemHandler/SftpStub in README + end-user/admin/dev docs
+step 06.12 · PR#613 · candy-wish: add session metadata (sessionId/authMethod/keyFingerprint/clientVersion/serverVersion + withProtocolMetadata)
 
 ## Open review findings — 03.05
 
