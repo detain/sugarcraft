@@ -116,4 +116,13 @@ final class QuarterBlockRenderer implements Renderer
     {
         return false;
     }
+
+    /**
+     * Quarter-block rendering uses plain text SGR codes — no stored
+     * image identity to delete. Returns the empty string.
+     */
+    public function delete(string $imageId): string
+    {
+        return '';
+    }
 }

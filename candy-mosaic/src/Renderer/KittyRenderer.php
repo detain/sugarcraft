@@ -133,6 +133,16 @@ final class KittyRenderer implements Renderer
     }
 
     /**
+     * Remove a previously rendered image by its numeric id.
+     *
+     * Uses Kitty protocol action 'd' (delete specific image).
+     */
+    public function delete(string $imageId): string
+    {
+        return Ansi::kittyGraphicsClear((int) $imageId);
+    }
+
+    /**
      * Split base64 string into protocol-compliant chunks (max 4092 bytes).
      *
     /**

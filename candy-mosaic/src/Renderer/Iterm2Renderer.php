@@ -70,4 +70,16 @@ final class Iterm2Renderer implements Renderer
     {
         return true;
     }
+
+    /**
+     * Remove the most recently displayed iTerm2 / WezTerm image.
+     *
+     * iTerm2 does not support deleting by image id — "Pop" removes the
+     * topmost image from the stack. The `$imageId` parameter is accepted
+     * for interface compatibility but has no effect.
+     */
+    public function delete(string $imageId): string
+    {
+        return Ansi::iterm2Delete();
+    }
 }
