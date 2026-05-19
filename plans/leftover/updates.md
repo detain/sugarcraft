@@ -275,6 +275,7 @@ step 06.13 · PR#615 · candy-wish: async middleware — Middleware interface ac
 fix for step 06.13 · PR#616 · resolved 2 findings (AsyncMiddleware docs in README + promise-awaiting clarification note in Server.php)
 tests-ci for step 06.13 · clean
 docs for step 06.13 · PR#618 · add AsyncMiddleware to end-user API table + async middleware extension point in dev guide + operational notes in hub-admin guide
+step 07.01 · PR#619 · candy-vt: DECSTBM scroll margins — ScrollHandler accepts region bounds, ScreenHandler tracks scrollRegionTop/Bottom, CSI r wired (leftover-rollout step 07.01)
 
 ## Open review findings — 03.05
 
