@@ -169,10 +169,23 @@ review for step 03.08 · clean · PR#541
   review for step 03.14 · clean · PR#558
   tests-ci for step 03.14 · clean
   docs for step 03.14 · clean
+  step 03.15 · PR#559 · sugar-dash: generate-goldens.php + GoldenSnapshotTest.php + 244 golden snapshots at 80x24 and 120x40 (leftover-rollout step 03.15)
+  review for step 03.15 · clean · PR#559
+  tests-ci for step 03.15 · clean
+  docs for step 03.15 · clean
+  step 03.16 · PR#560 · sugar-dash: create plot-braille/gridtable-demo/boxer examples + update golden snapshots + README GIF demos table (leftover-rollout step 03.16)
+  review for step 03.16 · clean · PR#560
+  tests-ci for step 03.16 · clean
+  docs for step 03.16 · clean
   step 03.17 · PR#561 · sugar-dash: Drawable::withTheme + layout containers fan theme to children + Badge/Card/NProgress opt-in + dashboard-live Ctrl-T toggle (leftover-rollout step 03.17)
+  review for step 03.17 · clean · PR#561
   fix for step 03.17 · PR#562 · resolved 3 findings (5 containers +Theme, test naming acceptable, remaining hex→theme carry-forward)
+  tests-ci for step 03.17 · clean
+  docs for step 03.17 · clean
+  step 03.18 · PR#563 · sugar-dash: delete 7 one-shot migration scripts + rename dashboard-interactive.php → dashboard-accordion-timeline.php (leftover-rollout step 03.18)
   carry-forward: step 03.17 Issue #1: 760+ hardcoded Color::hex() calls remain in Components/ (Modal/Notification, Alert, Toast, Card/*, Tree/*, Media/*, Feedback/*, Gauge, Bullet, etc.) — bulk hex→theme conversion needed as follow-up
   carry-forward: step 03.17 Issue #3 (minor): DrawableThemeTest.php naming (vs step-spec RenderUsesThemeTest.php per family) — acceptable as test covers same ground; no action needed
+  carry-forward: step 03.18 Issue #1: examples/dashboard-accordion-timeline.php uses `SugarCraft\Dash\Grid\StackedGrid` (moved to Layout in step 03.01) — example needs namespace fix
 
 ## Open review findings — 03.05
 
