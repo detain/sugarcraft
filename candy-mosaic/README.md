@@ -117,3 +117,58 @@ during rendering (Kitty) or a placeholder for interface compatibility
 | HalfBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
 | QuarterBlock | _(none)_ | Plain text SGR; no stored image identity; returns `''` |
 | Chafa | _(none)_ | External command; no persistent image identity; returns `''` |
+
+## Animation
+
+Drive a sequence of frames through `AnimationDriver` — a `Model`-implementing class that uses `Cmd::tick()` for per-frame timing and `Renderer::delete()` / `Renderer::renderFrame()` for clean per-frame redraws on Kitty/iTerm2 terminals.
+
+```php
+use SugarCraft\Mosaic\Animation;
+use SugarCraft\Mosaic\AnimationDriver;
+use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Mosaic;
+
+$frames = [
+    ImageSource::fromFile('frame1.png'),
+    ImageSource::fromFile('frame2.png'),
+    ImageSource::fromFile('frame3.png'),
+];
+
+$animation = Animation::fixed($frames, delayMs: 100);
+$driver    = new AnimationDriver(
+    animation:  $animation,
+    renderer:   (Mosaic::kitty())->renderer(),
+    cellWidth:  40,
+    cellHeight: 20,
+    imageId:    1,
+);
+
+// Use in a Program:
+// new Program($driver, ...);
+echo $driver->view(); // renders first frame immediately
+```
+
+`Animation` is an immutable value object (`list<ImageSource>` + `list<int> $delaysMs`). Use `Animation::fixed($frames, $delayMs)` for uniform delays, or `new Animation($frames, $delaysMs)` for per-frame control. `withFrame($index, $frame, $delayMs)` returns a new instance with one replaced frame.
+
+`AnimationDriver` composes `Animation` + current frame index + paused flag. Call `withIndex()` / `withPaused()` / `withImageId()` for fluent state changes. On Kitty-capable terminals, `KittyRenderer::renderFrame($image, $width, $height, $imageId)` renders a single frame with a stable id that `delete($imageId)` can later target.
+
+## Architecture
+
+```
+SugarCraft\Mosaic
+├── Animation              # Immutable frame sequence value object
+├── AnimationDriver        # Model; drives Animation onto a Renderer via tick()
+├── FrameTickMsg          # Internal Msg for frame-advance ticks
+├── ImageSource            # Image bytes + metadata (bytes, format, aspect ratio)
+├── KittyOptions           # Kitty protocol options (transmit / place / compress)
+├── Lang                   # i18n facade
+├── Mosaic                 # Facade: probe / builder / render
+├── PixelGrid              # 2-D cell grid (foreground, background, alpha, char)
+└── Renderer
+    ├── ChafaRenderer      # External command renderer
+    ├── HalfBlockRenderer  # Unicode ▀ with 24-bit fg/bg
+    ├── Iterm2Renderer     # iTerm2 OSC 1337
+    ├── KittyRenderer      # Kitty APC graphics (chunked PNG)
+    ├── QuarterBlockRenderer # Unicode ░▒▓█ 2×2 sub-pixel
+    └── SixelRenderer      # DEC sixel with median-cut quantizer
+```
