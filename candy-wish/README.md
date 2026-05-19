@@ -134,6 +134,7 @@ ssh wishuser@your-host
 | `Keepalive`          | both            | Sends SSH-level keepalive messages at a configurable interval.                                      |
 | `Spawn`              | InProcess only  | Terminal — spawns a child cmd in a candy-pty controlled by the supervisor.                          |
 | `BubbleTea`          | HostSshd only   | Terminal — mounts a SugarCraft Program inline reading STDIN, writing STDOUT.                         |
+| `Subsystem`          | both            | Terminal — parses `subsystem <name>` from `Session::command`, dispatches to a registered `SubsystemHandler`. Non-subsystem requests pass through to `$next`. |
 
 All middleware receives a {@see Context} as the first argument, along with
 the {@see Session} and a `$next` continuation. Implement `SugarCraft\Wish\Middleware`:
@@ -288,6 +289,38 @@ final class DebugChannelHandler implements ChannelHandler
 // Pass to InProcessTransport
 new InProcessTransport($ptySystem, new DebugChannelHandler());
 ```
+
+## Subsystem middleware (InProcessTransport)
+
+SSH clients can request a named subsystem by sending `subsystem <name>` as
+the original command. The `Subsystem` middleware parses this prefix, looks up
+a registered handler, invokes it, and stops the chain — subsystem handlers
+are terminal by design.
+
+| Class | Purpose |
+|-------|---------|
+| `Subsystem` | Middleware — parses `subsystem <name>`, dispatches to registered handler |
+| `SubsystemHandler` | Interface — implement `handle(Context, Session): void` for a named subsystem |
+| `SftpStub` | Example impl — stub demonstrating wiring; not a real SFTP server |
+
+```php
+use SugarCraft\Wish\Middleware\Subsystem;
+use SugarCraft\Wish\Middleware\Subsystem\SftpStub;
+
+$subsystem = new Subsystem();
+$subsystem->register('sftp', new SftpStub());
+
+Server::new()
+    ->use(new Logger('/var/log/wish.jsonl'))
+    ->use(new Auth(['alice', 'bob']))
+    ->use($subsystem)  // handles subsystem sftp; others pass through to Spawn
+    ->use(new Spawn(fn (Session $s) => ['cmd' => ['/bin/bash', '-l']]))
+    ->serve();
+```
+
+A production SFTP implementation would implement `SubsystemHandler` to speak
+the SFTP protocol over the session's stdin/stdout after `Subsystem`
+extracts the name and dispatches.
 
 ## Status
 
