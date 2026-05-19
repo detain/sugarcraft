@@ -316,7 +316,7 @@ tests-ci for step 07.14 · clean
 docs for step 07.14 · PR#648 · document HalfBlockRenderer transparent-pixel docblock + SixelRenderer::maxColors() docblock + end-user HTML feature grid + API table entries
 fix for step 07.13 · PR#645 · resolved 1 finding (remove orphaned docblock)
 docs for step 07.13 · clean · PR#646 · document virtual-image (a=p) + zlib compression (f=1) in README/end-user HTML/PHPDoc/CALIBER_LEARNINGS.md
-step 11.01 · plans/sugar-post-identity.md · strategic decision memo (Option A/B/C; recommendation: A — stay an email tool, finish upstream Pop TUI surface; awaiting user decision)
+step 11.01 · PR#649 · plans: sugar-post-identity decision memo (Option A/B/C; recommendation: A — stay an email tool, finish upstream Pop TUI surface; awaiting user decision)
 
 ## Open review findings — 03.05
 
