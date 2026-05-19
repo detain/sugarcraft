@@ -55,6 +55,9 @@ ToastType::Info
 ToastType::Success
 ```
 
+Each type also provides a localized label via `ToastType::label()` (e.g.
+`ToastType::Success->label()` → `"Success"` in English).
+
 ## Positions
 
 ```php
@@ -64,6 +67,50 @@ Position::TopRight
 Position::BottomLeft
 Position::BottomCenter
 Position::BottomRight
+```
+
+## Internationalization
+
+User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
+All translatable strings live in `lang/en.php` under the `'toast'` namespace.
+
+**Available keys** (`lang/en.php`):
+
+| Key              | Default string                    | Parameters   |
+|------------------|-----------------------------------|--------------|
+| `type.info`       | `Info`                            | —            |
+| `type.warning`    | `Warning`                         | —            |
+| `type.error`      | `Error`                           | —            |
+| `type.success`    | `Success`                         | —            |
+| `dismiss`        | `Press any key to dismiss`        | —            |
+| `count`           | `{count} notification(s)`         | `{count}`    |
+
+To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
+values. The lookup chain follows `SugarCraft\Core\I18n\T`:
+exact locale → base language → `en` → raw key.
+
+**Using the facade:**
+
+```php
+use SugarCraft\Toast\Lang;
+use SugarCraft\Toast\ToastType;
+
+$label = ToastType::Error->label();        // 'Error' (i18n-aware)
+$prompt = Lang::t('dismiss');            // 'Press any key to dismiss'
+$counter = Lang::t('count', ['count' => 3]); // '3 notification(s)'
+```
+
+**Adding new translatable strings:**
+
+```php
+// In any source file:
+use SugarCraft\Toast\Lang;
+
+// Simple key:
+$msg = Lang::t('dismiss');
+
+// With placeholder:
+$counter = Lang::t('count', ['count' => $n]);
 ```
 
 ## License
