@@ -63,8 +63,6 @@ final class KittyRenderer implements Renderer
 
     /**
      * Render with explicit Kitty protocol options.
-     *
-     * @experimental Virtual images and z-index are experimental in the Kitty spec.
      */
     public function renderWithOptions(
         ImageSource $image,
@@ -82,14 +80,17 @@ final class KittyRenderer implements Renderer
         }
 
         $pngBytes  = $this->ensurePng($image);
-        $base64    = base64_encode($pngBytes);
+        $compress  = ($opts->toArray()['f'] ?? 100) === 1;
+        $base64    = $compress ? base64_encode(gzcompress($pngBytes)) : base64_encode($pngBytes);
         $chunks    = $this->chunk($base64);
         $total     = count($chunks);
         $optsArr   = $opts->toArray();
         $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
 
+        $action = $opts->useVirtual() ? 'p' : ($optsArr['a'] ?? 'T');
+
         $begin = $this->buildBegin([
-            'a' => $optsArr['a'] ?? 'T',
+            'a' => $action,
             'i' => $optsArr['i'],
             'z' => $optsArr['z'],
             'f' => $optsArr['f'] ?? 100,
