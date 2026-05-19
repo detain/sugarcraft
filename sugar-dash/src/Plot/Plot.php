@@ -9,6 +9,7 @@ use SugarCraft\Dash\Foundation\Buffer;
 use SugarCraft\Dash\Foundation\Rect;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
 use SugarCraft\Dash\Plot\Braille\BrailleMatrix;
 
@@ -430,5 +431,13 @@ final class Plot implements Sizer, Drawable
         $endLabel = (string) ($dataCount - 1);
 
         return [$startLabel, $endLabel];
+    }
+
+    /**
+     * Apply a theme to this plot, using the theme's primary color.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return $this->withColor($theme->primary());
     }
 }

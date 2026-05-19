@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Layout\Grid;
 
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 use SugarCraft\Dash\Layout\Breakpoint;
 use SugarCraft\Dash\State\Persistence;
 use SugarCraft\Sprinkles\Layout;
@@ -311,5 +313,30 @@ final class StackedGrid implements \SugarCraft\Dash\Foundation\Sizer
         }
 
         return $data['collapsedAddresses'] ?? [];
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $itemWithOpts) {
+            $item = $itemWithOpts->item;
+            if ($item instanceof Drawable) {
+                $themedItems[] = new ItemWithOptions(
+                    $item->withTheme($theme),
+                    $itemWithOpts->options
+                );
+            } else {
+                $themedItems[] = $itemWithOpts;
+            }
+        }
+
+        $clone = new self($this->options);
+        $clone->items = $themedItems;
+        $clone->width = $this->width;
+        $clone->height = $this->height;
+        return $clone;
     }
 }

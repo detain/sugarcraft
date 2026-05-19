@@ -7,6 +7,8 @@ namespace SugarCraft\Dash\Layout;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Dash\Layout\AlignItems;
 use SugarCraft\Dash\Layout\JustifyContent;
+use SugarCraft\Dash\Foundation\Drawable;
+use SugarCraft\Dash\Foundation\Theme;
 
 /**
  * A flexbox-style layout component.
@@ -679,6 +681,30 @@ final class FlexLayout implements \SugarCraft\Dash\Foundation\Sizer
             justify: $this->justify,
             alignItems: $this->alignItems,
             gap: max(0, $gap),
+        );
+    }
+
+    /**
+     * Apply a theme, fanning it down to any theme-aware children.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        $themedItems = [];
+        foreach ($this->items as $item) {
+            if ($item instanceof Drawable) {
+                $themedItems[] = $item->withTheme($theme);
+            } else {
+                $themedItems[] = $item;
+            }
+        }
+
+        return new self(
+            items: $themedItems,
+            direction: $this->direction,
+            wrap: $this->wrap,
+            justify: $this->justify,
+            alignItems: $this->alignItems,
+            gap: $this->gap,
         );
     }
 }
