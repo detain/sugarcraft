@@ -6,8 +6,6 @@ namespace SugarCraft\Shell\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Shell\Application;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Tester\CommandTester;
 
 final class EnvVarFallbackTest extends TestCase
@@ -40,17 +38,18 @@ final class EnvVarFallbackTest extends TestCase
         }
     }
 
-    public function testEnvVarFallbackWhenNoExplicitOption(): void
+    public function testExplicitOptionIsUsedWhenProvided(): void
     {
-        putenv('CANDYSHELL_TIMEOUT=30');
-
         $app = new Application();
         $command = $app->find('style');
 
         $tester = new CommandTester($command);
-        $tester->execute(['--foreground' => '#0000ff']);
+        $tester->execute(['--foreground' => '#0000ff', 'text' => ['hello']], ['decorated' => false]);
 
         $this->assertSame(0, $tester->getStatusCode());
+        $output = $tester->getDisplay();
+        $this->assertStringContainsString("\x1b[38;2;0;0;255m", $output);
+        $this->assertStringContainsString('hello', $output);
     }
 
     public function testVersionFromComposerReturnsString(): void
@@ -74,16 +73,5 @@ final class EnvVarFallbackTest extends TestCase
         $expectedVersion = is_array($json) ? ($json['version'] ?? '0.0.0') : '0.0.0';
 
         $this->assertSame($expectedVersion, $version);
-    }
-
-    public function testExplicitOptionIsUsedWhenProvided(): void
-    {
-        $app = new Application();
-        $command = $app->find('style');
-
-        $tester = new CommandTester($command);
-        $tester->execute(['--foreground' => '#0000ff']);
-
-        $this->assertSame(0, $tester->getStatusCode());
     }
 }
