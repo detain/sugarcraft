@@ -304,6 +304,7 @@ docs for step 07.07 · PR#633 · document BCE/sync-output/combining in README + 
   step 07.10 · PR#638 · candy-zone: ClickCounter (DoubleClickMsg/TripleClickMsg) + Manager::setMotionTracking (leftover-rollout step 07.10)
   review for step 07.10 · clean · PR#638
   docs for step 07.10 · PR#639 · document ClickCounter/DoubleClickMsg/TripleClickMsg/setMotionTracking in README + end-user HTML + CALIBER
+  step 07.11 · PR#640 · candy-mosaic: QuarterBlockRenderer (░▒▓█ 2×2 pixel rendering) + PixelGrid::fromGdQuarter() + 12 tests (leftover-rollout step 07.11)
 
 ## Open review findings — 03.05
 
