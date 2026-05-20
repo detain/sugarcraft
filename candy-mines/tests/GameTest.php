@@ -287,4 +287,39 @@ final class GameTest extends TestCase
         $this->assertSame(2, $stats->wins(Difficulty::EASY));
         $this->assertEqualsWithDelta(50.0, $stats->winRate(Difficulty::EASY), 0.01);
     }
+
+    public function testTimerUsesMicrotimePrecision(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+
+        // Before first reveal, elapsed is null.
+        $this->assertNull($g->elapsed());
+
+        // First reveal starts the timer.
+        [$g, ] = $g->update(self::key(KeyType::Space));
+        $this->assertNotNull($g->startedAt);
+
+        // Elapsed should be a float with sub-second precision.
+        $elapsed = $g->elapsed();
+        $this->assertNotNull($elapsed);
+        $this->assertIsFloat($elapsed);
+
+        // After a short wait, elapsed should have increased (sub-second delta).
+        usleep(50000); // 50ms
+        $elapsed2 = $g->elapsed();
+        $this->assertNotNull($elapsed2);
+        $this->assertGreaterThan($elapsed, $elapsed2);
+    }
+
+    public function testRecordResultAcceptsFloatElapsed(): void
+    {
+        $g = Game::withDifficulty(Difficulty::EASY, static fn(int $max): int => 0);
+        [$g, ] = $g->update(self::key(KeyType::Space));
+
+        // Record result with a float elapsed time.
+        $g = $g->recordResult(12.345);
+        $stats = $g->stats();
+
+        $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+    }
 }

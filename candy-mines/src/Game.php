@@ -31,7 +31,7 @@ final class Game implements Model
         public readonly int $cursorX = 0,
         public readonly int $cursorY = 0,
         ?\Closure $rand = null,
-        public readonly ?int $startedAt = null,
+        public readonly ?float $startedAt = null,
         public readonly ?int $elapsedSeconds = null,
         public readonly ?Stats $stats = null,
     ) {
@@ -137,7 +137,7 @@ final class Game implements Model
 
     private function reveal(): self
     {
-        $now = $this->startedAt ?? time();
+        $now = $this->startedAt ?? microtime(true);
         return new self(
             board: $this->board->reveal($this->cursorX, $this->cursorY, $this->rand),
             cursorX: $this->cursorX,
@@ -163,24 +163,24 @@ final class Game implements Model
     }
 
     /**
-     * Returns the elapsed time in seconds if the game is in progress.
+     * Returns the elapsed time in seconds (sub-second precision) if the game is in progress.
      */
-    public function elapsed(): ?int
+    public function elapsed(): ?float
     {
         if ($this->startedAt === null) {
             return null;
         }
         if ($this->board->exploded || $this->board->isWon()) {
-            return $this->elapsedSeconds;
+            return $this->elapsedSeconds !== null ? (float) $this->elapsedSeconds : null;
         }
-        return time() - $this->startedAt;
+        return microtime(true) - $this->startedAt;
     }
 
     /**
      * Record the result of this game and return a new Game with updated stats.
      * The returned Game has the same board state but updated stats.
      */
-    public function recordResult(?int $elapsed): self
+    public function recordResult(?float $elapsed): self
     {
         $difficulty = $this->difficulty();
         if ($difficulty === null) {
@@ -193,8 +193,8 @@ final class Game implements Model
             cursorY: $this->cursorY,
             rand: $this->rand,
             startedAt: $this->startedAt,
-            elapsedSeconds: $this->elapsedSeconds,
-            stats: $this->stats()->withGame($difficulty, $won, $elapsed),
+            elapsedSeconds: $elapsed !== null ? (int) $elapsed : null,
+            stats: $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
         );
     }
 }
