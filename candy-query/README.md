@@ -33,16 +33,63 @@ candy-query path/to/db.sqlite
 
 ## Architecture
 
-| File         | Role                                                                  |
-|--------------|-----------------------------------------------------------------------|
-| `Database`   | Thin PDO/SQLite wrapper. Throws `RuntimeException` on missing files; promotes PDO errors to exceptions for the App's catch arm. |
-| `Pane`       | Enum for pane focus + `next()`.                                       |
-| `App` (Model)| Tables list, rows pane, in-progress SQL editor buffer, error string, status string. Pure-state. |
-| `Renderer`   | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
+| File              | Role                                                                                          |
+|-------------------|----------------------------------------------------------------------------------------------|
+| `Database`        | Thin PDO/SQLite wrapper. Throws `RuntimeException` on missing files; promotes PDO errors.   |
+| `Pane`            | Enum for pane focus + `next()`.                                                              |
+| `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
+| `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
+| `SchemaBrowser`   | PRAGMA-based schema introspection (tables, columns, indexes, foreign keys). Returns immutable schema objects. |
+| `ResultPager`     | Cursor-based pagination for SQL result sets. Immutable + fluent `nextPage()`/`prevPage()`. |
+| `CellEditor`       | Cell-level UPDATE by primary-key identity. `updateCell()`, `updateRow()`, `readCell()`.     |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
 Multi-driver (MySQL / Postgres / Mongo) is a planned follow-up — the current `Database` class is a SQLite-only concrete; promoting it to an interface is a one-class job once the second driver lands.
+
+## Schema introspection
+
+`SchemaBrowser` exposes SQLite schema via three PRAGMA queries:
+
+```php
+$browser = (new SchemaBrowser($pdo))->refresh();
+foreach ($browser->tables as $table) {
+    echo $table->name;
+    foreach ($table->columns as $col) {
+        echo $col->name, ' ', $col->type, $col->primaryKey ? ' PK' : '';
+    }
+}
+```
+
+Schema value objects (`SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForeignKey`) are all `readonly` classes with bare accessors.
+
+## Pagination
+
+`ResultPager` wraps a full result-set and provides cursor-based navigation:
+
+```php
+$pager = new ResultPager($allRows, pageSize: 25);
+while ($pager->hasNextPage()) {
+    $pageRows = $pager->page();   // list of row arrays
+    // process $pageRows
+    $pager = $pager->nextPage();  // new immutable instance
+}
+```
+
+`goToPage(1-based-int)`, `prevPage()`, and `withPageSize(int)` are also available. Page size defaults to 25 rows.
+
+## Cell editing
+
+`CellEditor` targets a table + primary-key column at construction, then performs single-cell or multi-cell updates by row identity:
+
+```php
+$editor = new CellEditor($pdo, 'users', 'id');
+$editor->updateCell(rowId: 42, column: 'email', newValue: 'new@example.com');
+$editor->updateRow(rowId: 42, cells: ['name' => 'Alice', 'email' => 'alice@example.com']);
+$current = $editor->readCell(rowId: 42, column: 'email');
+```
+
+All identifiers are safely quoted via `str_replace('"', '""', $name)`. `updateCell` and `updateRow` return rows affected (0 or 1).
 
 ## Demos
 

@@ -74,6 +74,9 @@ $db = Database::open('app.sqlite');
       <div class="feature"><strong>Tab / Backspace / Space</strong><span>Pane cycle, character delete, and space typing all respect the focused pane.</span></div>
       <div class="feature"><strong>Cursor clamping</strong><span>Lists never let the cursor escape their bounds; switching panes preserves per-pane positions.</span></div>
       <div class="feature"><strong>PDO under the hood</strong><span><code>:memory:</code> driving in tests covers the full transition surface without fixture files.</span></div>
+      <div class="feature"><strong>SchemaBrowser</strong><span>PRAGMA-based introspection — tables, columns, indexes, foreign keys. Returns immutable <code>SchemaTable</code>/<code>SchemaColumn</code>/<code>SchemaIndex</code>/<code>SchemaForeignKey</code> value objects.</span></div>
+      <div class="feature"><strong>ResultPager</strong><span>Cursor-based pagination for SQL result sets. Immutable + fluent: <code>nextPage()</code>, <code>prevPage()</code>, <code>goToPage()</code>, <code>withPageSize()</code>. Default page size 25.</span></div>
+      <div class="feature"><strong>CellEditor</strong><span>Cell-level UPDATE by primary-key identity. <code>updateCell()</code>, <code>updateRow()</code>, <code>readCell()</code> — all safely quoted, all return rows affected.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -94,6 +97,16 @@ $db = Database::open('app.sqlite');
 <tr><td>Database</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
 <tr><td>Database</td><td>query(sql)</td><td>Execute SQL query</td></tr>
 <tr><td>App</td><td>start(database)</td><td>Create the app model</td></tr>
+<tr><td>SchemaBrowser</td><td>refresh()</td><td>Load all tables + columns + indexes + FKs via PRAGMA</td></tr>
+<tr><td>SchemaBrowser</td><td>dropTable(name)</td><td>DROP table and re-refresh</td></tr>
+<tr><td>SchemaTable</td><td>column(name)</td><td>Find a column by name</td></tr>
+<tr><td>ResultPager</td><td>page()</td><td>Rows on current page</td></tr>
+<tr><td>ResultPager</td><td>nextPage() / prevPage() / goToPage(n)</td><td>Navigate pages (all return new instance)</td></tr>
+<tr><td>ResultPager</td><td>withPageSize(n)</td><td>Change page size (returns new instance)</td></tr>
+<tr><td>ResultPager</td><td>hasNextPage() / hasPrevPage()</td><td>Check navigation availability</td></tr>
+<tr><td>CellEditor</td><td>updateCell(rowId, column, newValue)</td><td>Update one cell, return rows affected</td></tr>
+<tr><td>CellEditor</td><td>updateRow(rowId, cells)</td><td>Update multiple cells in one row</td></tr>
+<tr><td>CellEditor</td><td>readCell(rowId, column)</td><td>Read current cell value</td></tr>
 </table>
   </div>
 </section>
