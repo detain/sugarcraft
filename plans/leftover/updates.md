@@ -345,6 +345,8 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
  review for step 07.18 · clean · PR#674
  tests-ci for step 07.18 · clean
  docs for step 07.18 · PR#675 · document attachSigwinchToFd() in README (resize forwarding + Mirrors table) + end-user HTML (resize section + API table) + dev HTML (SignalForwarder extension point note) + CALIBER_LEARNINGS.md [pattern:attachSigwinchToFd-fd-based]
+  step 07.19 · PR#676 · candy-pty: add ControllingTerminal::claim(int $fd) static method (setsid+ioctl(TIOCSCTTY)); bin/pty-shim.php delegates to it
+  docs for step 07.19 · PR#677 · document ControllingTerminal::claim() in README (Mirrors + API table + Controlling terminal section) + end-user HTML (feature + API table) + admin HTML (new section) + dev HTML (new section + namespace tree) + CALIBER [pattern:claim-setsid-ioctl]
 
 ## Open review findings — 07.16
 
