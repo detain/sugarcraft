@@ -602,6 +602,49 @@ final class Form implements Model
     }
 
     /**
+     * Run all field validators and return the full error map.
+     * Unlike {@see errors()} which only reports per-field inline errors
+     * (min/max violations, format errors), this also triggers any
+     * attached validators so cross-field constraints are evaluated.
+     * Returns `array<fieldKey, errorMessage>` for fields that fail.
+     * Mirrors huh's `ValidateAll()`.
+     *
+     * @return array<string, string>
+     */
+    public function validateAll(): array
+    {
+        $out = [];
+        $accumulated = [];
+        foreach ($this->groups as $i => $group) {
+            if ($group->isHidden($accumulated)) {
+                continue;
+            }
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if ($f->skippable()) {
+                    continue;
+                }
+                $accumulated[$f->key()] = $f->value();
+            }
+        }
+        // Re-validate all fields by collecting their current errors.
+        foreach ($this->groups as $i => $group) {
+            if ($group->isHidden($accumulated)) {
+                continue;
+            }
+            foreach ($this->fieldsByGroup[$i] as $f) {
+                if ($f->skippable()) {
+                    continue;
+                }
+                $err = $f->getError();
+                if ($err !== null && $err !== '') {
+                    $out[$f->key()] = $err;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Currently-applicable key bindings rendered as `[label, keys]` rows
      * suitable for a status / help bar. The bindings reflect form-level
      * navigation (Tab, Shift-Tab, Enter, Esc/Ctrl-C) plus any extras
