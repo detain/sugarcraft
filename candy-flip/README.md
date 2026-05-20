@@ -51,7 +51,8 @@ GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage
 | `Frame`           | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` (centiseconds), `$disposal` method (0–3), and `$transparent` flag. |
 | `Downsampler`     | Image downsampler with two modes: `NEAREST` (center-pixel sample) and `AREA_AVERAGE` (area-weighted RGB average — higher quality, default). |
 | `Dither\FloydSteinberg` | Floyd-Steinberg error-diffusion dithering against a fixed palette. Source image is not modified; returns a new `GdImage`. |
-| `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit `█` blocks) or `density` (luminance ramp). |
+| `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit `█` blocks) or `density` (luminance ramp). `withAdaptiveSize()` queries the TTY via `SizeIoctl` so the output never overflows the viewport; `withConstraints()` accepts explicit row/col limits for testing. |
+| `Cache/FrameCache` | WeakMap-backed memoization cache keyed by `Frame` object identity. Identical frames skip the rendering step on re-playback, and entries are dropped automatically when the `Frame` is garbage-collected. |
 | `Player`          | SugarCraft Model — index + paused + preset state. `Cmd::tick(...)` schedules frame advance using per-frame delays. |
 | `TickMsg`         | Frame-tick message produced by the Cmd.                                                            |
 

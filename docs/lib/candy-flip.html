@@ -78,6 +78,8 @@ $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
       <div class="feature"><strong>Two presets</strong><span><code>solid</code> — full-cell <code>█</code> in 24-bit truecolor. <code>density</code> — luminance ramp <code>` .:-=+*#%@`</code>.</span></div>
       <div class="feature"><strong>Pause + step</strong><span><code>Space</code> pauses; <code>←</code> / <code>→</code> step through frames manually.</span></div>
       <div class="feature"><strong>Preset toggle</strong><span><code>d</code> swaps solid ↔ density without losing your position.</span></div>
+      <div class="feature"><strong>Adaptive sizing</strong><span><code>Renderer::withAdaptiveSize()</code> queries the TTY via <code>SizeIoctl</code> (ioctl <code>TIOCGWINSZ</code>) so the output never overflows the viewport. Call <code>withConstraints()</code> with explicit limits to test rendering at fixed dimensions.</span></div>
+      <div class="feature"><strong>Frame cache</strong><span>WeakMap-backed memoization caches rendered frame output by <code>Frame</code> object identity — repeated playback skips re-rendering, and entries are dropped automatically when the <code>Frame</code> is garbage-collected.</span></div>
       <div class="feature"><strong>Frame cap</strong><span>Decoder caps at 256 frames so a runaway file can't OOM the runtime.</span></div>
       <div class="feature"><strong>Cmd::tick driven</strong><span><code>Cmd::tick($interval, …)</code> schedules frame advance — no busy-waiting in the main fiber.</span></div>
     </div>
@@ -96,10 +98,15 @@ $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Decoder</td><td>decode(path, cellsW, cellsH)</td><td>Load and resize GIF</td></tr>
+<tr><td>FrameCache</td><td>new()</td><td>WeakMap-backed render cache</td></tr>
+<tr><td>FrameCache</td><td>get(frame) / set(frame, rendered) / has(frame) / delete(frame) / clear()</td><td>Cache read/write/reset</td></tr>
 <tr><td>Player</td><td>new(frames)</td><td>Create player</td></tr>
 <tr><td>Program</td><td>new(player, options)</td><td>Create program</td></tr>
 <tr><td>Program</td><td>run()</td><td>Start the event loop</td></tr>
 <tr><td>ProgramOptions</td><td>new(useAltScreen)</td><td>Configure terminal mode</td></tr>
+<tr><td>Renderer</td><td>withAdaptiveSize()</td><td>Query TTY size via SizeIoctl, clamp output</td></tr>
+<tr><td>Renderer</td><td>withConstraints(rows, cols)</td><td>Set explicit render limits (testing)</td></tr>
+<tr><td>Renderer</td><td>renderFrame(frame, preset)</td><td>Render a frame to ANSI string</td></tr>
 </table>
   </div>
 </section>
