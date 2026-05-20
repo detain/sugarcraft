@@ -341,9 +341,10 @@ docs for step 07.16 · PR#671 · document openpty FFI in end-user HTML (Pty::ope
 step 07.17 · PR#672 · candy-pty: add waitpid() FFI for fast process-exit detection (<1ms vs 10ms poll) + ChildPollWaitpidTest (5 tests) + signal-exit handling (128+signal)
 tests-ci for step 07.17 · clean
 docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALIBER + end-user/admin/dev HTML + PHPDoc on tryWaitpid
-step 07.18 · PR#674 · candy-pty: add attachSigwinchToFd() for /dev/tty size-forwarding (SizeIoctl against raw fd + onResize callback + SignalForwarderDevTtyTest)
-review for step 07.18 · clean · PR#674
-tests-ci for step 07.18 · clean
+ step 07.18 · PR#674 · candy-pty: add attachSigwinchToFd() for /dev/tty size-forwarding (SizeIoctl against raw fd + onResize callback + SignalForwarderDevTtyTest)
+ review for step 07.18 · clean · PR#674
+ tests-ci for step 07.18 · clean
+ docs for step 07.18 · PR#675 · document attachSigwinchToFd() in README (resize forwarding + Mirrors table) + end-user HTML (resize section + API table) + dev HTML (SignalForwarder extension point note) + CALIBER_LEARNINGS.md [pattern:attachSigwinchToFd-fd-based]
 
 ## Open review findings — 07.16
 
