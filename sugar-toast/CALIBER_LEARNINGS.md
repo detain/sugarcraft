@@ -100,3 +100,36 @@ This allows consumer code to pass dynamically-composed type names without
 matching the enum exactly. Case-insensitivity is intentional — user input is
 unpredictable and the failure mode (exception) is clearer than silent
 no-op.
+
+---
+
+## [pattern:action-value-object] Action with readonly label + Closure callback
+
+`Action` is a minimal value object holding a user-visible label and a zero-arg
+callback. The class is `final` with two `readonly` constructor parameters and
+no internal state. Construction is via the named factory `Action::make()` for
+fluent call-chains, but direct construction is also valid since the ctor is
+public. Callbacks are stored as `\Closure(): void` — no parameters, no return
+value, keeps the interface small and impossible to misuse.
+
+```php
+$action = Action::make('Retry', function (): void {
+    // reconnect logic
+});
+// Trigger:
+$action->callback();
+```
+
+---
+
+## [pattern:toast-history-log] HistoryLog records dismissed toasts; immutable log with push-returning-new-instance
+
+`HistoryLog` is an immutable collection of `Alert` entries representing every
+toast dismissed via `Toast::dismiss()`. It is constructed with a private
+`list<Alert> $entries` and exposes `push(Alert): self` (returns a new log
+with the alert appended), `all(): list<Alert>`, and `count(): int`. The
+immutable pattern means `Toast::$historyLog` is replaced with a new log
+instance on every `dismiss()` call — prior instances remain valid for inspection
+or undo stacks. The `Toast` instance itself is also immutable (clone+mutate),
+so `getHistory()` on a given `Toast` always reflects only the dismissals that
+occurred on that instance's lineage.
