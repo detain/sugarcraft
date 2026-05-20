@@ -486,4 +486,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.11 · PR#731 · candy-log: Probe-driven color + PadLevelText + syslog level values + key styles (leftover-rollout step 09.11)
     review for step 09.11 · clean · PR#731
     tests-ci for step 09.11 · clean
+    docs for step 09.11 · clean · PR#732
 
