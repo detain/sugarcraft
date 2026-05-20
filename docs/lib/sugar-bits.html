@@ -87,7 +87,7 @@ final class Search implements Model {
     <div class="feature-grid">
       <div class="feature"><strong>Spinner</strong><span>12 styles — line, dot, miniDot, points, pulse, globe, meter, jump, moon, monkey, hamburger, ellipsis.</span></div>
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
-      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, line numbers, soft-wrap, dynamic-height growth (mirrors upstream bubbles #910).</span></div>
+      <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth (mirrors upstream bubbles #910).</span></div>
       <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
       <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246).</span></div>
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump (mirrors bubbles #233).</span></div>
@@ -111,6 +111,9 @@ final class Search implements Model {
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>TextInput</td><td>new()</td><td>Create a new text input instance</td></tr>
 <tr><td>TextInput</td><td>update(Msg)</td><td>Handle input events</td></tr>
+<tr><td>TextInput</td><td>withValidateOn(ValidateOn)</td><td>Set validation timing — None / Blur / Change / Submit</td></tr>
+<tr><td>TextInput</td><td>withRestrict(string $pattern)</td><td>PCRE regex filter — only matching keystrokes are accepted</td></tr>
+<tr><td>ValidateOn</td><td>enum</td><td>Cases: None / Blur / Change / Submit — controls when validation fires</td></tr>
 <tr><td>TextArea</td><td>new()</td><td>Create a multi-line text area</td></tr>
 <tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style</td></tr>
 <tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
