@@ -28,6 +28,8 @@ use SugarCraft\Core\Util\Width;
  */
 final class Viewport implements Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     private function __construct(
         public readonly int $width,
         public readonly int $height,
