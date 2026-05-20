@@ -22,6 +22,8 @@ return [
     'color.invalid_hex'           => 'invalid hex color: {hex}',
     'color.ansi_out_of_range'     => 'ansi index out of range [0,15]: {index}',
     'color.ansi256_out_of_range'  => 'ansi256 index out of range [0,255]: {index}',
+    'color.parse_empty'           => 'cannot parse empty color name',
+    'color.parse_unknown'          => 'unknown color name: {name}',
 
     // Util/Ansi.php
     'ansi.invalid_fg_code'        => 'invalid 16-color fg code: {code}',
