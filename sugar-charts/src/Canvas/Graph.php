@@ -522,5 +522,60 @@ final class Graph
         self::drawVLine($c, $x, min($open, $close), max($open, $close), $style, $body);
     }
 
+    /**
+     * Compute a list of "nice" numbers for axis tick labeling.
+     *
+     * Returns evenly-spaced round numbers that divide the given range
+     * into readable intervals. Mirrors ntcharts' `niceNumbers` helper.
+     *
+     * @return list<float>  ascending list of tick values
+     */
+    public static function niceNumbers(float $min, float $max, int $targetTicks = 5): array
+    {
+        if ($targetTicks < 2) {
+            $targetTicks = 2;
+        }
+        if ($min > $max) {
+            [$min, $max] = [$max, $min];
+        }
+        if ($min === $max) {
+            return [$min];
+        }
+
+        $range = $max - $min;
+        // Target spacing between adjacent ticks.
+        $targetStep = $range / (float) ($targetTicks - 1);
+
+        // Compute the power-of-ten exponent for the step.
+        $exp = (int) floor(log10($targetStep));
+        $step10 = pow(10.0, $exp);
+
+        // Pick the nicest multiplier: 1, 2, 5, 10.
+        $multipliers = [1.0, 2.0, 5.0, 10.0];
+        $niceStep = $step10 * 10.0;
+        foreach ($multipliers as $m) {
+            $candidate = $step10 * $m;
+            if ($candidate >= $step10) {
+                $niceStep = $candidate;
+                break;
+            }
+        }
+
+        // Round the minimum down to a nice tick boundary.
+        $niceMin = floor($min / $niceStep) * $niceStep;
+        // Ensure we start at or below the actual minimum.
+        if ($niceMin > $min) {
+            $niceMin -= $niceStep;
+        }
+
+        // Generate ticks until we exceed the maximum.
+        $ticks = [];
+        for ($tick = $niceMin; $tick <= $max + 1e-9; $tick += $niceStep) {
+            $ticks[] = $tick;
+        }
+
+        return $ticks;
+    }
+
     private function __construct() {}
 }

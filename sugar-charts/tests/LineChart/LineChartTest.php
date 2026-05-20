@@ -293,4 +293,56 @@ final class LineChartTest extends TestCase
         $this->assertStringContainsString('Series A', $out);
         $this->assertStringContainsString('Series B', $out);
     }
+
+    // ─── push() Streaming Tests ───────────────────────────────────────────
+
+    public function testPushAppendsValue(): void
+    {
+        $chart = LineChart::new([1, 2], 5, 4)->push(3.0);
+        $this->assertSame([1, 2, 3.0], $chart->data);
+    }
+
+    public function testPushSlidesWindowWhenFull(): void
+    {
+        // Width=3, so window holds exactly 3 points.
+        $chart = LineChart::new([1, 2], 3, 4)->push(3.0)->push(4.0);
+        // Oldest point (1) should have been evicted.
+        $this->assertSame([2, 3.0, 4.0], $chart->data);
+    }
+
+    public function testPushWindowOfOne(): void
+    {
+        $chart = LineChart::new([], 1, 4)->push(5.0)->push(6.0);
+        // Only the newest value is kept.
+        $this->assertSame([6.0], $chart->data);
+    }
+
+    // ─── withFill() Tests ───────────────────────────────────────────────
+
+    public function testWithFillRendersAreaBelowCurve(): void
+    {
+        // When fill is on, the output should have more rune cells filled
+        // vertically below each point compared to no-fill.
+        $filled   = LineChart::new([1, 5, 2], 10, 5)->withFill(true)->view();
+        $unfilled = LineChart::new([1, 5, 2], 10, 5)->withFill(false)->view();
+        // Count non-space cells (filled output has more "filled" characters).
+        $filledRunes   = preg_replace('/\s+/', '', $filled);
+        $unfilledRunes = preg_replace('/\s+/', '', $unfilled);
+        $this->assertGreaterThan(mb_strlen($unfilledRunes), mb_strlen($filledRunes));
+    }
+
+    public function testFillFalseRendersLineOnly(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 10, 4)->withFill(false);
+        $out = $chart->view();
+        // Just verify it doesn't throw and produces output.
+        $this->assertNotEmpty($out);
+        $this->assertSame(false, $chart->fill);
+    }
+
+    public function testFillShortAlias(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 10, 4)->fill(true);
+        $this->assertSame(true, $chart->fill);
+    }
 }
