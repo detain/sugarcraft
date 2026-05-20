@@ -10,3 +10,28 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `T::register(namespace, __DIR__ . '/../lang')` on every invocation — this is
   idempotent so no static bootstrap is needed. See `sugar-wishlist/src/Lang.php`
   and `sugar-calendar/src/Lang.php` for the same pattern.
+
+- **[pattern:viewport-virtualization]** slicing visible row range + scrollY offset.
+  In `Table::View()`, when `$viewportHeight > 0`, rows are sliced via
+  `array_slice($rows, $this->scrollY, $this->viewportHeight)` so only the visible
+  window is rendered. Callers drive `withScrollY()` to scroll. See `Table.php` lines
+  566–573.
+
+- **[pattern:column-width-enum]** Fixed/Percent/Dynamic/Content with multi-pass
+  computation. `Table::computeColumnWidths()` runs two passes: first collects
+  explicit widths and counts flex slots, then distributes remaining space to
+  Dynamic/Content columns. `ColumnWidth::Percent` requires a `$percentValue ∈
+  [0.0, 100.0]` validated at `Column::withColumnWidth()`. See `ColumnWidth.php`
+  and `Table.php` lines 468–527.
+
+- **[pattern:cell-wrap-return-list-string]** renderCell returns list for wrapping;
+  callers use `$cell[0]`. `Column::renderCell()` always returns `list<string>` (one
+  per line after wrapping). Single-line callers (e.g. `renderHeader()`) use only
+  the first element. Multi-line callers iterate all elements. This is why
+  `renderHeader()` returns `string` not `list<string>` — it never wraps. See
+  `Column.php` lines 128–150 and `Table.php` line 645.
+
+- **[pattern:percent-value-range]** percent values should be validated 0.0–100.0.
+  `Column::withColumnWidth(ColumnWidth::Percent, $percentValue)` throws
+  `\InvalidArgumentException` if `$percentValue` is outside `[0.0, 100.0]`. Guard
+  fires before any object construction. See `Column.php` lines 100–105.
