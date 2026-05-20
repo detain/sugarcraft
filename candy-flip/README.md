@@ -36,21 +36,24 @@ candy-flip my-animation.gif density # ASCII luminance ramp
 The decoder uses PHP's built-in `imagecreatefromstring()` for in-memory single-frame extraction — no temporary files are written to disk. It walks the GIF89a byte-stream manually to:
 
 1. Parse the Logical Screen Descriptor and Global Color Table (GCT) from the header.
-2. Walk the frame stream, extracting each frame's Graphic Control Extension (GCE) delay value (centiseconds).
-3. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
-4. Downsample the resulting `GdImage` to the requested cell grid.
+2. Walk the frame stream, extracting each frame's Graphic Control Extension (GCE) delay, disposal method (0–3), and transparent-color index.
+3. Extract per-frame Local Color Table (LCT) when present; fall back to the GCT otherwise.
+4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
+5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping transparent pixels in the average.
 
 GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently so memory usage stays bounded regardless of input size.
 
 ## Architecture
 
-| File         | Role                                                                              |
-|--------------|-----------------------------------------------------------------------------------|
-| `Decoder`    | Reads the GIF, extracts per-frame GCE delays, hands each frame to GD via `imagecreatefromstring()`, downsamples to a cell grid, returns a list of {@see Frame}. |
-| `Frame`      | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` in centiseconds (default 10). |
-| `Renderer`   | ANSI emitter. Two presets: `solid` (24-bit `█` blocks) or `density` (luminance ramp). |
-| `Player`     | SugarCraft Model — index + paused + preset state. `Cmd::tick(...)` schedules frame advance using per-frame delays. |
-| `TickMsg`    | Frame-tick message produced by the Cmd.                                           |
+| File              | Role                                                                                                  |
+|-------------------|------------------------------------------------------------------------------------------------------|
+| `Decoder`         | Reads the GIF, extracts per-frame GCE delay + disposal + transparency + local color table, hands each frame to GD via `imagecreatefromstring()`, area-average downsamples to a cell grid, returns a list of {@see Frame}. |
+| `Frame`           | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` (centiseconds), `$disposal` method (0–3), and `$transparent` flag. |
+| `Downsampler`     | Image downsampler with two modes: `NEAREST` (center-pixel sample) and `AREA_AVERAGE` (area-weighted RGB average — higher quality, default). |
+| `Dither\FloydSteinberg` | Floyd-Steinberg error-diffusion dithering against a fixed palette. Source image is not modified; returns a new `GdImage`. |
+| `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit `█` blocks) or `density` (luminance ramp). |
+| `Player`          | SugarCraft Model — index + paused + preset state. `Cmd::tick(...)` schedules frame advance using per-frame delays. |
+| `TickMsg`         | Frame-tick message produced by the Cmd.                                                            |
 
 The decoder caps at 256 frames so a runaway file can't OOM the runtime; pause + manual step are always available even on long animations.
 
