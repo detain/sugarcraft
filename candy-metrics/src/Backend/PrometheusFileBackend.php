@@ -36,6 +36,12 @@ final class PrometheusFileBackend implements Backend
     private array $gauges = [];
     /** @var array<string,array{count:int,sum:float,buckets:array<string,int>}> */
     private array $histograms = [];
+    /** @var array<string,float> */
+    private array $upDownCounters = [];
+    /** @var array<string,float> */
+    private array $asyncCounters = [];
+    /** @var array<string,float> */
+    private array $asyncGauges = [];
 
     public function __construct(private readonly string $path)
     {}
@@ -81,12 +87,40 @@ final class PrometheusFileBackend implements Backend
         $this->histograms[$key] = $h;
     }
 
+    public function upDownCounter(string $name, float $amount, array $tags = []): void
+    {
+        $key = $this->key($name, $tags);
+        $this->upDownCounters[$key] = ($this->upDownCounters[$key] ?? 0.0) + $amount;
+    }
+
+    public function asyncCounter(string $name, float $value, array $tags = []): void
+    {
+        $this->asyncCounters[$this->key($name, $tags)] = $value;
+    }
+
+    public function asyncGauge(string $name, float $value, array $tags = []): void
+    {
+        $this->asyncGauges[$this->key($name, $tags)] = $value;
+    }
+
     public function flush(): void
     {
         $body = '';
         foreach ($this->counters as $key => $val) {
             [$name, $labels] = self::splitKey($key);
             $body .= "# TYPE {$name} counter\n{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->upDownCounters as $key => $val) {
+            [$name, $labels] = self::splitKey($key);
+            $body .= "# TYPE {$name} gauge\n{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->asyncCounters as $key => $val) {
+            [$name, $labels] = self::splitKey($key);
+            $body .= "# TYPE {$name} counter\n{$name}{$labels} " . self::fmt($val) . "\n";
+        }
+        foreach ($this->asyncGauges as $key => $val) {
+            [$name, $labels] = self::splitKey($key);
+            $body .= "# TYPE {$name} gauge\n{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->gauges as $key => $val) {
             [$name, $labels] = self::splitKey($key);

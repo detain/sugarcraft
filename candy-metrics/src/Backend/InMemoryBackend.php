@@ -24,6 +24,12 @@ final class InMemoryBackend implements Backend
     private array $gauges = [];
     /** @var array<string,list<float>> */
     private array $histograms = [];
+    /** @var array<string,float> */
+    private array $upDownCounters = [];
+    /** @var array<string,float> */
+    private array $asyncCounters = [];
+    /** @var array<string,float> */
+    private array $asyncGauges = [];
 
     public function counter(string $name, float $value, array $tags = []): void
     {
@@ -41,12 +47,34 @@ final class InMemoryBackend implements Backend
         $this->histograms[$this->key($name, $tags)][] = $value;
     }
 
+    public function upDownCounter(string $name, float $amount, array $tags = []): void
+    {
+        $key = $this->key($name, $tags);
+        $this->upDownCounters[$key] = ($this->upDownCounters[$key] ?? 0.0) + $amount;
+    }
+
+    public function asyncCounter(string $name, float $value, array $tags = []): void
+    {
+        $this->asyncCounters[$this->key($name, $tags)] = $value;
+    }
+
+    public function asyncGauge(string $name, float $value, array $tags = []): void
+    {
+        $this->asyncGauges[$this->key($name, $tags)] = $value;
+    }
+
     /** @return array<string,float> */
     public function counters(): array { return $this->counters; }
     /** @return array<string,float> */
     public function gauges(): array { return $this->gauges; }
     /** @return array<string,list<float>> */
     public function histograms(): array { return $this->histograms; }
+    /** @return array<string,float> */
+    public function upDownCounters(): array { return $this->upDownCounters; }
+    /** @return array<string,float> */
+    public function asyncCounters(): array { return $this->asyncCounters; }
+    /** @return array<string,float> */
+    public function asyncGauges(): array { return $this->asyncGauges; }
 
     public function counterValue(string $name, array $tags = []): float
     {
@@ -62,6 +90,21 @@ final class InMemoryBackend implements Backend
     public function histogramValues(string $name, array $tags = []): array
     {
         return $this->histograms[$this->key($name, $tags)] ?? [];
+    }
+
+    public function upDownCounterValue(string $name, array $tags = []): float
+    {
+        return $this->upDownCounters[$this->key($name, $tags)] ?? 0.0;
+    }
+
+    public function asyncCounterValue(string $name, array $tags = []): float
+    {
+        return $this->asyncCounters[$this->key($name, $tags)] ?? 0.0;
+    }
+
+    public function asyncGaugeValue(string $name, array $tags = []): ?float
+    {
+        return $this->asyncGauges[$this->key($name, $tags)] ?? null;
     }
 
     /**

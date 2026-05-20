@@ -46,4 +46,25 @@ final class MultiBackend implements Backend
             $b->histogram($name, $value, $tags);
         }
     }
+
+    public function upDownCounter(string $name, float $amount, array $tags = []): void
+    {
+        foreach ($this->children as $b) {
+            $b->upDownCounter($name, $amount, $tags);
+        }
+    }
+
+    public function asyncCounter(string $name, float $value, array $tags = []): void
+    {
+        foreach ($this->children as $b) {
+            $b->asyncCounter($name, $value, $tags);
+        }
+    }
+
+    public function asyncGauge(string $name, float $value, array $tags = []): void
+    {
+        foreach ($this->children as $b) {
+            $b->asyncGauge($name, $value, $tags);
+        }
+    }
 }
