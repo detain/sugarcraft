@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister\Tests;
 
-use SugarCraft\Lister\{DefaultPrefixer, DefaultSuffixer, Model, StringItem};
+use SugarCraft\Lister\{DefaultPrefixer, DefaultSuffixer, FilterState, Model, StringItem};
 use PHPUnit\Framework\TestCase;
 
 final class ModelTest extends TestCase
@@ -202,5 +202,88 @@ final class ModelTest extends TestCase
     {
         $m = $this->model->addItem(new StringItem('x'));
         $this->assertSame($this->model, $m);
+    }
+
+    // -------------------------------------------------------------------------
+    // Filter tests
+    // -------------------------------------------------------------------------
+
+    public function testWithFilterFnReturnsNewInstance(): void
+    {
+        foreach (['apple', 'banana', 'cherry'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+
+        $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'b'));
+
+        // Original model unchanged
+        $this->assertSame(3, $this->model->length());
+        $this->assertNull($this->model->filterFn);
+        $this->assertNull($this->model->filterState);
+
+        // New model has filtered items
+        $this->assertSame(1, $filtered->length());
+        $this->assertSame('banana', (string) $filtered->cursorItem());
+        $this->assertNotNull($filtered->filterFn);
+        $this->assertSame(FilterState::filtering, $filtered->filterState);
+    }
+
+    public function testWithFilterFnFiltersItemsCorrectly(): void
+    {
+        foreach (['apple', 'apricot', 'banana', 'cherry'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+
+        $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
+
+        $this->assertSame(2, $filtered->length());
+        // Verify by navigating through cursorItem
+        $this->assertSame('apple', (string) $filtered->cursorItem());
+        $filtered->cursorDown();
+        $this->assertSame('apricot', (string) $filtered->cursorItem());
+    }
+
+    public function testWithoutFilterRestoresOriginalItems(): void
+    {
+        foreach (['apple', 'banana', 'cherry'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+
+        $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'banana');
+        $this->assertSame(2, $filtered->length());
+
+        $restored = $filtered->withoutFilter();
+        $this->assertSame(3, $restored->length());
+        $this->assertNull($restored->filterFn);
+        $this->assertSame(FilterState::unfiltered, $restored->filterState);
+    }
+
+    public function testWithoutFilterOnUnfilteredModelReturnsSelf(): void
+    {
+        $this->model->addItem(new StringItem('apple'));
+        $result = $this->model->withoutFilter();
+        $this->assertSame($this->model, $result);
+    }
+
+    public function testWithFilterFnCursorClampedToFilteredLength(): void
+    {
+        foreach (['a', 'b', 'c'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+        $this->model->setCursor(2);  // cursor on 'c'
+
+        // Filter out 'c' — cursor should clamp to index 1 (last remaining item 'b')
+        $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'c');
+        $this->assertSame(2, $filtered->length());
+        $this->assertSame(1, $filtered->cursorIndex());
+    }
+
+    public function testFilterStateIsFilteringAfterSet(): void
+    {
+        $this->model->addItem(new StringItem('apple'));
+        $this->assertNull($this->model->filterState);
+
+        $filtered = $this->model->withFilterFn(fn($v) => true);
+        $this->assertSame(FilterState::filtering, $filtered->filterState);
     }
 }

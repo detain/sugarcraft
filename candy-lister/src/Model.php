@@ -56,12 +56,20 @@ final class Model
     /** Style for current item (ANSI string). */
     public string $currentStyle = '';
 
+    /** @var \Closure(\Stringable): bool|null */
+    public ?\Closure $filterFn = null;
+
+    public ?FilterState $filterState = null;
+
     // -------------------------------------------------------------------------
     // Internal state
     // -------------------------------------------------------------------------
 
     /** @var list<Item> */
     private array $items = [];
+
+    /** @var list<Item> */
+    private array $originalItems = [];
 
     private int $cursorIndex = 0;
     private int $idCounter = 0;
@@ -139,6 +147,50 @@ final class Model
     {
         $this->currentStyle = $ansiStyle;
         return $this;
+    }
+
+    /**
+     * Set a filter function and return a new Model with filtering active.
+     *
+     * The filterFn receives a \Stringable and returns bool (true = keep item).
+     * Setting a filter transitions filterState to filtering; the items list
+     * is immediately filtered.
+     *
+     * @param \Closure(\Stringable): bool $fn
+     */
+    public function withFilterFn(\Closure $fn): self
+    {
+        $clone = clone $this;
+        $clone->filterFn = $fn;
+        $clone->filterState = FilterState::filtering;
+        $clone->originalItems = $clone->items;
+        $clone->items = array_values(array_filter(
+            $clone->items,
+            fn(Item $item) => $fn($item->value),
+        ));
+        // Clamp cursor to new length
+        $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        return $clone;
+    }
+
+    /**
+     * Clear the filter and return a new Model with unfiltered items.
+     *
+     * Restores the original item list and transitions filterState to unfiltered.
+     */
+    public function withoutFilter(): self
+    {
+        if ($this->filterFn === null) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->filterFn = null;
+        $clone->filterState = FilterState::unfiltered;
+        $clone->items = $clone->originalItems;
+        $clone->originalItems = [];
+        // Clamp cursor
+        $clone->cursorIndex = min($clone->cursorIndex, max(0, count($clone->items) - 1));
+        return $clone;
     }
 
     // -------------------------------------------------------------------------
