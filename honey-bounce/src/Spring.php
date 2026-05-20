@@ -7,6 +7,7 @@ namespace SugarCraft\Bounce;
 use SugarCraft\Bounce\Lang;
 use SugarCraft\Bounce\SpringPreset;
 use SugarCraft\Bounce\SpringConfig;
+use SugarCraft\Palette\Probe;
 
 /**
  * Damped harmonic oscillator (Ryan Juckett's "Damped Springs"), with
@@ -103,10 +104,17 @@ final class Spring
     /**
      * Advance one step toward $target, returning the new position and velocity.
      *
+     * If reduced motion is enabled via environment (REDUCE_MOTION or
+     * PREFERS_REDUCED_MOTION), the spring snaps to its target instantly.
+     *
      * @return array{0:float,1:float}
      */
     public function update(float $pos, float $vel, float $target): array
     {
+        if (Probe::reducedMotion()) {
+            return [$target, 0.0];
+        }
+
         $oldPos = $pos - $target;
         $newPos = $oldPos * $this->posPosCoef + $vel * $this->posVelCoef + $target;
         $newVel = $oldPos * $this->velPosCoef + $vel * $this->velVelCoef;
