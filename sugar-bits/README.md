@@ -230,6 +230,43 @@ Immutable list of sort criteria — each entry is a `(column index, direction)` 
 
 Sorting throws `\InvalidArgumentException` with message `table.sort_unknown_column` when the column name is not found. The exception message is localizable.
 
+## Table — filtering
+
+```php
+use SugarCraft\Bits\Table\Table;
+
+// Enable the filter feature (opt-in)
+$t = $table->withFilterable(true);
+
+// Set a query string — default: case-insensitive substring match across all visible columns
+$t = $table->withFilter('foo');
+
+// Custom filter: receives a row (list<string>), returns true to keep
+$t = $table->withFilterPredicate(fn(array $row): bool =>
+    str_contains(strtolower(implode("\t", $row)), 'foo')
+);
+
+// Inspect current filter state
+$isFilterable = $t->getFilterable();   // bool
+$query        = $t->getFilter();        // string
+$predicate    = $t->getFilterPredicate(); // ?Closure(list<string>): bool
+```
+
+When `withFilterPredicate()` is set, it overrides the default substring-match behaviour. Pass `null` to restore the default.
+
+### Table filter builders
+
+| Method | Description |
+|--------|-------------|
+| `withFilterable(bool $filterable)` | Enable or disable the filter feature |
+| `withFilter(string $query)` | Set the filter query string (non-empty enables filtering) |
+| `withFilterPredicate(?Closure(list<string>): bool $predicate)` | Custom filter callable — `null` restores the default |
+| `getFilterable(): bool` | Return whether filtering is enabled |
+| `getFilter(): string` | Return the current filter query string |
+| `getFilterPredicate(): ?Closure` | Return the current custom predicate |
+
+The default filter applies case-insensitive substring matching across all visible columns.
+
 ## Test
 
 ```sh
