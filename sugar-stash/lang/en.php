@@ -48,4 +48,11 @@ return [
     // Commit
     'commit.prompt'         => 'commit message: ',
     'commit.empty_message'  => 'commit: message cannot be empty',
+
+    // Branch creation
+    'branch.prompt'         => 'branch name: ',
+    'branch.empty_name'     => 'branch: name cannot be empty',
+
+    // Diff viewer
+    'diff.hunk_staged'      => 'hunk staged',
 ];
