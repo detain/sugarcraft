@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Bounce;
 
 use SugarCraft\Bounce\Lang;
+use SugarCraft\Bounce\SpringPreset;
+use SugarCraft\Bounce\SpringConfig;
 
 /**
  * Damped harmonic oscillator (Ryan Juckett's "Damped Springs"), with
@@ -118,5 +120,17 @@ final class Spring
             throw new \InvalidArgumentException(Lang::t('spring.fps_positive', ['fps' => $n]));
         }
         return 1.0 / $n;
+    }
+
+    /**
+     * Construct a spring from a named preset at 60 fps.
+     *
+     * @param SpringPreset $preset  One of Gentle / Wobbly / Stiff / Slow / Molasses
+     * @param float|null   $deltaTime Overrides the default 1/60s frame time
+     */
+    public static function fromPreset(SpringPreset $preset, ?float $deltaTime = null): Spring
+    {
+        $config = $preset->resolve();
+        return $config->spring($deltaTime ?? (1.0 / 60.0));
     }
 }
