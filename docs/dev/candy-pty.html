@@ -64,6 +64,16 @@
       <li>Remove the <code>UnsupportedPlatformException::forDeferredBackend()</code> throw for that value.</li>
     </ol>
 
+    <h3 style="margin-top: 32px;">ChildPollTrait — child lifecycle fast-path</h3>
+    <p>The <code>ChildPollTrait</code> (in <code>src/Posix/ChildPollTrait.php</code>) is a package-private trait shared by <code>PosixChild</code> and <code>PosixProcess</code>. It exposes the canonical lifecycle methods: <code>pid()</code>, <code>exited()</code>, <code>wait()</code>, <code>exitCode()</code>, and <code>pollDestruct()</code>.</p>
+    <p>Exit detection uses a two-tier strategy:</p>
+    <ol>
+      <li><strong>Fast path (sub-ms):</strong> <code>tryWaitpid(int $pid): ?int</code> calls <code>waitpid(pid, &status, WNOHANG)</code> via FFI into libc. Returns the exit code immediately if the child has exited, <code>null</code> if still running or FFI is unavailable. WNOHANG makes it non-blocking — returns 0 if the child is still alive.</li>
+      <li><strong>Fallback (10 ms poll):</strong> PHP's <code>proc_get_status()</code> polled in a <code>usleep(10_000)</code> loop inside <code>wait()</code>, or a single probe in <code>exited()</code>.</li>
+    </ol>
+    <p>Exit code decoding: normally-exited → <code>(status &gt;&gt; 8) &amp; 0xFF</code>; signal-terminated → <code>128 + (status &amp; 0x7F)</code> (Unix shell convention). The FFI call is wrapped in <code>try/catch</code> — any <code>FFI\Exception</code> or <code>PtyException</code> falls through to the poll loop silently.</p>
+    <p>The <code>tryWaitpid</code> method is <code>private</code> — it is not part of the public API. Implementors of custom <code>Child</code> backends do not need to replicate it unless they want FFI-based fast-path exit detection.</p>
+
     <h3 style="margin-top: 32px;">Internal PTY allocation — openpty vs quartet</h3>
     <p>The <code>PosixPtySystem</code> backend uses two platform-specific code paths internally when allocating the master fd:</p>
     <ul>
@@ -110,6 +120,8 @@ $pair = $system->open(80, 24);</code></pre>
 │   ├── PosixMasterPty
 │   ├── PosixSlavePty
 │   ├── PosixChild
+│   ├── PosixProcess
+│   ├── ChildPollTrait   # Shared waitpid/proc_get_status lifecycle (internal)
 │   └── PosixPump
 ├── PtySystemFactory   # Entry point; SUGARCRAFT_PTY_BACKEND dispatch
 ├── SignalForwarder    # SIGWINCH → resize, SIGCHLD → reap
