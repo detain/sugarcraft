@@ -365,6 +365,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.03 · clean · PR#688
   tests-ci for step 08.03 · clean
   docs for step 08.03 · PR#689 · document withAsyncSuggestions() in README (Input/Select tables + async section) + end-user HTML (feature grid + API table + quickstart) + CALIBER [pattern:async-suggestions-debounce]
+  step 08.04 · PR#690 · sugar-prompt: MultiSelect vim keys (j/k nav + space toggle) + Form::validateAll() + Select::withEnum(\BackedEnum) + Theme::$errorSummary slot (leftover-rollout step 08.04)
 
 ## Open review findings — 08.03
 
