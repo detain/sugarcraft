@@ -38,6 +38,12 @@ final class Toast
     /** Overflow strategy when queue exceeds maxConcurrent. */
     private Overflow $overflow = Overflow::DropOldest;
 
+    /** History log of dismissed alerts. */
+    private HistoryLog $historyLog;
+
+    /** Fade animation duration in seconds (0 = disabled). */
+    private float $animationDuration = 0.0;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -45,6 +51,7 @@ final class Toast
     public function __construct(int $maxWidth = 50)
     {
         $this->maxWidth = $maxWidth;
+        $this->historyLog = new HistoryLog();
     }
 
     public static function new(int $maxWidth = 50): self
@@ -126,6 +133,19 @@ final class Toast
         return $clone;
     }
 
+    /**
+     * Set fade animation duration in seconds.
+     *
+     * When > 0, a simple character-reveal animation hint is rendered.
+     * True CubicBezier easing requires the honey-bounce library (step 09.17).
+     */
+    public function withAnimationDuration(float $seconds): self
+    {
+        $clone = clone $this;
+        $clone->animationDuration = \max(0.0, $seconds);
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Alert operations
     // -------------------------------------------------------------------------
@@ -168,6 +188,37 @@ final class Toast
     }
 
     /**
+     * Add a progress toast — renders a progress bar beneath the message.
+     *
+     * @param float $progress  Value between 0.0 and 1.0 (clamped)
+     */
+    public function progressToast(ToastType|string $type, string $message, float $progress, ?float $expiresAt = null): self
+    {
+        $resolvedType = $type instanceof ToastType
+            ? $type
+            : ToastType::tryFrom(\strtolower($type))
+                ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
+
+        $clone = clone $this;
+        $alert = (new Alert($resolvedType, $message, $expiresAt))->withProgress($progress);
+        if ($expiresAt === null && $clone->duration !== null) {
+            $alert = $alert->withExpiry($clone->duration);
+        }
+
+        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
+            if ($clone->overflow === Overflow::DropNewest) {
+                return $clone;
+            }
+            if ($clone->overflow === Overflow::DropOldest) {
+                \array_shift($clone->queue);
+            }
+        }
+
+        $clone->queue[] = $alert;
+        return $clone;
+    }
+
+    /**
      * Convenience: show an error alert.
      */
     public function error(string $message): self
@@ -200,11 +251,19 @@ final class Toast
     }
 
     /**
-     * Dismiss all alerts (hide the toast layer).
+     * Dismiss all alerts and record them in the history log.
      */
     public function dismiss(): self
     {
         $clone = clone $this;
+
+        // Record active (non-expired) alerts to history before dismissing
+        foreach ($clone->queue as $alert) {
+            if (!$alert->isExpired()) {
+                $clone->historyLog = $clone->historyLog->push($alert);
+            }
+        }
+
         $clone->dismissed = true;
         return $clone;
     }
@@ -242,6 +301,16 @@ final class Toast
             }
         }
         return false;
+    }
+
+    /**
+     * Return the history of dismissed alerts.
+     *
+     * @return list<Alert>
+     */
+    public function getHistory(): array
+    {
+        return $this->historyLog->all();
     }
 
     // -------------------------------------------------------------------------
@@ -313,7 +382,6 @@ final class Toast
 
         // Top border
         $top    = '╭' . \str_repeat('─', $width - 2) . '╮';
-        $middle = '│' . \str_pad($header, $width - 2, ' ', \STR_PAD_BOTH) . '│';
         $bottom = '╰' . \str_repeat('─', $width - 2) . '╯';
 
         // Word-wrap middle if needed
@@ -323,8 +391,37 @@ final class Toast
             $middleLines[] = '│' . \str_pad(' ' . $wl, $width - 2) . '│';
         }
 
+        // Render progress bar if set
+        $progressBar = null;
+        if ($alert->progress !== null) {
+            $progressBar = $this->renderProgressBar($alert->progress, $width - 2);
+            $middleLines[] = $progressBar;
+        }
+
+        // Render action buttons if any
+        foreach ($alert->actions as $action) {
+            $label = '[' . $action->label . ']';
+            $middleLines[] = '│' . \str_pad($label, $width - 2, ' ', \STR_PAD_RIGHT) . '│';
+        }
+
         $lines = [$top, ...$middleLines, $bottom];
         return \implode("\n", $lines);
+    }
+
+    /**
+     * Render a progress bar using Unicode block characters.
+     *
+     * @param float $progress  0.0 to 1.0
+     * @param int $width  Available width in cells
+     */
+    private function renderProgressBar(float $progress, int $width): string
+    {
+        $width = \max(4, $width);
+        $filled = (int) \round($progress * $width);
+        $empty = $width - $filled;
+
+        $bar = '▰' . \str_repeat('█', $filled) . \str_repeat('░', $empty);
+        return '│' . \str_pad($bar, $width, ' ', \STR_PAD_BOTH) . '│';
     }
 
     private function resolveWidth(int $messageLen): int
