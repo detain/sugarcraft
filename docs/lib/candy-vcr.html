@@ -82,7 +82,7 @@ if (!$result-&gt;ok) {
 }</code></pre>
 
     <h3 style="margin-top: 32px;">Cassette format</h3>
-    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (timestamp in seconds) and <code>k</code> (event kind). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/main/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure.</p>
+    <p>Cassettes are streaming JSONL — each line is a self-contained event with <code>t</code> (absolute timestamp in seconds) or <code>dt</code> (delta since previous event). See the <a href="https://github.com/sugarcraft/candy-vcr/blob/main/docs/CASSETTE.md">full schema reference</a> for all event types and the header structure. Use <code>Recorder::withFormat(new RelativeFormat())</code> to record in delta-time mode for deterministic, edit-friendly cassettes.</p>
 
     <h3 style="margin-top: 32px;">CLI</h3>
     <pre class="code"><code>vendor/bin/candy-vcr inspect session.cas               # list events
@@ -102,7 +102,7 @@ vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # �
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Cassette format</strong><span>JSONL primary (line-streamable, diff-friendly), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object.</span></div>
+      <div class="feature"><strong>Cassette format</strong><span>JSONL (absolute <code>t</code>) or RelativeFormat (delta <code>dt</code>, asciinema v3 style), YAML secondary (hand-written test fixtures). Both round-trip through the same <code>Cassette</code> value object; <code>Player::open()</code> auto-detects format.</span></div>
       <div class="feature"><strong>Recorder hook</strong><span><code>Program::withRecorder()</code> tees input bytes, output bytes (renderer + RawMsg + PrintMsg + cursor / title / mode), resize, and quit events.</span></div>
       <div class="feature"><strong>Msg serializers</strong><span>14 builtin candy-core Msg types (KeyMsg, MouseMsg×4, WindowSizeMsg, FocusMsg, BlurMsg, PasteMsg×3, BackgroundColorMsg, ForegroundColorMsg, CursorPositionMsg) + JsonSerializable catch-all + extensible Registry.</span></div>
       <div class="feature"><strong>Player</strong><span>Drives a fresh Program through a cassette. INSTANT mode for fast tests, REALTIME for visual demos. Supports both raw input bytes and Msg envelope payloads.</span></div>
@@ -132,11 +132,13 @@ vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # �
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Recorder</td><td>open(path)</td><td>Open cassette for recording</td></tr>
+<tr><td>Recorder</td><td>withFormat(format)</td><td>Select timestamp encoding (e.g. <code>new RelativeFormat()</code> for delta-time)</td></tr>
 <tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
 <tr><td>Player</td><td>open(path)</td><td>Open cassette for replay</td></tr>
 <tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
 <tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
 <tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
+<tr><td>RelativeFormat</td><td>new()</td><td>Delta-time (<code>dt</code>) format — asciinema v3 compatible; easier manual editing</td></tr>
 <tr><td>Cassette</td><td>events()</td><td>Iterate recorded events</td></tr>
 </table>
   </div>
