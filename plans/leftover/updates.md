@@ -521,11 +521,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     tests-ci for step 09.19 · clean
     docs for step 09.19 · PR#750 · document variable gap in README (Architecture table + Difficulty scaling section) + end-user HTML (variable difficulty chip) + new CALIBER_LEARNINGS.md (variable-pipe-gap pattern)
     step 10.01 · PR#751 · super-candy: add copy/move/rename file-manager ops (leftover-rollout step 10.01)
-
-## Open review findings — 10.01
-
-- [ ] 🟡 Minor: `super-candy/lang/en.php:36` — `keyhelp.default` omits the three new keybindings (`c` copy, `m` move, `R` rename) wired in `Manager::dispatch()`. Users cannot discover the ops from the UI. Fix: append `c copy · m move · R rename` to the keyhelp string.
-- [ ] 🟡 Minor: `super-candy/CALIBER_LEARNINGS.md` is absent — all other active libs carry one per AGENTS.md §Lib skeleton. Not a regression from this PR (long-standing gap). When the file is created, add an entry for the copy/move/rename confirmation-gate pattern (armXxx + ConfirmState + performXxx + UndoAction).
+    fix for step 10.01 · PR#752 · resolved 2 findings (keyhelp c/m/R omissions + CALIBER_LEARNINGS.md creation)
 
 ## Open review findings — 09.19
 
