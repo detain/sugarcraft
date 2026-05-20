@@ -422,6 +422,9 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     review for step 09.03 · clean · PR#714
     tests-ci for step 09.03 · clean
     docs for step 09.03 · PR#715 · document withAdaptiveSize() and FrameCache in README + end-user HTML + CALIBER_LEARNINGS
+    step 09.04 · PR#716 · candy-hermit: Item interface + FilteredItem readonly impl + FileHistory + setFilterFn() + Hermit accepts Item[] (leftover-rollout step 09.04)
+    fix for step 09.04 · PR#717 · resolved 2 findings (dead Model import + setFilterFn test)
+
     ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
