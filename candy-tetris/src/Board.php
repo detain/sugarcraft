@@ -139,4 +139,20 @@ final class Board
     {
         return $this->cells;
     }
+
+    /**
+     * True iff the board is completely empty (all cells null).
+     * Used to detect a "perfect clear" — all lines cleared at once.
+     */
+    public function isPerfectClear(): bool
+    {
+        foreach ($this->cells as $row) {
+            foreach ($row as $cell) {
+                if ($cell !== null) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }
