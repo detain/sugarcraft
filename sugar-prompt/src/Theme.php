@@ -29,6 +29,7 @@ final class Theme
         public readonly Style $focusedTitle,
         public readonly Style $blurredTitle,
         public readonly Style $error,
+        public readonly Style $errorSummary,
         public readonly Style $cursor,
         public readonly Style $option,
         public readonly Style $selectedOption,
@@ -49,6 +50,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->foreground($cyan),
             blurredTitle:   Style::new()->faint(),
             error:          Style::new()->foreground($red),
+            errorSummary:   Style::new()->bold()->foreground($red),
             cursor:         Style::new()->reverse(),
             option:         Style::new(),
             selectedOption: Style::new()->bold()->foreground($accent),
@@ -63,8 +65,8 @@ final class Theme
         $s = Style::new();
         return new self(
             title: $s, description: $s, focusedTitle: $s, blurredTitle: $s,
-            error: $s, cursor: $s, option: $s, selectedOption: $s, help: $s,
-            prompt: $s,
+            error: $s, errorSummary: $s, cursor: $s, option: $s,
+            selectedOption: $s, help: $s, prompt: $s,
         );
     }
 
@@ -80,6 +82,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->foreground($cyan),
             blurredTitle:   Style::new()->foreground(Color::hex('#5f5f5f')),
             error:          Style::new()->bold()->foreground(Color::hex('#ff5f5f')),
+            errorSummary:   Style::new()->bold()->foreground(Color::hex('#ff5f5f')),
             cursor:         Style::new()->reverse()->foreground($pink),
             option:         Style::new(),
             selectedOption: Style::new()->bold()->foreground($green),
@@ -102,6 +105,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->foreground($purp),
             blurredTitle:   Style::new()->foreground($com),
             error:          Style::new()->bold()->foreground(Color::hex('#ff5555')),
+            errorSummary:   Style::new()->bold()->foreground(Color::hex('#ff5555')),
             cursor:         Style::new()->reverse()->foreground($pink),
             option:         Style::new()->foreground(Color::hex('#f8f8f2')),
             selectedOption: Style::new()->bold()->foreground($green),
@@ -124,6 +128,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->foreground($teal),
             blurredTitle:   Style::new()->foreground($surf),
             error:          Style::new()->bold()->foreground($red),
+            errorSummary:   Style::new()->bold()->foreground($red),
             cursor:         Style::new()->reverse()->foreground($mauve),
             option:         Style::new(),
             selectedOption: Style::new()->bold()->foreground($green),
@@ -144,6 +149,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->foreground($cyan),
             blurredTitle:   Style::new()->faint(),
             error:          Style::new()->bold()->foreground($accent),
+            errorSummary:   Style::new()->bold()->foreground($accent),
             cursor:         Style::new()->reverse(),
             option:         Style::new(),
             selectedOption: Style::new()->bold()->foreground($green),
@@ -161,6 +167,7 @@ final class Theme
             focusedTitle:   Style::new()->bold()->underline(),
             blurredTitle:   Style::new()->faint(),
             error:          Style::new()->bold(),
+            errorSummary:   Style::new()->bold(),
             cursor:         Style::new()->reverse(),
             option:         Style::new(),
             selectedOption: Style::new()->bold(),
