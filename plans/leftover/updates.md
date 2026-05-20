@@ -487,4 +487,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.11 · clean · PR#731
     tests-ci for step 09.11 · clean
     docs for step 09.11 · clean · PR#732
+    step 09.12 · PR#733 · candy-log: CallerFormatter + PsrBridge (PSR-3 bridge) + Hook/HookRegistry + PartsOrder config DTO (leftover-rollout step 09.12)
 
