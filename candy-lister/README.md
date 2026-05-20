@@ -22,6 +22,8 @@ PHP port of [treilik/bubblelister](https://github.com/treilik/bubblelister) — 
 - **`Stringable` items** — any PHP object with `__toString()` or `Stringable` works as a list item
 - **`StringItem` adapter** — wrap plain strings as list items without a class
 - **`LessFunc` / `EqualsFunc`** — plug-in sorting and equality comparison
+- **Fuzzy matching** — `FuzzyMatch` scores candidates via Smith-Waterman local alignment
+- **Filter state machine** — `withFilterFn()` / `withoutFilter()` with `FilterState` enum tracking (unfiltered / filtering / filtered)
 - **Pure rendering** — outputs ANSI-styled strings; integrate with any TUI framework
 
 ## Install
@@ -103,6 +105,69 @@ Set the rendering viewport dimensions before calling `View()`:
 ```php
 $model->setWidth(80)->setHeight(25);
 $model->setCursorOffset(3); // keep 3 lines between cursor and screen edge
+```
+
+## Filtering
+
+Attach a filter function to narrow the visible items. The model tracks filter state via the `FilterState` enum:
+
+```php
+use SugarCraft\Lister\{Model, StringItem, FilterState};
+
+// Start with a list
+$model = Model::new();
+$model->setWidth(80)->setHeight(24);
+foreach (['apple', 'banana', 'cherry', 'apricot', 'blueberry'] as $f) {
+    $model->addItem(new StringItem($f));
+}
+
+// Filter to items starting with "a"
+$filtered = $model->withFilterFn(
+    fn(\Stringable $item) => stripos((string) $item, 'a') === 0
+);
+// filterState is now FilterState::filtering → FilterState::filtered
+
+echo $filtered->length(); // 2 (apple, apricot)
+echo $filtered->View();
+
+// Remove filter and restore original items
+$restored = $filtered->withoutFilter();
+// filterState is now FilterState::unfiltered
+echo $restored->length(); // 5
+```
+
+Filter state transitions:
+
+| From | To | Trigger |
+|------|----|---------|
+| `unfiltered` | `filtering` | `withFilterFn()` called |
+| `filtering` | `filtered` | filter applied, items reduced |
+| `filtered` | `unfiltered` | `withoutFilter()` called |
+| `filtering` | `unfiltered` | filter cleared before result |
+
+## Fuzzy Matching
+
+`FuzzyMatch` implements Smith-Waterman local alignment to rank candidates by relevance to a query string. It is memory-efficient (two-row DP matrix) and penalizes gaps and mismatches while rewarding consecutive character matches:
+
+```php
+use SugarCraft\Lister\FuzzyMatch;
+
+$matcher = new FuzzyMatch();
+
+// Score a single candidate
+$score = $matcher->score('april', 'apricot'); // 13 (consecutive match bonus applied)
+
+// Filter and rank a list of items
+$items = [
+    new StringItem('April'),
+    new StringItem('September'),
+    new StringItem('June'),
+    new StringItem('July'),
+    new StringItem('November'),
+];
+
+$results = $matcher->match('sep', $items);
+// Returns [ [StringItem('September'), 11], ... ] sorted by score descending
 ```
 
 ## License
