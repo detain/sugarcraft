@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit\Tests;
 
-use SugarCraft\Hermit\{Hermit, Model, FilteredItem, Item};
+use SugarCraft\Hermit\{Hermit, FilteredItem, Item};
 use PHPUnit\Framework\TestCase;
 
 final class HermitTest extends TestCase
@@ -191,5 +191,22 @@ final class HermitTest extends TestCase
         // a filter unchanged
         $this->assertSame('a', $a->filterText());
         $this->assertSame('a', $b->filterText());
+    }
+
+    public function testSetFilterFn(): void
+    {
+        $h = $this->makeHermit()->show();
+
+        // Default: all 5 items pass
+        $this->assertSame(5, $h->itemCount());
+
+        // Set a custom filter — only items with value length > 5
+        $h = $h->setFilterFn(fn(Item $item): bool => \strlen($item->value()) > 5);
+
+        // apple(5→false), banana(6→true), cherry(6→true), date(4→false), elderberry(9→true)
+        $this->assertSame(3, $h->itemCount());
+
+        // Cursor resets to 0 after setFilterFn
+        $this->assertSame(0, $h->cursor());
     }
 }
