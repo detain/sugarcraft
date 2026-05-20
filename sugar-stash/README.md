@@ -28,11 +28,23 @@ sugar-stash    # run inside any git working tree
 | `↑/↓` or `k/j`           | Move cursor in active pane                             |
 | `s` (status pane)        | Stage / unstage the highlighted entry                    |
 | `a` (status pane)        | Stage all files                                         |
+| `d` (status pane)        | Discard changes to the highlighted file                  |
+| `P` (status pane)        | Open diff viewer for the highlighted file                |
 | `Space` (branches pane)  | Checkout branch                                         |
 | `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
+| `A`                      | Amend last commit                                        |
+| `n`                      | Create and switch to a new branch                        |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
 | `q` / `Esc`              | Quit                                                    |
+
+### Diff viewer keys
+
+| Key              | Action                          |
+|------------------|--------------------------------|
+| `Space`          | Stage current hunk              |
+| `↑/↓` or `k/j`   | Navigate between hunks         |
+| `Esc`            | Close diff viewer              |
 
 ## Architecture
 

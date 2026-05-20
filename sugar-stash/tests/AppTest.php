@@ -259,40 +259,12 @@ final class AppTest extends TestCase
         $this->assertFalse($g->stageAllCalled);
     }
 
-    public function testDiffKeyOpensDiffViewer(): void
-    {
-        $g = $this->git();
-        $g->diffs = [
-            'diff --git a/src/A.php b/src/A.php',
-            '--- a/src/A.php',
-            '+++ b/src/A.php',
-            '@@ -1,3 +1,4 @@',
-            '-line 1',
-            '+line 1 modified',
-            ' context',
-        ];
-        $a = App::start($g);
-        $this->assertNull($a->diffViewer);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
-        $this->assertNotNull($a->diffViewer);
-        $this->assertSame('src/A.php', $a->diffViewer->path);
-    }
-
-    public function testDiffKeyOnlyInStatusPane(): void
-    {
-        $g = $this->git();
-        $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // branches
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
-        $this->assertNull($a->diffViewer);
-    }
-
     public function testEscapeClosesDiffViewer(): void
     {
         $g = $this->git();
         $g->diffs = ['+added line'];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
         $this->assertNull($a->diffViewer);
@@ -367,7 +339,7 @@ final class AppTest extends TestCase
             ' context',
         ];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
         $this->assertNotNull($a->diffViewer);
         [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
         $this->assertArrayHasKey('src/A.php', $g->stagePatches);
@@ -387,12 +359,50 @@ final class AppTest extends TestCase
             '+line 5 modified',
         ];
         $a = App::start($g);
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
         $this->assertNotNull($a->diffViewer);
         $this->assertSame(2, $a->diffViewer->hunkCount());
 
         // Navigate down to second hunk
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
         $this->assertNotNull($a->diffViewer);
+    }
+
+    public function testDiscardKeyCallsDiscardOnGit(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertSame([], $g->discards);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame(['src/A.php'], $g->discards);
+    }
+
+    public function testDiscardKeyOnlyInStatusPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertSame([], $g->discards);
+    }
+
+    public function testPDiffViewerKeyOpensDiffViewer(): void
+    {
+        $g = $this->git();
+        $g->diffs = ['+added line'];
+        $a = App::start($g);
+        $this->assertNull($a->diffViewer);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        $this->assertNotNull($a->diffViewer);
+        $this->assertSame('src/A.php', $a->diffViewer->path);
+    }
+
+    public function testPDiffViewerKeyOnlyInStatusPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'P'));
+        $this->assertNull($a->diffViewer);
     }
 }

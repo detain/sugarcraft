@@ -48,6 +48,8 @@ final class App implements Model
         public readonly bool $collectingBranchName = false,
         /** The accumulated branch name while collectingBranchName is true. */
         public readonly string $branchName = '',
+        /** Transient success message shown briefly after an action (e.g. hunk staged). */
+        public readonly ?string $successMessage = null,
     ) {}
 
     public static function start(GitDriver $git): self
@@ -159,6 +161,9 @@ final class App implements Model
             return [$this->startCommit(), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->pane === Pane::Status) {
+            return [$this->discard(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'P' && $this->pane === Pane::Status) {
             return [$this->showDiff(), null];
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'A') {
@@ -249,6 +254,7 @@ final class App implements Model
         ?DiffViewer $diffViewer = null,
         bool $collectingBranchName = null,
         string $branchName = null,
+        ?string $successMessage = null,
     ): self {
         return new self(
             git: $this->git,
@@ -267,6 +273,7 @@ final class App implements Model
             diffViewer: $diffViewer ?? $this->diffViewer,
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
+            successMessage: $successMessage,
         );
     }
 
@@ -289,6 +296,24 @@ final class App implements Model
     {
         if ($size <= 0) return 0;
         return max(0, min($size - 1, $i));
+    }
+
+    /** Runs `git restore --worktree -- <path>` via the GitDriver, then refreshes. */
+    private function discard(): self
+    {
+        if ($this->pane !== Pane::Status) {
+            return $this;
+        }
+        $row = $this->status[$this->statusCursor] ?? null;
+        if (!is_array($row) || !isset($row['path'])) {
+            return $this;
+        }
+        try {
+            $this->git->discard($row['path']);
+            return $this->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
     }
 
     private function toggleStage(): self
@@ -399,6 +424,7 @@ final class App implements Model
             diffViewer: $dv,
             collectingBranchName: $this->collectingBranchName,
             branchName: $this->branchName,
+            successMessage: $this->successMessage,
         );
     }
 
@@ -432,7 +458,9 @@ final class App implements Model
         try {
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
-            return $this->withDiffViewer(null)->refresh();
+            return $this->withDiffViewer(null)
+                ->refresh()
+                ->withAll(successMessage: Lang::t('diff.hunk_staged'));
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
