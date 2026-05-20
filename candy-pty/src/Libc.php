@@ -105,6 +105,7 @@ final class Libc
             : '';
 
         return <<<CPROTO
+int   setsid(void);
 int   posix_openpt(int flags);
 int   grantpt(int fd);
 int   unlockpt(int fd);
