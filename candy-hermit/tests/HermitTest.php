@@ -4,14 +4,28 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit\Tests;
 
-use SugarCraft\Hermit\{Hermit, Model};
+use SugarCraft\Hermit\{Hermit, Model, FilteredItem, Item};
 use PHPUnit\Framework\TestCase;
 
 final class HermitTest extends TestCase
 {
+    /**
+     * @return list<Item>
+     */
+    private function items(): array
+    {
+        return [
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+            new FilteredItem(3, 'cherry'),
+            new FilteredItem(4, 'date'),
+            new FilteredItem(5, 'elderberry'),
+        ];
+    }
+
     private function makeHermit(): Hermit
     {
-        return Hermit::new(['apple', 'banana', 'cherry', 'date', 'elderberry']);
+        return Hermit::new($this->items());
     }
 
     public function testNew(): void
@@ -39,7 +53,7 @@ final class HermitTest extends TestCase
 
         $h = $h->type('a');  // apple, banana, date
         $this->assertSame(3, $h->itemCount());
-        $this->assertSame('apple', $h->selected());
+        $this->assertSame('apple', $h->selected()->value());
     }
 
     public function testBackspace(): void
@@ -94,7 +108,7 @@ final class HermitTest extends TestCase
     public function testSelectedItem(): void
     {
         $h = $this->makeHermit()->show()->type('a');
-        $this->assertSame('apple', $h->selected());
+        $this->assertSame('apple', $h->selected()->value());
 
         $h = $h->cursorDown();
         // next filtered item
@@ -140,7 +154,11 @@ final class HermitTest extends TestCase
     public function testWithItemsReturnsNewInstance(): void
     {
         $a = $this->makeHermit();
-        $b = $a->withItems(['x', 'y', 'z']);
+        $b = $a->withItems([
+            new FilteredItem(1, 'x'),
+            new FilteredItem(2, 'y'),
+            new FilteredItem(3, 'z'),
+        ]);
 
         $this->assertSame(5, $a->allCount());
         $this->assertSame(3, $b->allCount());
@@ -148,8 +166,10 @@ final class HermitTest extends TestCase
 
     public function testCustomItemFormatter(): void
     {
-        $h = Hermit::new(['apple', 'banana'])
-            ->show()
+        $h = Hermit::new([
+            new FilteredItem(1, 'apple'),
+            new FilteredItem(2, 'banana'),
+        ])->show()
             ->setItemFormatter(fn($item, $sel) => "[$sel] $item");
 
         // Hidden view result — but custom formatter is applied in View()
