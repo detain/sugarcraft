@@ -73,6 +73,9 @@ final class RendererTest extends TestCase
             public function log(int $limit = 25): array { return []; }
             public function stage(string $path): void {}
             public function unstage(string $path): void {}
+            public function checkout(string $branch): void {}
+            public function commit(string $message): void {}
+            public function stageAll(): void {}
         };
         $a = App::start($g);
         $out = Renderer::render($a);

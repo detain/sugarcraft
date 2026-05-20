@@ -25,5 +25,27 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit',
+    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit  ·  ?  help',
+
+    // Help overlay
+    'help.context_general'  => 'show this help',
+    'help.quit'             => 'quit',
+    'help.refresh'          => 'refresh',
+    'help.switch_pane'      => 'switch pane',
+    'help.move_cursor'      => 'move cursor',
+    'help.close_help'       => 'close',
+    'help.pane_navigation'  => 'Navigation:',
+    'help.pane_status'      => 'Status pane:',
+    'help.pane_branches'    => 'Branches pane:',
+    'help.stage_single'    => 'stage / unstage file',
+    'help.stage_all'       => 'stage all files',
+    'help.checkout'         => 'checkout branch',
+    'help.commit'           => 'commit (opens message input)',
+
+    // Checkout
+    'checkout.no_branch'    => 'checkout: no branch selected',
+
+    // Commit
+    'commit.prompt'         => 'commit message: ',
+    'commit.empty_message'  => 'commit: message cannot be empty',
 ];
