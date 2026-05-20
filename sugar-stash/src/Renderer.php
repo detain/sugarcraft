@@ -41,6 +41,12 @@ final class Renderer
                 ->render(Lang::t('ui.error_prefix') . $a->error);
         }
 
+        $success = '';
+        if ($a->successMessage !== null) {
+            $success = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
+                ->render($a->successMessage);
+        }
+
         $commitBar = '';
         if ($a->collectingCommit) {
             $commitBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
@@ -63,7 +69,7 @@ final class Renderer
             $overlay = self::helpOverlay($a);
         }
 
-        return $header . "\n" . $body . "\n " . $help . $err . $commitBar . $branchBar . $diffOverlay . $overlay . "\n";
+        return $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $diffOverlay . $overlay . "\n";
     }
 
     private static function statusPane(App $a): string
@@ -156,6 +162,10 @@ final class Renderer
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('R') . '  ' . Lang::t('help.refresh'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('tab') . '  ' . Lang::t('help.switch_pane'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . Lang::t('help.commit'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('A') . '  ' . Lang::t('help.amend'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('n') . '  ' . Lang::t('help.new_branch'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('d') . '  ' . Lang::t('help.discard'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('P') . '  ' . Lang::t('help.diff_viewer'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('esc') . '  ' . Lang::t('help.close_help'),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_navigation')),
@@ -233,7 +243,7 @@ final class Renderer
         }
 
         $hint = Style::new()->foreground(Color::hex('#7d6e98'))
-            ->render('space: stage hunk  ·  ↑↓: navigate  ·  esc/d: close');
+            ->render(Lang::t('diff.navigation_hint'));
 
         $border = Border::rounded();
         $box = Style::new()
