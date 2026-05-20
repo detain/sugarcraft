@@ -45,6 +45,10 @@ final class Table implements Model
         /** @var ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style */
         public readonly ?\Closure $styleFunc = null,
         public readonly ?SortState $sortState = null,
+        public readonly bool $filterable = false,
+        public readonly string $filter = '',
+        /** @var ?\Closure(list<string> $row): bool */
+        public readonly ?\Closure $filterPredicate = null,
     ) {}
 
     /**
@@ -153,7 +157,8 @@ final class Table implements Model
 
         $top    = max(0, $this->offset);
         $sortedRows = $this->sortedRows();
-        $window = array_slice($sortedRows, $top, $this->height);
+        $filteredRows = $this->filteredRows($sortedRows);
+        $window = array_slice($filteredRows, $top, $this->height);
         foreach ($window as $i => $row) {
             $idx = $top + $i;
             $line = $this->renderRow($row, $cols, $idx);
@@ -300,6 +305,56 @@ final class Table implements Model
         return $this->mutate(sortState: SortState::empty(), sortStateSet: true);
     }
 
+    /**
+     * Enable or disable filtering. When enabled and {@see $filter} is
+     * non-empty, rows that don't match are hidden from the view.
+     */
+    public function withFilterable(bool $filterable): self
+    {
+        return $this->mutate(filterable: $filterable, filterableSet: true);
+    }
+
+    /** @return bool */
+    public function getFilterable(): bool
+    {
+        return $this->filterable;
+    }
+
+    /**
+     * Set the filter query string. A non-empty string enables implicit
+     * case-insensitive substring matching across all visible columns.
+     * Use {@see withFilterPredicate()} to override with a custom callable.
+     */
+    public function withFilter(string $query): self
+    {
+        return $this->mutate(filter: $query, filterSet: true);
+    }
+
+    /** @return string */
+    public function getFilter(): string
+    {
+        return $this->filter;
+    }
+
+    /**
+     * Provide a custom filter predicate. The callable receives a row
+     * (list<string>) and returns true to keep the row or false to hide it.
+     * Overrides the default substring-match behaviour when set.
+     * Pass null to restore the default.
+     *
+     * @param ?\Closure(list<string> $row): bool $predicate
+     */
+    public function withFilterPredicate(?\Closure $predicate): self
+    {
+        return $this->mutate(filterPredicate: $predicate, filterPredicateSet: true);
+    }
+
+    /** @return ?\Closure(list<string> $row): bool */
+    public function getFilterPredicate(): ?\Closure
+    {
+        return $this->filterPredicate;
+    }
+
     /** @return SortState */
     public function getSortState(): SortState
     {
@@ -346,6 +401,41 @@ final class Table implements Model
             });
         }
         return $rows;
+    }
+
+    /**
+     * Return rows filtered according to the current filter settings.
+     * When filterable is true and filter (or filterPredicate) is set,
+     * applies the predicate to each row.
+     *
+     * @param list<list<string>> $rows
+     * @return list<list<string>>
+     */
+    private function filteredRows(array $rows): array
+    {
+        if (!$this->filterable) {
+            return $rows;
+        }
+
+        $predicate = $this->filterPredicate;
+        if ($predicate !== null) {
+            return array_values(array_filter($rows, static fn(array $row): bool => $predicate($row)));
+        }
+
+        if ($this->filter === '') {
+            return $rows;
+        }
+
+        // Default: case-insensitive substring match on all columns.
+        $query = mb_strtolower($this->filter);
+        return array_values(array_filter($rows, static function (array $row) use ($query): bool {
+            foreach ($row as $cell) {
+                if (mb_stripos((string) $cell, $query) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        }));
     }
 
     /** @return list<int> */
@@ -460,19 +550,28 @@ final class Table implements Model
         bool $styleFuncSet = false,
         ?SortState $sortState = null,
         bool $sortStateSet = false,
+        ?bool $filterable = null,
+        bool $filterableSet = false,
+        ?string $filter = null,
+        bool $filterSet = false,
+        ?\Closure $filterPredicate = null,
+        bool $filterPredicateSet = false,
     ): self {
         return new self(
-            headers:   $headers   ?? $this->headers,
-            rows:      $rows      ?? $this->rows,
-            cursor:    $cursor    ?? $this->cursor,
-            offset:    $offset    ?? $this->offset,
-            width:     $width     ?? $this->width,
-            height:    $height    ?? $this->height,
-            focused:   $focused   ?? $this->focused,
-            colWidths: $colWidths ?? $this->colWidths,
-            styles:    $stylesSet ? $styles : $this->styles,
-            styleFunc: $styleFuncSet ? $styleFunc : $this->styleFunc,
-            sortState: $sortStateSet ? $sortState : $this->sortState,
+            headers:         $headers           ?? $this->headers,
+            rows:            $rows              ?? $this->rows,
+            cursor:          $cursor            ?? $this->cursor,
+            offset:          $offset            ?? $this->offset,
+            width:           $width             ?? $this->width,
+            height:          $height            ?? $this->height,
+            focused:         $focused           ?? $this->focused,
+            colWidths:       $colWidths         ?? $this->colWidths,
+            styles:          $stylesSet ? $styles : $this->styles,
+            styleFunc:       $styleFuncSet ? $styleFunc : $this->styleFunc,
+            sortState:       $sortStateSet ? $sortState : $this->sortState,
+            filterable:       $filterableSet ? $filterable : $this->filterable,
+            filter:           $filterSet ? $filter : $this->filter,
+            filterPredicate:  $filterPredicateSet ? $filterPredicate : $this->filterPredicate,
         );
     }
 }
