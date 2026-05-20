@@ -25,7 +25,7 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  R  refresh  ·  q  quit  ·  ?  help',
+    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  space  checkout  ·  c  commit  ·  R  refresh  ·  ?  help  ·  q  quit',
 
     // Help overlay
     'help.context_general'  => 'show this help',
