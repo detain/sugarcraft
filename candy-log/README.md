@@ -15,11 +15,12 @@ PHP port of [charmbracelet/log](https://github.com/charmbracelet/log) — a mini
 ## Features
 
 - **Leveled logging** — `Debug`, `Info`, `Warn`, `Error`, `Fatal` levels
-- **Colorful human-readable output** — terminal-styled by default (TTY detection)
+- **Colorful human-readable output** — terminal-styled by default (Probe-driven: respects `NO_COLOR` / `FORCE_COLOR`)
 - **Multiple formatters** — `TextFormatter` (default), `JSONFormatter`, `LogfmtFormatter`
 - **Structured key/value pairs** — pass arbitrary context with every log call
-- **Sub-loggers** — `With(...)` creates a child logger with persistent fields
-- **Customizable** — prefix, timestamp format, report caller, styles
+- **Sub-loggers** — `with([...])` creates a child logger with persistent fields
+- **Per-field styling** — `Styles::keys` maps field names to their ANSI styles
+- **syslog-aligned levels** — integer values (-4/0/4/8/12) for easy threshold filtering
 - **stdlog adapter** — wrap in `Log\StandardLogAdapter` for `*log.Logger` interface compatibility
 
 ## Install
@@ -42,13 +43,20 @@ $log->error('Temperature too low', ['err' => 'underheated']);
 
 ## Levels
 
+Levels are syslog-aligned integers — use `->value` for threshold comparisons:
+
 ```php
-Logger::debug('debug message');
-Logger::info('info message');
-Logger::warn('warn message');
-Logger::error('error message');
-Logger::fatal('fatal message'); // calls exit(1)
-Logger::print('always prints');
+Level::Debug->value; // -4
+Level::Info->value;  //  0
+Level::Warn->value;  //  4
+Level::Error->value;  //  8
+Level::Fatal->value;  // 12
+
+$log->info('info message');
+$log->warn('warn message');
+$log->error('error message');
+$log->fatal('fatal message'); // throws RuntimeException
+$log->print('always prints');   // no level prefix
 ```
 
 ## Structured Fields
@@ -77,7 +85,11 @@ $log = Logger::new(formatter: new JsonFormatter());
 
 ## Styling
 
-Styles are applied automatically in TTY environments. Override via `Logger::styles()`:
+Styles are applied automatically when the terminal supports color output.
+Color is determined by `candy-palette`'s Probe — it respects the `NO_COLOR`
+and `FORCE_COLOR` environment variables.
+
+Override level styles via `Logger::styles()`:
 
 ```php
 use SugarCraft\Sprinkles\Style;
@@ -85,6 +97,28 @@ $log = Logger::new();
 $styles = $log->styles();
 $styles->levels[Level::Error] = Style::new()->foreground('red')->bold();
 $log->setStyles($styles);
+```
+
+### Per-field styles
+
+`Styles::keys` maps field names (`time`, `level`, `prefix`, `caller`,
+`message`, `key`, `value`) to individual `Style` objects:
+
+```php
+$styles = $log->styles();
+$styles->keys['time']   = Style::new()->foreground('cyan');
+$styles->keys['caller'] = Style::new()->foreground('grey');
+$log->setStyles($styles);
+```
+
+### Level text alignment
+
+`Styles::padLevelText($label)` right-pads a level label to 5 characters for
+column-aligned log output:
+
+```php
+Styles::padLevelText('INFO');  // "INFO "
+Styles::padLevelText('DEBUG'); // "DEBUG"
 ```
 
 ## Panic Handlers
