@@ -16,7 +16,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  * pane; `s` stages / unstages the highlighted status entry; `a`
  * stages all files; Space (branches pane) checks out the selected
  * branch; `c` opens inline commit message collection; `?` shows the
- * help overlay; `R` refreshes from disk.
+ * help overlay; `R` refreshes from disk. `u` / Ctrl+r for undo/redo.
  */
 final class App implements Model
 {
@@ -50,11 +50,19 @@ final class App implements Model
         public readonly string $branchName = '',
         /** Transient success message shown briefly after an action (e.g. hunk staged). */
         public readonly ?string $successMessage = null,
+        /** Whether the app is collecting a merge target branch name. */
+        public readonly bool $collectingMergeTarget = false,
+        /** The accumulated merge target branch name. */
+        public readonly string $mergeTarget = '',
+        /** Whether the rebase menu overlay is shown. */
+        public readonly bool $showRebaseMenu = false,
+        /** Command history for undo/redo. */
+        public readonly ?HistoryManager $history = null,
     ) {}
 
     public static function start(GitDriver $git): self
     {
-        return (new self($git))->refresh();
+        return (new self($git, history: new HistoryManager()))->refresh();
     }
 
     public function init(): ?\Closure
@@ -68,7 +76,7 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Escape / q / Ctrl+C always quits, even during commit/branch collection
+        // Escape / q / Ctrl+C always quits, even during commit/branch/merge collection
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
@@ -78,11 +86,17 @@ final class App implements Model
             if ($this->collectingBranchName) {
                 return [$this->withBranchCollection(false, ''), null];
             }
+            if ($this->collectingMergeTarget) {
+                return [$this->withMergeCollection(false, ''), null];
+            }
             if ($this->showHelp) {
                 return [$this->withShowHelp(false), null];
             }
             if ($this->diffViewer !== null) {
                 return [$this->withDiffViewer(null), null];
+            }
+            if ($this->showRebaseMenu) {
+                return [$this->withRebaseMenu(false), null];
             }
             return [$this, Cmd::quit()];
         }
@@ -105,6 +119,31 @@ final class App implements Model
             }
             if ($msg->type === KeyType::Char && $msg->rune !== '') {
                 return [$this->withBranchName($this->branchName . $msg->rune), null];
+            }
+            return [$this, null];
+        }
+
+        // During merge target collection
+        if ($this->collectingMergeTarget) {
+            if ($msg->type === KeyType::Enter) {
+                return [$this->executeMerge(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune !== '') {
+                return [$this->withMergeTarget($this->mergeTarget . $msg->rune), null];
+            }
+            return [$this, null];
+        }
+
+        // Rebase menu: handle c/a/s keys
+        if ($this->showRebaseMenu) {
+            if ($msg->type === KeyType::Char && $msg->rune === 'c') {
+                return [$this->executeRebaseContinue(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'a') {
+                return [$this->executeRebaseAbort(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 's') {
+                return [$this->executeRebaseSkip(), null];
             }
             return [$this, null];
         }
@@ -171,6 +210,26 @@ final class App implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'n') {
             return [$this->startCreateBranch(), null];
+        }
+        // Undo: u key
+        if ($msg->type === KeyType::Char && $msg->rune === 'u') {
+            return [$this->executeUndo(), null];
+        }
+        // Redo: Ctrl+r
+        if ($msg->ctrl && $msg->rune === 'r') {
+            return [$this->executeRedo(), null];
+        }
+        // Delete branch: D key (branches pane only, not current branch)
+        if ($msg->type === KeyType::Char && $msg->rune === 'D' && $this->pane === Pane::Branches) {
+            return [$this->executeDeleteBranch(), null];
+        }
+        // Merge: M key
+        if ($msg->type === KeyType::Char && $msg->rune === 'M') {
+            return [$this->startMerge(), null];
+        }
+        // Rebase options: r key
+        if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+            return [$this->handleRebaseKey(), null];
         }
         return [$this, null];
     }
@@ -255,6 +314,10 @@ final class App implements Model
         bool $collectingBranchName = null,
         string $branchName = null,
         ?string $successMessage = null,
+        HistoryManager $history = null,
+        bool $collectingMergeTarget = null,
+        string $mergeTarget = null,
+        bool $showRebaseMenu = null,
     ): self {
         return new self(
             git: $this->git,
@@ -274,6 +337,10 @@ final class App implements Model
             collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
             branchName: $branchName ?? $this->branchName,
             successMessage: $successMessage,
+            history: $history ?? $this->history,
+            collectingMergeTarget: $collectingMergeTarget ?? $this->collectingMergeTarget,
+            mergeTarget: $mergeTarget ?? $this->mergeTarget,
+            showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
         );
     }
 
@@ -310,6 +377,7 @@ final class App implements Model
         }
         try {
             $this->git->discard($row['path']);
+            $this->history->push(HistoryEntry::discard($row['path']));
             return $this->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -329,8 +397,10 @@ final class App implements Model
             $isStaged = ($row['index_status'] ?? ' ') !== ' ';
             if ($isStaged) {
                 $this->git->unstage($row['path']);
+                $this->history->push(HistoryEntry::unstage($row['path']));
             } else {
                 $this->git->stage($row['path']);
+                $this->history->push(HistoryEntry::stage($row['path']));
             }
             return $this->refresh();
         } catch (\RuntimeException $e) {
@@ -343,6 +413,7 @@ final class App implements Model
     {
         try {
             $this->git->stageAll();
+            $this->history->push(HistoryEntry::stageAll());
             return $this->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -358,6 +429,7 @@ final class App implements Model
         }
         try {
             $this->git->checkout($branch['name']);
+            $this->history->push(HistoryEntry::checkout($branch['name']));
             return $this->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -378,6 +450,7 @@ final class App implements Model
         }
         try {
             $this->git->commit($this->commitMessage);
+            $this->history->push(HistoryEntry::commit($this->commitMessage));
             return $this->withCommitCollection(false, '')->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -425,6 +498,10 @@ final class App implements Model
             collectingBranchName: $this->collectingBranchName,
             branchName: $this->branchName,
             successMessage: $this->successMessage,
+            history: $this->history,
+            collectingMergeTarget: $this->collectingMergeTarget,
+            mergeTarget: $this->mergeTarget,
+            showRebaseMenu: $this->showRebaseMenu,
         );
     }
 
@@ -458,6 +535,7 @@ final class App implements Model
         try {
             $patch = $dv->currentHunkPatch();
             $this->git->stagePatch($dv->path, $patch);
+            $this->history->push(HistoryEntry::stagePatch($dv->path, $patch));
             return $this->withDiffViewer(null)
                 ->refresh()
                 ->withAll(successMessage: Lang::t('diff.hunk_staged'));
@@ -471,6 +549,7 @@ final class App implements Model
     {
         try {
             $this->git->amend();
+            $this->history->push(HistoryEntry::amend());
             return $this->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
@@ -501,7 +580,182 @@ final class App implements Model
         }
         try {
             $this->git->createBranch($this->branchName);
+            $this->history->push(HistoryEntry::createBranch($this->branchName));
             return $this->withBranchCollection(false, '')->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Undo the last operation. */
+    private function executeUndo(): self
+    {
+        if (!$this->history->canUndo()) {
+            return $this->withError(Lang::t('history.nothing_to_undo'));
+        }
+        $entry = $this->history->undo();
+        if ($entry === null) {
+            return $this->withError(Lang::t('history.nothing_to_undo'));
+        }
+        return $this->applyHistoryEntry($entry, false);
+    }
+
+    /** Redo the last undone operation. */
+    private function executeRedo(): self
+    {
+        if (!$this->history->canRedo()) {
+            return $this->withError(Lang::t('history.nothing_to_redo'));
+        }
+        $entry = $this->history->redo();
+        if ($entry === null) {
+            return $this->withError(Lang::t('history.nothing_to_redo'));
+        }
+        return $this->applyHistoryEntry($entry, true);
+    }
+
+    /**
+     * Apply a history entry (either forward or inverse).
+     *
+     * @param bool $forward If true, apply the original op; if false, apply the inverse
+     */
+    private function applyHistoryEntry(HistoryEntry $entry, bool $forward): self
+    {
+        $op = $forward ? $entry->op : $entry->inverseOp;
+        $args = $forward ? $entry->args : $entry->inverseArgs;
+
+        try {
+            match ($op) {
+                'stage' => $this->git->stage($args['path']),
+                'unstage' => $this->git->unstage($args['path']),
+                'discard' => $this->git->discard($args['path']),
+                'checkout' => $this->git->checkout($args['branch']),
+                'commit' => $this->git->commit($args['message'] ?? ''),
+                'reset' => $this->git->reset(),
+                'amend' => $this->git->amend(),
+                'createBranch' => $this->git->createBranch($args['name']),
+                'deleteBranch' => $this->git->deleteBranch($args['name']),
+                'stageAll' => $this->git->stageAll(),
+                'stagePatch' => $this->git->stagePatch($args['path'], $args['hunk']),
+                'merge' => $this->git->merge($args['branch']),
+                'abort' => $this->git->rebaseAbort(),
+                default => null,
+            };
+            $msg = Lang::t('history.undone', ['op' => $entry->op]);
+            return $this->refresh()->withAll(successMessage: $msg);
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Delete the currently selected branch. */
+    private function executeDeleteBranch(): self
+    {
+        $branch = $this->branches[$this->branchesCursor] ?? null;
+        if (!is_array($branch) || !isset($branch['name'])) {
+            return $this->withError(Lang::t('branch.delete_no_select'));
+        }
+        if ($branch['current'] ?? false) {
+            return $this->withError(Lang::t('branch.delete_current'));
+        }
+        try {
+            $this->git->deleteBranch($branch['name']);
+            $this->history->push(HistoryEntry::deleteBranch($branch['name']));
+            return $this->refresh()->withAll(
+                successMessage: Lang::t('branch.deleted', ['name' => $branch['name']])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Start collecting merge target branch name. */
+    private function startMerge(): self
+    {
+        return $this->withMergeCollection(true, '');
+    }
+
+    private function withMergeCollection(bool $collecting, string $target): self
+    {
+        return $this->withAll(collectingMergeTarget: $collecting, mergeTarget: $target);
+    }
+
+    private function withMergeTarget(string $target): self
+    {
+        return $this->withAll(mergeTarget: $target);
+    }
+
+    /** Execute the merge with the collected target branch. */
+    private function executeMerge(): self
+    {
+        if ($this->mergeTarget === '') {
+            return $this->withError(Lang::t('merge.empty_target'));
+        }
+        try {
+            $this->git->merge($this->mergeTarget);
+            $this->history->push(HistoryEntry::merge($this->mergeTarget));
+            return $this->withMergeCollection(false, '')->refresh()->withAll(
+                successMessage: Lang::t('merge.success', ['branch' => $this->mergeTarget])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Handle 'r' key: show rebase menu if rebase in progress. */
+    private function handleRebaseKey(): self
+    {
+        if ($this->isRebaseInProgress()) {
+            return $this->withRebaseMenu(true);
+        }
+        return $this->withError(Lang::t('rebase.no_rebase'));
+    }
+
+    private function withRebaseMenu(bool $show): self
+    {
+        return $this->withAll(showRebaseMenu: $show);
+    }
+
+    /** Check if a rebase is currently in progress. */
+    private function isRebaseInProgress(): bool
+    {
+        $gitDir = $this->git instanceof Git ? $this->git->cwd . '/.git' : null;
+        if ($gitDir === null || !is_dir($gitDir)) {
+            return false;
+        }
+        return is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply');
+    }
+
+    private function executeRebaseContinue(): self
+    {
+        try {
+            $this->git->rebaseContinue();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('rebase.success', ['action' => 'continue'])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeRebaseAbort(): self
+    {
+        try {
+            $this->git->rebaseAbort();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('rebase.success', ['action' => 'abort'])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeRebaseSkip(): self
+    {
+        try {
+            $this->git->rebaseSkip();
+            return $this->withRebaseMenu(false)->refresh()->withAll(
+                successMessage: Lang::t('rebase.success', ['action' => 'skip'])
+            );
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
