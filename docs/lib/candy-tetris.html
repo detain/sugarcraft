@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, CandySprinkles for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-classic line-clear scoring. 41 tests / 1535 assertions.</p>
+    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, CandySprinkles for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-classic line-clear scoring. Full SRS wall-kicks via official Tetris Association tables.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-tetris</code></pre>
@@ -69,7 +69,7 @@
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>SRS rotation</strong><span>Standard Rotation System with simple ±2 wall-kicks. CW / CCW handled identically.</span></div>
+      <div class="feature"><strong>SRS rotation</strong><span>Full Super Rotation System — official Tetris Association kick tables for J/L/S/T/Z and I piece. Tries up to 5 offsets per rotation transition; the first that fits the board is used.</span></div>
       <div class="feature"><strong>7-bag RNG</strong><span>Deterministic shuffle of the seven pieces; injectable RNG closure for reproducible tests.</span></div>
       <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
       <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines.</span></div>
@@ -92,6 +92,7 @@
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Tetromino</td><td>new(type)</td><td>Create a tetromino piece</td></tr>
 <tr><td>Piece</td><td>rotate(direction)</td><td>Rotate piece</td></tr>
+<tr><td>Piece</td><td>rotationsWithKicks(delta)</td><td>All valid rotated positions (naive + SRS wall-kick offsets)</td></tr>
 <tr><td>Piece</td><td>move(dx, dy)</td><td>Move piece</td></tr>
 <tr><td>Board</td><td>new(width, height)</td><td>Create game board</td></tr>
 <tr><td>Board</td><td>lock(piece)</td><td>Lock piece into board</td></tr>
@@ -100,6 +101,8 @@
 <tr><td>Score</td><td>add(lines, level)</td><td>Add score for lines cleared</td></tr>
 <tr><td>Game</td><td>tick()</td><td>Process game tick</td></tr>
 <tr><td>Game</td><td>state()</td><td>Get current game state</td></tr>
+<tr><td>SrsKickTable</td><td>kicks(piece, from, to)</td><td>Return kick offsets for a rotation transition</td></tr>
+<tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all four transition tables for a piece</td></tr>
 </table>
   </div>
 </section>
