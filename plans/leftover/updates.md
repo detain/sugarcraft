@@ -400,12 +400,20 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.13 · PR#705 · candy-freeze: Segment::$bg + SvgRenderer::withLigatures() + LanguageDetector (shebang/extension/content; 44 filter tests; leftover-rollout step 08.13)
   review for step 08.13 · clean · PR#705
   tests-ci for step 08.13 · clean
+  step 08.14 · PR#707 · candy-freeze: VsCode/ChromaThemeLoader + SvgRenderer withFont() (base64 TTF embed) + withHighlight() (line bg rect) + 30 new tests (leftover-rollout step 08.14)
+  review for step 08.14 · clean · PR#707
+  tests-ci for step 08.14 · clean
   docs for step 08.12 · direct-to-master · document BorderGradientBlend/Style::patch/rapidBlink
   step 08.13 · PR#705 · candy-freeze: Segment bg field + AnsiParser background SGR + SvgRenderer per-segment rect + withLigatures + LanguageDetector (leftover-rollout step 08.13)
    review for step 08.13 · clean · PR#705
    docs for step 08.13 · PR#706 · document Segment::$bg/withBg + SvgRenderer::withLigatures + LanguageDetector in README/end-user HTML/CALIBER_LEARNINGS.md
    step 08.14 · PR#707 · candy-freeze: VS Code/chroma JSON theme loaders + font embed + line highlight (leftover-rollout step 08.14)
- ## Open review findings — 08.04
+   review for step 08.14 · clean · PR#707
+   docs for step 08.14 · direct-to-master · document VsCodeThemeLoader/ChromaThemeLoader/withFont/withHighlight in README/end-user HTML/CALIBER_LEARNINGS.md
+   step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)
+   ## Open review findings — 08.04
+
+### Phase 08 complete (all 14 steps shipped)
 
 - [x] sugar-prompt/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
 - [x] sugar-prompt/README.md: `Select::withEnum(\BackedEnum::class)` not documented in the Select field notable knobs column (line 47) — ✅ resolved PR#691
