@@ -519,6 +519,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.19 · PR#749 · honey-flap: variable pipe-gap height (gap shrinks from 6→3 as score increases; floor at 3; PipeGenerator + tests)
     review for step 09.19 · clean · PR#749
     tests-ci for step 09.19 · clean
+    docs for step 09.19 · PR#750 · document variable gap in README (Architecture table + Difficulty scaling section) + end-user HTML (variable difficulty chip) + new CALIBER_LEARNINGS.md (variable-pipe-gap pattern)
 
 ## Open review findings — 09.19
 
