@@ -372,6 +372,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.05 · clean · PR#692
   tests-ci for step 08.05 · clean
   docs for step 08.05 · PR#693 · document ValidateOn + withRestrict in README + end-user HTML
+  step 08.06 · PR#694 · sugar-bits: add Table sort (withSort/thenSortBy/clearSort) + SortDirection enum + SortState DTO (leftover-rollout step 08.06)
 
 ## Open review findings — 08.04
 
