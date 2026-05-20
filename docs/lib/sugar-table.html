@@ -52,21 +52,22 @@
     <pre class="code"><code>composer require sugarcraft/sugar-table</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Table\{Table, Column, Row, RowData, StyledCell};
+    <pre class="code"><code>use SugarCraft\Table\{Table, Column, Row, RowData, StyledCell, ColumnWidth, WrapMode};
 
 $table = (new Table())
     -&gt;withColumns([
-        Column::make('Name', 20)-&gt;withAlignment('left'),
-        Column::make('Role', 15)-&gt;withAlignment('center'),
-        Column::make('Age', 5)-&gt;withAlignment('right'),
+        Column::new('name', 'Name', 20)-&gt;withAlignLeft()
+            -&gt;withColumnWidth(ColumnWidth::Dynamic, 0),
+        Column::new('role', 'Role', 15)-&gt;withColumnWidth(ColumnWidth::Percent, 25.0),
+        Column::new('age',  'Age',   5)-&gt;withWrapMode(WrapMode::None),
     ])
     -&gt;withRows([
-        Row::new([new StyledCell('Alice'), new StyledCell('Admin', '32'), new StyledCell('30')]),
-        Row::new([new StyledCell('Bob'),   new StyledCell('Dev',   '34'), new StyledCell('28')]),
+        Row::new(RowData::from(['name' =&gt; 'Alice', 'role' =&gt; 'Admin', 'age' =&gt; '30'])),
+        Row::new(RowData::from(['name' =&gt; 'Bob',   'role' =&gt; 'Dev',   'age' =&gt; '28'])),
     ])
-    -&gt;withPagination(25);
+    -&gt;withPageSize(25);
 
-echo $table-&gt;render();</code></pre>
+echo $table-&gt;view();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -75,7 +76,9 @@ echo $table-&gt;render();</code></pre>
             <div class="feature"><strong>Pagination</strong><span>Paginate large datasets, navigate between pages.</span></div>
             <div class="feature"><strong>Frozen rows/cols</strong><span>Stick a row at the top or a column on the left.</span></div>
             <div class="feature"><strong>Row selection</strong><span>Click or arrow-key row selection with highlight.</span></div>
-            
+            <div class="feature"><strong>Viewport virtualization</strong><span>Render only visible rows with withViewportHeight() + withScrollY().</span></div>
+            <div class="feature"><strong>Column width modes</strong><span>ColumnWidth enum — Fixed, Percent, Dynamic, Content.</span></div>
+            <div class="feature"><strong>Cell text wrapping</strong><span>WrapMode enum — None, WordWrap, Character.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -93,12 +96,22 @@ echo $table-&gt;render();</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Table</td><td>withColumns(columns)</td><td>Set table columns</td></tr>
 <tr><td>Table</td><td>withRows(rows)</td><td>Set table rows</td></tr>
-<tr><td>Table</td><td>withPagination(size)</td><td>Enable pagination</td></tr>
-<tr><td>Table</td><td>render()</td><td>Render the table</td></tr>
-<tr><td>Column</td><td>make(name, width)</td><td>Create a column</td></tr>
-<tr><td>Column</td><td>withAlignment(align)</td><td>Set column alignment</td></tr>
-<tr><td>Row</td><td>new(cells)</td><td>Create a row</td></tr>
-<tr><td>StyledCell</td><td>new(content)</td><td>Create styled cell</td></tr>
+<tr><td>Table</td><td>withPageSize(size)</td><td>Set rows per page for pagination</td></tr>
+<tr><td>Table</td><td>withPage(n)</td><td>Jump to page n</td></tr>
+<tr><td>Table</td><td>withViewportHeight(n)</td><td>Render only n visible rows (viewport virtualization)</td></tr>
+<tr><td>Table</td><td>withScrollY(n)</td><td>Set vertical scroll offset (row number)</td></tr>
+<tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
+<tr><td>Table</td><td>view()</td><td>Render the table to string</td></tr>
+<tr><td>Table</td><td>computeColumnWidths(total)</td><td>Compute actual widths from ColumnWidth enum values</td></tr>
+<tr><td>Column</td><td>new(key, title, width)</td><td>Create a column</td></tr>
+<tr><td>Column</td><td>withAlignLeft(bool)</td><td>Left-align (default is right)</td></tr>
+<tr><td>Column</td><td>withColumnWidth(mode, value)</td><td>Set ColumnWidth::Fixed|Percent|Dynamic|Content</td></tr>
+<tr><td>Column</td><td>withWrapMode(mode)</td><td>Set WrapMode::None|WordWrap|Character</td></tr>
+<tr><td>Row</td><td>new(rowData)</td><td>Create a row from RowData</td></tr>
+<tr><td>RowData</td><td>from(array)</td><td>Create from key-value array</td></tr>
+<tr><td>StyledCell</td><td>new(value, style)</td><td>Create styled cell with ANSI style</td></tr>
+<tr><td>ColumnWidth</td><td>enum</td><td>Fixed | Percent | Dynamic | Content</td></tr>
+<tr><td>WrapMode</td><td>enum</td><td>None | WordWrap | Character</td></tr>
 </table>
   </div>
 </section>
