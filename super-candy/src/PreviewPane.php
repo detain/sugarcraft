@@ -172,16 +172,14 @@ final class PreviewPane
     {
         $ext = strtolower(pathinfo($this->filePath, PATHINFO_EXTENSION));
 
-        // Detect MIME via finfo when available
         if (class_exists(\finfo::class)) {
             $finfo = new \finfo(FILEINFO_MIME_TYPE);
-            $mime = $finfo->file($this->filePath);
+            $mime = @$finfo->file($this->filePath);
             if ($mime !== false && $mime !== 'application/octet-stream') {
                 return $mime;
             }
         }
 
-        // Fallback to extension-based type
         return match ($ext) {
             'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico' => 'image/' . ($ext === 'jpg' ? 'jpeg' : $ext),
             'mp4', 'avi', 'mov', 'mkv' => 'video/' . $ext,

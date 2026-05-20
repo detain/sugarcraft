@@ -523,6 +523,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.01 · PR#751 · super-candy: add copy/move/rename file-manager ops (leftover-rollout step 10.01)
     fix for step 10.01 · PR#752 · resolved 2 findings (keyhelp c/m/R omissions + CALIBER_LEARNINGS.md creation)
     docs for step 10.01 · PR#753 · document copy/move/rename in README (c/m/R keys + Status section) + end-user HTML (keys/feature grid/API table) + Manager.php PHPDoc (@throws/@return on copy/move/rename + docblocks on arm* helpers)
+    step 10.02 · PR#754 · super-candy: add bulk rename + preview pane + async ops (leftover-rollout step 10.02)
 
 ## Open review findings — 09.19
 
