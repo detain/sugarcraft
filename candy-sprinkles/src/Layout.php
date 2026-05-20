@@ -81,9 +81,25 @@ final class Layout
      * vertically with blank lines anchored per `$pos`. Per-line widths
      * are equalised with trailing spaces so the output is rectangular.
      *
+     * When `$spacing` is set, that many blank columns are inserted
+     * between each pair of adjacent blocks (but not before the first
+     * or after the last).
+     *
      * Mirrors `lipgloss.JoinHorizontal(pos, blocks...)`.
      */
     public static function joinHorizontal(float $pos, string ...$blocks): string
+    {
+        return self::joinHorizontalWithSpacing($pos, null, ...$blocks);
+    }
+
+    /**
+     * Stitch blocks side by side with explicit spacing.
+     *
+     * @param float  $pos     Vertical anchor (0.0-1.0)
+     * @param int|null $spacing Horizontal gap between blocks (null = no gap)
+     * @param string ...$blocks
+     */
+    public static function joinHorizontalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string
     {
         if ($blocks === []) {
             return '';
@@ -120,11 +136,16 @@ final class Layout
             $cols[$i] = $lines;
         }
 
+        $spacingStr = $spacing !== null ? str_repeat(' ', $spacing) : '';
+
         $rows = [];
         for ($r = 0; $r < $maxRows; $r++) {
             $row = '';
-            foreach ($cols as $col) {
+            foreach ($cols as $idx => $col) {
                 $row .= $col[$r];
+                if ($spacingStr !== '' && $idx < count($cols) - 1) {
+                    $row .= $spacingStr;
+                }
             }
             $rows[] = $row;
         }
@@ -136,9 +157,25 @@ final class Layout
      * (Left/Center/Right or any 0.0-1.0 float): narrower blocks get
      * padded horizontally with spaces anchored per `$pos`.
      *
+     * When `$spacing` is set, that many blank lines are inserted
+     * between each pair of adjacent blocks (but not before the first
+     * or after the last).
+     *
      * Mirrors `lipgloss.JoinVertical(pos, blocks...)`.
      */
     public static function joinVertical(float $pos, string ...$blocks): string
+    {
+        return self::joinVerticalWithSpacing($pos, null, ...$blocks);
+    }
+
+    /**
+     * Stack blocks top-to-bottom with explicit spacing.
+     *
+     * @param float  $pos     Horizontal anchor (0.0-1.0)
+     * @param int|null $spacing Vertical gap between blocks (null = no gap)
+     * @param string ...$blocks
+     */
+    public static function joinVerticalWithSpacing(float $pos, ?int $spacing, string ...$blocks): string
     {
         if ($blocks === []) {
             return '';
@@ -152,7 +189,7 @@ final class Layout
             }
         }
         $rows = [];
-        foreach ($blocks as $b) {
+        foreach ($blocks as $blockIdx => $b) {
             foreach (explode("\n", $b) as $line) {
                 $w = WidthUtil::string($line);
                 $extra = $width - $w;
@@ -163,6 +200,12 @@ final class Layout
                 $left = (int) round($pos * $extra);
                 $right = $extra - $left;
                 $rows[] = str_repeat(' ', $left) . $line . str_repeat(' ', $right);
+            }
+            // Insert spacing rows after each block except the last
+            if ($spacing !== null && $blockIdx < count($blocks) - 1) {
+                for ($s = 0; $s < $spacing; $s++) {
+                    $rows[] = str_repeat(' ', $width);
+                }
             }
         }
         return implode("\n", $rows);
