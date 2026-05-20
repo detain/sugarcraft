@@ -38,7 +38,15 @@ trait ChildPollTrait
      * Returns the exit code if the child has exited, null if still
      * running or FFI is unavailable (falls back to proc_get_status).
      *
+     * WNOHANG is used so this never blocks — returns null immediately
+     * if the child has not yet exited. Exit code: normally-exited =>
+     * (status >> 8) & 0xFF; signal-terminated => 128 + (status & 0x7F).
+     *
      * @internal
+     *
+     * @param int $pid the child process ID to wait on
+     * @return int|null the exit code if the child has exited, null if still
+     *                  running or FFI is unavailable
      */
     private function tryWaitpid(int $pid): ?int
     {
