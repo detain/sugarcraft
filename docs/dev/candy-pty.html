@@ -82,6 +82,16 @@
     </ul>
     <p>This internal detail is documented here for developers extending <code>PosixPtySystem</code> or implementing a parallel backend. Consumer code is fully abstracted by <code>Pty::open()</code> and the <code>PtySystem</code> interface.</p>
 
+    <h3 style="margin-top: 32px;">ControllingTerminal::claim() — setsid + TIOCSCTTY</h3>
+    <p><code>ControllingTerminal::claim(int $fd)</code> is a static utility that calls <code>setsid()</code> then <code>ioctl($fd, TIOCSCTTY, 0)</code> to claim a file descriptor as the calling process's controlling terminal. It is used by <code>bin/pty-shim.php</code> for the <code>controllingTerminal: true</code> spawn path and can also be called directly from FFI-heavy code that needs to establish a ctty without going through the PHP shim.</p>
+    <p>This is the only direct public API in the <code>ControllingTerminal</code> class — it exists as a standalone static method so alternative spawning strategies (custom shim, direct fork+exec, pecl extension) can reuse the same <code>setsid</code> + <code>TIOCSCTTY</code> logic without duplicating the platform-specific constants.</p>
+    <pre class="code"><code>use SugarCraft\Pty\ControllingTerminal;
+
+// Claim fd 0 (already-open slave PTY from proc_open) as ctty.
+// Throws PtyException if setsid() fails (already a session leader)
+// or ioctl(TIOCSCTTY) fails.
+ControllingTerminal::claim(0);</code></pre>
+
     <h3 style="margin-top: 32px;">Testing your extension</h3>
     <p>Use a <code>FakePtySystem</code> that implements <code>PtySystem</code> and returns synthetic <code>PtyPair</code> / <code>Child</code> objects. This lets unit tests run without FFI or real syscalls.</p>
     <pre class="code"><code>use SugarCraft\Pty\Contract\PtySystem;
@@ -125,6 +135,7 @@ $pair = $system->open(80, 24);</code></pre>
 │   └── PosixPump
 ├── PtySystemFactory   # Entry point; SUGARCRAFT_PTY_BACKEND dispatch
 ├── SignalForwarder    # SIGWINCH → resize, SIGCHLD → reap
+├── ControllingTerminal # setsid() + ioctl(TIOCSCTTY) static utility
 └── PumpOptions        # Callback holders + sshDefault()</code></pre>
 
     <h3 style="margin-top: 40px;">Source</h3>
