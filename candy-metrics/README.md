@@ -18,13 +18,38 @@ composer require sugarcraft/candy-metrics
 
 ## Concepts
 
-| Primitive   | Behaviour                                                       |
-|-------------|------------------------------------------------------------------|
-| Counter     | Monotonic value that accumulates (connect counts, errors).       |
-| Gauge       | Instantaneous value that replaces on set (queue depth, RSS).     |
-| Histogram   | Distribution of samples (latency, payload size).                 |
+| Primitive   | Behaviour                                                                                              |
+|-------------|---------------------------------------------------------------------------------------------------------|
+| Counter     | Monotonic value that accumulates (connect counts, errors).                                                |
+| Gauge       | Instantaneous value that replaces on set (queue depth, RSS).                                            |
+| Histogram   | Distribution of samples (latency, payload size); Prometheus backend emits 14 classic `le` buckets +Inf. |
 
 A `Registry` is the application-facing facade; it forwards every emit to the configured `Backend`. Backends decide how to persist or forward.
+
+## Descriptor registration
+
+The `Descriptor` DTO carries a metric's name, help text, type, and label keys. Register it with the registry so backends can pre-emit `TYPE` and `HELP` lines before any samples are recorded — required by the Prometheus textfile collector for uninitialized metrics:
+
+```php
+use SugarCraft\Metrics\Registry;
+use SugarCraft\Metrics\Descriptor;
+use SugarCraft\Metrics\Backend\PrometheusFileBackend;
+
+$reg = new Registry(new PrometheusFileBackend('/var/lib/app/metrics.prom'));
+
+$reg->register(new Descriptor(
+    name: 'http.request.duration',
+    help: 'HTTP request duration in seconds',
+    type: 'histogram',
+    labelKeys: ['route', 'status'],
+));
+
+$stop = $reg->time('http.request.duration', ['route' => '/api/foo']);
+handleRequest();
+$stop();
+```
+
+`register()` is idempotent — registering the same metric name twice is a no-op.
 
 ## Usage
 
@@ -73,7 +98,7 @@ hits:1|c|#route:/x,env:prod
 
 ### `PrometheusFileBackend`
 
-Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Counter values accumulate across `flush()`s; histograms expose `_count` and `_sum`.
+Atomically rewrites a `.prom` textfile-collector file with the current state of every metric. Pairs with `node_exporter --collector.textfile.directory=…`. Counter values accumulate across `flush()`s; histograms emit all 14 classic cumulative bucket boundaries (`le="0.005"` … `le="100"`) plus `le="+Inf"`, alongside `_count` and `_sum`.
 
 ### `MultiBackend`
 
@@ -116,4 +141,4 @@ Pass `extraTags` (a callable receiving the `Session`) to add things like client 
 
 ## Status
 
-Phase 9+ — first cut. 23 tests / 57 assertions across Registry, four backends, and the SessionMetrics middleware.
+Phase 9 — histogram bucket emission + Descriptor DTO. 38 tests / 95 assertions across Registry, four backends, SessionMetrics middleware, and histogram bucket coverage.

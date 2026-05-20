@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics. Counter / Gauge / Histogram + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out.</p>
+    <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics. Counter / Gauge / Histogram (14 classic Prometheus buckets +Inf) + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-metrics</code></pre>
@@ -81,6 +81,9 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
     </div>
 
+      <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) +Inf for classic Prometheus compatibility.</span></div>
+    </div>
+
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/candy-metrics">Source on GitHub</a></li>
@@ -94,14 +97,18 @@ $req-&gt;counter('events');</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Descriptor</td><td>new(name, help, type, labelKeys)</td><td>Metric registration DTO (type: counter|gauge|histogram|summary)</td></tr>
 <tr><td>Registry</td><td>new(backend)</td><td>Create registry with backend</td></tr>
+<tr><td>Registry</td><td>register(Descriptor)</td><td>Register metric descriptor for early TYPE/HELP emission</td></tr>
 <tr><td>Registry</td><td>counter(name, value, tags)</td><td>Increment counter</td></tr>
 <tr><td>Registry</td><td>gauge(name, value, tags)</td><td>Set gauge value</td></tr>
+<tr><td>Registry</td><td>histogram(name, value, tags)</td><td>Record a histogram sample (14 classic buckets +Inf on Prometheus backend)</td></tr>
 <tr><td>Registry</td><td>time(name, tags)</td><td>Time a block, returns callable</td></tr>
 <tr><td>Registry</td><td>withTags(tags)</td><td>Pre-tag every emit</td></tr>
+<tr><td>Registry</td><td>backend()</td><td>Returns the current backend</td></tr>
 <tr><td>InMemoryBackend</td><td>new()</td><td>In-memory storage</td></tr>
 <tr><td>StatsdBackend</td><td>new(host, port)</td><td>StatsD protocol</td></tr>
-<tr><td>PrometheusFileBackend</td><td>new(path)</td><td>Prometheus textfile</td></tr>
+<tr><td>PrometheusFileBackend</td><td>new(path)</td><td>Prometheus textfile (atomic write, 14 bucket boundaries +Inf)</td></tr>
 </table>
   </div>
 </section>
