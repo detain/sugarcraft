@@ -348,6 +348,7 @@ final class Manager implements Model
             ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
     }
 
+    /** Arm copy confirmation — next KeyMsg triggers performCopy or cancel. */
     private function armCopy(): self
     {
         $pane = $this->activePane();
@@ -368,6 +369,7 @@ final class Manager implements Model
         );
     }
 
+    /** Arm move confirmation — next KeyMsg triggers performMove or cancel. */
     private function armMove(): self
     {
         $pane = $this->activePane();
@@ -388,6 +390,7 @@ final class Manager implements Model
         );
     }
 
+    /** Arm rename confirmation — next KeyMsg triggers performRename or cancel. */
     private function armRename(): self
     {
         $pane = $this->activePane();
@@ -406,6 +409,8 @@ final class Manager implements Model
     /**
      * @param string $src Source path
      * @param string $dst Destination path
+     * @return bool True on success; false on any error (file not found, permission denied, etc.)
+     * @throws void
      */
     public function copy(string $src, string $dst): bool
     {
@@ -418,6 +423,8 @@ final class Manager implements Model
     /**
      * @param string $src Source path
      * @param string $dst Destination path
+     * @return bool True on success; false on any error
+     * @throws void
      */
     public function move(string $src, string $dst): bool
     {
@@ -426,7 +433,9 @@ final class Manager implements Model
 
     /**
      * @param string $src Source path
-     * @param string $newName New name (not full path)
+     * @param string $newName New name (not full path — placed in the same directory as src)
+     * @return bool True on success; false on any error
+     * @throws void
      */
     public function rename(string $src, string $newName): bool
     {
