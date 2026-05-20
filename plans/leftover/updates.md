@@ -393,6 +393,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   fix for step 08.10 · PR#701 · resolved 4 findings (duplicate docblock + README docs + CALIBER_LEARNINGS + PR not merged)
   docs for step 08.10 · clean
   step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11)
+  fix for step 08.11 · PR#703 · resolved 3 findings (path-repo restored + README docs + CALIBER_LEARNINGS)
 
 ## Open review findings — 08.04
 
