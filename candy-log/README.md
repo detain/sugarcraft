@@ -22,6 +22,9 @@ PHP port of [charmbracelet/log](https://github.com/charmbracelet/log) — a mini
 - **Per-field styling** — `Styles::keys` maps field names to their ANSI styles
 - **syslog-aligned levels** — integer values (-4/0/4/8/12) for easy threshold filtering
 - **stdlog adapter** — wrap in `Log\StandardLogAdapter` for `*log.Logger` interface compatibility
+- **PSR-3 bridge** — `PsrBridge` wrapper provides full PSR-3 `LoggerInterface` methods
+- **Hook system** — register callbacks per log level via `HookRegistry::onLevel()`
+- **Configurable log-part ordering** — `PartsOrder` DTO controls which parts appear and in what sequence
 
 ## Install
 
@@ -136,6 +139,101 @@ Log::restoreTerminal();
 ```
 
 The panic handler catches uncaught exceptions and fatal errors (E_ERROR, E_PARSE), restores the terminal to a usable state, and prints a colorized banner with the exception class, message, and backtrace.
+
+## PSR-3 Bridge
+
+`PsrBridge` wraps a `Logger` instance and provides the full PSR-3 `LoggerInterface` API (`emergency`, `alert`, `critical`, `error`, `warning`, `notice`, `info`, `debug`, `log`). Use it anywhere a PSR-3 logger is expected:
+
+```php
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\PsrBridge;
+use Psr\Log\LogLevel;
+
+$logger = new Logger();
+$psr = new PsrBridge($logger);
+
+// All PSR-3 methods available
+$psr->warning('Something is off', ['detail' => 'temperature rising']);
+$psr->log(LogLevel::ERROR, 'Operation failed', ['code' => 500]);
+```
+
+The bridge also fires registered hooks before forwarding each message to the underlying logger, enabling middleware-style interceptors.
+
+## Hook System
+
+The hook system lets you register callbacks that fire whenever a log entry is emitted at or above a given level. Hooks receive the `Level`, PSR-3 level string, message, and context — useful for dispatching to external services, enriching context, or filtering.
+
+```php
+use SugarCraft\Log\Logger;
+use SugarCraft\Log\Level;
+use SugarCraft\Log\Hook\HookRegistry;
+
+$logger = new Logger();
+$hooks = new HookRegistry();
+
+// Register a callback for all Warn-and-above entries
+$id = $hooks->onLevel(Level::Warn, function (Level $level, string $psrLevel, string $message, array $context) {
+    // Dispatch to external service, enrich context, etc.
+    file_put_contents('/tmp/warn.log', "[{$level->label()}] {$message}\n", FILE_APPEND);
+});
+
+// Pass hooks to the PsrBridge, or fire them manually
+$hooks->fire(Level::Warn, 'warning', 'Something is off', []);
+```
+
+`HookRegistry::onLevel(Level, callable)` returns a registration ID. `HookRegistry::fire(Level, psrLevel, message, context)` dispatches to all handlers whose minimum level is met.
+
+The `Hook` interface is also available for structured implementations:
+
+```php
+use SugarCraft\Log\Hook\Hook;
+use SugarCraft\Log\Level;
+
+final class MetricsHook implements Hook
+{
+    public function onLevel(Level $level, string $psrLevel, string $message, array $context): void
+    {
+        // Ship metrics to your observability platform
+    }
+}
+```
+
+## Parts Order
+
+`PartsOrder` is a config DTO that controls which log-parts appear and in what sequence when formatting. It ships with three named presets:
+
+```php
+use SugarCraft\Log\PartsOrder;
+
+// Default: timestamp level prefix? caller? message fields?
+PartsOrder::default();   // [timestamp, level, prefix, caller, message, fields]
+
+// Syslog-friendly: omits prefix and caller
+PartsOrder::syslog();     // [timestamp, level, message, fields]
+
+// Message-first: message comes before level and timestamp
+PartsOrder::messageFirst(); // [message, level, timestamp, fields]
+
+// Custom ordering
+$order = new PartsOrder([PartsOrder::PART_MESSAGE, PartsOrder::PART_LEVEL, PartsOrder::PART_FIELDS]);
+
+// Query whether a part is included
+$order->has(PartsOrder::PART_CALLER); // false for syslog(), true for default()
+```
+
+Named part constants: `PART_TIMESTAMP`, `PART_LEVEL`, `PART_PREFIX`, `PART_CALLER`, `PART_MESSAGE`, `PART_FIELDS`.
+
+## Caller Information
+
+`CallerFormatter::find()` walks the call stack and returns `"file:line"` of the first frame outside the log package — the true call site:
+
+```php
+use SugarCraft\Log\CallerFormatter;
+
+$caller = CallerFormatter::find(); // e.g. "my-script.php:42"
+```
+
+Used internally by formatters when `$reportCaller` is enabled on the `Logger`.
 
 ## License
 

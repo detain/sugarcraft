@@ -8,6 +8,9 @@ namespace SugarCraft\Log;
  * Captures the file:line of the immediate caller outside the log package.
  *
  * Mirrors charmbracelet/log's caller functionality.
+ *
+ * @internal This class is public API but is for framework integration
+ *           use. Prefer Logger::setReportCaller(true) for normal use.
  */
 final class CallerFormatter
 {
