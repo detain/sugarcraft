@@ -101,4 +101,35 @@ final class FloydSteinbergTest extends TestCase
         imagedestroy($src);
         imagedestroy($dst);
     }
+
+    public function testDitherSingleColorTransparent(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Create a 1×1 palette (not truecolor) image so we can use imagecolortransparent.
+        $src = imagecreate(1, 1);
+        $transparentIndex = imagecolorallocate($src, 0, 0, 0);
+        imagecolortransparent($src, $transparentIndex);
+
+        // Pixel (0,0) is the transparent color index.
+        imagesetpixel($src, 0, 0, $transparentIndex);
+
+        $dst = FloydSteinberg::dither($src, [
+            [0, 0, 0],      // index 0 — also our transparent color
+            [255, 0, 0],    // index 1 — opaque red
+        ]);
+
+        $idx = imagecolorat($dst, 0, 0);
+        // For truecolor output, imagecolorat returns 0xRRGGBBAA.
+        // Extract alpha from the high byte (24–31).
+        $alpha = ($idx >> 24) & 0xff;
+
+        // The transparent source pixel should map to the transparent palette entry
+        // and remain transparent (alpha = 127) in the output.
+        $this->assertSame(127, $alpha, 'Pixel 0 at (0,0) should be fully transparent');
+
+        imagedestroy($src);
+        imagedestroy($dst);
+    }
 }
