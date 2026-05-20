@@ -87,9 +87,6 @@ final class CubicBezier
     /**
      * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
      */
-    /**
-     * Evaluate the cubic bezier at normalized time $t ∈ [0, 1].
-     */
     public function evaluate(float $t): float
     {
         if ($t === 0.0 || $t === 1.0) {
