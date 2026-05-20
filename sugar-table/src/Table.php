@@ -15,6 +15,7 @@ namespace SugarCraft\Table;
  *
  * @see https://github.com/Evertras/bubble-table
  */
+use SugarCraft\Sprinkles\Border;
 use SugarCraft\Table\Lang;
 
 final class Table
@@ -93,6 +94,12 @@ final class Table
 
     private bool $showHeader = true;
     private bool $showFooter = true;
+
+    /** When set, border characters are sourced from this Border object. */
+    private ?Border $border = null;
+
+    /** When true, renderRowLines outputs all wrapped cell lines (multi-line rows). */
+    private bool $multilineMode = false;
 
     // -------------------------------------------------------------------------
     // Factory
@@ -221,6 +228,20 @@ final class Table
     {
         $clone = clone $this;
         $clone->showFooter = $v;
+        return $clone;
+    }
+
+    public function withBorder(Border $border): self
+    {
+        $clone = clone $this;
+        $clone->border = $border;
+        return $clone;
+    }
+
+    public function withMultilineMode(bool $multiline = true): self
+    {
+        $clone = clone $this;
+        $clone->multilineMode = $multiline;
         return $clone;
     }
 
@@ -606,6 +627,61 @@ final class Table
     // Internal
     // -------------------------------------------------------------------------
 
+    private function borderTopLeft(): string
+    {
+        return $this->border?->topLeft ?? $this->borderTopLeft;
+    }
+
+    private function borderTop(): string
+    {
+        return $this->border?->top ?? $this->borderTop;
+    }
+
+    private function borderTopRight(): string
+    {
+        return $this->border?->topRight ?? $this->borderTopRight;
+    }
+
+    private function borderBottomLeft(): string
+    {
+        return $this->border?->bottomLeft ?? $this->borderBottomLeft;
+    }
+
+    private function borderBottom(): string
+    {
+        return $this->border?->bottom ?? $this->borderBottom;
+    }
+
+    private function borderBottomRight(): string
+    {
+        return $this->border?->bottomRight ?? $this->borderBottomRight;
+    }
+
+    private function borderLeft(): string
+    {
+        return $this->border?->left ?? $this->borderLeft;
+    }
+
+    private function borderRight(): string
+    {
+        return $this->border?->right ?? $this->borderRight;
+    }
+
+    private function borderCenterH(): string
+    {
+        return $this->border?->middle ?? $this->borderCenterH;
+    }
+
+    private function borderCenterV(): string
+    {
+        return $this->border?->middleLeft ?? $this->borderCenterV;
+    }
+
+    private function borderCross(): string
+    {
+        return $this->border?->middle ?? $this->borderCross;
+    }
+
     private function computeTotalWidth(): int
     {
         $total = 0;
@@ -624,17 +700,17 @@ final class Table
 
     private function renderTopBorder(int $totalWidth): string
     {
-        $s = $this->borderTopLeft
-           . \str_repeat($this->borderTop, $totalWidth)
-           . $this->borderTopRight;
+        $s = $this->borderTopLeft()
+           . \str_repeat($this->borderTop(), $totalWidth)
+           . $this->borderTopRight();
         return $this->applyBorderStyle($s);
     }
 
     private function renderBottomBorder(int $totalWidth): string
     {
-        $s = $this->borderBottomLeft
-           . \str_repeat($this->borderBottom, $totalWidth)
-           . $this->borderBottomRight;
+        $s = $this->borderBottomLeft()
+           . \str_repeat($this->borderBottom(), $totalWidth)
+           . $this->borderBottomRight();
         return $this->applyBorderStyle($s);
     }
 
@@ -645,17 +721,17 @@ final class Table
             $cells[] = $col->renderHeader();
         }
 
-        $line = $this->borderLeft
-              . \implode($this->borderCenterV, $cells)
-              . $this->borderRight;
+        $line = $this->borderLeft()
+              . \implode($this->borderCenterV(), $cells)
+              . $this->borderRight();
 
         return $this->ansi($line, $this->headerStyle);
     }
 
     private function renderHeaderSeparator(int $totalWidth): string
     {
-        $sep = \str_repeat($this->borderCenterH, $totalWidth);
-        $line = '├' . $sep . '┤';
+        $sep = \str_repeat($this->borderCenterH(), $totalWidth);
+        $line = $this->borderLeft() . $sep . $this->borderRight();
         return $this->applyBorderStyle($line);
     }
 
@@ -666,7 +742,7 @@ final class Table
         $padRight = $totalWidth - $padLeft - \strlen($label);
         $content = \str_repeat(' ', $padLeft) . $label . \str_repeat(' ', $padRight);
 
-        $line = $this->borderLeft . $content . $this->borderRight;
+        $line = $this->borderLeft() . $content . $this->borderRight();
         return $this->ansi($line, $this->footerStyle);
     }
 
@@ -728,6 +804,9 @@ final class Table
             }
         }
 
+        // When multilineMode is false, only render the first line per cell
+        $maxLines = $this->multilineMode ? $maxLines : 1;
+
         // Build output lines, one per row
         $result = [];
         for ($i = 0; $i < $maxLines; $i++) {
@@ -740,7 +819,7 @@ final class Table
                     $cells[] = \str_repeat(' ', $colWidths[$ci]);
                 }
             }
-            $result[] = $this->borderLeft . \implode($this->borderCenterV, $cells) . $this->borderRight;
+            $result[] = $this->borderLeft() . \implode($this->borderCenterV(), $cells) . $this->borderRight();
         }
 
         return $result;
