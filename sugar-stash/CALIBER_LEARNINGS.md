@@ -74,13 +74,66 @@ and sugar-toast:
    i18n lib needs `sugarcraft/candy-core: dev-master` in `require` plus a
    path-repo entry in `repositories`.
 
-    6. **Keys in sugar-stash** — `git.spawn_failed`, `git.error`,
-     `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
-     `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
-     `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,
-     `help.pane_navigation`, `help.pane_status`, `help.pane_branches`,
-     `help.stage_single`, `help.stage_all`, `help.checkout`, `help.commit`,
-     `help.amend`, `help.new_branch`, `help.discard`, `help.diff_viewer`,
-     `checkout.no_branch`, `commit.prompt`, `commit.empty_message`,
-     `branch.prompt`, `branch.empty_name`, `diff.hunk_staged`,
-     `diff.navigation_hint`.
+     6. **Keys in sugar-stash** — `git.spawn_failed`, `git.error`,
+      `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
+      `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
+      `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,
+      `help.pane_navigation`, `help.pane_status`, `help.pane_branches`,
+      `help.stage_single`, `help.stage_all`, `help.checkout`, `help.commit`,
+      `help.amend`, `help.new_branch`, `help.discard`, `help.diff_viewer`,
+      `checkout.no_branch`, `commit.prompt`, `commit.empty_message`,
+      `branch.prompt`, `branch.empty_name`, `diff.hunk_staged`,
+      `diff.navigation_hint`.
+
+---
+
+## [pattern:history-entry-factory] HistoryEntry captures op + inverseOp for undo
+
+Every mutation operation that can be undone stores a paired **inverse operation**
+in the `HistoryEntry`:
+
+- **Op** — the forward action (e.g. `commit`, `branch_create`, `stage_file`).
+- **inverseOp** — the exact inverse needed to undo it (e.g. `commit_undo`,
+  `branch_delete`, `stage_undo`).
+- **label** — human-readable `{op}` placeholder string used in feedback.
+
+This makes `HistoryManager::undo()` a simple pop + execute inverseOp — no
+operation-type switch needed. The entry itself knows how to undo itself.
+
+---
+
+## [pattern:history-manager-undo-redo] Separate undo stack + redo stack; new operation clears redo
+
+`HistoryManager` maintains two stacks:
+
+1. **`undoStack: list<HistoryEntry>`** — committed entries ready to undo.
+2. **`redoStack: list<HistoryEntry>`** — undone entries available to redo.
+
+Key invariant: **any new mutation operation** (anything that pushes onto
+`undoStack`) **clears `redoStack` entirely**. This matches git/undo semantics —
+after you undo N steps then perform a new action, the redo history is discarded.
+
+`undo()` pops from `undoStack`, executes `inverseOp`, pushes to `redoStack`.
+`redo()` pops from `redoStack`, executes `op`, pushes to `undoStack`.
+
+---
+
+## [pattern:rebase-in-progress-check] Detect ongoing rebase via git rev-parse or git status
+
+Before entering rebase UI or offering continue/abort/skip, detect whether a
+rebase is actually in progress:
+
+```php
+// Safe: works even when .git is a file (worktree)
+$gitDir = trim(shell_exec('git rev-parse --absolute-git-dir 2>/dev/null') ?? '');
+$inRebase = is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply');
+```
+
+Or fall back to `git status` (slower, but always correct):
+```php
+$status = trim(shell_exec('git status --porcelain 2>/dev/null') ?? '');
+$inRebase = str_contains($status, 'rebase in progress');
+```
+
+Use the `--absolute-git-dir` form over bare `git rev-parse --git-dir` because
+it returns an absolute path and works inside worktree linked dirs.
