@@ -540,6 +540,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.08 · PR#769 · sugar-toast: persistent toasts + maxConcurrent + overflow enum + custom alert types (leftover-rollout step 10.08)
     review for step 10.08 · clean · PR#769
     docs for step 10.08 · PR#770 · refresh README (Overflow enum + withMaxConcurrent/withOverflow + persistent null-expiry + string type lookup) + end-user HTML API table + 3 CALIBER patterns
+    step 10.09 · PR#771 · sugar-toast: progress toasts + action buttons + history log + animation stubs (leftover-rollout step 10.09)
 
 ## Open review findings — 09.19
 
