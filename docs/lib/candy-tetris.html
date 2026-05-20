@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, CandySprinkles for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-classic line-clear scoring. Full SRS wall-kicks via official Tetris Association tables.</p>
+    <p class="lede" style="margin-top: 28px;">SugarCraft runtime, CandySprinkles for rounded borders + per-piece colours, deterministic 7-bag RNG, ghost piece, hard drop, hold, level-driven gravity ramp, NES-classic line-clear scoring. Full SRS wall-kicks via official Tetris Association tables, T-Spin detection via the 3-corner rule, Back-to-Back (1.5×) and combo bonuses, DAS/ARR keyboard timing (167/50 ms), and perfect-clear detection (+5000/level).</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-tetris</code></pre>
@@ -74,6 +74,11 @@
       <div class="feature"><strong>Ghost piece</strong><span>Translucent preview at the hard-drop landing position.</span></div>
       <div class="feature"><strong>Hard drop / hold</strong><span>Space-bar drop; level-driven gravity speed-up at every 10 lines.</span></div>
       <div class="feature"><strong>NES scoring</strong><span>1 → 40, 2 → 100, 3 → 300, 4 → 1200 — multiplied by (level + 1).</span></div>
+      <div class="feature"><strong>T-Spin (3-corner rule)</strong><span>Full T-Spin (400 × level+1) and T-Spin Mini (100 × level+1) via the official 3-corner detection: piece must have rotated and ≥2 diagonal corner cells must be filled (wall = filled).</span></div>
+      <div class="feature"><strong>Back-to-Back (B2B)</strong><span>1.5× multiplier on Tetris or full T-Spin clears when preceded by another B2B-eligible clear. Resets on 1–3 line clears or T-Spin Mini.</span></div>
+      <div class="feature"><strong>Combo counter</strong><span>Consecutive line clears add combo × 10 × (level+1) bonus points; resets to 0 on a zero-line lock.</span></div>
+      <div class="feature"><strong>Perfect clear</strong><span>Clearing the full board awards +5000 × (level+1) bonus — documented via Board::isPerfectClear().</span></div>
+      <div class="feature"><strong>DAS / ARR timing</strong><span>167 ms DAS delay (time before auto-repeat begins) + 50 ms ARR interval (repeat rate). Gives precise single-tap and smooth continuous movement; configurable via Input\Das.</span></div>
       <div class="feature"><strong>Six pure-state classes</strong><span>Tetromino, Piece, Board, Bag, Score, Game — each individually testable without booting the runtime.</span></div>
     </div>
 
@@ -97,12 +102,18 @@
 <tr><td>Board</td><td>new(width, height)</td><td>Create game board</td></tr>
 <tr><td>Board</td><td>lock(piece)</td><td>Lock piece into board</td></tr>
 <tr><td>Board</td><td>clearLines()</td><td>Clear completed lines</td></tr>
+<tr><td>Board</td><td>isPerfectClear()</td><td>True iff every cell is null (empty board after a perfect clear)</td></tr>
 <tr><td>Bag</td><td>next()</td><td>Get next piece from bag</td></tr>
 <tr><td>Score</td><td>add(lines, level)</td><td>Add score for lines cleared</td></tr>
 <tr><td>Game</td><td>tick()</td><td>Process game tick</td></tr>
 <tr><td>Game</td><td>state()</td><td>Get current game state</td></tr>
 <tr><td>SrsKickTable</td><td>kicks(piece, from, to)</td><td>Return kick offsets for a rotation transition</td></tr>
 <tr><td>SrsKickTable</td><td>allKicks(piece)</td><td>Return all four transition tables for a piece</td></tr>
+<tr><td>Scoring\TSpin</td><td>detect(board, piece, wasRotated)</td><td>Detect T-Spin state using the 3-corner rule; returns TSpin(active, mini)</td></tr>
+<tr><td>Scoring\TSpin</td><td>T_SPIN_POINTS / T_SPIN_MINI_POINTS</td><td>Base score constants (400 / 100, scaled by level+1)</td></tr>
+<tr><td>Input\Das</td><td>create(dasMicroseconds, arrMicroseconds)</td><td>Factory — defaults 167_000 / 50_000 µs</td></tr>
+<tr><td>Input\Das</td><td>advance(us)</td><td>Accumulate microseconds; returns fresh Das</td></tr>
+<tr><td>Input\Das</td><td>leftFiring() / rightFiring() / downFiring()</td><td>Whether the direction should fire at current tick</td></tr>
 </table>
   </div>
 </section>
