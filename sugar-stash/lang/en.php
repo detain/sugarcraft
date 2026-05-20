@@ -81,6 +81,10 @@ return [
     'rebase.no_rebase'        => 'no rebase in progress',
     'rebase.success'         => 'rebase: {action}',
     'rebase.conflict'        => 'rebase: unresolved conflicts',
+    'rebase.continue'        => 'continue',
+    'rebase.abort'          => 'abort',
+    'rebase.skip'           => 'skip',
+    'rebase.cancel'          => 'cancel',
 
     // Help overlay additions
     'help.undo'              => 'undo last operation',
