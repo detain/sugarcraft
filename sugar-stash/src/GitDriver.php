@@ -43,4 +43,24 @@ interface GitDriver
     public function commit(string $message): void;
 
     public function stageAll(): void;
+
+    /**
+     * @return list<string> unified diff lines for a file (no color)
+     */
+    public function diff(string $path): array;
+
+    /** Discard working-tree changes for a file (git restore --worktree <path>). */
+    public function discard(string $path): void;
+
+    /** Amend the last commit without changing its message (--no-edit). */
+    public function amend(): void;
+
+    /**
+     * Stage a single hunk via git apply --cached.
+     * @param string $hunk The hunk patch text (unified diff format)
+     */
+    public function stagePatch(string $path, string $hunk): void;
+
+    /** Create and switch to a new branch. */
+    public function createBranch(string $name): void;
 }
