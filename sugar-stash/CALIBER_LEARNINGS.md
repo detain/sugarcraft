@@ -5,9 +5,9 @@ sugar-stash.
 
 ---
 
-## [pattern:inline-commit-collection] Inline commit message collection via key dispatch
+## [pattern:inline-text-collection] Inline multi-character text collection via key dispatch
 
-When a TUI needs a multi-character string input (e.g. a commit message) without
+When a TUI needs a multi-character string input (e.g. a commit message, branch name) without
 spawning a sub-process or blocking, use a dedicated boolean flag + accumulator
 string in the Model state:
 
@@ -25,6 +25,24 @@ calls needed.
 
 The same pattern applies to any inline text input: patch messages, branch names,
 tag names, etc.
+
+---
+
+## [pattern:diff-viewer-hunk-cursor] Diff viewer with hunk-level cursor
+
+The diff viewer is a full-overlay pane that tracks cursor position at the
+hunk level (not line level):
+
+1. **`diffViewer: ?DiffViewer`** — `null` means no overlay; a `DiffViewer`
+   instance means the overlay is active.
+2. **`hunkStarts: list<int>`** — line indices where each hunk begins, computed
+   by `DiffViewer::fromRawDiff()`.
+3. **`hunkCursor: int`** — index into `hunkStarts` for the currently selected
+   hunk. Navigation (`j`/`k`) clamps to `[0, hunkCount - 1]`.
+4. **`withDiffViewer(?DiffViewer)`** — bypasses `withAll()` to handle the
+   `null`-explicitly vs `null`-as-unchanged ambiguity.
+5. **Selected hunk highlight** — `reverse()` style applied to lines between
+   `hunkCursor` and the next hunk start (or end of file).
 
 ---
 
@@ -56,10 +74,13 @@ and sugar-toast:
    i18n lib needs `sugarcraft/candy-core: dev-master` in `require` plus a
    path-repo entry in `repositories`.
 
-   6. **Keys in sugar-stash** — `git.spawn_failed`, `git.error`,
-    `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
-    `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
-    `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,
-    `help.pane_navigation`, `help.pane_status`, `help.pane_branches`,
-    `help.stage_single`, `help.stage_all`, `help.checkout`, `help.commit`,
-    `checkout.no_branch`, `commit.prompt`, `commit.empty_message`.
+    6. **Keys in sugar-stash** — `git.spawn_failed`, `git.error`,
+     `cli.not_a_repo`, `ui.error_prefix`, `status.clean`, `branches.empty`,
+     `log.empty`, `help.keyhints`, `help.context_general`, `help.quit`,
+     `help.refresh`, `help.switch_pane`, `help.move_cursor`, `help.close_help`,
+     `help.pane_navigation`, `help.pane_status`, `help.pane_branches`,
+     `help.stage_single`, `help.stage_all`, `help.checkout`, `help.commit`,
+     `help.amend`, `help.new_branch`, `help.discard`, `help.diff_viewer`,
+     `checkout.no_branch`, `commit.prompt`, `commit.empty_message`,
+     `branch.prompt`, `branch.empty_name`, `diff.hunk_staged`,
+     `diff.navigation_hint`.

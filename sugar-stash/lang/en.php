@@ -25,7 +25,7 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  space  checkout  ·  c  commit  ·  R  refresh  ·  ?  help  ·  q  quit',
+    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  ?  help  ·  q  quit',
 
     // Help overlay
     'help.context_general'  => 'show this help',
@@ -41,6 +41,10 @@ return [
     'help.stage_all'       => 'stage all files',
     'help.checkout'         => 'checkout branch',
     'help.commit'           => 'commit (opens message input)',
+    'help.amend'            => 'amend last commit',
+    'help.new_branch'       => 'create new branch',
+    'help.discard'          => 'discard changes to file',
+    'help.diff_viewer'     => 'open diff viewer',
 
     // Checkout
     'checkout.no_branch'    => 'checkout: no branch selected',
@@ -55,4 +59,5 @@ return [
 
     // Diff viewer
     'diff.hunk_staged'      => 'hunk staged',
+    'diff.navigation_hint'  => 'space: stage hunk  ·  ↑↓: navigate  ·  esc: close',
 ];
