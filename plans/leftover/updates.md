@@ -394,8 +394,9 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   docs for step 08.10 · clean
   step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11)
   fix for step 08.11 · PR#703 · resolved 3 findings (path-repo restored + README docs + CALIBER_LEARNINGS)
+  step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend 5-color + Style::patch + rapid blink (leftover-rollout step 08.12)
 
-## Open review findings — 08.04
+ ## Open review findings — 08.04
 
 - [x] sugar-prompt/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
 - [x] sugar-prompt/README.md: `Select::withEnum(\BackedEnum::class)` not documented in the Select field notable knobs column (line 47) — ✅ resolved PR#691
