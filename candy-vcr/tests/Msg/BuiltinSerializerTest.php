@@ -223,12 +223,14 @@ final class BuiltinSerializerTest extends TestCase
         $this->assertContains('FocusGainedMsg', $tags);
         $this->assertContains('FocusLostMsg', $tags);
         $this->assertContains('BlurMsg', $tags);
+        $this->assertContains('FocusInMsg', $tags);
+        $this->assertContains('FocusOutMsg', $tags);
         $this->assertContains('PasteStartMsg', $tags);
         $this->assertContains('PasteEndMsg', $tags);
         $this->assertContains('PasteMsg', $tags);
         $this->assertContains('BackgroundColorMsg', $tags);
         $this->assertContains('ForegroundColorMsg', $tags);
         $this->assertContains('CursorPositionMsg', $tags);
-        $this->assertCount(15, $tags);
+        $this->assertCount(17, $tags);
     }
 }
