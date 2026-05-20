@@ -31,7 +31,7 @@ use SugarCraft\Bounce\Spring;
 $spring = new Spring(
     deltaTime:        Spring::fps(60),  // 1/60 of a second
     angularFrequency: 6.0,              // rad/sec
-    dampingRatio:     1.0,              // critical
+    dampingRatio:     1.0,             // critical
 );
 $pos = 0.0;
 $vel = 0.0;
@@ -45,6 +45,49 @@ for ($frame = 0; $frame < 60; $frame++) {
 
 `Spring::fps(int $n)` returns `1.0 / $n` for the deltaTime — pair with the
 same `$n` per-second simulation cadence.
+
+### Spring presets
+
+`Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null)` constructs
+a spring from a named preset at 60 fps (override the frame time as needed).
+Five presets are available, translated from UIKit's canonical values:
+
+| Preset     | Feel      | Tension | Friction | Mass |
+|------------|-----------|---------|----------|------|
+| `Gentle`   | soft, slow overshoot | 100 | 10 | 1 |
+| `Wobbly`   | bouncy oscillation   | 180 | 12 | 1 |
+| `Stiff`    | snappy snap          | 500 | 20 | 1 |
+| `Slow`     | heavy, lazy settle    |  50 |  6 | 1 |
+| `Molasses` | barely moves          |  30 |  4 | 1 |
+
+```php
+use SugarCraft\Bounce\{Spring, SpringPreset};
+
+$spring = Spring::fromPreset(SpringPreset::Wobbly);
+// With custom frame rate
+$spring60 = Spring::fromPreset(SpringPreset::Stiff, 1.0 / 60.0);
+$spring30 = Spring::fromPreset(SpringPreset::Gentle, 1.0 / 30.0);
+```
+
+### SpringConfig
+
+`SpringConfig` accepts physical parameters (tension / friction / mass) and
+derives the `angularFrequency` and `dampingRatio` consumed by `Spring`:
+
+```
+angularFrequency = sqrt(tension / mass)
+dampingRatio     = friction / (2 * sqrt(tension * mass))
+```
+
+```php
+use SugarCraft\Bounce\{SpringConfig, Spring};
+
+$config = new SpringConfig(tension: 180.0, friction: 12.0, mass: 1.0);
+$spring = $config->springAt60Fps();  // or ->spring($deltaTime)
+```
+
+Both `SpringConfig::spring()` and `SpringConfig::springAt60Fps()` return
+a pre-wired `Spring` instance ready to drive `update()` calls.
 
 ## Projectile
 
@@ -110,10 +153,88 @@ call (immutable-with-pattern); upstream `Projectile.Update()` returns
 the new `Point` and mutates the receiver in place. Read the new
 position from `result->position` rather than `$p->position()`.
 
+## Easing
+
+`SugarCraft\Bounce\Easing\Easing` provides named easing curves via its
+`ease(float $t): float` method — apply to any normalized time value in
+`[0.0, 1.0]`:
+
+```php
+use SugarCraft\Bounce\Easing\Easing;
+
+$ease = Easing::ElasticOut;
+for ($f = 0; $f <= 60; $f++) {
+    $t = $f / 60.0;
+    echo sprintf("frame %2d  t=%.3f  eased=%.3f\n", $f, $t, $ease->ease($t));
+}
+```
+
+### CubicBezier
+
+`CubicBezier` implements the CSS `cubic-bezier()` easing algorithm
+(Newton-Raphson root-finding with binary-search fallback) for
+monotonic interpolation. Construct via static factory methods covering
+all 24 CSS standard easings:
+
+```php
+use SugarCraft\Bounce\Easing\CubicBezier;
+
+// CSS named easings
+$ease      = CubicBezier::ease();       // 0.25, 0.10, 0.25, 1.00
+$easeIn   = CubicBezier::easeIn();      // 0.42, 0.00, 1.00, 1.00
+$easeOut  = CubicBezier::easeOut();    // 0.00, 0.00, 0.58, 1.00
+$easeInOut = CubicBezier::easeInOut(); // 0.42, 0.00, 0.58, 1.00
+$linear   = CubicBezier::linear();      // 0.00, 0.00, 1.00, 1.00
+
+// Sine
+$easeInSine      = CubicBezier::easeInSine();
+$easeOutSine     = CubicBezier::easeOutSine();
+$easeInOutSine   = CubicBezier::easeInOutSine();
+
+// Quadratic
+$easeInQuad      = CubicBezier::easeInQuad();
+$easeOutQuad     = CubicBezier::easeOutQuad();
+$easeInOutQuad   = CubicBezier::easeInOutQuad();
+
+// Cubic
+$easeInCubic     = CubicBezier::easeInCubic();
+$easeOutCubic    = CubicBezier::easeOutCubic();
+$easeInOutCubic  = CubicBezier::easeInOutCubic();
+
+// Quartic / Quintic / Exponential / Circular
+$easeInQuart     = CubicBezier::easeInQuart();
+$easeOutQuart    = CubicBezier::easeOutQuart();
+$easeInOutQuart  = CubicBezier::easeInOutQuart();
+
+$easeInQuint     = CubicBezier::easeInQuint();
+$easeOutQuint    = CubicBezier::easeOutQuint();
+$easeInOutQuint  = CubicBezier::easeInOutQuint();
+
+$easeInExpo      = CubicBezier::easeInExpo();
+$easeOutExpo     = CubicBezier::easeOutExpo();
+$easeInOutExpo   = CubicBezier::easeInOutExpo();
+
+$easeInCirc      = CubicBezier::easeInCirc();
+$easeOutCirc     = CubicBezier::easeOutCirc();
+$easeInOutCirc  = CubicBezier::easeInOutCirc();
+
+for ($f = 0; $f <= 60; $f++) {
+    $t = $f / 60.0;
+    echo sprintf("frame %2d  eased=%.4f\n", $f, $easeInOutCubic->evaluate($t));
+}
+```
+
+`CubicBezier::evaluate(float $t): float` maps `[0, 1]` → `[0, 1]`
+using the Newton-Raphson algorithm from the W3C CSS Easing spec.
+
 ## Public API
 
-- **`Spring`** — `__construct($dt, $ω, $ζ)` / `update($pos, $vel, $target)`
-  / `Spring::fps(int)`.
+- **`Spring`** — `__construct($dt, $ω, $ζ)` / `update($pos, $vel, $target)` /
+  `fps(int)` / `fromPreset(SpringPreset, ?float)`.
+- **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
+  `resolve()` returns a `SpringConfig`.
+- **`SpringConfig`** — `__construct(tension, friction, mass)` /
+  `spring(float $dt)` / `springAt60Fps()`.
 - **`Projectile`** — `Projectile::new(...)` / `update()` / `position()` /
   `velocity()` / `acceleration()` / `gravity()` / `terminalGravity()` /
   `gravityYDown()` / `terminalGravityYDown()` / `GRAVITY` /
@@ -125,6 +246,12 @@ position from `result->position` rather than `$p->position()`.
   `length` / `dot` / `cross` / `Vector::zero()`.
 - **`Point`** — immutable 3D point with `add(Vector)` / `distance` /
   `Point::zero()`.
+- **`Easing`** — enum with `ease(float $t): float`. Cases: `Linear`,
+  `QuadraticIn/Out/InOut`, `CubicIn/Out/InOut`, `ElasticIn/Out/InOut`,
+  `BounceIn/Out/InOut`, `BackIn/Out/InOut`.
+- **`CubicBezier`** — `evaluate(float $t): float`. Static factories for
+  all 24 CSS named easings (`ease`, `easeIn`, `easeOut`, `easeInOut`,
+  `easeIn/OutSine/Quad/Cubic/Quart/Quint/Expo/Circ`, `linear`).
 
 ## Test
 
