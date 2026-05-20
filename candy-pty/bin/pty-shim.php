@@ -14,20 +14,28 @@ declare(strict_types=1);
  *
  * Sequence (mirrors creack/pty's `Open()` post-fork branch):
  *
- *   1. setsid()                     — new session, calling proc is leader.
- *   2. ioctl(0, TIOCSCTTY, 0)       — make slave PTY the ctty.
- *   3. pcntl_exec(cmd, args)        — replace process image with cmd.
+ *   1. ControllingTerminal::claim(0)  — setsid() + ioctl(TIOCSCTTY, 0)
+ *   2. pcntl_exec(cmd, args)             — replace process image with cmd.
  *
  * Exit codes (only reached on shim errors before exec):
  *   2  pcntl missing
- *   3  ffi missing or libc load failed
- *   4  setsid failed (already a session leader, etc.)
- *   5  TIOCSCTTY failed (slave already someone's ctty, EPERM)
+ *   3  FFI unavailable or ControllingTerminal::claim failed
  *   6  pcntl_exec failed (cmd not found, ENOEXEC, etc.)
  *
  * Once pcntl_exec succeeds the shim's PHP image is gone — exit code
  * comes from the cmd itself.
+ *
+ * Logic for step 1 lives in SugarCraft\Pty\ControllingTerminal::claim()
+ * so it can be called from other contexts without invoking the shim.
  */
+
+// Resolve vendor autoload so we can use ControllingTerminal / Libc.
+$autoload = \dirname(__DIR__) . '/vendor/autoload.php';
+if (!\is_file($autoload)) {
+    \fwrite(\STDERR, "pty-shim: vendor/autoload.php not found\n");
+    exit(3);
+}
+require $autoload;
 
 if (\count($argv) < 2) {
     \fwrite(\STDERR, "pty-shim: usage: pty-shim.php <cmd> [args...]\n");
@@ -44,36 +52,11 @@ if (!\extension_loaded('ffi')) {
     exit(3);
 }
 
-// Match Libc::libraryPath() exactly — same env override, same defaults.
-$libcPath = \getenv('SUGARCRAFT_LIBC');
-if (!\is_string($libcPath) || $libcPath === '') {
-    $libcPath = PHP_OS_FAMILY === 'Darwin'
-        ? '/usr/lib/libSystem.B.dylib'
-        : 'libc.so.6';
-}
-
 try {
-    $libc = \FFI::cdef(
-        'int setsid(void); int ioctl(int fd, unsigned long request, void *arg);',
-        $libcPath,
-    );
-} catch (\FFI\Exception $e) {
-    \fwrite(\STDERR, "pty-shim: failed to load libc from {$libcPath}: {$e->getMessage()}\n");
+    \SugarCraft\Pty\ControllingTerminal::claim(0);
+} catch (\SugarCraft\Pty\PtyException $e) {
+    \fwrite(\STDERR, "pty-shim: ControllingTerminal::claim failed: {$e->getMessage()}\n");
     exit(3);
-}
-
-if ($libc->setsid() === -1) {
-    \fwrite(\STDERR, "pty-shim: setsid() failed (already session leader?)\n");
-    exit(4);
-}
-
-// TIOCSCTTY: Linux 0x540E, macOS 0x20007461. Third arg is read by the
-// kernel as `unsigned long` — passing NULL pointer (PHP null) renders
-// as 0 ("don't steal an existing ctty from another session").
-$tioCSctty = PHP_OS_FAMILY === 'Darwin' ? 0x20007461 : 0x540E;
-if ($libc->ioctl(0, $tioCSctty, null) !== 0) {
-    \fwrite(\STDERR, "pty-shim: ioctl(0, TIOCSCTTY, 0) failed\n");
-    exit(5);
 }
 
 // argv[0] is the script name, argv[1] is the real cmd, argv[2..] are args.
