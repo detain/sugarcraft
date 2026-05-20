@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ByteAssertion;
+use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Matcher\EventMatcher;
@@ -63,11 +64,26 @@ final class Player
      */
     public const INSTANT_YIELD_SECONDS = 0.005;
 
-    public function __construct(public readonly Cassette $cassette) {}
+    public function __construct(
+        public readonly Cassette $cassette,
+        private readonly ?float $idleTrimSeconds = null,
+    ) {}
 
     public static function open(string $path): self
     {
         return new self(self::detectFormat($path)->read($path));
+    }
+
+    /**
+     * Fluent setter for idle-trim threshold. When set, delays between
+     * consecutive events that exceed `$seconds` are clamped to `$seconds`
+     * during SPEED_REALTIME playback. Has no effect in SPEED_INSTANT mode.
+     *
+     * Mirrors charmbracelet/x/vcr Player.withIdleTrim.
+     */
+    public function withIdleTrim(?float $seconds): self
+    {
+        return new self($this->cassette, $seconds);
     }
 
     /**
@@ -147,6 +163,9 @@ final class Player
     ): ReplayResult {
         $assertion ??= new ByteAssertion();
         $registry = $serializerRegistry ?? Registry::default();
+        // Resolve idleThresholdSeconds: explicit parameter wins, otherwise
+        // fall back to the fluent withIdleTrim() setting.
+        $idleThreshold = $idleThresholdSeconds ?? $this->idleTrimSeconds;
 
         $sockets = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
         if ($sockets === false) {
@@ -185,6 +204,8 @@ final class Player
             $registry,
             $loop,
             $speed,
+            $idleThreshold,
+            $useRawTimestamps,
             &$tally,
             &$expectedOutput,
             &$programQuitCleanly,
@@ -212,14 +233,14 @@ final class Player
             // Schedule the next step. INSTANT mode uses a tiny yield to
             // let the program's render tick fire between events;
             // REALTIME mode uses the recorded delta between consecutive
-            // event timestamps, clamped to >= 0. If idleThresholdSeconds
+            // event timestamps, clamped to >= 0. If idleThreshold
             // is set, long pauses are clamped to that value for faster CI.
             if ($speed === self::SPEED_REALTIME) {
                 $thisT = self::eventTimestamp($events[$i], $useRawTimestamps);
                 $prevT = self::eventTimestamp($event, $useRawTimestamps);
                 $delta = max(0.0, $thisT - $prevT);
-                if ($idleThresholdSeconds !== null && $delta > $idleThresholdSeconds) {
-                    $delta = $idleThresholdSeconds;
+                if ($idleThreshold !== null && $delta > $idleThreshold) {
+                    $delta = $idleThreshold;
                 }
             } else {
                 $delta = self::INSTANT_YIELD_SECONDS;
