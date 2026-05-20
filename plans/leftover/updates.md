@@ -542,6 +542,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.08 · PR#770 · refresh README (Overflow enum + withMaxConcurrent/withOverflow + persistent null-expiry + string type lookup) + end-user HTML API table + 3 CALIBER patterns
     step 10.09 · PR#771 · sugar-toast: progress toasts + action buttons + history log + animation stubs (leftover-rollout step 10.09)
     review for step 10.09 · clean · PR#771
+    docs for step 10.09 · PR#772 · document progressToast/action buttons/history log/animation stub in README/end-user HTML/CALIBER patterns
 
 ## Open review findings — 09.19
 
