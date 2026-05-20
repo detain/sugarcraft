@@ -15,4 +15,7 @@ enum ConfirmState
 {
     case None;
     case DeleteSelected;
+    case CopySelected;
+    case MoveSelected;
+    case RenameSelected;
 }
