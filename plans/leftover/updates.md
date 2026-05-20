@@ -383,6 +383,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   tests-ci for step 08.08 · clean
   docs for step 08.07 · PR#697 · document withFilterable/withFilter/withFilterPredicate + default substring-match in README + end-user HTML
   docs for step 08.08 · PR#699 · document withPageSize/getPaginator/navigation methods in README + end-user HTML
+  step 08.09 · PR#700 · sugar-charts: niceNumbers() axis-tick helper + LineChart::push() sliding-window streaming + LineChart::withFill() area fill + MarkLine annotation type (leftover-rollout step 08.09)
 
 ## Open review findings — 08.04
 
