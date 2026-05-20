@@ -70,6 +70,9 @@
 # Space      Toggle selection + advance
 # s          Cycle sort order (6 modes)
 # .          Toggle hidden files
+# c          Copy selection or cursor → inactive pane (y confirm)
+# m          Move selection or cursor → inactive pane (y confirm)
+# R          Rename cursor entry with prompt (y confirm)
 # d          Delete (selection or cursor) — y to confirm
 # r          Refresh active pane
 # q          Quit
@@ -78,7 +81,7 @@
 # t          Duplicate current tab
 # Ctrl+w     Close current tab
 # Ctrl+Tab   Cycle to next tab
-# u / Ctrl+z Undo last delete</code></pre>
+# u / Ctrl+z Undo last operation</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -86,21 +89,12 @@
       <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. Selection survives sort / cwd-change.</span></div>
       <div class="feature"><strong>Six sort modes</strong><span>name / mtime / size, asc / desc — <code>s</code> cycles.</span></div>
       <div class="feature"><strong>Hidden-file toggle</strong><span><code>.</code> hides / shows dotfiles.</span></div>
-      <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
-      <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
-    </div>
-
-    <h3 style="margin-top: 32px;">What's in the box</h3>
-    <div class="feature-grid">
-      <div class="feature"><strong>Dual panes</strong><span>Left + right; Tab swaps focus. Each pane has its own cwd, cursor, selection, sort, hidden-flag.</span></div>
-      <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. Selection survives sort / cwd-change.</span></div>
-      <div class="feature"><strong>Six sort modes</strong><span>name / mtime / size, asc / desc — <code>s</code> cycles.</span></div>
-      <div class="feature"><strong>Hidden-file toggle</strong><span><code>.</code> hides / shows dotfiles.</span></div>
+      <div class="feature"><strong>Copy / Move / Rename</strong><span><code>c</code>/<code>m</code>/<code>R</code> stage to inactive pane / cursor target; <code>y</code> commits. Undo available for move and rename.</span></div>
       <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
       <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
       <div class="feature"><strong>Live search</strong><span><code>/</code> enters search mode; type to filter, <code>↑↓</code> navigate, Enter opens.</span></div>
       <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates tab, <code>Ctrl+Tab</code> cycles, <code>Ctrl+w</code> closes.</span></div>
-      <div class="feature"><strong>Undo delete</strong><span><code>u</code> or <code>Ctrl+z</code> restores the last deleted entry.</span></div>
+      <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores last delete / move / rename.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -119,8 +113,9 @@
 <tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initialises two panes + first tab</td></tr>
 <tr><td>Manager</td><td>update(Msg): [Model, ?Cmd]</td><td>Main event loop — key dispatch, confirm gate</td></tr>
 <tr><td>Manager</td><td>view(): string</td><td>Renders two panes + tab bar + status line</td></tr>
+<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>File-manager ops — used by confirm-gate handlers</td></tr>
 <tr><td>Manager</td><td>search(query), exitSearch(), openSearchResult()</td><td>Live search mode</td></tr>
-<tr><td>Manager</td><td>undo(), canUndo(), canRedo()</td><td>Delete undo/redo stack</td></tr>
+<tr><td>Manager</td><td>undo(), canUndo(), canRedo()</td><td>Delete / move / rename undo/redo stack</td></tr>
 <tr><td>Manager</td><td>duplicateTab(), closeTab(), switchTab()</td><td>Tab management</td></tr>
 <tr><td>Pane</td><td>open(cwd, lister, sort, showHidden): self</td><td>Factory — reads and sorts directory</td></tr>
 <tr><td>Pane</td><td>navigate(lister): self</td><td>Enter directory under cursor (no-op on files)</td></tr>
