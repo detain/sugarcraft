@@ -40,4 +40,12 @@ enum ColorProfile: string
             self::TrueColor => 'TrueColor',
         };
     }
+
+    /**
+     * Whether this profile permits ANSI color rendering.
+     */
+    public function allowsColor(): bool
+    {
+        return $this !== self::NoTTY;
+    }
 }
