@@ -22,13 +22,17 @@ sugar-stash    # run inside any git working tree
 
 ## Keys
 
-| Key                  | Action                                  |
-|----------------------|-----------------------------------------|
-| `Tab`                | Cycle pane focus                        |
-| `↑/↓` or `k/j`       | Move cursor in active pane              |
-| `s` (status pane)    | Stage / unstage the highlighted entry   |
-| `R`                  | Refresh from disk                       |
-| `q` / `Esc`          | Quit                                    |
+| Key                      | Action                                                  |
+|--------------------------|---------------------------------------------------------|
+| `Tab`                    | Cycle pane focus                                        |
+| `↑/↓` or `k/j`           | Move cursor in active pane                             |
+| `s` (status pane)        | Stage / unstage the highlighted entry                    |
+| `a` (status pane)        | Stage all files                                         |
+| `Space` (branches pane)  | Checkout branch                                         |
+| `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
+| `R`                      | Refresh from disk                                       |
+| `?`                      | Context-sensitive help                                  |
+| `q` / `Esc`              | Quit                                                    |
 
 ## Architecture
 
