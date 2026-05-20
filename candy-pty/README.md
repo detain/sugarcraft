@@ -81,6 +81,7 @@ Tests can swap in a stub `PtySystem` without touching libc.
 | `$child->pid: int` | OS process id. |
 | `$child->wait(): int` | Waits via `waitpid` FFI (sub-ms) first, falls back to 10ms `proc_get_status` poll. Returns exit code (signal death = 128+signal). Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
+| `ControllingTerminal::claim(int $fd): void` | Calls `setsid()` + `ioctl(TIOCSCTTY)` to claim `$fd` as the session's controlling terminal. Used internally by the `controllingTerminal: true` shim path; callable directly from FFI-heavy contexts that want the same effect without the PHP shim. Throws `PtyException` on failure. |
 
 ## Non-PTY processes
 
@@ -273,6 +274,7 @@ Alpine, custom sysroots).
 | `xpty.Pty.Size()`                 | `Pty::size()`                                            |
 | `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
 | _fd-based variant_                | `SignalForwarder::attachSigwinchToFd($fd, $sizeProvider)` |
+| `xpty.claimControllingTerminal` | `ControllingTerminal::claim(int $fd)`                      |
 
 ## Compared to node-pty / creack/pty / portable-pty
 
@@ -326,9 +328,12 @@ $pty->write("\x03");              // Ctrl+C → SIGINT to the child
 
 Routes the spawn through `bin/pty-shim.php`, which does
 `setsid()` + `ioctl(0, TIOCSCTTY, 0)` + `pcntl_exec()` between
-`proc_open` and the actual cmd. Requires `ext-pcntl`. Costs ~5-50
-ms of shim startup per spawn — opt-in because non-interactive
-spawns (`echo`, `tput`, `bash -c '…'`) don't benefit.
+`proc_open` and the actual cmd. The `setsid()` + `ioctl(TIOCSCTTY)` logic
+is also available directly as `ControllingTerminal::claim(int $fd)` —
+usable from FFI-heavy contexts that want the same effect without the
+shim overhead. Requires `ext-pcntl`. Costs ~5-50 ms of shim startup per
+spawn — opt-in because non-interactive spawns (`echo`, `tput`, `bash -c '…'`)
+don't benefit.
 
 ## Architecture
 
