@@ -17,6 +17,9 @@ enum Position
     case BottomLeft;
     case BottomCenter;
     case BottomRight;
+    case MiddleLeft;
+    case MiddleCenter;
+    case MiddleRight;
 
     /**
      * Compute the X offset in a viewport of given dimensions.
@@ -24,9 +27,9 @@ enum Position
     public function xOffset(int $alertWidth, int $viewportWidth): int
     {
         return match ($this) {
-            self::TopLeft, self::BottomLeft                        => 0,
-            self::TopCenter, self::BottomCenter                    => (int) \floor(($viewportWidth - $alertWidth) / 2),
-            self::TopRight, self::BottomRight                      => $viewportWidth - $alertWidth,
+            self::TopLeft, self::BottomLeft, self::MiddleLeft        => 0,
+            self::TopCenter, self::BottomCenter, self::MiddleCenter  => (int) \floor(($viewportWidth - $alertWidth) / 2),
+            self::TopRight, self::BottomRight, self::MiddleRight     => $viewportWidth - $alertWidth,
         };
     }
 
@@ -44,6 +47,8 @@ enum Position
                 => 0,
             self::BottomLeft, self::BottomCenter, self::BottomRight
                 => $viewportHeight - $alertHeight - $totalAlertLines,
+            self::MiddleLeft, self::MiddleCenter, self::MiddleRight
+                => (int) \floor(($viewportHeight - $alertHeight) / 2) - $totalAlertLines,
         };
     }
 }
