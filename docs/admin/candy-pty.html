@@ -62,6 +62,15 @@
     <p>Signal-terminated exits use the Unix convention: exit code is <code>128 + signal_number</code> (e.g. SIGTERM=15 → exit code 143). This matches shell convention and is compatible with <code>bash -c 'trap ... TERM; kill -TERM $child'</code> patterns.</p>
     <p>Always call <code>$child->wait()</code> or poll <code>$child->exited()</code> to reap the child — unreaped children become zombies.</p>
 
+    <h3 style="margin-top: 32px;">Controlling terminal claim mechanism</h3>
+    <p>When <code>controllingTerminal: true</code> is passed to <code>spawn()</code>, the child process claims the slave PTY as its controlling terminal via <code>ControllingTerminal::claim()</code> — a two-step FFI sequence:</p>
+    <ol>
+      <li><code>setsid()</code> — creates a new session with the child as session leader (required before the kernel honours <code>TIOCSCTTY</code>).</li>
+      <li><code>ioctl(fd, TIOCSCTTY, 0)</code> — assigns the fd as the session's controlling terminal. The third arg <code>0</code> means "don't steal an existing ctty from another session." Platform-specific request codes: Linux <code>0x540E</code>, macOS <code>0x20007461</code>.</li>
+    </ol>
+    <p>Once claimed, the kernel delivers job-control signals to the child: <code>Ctrl+C</code> → <code>SIGINT</code>, host resize → <code>SIGWINCH</code>, master close → <code>SIGHUP</code>. The implementation is in <code>ControllingTerminal::claim()</code> and is invoked by <code>bin/pty-shim.php</code> for the <code>controllingTerminal: true</code> spawn path.</p>
+    <p>The shim adds ~5–50 ms of startup latency per spawn (PHP boot + FFI cdef). Only enable <code>controllingTerminal: true</code> for interactive processes that need job control.</p>
+
     <h3 style="margin-top: 32px;">Platform behaviour — PTY allocation</h3>
     <ul>
       <li><strong>macOS</strong> — <code>openpty(3)</code> is attempted first (single call that opens both master and slave fds). On failure it falls back to the POSIX quartet: <code>posix_openpt + grantpt + unlockpt + ptsname_r</code>.</li>

@@ -102,6 +102,7 @@ SignalForwarder::attachSigwinchToFd(
       <div class="feature"><strong>resize() / size()</strong><span>TIOCSWINSZ on the master fd; <code>size()</code> reads back via TIOCGWINSZ. Platform-aware constants for Linux + macOS.</span></div>
       <div class="feature"><strong>SignalForwarder</strong><span>Wires host SIGWINCH → <code>Pty::resize()</code> via a caller-supplied size provider, plus optional SIGCHLD reaper. Defaults <code>pcntl_async_signals(true)</code>; falls back cleanly when pcntl is missing.</span></div>
       <div class="feature"><strong>waitpid fast-path</strong><span><code>Child::exited()</code> and <code>Child::wait()</code> use a <code>waitpid(pid, &status, WNOHANG)</code> FFI call as the first exit probe — sub-ms detection instead of the 10 ms <code>proc_get_status</code> poll. If FFI is unavailable, falls back to <code>proc_get_status</code> transparently. Signal-terminated exit codes follow the Unix convention: <code>128 + signal_number</code>.</span></div>
+      <div class="feature"><strong>ControllingTerminal::claim()</strong><span>Static method: <code>setsid()</code> + <code>ioctl(fd, TIOCSCTTY, 0)</code> to claim a fd as the session's controlling terminal. Used by the <code>controllingTerminal: true</code> shim path; callable directly from FFI-heavy code that needs the same effect without the PHP shim overhead. Throws <code>PtyException</code> on failure.</span></div>
       <div class="feature"><strong>PosixPump + PumpOptions</strong><span>Byte pump with <code>onIdle</code> (idle tick), <code>onSigwinch</code> (dimension change), <code>onChildExit</code> (child exit), and <code>recorder</code> (session tap) callbacks. Wire via <code>PumpOptions::withOnIdle()</code> / <code>withOnSigwinch()</code> / <code>withOnChildExit()</code> / <code>withRecorder()</code>.</span></div>
       <div class="feature"><strong>SUGARCRAFT_LIBC override</strong><span>Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Override via env var for musl, Alpine, or custom sysroots.</span></div>
       <div class="feature"><strong>SUGARCRAFT_PTY_BACKEND</strong><span>Selects the PTY backend. Recognised values: <code>posix-ffi</code> (default on POSIX), <code>auto</code> (same as unset), <code>sidecar</code> or <code>pecl</code> (throw <code>UnsupportedPlatformException</code> — deferred to phase 12). Unrecognised values throw <code>InvalidArgumentException</code>. See the <a href="https://github.com/sugarcraft/candy-pty/blob/main/README.md#backend-selection">full backend selection table</a> in the README.</span></div>
@@ -160,6 +161,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>PumpOptions</td><td>sshDefault()</td><td>SSH-session-tuned preset — matches values hardcoded in InProcessTransport</td></tr>
 <tr><td>Child</td><td>pid</td><td>Child process ID</td></tr>
 <tr><td>Child</td><td>exited(), wait()</td><td>Check/await child exit</td></tr>
+<tr><td>ControllingTerminal</td><td>claim(fd)</td><td>Claim a fd as controlling terminal via setsid() + ioctl(TIOCSCTTY)</td></tr>
 </table>
   </div>
 </section>
