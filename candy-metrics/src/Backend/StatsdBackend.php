@@ -62,9 +62,12 @@ final class StatsdBackend implements Backend
         }
     }
 
-    public function counter(string $name, float $value, array $tags = []): void   { $this->send($name, $value, 'c', $tags); }
-    public function gauge(string $name, float $value, array $tags = []): void     { $this->send($name, $value, 'g', $tags); }
-    public function histogram(string $name, float $value, array $tags = []): void { $this->send($name, $value, 'h', $tags); }
+    public function counter(string $name, float $value, array $tags = []): void       { $this->send($name, $value, 'c', $tags); }
+    public function gauge(string $name, float $value, array $tags = []): void         { $this->send($name, $value, 'g', $tags); }
+    public function histogram(string $name, float $value, array $tags = []): void       { $this->send($name, $value, 'h', $tags); }
+    public function upDownCounter(string $name, float $amount, array $tags = []): void { $this->send($name, $amount, 'g', $tags); }
+    public function asyncCounter(string $name, float $value, array $tags = []): void      { $this->send($name, $value, 'c', $tags); }
+    public function asyncGauge(string $name, float $value, array $tags = []): void        { $this->send($name, $value, 'g', $tags); }
 
     /**
      * @param array<string,string> $tags
