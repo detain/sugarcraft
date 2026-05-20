@@ -443,6 +443,10 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 - [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
 
+## Open review findings — 09.02
+
+- [ ] candy-flip/CALIBER_LEARNINGS.md: not updated with 4 new patterns from step 09.02 (area-average-downsample, floyd-steinberg-dithering, local-color-table-per-frame, gce-transparency-disposal) — the brief and step spec both require new patterns to be logged; file currently has only the 3 patterns from step 09.01
+
 ## Open review findings — 01.08
 
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
