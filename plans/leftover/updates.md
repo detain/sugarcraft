@@ -412,6 +412,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
    docs for step 08.14 · direct-to-master · document VsCodeThemeLoader/ChromaThemeLoader/withFont/withHighlight in README/end-user HTML/CALIBER_LEARNINGS.md
    step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)
    review for step 09.01 · clean · PR#708
+   tests-ci for step 09.01 · clean
    ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
