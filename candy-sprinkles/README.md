@@ -60,8 +60,14 @@ use SugarCraft\Sprinkles\Position;
 // Side-by-side
 echo Layout::joinHorizontal(Position::TOP, $left, $right);
 
+// Side-by-side with 2-cell gap between blocks
+echo Layout::joinHorizontalWithSpacing(Position::TOP, 2, $left, $right);
+
 // Top-down
 echo Layout::joinVertical(Position::LEFT, $header, $body, $footer);
+
+// Top-down with 1-line gap between blocks
+echo Layout::joinVerticalWithSpacing(Position::LEFT, 1, $header, $body, $footer);
 
 // Place inside a fixed rectangle
 echo Layout::place(40, 10, Position::CENTER, Position::CENTER, 'centered text');
@@ -159,8 +165,9 @@ echo Tree::new()
   Ansi) or per dark-vs-light background.
 - **`LightDark`** — pick helper for dark-bg vs light-bg colour schemes.
 - **`Layout`** — `Place`, `PlaceHorizontal`, `PlaceVertical`,
-  `JoinHorizontal`, `JoinVertical`, `Width`, `Height`, `Size` (all
-  package-level layout primitives from lipgloss).
+  `JoinHorizontal`, `JoinVertical`, `JoinHorizontalWithSpacing`,
+  `JoinVerticalWithSpacing`, `Width`, `Height`, `Size` (all package-level
+  layout primitives from lipgloss).
 - **`Position`** — `TOP / LEFT / CENTER / RIGHT / BOTTOM` floats for layout
   anchors.
 - **`Layout`** (sub-namespace) — ratatui-inspired constraint solver:
@@ -187,6 +194,13 @@ echo Tree::new()
   BrightWhite) + `hasDarkBackground()` helper.
 - **`UnderlineStyle`** — enum (None / Single / Double / Curly /
   Dotted / Dashed) for SGR `4:N` sub-style emit.
+- **`Hsl`** — CSS-style HSL factory: `Hsl::color($h, $s, $l)` (hue 0-360,
+  saturation/lightness 0-100) and `Hsl::parse('hsl(200,80%,50%)')` for
+  string input.
+- **`Markup`** — Rich-style `[tag]text[/]` parser returning `list<Cell>`.
+  Distinct from `StyleParser` (which uses `[text](fg:red,bold)` syntax).
+  Supports color names, fg:/bg: shortcuts, and bold/dim/italic/
+  underline/reverse/strikethrough.
 
 ## Custom Renderer & color-profile
 
@@ -221,6 +235,8 @@ specific stream.
 | `Color::hex('#ff5f87')` | RGB |
 | `Color::ansi(13)` | named ANSI slot |
 | `Color::ansi256(213)` | xterm-256 |
+| `Color::parse('cyan')` / `Color::parse('bright-red')` | lookup by CSS/ANSI name |
+| `Color::hsl($h, $s, $l)` | from HSL (0-360, 0-1, 0-1) |
 | `$c->blend($other, $t)` | linear LERP, t ∈ [0, 1] |
 | `Color::blend1D($a, $b, int $steps)` | list of N stops |
 | `Color::blend2D($tl, $tr, $bl, $br, $w, $h)` | 2D grid |
@@ -231,6 +247,39 @@ specific stream.
 Named ANSI slots live on `Sprinkles\Palette`:
 `Palette::Red`, `Palette::BrightWhite`, etc. Use
 `Palette::hasDarkBackground()` for a no-args terminal-detect.
+
+## HSL colour factory
+
+`Sprinkles\Hsl` provides CSS-style HSL colour construction:
+
+```php
+use SugarCraft\Sprinkles\Hsl;
+
+// Factory: hue 0-360, saturation 0-100, lightness 0-100
+$sky = Hsl::color(200.0, 80.0, 50.0);
+
+// Parse from hsl() string — handles '%' suffixes and whitespace
+$teal = Hsl::parse('hsl(174, 70%, 40%)');
+$blue = Hsl::parse('hsl(240, 100%, 50%)');
+```
+
+## Inline markup parser
+
+`Sprinkles\Markup` parses Rich-style `[tag]text[/]` markup into
+`Cell` arrays — distinct from `StyleParser`'s `[text](fg:red,bold)`
+syntax:
+
+```php
+use SugarCraft\Sprinkles\{Markup, Style};
+
+$cells = Markup::parse('[bold]hello[/] world', Style::new());
+$cells = Markup::parse('[red]error: [bold]oops[/][/]', Style::new());
+$cells = Markup::parse('[fg:blue bg:yellow]blue on yellow[/]', Style::new());
+```
+
+Supported tags: colour names (black, red, green, yellow, blue,
+magenta, cyan, white, bright-\*), bold, dim, italic, underline,
+reverse, strikethrough, fg:color, bg:color.
 
 ## OSC-8 hyperlinks & underline styles
 
