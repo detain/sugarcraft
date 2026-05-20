@@ -501,4 +501,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.15 · PR#740 · candy-query: SchemaBrowser (PRAGMA table_info/index_list/foreign_key_list) + ResultPager (immutable cursor pagination) + CellEditor (UPDATE by PK) (leftover-rollout step 09.15)
     review for step 09.15 · clean · PR#740
     tests-ci for step 09.15 · clean
+    docs for step 09.15 · PR#741 · document SchemaBrowser/ResultPager/CellEditor in README + end-user HTML + CALIBER_LEARNINGS.md (sqlite-pragma-schema, immutable-cursor-pager patterns)
 
