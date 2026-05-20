@@ -20,6 +20,10 @@ PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floati
 - **Symbol sets**: NerdFont (icons), Unicode (boxed), ASCII (plain text)
 - **Auto-dismiss**: duration-based expiry support
 - **Multiple alerts**: queue of toasts rendered in order
+- **Progress toasts**: inline progress bar (0–100%) beneath the message body
+- **Action buttons**: `[Label]` buttons attached to an alert with closure callbacks
+- **History log**: immutable record of every dismissed alert
+- **Fade animation stub**: `withAnimationDuration()` (CubicBezier deferred to future phase)
 - **Pure renderer**: outputs ANSI strings; works with any TUI framework
 
 ## Install
@@ -146,6 +150,72 @@ $msg = Lang::t('dismiss');
 $counter = Lang::t('count', ['count' => $n]);
 ```
 
+## Progress Toasts
+
+Add a progress bar beneath the message body using `progressToast()`:
+
+```php
+$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.65);
+// Re-render as progress updates:
+$toast = $toast->progressToast(ToastType::Info, 'Downloading...', 0.80);
+```
+
+`progressToast()` accepts the same `$expiresAt` override as `alert()`. The
+progress value (0.0–1.0) is clamped automatically.
+
+## Action Buttons
+
+Attach clickable buttons to an alert via `Alert::withActions()`:
+
+```php
+use SugarCraft\Toast\{Action, Toast, ToastType};
+
+$action = Action::make('Retry', function (): void {
+    // reconnect logic here
+});
+
+$alert = (new Alert(ToastType::Error, 'Connection lost'))
+    ->withActions([$action]);
+
+$toast = $toast->alert(ToastType::Error, 'Connection lost')
+    ->withActions([$action]);
+```
+
+`Action` is a value object with `readonly string $label` and
+`readonly \Closure(): void $callback`. When the action is triggered, invoke
+`$action->callback()` directly in your key/mouse handler.
+
+## History Log
+
+`Toast` maintains an immutable history of every dismissed alert via
+`HistoryLog`:
+
+```php
+// Dismiss all active alerts and record them
+$toast = $toast->dismiss();
+
+// Retrieve the log
+$history = $toast->getHistory();  // list<Alert>
+
+foreach ($history as $alert) {
+    echo $alert->type->label() . ': ' . $alert->message . "\n";
+}
+```
+
+`HistoryLog` is immutable — `dismiss()` returns a new `Toast` with an
+updated log; prior instances are unchanged.
+
+## Animations
+
+```php
+$toast = $toast->withAnimationDuration(0.25);
+```
+
+Set a fade animation duration in seconds. When > 0, toasts render a
+character-reveal hint. Full CubicBezier spring easing (honey-bounce) is
+wired but deferred — the `animationDuration` field is a functional stub
+for now.
+
 ## API Summary
 
 | Method | Description |
@@ -159,11 +229,27 @@ $counter = Lang::t('count', ['count' => $n]);
 | `->withAllowEscToClose(bool)` | Allow Escape key to dismiss |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
+| `->withAnimationDuration(float $seconds)` | Fade animation duration (stub; CubicBezier deferred) |
 | `->alert(ToastType\|string, string, ?float $expiresAt)` | Add alert (string type = case-insensitive) |
+| `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt)` | Add alert with progress bar (0.0–1.0) |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
-| `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle |
+| `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle; `dismiss()` records to history |
+| `->getHistory(): list<Alert>` | Return all dismissed alerts |
 | `->view(string $background, int $w, int $h): string` | Render toast layer over background |
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `Alert` | `withProgress(float)` | Attach progress bar (0.0–1.0, clamped) |
+| `Alert` | `withActions(list<Action>)` | Attach action buttons |
+| `Alert` | `isExpired(): bool` | Check expiry |
+| `Alert` | `withExpiry(float $duration)` | Set expiry from now |
+| `Action` | `make(string $label, \Closure(): void $callback)` | Factory |
+| `Action` | `->label: non-empty-string` | Button label (readonly) |
+| `Action` | `->callback: \Closure(): void` | Callback (readonly) |
+| `HistoryLog` | `push(Alert): self` | Append alert, return new log |
+| `HistoryLog` | `all(): list<Alert>` | Return all entries |
+| `HistoryLog` | `count(): int` | Entry count |
 
 | Enum | Cases |
 |-------|-------|
