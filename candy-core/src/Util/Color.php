@@ -102,6 +102,78 @@ final class Color
     }
 
     /**
+     * Map a named color string to a Color instance.
+     *
+     * Accepts CSS color names (e.g. 'cyan', 'magenta') and ANSI 8-color
+     * basic names (black, red, green, yellow, blue, magenta, cyan, white).
+     * Case-insensitive. Throws {@see \InvalidArgumentException} for
+     * unknown names.
+     */
+    public static function parse(string $name): self
+    {
+        $lower = strtolower(trim($name));
+        if ($lower === '') {
+            throw new \InvalidArgumentException(Lang::t('color.parse_empty'));
+        }
+
+        $named = [
+            // CSS / ANSI-16 basic 8 colors (indices 0-7)
+            'black'   => [  0,   0,   0],
+            'red'     => [205,   0,   0],
+            'green'   => [  0, 205,   0],
+            'yellow'  => [205, 205,   0],
+            'blue'    => [  0,   0, 238],
+            'magenta' => [205,   0, 205],
+            'cyan'    => [  0, 205, 205],
+            'white'   => [229, 229, 229],
+            // CSS extended names that map to ANSI-16
+            'purple'      => [205,   0, 205],  // maps to magenta
+            'fuchsia'     => [205,   0, 205],
+            'aqua'       => [  0, 205, 205],
+            'lime'       => [  0, 205,   0],
+            'maroon'     => [128,   0,   0],
+            'olive'      => [128, 128,   0],
+            'navy'       => [  0,   0, 128],
+            'teal'      => [  0, 128, 128],
+            'silver'    => [192, 192, 192],
+            'gray'      => [128, 128, 128],
+            'grey'      => [128, 128, 128],
+            'orange'    => [255, 165,   0],
+            'pink'      => [255, 192, 203],
+            'brown'     => [165,  42,  42],
+            'coral'     => [255, 127,  80],
+            'gold'      => [255, 215,   0],
+            'indigo'    => [ 75,   0, 130],
+            'violet'    => [238, 130, 238],
+            'turquoise' => [ 64, 224, 208],
+            'salmon'    => [250, 128, 114],
+            'khaki'     => [240, 230, 140],
+            'beige'     => [245, 245, 220],
+            'ivory'     => [255, 255, 240],
+            'lavender'  => [230, 230, 250],
+            'plum'      => [221, 160, 221],
+            'crimson'   => [220,  20,  60],
+            'darkgreen' => [  0, 100,   0],
+            // ANSI-16 bright colors (indices 8-15)
+            'bright-black'   => [127, 127, 127],
+            'bright-red'     => [255,   0,   0],
+            'bright-green'   => [  0, 255,   0],
+            'bright-yellow'  => [255, 255,   0],
+            'bright-blue'    => [ 92,  92, 255],
+            'bright-magenta' => [255,   0, 255],
+            'bright-cyan'    => [  0, 255, 255],
+            'bright-white'   => [255, 255, 255],
+        ];
+
+        if (isset($named[$lower])) {
+            [$r, $g, $b] = $named[$lower];
+            return new self($r, $g, $b);
+        }
+
+        throw new \InvalidArgumentException(Lang::t('color.parse_unknown', ['name' => $name]));
+    }
+
+    /**
      * Construct from HSL values: hue 0-360, saturation 0-1, lightness 0-1.
      * Translates to RGB via the standard HSL→RGB conversion.
      */
