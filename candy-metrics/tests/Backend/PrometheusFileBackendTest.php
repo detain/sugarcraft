@@ -25,7 +25,7 @@ final class PrometheusFileBackendTest extends TestCase
         }
     }
 
-    public function testEmitsCounterAndGaugeAndSummary(): void
+    public function testEmitsCounterAndGaugeAndHistogram(): void
     {
         $b = new PrometheusFileBackend($this->path);
         $b->counter('hits', 5);
@@ -40,9 +40,12 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString("hits 7\n",                       $content);
         $this->assertStringContainsString('# TYPE queue_depth gauge',       $content);
         $this->assertStringContainsString("queue_depth 17\n",               $content);
-        $this->assertStringContainsString('# TYPE lat summary',             $content);
+        $this->assertStringContainsString('# TYPE lat histogram',             $content);
         $this->assertStringContainsString("lat_count 2\n",                  $content);
         $this->assertStringContainsString('lat_sum 0.400000',               $content);
+        // Verify bucket lines are present
+        $this->assertStringContainsString('lat_bucket{le="0.1"} 1', $content);
+        $this->assertStringContainsString('lat_bucket{le="+Inf"} 2', $content);
     }
 
     public function testTagsRenderAsLabels(): void
