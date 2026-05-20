@@ -89,7 +89,7 @@ final class Search implements Model {
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
       <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth (mirrors upstream bubbles #910).</span></div>
       <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
-      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246), multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, and filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns).</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246), multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>, filtering with <code>withFilterable()</code> / <code>withFilter()</code> / <code>withFilterPredicate()</code> (default: case-insensitive substring match on all visible columns), and pagination with <code>withPageSize()</code> / <code>getPaginator()</code> / <code>withPage()</code> / <code>nextPage()</code> / <code>prevPage()</code> / <code>pageFirst()</code> / <code>pageLast()</code> — integrates with sort and filter.</span></div>
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump (mirrors bubbles #233).</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
@@ -130,6 +130,16 @@ final class Search implements Model {
 <tr><td>Table</td><td>getFilterPredicate(): ?Closure</td><td>Return the current custom filter predicate</td></tr>
 <tr><td>SortDirection</td><td>enum</td><td>Cases: Asc / Desc — use toggle() to flip direction</td></tr>
 <tr><td>SortState</td><td>DTO</td><td>Immutable list of (column index, SortDirection) pairs</td></tr>
+<tr><td>Table</td><td>withPageSize(int $size)</td><td>Set rows per page — 0 disables pagination, ≥1 enables it</td></tr>
+<tr><td>Table</td><td>withPage(int $page)</td><td>Navigate to a zero-based page (clamps to valid range)</td></tr>
+<tr><td>Table</td><td>nextPage()</td><td>Advance one page — returns new Table</td></tr>
+<tr><td>Table</td><td>prevPage()</td><td>Retreat one page — returns new Table</td></tr>
+<tr><td>Table</td><td>pageFirst()</td><td>Jump to the first page — returns new Table</td></tr>
+<tr><td>Table</td><td>pageLast()</td><td>Jump to the last page — returns new Table</td></tr>
+<tr><td>Table</td><td>getPageSize(): int</td><td>Return rows per page (0 = pagination disabled)</td></tr>
+<tr><td>Table</td><td>getCurrentPage(): int</td><td>Return the current zero-based page</td></tr>
+<tr><td>Table</td><td>getTotalPages(): int</td><td>Return total page count (1 when pagination is disabled)</td></tr>
+<tr><td>Table</td><td>getPaginator(): Paginator</td><td>Return a Paginator wired to the table's current page state</td></tr>
 <tr><td>Tree</td><td>new(root)</td><td>Create tree view</td></tr>
 <tr><td>Viewport</td><td>new(content)</td><td>Create scrollable viewport</td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar</td></tr>

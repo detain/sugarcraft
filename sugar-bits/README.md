@@ -267,6 +267,47 @@ When `withFilterPredicate()` is set, it overrides the default substring-match be
 
 The default filter applies case-insensitive substring matching across all visible columns.
 
+## Table — pagination
+
+```php
+use SugarCraft\Bits\Table\Table;
+
+// Enable pagination: 10 rows per page
+$t = $table->withPageSize(10);
+
+// Navigate pages
+$t = $t->withPage(1);   // zero-based — go to page 1 (second page)
+$t = $t->nextPage();
+$t = $t->prevPage();
+$t = $t->pageFirst();
+$t = $t->pageLast();
+
+// Inspect pagination state
+$pageSize   = $t->getPageSize();      // int — rows per page (0 = pagination disabled)
+$current   = $t->getCurrentPage();   // int — zero-based current page
+$totalPages = $t->getTotalPages();  // int — 1 when pagination is disabled
+
+// Wire a Paginator to the table for UI rendering
+$paginator = $t->getPaginator();    // Paginator instance
+```
+
+### Table pagination builders
+
+| Method | Description |
+|--------|-------------|
+| `withPageSize(int $size)` | Set rows per page — `0` disables pagination; `≥1` enables it |
+| `withPage(int $page)` | Navigate to a zero-based page (clamps to valid range) |
+| `nextPage()` | Advance one page |
+| `prevPage()` | Retreat one page |
+| `pageFirst()` | Jump to the first page |
+| `pageLast()` | Jump to the last page |
+| `getPageSize(): int` | Return rows per page (`0` = pagination off) |
+| `getCurrentPage(): int` | Return the current zero-based page |
+| `getTotalPages(): int` | Return the total page count (`1` when pagination is disabled) |
+| `getPaginator(): Paginator` | Return a `Paginator` instance wired to the table's current page state |
+
+Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
+
 ## Test
 
 ```sh
