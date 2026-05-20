@@ -420,6 +420,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     docs for step 09.02 · PR#713 · document Downsampler/FloydSteinberg in README + end-user HTML (leftover-rollout step 09.02)
     step 09.03 · PR#714 · candy-flip: adaptive cell size via SizeIoctl + frame cache (leftover-rollout step 09.03)
     review for step 09.03 · clean · PR#714
+    tests-ci for step 09.03 · clean
     ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
