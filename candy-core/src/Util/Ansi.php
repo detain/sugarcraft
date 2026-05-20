@@ -29,8 +29,9 @@ final class Ansi
     public const FAINT     = 2;
     public const ITALIC    = 3;
     public const UNDERLINE = 4;
-    public const BLINK     = 5;
-    public const REVERSE   = 7;
+    public const BLINK       = 5;
+    public const RAPID_BLINK = 6;
+    public const REVERSE     = 7;
     public const CONCEAL   = 8;
     public const STRIKE    = 9;
     public const OVERLINE  = 53;

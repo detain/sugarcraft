@@ -897,4 +897,98 @@ final class StyleTest extends TestCase
         $this->assertTrue($c->isOverline());
         $this->assertTrue($c->isInvisible());
     }
+
+    // ─── Rapid blink tests ─────────────────────────────────────────────
+
+    public function testRapidBlinkEmitsSgr6(): void
+    {
+        $this->assertSame("\x1b[6mhello\x1b[0m", Style::new()->rapidBlink()->render('hello'));
+    }
+
+    public function testRapidBlinkGetterDefaultFalse(): void
+    {
+        $this->assertFalse(Style::new()->isRapidBlink());
+    }
+
+    public function testRapidBlinkChaining(): void
+    {
+        $s = Style::new()->bold()->rapidBlink()->italic();
+        $this->assertTrue($s->isBold());
+        $this->assertTrue($s->isRapidBlink());
+        $this->assertTrue($s->isItalic());
+    }
+
+    public function testRapidBlinkImmutability(): void
+    {
+        $a = Style::new();
+        $b = $a->rapidBlink();
+        $this->assertNotSame($a, $b);
+        $this->assertFalse($a->isRapidBlink());
+        $this->assertTrue($b->isRapidBlink());
+    }
+
+    public function testRapidBlinkFalseClearsRapidBlink(): void
+    {
+        $s = Style::new()->rapidBlink();
+        $cleared = $s->rapidBlink(false);
+        $this->assertFalse($cleared->isRapidBlink());
+    }
+
+    // ─── patch() tests ─────────────────────────────────────────────────
+
+    public function testPatchAppliesNonNullProperties(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->background(Color::hex('#0000ff'))
+            ->italic();
+
+        $merged = $base->patch($patch);
+
+        // patch should have applied the bg and italic from $patch
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertEquals(Color::hex('#0000ff'), $merged->getBackground());
+        $this->assertTrue($merged->isBold());
+        $this->assertTrue($merged->isItalic());
+    }
+
+    public function testPatchPreservesBaseProperties(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->background(Color::hex('#0000ff'));
+
+        $merged = $base->patch($patch);
+
+        // Base's fg and bold should be preserved
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertTrue($merged->isBold());
+    }
+
+    public function testPatchNullPropertiesIgnored(): void
+    {
+        $base = Style::new()
+            ->foreground(Color::hex('#ff0000'))
+            ->bold();
+        $patch = Style::new()
+            ->foreground(null); // explicitly null should not override
+
+        $merged = $base->patch($patch);
+
+        $this->assertEquals(Color::hex('#ff0000'), $merged->getForeground());
+        $this->assertTrue($merged->isBold());
+    }
+
+    public function testPatchIsImmutable(): void
+    {
+        $a = Style::new()->foreground(Color::hex('#ff0000'));
+        $b = $a->patch(Style::new()->background(Color::hex('#0000ff')));
+        $this->assertNotSame($a, $b);
+        $this->assertNull($a->getBackground());
+        $this->assertEquals(Color::hex('#0000ff'), $b->getBackground());
+    }
 }
