@@ -30,7 +30,52 @@ final class SignalForwarder
     private static bool $asyncEnabled = false;
 
     /**
-     * Install a `SIGWINCH` handler that, on receipt, calls
+     * Variant of {@see attachSigwinch()} that targets a raw file
+     * descriptor instead of a `MasterPty`. Calls
+     * `SizeIoctl::setSizeViaLibc()` directly so callers holding a
+     * plain `/dev/tty` fd can forward resize events without a PTY.
+     *
+     * `$sizeProvider` returns `array{cols:int, rows:int}`. Any
+     * exception it throws is swallowed (signal handlers must not
+     * propagate exceptions across the runtime).
+     *
+     * @param callable(): array{cols:int, rows:int} $sizeProvider
+     * @param callable(int, int): void|null $onResize if provided,
+     *               called with `(cols, rows)` after a successful resize
+     * @return bool true if the handler installed; false on platforms
+     *              without pcntl or `SIGWINCH`.
+     * @see attachSigwinch()
+     */
+    public static function attachSigwinchToFd(int $fd, callable $sizeProvider, ?callable $onResize = null, bool $async = true): bool
+    {
+        if (!self::pcntlReady() || !\defined('SIGWINCH')) {
+            return false;
+        }
+
+        $handler = static function (int $signo) use ($fd, $sizeProvider, $onResize): void {
+            try {
+                $size = $sizeProvider();
+                $cols = (int) $size['cols'];
+                $rows = (int) $size['rows'];
+                $ws = \SugarCraft\Pty\SizeIoctl::pack($rows, $cols);
+                $rc = \SugarCraft\Pty\SizeIoctl::setSizeViaLibc(\SugarCraft\Pty\Libc::lib(), $fd, $ws);
+                if ($rc === 0 && $onResize !== null) {
+                    $onResize($cols, $rows);
+                }
+            } catch (\Throwable) {
+                // Signal handlers must not throw — best-effort only.
+            }
+        };
+
+        if (!@\pcntl_signal(SIGWINCH, $handler)) {
+            return false;
+        }
+        self::ensureAsync($async);
+        return true;
+    }
+
+    /**
+     * Install a `SIGWINCH` handler that calls
      * `$sizeProvider()` and pipes the returned `[cols, rows]` into
      * `$pty->resize()`.
      *
