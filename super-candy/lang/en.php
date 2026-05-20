@@ -15,9 +15,18 @@ return [
 
     // Status messages
     'status.nothing_to_delete' => 'nothing to delete',
+    'status.nothing_to_copy'   => 'nothing to copy',
+    'status.nothing_to_move'   => 'nothing to move',
+    'status.nothing_to_rename' => 'nothing to rename',
     'status.cancelled'        => 'cancelled',
     'status.deleted'           => 'deleted {count} entries',
     'status.deleted_with_errors' => 'deleted with {errors} errors',
+    'status.copied'           => 'copied {count} entries',
+    'status.copied_with_errors' => 'copied with {errors} errors',
+    'status.moved'            => 'moved {count} entries',
+    'status.moved_with_errors' => 'moved with {errors} errors',
+    'status.renamed'          => 'renamed {old} to {new}',
+    'status.rename_failed'    => 'rename failed: {name}',
     'status.nothing_to_undo'    => 'nothing to undo',
     'status.undone'            => 'undone: {description}',
     'status.undo_with_errors'  => 'undo {description} with {errors} error(s)',
