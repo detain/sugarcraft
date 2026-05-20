@@ -545,6 +545,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.09 · PR#772 · document progressToast/action buttons/history log/animation stub in README/end-user HTML/CALIBER patterns
     step 10.10 · PR#773 · sugar-table: viewport virtualization + column widths + wrapping (leftover-rollout step 10.10)
     fix for step 10.10 · PR#774 · resolved 4 findings
+    step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11)
 
 ## Open review findings — 09.19
 
