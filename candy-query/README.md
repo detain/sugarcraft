@@ -42,6 +42,9 @@ candy-query path/to/db.sqlite
 | `SchemaBrowser`   | PRAGMA-based schema introspection (tables, columns, indexes, foreign keys). Returns immutable schema objects. |
 | `ResultPager`     | Cursor-based pagination for SQL result sets. Immutable + fluent `nextPage()`/`prevPage()`. |
 | `CellEditor`       | Cell-level UPDATE by primary-key identity. `updateCell()`, `updateRow()`, `readCell()`.     |
+| `SnippetStore`   | File-backed JSON store for named SQL snippets. Immutable + fluent `add()`/`delete()`/`find()`/`search()`. Persists to `/tmp/candy-query-snippets.json`. |
+| `ExplainView`     | Renders `EXPLAIN QUERY PLAN` output as a colour-coded ANSI tree (SEARCH=cyan, SCAN=yellow, SUBQUERY=magenta, etc.). Static `run()` executes against a Database. |
+| `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -90,6 +93,54 @@ $current = $editor->readCell(rowId: 42, column: 'email');
 ```
 
 All identifiers are safely quoted via `str_replace('"', '""', $name)`. `updateCell` and `updateRow` return rows affected (0 or 1).
+
+## Snippet store
+
+`SnippetStore` persists named SQL snippets to a JSON file, surviving process restarts:
+
+```php
+$store = SnippetStore::load();                    // load from /tmp/candy-query-snippets.json
+$store = $store->add('active-users', 'SELECT * FROM users WHERE active = 1', 'Fetch active users');
+$store->flush();                                   // persist to disk
+
+$store->find('active-users');                     // → Snippet|null
+$store->search('users');                           // → list<Snippet> (name or SQL match)
+$store->delete('active-users')->flush();          // remove and persist
+```
+
+`Snippet(name, description, sql, createdAt)` is a plain readonly value object. The store is immutable — every mutation returns a new instance.
+
+## Query plan viewer
+
+`ExplainView` parses and colour-renders SQLite's `EXPLAIN QUERY PLAN` output:
+
+```php
+$view = ExplainView::run($db, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
+echo $view->render();   // ANSI coloured tree
+print_r($view->toArray());  // JSON-serialisable structure
+```
+
+Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange). Depth is inferred from SQLite's `|--` / `` `-- `` tree prefixes.
+
+## Result table
+
+`ResultTable` renders a SQL result set with horizontal scrolling, JSON pretty-print, and a styled NULL token:
+
+```php
+$table = ResultTable::fromRows($rows)
+    ->withVisibleWidth(80)
+    ->withJsonPretty(true)
+    ->withNullToken('∅');
+
+echo $table->render();       // ANSI coloured
+echo $table->renderPlain();  // plain text for copy/export
+
+if ($table->canScrollRight()) {
+    $table = $table->scrollRight();
+}
+```
+
+Columns auto-size to the widest value; cells exceeding `maxCellWidth` (default 40) are truncated with `…`. Array/object values are JSON-encoded with 2-space indent when `visibleWidth >= 80`, collapsed to a single line otherwise.
 
 ## Demos
 
