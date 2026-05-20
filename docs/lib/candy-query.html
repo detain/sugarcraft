@@ -77,6 +77,9 @@ $db = Database::open('app.sqlite');
       <div class="feature"><strong>SchemaBrowser</strong><span>PRAGMA-based introspection — tables, columns, indexes, foreign keys. Returns immutable <code>SchemaTable</code>/<code>SchemaColumn</code>/<code>SchemaIndex</code>/<code>SchemaForeignKey</code> value objects.</span></div>
       <div class="feature"><strong>ResultPager</strong><span>Cursor-based pagination for SQL result sets. Immutable + fluent: <code>nextPage()</code>, <code>prevPage()</code>, <code>goToPage()</code>, <code>withPageSize()</code>. Default page size 25.</span></div>
       <div class="feature"><strong>CellEditor</strong><span>Cell-level UPDATE by primary-key identity. <code>updateCell()</code>, <code>updateRow()</code>, <code>readCell()</code> — all safely quoted, all return rows affected.</span></div>
+      <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
+      <div class="feature"><strong>ExplainView</strong><span>Colour-coded <code>EXPLAIN QUERY PLAN</code> tree. Static <code>run()</code> executes against a Database; <code>render()</code> produces ANSI output; <code>toArray()</code> returns JSON-serialisable rows.</span></div>
+      <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -107,6 +110,19 @@ $db = Database::open('app.sqlite');
 <tr><td>CellEditor</td><td>updateCell(rowId, column, newValue)</td><td>Update one cell, return rows affected</td></tr>
 <tr><td>CellEditor</td><td>updateRow(rowId, cells)</td><td>Update multiple cells in one row</td></tr>
 <tr><td>CellEditor</td><td>readCell(rowId, column)</td><td>Read current cell value</td></tr>
+<tr><td>SnippetStore</td><td>load(path)</td><td>Load snippets from JSON file (default /tmp/candy-query-snippets.json)</td></tr>
+<tr><td>SnippetStore</td><td>add(name, sql, description)</td><td>Add or replace a snippet, return new store</td></tr>
+<tr><td>SnippetStore</td><td>flush()</td><td>Persist current snippets to disk</td></tr>
+<tr><td>SnippetStore</td><td>find(name)</td><td>Look up snippet by exact name</td></tr>
+<tr><td>SnippetStore</td><td>search(term)</td><td>Case-insensitive substring search on name and SQL</td></tr>
+<tr><td>SnippetStore</td><td>delete(name)</td><td>Remove snippet by name, return new store</td></tr>
+<tr><td>ExplainView</td><td>run(db, sql)</td><td>Execute EXPLAIN QUERY PLAN and return ExplainView instance</td></tr>
+<tr><td>ExplainView</td><td>render()</td><td>Render plan as ANSI-coloured string</td></tr>
+<tr><td>ExplainView</td><td>toArray()</td><td>Return JSON-serialisable plan rows (depth, tag, detail, indent)</td></tr>
+<tr><td>ResultTable</td><td>fromRows(rows)</td><td>Factory from a list of associative row arrays</td></tr>
+<tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>
+<tr><td>ResultTable</td><td>withVisibleWidth(n) / withJsonPretty(bool) / withNullToken(s)</td><td>Fluent configuration builders</td></tr>
+<tr><td>ResultTable</td><td>render() / renderPlain()</td><td>Render ANSI string or plain text</td></tr>
 </table>
   </div>
 </section>
