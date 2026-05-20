@@ -188,6 +188,7 @@ The CLI lands in PR7.
 vendor/bin/candy-vcr record   --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
 vendor/bin/candy-vcr inspect  session.cas                                # list events
 vendor/bin/candy-vcr replay   session.cas --speed=realtime               # stream output to stdout
+vendor/bin/candy-vcr replay   session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
 vendor/bin/candy-vcr diff     a.cas b.cas                                # structural diff
 vendor/bin/candy-vcr stats    session.cas                                # show cassette statistics
 ```
@@ -366,9 +367,14 @@ if (!$result->ok) {
 
 `Player::play` walks the cassette and feeds each event into the program: resize → `WindowSizeMsg`, input bytes → re-parsed via `InputReader` and dispatched, input msg envelope → decoded via the serializer registry, quit → `program->quit()`. Output events accumulate into the expected byte buffer; the program's actual output stream is captured and compared via the supplied assertion.
 
-**Idle time trimming:** In `SPEED_REALTIME` mode, long pauses between events can slow down CI tests. Pass `idleThresholdSeconds: 0.5` to clamp pauses longer than 500ms to 500ms, making tests run faster while still honoring shorter pauses:
+**Idle time trimming:** In `SPEED_REALTIME` mode, long pauses between events can slow down CI tests. Set `idleThresholdSeconds: 0.5` (or `withIdleTrim(0.5)` on the `Player`) to clamp pauses longer than 500 ms to 500 ms, making tests run faster while still honoring shorter pauses. The fluent `withIdleTrim()` form is useful when the threshold is configured once at the call site:
 
 ```php
+$result = $player->withIdleTrim(0.5)->play(
+    programFactory: $factory,
+    speed: Player::SPEED_REALTIME,
+);
+// Or pass it explicitly to play():
 $result = $player->play(
     programFactory: $factory,
     speed: Player::SPEED_REALTIME,
