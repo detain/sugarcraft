@@ -29,6 +29,9 @@ final class Toast
     /** Dismissed flag — if true, Toast won't render any alerts. */
     private bool $dismissed = false;
 
+    /** Whether Escape key dismisses the active alert. */
+    private bool $allowEscToClose = true;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -83,6 +86,16 @@ final class Toast
     {
         $clone = clone $this;
         $clone->duration = $seconds;
+        return $clone;
+    }
+
+    /**
+     * Control whether pressing Escape dismisses the active alert.
+     */
+    public function withAllowEscToClose(bool $allow): self
+    {
+        $clone = clone $this;
+        $clone->allowEscToClose = $allow;
         return $clone;
     }
 
@@ -170,6 +183,19 @@ final class Toast
         return $clone;
     }
 
+    /**
+     * Returns true if there are active (non-expired) alerts in the queue.
+     */
+    public function hasActiveAlert(): bool
+    {
+        foreach ($this->queue as $alert) {
+            if (!$alert->isExpired()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // -------------------------------------------------------------------------
     // Rendering
     // -------------------------------------------------------------------------
@@ -199,6 +225,15 @@ final class Toast
 
         $bgLines = $this->splitLines($background);
 
+        // First pass: compute total height of all active alerts for stacking
+        $totalAlertLines = 0;
+        foreach ($active as $alert) {
+            $alertStr = $this->renderAlert($alert);
+            $totalAlertLines += \count($this->splitLines($alertStr));
+        }
+
+        // Second pass: render each alert with proper cumulative stacking offset
+        $cumulativeHeight = 0;
         foreach ($active as $alert) {
             $alertStr = $this->renderAlert($alert);
             $alertLines = $this->splitLines($alertStr);
@@ -206,9 +241,10 @@ final class Toast
             $alertHeight = \count($alertLines);
 
             $x = $this->position->xOffset($alertWidth, $viewportWidth);
-            $y = $this->position->yOffset($alertHeight, $viewportHeight);
+            $y = $this->position->yOffset($alertHeight, $viewportHeight, $cumulativeHeight);
 
             $bgLines = $this->compositeLines($bgLines, $alertLines, $x, $y, $alertWidth);
+            $cumulativeHeight += $alertHeight;
         }
 
         return \implode("\n", $bgLines);
