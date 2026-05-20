@@ -9,14 +9,29 @@ use PHPUnit\Framework\TestCase;
 
 final class LevelTest extends TestCase
 {
-    public function testDebugValueIsLowest(): void
+    public function testDebugValueIsNegativeFour(): void
     {
-        $this->assertSame(0, Level::Debug->value);
+        $this->assertSame(-4, Level::Debug->value);
     }
 
-    public function testFatalValueIsHighest(): void
+    public function testInfoValueIsZero(): void
     {
-        $this->assertSame(4, Level::Fatal->value);
+        $this->assertSame(0, Level::Info->value);
+    }
+
+    public function testWarnValueIsFour(): void
+    {
+        $this->assertSame(4, Level::Warn->value);
+    }
+
+    public function testErrorValueIsEight(): void
+    {
+        $this->assertSame(8, Level::Error->value);
+    }
+
+    public function testFatalValueIsTwelve(): void
+    {
+        $this->assertSame(12, Level::Fatal->value);
     }
 
     public function testLabelReturnsFullUppercase(): void

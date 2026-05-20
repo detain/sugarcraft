@@ -6,6 +6,7 @@ namespace SugarCraft\Log;
 
 use SugarCraft\Log\Lang;
 use SugarCraft\Log\Formatter\TextFormatter;
+use SugarCraft\Palette\Probe;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -47,7 +48,15 @@ final class Logger
         bool $reportCaller = false,
         $stream = null,
     ) {
-        $this->formatter = $formatter ?? new TextFormatter($reportTimestamp, $timeFormat, $reportCaller);
+        // Probe-driven color decision: disable colors when terminal cannot render them
+        $useColors = Probe::colorProfile()->allowsColor();
+
+        $this->formatter = $formatter ?? new TextFormatter(
+            $reportTimestamp,
+            $timeFormat,
+            $reportCaller,
+            $useColors,
+        );
         $this->minLevel = $minLevel ?? Level::Info;
         $this->prefix = $prefix;
         $this->reportTimestamp = $reportTimestamp;
