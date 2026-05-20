@@ -40,6 +40,24 @@ sugar-calendar, and sugar-table:
 
 ---
 
+## [pattern:middle-position-stacking] MiddleLeft/MiddleCenter/MiddleRight center vertically and stack toward bottom edge
+
+Middle positions use the same `totalAlertLines` accumulation logic as bottom
+positions. Each alert is offset by the cumulative height of all previously
+rendered alerts at the same position, so stacks grow downward from the
+vertical center rather than upward from the top.
+
+---
+
+## [pattern:toast-stack-y-offset-fix] Two-pass rendering for y-offset computation
+
+Render computes `totalAlertLines` in a first pass across all alerts, then
+uses a running `yOffset` accumulator in the second pass to assign each
+alert its cumulative vertical position. This prevents overlapping stacks
+when multiple toasts share the same position.
+
+---
+
 ## [gotcha:toast-type-symboldata] SymbolSet data lives on the enum
 
 `ToastType` provides `nerdIcon()`, `unicodeIcon()`, `asciiPrefix()`, and
