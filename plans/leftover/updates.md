@@ -375,6 +375,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.06 · clean · PR#694
   tests-ci for step 08.06 · clean
   docs for step 08.06 · PR#695 · document SortDirection/SortState/withSort/thenSortBy/clearSort/getSortState in README + end-user HTML
+  step 08.07 · PR#696 · sugar-bits: Table filter (withFilterable/withFilter/withFilterPredicate; 27 FilterTest tests; leftover-rollout step 08.07)
 
 ## Open review findings — 08.04
 
