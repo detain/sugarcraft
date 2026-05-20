@@ -16,10 +16,10 @@ namespace SugarCraft\Hermit;
  */
 final class Hermit
 {
-    /** @var list<string> */
+    /** @var list<Item> */
     private array $allItems = [];
 
-    /** @var list<string> */
+    /** @var list<Item> */
     private array $filteredItems = [];
 
     private bool $isShown = false;
@@ -33,6 +33,9 @@ final class Hermit
 
     /** @var \Closure(string $item, bool $isSelected): string */
     private \Closure $itemFormatter;
+
+    /** @var \Closure(Item $item): bool Filter function applied to items. */
+    private \Closure $filterFn;
 
     /** Match highlight style (ANSI SGR codes, e.g. "\e[33m"). */
     private string $matchStyle = '';
@@ -52,12 +55,15 @@ final class Hermit
     public function __construct(
         array $items = [],
         ?\Closure $itemFormatter = null,
+        ?\Closure $filterFn = null,
     ) {
-        $this->allItems     = \array_values(\array_map('strval', $items));
+        $this->allItems     = \array_values($items);
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
             ?? fn(string $item, bool $selected): string =>
                 ($selected ? '● ' : '  ') . $item;
+        $this->filterFn = $filterFn
+            ?? fn(Item $item): bool => true;
     }
 
     // -------------------------------------------------------------------------
@@ -76,7 +82,7 @@ final class Hermit
     public function withItems(array $items): self
     {
         $clone = clone $this;
-        $clone->allItems = \array_values(\array_map('strval', $items));
+        $clone->allItems = \array_values($items);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
@@ -123,6 +129,15 @@ final class Hermit
     {
         $clone = clone $this;
         $clone->itemFormatter = $fn;
+        return $clone;
+    }
+
+    public function setFilterFn(\Closure $fn): self
+    {
+        $clone = clone $this;
+        $clone->filterFn = $fn;
+        $clone->filteredItems = $clone->applyFilter($clone->filterText);
+        $clone->cursor = 0;
         return $clone;
     }
 
@@ -226,14 +241,14 @@ final class Hermit
         return $this->filterText;
     }
 
-    public function selected(): ?string
+    public function selected(): ?Item
     {
         $items = $this->filteredItems;
         $idx   = $this->cursor;
         return $items[$idx] ?? null;
     }
 
-    /** @return list<string> */
+    /** @return list<Item> */
     public function items(): array
     {
         return $this->filteredItems;
@@ -288,7 +303,7 @@ final class Hermit
 
         for ($i = 0; $i < $maxShow; $i++) {
             $isSelected = ($i === $this->cursor);
-            $itemStr    = ($this->itemFormatter)($items[$i], $isSelected);
+            $itemStr    = ($this->itemFormatter)($items[$i]->value(), $isSelected);
 
             if ($filter !== '' && $this->matchStyle !== '') {
                 $itemStr = $this->highlightMatches($itemStr, $filter);
@@ -312,26 +327,33 @@ final class Hermit
     // -------------------------------------------------------------------------
 
     /**
-     * Fuzzy filter allItems case-insensitively with an anchor bias: the
-     * filter must appear as a contiguous substring AND the match must
-     * start in the first half of the item. Keeps deeply-buried matches
-     * (e.g. 'b' in 'elderberry' at position 5/10) from polluting results
-     * for short queries.
+     * Filter allItems using the configured filter function.
+     * When filterText is empty, returns all items.
+     * Otherwise applies both the filterText (substring match with anchor bias)
+     * and the custom filterFn.
      *
-     * @return list<string>
+     * @return list<Item>
      */
     private function applyFilter(string $text): array
     {
+        $fn = $this->filterFn;
         if ($text === '') {
-            return $this->allItems;
+            return \array_values(
+                \array_filter(
+                    $this->allItems,
+                    fn(Item $item): bool => $fn($item),
+                )
+            );
         }
         $lower = \strtolower($text);
         return \array_values(
             \array_filter(
                 $this->allItems,
-                function (string $item) use ($lower): bool {
-                    $pos = \strpos(\strtolower($item), $lower);
-                    return $pos !== false && $pos * 2 < \strlen($item);
+                function (Item $item) use ($lower, $fn): bool {
+                    $value = $item->value();
+                    $pos = \strpos(\strtolower($value), $lower);
+                    $anchorOk = $pos !== false && $pos * 2 < \strlen($value);
+                    return $anchorOk && $fn($item);
                 }
             )
         );
@@ -343,7 +365,7 @@ final class Hermit
         $filterLen = \strlen($this->filterText);
         $itemMax   = 0;
         foreach ($this->filteredItems as $item) {
-            $itemLen = \strlen(($this->itemFormatter)($item, false));
+            $itemLen = \strlen(($this->itemFormatter)($item->value(), false));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + 5, $itemMax + 2);
