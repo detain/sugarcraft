@@ -32,6 +32,12 @@ final class Toast
     /** Whether Escape key dismisses the active alert. */
     private bool $allowEscToClose = true;
 
+    /** Maximum number of concurrent alerts (null = unlimited). */
+    private ?int $maxConcurrent = null;
+
+    /** Overflow strategy when queue exceeds maxConcurrent. */
+    private Overflow $overflow = Overflow::DropOldest;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -99,6 +105,27 @@ final class Toast
         return $clone;
     }
 
+    /**
+     * Set the maximum number of concurrent alerts.
+     * Pass null for unlimited.
+     */
+    public function withMaxConcurrent(?int $max): self
+    {
+        $clone = clone $this;
+        $clone->maxConcurrent = $max;
+        return $clone;
+    }
+
+    /**
+     * Set the overflow strategy when maxConcurrent is exceeded.
+     */
+    public function withOverflow(Overflow $overflow): self
+    {
+        $clone = clone $this;
+        $clone->overflow = $overflow;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Alert operations
     // -------------------------------------------------------------------------
@@ -107,14 +134,35 @@ final class Toast
      * Add an alert to the queue. Returns a new Toast instance.
      *
      * If $expiresAt is provided, it overrides the configured duration.
+     * Accepts a ToastType or a string type name (case-insensitive).
+     *
+     * When maxConcurrent is set and the queue would exceed it, applies
+     * the configured overflow strategy (DropOldest, DropNewest, or Enqueue).
      */
-    public function alert(ToastType $type, string $message, ?float $expiresAt = null): self
+    public function alert(ToastType|string $type, string $message, ?float $expiresAt = null): self
     {
+        $resolvedType = $type instanceof ToastType
+            ? $type
+            : ToastType::tryFrom(\strtolower($type))
+                ?? throw new \InvalidArgumentException("Unknown toast type: {$type}");
+
         $clone = clone $this;
-        $alert = new Alert($type, $message, $expiresAt);
+        $alert = new Alert($resolvedType, $message, $expiresAt);
         if ($expiresAt === null && $clone->duration !== null) {
             $alert = $alert->withExpiry($clone->duration);
         }
+
+        // Apply overflow strategy when maxConcurrent is set
+        if ($clone->maxConcurrent !== null && \count($clone->queue) >= $clone->maxConcurrent) {
+            if ($clone->overflow === Overflow::DropNewest) {
+                return $clone;  // discard the new alert
+            }
+            if ($clone->overflow === Overflow::DropOldest) {
+                \array_shift($clone->queue);
+            }
+            // Enqueue: do nothing, allow exceeding max
+        }
+
         $clone->queue[] = $alert;
         return $clone;
     }
