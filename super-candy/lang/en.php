@@ -57,6 +57,30 @@ return [
     'sort.size_asc'  => 'size-asc',
     'sort.size_desc' => 'size-desc',
 
+    // Preview pane
+    'preview.no_file'         => '(no file selected)',
+    'preview.file_not_found' => '(file not found)',
+    'preview.is_directory'   => '(is a directory)',
+    'preview.image_error'     => '(image error: {error})',
+    'preview.invalid_width'  => 'width must be positive',
+    'preview.invalid_height' => 'height must be positive',
+    'preview.metadata'       => 'Metadata',
+    'preview.size'           => 'Size',
+    'preview.mtime'          => 'Modified',
+    'preview.mode'           => 'Mode',
+    'preview.type'           => 'Type',
+    'preview.link_target'    => 'Link',
+    'preview.type_file'      => 'file',
+    'preview.stat_failed'    => 'stat failed',
+    'preview.unknown'       => 'unknown',
+
+    // Bulk rename
+    'bulk_rename.conflict' => 'duplicate names in output',
+    'bulk_rename.invalid_pattern' => 'invalid regex pattern',
+    'bulk_rename.empty_result' => 'resulting name is empty',
+    'bulk_rename.success' => 'renamed {count} files',
+    'bulk_rename.error'   => 'rename failed: {error}',
+
     // Error messages
     'error.remove_path' => 'failed to remove {path}',
     'error.restore_path' => 'failed to restore {path}',

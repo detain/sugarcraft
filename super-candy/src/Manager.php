@@ -9,6 +9,8 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Subscriptions;
+use SugarCraft\Core\SubscriptionCapable;
 
 /**
  * The dual-pane file manager `Model`.
@@ -28,6 +30,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  */
 final class Manager implements Model
 {
+    use SubscriptionCapable;
     /** @var \Closure(string): list<Entry> */
     private readonly \Closure $lister;
 
