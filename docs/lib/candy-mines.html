@@ -75,8 +75,10 @@ use SugarCraft\Mines\Game;
       <div class="feature"><strong>Chord click</strong><span><code>c</code> or middle-click on a satisfied number reveals all unflagged neighbours — mirrors classic left+right chord behaviour.</span></div>
       <div class="feature"><strong>Sub-second timer</strong><span>Game timer uses <code>microtime(true)</code> for millisecond precision; frozen on win/lose and stored in stats.</span></div>
       <div class="feature"><strong>Best-time persistence</strong><span><code>DifficultyStats</code> persists games/wins/best time per difficulty to JSON atomically (tmp+rename) so crashes never corrupt the record.</span></div>
-      <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked.</span></div>
+      <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked. O(1) via <code>revealedCount</code> — no grid scan on each move.</span></div>
       <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
+      <div class="feature"><strong>Save / restore mid-game</strong><span><code>Board::serialize()</code> emits versioned JSON; <code>Board::unserialize()</code> reconstructs the exact board state for mid-game suspend/resume.</span></div>
+      <div class="feature"><strong>Custom difficulty</strong><span><code>Ui\CustomDifficulty</code> validates rows (2–50), cols (2–50), mines (1 to rows×cols−9) with i18n-aware error messages.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -99,6 +101,10 @@ use SugarCraft\Mines\Game;
 <tr><td>Board</td><td>new(width, height, mines)</td><td>Create game board</td></tr>
 <tr><td>Board</td><td>cell(x, y)</td><td>Get cell at position</td></tr>
 <tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveal safe neighbours of a satisfied number</td></tr>
+<tr><td>Board</td><td>serialize()</td><td>Emit versioned JSON string ({v:1, w, h, m, p, e, r, c}) for mid-game save</td></tr>
+<tr><td>Board</td><td>unserialize(data)</td><td>Reconstruct a Board from a serialize() payload</td></tr>
+<tr><td>Ui\CustomDifficulty</td><td>fromInput(rows, cols, mines)</td><td>Validate custom board dimensions; throws with i18n key on violation</td></tr>
+<tr><td>Ui\CustomDifficulty</td><td>defaults()</td><td>Factory — 9×9, 10 mines</td></tr>
 <tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent)</td></tr>
 <tr><td>DifficultyStats</td><td>save(path)</td><td>Persist stats atomically (tmp+rename)</td></tr>
 <tr><td>DifficultyStats</td><td>withGame(d, won, time)</td><td>Return new DifficultyStats with the game recorded</td></tr>
