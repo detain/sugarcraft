@@ -49,7 +49,7 @@ to keep the static `Progress` lean).
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
 | `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Mirrors upstream Bubbles #233. | — |
-| `Table\Table` | Selectable data table with `Column` struct + nav | — |
+| `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes | — |
 
@@ -177,6 +177,58 @@ $alphanum = TextInput::new()->withRestrict('[a-zA-Z0-9]');
 |--------|--------------|
 | `withValidateOn(ValidateOn $timing)` | Set validation timing (`None` / `Blur` / `Change` / `Submit`) |
 | `withRestrict(string $pattern)` | Set a PCRE regex — only matching characters are accepted (no delimiters) |
+
+## Table — multi-column sort
+
+```php
+use SugarCraft\Bits\Table\{Table, SortDirection, SortState};
+
+// Primary sort by Name ascending
+$t = $table->withSort('Name');
+
+// Tiebreaker: Age descending
+$t = $table->thenSortBy('Age', SortDirection::Desc);
+
+// Reset to insertion order
+$t = $table->clearSort();
+
+// Inspect current sort criteria
+$state = $t->getSortState(); // SortState
+foreach ($state->criteria as [$colIndex, $dir]) {
+    // $colIndex is an int, $dir is SortDirection::Asc or SortDirection::Desc
+}
+```
+
+### SortDirection enum
+
+| Case | Value | Description |
+|------|-------|-------------|
+| `SortDirection::Asc` | `'asc'` | Sort in ascending order |
+| `SortDirection::Desc` | `'desc'` | Sort in descending order |
+
+`SortDirection::toggle()` returns the opposite direction.
+
+### SortState DTO
+
+Immutable list of sort criteria — each entry is a `(column index, direction)` pair. Applied in order: first entry is primary sort, second is tiebreaker, etc.
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `SortState::empty()` | `SortState` | Factory for no criteria |
+| `SortState->withCriterion(int $col, SortDirection $dir)` | `SortState` | Append a criterion |
+| `SortState->isEmpty()` | `bool` | True when no criteria are set |
+| `SortState->criteria` | `list<array{0:int,1:SortDirection}>` | Raw criteria list |
+
+### Table sort builders
+
+| Method | Description |
+|--------|-------------|
+| `withSort(string $column, SortDirection $dir = Asc)` | Set primary sort — clears any prior sort chain |
+| `thenSortBy(string $column, SortDirection $dir = Asc)` | Add a secondary (or further) tiebreaker criterion |
+| `clearSort()` | Remove all sort criteria, restoring insertion order |
+| `getSortState(): SortState` | Return the current sort criteria (readonly accessor) |
+
+Sorting throws `\InvalidArgumentException` with message `table.sort_unknown_column` when the column name is not found. The exception message is localizable.
 
 ## Test
 
