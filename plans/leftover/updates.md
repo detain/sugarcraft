@@ -429,6 +429,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     step 09.05 · PR#719 · candy-hermit: border/Style (sprinkles) + SIGWINCH + help/status bar (leftover-rollout step 09.05)
     review for step 09.05 · clean · PR#719
     tests-ci for step 09.05 · clean
+    docs for step 09.05 · PR#720 · document Border/Style/HelpBar/StatusBar/SIGWINCH in README + end-user HTML + CALIBER_LEARNINGS.md
 
     ## Open review findings — 08.04
 
