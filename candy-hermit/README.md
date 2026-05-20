@@ -89,6 +89,9 @@ $allItems = $history->all();      // load previous items
 | **Item interface** | Work with structured `Item` objects instead of raw strings |
 | **Persistent history** | `FileHistory` stores items as JSONL for session persistence |
 | **Custom filter predicates** | `setFilterFn()` lets you filter items by arbitrary criteria |
+| **Border & Style composition** | `withBorder()` and `withStyle()` compose `candy-sprinkles` `Border` and `Style` for window decoration |
+| **HelpBar / StatusBar** | `withHelpBar()` and `withStatusBar()` attach keyboard-shortcut and status-line renders below the overlay |
+| **SIGWINCH resize** | `withOnResize()` + `attachSigwinch()` forwards terminal resize events via `SignalForwarder::attachSigwinchToFd` |
 
 ## Architecture
 
@@ -97,9 +100,10 @@ SugarCraft\Hermit
 ├── Hermit              — Fuzzy finder overlay (main class)
 ├── Item                — Interface for filterable items
 ├── FilteredItem        — Numbered item implementation of Item
-├── History
-│   └── FileHistory     — JSONL-backed persistent history
-└── Model               — Interface for embedding in Bubble-Tea programs
+├── HelpBar             — Keyboard shortcut summary line
+├── StatusBar           — Status message line with optional segments
+└── History
+    └── FileHistory     — JSONL-backed persistent history
 ```
 
 ## API — Hermit factory
@@ -137,6 +141,24 @@ public function setItemFormatter(\Closure $fn): self
 // Custom filter predicate: Closure(Item $item): bool
 // Applied after text-based fuzzy filtering; return false to exclude item
 public function setFilterFn(\Closure $fn): self
+
+// Apply a candy-sprinkles Border to the overlay window
+public function withBorder(?\SugarCraft\Sprinkles\Border $border): self
+
+// Apply a candy-sprinkles Style to the overlay window
+public function withStyle(?\SugarCraft\Sprinkles\Style $style): self
+
+// Attach a HelpBar (keyboard shortcut summary) below the filter list
+public function withHelpBar(?HelpBar $helpBar): self
+
+// Attach a StatusBar (status message line) at the bottom of the overlay
+public function withStatusBar(?StatusBar $statusBar): self
+
+// Register a callback invoked after SIGWINCH resize events (cols, rows)
+public function withOnResize(?\Closure $callback): self
+
+// Attach SIGWINCH handler via SignalForwarder::attachSigwinchToFd (requires ext-pcntl)
+public function attachSigwinch(): bool
 ```
 
 ## API — Hermit state mutations
@@ -180,6 +202,11 @@ public function selected(): ?Item   // Currently selected Item (or null)
 public function items(): array       // Filtered items (list<Item>)
 public function itemCount(): int      // Number of visible (filtered) items
 public function allCount(): int      // Total number of items
+public function border(): ?\SugarCraft\Sprinkles\Border
+public function style(): ?\SugarCraft\Sprinkles\Style
+public function helpBar(): ?HelpBar
+public function statusBar(): ?StatusBar
+public function onResize(): ?\Closure  // Registered resize callback (cols, rows)
 ```
 
 ## API — Item interface
@@ -222,6 +249,64 @@ $history->clear();
 
 // Get the history file path
 $path = $history->path();
+```
+
+## API — HelpBar
+
+```php
+use SugarCraft\Hermit\HelpBar;
+
+// Create with optional shortcuts
+$bar = new HelpBar([
+    '↑↓' => 'navigate',
+    'Enter' => 'select',
+    'Esc' => 'close',
+]);
+
+// Add or remove shortcuts (fluent)
+$bar = $bar->withShortcut('Ctrl+R', 'reload')
+           ->withoutShortcut('↑↓');
+
+// Show or hide
+$bar = $bar->show();
+$bar = $bar->hide();
+
+// Render: "↑↓: navigate │ Enter: select │ Esc: close"
+echo $bar->render();
+```
+
+## API — StatusBar
+
+```php
+use SugarCraft\Hermit\StatusBar;
+
+// Create with optional message
+$bar = new StatusBar('3 of 12 items');
+
+// Fluent setters
+$bar = $bar->withMessage('Searching...')
+           ->withNoMessage()          // clear the message
+           ->withSegment('count', '7') // named segment
+           ->withoutSegment('count');
+
+// Show or hide
+$bar = $bar->show();
+$bar = $bar->hide();
+
+// Render: "[count: 7] Searching..."
+echo $bar->render();
+```
+
+## SIGWINCH Resize
+
+```php
+use SugarCraft\Hermit\Hermit;
+
+$h = Hermit::new($items)
+    ->withOnResize(function (int $cols, int $rows): void {
+        echo "Terminal resized to {$cols}x{$rows}\n";
+    })
+    ->attachSigwinch();  // installs SIGWINCH handler; returns bool
 ```
 
 ## Model Interface
