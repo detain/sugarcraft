@@ -539,6 +539,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.07 · PR#768 · refresh docs/lib/sugar-toast.html (9 positions in feature grid + current API quickstart + withAllowEscToClose/hasActiveAlert in API table)
     step 10.08 · PR#769 · sugar-toast: persistent toasts + maxConcurrent + overflow enum + custom alert types (leftover-rollout step 10.08)
     review for step 10.08 · clean · PR#769
+    docs for step 10.08 · PR#770 · refresh README (Overflow enum + withMaxConcurrent/withOverflow + persistent null-expiry + string type lookup) + end-user HTML API table + 3 CALIBER patterns
 
 ## Open review findings — 09.19
 
