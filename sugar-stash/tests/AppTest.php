@@ -21,6 +21,13 @@ final class FixtureGit implements GitDriver
     public array $checkouts = [];
     public array $commits = [];
     public bool $stageAllCalled = false;
+    /** @var list<string> */
+    public array $diffs = [];
+    public array $discards = [];
+    public bool $amendCalled = false;
+    /** @var array<string, string> path => hunk patch */
+    public array $stagePatches = [];
+    public array $branchCreations = [];
 
     public function __construct(array $statusRows, array $branchRows, array $logRows)
     {
@@ -37,6 +44,11 @@ final class FixtureGit implements GitDriver
     public function checkout(string $branch): void { $this->checkouts[] = $branch; }
     public function commit(string $message): void  { $this->commits[] = $message; }
     public function stageAll(): void             { $this->stageAllCalled = true; }
+    public function diff(string $path): array    { return $this->diffs; }
+    public function discard(string $path): void   { $this->discards[] = $path; }
+    public function amend(): void                 { $this->amendCalled = true; }
+    public function stagePatch(string $path, string $hunk): void { $this->stagePatches[$path] = $hunk; }
+    public function createBranch(string $name): void { $this->branchCreations[] = $name; }
 }
 
 final class AppTest extends TestCase
@@ -245,5 +257,142 @@ final class AppTest extends TestCase
         $this->assertSame(Pane::Branches, $a->pane);
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
         $this->assertFalse($g->stageAllCalled);
+    }
+
+    public function testDiffKeyOpensDiffViewer(): void
+    {
+        $g = $this->git();
+        $g->diffs = [
+            'diff --git a/src/A.php b/src/A.php',
+            '--- a/src/A.php',
+            '+++ b/src/A.php',
+            '@@ -1,3 +1,4 @@',
+            '-line 1',
+            '+line 1 modified',
+            ' context',
+        ];
+        $a = App::start($g);
+        $this->assertNull($a->diffViewer);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($a->diffViewer);
+        $this->assertSame('src/A.php', $a->diffViewer->path);
+    }
+
+    public function testDiffKeyOnlyInStatusPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNull($a->diffViewer);
+    }
+
+    public function testEscapeClosesDiffViewer(): void
+    {
+        $g = $this->git();
+        $g->diffs = ['+added line'];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($a->diffViewer);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->diffViewer);
+    }
+
+    public function testAmendKeyCallsAmendOnGit(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertFalse($g->amendCalled);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'A'));
+        $this->assertTrue($g->amendCalled);
+    }
+
+    public function testCreateBranchKeyStartsCollection(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertFalse($a->collectingBranchName);
+        $this->assertSame('', $a->branchName);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertTrue($a->collectingBranchName);
+        $this->assertSame('', $a->branchName);
+    }
+
+    public function testBranchNameCollection(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        $this->assertTrue($a->collectingBranchName);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        $this->assertSame('f', $a->branchName);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'e'));
+        $this->assertSame('fe', $a->branchName);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame('fea', $a->branchName);
+    }
+
+    public function testCreateBranchOnEnter(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'e'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(['fea'], $g->branchCreations);
+        $this->assertFalse($a->collectingBranchName);
+    }
+
+    public function testBranchCollectionEscapeCancels(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'n'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->collectingBranchName);
+        $this->assertSame('', $a->branchName);
+    }
+
+    public function testSpaceInDiffViewerStagesCurrentHunk(): void
+    {
+        $g = $this->git();
+        $g->diffs = [
+            'diff --git a/src/A.php b/src/A.php',
+            '@@ -1,3 +1,4 @@',
+            '-line 1',
+            '+line 1 modified',
+            ' context',
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($a->diffViewer);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertArrayHasKey('src/A.php', $g->stagePatches);
+        $this->assertNull($a->diffViewer);
+    }
+
+    public function testDiffViewerHunkNavigation(): void
+    {
+        $g = $this->git();
+        $g->diffs = [
+            'diff --git a/src/A.php b/src/A.php',
+            '@@ -1,3 +1,4 @@',
+            '-line 1',
+            '+line 1 modified',
+            '@@ -5,3 +5,4 @@',
+            '-line 5',
+            '+line 5 modified',
+        ];
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'd'));
+        $this->assertNotNull($a->diffViewer);
+        $this->assertSame(2, $a->diffViewer->hunkCount());
+
+        // Navigate down to second hunk
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));
+        $this->assertNotNull($a->diffViewer);
     }
 }

@@ -47,12 +47,23 @@ final class Renderer
                 ->render(Lang::t('commit.prompt') . $a->commitMessage . '_');
         }
 
+        $branchBar = '';
+        if ($a->collectingBranchName) {
+            $branchBar = "\n " . Style::new()->foreground(Color::hex('#fde68a'))
+                ->render(Lang::t('branch.prompt') . $a->branchName . '_');
+        }
+
+        $diffOverlay = '';
+        if ($a->diffViewer !== null) {
+            $diffOverlay = self::diffOverlay($a);
+        }
+
         $overlay = '';
         if ($a->showHelp) {
             $overlay = self::helpOverlay($a);
         }
 
-        return $header . "\n" . $body . "\n " . $help . $err . $commitBar . $overlay . "\n";
+        return $header . "\n" . $body . "\n " . $help . $err . $commitBar . $branchBar . $diffOverlay . $overlay . "\n";
     }
 
     private static function statusPane(App $a): string
@@ -175,5 +186,63 @@ final class Renderer
             ->render(implode("\n", $lines));
 
         return "\n\n" . $box . "\n";
+    }
+
+    private static function diffOverlay(App $a): string
+    {
+        $dv = $a->diffViewer;
+        if ($dv === null) {
+            return '';
+        }
+
+        $lines = [];
+        $lines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))
+            ->render(' diff: ' . $dv->path . ' ');
+
+        foreach ($dv->lines as $i => $line) {
+            $isSelectedHunkLine = false;
+            // Highlight the selected hunk block
+            if ($dv->hunkStarts !== []) {
+                $hunkIdx = array_search($dv->hunkCursor, $dv->hunkStarts, true);
+                if ($hunkIdx !== false) {
+                    $start = $dv->hunkCursor;
+                    $end = count($dv->lines) - 1;
+                    if ($hunkIdx + 1 < count($dv->hunkStarts)) {
+                        $end = $dv->hunkStarts[$hunkIdx + 1] - 1;
+                    }
+                    $isSelectedHunkLine = ($i >= $start && $i <= $end);
+                }
+            }
+
+            $st = Style::new();
+            if (str_starts_with($line, '+')) {
+                $st = $st->foreground(Color::hex('#6ee7b7'));
+            } elseif (str_starts_with($line, '-')) {
+                $st = $st->foreground(Color::hex('#ff5f87'));
+            } elseif (str_starts_with($line, '@@')) {
+                $st = $st->foreground(Color::hex('#a78bfa'))->italic();
+            } else {
+                $st = $st->foreground(Color::hex('#c5b6dd'));
+            }
+
+            if ($isSelectedHunkLine) {
+                $st = $st->reverse();
+            }
+
+            $lines[] = $st->render(' ' . $line);
+        }
+
+        $hint = Style::new()->foreground(Color::hex('#7d6e98'))
+            ->render('space: stage hunk  ·  ↑↓: navigate  ·  esc/d: close');
+
+        $border = Border::rounded();
+        $box = Style::new()
+            ->border($border)
+            ->borderForeground(Color::hex('#a78bfa'))
+            ->padding(0, 1)
+            ->width(72)
+            ->render(implode("\n", $lines) . "\n" . $hint);
+
+        return "\n" . $box . "\n";
     }
 }
