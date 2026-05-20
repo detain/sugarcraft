@@ -63,4 +63,22 @@ interface GitDriver
 
     /** Create and switch to a new branch. */
     public function createBranch(string $name): void;
+
+    /** Delete a branch (safe, -d flag). */
+    public function deleteBranch(string $name): void;
+
+    /** Merge a branch into the current branch. */
+    public function merge(string $branch): void;
+
+    /** Continue an in-progress rebase. */
+    public function rebaseContinue(): void;
+
+    /** Abort an in-progress rebase. */
+    public function rebaseAbort(): void;
+
+    /** Skip the current rebase commit. */
+    public function rebaseSkip(): void;
+
+    /** Reset HEAD to the parent of the last commit (undo last commit, keep changes staged). */
+    public function reset(): void;
 }
