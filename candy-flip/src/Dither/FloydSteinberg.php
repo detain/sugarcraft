@@ -29,7 +29,32 @@ final class FloydSteinberg
         $w = imagesx($src);
         $h = imagesy($src);
         $dst = imagecreatetruecolor($w, $h);
+
+        // Capture transparent pixels from palette source before imagecopy()
+        // loses the transparent index info by converting to truecolor.
+        $transparentPixels = [];
+        $srcTransparentIndex = imagecolortransparent($src);
+        if ($srcTransparentIndex >= 0) {
+            for ($y = 0; $y < $h; $y++) {
+                for ($x = 0; $x < $w; $x++) {
+                    if (imagecolorat($src, $x, $y) === $srcTransparentIndex) {
+                        $transparentPixels[$y][$x] = true;
+                    }
+                }
+            }
+        }
+
         imagecopy($dst, $src, 0, 0, 0, 0, $w, $h);
+
+        // Enable alpha saving and pre-allocate a fully transparent color.
+        // imagefill() with this color makes all pixels transparent.
+        imagesavealpha($dst, true);
+        $transparentColor = imagecolorallocatealpha($dst, 0, 0, 0, 127);
+
+        // Fill entire destination with transparent so transparent source
+        // pixels remain transparent (imagefill preserves alpha; imagesetpixel
+        // does not reliably preserve alpha for truecolor).
+        imagefill($dst, 0, 0, $transparentColor);
 
         // Build per-channel float buffers initialized to 0.
         $errR = array_fill(0, $h, array_fill(0, $w + 2, 0.0));
@@ -38,6 +63,11 @@ final class FloydSteinberg
 
         for ($y = 0; $y < $h; $y++) {
             for ($x = 0; $x < $w; $x++) {
+                // Preserve transparent source pixels as transparent in output.
+                if (isset($transparentPixels[$y][$x])) {
+                    continue;
+                }
+
                 $oldR = imagecolorat($src, $x, $y);
                 $oldR = ($oldR >> 16) & 0xff;
                 $oldG = imagecolorat($src, $x, $y);
