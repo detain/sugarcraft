@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit;
 
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\VAlign;
+use SugarCraft\Sprinkles\Border\TitleAnchor;
+use SugarCraft\Pty\SignalForwarder;
+
 /**
  * The Hermit — fuzzy finder / quick-fix overlay component.
  *
@@ -51,6 +58,26 @@ final class Hermit
 
     /** Top-left Y offset for the overlay. */
     private int $yOffset = 0;
+
+    /** Border rune set for the overlay window (composed from candy-sprinkles). */
+    private ?Border $border = null;
+
+    /** Style for the overlay window (composed from candy-sprinkles). */
+    private ?Style $style = null;
+
+    /** Help bar rendered below the filter list. */
+    private ?HelpBar $helpBar = null;
+
+    /** Status bar rendered at the bottom of the overlay. */
+    private ?StatusBar $statusBar = null;
+
+    /**
+     * Callback invoked after a SIGWINCH-resize event.
+     * Receives (cols: int, rows: int) of the new terminal size.
+     *
+     * @var \Closure(int, int): void|null
+     */
+    private ?\Closure $onResize = null;
 
     public function __construct(
         array $items = [],
@@ -139,6 +166,92 @@ final class Hermit
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
+    }
+
+    /**
+     * Apply a border from candy-sprinkles.
+     */
+    public function withBorder(?Border $border): self
+    {
+        $clone = clone $this;
+        $clone->border = $border;
+        return $clone;
+    }
+
+    /**
+     * Apply a style from candy-sprinkles.
+     */
+    public function withStyle(?Style $style): self
+    {
+        $clone = clone $this;
+        $clone->style = $style;
+        return $clone;
+    }
+
+    /**
+     * Attach a help bar below the filter list.
+     */
+    public function withHelpBar(?HelpBar $helpBar): self
+    {
+        $clone = clone $this;
+        $clone->helpBar = $helpBar;
+        return $clone;
+    }
+
+    /**
+     * Attach a status bar at the bottom of the overlay.
+     */
+    public function withStatusBar(?StatusBar $statusBar): self
+    {
+        $clone = clone $this;
+        $clone->statusBar = $statusBar;
+        return $clone;
+    }
+
+    /**
+     * Register a callback to invoke after SIGWINCH resize events.
+     * The callback receives (cols: int, rows: int).
+     */
+    public function withOnResize(?\Closure $callback): self
+    {
+        $clone = clone $this;
+        $clone->onResize = $callback;
+        return $clone;
+    }
+
+    /**
+     * Attach a SIGWINCH handler via SignalForwarder that forwards
+     * terminal resize events to the stored $onResize callback.
+     *
+     * Requires ext-pcntl. Installs a SIGWINCH handler that calls
+     * SizeIoctl against /dev/tty and then invokes the $onResize
+     * closure with (cols, rows) if one was registered via withOnResize().
+     *
+     * Returns true if the handler was installed; false if pcntl
+     * is unavailable or SIGWINCH is not defined.
+     *
+     * Mirrors SignalForwarder::attachSigwinchToFd pattern.
+     */
+    public function attachSigwinch(): bool
+    {
+        if ($this->onResize === null) {
+            return false;
+        }
+
+        $hermit = $this;
+        return SignalForwarder::attachSigwinchToFd(
+            \STDIN,
+            static fn(): array => [
+                'cols' => (int) (\getenv('COLUMNS') ?: 80),
+                'rows' => (int) (\getenv('LINES') ?: 24),
+            ],
+            static function (int $cols, int $rows) use ($hermit): void {
+                $cb = $hermit->onResize;
+                if ($cb !== null) {
+                    $cb($cols, $rows);
+                }
+            },
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -262,6 +375,34 @@ final class Hermit
     public function allCount(): int
     {
         return \count($this->allItems);
+    }
+
+    public function border(): ?Border
+    {
+        return $this->border;
+    }
+
+    public function style(): ?Style
+    {
+        return $this->style;
+    }
+
+    public function helpBar(): ?HelpBar
+    {
+        return $this->helpBar;
+    }
+
+    public function statusBar(): ?StatusBar
+    {
+        return $this->statusBar;
+    }
+
+    /**
+     * @return \Closure(int, int): void|null
+     */
+    public function onResize(): ?\Closure
+    {
+        return $this->onResize;
     }
 
     // -------------------------------------------------------------------------

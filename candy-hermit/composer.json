@@ -24,8 +24,26 @@
         "source": "https://github.com/sugarcraft/candy-hermit"
     },
     "require": {
-        "php": "^8.3"
+        "php": "^8.3",
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
