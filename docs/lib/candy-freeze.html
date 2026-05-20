@@ -76,6 +76,9 @@ $svg = SvgRenderer::dark()
       <div class="feature"><strong>Line numbers</strong><span>Optional left-gutter line counter.</span></div>
       <div class="feature"><strong>Five themes</strong><span>dark, light, dracula, tokyo-night, nord.</span></div>
       <div class="feature"><strong>ANSI honoured</strong><span>Pipe coloured terminal output through; SGR sequences become tspan colour spans.</span></div>
+      <div class="feature"><strong>Per-segment background</strong><span>ANSI background colours render as &lt;rect&gt; fills behind text.</span></div>
+      <div class="feature"><strong>Ligatures</strong><span>Enable font-variant-ligatures for code ligature rendering (→, &gt;=, !==, etc.).</span></div>
+      <div class="feature"><strong>Language detection</strong><span>Heuristic detection from shebang, filename extension, and content signatures.</span></div>
       <div class="feature"><strong>CLI + library</strong><span><code>candyfreeze input.php -o out.svg</code>, or <code>SvgRenderer::dracula()->render($code)</code>.</span></div>
     </div>
 
@@ -96,7 +99,12 @@ $svg = SvgRenderer::dark()
 <tr><td>SvgRenderer</td><td>withLineNumbers(bool)</td><td>Show line numbers</td></tr>
 <tr><td>SvgRenderer</td><td>withWindow(bool)</td><td>Show window chrome</td></tr>
 <tr><td>SvgRenderer</td><td>withPadding(pixels)</td><td>Set padding</td></tr>
+<tr><td>SvgRenderer</td><td>withLigatures(bool)</td><td>Enable font-variant-ligatures</td></tr>
+<tr><td>SvgRenderer</td><td>withBorderRadius(int)</td><td>Set corner radius</td></tr>
 <tr><td>SvgRenderer</td><td>render(code)</td><td>Render code to SVG</td></tr>
+<tr><td>LanguageDetector</td><td>detect(content)</td><td>Detect language from content (shebang or signatures)</td></tr>
+<tr><td>LanguageDetector</td><td>detectFromFilename(filename)</td><td>Detect language from filename extension</td></tr>
+<tr><td>Segment</td><td>withBg(?string)</td><td>Return segment with different background colour</td></tr>
 </table>
   </div>
 </section>
