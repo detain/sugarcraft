@@ -476,4 +476,6 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     tests-ci for step 09.08 · clean
     docs for step 09.08 · PR#726 · document SrsKickTable and rotationsWithKicks() in README + end-user HTML + new CALIBER_LEARNINGS.md
     step 09.09 · PR#727 · candy-tetris: T-Spin (3-corner rule) + B2B bonus (1.5×) + combo counter + DAS/ARR (167/50ms) + perfect-clear (+5000 bonus)
+    review for step 09.09 · clean · PR#727
+    tests-ci for step 09.09 · clean
 
