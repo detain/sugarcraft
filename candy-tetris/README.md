@@ -86,6 +86,44 @@ VsRenderer   ──►    split-screen view for VS mode
 
 Why so split? Because each piece is testable in isolation — line-clear correctness has nothing to do with rotation correctness has nothing to do with score arithmetic. The full test suite is **82 tests, 1669 assertions** and runs in ~300 ms; the deterministic RNG injection means even the `Game` integration tests are reproducible across runs.
 
-## Status
+## Super Rotation System
 
-Phase 9+ entry #19 — first cut. All standard SRS rules, ghost piece, level/gravity, scoring, and VS Computer mode with AI opponent. Wall-kicks are a tiny ±2 horizontal nudge rather than full SRS-spec; OK for v0.
+candy-tetris implements the official Tetris Association **Super Rotation System (SRS)** — the same system used in modern Tetris games. When a piece rotation would collide with a wall or occupied cell, SRS tries a series of offset candidates before giving up:
+
+| Piece type | Offsets tried per rotation |
+|------------|---------------------------|
+| J / L / S / T / Z | 5 candidates per transition |
+| I | 5 candidates (larger offsets) |
+| O | No kicks (always valid) |
+
+The tables are from the [official SRS specification](https://tetris.fandom.com/wiki/SRS). `Piece::rotationsWithKicks()` returns all candidates in order; the `Game` loop tests each for board validity and uses the first fit.
+
+```php
+// All valid rotated positions (naive + wall-kick offsets)
+$candidates = $piece->rotationsWithKicks(+1); // clockwise
+foreach ($candidates as $candidate) {
+    if ($board->fits($candidate)) {
+        $piece = $candidate;
+        break;
+    }
+}
+```
+
+## Architecture
+
+Nine pure-state classes + one rotation table, each individually testable without booting the runtime:
+
+```
+Tetromino    enum   ─►  shape data + colour for each of the 7 pieces
+Piece        VO     ─►  Tetromino + rotation + (x, y), with immutable transforms
+Board        VO     ─►  10×24 grid (4 hidden rows above), fits/place/clearLines/dropPiece
+Bag          ──►    7-bag RNG with peek(); injectable RNG closure for deterministic tests
+Score        VO     ─►  points / lines / level + level-driven gravity interval
+Game         Model  ─►  SugarCraft Model orchestrating the above + key handling
+Computer     ──►    AI opponent with board-evaluation heuristics
+VsGame       Model  ─►  VS mode combining two Games with garbage row passing
+Renderer     ──►    pure view function from Game to frame string
+VsRenderer   ──►    split-screen view for VS mode
+Rotation/
+  SrsKickTable  ──►  official SRS kick-offset tables (J/L/S/T/Z + I piece)
+```
