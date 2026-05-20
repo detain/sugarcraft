@@ -57,6 +57,14 @@ The rescue marker file is cleaned up automatically on every clean exit
 | `--env-allow-secrets` | **DANGEROUS** — disable all secret-key filtering; cassette will contain credentials verbatim; only for fully isolated environments |
 | `--idle-trim N` | Compress inter-event gaps longer than N seconds (asciinema-style) |
 
+### CLI flags for `replay`
+
+| Flag | Description |
+|------|-------------|
+| `--speed=instant\|realtime` | Playback mode (default: `instant`) |
+| `--idle-trim=N` | Clamp inter-event gaps longer than N seconds to N during realtime playback |
+| `--no-trim` | Use original (`tRaw`) timestamps from a trimmed cassette |
+
 ---
 
 ## Monitoring
