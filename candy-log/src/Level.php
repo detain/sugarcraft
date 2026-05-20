@@ -9,11 +9,11 @@ namespace SugarCraft\Log;
  */
 enum Level: int
 {
-    case Debug = 0;
-    case Info  = 1;
-    case Warn  = 2;
-    case Error = 3;
-    case Fatal = 4;
+    case Debug = -4;
+    case Info  =  0;
+    case Warn  =  4;
+    case Error =  8;
+    case Fatal = 12;
 
     public function label(): string
     {
