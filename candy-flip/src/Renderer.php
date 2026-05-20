@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flip;
 
+use SugarCraft\Pty\SizeIoctl;
+
 /**
  * Render a {@see Frame} as ANSI-coloured Unicode block-glyphs.
  *
@@ -20,17 +22,100 @@ final class Renderer
 
     private const RAMP = ' .:-=+*#%@';
 
+    /** @var int<0, max>|null */
+    private readonly ?int $adaptiveRows;
+
+    /** @var int<0, max>|null */
+    private readonly ?int $adaptiveCols;
+
+    /**
+     * @param int<0, max>|null $adaptiveRows  limit rows rendered to this many; null = unlimited
+     * @param int<0, max>|null $adaptiveCols  limit cols rendered to this many; null = unlimited
+     */
+    private function __construct(
+        ?int $adaptiveRows = null,
+        ?int $adaptiveCols = null,
+    ) {
+        $this->adaptiveRows = $adaptiveRows;
+        $this->adaptiveCols = $adaptiveCols;
+    }
+
+    /**
+     * Return a Renderer that adapts its output to fit the current TTY dimensions.
+     *
+     * Queries the terminal size via ioctl(TIOCGWINSZ) — no shell-out to tput.
+     * When adaptive size is set, the renderer clamps the output grid to the
+     * available rows and columns so the GIF never overflow the viewport.
+     *
+     * @throws \RuntimeException if STDOUT is not a TTY
+     */
+    public static function withAdaptiveSize(): self
+    {
+        $size = SizeIoctl::query((int) STDOUT);
+        return new self($size['rows'], $size['cols']);
+    }
+
+    /**
+     * Return a fresh Renderer with no adaptive sizing (default).
+     */
+    public static function create(): self
+    {
+        return new self();
+    }
+
+    /**
+     * @internal For testing only — creates a Renderer with explicit adaptive constraints.
+     * @param int<0, max> $rows
+     * @param int<0, max> $cols
+     */
+    public static function withConstraints(int $rows, int $cols): self
+    {
+        $rc = new \ReflectionClass(Renderer::class);
+        $instance = $rc->newInstanceWithoutConstructor();
+
+        $propRows = $rc->getProperty('adaptiveRows');
+        $propRows->setAccessible(true);
+        $propRows->setValue($instance, $rows);
+
+        $propCols = $rc->getProperty('adaptiveCols');
+        $propCols->setAccessible(true);
+        $propCols->setValue($instance, $cols);
+
+        return $instance;
+    }
+
+    /**
+     * Static-compatible render — delegates to a zero-sized (unconstrained) instance.
+     * Preserved for backward compatibility; new code should use {@see self::create()}->renderFrame().
+     */
     public static function render(Frame $f, string $preset = self::PRESET_SOLID): string
     {
+        return (new self())->renderFrame($f, $preset);
+    }
+
+    /**
+     * Render a frame. When adaptive dimensions are set (via {@see withAdaptiveSize()}),
+     * the output grid is clamped to fit within them.
+     */
+    public function renderFrame(Frame $f, string $preset = self::PRESET_SOLID): string
+    {
+        $maxRows = $this->adaptiveRows;
+        $maxCols = $this->adaptiveCols;
         $rows = [];
-        foreach ($f->cells as $row) {
+        foreach ($f->cells as $rowIndex => $row) {
+            if ($maxRows !== null && $rowIndex >= $maxRows) {
+                break;
+            }
             $line = '';
-            foreach ($row as $cell) {
+            foreach ($row as $colIndex => $cell) {
+                if ($maxCols !== null && $colIndex >= $maxCols) {
+                    break;
+                }
                 if ($cell === null) {
-                    $line .= self::transparent();
+                    $line .= $this->transparent();
                 } else {
                     [$r, $g, $b] = $cell;
-                    $line .= self::cell($r, $g, $b, $preset);
+                    $line .= $this->cell($r, $g, $b, $preset);
                 }
             }
             $rows[] = $line . "\033[0m";
@@ -38,7 +123,7 @@ final class Renderer
         return implode("\n", $rows);
     }
 
-    private static function cell(int $r, int $g, int $b, string $preset): string
+    private function cell(int $r, int $g, int $b, string $preset): string
     {
         if ($preset === self::PRESET_DENSITY) {
             // 0.299r + 0.587g + 0.114b is the standard luminance weight.
@@ -55,7 +140,7 @@ final class Renderer
      * Emit a transparent-cell placeholder (resets bg so the terminal
      * background shows through).
      */
-    private static function transparent(): string
+    private function transparent(): string
     {
         return "\033[49m "; // Reset to default background.
     }
