@@ -128,4 +128,34 @@ final class GraphTest extends TestCase
         Graph::drawVLine($c, 5, 0, 10);
         $this->assertTrue(true); // didn't throw
     }
+
+    public function testNiceNumbersReturnsAscendingValues(): void
+    {
+        $ticks = Graph::niceNumbers(0.0, 100.0, 5);
+        $this->assertGreaterThan(1, count($ticks));
+        // Must be sorted ascending.
+        $sorted = $ticks;
+        sort($sorted);
+        $this->assertSame($sorted, $ticks);
+    }
+
+    public function testNiceNumbersHandlesInvertedRange(): void
+    {
+        $ticks = Graph::niceNumbers(100.0, 0.0, 4);
+        $this->assertGreaterThan(1, count($ticks));
+        // First tick should be <= 0.
+        $this->assertLessThanOrEqual(0.0, $ticks[0]);
+    }
+
+    public function testNiceNumbersSingleValueReturnsSingleton(): void
+    {
+        $ticks = Graph::niceNumbers(5.0, 5.0, 5);
+        $this->assertSame([5.0], $ticks);
+    }
+
+    public function testNiceNumbersMinimumTwoTicks(): void
+    {
+        $ticks = Graph::niceNumbers(0.0, 1.0, 1);
+        $this->assertGreaterThanOrEqual(2, count($ticks));
+    }
 }

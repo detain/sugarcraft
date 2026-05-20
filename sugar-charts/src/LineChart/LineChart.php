@@ -62,6 +62,7 @@ final class LineChart extends Chart
         array $legendItems = [],
         float $animationProgress = 1.0,
         int $animationDuration = 0,
+        public readonly bool $fill = false,
     ) {
         parent::__construct(
             width: $width,
@@ -315,6 +316,38 @@ final class LineChart extends Chart
     }
 
     /**
+     * Append a single value using a sliding window sized to the chart width.
+     * When the window is full, the oldest point is dropped before the new
+     * one is added — giving live streaming behaviour.
+     */
+    public function push(float $value): self
+    {
+        $window = $this->width > 0 ? $this->width : 1;
+        $data = $this->data;
+        $data[] = $value;
+        if (count($data) > $window) {
+            $data = array_slice($data, -$window);
+        }
+        return $this->lineChartCopy(data: array_values($data));
+    }
+
+    /**
+     * Toggle area fill below the line. When enabled the vertical space
+     * under the curve is filled with the point rune to create a solid-band
+     * look.
+     */
+    public function withFill(bool $on = true): self
+    {
+        return $this->lineChartCopy(fill: $on);
+    }
+
+    /** Short-form alias for {@see withFill()}. */
+    public function fill(bool $on = true): self
+    {
+        return $this->withFill($on);
+    }
+
+    /**
      * Render the raw line chart without legend, title, or labels.
      */
     protected function renderChart(): string
@@ -403,6 +436,15 @@ final class LineChart extends Chart
                 if ($i + 1 < $maxPointIndex) {
                     [$x2, $y2] = $coords[$i + 1];
                     self::drawConnector($canvas, $x, $y, $x2, $y2, $rune);
+                }
+                // Area fill: paint from baseline up to the point row.
+                if ($this->fill) {
+                    $baseline = $plotH - 1;
+                    $top = min($baseline, $y);
+                    $bottom = max($baseline, $y);
+                    for ($fy = $top; $fy <= $bottom; $fy++) {
+                        $canvas->setCell($x, $fy, $rune);
+                    }
                 }
             }
         }
@@ -514,6 +556,7 @@ final class LineChart extends Chart
         ?array $legendItems = null,
         ?float $animationProgress = null,
         ?int $animationDuration = null,
+        ?bool $fill = null,
     ): self {
         return new self(
             data:               $data               ?? $this->data,
@@ -545,6 +588,7 @@ final class LineChart extends Chart
             legendItems:        $legendItems        ?? $this->legendItems,
             animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
+            fill:              $fill              ?? $this->fill,
         );
     }
 
