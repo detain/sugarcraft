@@ -517,4 +517,10 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 09.17 · duplicate docblock in CubicBezier::evaluate() · PR#745
     tests-ci for step 09.17 · clean
     step 09.19 · PR#749 · honey-flap: variable pipe-gap height (gap shrinks from 6→3 as score increases; floor at 3; PipeGenerator + tests)
+    review for step 09.19 · clean · PR#749
+    tests-ci for step 09.19 · clean
 
+## Open review findings — 09.19
+
+- [ ] 🟢 Nitpick: `Game::PIPE_GAP` (line 30) is defined but never used — the old static gap constant replaced by `PipeGenerator::GAP_DEFAULT`. No functional impact; consider removing in a follow-up cleanup pass.
+    
