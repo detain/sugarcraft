@@ -63,3 +63,40 @@ when multiple toasts share the same position.
 `ToastType` provides `nerdIcon()`, `unicodeIcon()`, `asciiPrefix()`, and
 `color()` directly on the enum case. The `icon(SymbolSet $set)` method
 dispatches to the appropriate method. No separate data class is needed.
+
+---
+
+## [pattern:toast-persistent-null-expiry] Null expiry = never expires
+
+`Alert::$expiresAt` stores `?float` (Unix timestamp or null). When `null`,
+`Alert::isExpired()` always returns `false`, creating a persistent alert.
+The `Toast::alert()` method applies `withDuration()` only when `$expiresAt`
+is `null` AND `$this->duration !== null` — meaning an alert without a
+per-call expiry only auto-expires if a default duration was set on the Toast
+instance. To create a truly persistent alert, pass `null` as `$expiresAt` AND
+ensure no default duration is configured (or configure `withDuration(null)`).
+
+---
+
+## [pattern:toast-overflow-strategy] Overflow enum controls queue bound behaviour
+
+When `withMaxConcurrent(int)` caps the queue, `withOverflow(Overflow)` picks
+the strategy when a new alert would exceed the cap:
+- `DropOldest` — `array_shift()` discards the oldest alert before appending
+- `DropNewest` — returns the clone without appending the new alert
+- `Enqueue` — appends anyway, allowing temporary overruns
+
+`DropOldest` is the default so the queue is always bounded by the most recent
+$N` alerts.
+
+---
+
+## [pattern:toast-string-type-lookup] String-to-enum type coercion in alert()
+
+`Toast::alert(ToastType|string $type, ...)` accepts either a `ToastType`
+enum case or a lowercase string. `ToastType::tryFrom(strtolower($type))` is
+used for resolution; an unknown string throws `InvalidArgumentException`.
+This allows consumer code to pass dynamically-composed type names without
+matching the enum exactly. Case-insensitivity is intentional — user input is
+unpredictable and the failure mode (exception) is clearer than silent
+no-op.
