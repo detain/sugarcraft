@@ -26,6 +26,15 @@
         "source": "https://github.com/sugarcraft/candy-vcr",
         "docs": "https://sugarcraft.github.io/lib/candy-vcr.html"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-vt",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
