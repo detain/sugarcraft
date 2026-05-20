@@ -123,4 +123,81 @@ final class BoardTest extends TestCase
         $this->assertFalse($b->exploded);
         $this->assertTrue($b->isWon());
     }
+
+    public function testChordClickRevealsNeighborsWhenSatisfied(): void
+    {
+        // Manually set up a 3×3 board where center (1,1) has adjacent=1,
+        // one neighbor is flagged, and one neighbor is unrevealed safe.
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new \SugarCraft\Mines\Cell(false, false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        // (1,1) center is revealed with adjacent=1 (satisfied)
+        $rows[1][1] = new \SugarCraft\Mines\Cell(false, true, false, 1);
+        // (0,1) left neighbor is flagged (counts as the correct mine flag)
+        $rows[1][0] = new \SugarCraft\Mines\Cell(false, false, true, 0);
+        // (2,1) right neighbor is unrevealed safe cell (should be revealed by chord)
+        $rows[1][2] = new \SugarCraft\Mines\Cell(false, false, false, 0);
+
+        $board = new Board(3, 3, 1, $rows, true, false);
+
+        // Chord on center (1,1) — it has adjacent=1 and exactly 1 neighbor flagged
+        // → should reveal (2,1) but not (0,1) since it's already flagged.
+        $next = $board->chord(1, 1);
+
+        $this->assertTrue($next->cell(2, 1)->revealed, 'Unflagged neighbor should be revealed');
+        $this->assertFalse($next->cell(0, 1)->revealed, 'Flagged neighbor stays unrevealed');
+        // Center cell stays revealed (chord only reveals neighbors, not the center)
+        $this->assertTrue($next->cell(1, 1)->revealed, 'Center cell stays revealed');
+    }
+
+    public function testChordDoesNothingWhenNotSatisfied(): void
+    {
+        // Board with center revealed number but NOT all adjacent mines flagged.
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new \SugarCraft\Mines\Cell(false, false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $rows[1][1] = new \SugarCraft\Mines\Cell(false, true, false, 2);
+        // Only 1 of 2 adjacent mines is flagged — not satisfied.
+        $rows[1][0] = new \SugarCraft\Mines\Cell(false, false, true, 0);
+
+        $board = new Board(3, 3, 1, $rows, true, false);
+
+        $next = $board->chord(1, 1);
+
+        $this->assertFalse($next->cell(0, 1)->revealed);
+        $this->assertFalse($next->cell(2, 1)->revealed);
+    }
+
+    public function testChordOnUnrevealedCellNoops(): void
+    {
+        $b = Board::blank(3, 3, 1);
+        $this->assertSame($b, $b->chord(1, 1));
+    }
+
+    public function testChordOnZeroAdjacentNoops(): void
+    {
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new \SugarCraft\Mines\Cell(false, false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        $rows[1][1] = new \SugarCraft\Mines\Cell(false, true, false, 0);
+
+        $board = new Board(3, 3, 1, $rows, true, false);
+
+        $this->assertSame($board, $board->chord(1, 1));
+    }
 }
