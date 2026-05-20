@@ -68,6 +68,10 @@ final class TextInput implements Model
         public readonly int $historyIndex = -1,
         /** Maximum number of history entries to keep (0 = unlimited) */
         public readonly int $historyLimit = 0,
+        /** When to run validation. */
+        public readonly ValidateOn $validateOn = ValidateOn::None,
+        /** Regex pattern; only matching characters are accepted. */
+        public readonly string $restrict = '',
     ) {}
 
     /** Construct a fresh instance with default state. */
@@ -136,6 +140,7 @@ final class TextInput implements Model
             KeyType::Space     => [$this->insert(' '), null],
             KeyType::Char      => [$this->insert($msg->rune), null],
             KeyType::Escape    => [$this, null],
+            KeyType::Enter     => $this->handleEnter(),
             default            => [$this, null],
         };
     }
@@ -249,6 +254,7 @@ final class TextInput implements Model
             KeyType::Delete    => [$this->deleteForward(), null],
             KeyType::Space     => [$this->insert(' '), null],
             KeyType::Char      => [$this->insert($msg->rune), null],
+            KeyType::Enter     => $this->handleEnter(),
             default            => [$this, null],
         };
     }
@@ -394,16 +400,24 @@ final class TextInput implements Model
     /** Release focus; companion to { focus()}. */
     public function blur(): self
     {
-        // Reset vim mode to normal when losing focus
-        return $this->withCursor($this->cursor->blur())
+        $next = $this->withCursor($this->cursor->blur())
             ->withFocused(false)
             ->mutate(vimNormalMode: true);
+        // Run validation on blur if timing is set to Blur.
+        if ($this->validateOn === ValidateOn::Blur && $this->validate !== null) {
+            $next = $next->mutate(err: ($this->validate)($next->value), errSet: true);
+        }
+        return $next;
     }
 
     public function setValue(string $v): self
     {
         if ($this->charLimit > 0) {
             $v = mb_substr($v, 0, $this->charLimit, 'UTF-8');
+        }
+        // Skip mutation if value unchanged to avoid spurious re-validation.
+        if ($v === $this->value) {
+            return $this;
         }
         $clone = clone $this;
         $clone = $clone->mutate(value: $v, cursorPos: mb_strlen($v, 'UTF-8'));
@@ -621,12 +635,41 @@ final class TextInput implements Model
      */
     public function withValidator(?\Closure $fn): self
     {
+        // When validateOn is Blur or Submit, defer validation to those events.
+        // For None/Change, validate immediately (backward-compatible default).
+        $defer = $this->validateOn === ValidateOn::Blur
+              || $this->validateOn === ValidateOn::Submit;
         return $this->mutate(
             validate: $fn,
             validateSet: true,
-            err: $fn !== null ? $fn($this->value) : null,
-            errSet: true,
+            err: $defer ? null : ($fn !== null ? $fn($this->value) : null),
+            errSet: !$defer,
         );
+    }
+
+    /**
+     * Set when validation fires.
+     *
+     * - {@see ValidateOn::None}    — validate on every edit (immediate, default).
+     * - {@see ValidateOn::Blur}   — validate when the input loses focus.
+     * - {@see ValidateOn::Change}  — validate on every keystroke.
+     * - {@see ValidateOn::Submit} — validate only on Enter keypress.
+     */
+    public function withValidateOn(ValidateOn $timing): self
+    {
+        return $this->mutate(validateOn: $timing);
+    }
+
+    /**
+     * Set a regex pattern that filters which keystrokes are accepted.
+     * Only characters matching the pattern enter the buffer.
+     * An empty string (default) accepts all characters.
+     *
+     * @param string $pattern PCRE regex pattern (no delimiters, e.g. `'[a-zA-Z0-9]'`)
+     */
+    public function withRestrict(string $pattern): self
+    {
+        return $this->mutate(restrict: $pattern);
     }
 
     // Short-form aliases.
@@ -717,6 +760,10 @@ final class TextInput implements Model
         if ($this->charLimit > 0 && $this->length() >= $this->charLimit) {
             return $this;
         }
+        // Reject characters that don't match the restrict pattern.
+        if ($this->restrict !== '' && preg_match('/' . $this->restrict . '/', $rune) !== 1) {
+            return $this;
+        }
         $before = mb_substr($this->value, 0, $this->cursorPos, 'UTF-8');
         $after  = mb_substr($this->value, $this->cursorPos, null, 'UTF-8');
         return $this->mutate(
@@ -763,6 +810,20 @@ final class TextInput implements Model
         return $this->mutate(cursorPos: $clamped);
     }
 
+    /**
+     * Handle Enter keypress, running validation if validateOn is Submit.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function handleEnter(): array
+    {
+        if ($this->validateOn === ValidateOn::Submit && $this->validate !== null) {
+            $err = ($this->validate)($this->value);
+            return [$this->mutate(err: $err, errSet: true), null];
+        }
+        return [$this, null];
+    }
+
     private function displayedValue(): string
     {
         return match ($this->echoMode) {
@@ -801,14 +862,21 @@ final class TextInput implements Model
         ?array $history = null,
         ?int $historyIndex = null,
         ?int $historyLimit = null,
+        ?ValidateOn $validateOn = null,
+        ?string $restrict = null,
     ): self {
         $newValue = $value ?? $this->value;
         // Auto-revalidate when the value changes and a validator is set,
         // unless the caller explicitly supplied an err override.
+        // Only run on every edit when validateOn is None or Change;
+        // for Blur/Submit, validation is deferred to those events.
         $resolvedValidate = $validateSet ? $validate : $this->validate;
+        $resolvedValidateOn = $validateOn ?? $this->validateOn;
         if (!$errSet) {
-            $err = $resolvedValidate !== null && ($value !== null)
-                ? $resolvedValidate($newValue)
+            $deferred = $resolvedValidateOn === ValidateOn::Blur
+                || $resolvedValidateOn === ValidateOn::Submit;
+            $err = !$deferred && $resolvedValidate !== null && ($value !== null)
+                ? ($resolvedValidate)($newValue)
                 : ($value !== null ? null : $this->err);
         }
         return new self(
@@ -837,6 +905,8 @@ final class TextInput implements Model
             history:                $history                ?? $this->history,
             historyIndex:           $historyIndex           ?? $this->historyIndex,
             historyLimit:           $historyLimit           ?? $this->historyLimit,
+            validateOn:             $validateOn             ?? $this->validateOn,
+            restrict:               $restrict               ?? $this->restrict,
         );
     }
 
