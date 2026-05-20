@@ -350,6 +350,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
  step 07.20 · PR#678 · candy-vcr: add RelativeFormat (dt field at file level) + Recorder::withFormat() + Player auto-detect; 48 Format tests green
  docs for step 07.20 · PR#679 · document RelativeFormat + withFormat() + detectFormat() in README/end-user HTML/dev HTML + CALIBER entry
  step 07.21 · PR#680 · candy-vcr: add withIdleTrim() fluent setter + --idle-trim CLI flag for SPEED_REALTIME playback; fix detectFormat() missing Format import; 5 IdleTrimTest tests
+ docs for step 07.21 · PR#681 · document withIdleTrim() in README/end-user HTML/dev HTML/admin HTML + ReplayCommand PHPDoc + CALIBER entry
 
 ## Open review findings — 07.16
 
