@@ -364,11 +364,12 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.03 · PR#688 · sugar-prompt: add withAsyncSuggestions() to Input/Select (150ms debounce + SuggestionsReadyMsg + Deferred pattern; leftover-rollout step 08.03)
   review for step 08.03 · clean · PR#688
   tests-ci for step 08.03 · clean
+  docs for step 08.03 · PR#689 · document withAsyncSuggestions() in README (Input/Select tables + async section) + end-user HTML (feature grid + API table + quickstart) + CALIBER [pattern:async-suggestions-debounce]
 
 ## Open review findings — 08.03
 
-- [x] sugar-prompt/README.md: `withAsyncSuggestions()` not documented in the Input field API table or Select field API table. — ✅ resolved PR#690
-- [x] sugar-prompt/CALIBER_LEARNINGS.md: no new pattern entry for the async debounce + `Loop::addTimer` + `Deferred` + `SuggestionsReadyMsg` dispatch pattern. — ✅ resolved PR#690
+- [x] sugar-prompt/README.md: `withAsyncSuggestions()` not documented in the Input field API table or Select field API table. — ✅ resolved PR#689
+- [x] sugar-prompt/CALIBER_LEARNINGS.md: no new pattern entry for the async debounce + `Loop::addTimer` + `Deferred` + `SuggestionsReadyMsg` dispatch pattern. — ✅ resolved PR#689
 
 ## Open review findings — 07.16
 
