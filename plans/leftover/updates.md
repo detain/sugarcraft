@@ -368,6 +368,10 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.04 · clean · PR#690 (2 docs gaps: validateAll + withEnum not in README API tables)
   tests-ci for step 08.04 · clean
   docs for step 08.04 · PR#691 · document validateAll in Form chainables table + withEnum in Select knobs + MultiSelect vim keys + errorSummary in README/end-user HTML
+  step 08.05 · PR#692 · sugar-bits: add withValidateOn(ValidateOn) timing control + withRestrict(string $pattern) keystroke filter to TextInput (leftover-rollout step 08.05)
+  review for step 08.05 · clean · PR#692
+  tests-ci for step 08.05 · clean
+  docs for step 08.05 · PR#693 · document ValidateOn + withRestrict in README + end-user HTML
 
 ## Open review findings — 08.04
 
