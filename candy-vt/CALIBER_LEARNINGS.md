@@ -378,7 +378,8 @@ Focus event reporting (`CSI ?1004 h` / `CSI ?1004 l`) is implemented as:
 - `ScreenHandler::$focusEvents` — public `array` accumulating `FocusInMsg` /
   `FocusOutMsg` value objects
 - `FocusInMsg` / `FocusOutMsg` — `final readonly` value objects in the
-  `Msg` namespace (`SugarCraft\Vt\Msg\FocusInMsg`)
+  `Msg` namespace (`SugarCraft\Vt\Msg\FocusInMsg`), both `implement Msg`
+  for VCR serialization compatibility (step 07.22)
 - `ScreenHandler::focusIn()` — appends `FocusInMsg` to `$focusEvents`
   when `$mode->reportFocusEvents` is true
 - `ScreenHandler::focusOut()` — same for `FocusOutMsg`
