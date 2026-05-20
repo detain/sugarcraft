@@ -29,7 +29,8 @@
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-palette": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
@@ -44,6 +45,15 @@
             "SugarCraft\\Bounce\\Tests\\": "tests/"
         }
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-palette",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "minimum-stability": "dev",
     "prefer-stable": true
 }
