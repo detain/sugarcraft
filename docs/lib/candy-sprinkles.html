@@ -104,7 +104,9 @@ echo Layout::joinVertical(Position::LEFT, $banner, $table);</code></pre>
 <tr><td>Style</td><td>new()</td><td>Create a new style</td></tr>
 <tr><td>Style</td><td>foreground(color)</td><td>Set foreground color</td></tr>
 <tr><td>Style</td><td>background(color)</td><td>Set background color</td></tr>
-<tr><td>Style</td><td>bold(), italic(), underline()</td><td>Text effects</td></tr>
+<tr><td>Style</td><td>bold(), italic(), underline(), blink(), rapidBlink()</td><td>Text effects (blink = SGR 5, rapidBlink = SGR 6)</td></tr>
+<tr><td>Style</td><td>patch($other)</td><td>Incremental merge — only props set in $other are applied</td></tr>
+<tr><td>BorderGradientBlend</td><td>fromColors(Color ...$colors)</td><td>1-5 colors → 4 interpolated border-side colors</td></tr>
 <tr><td>Style</td><td>padding(top, right, bottom, left)</td><td>Add padding</td></tr>
 <tr><td>Style</td><td>render(content)</td><td>Render styled content</td></tr>
 <tr><td>Border</td><td>rounded(), thick(), double(), hidden()</td><td>Border style presets</td></tr>
