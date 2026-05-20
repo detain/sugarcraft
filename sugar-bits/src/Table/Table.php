@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Bits\Table;
 
 use SugarCraft\Bits\Lang;
+use SugarCraft\Bits\Paginator\Paginator;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -49,6 +50,10 @@ final class Table implements Model
         public readonly string $filter = '',
         /** @var ?\Closure(list<string> $row): bool */
         public readonly ?\Closure $filterPredicate = null,
+        /** @var int Rows per page; 0 means pagination is disabled. */
+        public readonly int $pageSize = 0,
+        /** @var int Current 0-indexed page when pagination is active. */
+        public readonly int $currentPage = 0,
     ) {}
 
     /**
@@ -158,7 +163,15 @@ final class Table implements Model
         $top    = max(0, $this->offset);
         $sortedRows = $this->sortedRows();
         $filteredRows = $this->filteredRows($sortedRows);
-        $window = array_slice($filteredRows, $top, $this->height);
+        // When pagination is active, derive the window offset and size from
+        // the current page rather than the scroll offset.
+        if ($this->pageSize > 0) {
+            $top  = $this->currentPage * $this->pageSize;
+            $windowSize = $this->pageSize;
+        } else {
+            $windowSize = $this->height;
+        }
+        $window = array_slice($filteredRows, $top, $windowSize);
         foreach ($window as $i => $row) {
             $idx = $top + $i;
             $line = $this->renderRow($row, $cols, $idx);
@@ -353,6 +366,107 @@ final class Table implements Model
     public function getFilterPredicate(): ?\Closure
     {
         return $this->filterPredicate;
+    }
+
+    /**
+     * Set the number of rows displayed per page. When > 0, the table
+     * is paginated and only rows for the current page are visible.
+     * When 0 (the default), all rows are shown (no pagination).
+     */
+    public function withPageSize(int $size): self
+    {
+        if ($size < 0) {
+            throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
+        }
+        return $this->mutate(pageSize: $size, pageSizeSet: true);
+    }
+
+    /** @return int */
+    public function getPageSize(): int
+    {
+        return $this->pageSize;
+    }
+
+    /** @return int */
+    public function getCurrentPage(): int
+    {
+        return $this->currentPage;
+    }
+
+    /**
+     * Return a {@see Paginator} initialized with the current row state.
+     * The Paginator can drive page navigation; call {@see withPage()}
+     * to apply a new page to the table.
+     */
+    public function getPaginator(): Paginator
+    {
+        $sortedRows   = $this->sortedRows();
+        $filteredRows = $this->filteredRows($sortedRows);
+        $total        = count($filteredRows);
+        $pageSize     = $this->pageSize > 0 ? $this->pageSize : $total;
+
+        return Paginator::new()
+            ->withPerPage($pageSize)
+            ->withTotalItems($total)
+            ->withPage($this->currentPage);
+    }
+
+    /**
+     * Return a new Table with a different active page. The page is clamped
+     * to the valid range so this method is always safe to call.
+     */
+    public function withPage(int $page): self
+    {
+        $paginator = $this->getPaginator()->withPage($page);
+        $newPage   = $paginator->page;
+        if ($newPage === $this->currentPage) {
+            return $this;
+        }
+        return $this->mutate(currentPage: $newPage, currentPageSet: true)
+            ->reclampCursorForPage($paginator);
+    }
+
+    /** Move cursor to the first row of the current page. Mirrors Bubbles' `GotoStart`. */
+    public function pageFirst(): self
+    {
+        if ($this->pageSize <= 0) {
+            return $this->moveCursor(0);
+        }
+        return $this->withPage(0);
+    }
+
+    /** Move cursor to the last row of the current page. Mirrors `GotoEnd`. */
+    public function pageLast(): self
+    {
+        if ($this->pageSize <= 0) {
+            return $this->moveCursor(PHP_INT_MAX);
+        }
+        $last = max(0, $this->getPaginator()->totalPages() - 1);
+        return $this->withPage($last);
+    }
+
+    /**
+     * Advance to the next page. No-op when already on the last page
+     * or when pagination is disabled.
+     */
+    public function nextPage(): self
+    {
+        if ($this->pageSize <= 0) {
+            return $this;
+        }
+        return $this->withPage($this->currentPage + 1);
+    }
+
+    /**
+     * Go to the previous page. No-op when already on the first page
+     * or when pagination is disabled.
+     */
+    public function prevPage(): self
+    {
+        if ($this->pageSize <= 0) {
+            return $this;
+        }
+        return $this->withPage($this->currentPage - 1);
     }
 
     /** @return SortState */
@@ -556,6 +670,10 @@ final class Table implements Model
         bool $filterSet = false,
         ?\Closure $filterPredicate = null,
         bool $filterPredicateSet = false,
+        ?int $pageSize = null,
+        bool $pageSizeSet = false,
+        ?int $currentPage = null,
+        bool $currentPageSet = false,
     ): self {
         return new self(
             headers:         $headers           ?? $this->headers,
@@ -572,6 +690,26 @@ final class Table implements Model
             filterable:       $filterableSet ? $filterable : $this->filterable,
             filter:           $filterSet ? $filter : $this->filter,
             filterPredicate:  $filterPredicateSet ? $filterPredicate : $this->filterPredicate,
+            pageSize:         $pageSizeSet ? $pageSize : $this->pageSize,
+            currentPage:      $currentPageSet ? $currentPage : $this->currentPage,
+        );
+    }
+
+    /**
+     * Keep the cursor within the current page boundary after a page change.
+     */
+    private function reclampCursorForPage(Paginator $paginator): self
+    {
+        [$start, $end] = $paginator->sliceBounds();
+        $count = $end - $start;
+        if ($count === 0) {
+            return $this->moveCursor($start);
+        }
+        // Clamp the existing cursor so it doesn't land off the page.
+        $cursor = max($start, min($start + $count - 1, $this->cursor));
+        return $this->mutate(
+            cursor: $cursor,
+            offset: $this->currentPage * $this->pageSize,
         );
     }
 }
