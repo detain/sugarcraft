@@ -94,6 +94,32 @@ final class Git implements GitDriver
     }
 
     /** @return list<string> */
+    public function diff(string $path): array
+    {
+        return $this->run(['diff', '--no-color', '--', $path]);
+    }
+
+    public function discard(string $path): void
+    {
+        $this->run(['restore', '--worktree', '--', $path]);
+    }
+
+    public function amend(): void
+    {
+        $this->run(['commit', '--amend', '--no-edit']);
+    }
+
+    public function stagePatch(string $path, string $hunk): void
+    {
+        $this->runPatch($path, $hunk, ['apply', '--cached', '--unidiff-zero', '-']);
+    }
+
+    public function createBranch(string $name): void
+    {
+        $this->run(['checkout', '-b', $name]);
+    }
+
+    /** @return list<string> */
     private function run(array $args): array
     {
         $cmd = array_merge(['git', '-C', $this->cwd], $args);
@@ -114,5 +140,28 @@ final class Git implements GitDriver
             throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($stderr)]));
         }
         return explode("\n", rtrim($stdout, "\n"));
+    }
+
+    /** Like run() but passes $input via stdin and does not capture stdout. */
+    private function runPatch(string $path, string $hunk, array $args): void
+    {
+        $cmd = array_merge(['git', '-C', $this->cwd], $args);
+        $proc = proc_open(
+            $cmd,
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($proc)) {
+            throw new \RuntimeException(Lang::t('git.spawn_failed'));
+        }
+        fwrite($pipes[0], $hunk);
+        fclose($pipes[0]);
+        $stderr = stream_get_contents($pipes[2]) ?: '';
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exit = proc_close($proc);
+        if ($exit !== 0) {
+            throw new \RuntimeException(Lang::t('git.error', ['stderr' => trim($stderr)]));
+        }
     }
 }

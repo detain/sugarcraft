@@ -42,6 +42,12 @@ final class App implements Model
         public readonly bool $collectingCommit = false,
         /** The accumulated commit message while collectingCommit is true. */
         public readonly string $commitMessage = '',
+        /** Diff viewer overlay (shown when 'd' is pressed on a status file). */
+        public readonly ?DiffViewer $diffViewer = null,
+        /** Whether the app is collecting a branch name character-by-character. */
+        public readonly bool $collectingBranchName = false,
+        /** The accumulated branch name while collectingBranchName is true. */
+        public readonly string $branchName = '',
     ) {}
 
     public static function start(GitDriver $git): self
@@ -60,15 +66,21 @@ final class App implements Model
             return [$this, null];
         }
 
-        // Escape / q / Ctrl+C always quits, even during commit collection
+        // Escape / q / Ctrl+C always quits, even during commit/branch collection
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
             if ($this->collectingCommit) {
                 return [$this->withCommitCollection(false, ''), null];
             }
+            if ($this->collectingBranchName) {
+                return [$this->withBranchCollection(false, ''), null];
+            }
             if ($this->showHelp) {
                 return [$this->withShowHelp(false), null];
+            }
+            if ($this->diffViewer !== null) {
+                return [$this->withDiffViewer(null), null];
             }
             return [$this, Cmd::quit()];
         }
@@ -84,9 +96,37 @@ final class App implements Model
             return [$this, null];
         }
 
+        // During branch name collection
+        if ($this->collectingBranchName) {
+            if ($msg->type === KeyType::Enter) {
+                return [$this->executeCreateBranch(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune !== '') {
+                return [$this->withBranchName($this->branchName . $msg->rune), null];
+            }
+            return [$this, null];
+        }
+
         // Help overlay: only Escape closes it
         if ($this->showHelp && $msg->type === KeyType::Escape) {
             return [$this->withShowHelp(false), null];
+        }
+
+        // Diff viewer: Space stages the current hunk, Up/Down navigate hunks, Escape closes
+        if ($this->diffViewer !== null) {
+            if ($msg->type === KeyType::Escape || ($msg->type === KeyType::Char && $msg->rune === 'd')) {
+                return [$this->withDiffViewer(null), null];
+            }
+            if ($msg->type === KeyType::Space) {
+                return [$this->stageCurrentHunk(), null];
+            }
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                return [$this->navigateHunk(-1), null];
+            }
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                return [$this->navigateHunk(+1), null];
+            }
+            return [$this, null];
         }
 
         if ($msg->type === KeyType::Char && $msg->rune === '?') {
@@ -117,6 +157,15 @@ final class App implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === 'c') {
             return [$this->startCommit(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'd' && $this->pane === Pane::Status) {
+            return [$this->showDiff(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'A') {
+            return [$this->amendCommit(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'n') {
+            return [$this->startCreateBranch(), null];
         }
         return [$this, null];
     }
@@ -197,6 +246,9 @@ final class App implements Model
         bool $showHelp = null,
         bool $collectingCommit = null,
         string $commitMessage = null,
+        ?DiffViewer $diffViewer = null,
+        bool $collectingBranchName = null,
+        string $branchName = null,
     ): self {
         return new self(
             git: $this->git,
@@ -212,6 +264,9 @@ final class App implements Model
             showHelp: $showHelp ?? $this->showHelp,
             collectingCommit: $collectingCommit ?? $this->collectingCommit,
             commitMessage: $commitMessage ?? $this->commitMessage,
+            diffViewer: $diffViewer ?? $this->diffViewer,
+            collectingBranchName: $collectingBranchName ?? $this->collectingBranchName,
+            branchName: $branchName ?? $this->branchName,
         );
     }
 
@@ -299,6 +354,126 @@ final class App implements Model
         try {
             $this->git->commit($this->commitMessage);
             return $this->withCommitCollection(false, '')->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Opens the diff viewer for the currently selected status file. */
+    private function showDiff(): self
+    {
+        if ($this->pane !== Pane::Status) {
+            return $this;
+        }
+        $row = $this->status[$this->statusCursor] ?? null;
+        if (!is_array($row) || !isset($row['path'])) {
+            return $this;
+        }
+        try {
+            $lines = $this->git->diff($row['path']);
+            $diffViewer = DiffViewer::fromRawDiff($row['path'], $lines);
+            return $this->withDiffViewer($diffViewer);
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Dismiss the diff viewer. */
+    private function withDiffViewer(?DiffViewer $dv): self
+    {
+        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
+        return new self(
+            git: $this->git,
+            status: $this->status,
+            branches: $this->branches,
+            log: $this->log,
+            branchSummary: $this->branchSummary,
+            pane: $this->pane,
+            statusCursor: $this->statusCursor,
+            branchesCursor: $this->branchesCursor,
+            logCursor: $this->logCursor,
+            error: $this->error,
+            showHelp: $this->showHelp,
+            collectingCommit: $this->collectingCommit,
+            commitMessage: $this->commitMessage,
+            diffViewer: $dv,
+            collectingBranchName: $this->collectingBranchName,
+            branchName: $this->branchName,
+        );
+    }
+
+    /** Navigate up/down through hunks in the diff viewer. */
+    private function navigateHunk(int $dir): self
+    {
+        $dv = $this->diffViewer;
+        if ($dv === null) {
+            return $this;
+        }
+        $count = $dv->hunkCount();
+        if ($count <= 1) {
+            return $this;
+        }
+        // hunkCursor is a line-index into hunkStarts; find current index and move
+        $currentIdx = array_search($dv->hunkCursor, $dv->hunkStarts, true);
+        if ($currentIdx === false) {
+            $currentIdx = 0;
+        }
+        $newIdx = max(0, min($count - 1, $currentIdx + $dir));
+        return $this->withDiffViewer($dv->withHunkCursor($newIdx));
+    }
+
+    /** Stage the currently selected hunk in the diff viewer. */
+    private function stageCurrentHunk(): self
+    {
+        $dv = $this->diffViewer;
+        if ($dv === null) {
+            return $this;
+        }
+        try {
+            $patch = $dv->currentHunkPatch();
+            $this->git->stagePatch($dv->path, $patch);
+            return $this->withDiffViewer(null)->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Amend the last commit without changing its message. */
+    private function amendCommit(): self
+    {
+        try {
+            $this->git->amend();
+            return $this->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    /** Open inline branch name collection. */
+    private function startCreateBranch(): self
+    {
+        return $this->withBranchCollection(true, '');
+    }
+
+    private function withBranchCollection(bool $collecting, string $name): self
+    {
+        return $this->withAll(collectingBranchName: $collecting, branchName: $name);
+    }
+
+    private function withBranchName(string $name): self
+    {
+        return $this->withAll(branchName: $name);
+    }
+
+    /** Execute the create-branch flow: create branch and switch to it. */
+    private function executeCreateBranch(): self
+    {
+        if ($this->branchName === '') {
+            return $this->withError(Lang::t('branch.empty_name'));
+        }
+        try {
+            $this->git->createBranch($this->branchName);
+            return $this->withBranchCollection(false, '')->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
