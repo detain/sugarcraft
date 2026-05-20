@@ -548,6 +548,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11)
     fix for step 10.11 · PR#777 · resolved 2 findings (CALIBER_LEARNINGS: add [pattern:border-from-sprinkles] + [pattern:multilineMode-row-height]; README: document withBorder() + withMultilineMode())
     docs for step 10.11 · PR#778 · document withBorder/withMultilineMode/withBorderStyle docblocks + docs/lib/sugar-table.html feature grid + API table
+    step 10.12 · PR#779 · sugar-stickers: sticky header/footer + scroll sync (leftover-rollout step 10.12)
 
 ## Open review findings — 09.19
 
