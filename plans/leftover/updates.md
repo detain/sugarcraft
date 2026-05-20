@@ -58,6 +58,7 @@ the step that surfaced it.)
 
 - step 06.02: Multi-push ScreenStack integration test (`testPushThreeScreensPopTwoVerifiesStateAndBreadcrumb`) fails with only first push recorded when using Program::send() + drainPending() timing — the ScreenStack type and RootModelWithScreenStack work correctly (proven by unit tests and direct dispatch), but socket pair + stream_select() timing in the full Program integration test is unreliable. Test was simplified to use direct dispatch instead of full Program loop.
 - step 06.05 (review-fix): `Flag::$enum` dead code — `applyFlag()` never uses the enum property; Symfony `InputOption` has no native allowed-values mode for options; full wiring needs a normalizer or execute()-time validation post-processing pass (architectural work deferred beyond this review-fix).
+- step 10.05 (sugar-stash Phase 3): Line-level staging (individual lines within hunks, not just whole hunks) is complex and requires `git apply --cached` with manually constructed patches or a different approach. This feature is deferred to a future phase. The current implementation supports hunk-level staging via `Space` in the diff viewer.
 
 ---
 
@@ -529,6 +530,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.03 · PR#758 · refresh App.php PHPDoc (7 keys in class block + showHelp/collectingCommit/commitMessage comments + docblocks on stageAll/checkoutBranch/startCommit/executeCommit) + document [pattern:inline-commit-collection] in CALIBER_LEARNINGS.md + enumerate all Phase 1 i18n keys
     step 10.04 · PR#759 · sugar-stash: diff viewer + discard + amend + hunk staging + create branch (leftover-rollout step 10.04 Phase 2)
     fix for step 10.04 · PR#760 · resolved 8 findings
+    tests-ci for step 10.04 · clean
 
 ## Open review findings — 09.19
 

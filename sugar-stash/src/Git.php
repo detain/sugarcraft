@@ -119,6 +119,36 @@ final class Git implements GitDriver
         $this->run(['checkout', '-b', $name]);
     }
 
+    public function deleteBranch(string $name): void
+    {
+        $this->run(['branch', '-d', $name]);
+    }
+
+    public function merge(string $branch): void
+    {
+        $this->run(['merge', $branch]);
+    }
+
+    public function rebaseContinue(): void
+    {
+        $this->run(['rebase', '--continue']);
+    }
+
+    public function rebaseAbort(): void
+    {
+        $this->run(['rebase', '--abort']);
+    }
+
+    public function rebaseSkip(): void
+    {
+        $this->run(['rebase', '--skip']);
+    }
+
+    public function reset(): void
+    {
+        $this->run(['reset', '--soft', 'HEAD~1']);
+    }
+
     /** @return list<string> */
     private function run(array $args): array
     {

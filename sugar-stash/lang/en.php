@@ -25,7 +25,7 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  ?  help  ·  q  quit',
+    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit',
 
     // Help overlay
     'help.context_general'  => 'show this help',
@@ -60,4 +60,32 @@ return [
     // Diff viewer
     'diff.hunk_staged'      => 'hunk staged',
     'diff.navigation_hint'  => 'space: stage hunk  ·  ↑↓: navigate  ·  esc: close',
+
+    // Undo/Redo
+    'history.nothing_to_undo' => 'nothing to undo',
+    'history.nothing_to_redo' => 'nothing to redo',
+    'history.undone'          => 'undone: {op}',
+
+    // Branch delete
+    'branch.delete_current'  => 'cannot delete current branch',
+    'branch.deleted'         => 'deleted branch {name}',
+    'branch.delete_no_select'=> 'delete: no branch selected',
+
+    // Merge
+    'merge.prompt'           => 'merge: ',
+    'merge.empty_target'     => 'merge: target branch required',
+    'merge.success'           => 'merged {branch}',
+
+    // Rebase
+    'rebase.prompt'          => 'rebase: [c]ontinue [a]bort [s]kip',
+    'rebase.no_rebase'        => 'no rebase in progress',
+    'rebase.success'         => 'rebase: {action}',
+    'rebase.conflict'        => 'rebase: unresolved conflicts',
+
+    // Help overlay additions
+    'help.undo'              => 'undo last operation',
+    'help.redo'              => 'redo last undone operation',
+    'help.delete_branch'      => 'delete branch',
+    'help.merge'             => 'merge branch',
+    'help.rebase'            => 'rebase options (when in progress)',
 ];
