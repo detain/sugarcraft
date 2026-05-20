@@ -101,11 +101,38 @@ final class GameTest extends TestCase
     {
         // Force game-over by hand: build a Game with over=true.
         $g = $this->deterministicGame();
-        $over = new Game($g->board, $g->piece, $g->bag, $g->score, over: true);
+        $over = new Game(
+            $g->board, $g->piece, $g->bag, $g->score,
+            over: true,
+            preLockRotation: $g->preLockRotation,
+        );
         [$samePiece1] = $over->update(new KeyMsg(KeyType::Left, ''));
         $this->assertSame($over->piece, $samePiece1->piece);
         [, $cmd] = $over->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertInstanceOf(\Closure::class, $cmd);
+    }
+
+    public function testComboStartsAtZero(): void
+    {
+        $g = $this->deterministicGame();
+        $this->assertSame(0, $g->combo);
+        $this->assertFalse($g->backToBack);
+    }
+
+    public function testBackToBackStartsFalse(): void
+    {
+        $g = $this->deterministicGame();
+        $this->assertFalse($g->backToBack);
+    }
+
+    public function testPerfectClearBonusConstant(): void
+    {
+        $this->assertSame(5000, Game::PERFECT_CLEAR_BONUS);
+    }
+
+    public function testB2BMultiplierConstant(): void
+    {
+        $this->assertSame(1.5, Game::B2B_MULTIPLIER);
     }
 
     public function testHoldKeyStoresPieceInHold(): void

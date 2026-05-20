@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Tetris\Scoring\TSpin;
 
 /**
  * Tetris as a SugarCraft {@see Model}.
@@ -34,26 +35,37 @@ use SugarCraft\Core\Msg\KeyMsg;
  *   - Ghost piece showing landing position
  *   - Hold piece (press c to swap with held piece)
  *   - Lock delay (piece locks after touching bottom for a delay period)
+ *   - T-Spin detection (3-corner rule) + T-Spin / T-Spin Mini scoring
+ *   - Back-to-Back (B2B) bonus for consecutive Tetris / T-Spin clears
+ *   - Combo counter for consecutive line clears
+ *   - Perfect clear detection (+5000 bonus)
  */
 final class Game implements Model
 {
+    public const PERFECT_CLEAR_BONUS = 5_000;
+    public const B2B_MULTIPLIER      = 1.5;
+
     public function __construct(
         public readonly Board        $board,
         public readonly Piece        $piece,
-        public readonly Bag          $bag,
-        public readonly Score        $score,
-        public readonly bool         $over = false,
-        public readonly bool         $paused = false,
-        public readonly ?Tetromino   $hold = null,
-        public readonly bool         $canHold = true,
-        public readonly int          $lockDelayTicks = 0,
+        public readonly Bag           $bag,
+        public readonly Score         $score,
+        public readonly bool          $over = false,
+        public readonly bool          $paused = false,
+        public readonly ?Tetromino    $hold = null,
+        public readonly bool          $canHold = true,
+        public readonly int            $lockDelayTicks = 0,
+        public readonly int           $combo = 0,
+        public readonly bool          $backToBack = false,
+        public readonly int           $preLockRotation = 0,
     ) {}
 
     public static function start(?Bag $bag = null): self
     {
         $bag ??= new Bag();
         $first = $bag->next();
-        return new self(new Board(), self::spawn($first), $bag, new Score());
+        $piece = self::spawn($first);
+        return new self(new Board(), $piece, $bag, new Score(), preLockRotation: $piece->rotation);
     }
 
     /**
@@ -65,12 +77,14 @@ final class Game implements Model
     {
         $bag ??= new Bag();
         $first = $bag->next();
+        $piece = self::spawn($first);
         return new self(
             new Board(),
-            self::spawn($first),
+            $piece,
             $bag,
             new Score(),
             lockDelayTicks: $lockDelayTicks,
+            preLockRotation: $piece->rotation,
         );
     }
 
@@ -159,12 +173,28 @@ final class Game implements Model
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
             // Piece can move down - reset lock delay
-            $game = new self($this->board, $next, $this->bag, $this->score, lockDelayTicks: $this->lockDelayTicks);
+            $game = new self(
+                $this->board, $next, $this->bag, $this->score,
+                hold: $this->hold,
+                canHold: $this->canHold,
+                lockDelayTicks: $this->lockDelayTicks,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $this->preLockRotation,
+            );
         } else {
             // Piece can't move down - handle lock delay
             if ($this->lockDelayTicks > 0) {
                 $newLockDelay = $this->lockDelayTicks - 1;
-                $game = new self($this->board, $this->piece, $this->bag, $this->score, lockDelayTicks: $newLockDelay);
+                $game = new self(
+                    $this->board, $this->piece, $this->bag, $this->score,
+                    hold: $this->hold,
+                    canHold: $this->canHold,
+                    lockDelayTicks: $newLockDelay,
+                    combo: $this->combo,
+                    backToBack: $this->backToBack,
+                    preLockRotation: $this->preLockRotation,
+                );
                 // Still return a tick to continue the lock delay countdown
                 return [$game, self::scheduleGravity($game->score)];
             }
@@ -186,6 +216,9 @@ final class Game implements Model
                 hold: $this->hold,
                 canHold: $this->canHold,
                 lockDelayTicks: $this->lockDelayTicks,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $this->preLockRotation,
             );
         }
         return $this;
@@ -200,12 +233,16 @@ final class Game implements Model
         foreach ([0, -1, 1, -2, 2] as $kick) {
             $kicked = $candidate->moved($kick, 0);
             if ($this->board->fits($kicked)) {
-                // SRS-style: successful rotation resets lock delay
+                // Successful rotation resets lock delay and tracks
+                // the new rotation for T-Spin detection
                 return new self(
                     $this->board, $kicked, $this->bag, $this->score,
                     hold: $this->hold,
                     canHold: $this->canHold,
                     lockDelayTicks: $this->lockDelayTicks,
+                    combo: $this->combo,
+                    backToBack: $this->backToBack,
+                    preLockRotation: $kicked->rotation,
                 );
             }
         }
@@ -222,6 +259,9 @@ final class Game implements Model
                 hold: $this->hold,
                 canHold: $this->canHold,
                 lockDelayTicks: $this->lockDelayTicks,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $this->preLockRotation,
             );
         }
         return $this;
@@ -237,6 +277,9 @@ final class Game implements Model
             $this->board, $resting, $this->bag, $this->score,
             hold: $this->hold,
             lockDelayTicks: $this->lockDelayTicks,
+            combo: $this->combo,
+            backToBack: $this->backToBack,
+            preLockRotation: $this->preLockRotation,
         );
         $game = $game->lockAndSpawn();
         if ($game->over) {
@@ -249,22 +292,73 @@ final class Game implements Model
     {
         $boardWithPiece = $this->board->place($this->piece);
         [$cleared, $count] = $boardWithPiece->clearLines();
+
+        // T-Spin detection: check corners on the board before the piece
+        // was placed. Pass the original rotation state so TSpin knows
+        // whether the piece actually spun.
+        $tspin = TSpin::detect($this->board, $this->piece, $this->preLockRotation);
+
+        // B2B-eligible clear: Tetris or full T-Spin (not mini)
+        $b2bEligible = $count >= 4 || ($tspin->active && !$tspin->mini);
+        $b2bActive = $this->backToBack && $b2bEligible;
+
+        // B2B bonus: 1.5× multiplier when B2B is active
+        $b2bMultiplier = $b2bActive ? self::B2B_MULTIPLIER : 1.0;
+
+        // T-Spin scoring: mini gets 100, full T-Spin gets 400 (pre-multiplier)
+        $tspinPoints = 0;
+        if ($tspin->active) {
+            $tspinPoints = $tspin->mini
+                ? TSpin::T_SPIN_MINI_POINTS
+                : TSpin::T_SPIN_POINTS;
+        }
+
+        // Combo bonus: consecutive line clears multiply; resets on a miss
+        $newCombo = $count > 0 ? $this->combo + 1 : 0;
+        $comboBonus = $newCombo > 0 ? $newCombo * 10 : 0;
+
+        // Base score from lines cleared
         $score = $this->score->withLines($count);
+
+        // Apply B2B multiplier and add T-Spin + combo points
+        $levelMultiplier = $score->level + 1;
+        $b2bBonus = (int) (($score->points - $this->score->points) * ($b2bMultiplier - 1.0));
+        $bonus = $b2bBonus + (int) (($tspinPoints + $comboBonus) * $levelMultiplier);
+
+        // Perfect clear bonus
+        if ($cleared->isPerfectClear()) {
+            $bonus += self::PERFECT_CLEAR_BONUS * $levelMultiplier;
+        }
+
+        $score = new Score(
+            $this->score->points + $bonus,
+            $score->lines,
+            $score->level,
+        );
+
         $newPiece = self::spawn($this->bag->next());
         if (!$cleared->fits($newPiece)) {
             return new self(
                 $cleared, $newPiece, $this->bag, $score,
                 over: true,
                 hold: $this->hold,
-                canHold: true,  // Re-enable hold after game over
+                canHold: true,
+                combo: 0,
+                backToBack: false,
+                preLockRotation: $newPiece->rotation,
             );
         }
-        // After locking, canHold is re-enabled and lock delay resets
+
+        // After locking, canHold is re-enabled and lock delay resets.
+        // B2B state persists only if the current clear was B2B-eligible.
         return new self(
             $cleared, $newPiece, $this->bag, $score,
             hold: $this->hold,
             canHold: true,
             lockDelayTicks: $this->lockDelayTicks > 0 ? $this->lockDelayTicks : 0,
+            combo: $newCombo,
+            backToBack: $b2bEligible,
+            preLockRotation: $newPiece->rotation,
         );
     }
 
@@ -280,6 +374,9 @@ final class Game implements Model
             $this->hold,
             $this->canHold,
             $this->lockDelayTicks,
+            $this->combo,
+            $this->backToBack,
+            $this->preLockRotation,
         );
     }
 
@@ -306,6 +403,9 @@ final class Game implements Model
                 hold: $currentKind,
                 canHold: false,
                 lockDelayTicks: $this->lockDelayTicks,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $newPiece->rotation,
             );
         } else {
             // Swap current piece with held piece
@@ -322,6 +422,9 @@ final class Game implements Model
                 hold: $currentKind,
                 canHold: false,
                 lockDelayTicks: $this->lockDelayTicks,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $swappedPiece->rotation,
             );
         }
 
@@ -383,6 +486,9 @@ final class Game implements Model
                 hold: $this->hold,
                 canHold: true,
                 lockDelayTicks: 0,
+                combo: $this->combo,
+                backToBack: $this->backToBack,
+                preLockRotation: $this->preLockRotation,
             );
         }
 
@@ -396,6 +502,9 @@ final class Game implements Model
             $this->hold,
             $this->canHold,
             $this->lockDelayTicks,
+            $this->combo,
+            $this->backToBack,
+            $this->preLockRotation,
         );
     }
 
@@ -408,8 +517,7 @@ final class Game implements Model
     {
         $bag ??= new Bag();
         $first = $bag->next();
-        $game = new self(new Board(), self::spawn($first), $bag, new Score());
-        // Return game with adjusted score for computer's slightly slower reaction
-        return $game;
+        $piece = self::spawn($first);
+        return new self(new Board(), $piece, $bag, new Score(), preLockRotation: $piece->rotation);
     }
 }
