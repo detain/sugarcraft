@@ -81,6 +81,12 @@ final class RendererTest extends TestCase
             public function amend(): void {}
             public function stagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
+            public function deleteBranch(string $name): void {}
+            public function merge(string $branch): void {}
+            public function rebaseContinue(): void {}
+            public function rebaseAbort(): void {}
+            public function rebaseSkip(): void {}
+            public function reset(): void {}
         };
         $a = App::start($g);
         $out = Renderer::render($a);
