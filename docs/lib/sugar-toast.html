@@ -46,25 +46,28 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Non-blocking floating notifications that appear at the top or bottom of the terminal. Info, Success, Warning, Error types. Auto-dismiss or manual dismiss.</p>
+    <p class="lede" style="margin-top: 28px;">Non-blocking floating notifications at 9 screen positions. Info, Success, Warning, Error types. Auto-dismiss, ESC-to-close, and stacked multi-toast support.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/sugar-toast</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Toast\{Toast, ToastType};
+    <pre class="code"><code>use SugarCraft\Toast\{Toast, ToastType, Position};
 
-$toast = Toast::new('Deployment complete!', ToastType::Success);
-$toast = $toast-&gt;withDuration(5000);  // ms
-$toast = $toast-&gt;withPosition('bottom');
+$toast = Toast::new(50)  // max width 50
+    -&gt;withPosition(Position::MiddleRight)
+    -&gt;withAllowEscToClose(true);
 
-// Render: outputs ANSI-styled notification string
-echo $toast-&gt;render();</code></pre>
+$toast = $toast-&gt;alert(ToastType::Success, 'File saved!');
+$toast = $toast-&gt;alert(ToastType::Error, 'Connection failed');
+
+$bg = str_repeat("background content\n", 20);
+echo $toast-&gt;view($bg);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Four types</strong><span>Info, Success, Warning, Error — each with a distinct symbol and color.</span></div>
-            <div class="feature"><strong>Positions</strong><span>Top, Bottom, TopCenter, BottomCenter.</span></div>
+            <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight.</span></div>
             <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; Toast::Update triggers removal.</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>Default, SuccessCheck, WarningTriangle, ErrorX.</span></div>
             
@@ -83,12 +86,22 @@ echo $toast-&gt;render();</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Toast</td><td>new(message, type)</td><td>Create a toast notification</td></tr>
-<tr><td>Toast</td><td>withDuration(ms)</td><td>Set auto-dismiss duration</td></tr>
-<tr><td>Toast</td><td>withPosition(pos)</td><td>Set position (top/bottom)</td></tr>
-<tr><td>Toast</td><td>render()</td><td>Render ANSI notification</td></tr>
+<tr><td>Toast</td><td>new(int $maxWidth = 50)</td><td>Factory — max width in cells</td></tr>
+<tr><td>Toast</td><td>withPosition(Position)</td><td>Set screen position (9 positions)</td></tr>
+<tr><td>Toast</td><td>withDuration(?float $seconds)</td><td>Auto-dismiss after N seconds (null to disable)</td></tr>
+<tr><td>Toast</td><td>withAllowEscToClose(bool)</td><td>Allow Escape key to dismiss active alert</td></tr>
+<tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells</td></tr>
+<tr><td>Toast</td><td>withMinWidth(int)</td><td>Set minimum alert width in cells</td></tr>
+<tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or ASCII symbol sets</td></tr>
+<tr><td>Toast</td><td>alert(ToastType, string, ?float $expiresAt)</td><td>Add alert to the queue</td></tr>
+<tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
+<tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
+<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle</td></tr>
+<tr><td>Toast</td><td>view(string $background, int $w, int $h): string</td><td>Render toast layer over background view</td></tr>
 <tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
 <tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
+<tr><td>Position</td><td>TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight</td><td>9 screen positions</td></tr>
+<tr><td>SymbolSet</td><td>NerdFont, Unicode, ASCII</td><td>Symbol set for alert icons</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
 </table>
 
