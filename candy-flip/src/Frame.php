@@ -5,21 +5,33 @@ declare(strict_types=1);
 namespace SugarCraft\Flip;
 
 /**
- * One downsampled GIF frame. Stored as a 2-D grid of RGB triples in
- * cell-coordinate space (post-downsample). The `Renderer` walks the
- * grid and emits ANSI escapes per cell.
+ * One downsampled GIF frame. Stored as a 2-D grid of RGB triples or
+ * null (transparent) in cell-coordinate space (post-downsample).
+ * The `Renderer` walks the grid and emits ANSI escapes per cell.
  *
  * @phpstan-type RgbCell array{0:int,1:int,2:int}
  */
 final class Frame
 {
     /**
-     * @param list<list<array{0:int,1:int,2:int}>> $cells
+     * Disposal method constants from GIF89a spec.
+     */
+    public const DISPOSAL_NONE       = 0; // No disposal action — leave composite as-is
+    public const DISPOSAL_RESTORE   = 1; // Restore to background (transparent fill)
+    public const DISPOSAL_PREVIOUS  = 2; // Restore to previous (unsupported; treated as NONE)
+    public const DISPOSAL_UNSPEC    = 3; // Unspecified — treat as DISPOSAL_NONE
+
+    /**
+     * @param list<list<array{0:int,1:int,2:int}|null>> $cells  null = transparent
      * @param int $delay  Centiseconds (1/100 s) from GIF Graphic Control Extension; 0 means no delay specified
+     * @param int $disposal  Disposal method (0-3) from GIF89a Graphic Control Extension
+     * @param bool $transparent  Whether this frame has a transparent pixel
      */
     public function __construct(
         public readonly array $cells,
         public readonly int $delay = 10,
+        public readonly int $disposal = self::DISPOSAL_NONE,
+        public readonly bool $transparent = false,
     ) {}
 
     public function width(): int
