@@ -107,4 +107,30 @@ final class BoardTest extends TestCase
         // Stack on row 23, O-piece occupies +0,+1 from y → must rest with y+1 = 22, so y = 21.
         $this->assertSame(Board::ROWS - 3, $resting->y);
     }
+
+    public function testIsPerfectClearOnEmptyBoard(): void
+    {
+        $b = new Board();
+        $this->assertTrue($b->isPerfectClear());
+    }
+
+    public function testIsPerfectClearOnBoardWithCells(): void
+    {
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[10][5] = Tetromino::I;
+        $b = new Board($rows);
+        $this->assertFalse($b->isPerfectClear());
+    }
+
+    public function testIsPerfectClearAfterFullLineClear(): void
+    {
+        // Build a board with exactly one full row at the bottom and all else empty.
+        // When that row is cleared, the board becomes perfect clear.
+        $rows = array_fill(0, Board::ROWS, array_fill(0, Board::COLS, null));
+        $rows[Board::ROWS - 1] = array_fill(0, Board::COLS, Tetromino::I);
+        $b = new Board($rows);
+        [$cleared, $count] = $b->clearLines();
+        $this->assertSame(1, $count);
+        $this->assertTrue($cleared->isPerfectClear());
+    }
 }
