@@ -360,13 +360,15 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.02 · PR#686 · sugar-prompt: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() in Input/Select (leftover-rollout step 08.02)
   review for step 08.02 · clean · PR#686
   tests-ci for step 08.02 · clean
-  step 08.02 · PR#686 · sugar-prompt: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() on Input and Select fields + 17 tests (leftover-rollout step 08.02)
-  review for step 08.02 · clean · PR#686 (one docs gap: withFuzzySuggestions() not yet in README — see note below)
   docs for step 08.02 · PR#687 · document FuzzyMatcher + withFuzzySuggestions() in README (fuzzy quickstart + field tables) + end-user HTML (quickstart/feature grid/API table) + new CALIBER_LEARNINGS.md [pattern:fuzzy-smith-waterman-two-row]
+  step 08.03 · PR#688 · sugar-prompt: add withAsyncSuggestions() to Input/Select (150ms debounce + SuggestionsReadyMsg + Deferred pattern; leftover-rollout step 08.03)
+  review for step 08.03 · clean · PR#688
+  tests-ci for step 08.03 · clean
 
-## Open review findings — 08.02
+## Open review findings — 08.03
 
-- [x] sugar-prompt/README.md: `withFuzzySuggestions()` and the `FuzzyMatcher` class are not documented in the API tables or elsewhere. Per the step 08.01 pattern (docs PR#685 followed implementation PR#684), a docs sub-step for step 08.02 is needed to add FuzzyMatcher to the README and to file/update CALIBER_LEARNINGS.md once the lib has one. — ✅ resolved PR#687
+- [x] sugar-prompt/README.md: `withAsyncSuggestions()` not documented in the Input field API table or Select field API table. — ✅ resolved PR#690
+- [x] sugar-prompt/CALIBER_LEARNINGS.md: no new pattern entry for the async debounce + `Loop::addTimer` + `Deferred` + `SuggestionsReadyMsg` dispatch pattern. — ✅ resolved PR#690
 
 ## Open review findings — 07.16
 

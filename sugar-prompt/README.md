@@ -41,10 +41,10 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarBits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)` |
+| `Input`       | Single-line text (wraps `SugarBits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
 | `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarBits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)` |
+| `Select`      | Single-choice list (wraps `SugarBits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)`, `withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)` |
 | `MultiSelect` | Multi-choice list                                           | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
 | `FilePicker`  | Filesystem picker (wraps `SugarBits\FileTree`)              | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
@@ -218,6 +218,37 @@ $matches = $matcher->match('py', ['Python', 'PHP', 'Ruby', 'JavaScript']);
 
 Scoring constants: match=`+3`, mismatch=`-3`, gap open=`-5`, gap extend=`-1`,
 adjacent bonus=`+5` for consecutive matches.
+
+### Async suggestions
+
+`Input` and `Select` support `withAsyncSuggestions()` for suggestions
+fetched asynchronously with a debounce delay. The `$fetcher` callable
+receives the current query string and must return `list<string>`.
+
+The default debounce is 150 ms — tuned to avoid firing on every keystroke
+while still feeling responsive. A `SuggestionsReadyMsg` is dispatched
+via the event loop when fresh suggestions are available.
+
+```php
+use SugarCraft\Prompt\Form;
+use SugarCraft\Prompt\Field\Input;
+use React\Async\defer;
+
+$form = Form::new(
+    Input::new('language')
+        ->withTitle('Pick a language')
+        ->withAsyncSuggestions(
+            defer(fn($query) => fetchFromApi($query)),
+            150,
+        ),
+);
+```
+
+The `async()` short alias is equivalent:
+
+```php
+->async(fn($query) => fetchFromApi($query))
+```
 
 ## Validation
 
