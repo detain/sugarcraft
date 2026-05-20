@@ -58,6 +58,10 @@ ToastType::Success
 Each type also provides a localized label via `ToastType::label()` (e.g.
 `ToastType::Success->label()` → `"Success"` in English).
 
+`alert()` accepts either a `ToastType` enum case or a lowercase string
+(`"error"`, `"warning"`, `"info"`, `"success"`). Passing an unknown string
+throws `InvalidArgumentException`.
+
 ## Positions
 
 ```php
@@ -71,6 +75,32 @@ Position::BottomLeft
 Position::BottomCenter
 Position::BottomRight
 ```
+
+## Overflow & Concurrency
+
+```php
+Overflow::DropOldest  // remove oldest alert to make room (default)
+Overflow::DropNewest  // discard the new alert instead of enqueueing
+Overflow::Enqueue     // allow queue to exceed maxConcurrent
+```
+
+Control the maximum number of concurrent alerts with `withMaxConcurrent(int|null)`:
+- Pass an integer to cap the queue size
+- Pass `null` for unlimited (default)
+
+When the cap is reached, the configured `Overflow` strategy determines behaviour.
+
+## Persistent Alerts
+
+By default, alerts inherit `withDuration()` for auto-dismiss timing. Pass
+`null` as the `$expiresAt` argument to `alert()` to create a persistent alert
+that never expires automatically:
+
+```php
+$toast = $toast->alert(ToastType::Info, 'Connected', null);  // never expires
+```
+
+Persistent alerts are dismissed only via `dismiss()`, `clear()`, or `pruneExpired()`.
 
 ## Internationalization
 
@@ -115,6 +145,32 @@ $msg = Lang::t('dismiss');
 // With placeholder:
 $counter = Lang::t('count', ['count' => $n]);
 ```
+
+## API Summary
+
+| Method | Description |
+|--------|-------------|
+| `Toast::new(int $maxWidth = 50)` | Factory |
+| `->withPosition(Position)` | Screen position (9 positions) |
+| `->withDuration(?float $seconds)` | Auto-dismiss after N seconds; `null` disables |
+| `->withMaxWidth(int)` | Maximum alert width in cells |
+| `->withMinWidth(int)` | Minimum alert width in cells |
+| `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or ASCII symbols |
+| `->withAllowEscToClose(bool)` | Allow Escape key to dismiss |
+| `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
+| `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
+| `->alert(ToastType\|string, string, ?float $expiresAt)` | Add alert (string type = case-insensitive) |
+| `->error/warning/info/success(string)` | Convenience alert helpers |
+| `->hasActiveAlert(): bool` | True if non-expired alerts queued |
+| `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle |
+| `->view(string $background, int $w, int $h): string` | Render toast layer over background |
+
+| Enum | Cases |
+|-------|-------|
+| `Position` | TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight |
+| `ToastType` | Error, Warning, Info, Success |
+| `Overflow` | DropOldest, DropNewest, Enqueue |
+| `SymbolSet` | NerdFont, Unicode, ASCII |
 
 ## License
 
