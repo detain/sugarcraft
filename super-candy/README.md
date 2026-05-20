@@ -52,16 +52,19 @@ Default: left pane = current directory, right pane = `$HOME`.
 | `Space`         | Toggle selection on the entry under cursor + advance|
 | `s`             | Cycle sort order (name → mtime → size, asc / desc)  |
 | `.`             | Toggle hidden-file visibility                       |
-| `d`             | Delete (selection or cursor); requires `y` confirm  |
-| `r`             | Refresh active pane                                 |
-| `q`             | Quit                                                |
-| `/`             | Start search mode; type to filter; Enter to open    |
-| `Escape`        | Exit search mode                                    |
-| `t`             | Duplicate current tab                               |
-| `Ctrl+w`        | Close current tab                                   |
-| `Ctrl+Tab`      | Cycle to next tab                                   |
-| `Ctrl+Shift+Tab`| Cycle to previous tab                               |
-| `u` / `Ctrl+z`  | Undo last delete operation                          |
+| `c`             | Copy (selection or cursor) to inactive pane; `y` confirm |
+| `m`             | Move (selection or cursor) to inactive pane; `y` confirm |
+| `R`             | Rename (cursor entry); new name prompted; `y` confirm    |
+| `d`             | Delete (selection or cursor); requires `y` confirm       |
+| `r`             | Refresh active pane                                      |
+| `q`             | Quit                                                      |
+| `/`             | Start search mode; type to filter; Enter to open          |
+| `Escape`        | Exit search mode                                          |
+| `t`             | Duplicate current tab                                   |
+| `Ctrl+w`        | Close current tab                                        |
+| `Ctrl+Tab`      | Cycle to next tab                                        |
+| `Ctrl+Shift+Tab`| Cycle to previous tab                                    |
+| `u` / `Ctrl+z`  | Undo last operation                                      |
 
 ## Architecture
 
@@ -115,4 +118,4 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ## Status
 
-Phase 9+ entry #20 — first cut. Read + delete are wired; search, tabs, and undo are fully implemented; copy / move / rename / new-dir are obvious next steps. Everything underneath them (the pure-state transition layer) is already in place.
+Phase 10 entry — copy / move / rename / undo are wired. Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.
