@@ -71,6 +71,10 @@ echo $toast-&gt;view($bg);</code></pre>
             <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; null for persistent (never expires).</span></div>
             <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or ASCII.</span></div>
             <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
+            <div class="feature"><strong>Progress toasts</strong><span>Inline progress bar (0–100%) beneath the message body.</span></div>
+            <div class="feature"><strong>Action buttons</strong><span>Clickable [Label] buttons with closure callbacks attached to an alert.</span></div>
+            <div class="feature"><strong>History log</strong><span>Immutable record of every dismissed alert via getHistory().</span></div>
+            <div class="feature"><strong>Animations</strong><span>withAnimationDuration() fade stub (CubicBezier deferred to future phase).</span></div>
 
     </div>
 
@@ -96,11 +100,24 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or ASCII symbol sets</td></tr>
 <tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited)</td></tr>
 <tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
+<tr><td>Toast</td><td>withAnimationDuration(float)</td><td>Fade animation duration in seconds (stub; CubicBezier deferred)</td></tr>
 <tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt)</td><td>Add alert; string type = case-insensitive lookup; <code>null</code> expiry = never auto-dismisses</td></tr>
+<tr><td>Toast</td><td>progressToast(ToastType|string, string, float $progress, ?float $expiresAt)</td><td>Add alert with progress bar (0.0–1.0, clamped); same expiry semantics as alert()</td></tr>
 <tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
 <tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
-<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle</td></tr>
+<tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle; dismiss() records non-expired alerts to history</td></tr>
+<tr><td>Toast</td><td>getHistory(): list&lt;Alert&gt;</td><td>Return all dismissed alerts recorded since last dismiss()</td></tr>
 <tr><td>Toast</td><td>view(string $background, int $w, int $h): string</td><td>Render toast layer over background view</td></tr>
+<tr><td>Alert</td><td>withProgress(float)</td><td>Attach progress bar (0.0–1.0, clamped)</td></tr>
+<tr><td>Alert</td><td>withActions(list&lt;Action&gt;)</td><td>Attach action buttons</td></tr>
+<tr><td>Alert</td><td>isExpired(): bool</td><td>Check expiry</td></tr>
+<tr><td>Alert</td><td>withExpiry(float $duration)</td><td>Set expiry from now</td></tr>
+<tr><td>Action</td><td>make(string $label, \Closure(): void $callback)</td><td>Factory</td></tr>
+<tr><td>Action</td><td>$label: non-empty-string</td><td>User-visible button label (readonly)</td></tr>
+<tr><td>Action</td><td>$callback: \Closure(): void</td><td>Invoked when action is triggered (readonly)</td></tr>
+<tr><td>HistoryLog</td><td>push(Alert): self</td><td>Append alert, return new immutable log</td></tr>
+<tr><td>HistoryLog</td><td>all(): list&lt;Alert&gt;</td><td>Return all recorded alerts</td></tr>
+<tr><td>HistoryLog</td><td>count(): int</td><td>Number of recorded entries</td></tr>
 <tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
 <tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
 <tr><td>Position</td><td>TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight</td><td>9 screen positions</td></tr>
