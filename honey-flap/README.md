@@ -39,8 +39,22 @@ composer install
 | `TickMsg`       | Frame-tick message scheduled by `Cmd::tick(0.033, …)` ≈ 30 fps.                |
 | `Game` (Model)  | Pure-state world: bird + pipes + score + crashed flag. Injects PRNG closure for deterministic gap placements in tests. |
 | `Renderer`      | Pure view — single playfield walk, ANSI-styled glyphs, rounded border.         |
+| `PipeGenerator` | Generates pipes with variable gap height — gap shrinks as score increases, raising difficulty. Gap starts at 6 cells, shrinks by 1 every 5 points, floors at 3. |
 
 The PRNG is injected as a `Closure(int $maxInclusive): int` so unit tests can pin the pipe layout to a specific sequence — the standard SugarCraft pattern.
+
+## Difficulty scaling
+
+The pipe gap height adapts to the player's score:
+
+| Score range | Gap height |
+|-------------|------------|
+| 0–4         | 6 cells    |
+| 5–9         | 5 cells    |
+| 10–14       | 4 cells    |
+| 15+         | 3 cells    |
+
+Gap shrinks by 1 every 5 points, bottoming out at 3 cells to keep the game playable. This is implemented by `PipeGenerator::gapHeightForScore()` and applied automatically when `Game` spawns new pipes via `PipeGenerator::makePipe()`.
 
 ## Test
 
