@@ -14,7 +14,7 @@ PHP port of [DaltonSW/bubbleup](https://github.com/daltonsw/bubbleup) — floati
 
 ## Features
 
-- **6 positions**: TopLeft, TopCenter, TopRight, BottomLeft, BottomCenter, BottomRight
+- **9 positions**: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight
 - **4 alert types**: Error, Warning, Info, Success — each with distinct styling
 - **Dynamic width**: fixed or auto-sizing between minWidth and maxWidth
 - **Symbol sets**: NerdFont (icons), Unicode (boxed), ASCII (plain text)
@@ -64,6 +64,9 @@ Each type also provides a localized label via `ToastType::label()` (e.g.
 Position::TopLeft
 Position::TopCenter
 Position::TopRight
+Position::MiddleLeft
+Position::MiddleCenter
+Position::MiddleRight
 Position::BottomLeft
 Position::BottomCenter
 Position::BottomRight
