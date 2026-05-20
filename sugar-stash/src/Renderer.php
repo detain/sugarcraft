@@ -59,9 +59,20 @@ final class Renderer
                 ->render(Lang::t('branch.prompt') . $a->branchName . '_');
         }
 
+        $mergeBar = '';
+        if ($a->collectingMergeTarget) {
+            $mergeBar = "\n " . Style::new()->foreground(Color::hex('#a78bfa'))
+                ->render(Lang::t('merge.prompt') . $a->mergeTarget . '_');
+        }
+
         $diffOverlay = '';
         if ($a->diffViewer !== null) {
             $diffOverlay = self::diffOverlay($a);
+        }
+
+        $rebaseOverlay = '';
+        if ($a->showRebaseMenu) {
+            $rebaseOverlay = self::rebaseOverlay($a);
         }
 
         $overlay = '';
@@ -69,7 +80,7 @@ final class Renderer
             $overlay = self::helpOverlay($a);
         }
 
-        return $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $diffOverlay . $overlay . "\n";
+        return $header . "\n" . $body . "\n " . $help . $err . $success . $commitBar . $branchBar . $mergeBar . $diffOverlay . $rebaseOverlay . $overlay . "\n";
     }
 
     private static function statusPane(App $a): string
@@ -166,6 +177,9 @@ final class Renderer
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('n') . '  ' . Lang::t('help.new_branch'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('d') . '  ' . Lang::t('help.discard'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('P') . '  ' . Lang::t('help.diff_viewer'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('u') . '  ' . Lang::t('help.undo'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('M') . '  ' . Lang::t('help.merge'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('r') . '  ' . Lang::t('help.rebase'),
             '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('esc') . '  ' . Lang::t('help.close_help'),
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_navigation')),
@@ -183,6 +197,7 @@ final class Renderer
             $lines = array_merge($lines, [
                 Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_branches')),
                 '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('space') . '  ' . Lang::t('help.checkout'),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('D') . '  ' . Lang::t('help.delete_branch'),
             ]);
         }
 
@@ -254,5 +269,31 @@ final class Renderer
             ->render(implode("\n", $lines) . "\n" . $hint);
 
         return "\n" . $box . "\n";
+    }
+
+    private static function rebaseOverlay(App $a): string
+    {
+        $lines = [
+            Style::new()->bold()->foreground(Color::hex('#a78bfa'))->render(' rebase '),
+            '',
+            Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase.prompt')),
+            '',
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . 'continue',
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . 'abort',
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . 'skip',
+            '',
+            '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . 'cancel',
+        ];
+
+        $border = Border::rounded();
+        $box = Style::new()
+            ->border($border)
+            ->borderForeground(Color::hex('#a78bfa'))
+            ->foreground(Color::hex('#c5b6dd'))
+            ->padding(0, 1)
+            ->width(40)
+            ->render(implode("\n", $lines));
+
+        return "\n\n" . $box . "\n";
     }
 }
