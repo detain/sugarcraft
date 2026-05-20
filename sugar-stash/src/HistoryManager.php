@@ -54,11 +54,17 @@ final class HistoryManager
         return $entry;
     }
 
+    /**
+     * Returns true if there is at least one entry on the undo stack.
+     */
     public function canUndo(): bool
     {
         return $this->undoStack !== [];
     }
 
+    /**
+     * Returns true if there is at least one entry on the redo stack.
+     */
     public function canRedo(): bool
     {
         return $this->redoStack !== [];
