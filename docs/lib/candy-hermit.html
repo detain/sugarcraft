@@ -86,6 +86,9 @@ $allItems = $history->all();</code></pre>
             <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
             <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
             <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
+            <div class="feature"><strong>Border &amp; Style</strong><span>withBorder() / withStyle() compose candy-sprinkles Border and Style objects.</span></div>
+            <div class="feature"><strong>HelpBar / StatusBar</strong><span>Keyboard-shortcut summary and status message rendered below the overlay.</span></div>
+            <div class="feature"><strong>SIGWINCH resize</strong><span>withOnResize() + attachSigwinch() forward terminal resize events via SignalForwarder.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -115,7 +118,23 @@ $allItems = $history->all();</code></pre>
 <tr><td>Hermit</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
 <tr><td>Hermit</td><td>selected()</td><td>Get currently selected Item</td></tr>
 <tr><td>Hermit</td><td>items() / itemCount() / allCount()</td><td>Query filtered/all item state</td></tr>
+<tr><td>Hermit</td><td>withBorder(?Border)</td><td>Apply candy-sprinkles Border to overlay window</td></tr>
+<tr><td>Hermit</td><td>withStyle(?Style)</td><td>Apply candy-sprinkles Style to overlay window</td></tr>
+<tr><td>Hermit</td><td>withHelpBar(?HelpBar)</td><td>Attach keyboard-shortcut summary below filter list</td></tr>
+<tr><td>Hermit</td><td>withStatusBar(?StatusBar)</td><td>Attach status message line at overlay bottom</td></tr>
+<tr><td>Hermit</td><td>withOnResize(Closure)</td><td>Register callback invoked on SIGWINCH (cols, rows)</td></tr>
+<tr><td>Hermit</td><td>attachSigwinch()</td><td>Install SIGWINCH handler via SignalForwarder (requires ext-pcntl)</td></tr>
+<tr><td>Hermit</td><td>border() / style() / helpBar() / statusBar()</td><td>Query attached border, style, help bar, status bar</td></tr>
 <tr><td>Hermit</td><td>View(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
+<tr><td>HelpBar</td><td>new(array $shortcuts, bool $visible)</td><td>Create help bar with key→description pairs</td></tr>
+<tr><td>HelpBar</td><td>withShortcut(key, desc) / withoutShortcut(key)</td><td>Add/remove shortcut entry</td></tr>
+<tr><td>HelpBar</td><td>show() / hide() / isVisible()</td><td>Control visibility</td></tr>
+<tr><td>HelpBar</td><td>render()</td><td>Render as "key: desc │ key: desc ..." string</td></tr>
+<tr><td>StatusBar</td><td>new(string $message, bool $visible)</td><td>Create status bar with message</td></tr>
+<tr><td>StatusBar</td><td>withMessage(string) / withNoMessage()</td><td>Set or clear primary message</td></tr>
+<tr><td>StatusBar</td><td>withSegment(name, value) / withoutSegment(name)</td><td>Add/remove named segment</td></tr>
+<tr><td>StatusBar</td><td>show() / hide() / isVisible()</td><td>Control visibility</td></tr>
+<tr><td>StatusBar</td><td>render()</td><td>Render as "[name: value] message" string</td></tr>
 <tr><td>Item</td><td>interface number(), value()</td><td>Contract for filterable items</td></tr>
 <tr><td>FilteredItem</td><td>new(int $number, string $value)</td><td>Numbered Item implementation</td></tr>
 <tr><td>FileHistory</td><td>new(string $path)</td><td>Open/create JSONL history file</td></tr>
