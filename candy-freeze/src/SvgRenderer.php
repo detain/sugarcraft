@@ -29,6 +29,7 @@ use SugarCraft\Core\Util\Ansi;
  */
 final class SvgRenderer
 {
+    /** @param array{range: array{0:int,1:int}, color:string}|null $highlight */
     public function __construct(
         public readonly Theme $theme       = new Theme(
             background:   '#0d1117',
@@ -48,6 +49,8 @@ final class SvgRenderer
         public readonly int $borderRadius  = 8,
         public readonly WindowStyle $windowStyle = WindowStyle::Macos,
         public readonly bool $ligatures    = false,
+        public readonly ?string $fontPath  = null,
+        public readonly ?array $highlight  = null,
     ) {}
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
@@ -68,6 +71,38 @@ final class SvgRenderer
     {
         $style = $style instanceof WindowStyle ? $style : WindowStyle::from($style);
         return $this->copy(windowStyle: $style);
+    }
+
+    /**
+     * Embed a TTF font file (loaded from `$path`) as base64 into the SVG
+     * so the output is fully self-contained.
+     *
+     * Pass `null` to disable font embedding.
+     */
+    public function withFont(?string $path): self
+    {
+        if ($path !== null && !file_exists($path)) {
+            throw new \InvalidArgumentException("Font file not found: {$path}");
+        }
+        return $this->copy(fontPath: $path);
+    }
+
+    /**
+     * Highlight a range of lines with a background colour.
+     *
+     * @param int $start 1-based start line (inclusive)
+     * @param int $end   1-based end line (inclusive)
+     * @param string $color CSS colour string (default: #fffbe6, a soft yellow)
+     */
+    public function withHighlight(int $start, int $end, string $color = '#fffbe6'): self
+    {
+        if ($start < 1) {
+            throw new \InvalidArgumentException("Highlight start must be >= 1, got {$start}");
+        }
+        if ($end < $start) {
+            throw new \InvalidArgumentException("Highlight end must be >= start, got {$end} < {$start}");
+        }
+        return $this->copy(highlight: ['range' => [$start, $end], 'color' => $color]);
     }
 
     /**
@@ -109,13 +144,25 @@ final class SvgRenderer
               . 'width="' . $totalW . '" height="' . $totalH . '" '
               . 'viewBox="0 0 ' . $totalW . ' ' . $totalH . '">' . "\n";
 
-        // Defs (drop shadow filter).
+        // Defs (drop shadow filter + embedded font).
+        $defs = '';
         if ($this->shadow) {
-            $svg .= '<defs>' . "\n"
-                 . '  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' . "\n"
+            $defs .= '  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">' . "\n"
                  . '    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="' . self::xmlEscape($this->theme->shadow) . '" />' . "\n"
-                 . '  </filter>' . "\n"
-                 . '</defs>' . "\n";
+                 . '  </filter>' . "\n";
+        }
+        if ($this->fontPath !== null) {
+            $fontData = file_get_contents($this->fontPath);
+            if ($fontData !== false) {
+                $base64 = base64_encode($fontData);
+                $mime = 'font/ttf';
+                $defs .= '  <style type="text/css"><![CDATA[' . "\n"
+                     . '    @font-face { font-family: "embedded"; src: url(data:' . $mime . ';base64,' . $base64 . '); }' . "\n"
+                     . '  ]]></style>' . "\n";
+            }
+        }
+        if ($defs !== '') {
+            $svg .= '<defs>' . "\n" . $defs . '</defs>' . "\n";
         }
 
         // Background frame.
@@ -139,14 +186,33 @@ final class SvgRenderer
         $textY0 = $shadowMargin + $this->padding + $headerHeight + $this->theme->fontSize;
         $textX0 = $shadowMargin + $this->padding;
 
+        $fontFamily = $this->fontPath !== null ? 'embedded' : $this->theme->fontFamily;
         $ligatureAttr = $this->ligatures ? ' font-variant-ligatures="normal"' : '';
-        $svg .= '<g font-family="' . self::xmlEscape($this->theme->fontFamily) . '" '
+        $svg .= '<g font-family="' . self::xmlEscape($fontFamily) . '" '
               . 'font-size="' . $this->theme->fontSize . '" '
               . 'fill="' . self::xmlEscape($this->theme->foreground) . '"'
               . $ligatureAttr . ' xml:space="preserve">' . "\n";
 
         foreach ($lines as $i => $line) {
+            $lineNumber = $i + 1;
             $y = $textY0 + $i * $cellH;
+
+            // Line-highlight background (--highlight range).
+            if ($this->highlight !== null) {
+                [$start, $end] = $this->highlight['range'];
+                $hlColor = $this->highlight['color'];
+                if ($lineNumber >= $start && $lineNumber <= $end) {
+                    $svg .= sprintf(
+                        '<rect x="%d" y="%.2f" width="%d" height="%.2f" fill="%s" />' . "\n",
+                        $shadowMargin + $this->padding,
+                        $y - $this->theme->fontSize,
+                        $contentWidth,
+                        $cellH,
+                        self::xmlEscape($hlColor),
+                    );
+                }
+            }
+
             if ($this->lineNumbers) {
                 $svg .= sprintf(
                     '<text x="%.2f" y="%.2f" fill="%s">%s</text>' . "\n",
@@ -327,6 +393,8 @@ final class SvgRenderer
         ?int $borderRadius = null,
         ?WindowStyle $windowStyle = null,
         ?bool $ligatures = null,
+        mixed $fontPath = null,
+        mixed $highlight = null,
     ): self {
         return new self(
             theme:        $theme        ?? $this->theme,
@@ -338,6 +406,8 @@ final class SvgRenderer
             borderRadius: $borderRadius ?? $this->borderRadius,
             windowStyle:  $windowStyle  ?? $this->windowStyle,
             ligatures:    $ligatures    ?? $this->ligatures,
+            fontPath:     is_null($fontPath) ? $this->fontPath : $fontPath,
+            highlight:    is_null($highlight) ? $this->highlight : $highlight,
         );
     }
 }
