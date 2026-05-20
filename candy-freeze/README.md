@@ -51,6 +51,7 @@ $svg = SvgRenderer::dracula()
     ->withLineNumbers(true)
     ->withWindow(true)
     ->withPadding(24)
+    ->withLigatures(true)
     ->render($code);
 
 file_put_contents('out.svg', $svg);
@@ -58,10 +59,46 @@ file_put_contents('out.svg', $svg);
 
 ANSI input is honoured — SGR foreground colours (16 / 256 / 24-bit truecolor)
 plus bold / italic / underline become `<tspan>` segments in the output.
+Background colours are rendered as per-segment `<rect>` fills behind the text.
 
 ```php
 $svg = SvgRenderer::dark()->render("\x1b[31merror:\x1b[0m something broke");
+
+// With background colour
+$svg = SvgRenderer::dark()->render("\x1b[44m\x1b[37malert:\x1b[0m background highlight");
 ```
+
+## Ligatures
+
+Code editors render ligatures (→, >=, !==, etc.) when `font-variant-ligatures: normal` is set. Enable it explicitly:
+
+```php
+$svg = SvgRenderer::dracula()
+    ->withLigatures(true)
+    ->render($code);
+```
+
+## Language Detection
+
+`LanguageDetector` provides heuristic detection from content or filename:
+
+```php
+use SugarCraft\Freeze\LanguageDetector;
+
+// From content (shebang, then content signatures)
+$lang = LanguageDetector::detect($code);        // "php", "bash", "python", ...
+
+// From filename extension
+$lang = LanguageDetector::detectFromFilename('script.py');  // "python"
+$lang = LanguageDetector::detectFromFilename('foo.php');  // "php"
+```
+
+Detection sources (in priority order):
+- **Shebang** — `#!/bin/bash`, `#!/usr/bin/env node`, `#!/usr/bin/env php`, etc.
+- **Filename extension** — `.php`, `.py`, `.js`, `.rb`, `.sh`, `.sql`, `.html`, `.css`, etc.
+- **Content signatures** — language-specific patterns (`namespace `, `<?php`, `def `, `const `, etc.)
+
+Returns `"text"` when no match is found.
 
 ## Themes
 
