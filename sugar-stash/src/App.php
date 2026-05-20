@@ -34,6 +34,9 @@ final class App implements Model
         public readonly int $branchesCursor = 0,
         public readonly int $logCursor      = 0,
         public readonly ?string $error = null,
+        public readonly bool $showHelp = false,
+        public readonly bool $collectingCommit = false,
+        public readonly string $commitMessage = '',
     ) {}
 
     public static function start(GitDriver $git): self
@@ -51,10 +54,38 @@ final class App implements Model
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
+
+        // Escape / q / Ctrl+C always quits, even during commit collection
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
+            if ($this->collectingCommit) {
+                return [$this->withCommitCollection(false, ''), null];
+            }
+            if ($this->showHelp) {
+                return [$this->withShowHelp(false), null];
+            }
             return [$this, Cmd::quit()];
+        }
+
+        // During commit message collection
+        if ($this->collectingCommit) {
+            if ($msg->type === KeyType::Enter) {
+                return [$this->executeCommit(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune !== '') {
+                return [$this->withCommitMessage($this->commitMessage . $msg->rune), null];
+            }
+            return [$this, null];
+        }
+
+        // Help overlay: only Escape closes it
+        if ($this->showHelp && $msg->type === KeyType::Escape) {
+            return [$this->withShowHelp(false), null];
+        }
+
+        if ($msg->type === KeyType::Char && $msg->rune === '?') {
+            return [$this->withShowHelp(true), null];
         }
         if ($msg->type === KeyType::Tab) {
             return [$this->withPane($this->pane->next()), null];
@@ -72,6 +103,15 @@ final class App implements Model
         }
         if ($msg->type === KeyType::Char && $msg->rune === 's') {
             return [$this->toggleStage(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'a' && $this->pane === Pane::Status) {
+            return [$this->stageAll(), null];
+        }
+        if ($msg->type === KeyType::Space && $this->pane === Pane::Branches) {
+            return [$this->checkoutBranch(), null];
+        }
+        if ($msg->type === KeyType::Char && $msg->rune === 'c') {
+            return [$this->startCommit(), null];
         }
         return [$this, null];
     }
@@ -96,16 +136,14 @@ final class App implements Model
                 }
                 $rows[] = $row;
             }
-            return new self(
-                git: $this->git,
+            return $this->withAll(
                 status: $rows,
                 branches: $branches,
                 log: $log,
                 branchSummary: $summary,
-                pane: $this->pane,
-                statusCursor:   min($this->statusCursor,   max(0, count($rows) - 1)),
+                statusCursor: min($this->statusCursor, max(0, count($rows) - 1)),
                 branchesCursor: min($this->branchesCursor, max(0, count($branches) - 1)),
-                logCursor:      min($this->logCursor,      max(0, count($log) - 1)),
+                logCursor: min($this->logCursor, max(0, count($log) - 1)),
                 error: null,
             );
         } catch (\RuntimeException $e) {
@@ -113,48 +151,76 @@ final class App implements Model
         }
     }
 
+    private function withShowHelp(bool $v): self
+    {
+        return $this->withAll(showHelp: $v);
+    }
+
+    private function withCommitCollection(bool $collecting, string $message): self
+    {
+        return $this->withAll(collectingCommit: $collecting, commitMessage: $message);
+    }
+
+    private function withCommitMessage(string $msg): self
+    {
+        return $this->withAll(commitMessage: $msg);
+    }
+
     private function withPane(Pane $p): self
     {
-        return new self(
-            $this->git, $this->status, $this->branches, $this->log,
-            $this->branchSummary, $p,
-            $this->statusCursor, $this->branchesCursor, $this->logCursor,
-            $this->error,
-        );
+        return $this->withAll(pane: $p);
     }
 
     private function withError(string $msg): self
     {
+        return $this->withAll(error: $msg);
+    }
+
+    /**
+     * Helper to construct new App with multiple fields updated atomically.
+     */
+    private function withAll(
+        array $status = null,
+        array $branches = null,
+        array $log = null,
+        string $branchSummary = null,
+        Pane $pane = null,
+        int $statusCursor = null,
+        int $branchesCursor = null,
+        int $logCursor = null,
+        ?string $error = null,
+        bool $showHelp = null,
+        bool $collectingCommit = null,
+        string $commitMessage = null,
+    ): self {
         return new self(
-            $this->git, $this->status, $this->branches, $this->log,
-            $this->branchSummary, $this->pane,
-            $this->statusCursor, $this->branchesCursor, $this->logCursor,
-            $msg,
+            git: $this->git,
+            status: $status ?? $this->status,
+            branches: $branches ?? $this->branches,
+            log: $log ?? $this->log,
+            branchSummary: $branchSummary ?? $this->branchSummary,
+            pane: $pane ?? $this->pane,
+            statusCursor: $statusCursor ?? $this->statusCursor,
+            branchesCursor: $branchesCursor ?? $this->branchesCursor,
+            logCursor: $logCursor ?? $this->logCursor,
+            error: $error,
+            showHelp: $showHelp ?? $this->showHelp,
+            collectingCommit: $collectingCommit ?? $this->collectingCommit,
+            commitMessage: $commitMessage ?? $this->commitMessage,
         );
     }
 
     private function moveCursor(int $dir): self
     {
         return match ($this->pane) {
-            Pane::Status => new self(
-                $this->git, $this->status, $this->branches, $this->log,
-                $this->branchSummary, $this->pane,
-                $this->clamp($this->statusCursor + $dir, count($this->status)),
-                $this->branchesCursor, $this->logCursor, $this->error,
+            Pane::Status => $this->withAll(
+                statusCursor: $this->clamp($this->statusCursor + $dir, count($this->status)),
             ),
-            Pane::Branches => new self(
-                $this->git, $this->status, $this->branches, $this->log,
-                $this->branchSummary, $this->pane,
-                $this->statusCursor,
-                $this->clamp($this->branchesCursor + $dir, count($this->branches)),
-                $this->logCursor, $this->error,
+            Pane::Branches => $this->withAll(
+                branchesCursor: $this->clamp($this->branchesCursor + $dir, count($this->branches)),
             ),
-            Pane::Log => new self(
-                $this->git, $this->status, $this->branches, $this->log,
-                $this->branchSummary, $this->pane,
-                $this->statusCursor, $this->branchesCursor,
-                $this->clamp($this->logCursor + $dir, count($this->log)),
-                $this->error,
+            Pane::Log => $this->withAll(
+                logCursor: $this->clamp($this->logCursor + $dir, count($this->log)),
             ),
         };
     }
@@ -175,7 +241,6 @@ final class App implements Model
             return $this;
         }
         try {
-            // If already staged (index_status != ' '), unstage; else stage.
             $isStaged = ($row['index_status'] ?? ' ') !== ' ';
             if ($isStaged) {
                 $this->git->unstage($row['path']);
@@ -183,6 +248,48 @@ final class App implements Model
                 $this->git->stage($row['path']);
             }
             return $this->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function stageAll(): self
+    {
+        try {
+            $this->git->stageAll();
+            return $this->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function checkoutBranch(): self
+    {
+        $branch = $this->branches[$this->branchesCursor] ?? null;
+        if (!is_array($branch) || !isset($branch['name'])) {
+            return $this->withError(Lang::t('checkout.no_branch'));
+        }
+        try {
+            $this->git->checkout($branch['name']);
+            return $this->refresh();
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function startCommit(): self
+    {
+        return $this->withCommitCollection(true, '');
+    }
+
+    private function executeCommit(): self
+    {
+        if ($this->commitMessage === '') {
+            return $this->withError(Lang::t('commit.empty_message'));
+        }
+        try {
+            $this->git->commit($this->commitMessage);
+            return $this->withCommitCollection(false, '')->refresh();
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
