@@ -10,6 +10,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Prompt\Field;
+use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
 use SugarCraft\Prompt\HasDynamicLabels;
 use SugarCraft\Prompt\HasHideFunc;
 
@@ -22,12 +23,21 @@ final class Select implements Field
     use HasHideFunc;
     use HasDynamicLabels;
 
+    /** @var list<string> */
+    private array $fuzzyCandidates = [];
+
+    /** @var string */
+    private string $fuzzyFilterText = '';
+
     private function __construct(
         public readonly string $key,
         public readonly ItemList $list,
         public readonly string $title,
         public readonly string $description,
-    ) {}
+        array $fuzzyCandidates = [],
+    ) {
+        $this->fuzzyCandidates = $fuzzyCandidates;
+    }
 
     public static function new(string $key): self
     {
@@ -40,6 +50,23 @@ final class Select implements Field
         return $this->mutate(list: $this->list->setItems($items));
     }
 
+    /**
+     * Provide a candidate pool that is filtered and ranked by fuzzy
+     * substring match (Smith-Waterman scoring) against the user's
+     * filter keystrokes. The suggestion list ranks by score; user picks
+     * via arrow keys. Mirrors huh's `WithFuzzySuggestions([]string)`.
+     *
+     * @param list<string> $candidates
+     */
+    public function withFuzzySuggestions(array $candidates): self
+    {
+        $items = array_map(static fn(string $o) => new StringItem($o), $candidates);
+        return $this->mutate(
+            list: $this->list->setItems($items),
+            fuzzyCandidates: $candidates,
+        );
+    }
+
     public function withTitle(string $t): self        { return $this->mutate(title: $t); }
     public function withDescription(string $d): self  { return $this->mutate(description: $d); }
     public function withHeight(int $h): self          { return $this->mutate(list: $this->list->setSize($this->list->width, max(1, $h))); }
@@ -49,6 +76,7 @@ final class Select implements Field
     public function desc(string $d): self                 { return $this->withDescription($d); }
     public function height(int $h): self                  { return $this->withHeight($h); }
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
+    public function fuzzy(array $candidates): self         { return $this->withFuzzySuggestions($candidates); }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed
@@ -71,6 +99,29 @@ final class Select implements Field
     public function update(Msg $msg): array
     {
         [$l, $cmd] = $this->list->update($msg);
+
+        // Apply fuzzy filtering when we have fuzzy candidates and list is in filtering mode.
+        if ($this->fuzzyCandidates !== [] && $l->isFiltering()) {
+            $filterText = $l->filterText;
+            if ($filterText === '') {
+                // No filter text - show all candidates in original order
+                $items = array_map(
+                    static fn(string $o) => new StringItem($o),
+                    $this->fuzzyCandidates,
+                );
+                $l = $l->setItems($items);
+            } else {
+                // Apply fuzzy ranking
+                $matcher = new FuzzyMatcher();
+                $scored = $matcher->match($filterText, $this->fuzzyCandidates);
+                if ($scored !== []) {
+                    $ranked = array_column($scored, 0);
+                    $items = array_map(static fn(string $o) => new StringItem($o), $ranked);
+                    $l = $l->setItems($items);
+                }
+            }
+        }
+
         return [$this->mutate(list: $l), $cmd];
     }
 
@@ -115,10 +166,11 @@ final class Select implements Field
     private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null): self
     {
         return new self(
-            key:         $this->key,
-            list:        $list        ?? $this->list,
-            title:       $title       ?? $this->title,
-            description: $description ?? $this->description,
+            key:             $this->key,
+            list:            $list        ?? $this->list,
+            title:           $title       ?? $this->title,
+            description:     $description ?? $this->description,
+            fuzzyCandidates: $this->fuzzyCandidates,
         );
     }
 }
