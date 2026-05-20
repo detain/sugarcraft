@@ -148,23 +148,19 @@ final class BulkRename
             return $file;
         }
 
-        // Run the PCRE replace
         $replaced = @preg_replace($this->pattern, $this->template, $file);
         if ($replaced === null) {
             return $file;
         }
 
-        // Extract name and ext
         $info = pathinfo($file);
         $name = $info['filename'] ?? '';
         $ext = isset($info['extension']) ? '.' . $info['extension'] : '';
         $extNoDot = $info['extension'] ?? '';
 
-        // Build the {name}, {ext} replacements
         $withName = str_replace('{name}', $name, $replaced);
         $withExt = str_replace('{ext}', $extNoDot, $withName);
 
-        // Build {n} and {N}
         $padded = str_pad((string) $number, $this->padNum, '0', STR_PAD_LEFT);
         $withN = str_replace('{n}', $padded, $withExt);
         $withN = str_replace('{N}', (string) $number, $withN);
