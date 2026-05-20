@@ -26,7 +26,7 @@ final class HookRegistry
      *
      * @param Level        $level    Minimum level to trigger the callback.
      * @param callable     $callback (Level, string, string, array<mixed>): void
-     * @return int                         Unique registration ID for later removal.
+     * @return int                         Unique registration ID.
      */
     public function onLevel(Level $level, callable $callback): int
     {
@@ -54,20 +54,4 @@ final class HookRegistry
         }
     }
 
-    /**
-     * Remove a previously registered handler by its ID.
-     *
-     * @param int $id The ID returned by onLevel().
-     */
-    public function remove(int $id): void
-    {
-        foreach ($this->handlers as $minLevel => $callbacks) {
-            $this->handlers[$minLevel] = \array_values(
-                \array_filter(
-                    $callbacks,
-                    static fn ($cb) => !($cb instanceof \Closure && $cb === \Closure::fromCallable($id))
-                )
-            );
-        }
-    }
 }
