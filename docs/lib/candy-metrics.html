@@ -49,7 +49,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms with pluggable backends — drop-in middleware for SSH session metrics. Counter / Gauge / Histogram (14 classic Prometheus buckets +Inf) + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out.</p>
+    <p class="lede" style="margin-top: 28px;">Counters, gauges, histograms, UpDownCounters, AsyncCounters, AsyncGauges with pluggable backends — drop-in middleware for SSH session metrics. Six instrument kinds + four backends: InMemory, JsonStream, StatsD, Prometheus textfile, plus a Multi fan-out. Built-in cardinality tracking with FIFO eviction.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-metrics</code></pre>
@@ -76,12 +76,15 @@ $req-&gt;counter('events');</code></pre>
       <div class="feature"><strong>Counter</strong><span>Monotonic value that accumulates (connect counts, errors).</span></div>
       <div class="feature"><strong>Gauge</strong><span>Instantaneous value that replaces on set (queue depth, RSS).</span></div>
       <div class="feature"><strong>Histogram</strong><span>Distribution of samples (latency, payload size).</span></div>
+      <div class="feature"><strong>UpDownCounter</strong><span>Synchronous counter supporting positive and negative increments (active connections, queue depth delta).</span></div>
+      <div class="feature"><strong>AsyncCounter</strong><span>Asynchronous counter observed at collection time via callback. External monotonic values (GC counts, DB pool size).</span></div>
+      <div class="feature"><strong>AsyncGauge</strong><span>Asynchronous gauge observed at collection time via callback. External instantaneous readings (memory, queue depth).</span></div>
       <div class="feature"><strong>Tagged metrics</strong><span><code>->withTags(['user' => $u])</code> returns a registry that pre-tags every emit.</span></div>
       <div class="feature"><strong>Time helper</strong><span><code>$stop = $reg->time('http.duration'); $stop()</code> — emit a histogram sample on close.</span></div>
       <div class="feature"><strong>Backends</strong><span>InMemoryBackend, JsonStreamBackend, StatsdBackend, PrometheusFileBackend, MultiBackend.</span></div>
-    </div>
-
       <div class="feature"><strong>Histogram buckets</strong><span>Prometheus backend emits 14 cumulative le buckets (0.005–100) +Inf for classic Prometheus compatibility.</span></div>
+      <div class="feature"><strong>Cardinality tracking</strong><span>FIFO eviction of oldest label combinations when per-metric limit (default 10 000) is exceeded. Inspect with <code>cardinality()</code>.</span></div>
+      <div class="feature"><strong>Descriptor registration</strong><span>Pre-emit <code># TYPE</code> / <code># HELP</code> lines before first sample (Prometheus textfile collector metadata).</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -99,13 +102,25 @@ $req-&gt;counter('events');</code></pre>
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Descriptor</td><td>new(name, help, type, labelKeys)</td><td>Metric registration DTO (type: counter|gauge|histogram|summary)</td></tr>
 <tr><td>Registry</td><td>new(backend)</td><td>Create registry with backend</td></tr>
+<tr><td>Registry</td><td>new(backend, defaultTags, cardinalityLimit)</td><td>Create registry with backend, default tags, and per-metric cardinality limit (default 10 000)</td></tr>
 <tr><td>Registry</td><td>register(Descriptor)</td><td>Register metric descriptor for early TYPE/HELP emission</td></tr>
 <tr><td>Registry</td><td>counter(name, value, tags)</td><td>Increment counter</td></tr>
 <tr><td>Registry</td><td>gauge(name, value, tags)</td><td>Set gauge value</td></tr>
 <tr><td>Registry</td><td>histogram(name, value, tags)</td><td>Record a histogram sample (14 classic buckets +Inf on Prometheus backend)</td></tr>
+<tr><td>Registry</td><td>upDownCounter(name, amount, tags)</td><td>Add positive or negative increment to a synchronous up-down counter</td></tr>
+<tr><td>Registry</td><td>asyncCounter(name, value, tags)</td><td>Record an observation from an asynchronous counter callback</td></tr>
+<tr><td>Registry</td><td>asyncGauge(name, value, tags)</td><td>Record an observation from an asynchronous gauge callback</td></tr>
 <tr><td>Registry</td><td>time(name, tags)</td><td>Time a block, returns callable</td></tr>
 <tr><td>Registry</td><td>withTags(tags)</td><td>Pre-tag every emit</td></tr>
 <tr><td>Registry</td><td>backend()</td><td>Returns the current backend</td></tr>
+<tr><td>Registry</td><td>cardinality(name)</td><td>Number of unique label-value combinations currently tracked for a metric</td></tr>
+<tr><td>Registry</td><td>deleteLabelValues(name, tags)</td><td>Evict a specific label combination (FIFO eviction also runs automatically when limit is exceeded)</td></tr>
+<tr><td>UpDownCounter</td><td>new(registry, name, help)</td><td>Create an up-down counter instrument</td></tr>
+<tr><td>UpDownCounter</td><td>add(amount, tags)</td><td>Add positive or negative increment</td></tr>
+<tr><td>AsyncCounter</td><td>new(registry, name, help, callback, tags)</td><td>Create an async counter instrument</td></tr>
+<tr><td>AsyncCounter</td><td>observe()</td><td>Invoke callback and record the returned sum</td></tr>
+<tr><td>AsyncGauge</td><td>new(registry, name, help, callback, tags)</td><td>Create an async gauge instrument</td></tr>
+<tr><td>AsyncGauge</td><td>observe()</td><td>Invoke callback and record the returned instantaneous value</td></tr>
 <tr><td>InMemoryBackend</td><td>new()</td><td>In-memory storage</td></tr>
 <tr><td>StatsdBackend</td><td>new(host, port)</td><td>StatsD protocol</td></tr>
 <tr><td>PrometheusFileBackend</td><td>new(path)</td><td>Prometheus textfile (atomic write, 14 bucket boundaries +Inf)</td></tr>
