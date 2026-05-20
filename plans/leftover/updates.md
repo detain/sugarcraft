@@ -421,6 +421,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     step 09.03 · PR#714 · candy-flip: adaptive cell size via SizeIoctl + frame cache (leftover-rollout step 09.03)
     review for step 09.03 · clean · PR#714
     tests-ci for step 09.03 · clean
+    docs for step 09.03 · PR#715 · document withAdaptiveSize() and FrameCache in README + end-user HTML + CALIBER_LEARNINGS
     ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
