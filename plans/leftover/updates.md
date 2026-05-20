@@ -497,4 +497,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.14 · PR#738 · candy-metrics: cardinality tracking (DeleteLabelValues cap per metric) + UpDownCounter/AsyncCounter/AsyncGauge instruments (leftover-rollout step 09.14)
     review for step 09.14 · clean · PR#738
     tests-ci for step 09.14 · clean
+    docs for step 09.14 · PR#739 · document UpDownCounter/AsyncCounter/AsyncGauge in README + end-user HTML + CALIBER entries (cardinality-fifo-eviction, async-instrument-ownership)
 
