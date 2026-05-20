@@ -58,9 +58,12 @@ final class JsonStreamBackend implements Backend
         }
     }
 
-    public function counter(string $name, float $value, array $tags = []): void   { $this->emit('counter',   $name, $value, $tags); }
-    public function gauge(string $name, float $value, array $tags = []): void     { $this->emit('gauge',     $name, $value, $tags); }
-    public function histogram(string $name, float $value, array $tags = []): void { $this->emit('histogram', $name, $value, $tags); }
+    public function counter(string $name, float $value, array $tags = []): void       { $this->emit('counter',        $name, $value, $tags); }
+    public function gauge(string $name, float $value, array $tags = []): void         { $this->emit('gauge',          $name, $value, $tags); }
+    public function histogram(string $name, float $value, array $tags = []): void       { $this->emit('histogram',       $name, $value, $tags); }
+    public function upDownCounter(string $name, float $amount, array $tags = []): void { $this->emit('updowncounter',  $name, $amount, $tags); }
+    public function asyncCounter(string $name, float $value, array $tags = []): void      { $this->emit('async_counter',  $name, $value, $tags); }
+    public function asyncGauge(string $name, float $value, array $tags = []): void        { $this->emit('async_gauge',    $name, $value, $tags); }
 
     /**
      * @param array<string,string> $tags
