@@ -58,6 +58,14 @@ final class App implements Model
         public readonly bool $showRebaseMenu = false,
         /** Command history for undo/redo. */
         public readonly ?HistoryManager $history = null,
+        /** Stash manager overlay (shown when 'S' is pressed). */
+        public readonly ?StashManager $stashManager = null,
+        /** Cherry-pick state (shown when 'V' is pressed). */
+        public readonly ?CherryPick $cherryPick = null,
+        /** Worktrees manager overlay (shown when 'w' is pressed in branches pane). */
+        public readonly ?Worktrees $worktrees = null,
+        /** Interactive rebase overlay (shown when 'i' is pressed). */
+        public readonly ?InteractiveRebase $interactiveRebase = null,
     ) {}
 
     public static function start(GitDriver $git): self
@@ -98,6 +106,18 @@ final class App implements Model
             if ($this->showRebaseMenu) {
                 return [$this->withRebaseMenu(false), null];
             }
+            if ($this->stashManager !== null) {
+                return [$this->withStashManager(null), null];
+            }
+            if ($this->cherryPick !== null) {
+                return [$this->withCherryPick(null), null];
+            }
+            if ($this->worktrees !== null) {
+                return [$this->withWorktrees(null), null];
+            }
+            if ($this->interactiveRebase !== null) {
+                return [$this->withInteractiveRebase(null), null];
+            }
             return [$this, Cmd::quit()];
         }
 
@@ -108,6 +128,105 @@ final class App implements Model
             }
             if ($msg->type === KeyType::Char && $msg->rune !== '') {
                 return [$this->withCommitMessage($this->commitMessage . $msg->rune), null];
+            }
+            return [$this, null];
+        }
+
+        // Stash manager overlay
+        if ($this->stashManager !== null) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->withStashManager(null), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'a') {
+                return [$this->executeStashApply(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'd') {
+                return [$this->executeStashDrop(), null];
+            }
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                return [$this->navigateStash(-1), null];
+            }
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                return [$this->navigateStash(+1), null];
+            }
+            return [$this, null];
+        }
+
+        // Cherry-pick mode
+        if ($this->cherryPick !== null && $this->cherryPick->collecting) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->withCherryPick(null), null];
+            }
+            if ($msg->type === KeyType::Enter) {
+                return [$this->executeCherryPick(), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune !== '') {
+                return [$this->withCherryPick($this->cherryPick->withChar($msg->rune)), null];
+            }
+            return [$this, null];
+        }
+
+        // Worktrees overlay
+        if ($this->worktrees !== null) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->withWorktrees(null), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'a' && !$this->worktrees->adding) {
+                return [$this->withWorktrees($this->worktrees->startAdding()), null];
+            }
+            if ($msg->type === KeyType::Char && $msg->rune === 'd' && !$this->worktrees->removing) {
+                return [$this->withWorktrees($this->worktrees->startRemoving()), null];
+            }
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                return [$this->navigateWorktree(-1), null];
+            }
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                return [$this->navigateWorktree(+1), null];
+            }
+            // Confirm add worktree
+            if ($msg->type === KeyType::Enter && $this->worktrees->adding) {
+                return [$this->executeWorktreeAdd(), null];
+            }
+            // Confirm remove worktree
+            if ($msg->type === KeyType::Enter && $this->worktrees->removing) {
+                return [$this->executeWorktreeRemove(), null];
+            }
+            // Cancel add/remove
+            if ($msg->type === KeyType::Char && $msg->rune === 'c') {
+                return [$this->withWorktrees($this->worktrees->cancelAdding()->cancelRemoving()), null];
+            }
+            return [$this, null];
+        }
+
+        // Interactive rebase overlay
+        if ($this->interactiveRebase !== null) {
+            if ($msg->type === KeyType::Escape) {
+                return [$this->withInteractiveRebase(null), null];
+            }
+            // Selecting N: enter digit
+            if ($this->interactiveRebase->selectingN) {
+                if ($msg->type === KeyType::Enter) {
+                    return [$this->confirmRebaseCount(), null];
+                }
+                if ($msg->type === KeyType::Char && ctype_digit($msg->rune)) {
+                    return [$this->withInteractiveRebase($this->interactiveRebase->withCountDigit($msg->rune)), null];
+                }
+                return [$this, null];
+            }
+            // Navigate commits
+            if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+                return [$this->navigateRebaseCommit(-1), null];
+            }
+            if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+                return [$this->navigateRebaseCommit(+1), null];
+            }
+            // Cycle action (space or right arrow)
+            if ($msg->type === KeyType::Space || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
+                return [$this->withInteractiveRebase($this->interactiveRebase->cycleAction()), null];
+            }
+            // Drop current commit
+            if ($msg->type === KeyType::Char && $msg->rune === 'd') {
+                return [$this->withInteractiveRebase($this->interactiveRebase->dropCurrent()), null];
             }
             return [$this, null];
         }
@@ -231,6 +350,22 @@ final class App implements Model
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
             return [$this->handleRebaseKey(), null];
         }
+        // Stash list: S key (capital S)
+        if ($msg->type === KeyType::Char && $msg->rune === 'S') {
+            return [$this->showStashManager(), null];
+        }
+        // Cherry-pick: V key
+        if ($msg->type === KeyType::Char && $msg->rune === 'V') {
+            return [$this->startCherryPick(), null];
+        }
+        // Worktrees: w key (branches pane)
+        if ($msg->type === KeyType::Char && $msg->rune === 'w' && $this->pane === Pane::Branches) {
+            return [$this->showWorktrees(), null];
+        }
+        // Interactive rebase: i key
+        if ($msg->type === KeyType::Char && $msg->rune === 'i') {
+            return [$this->startInteractiveRebase(), null];
+        }
         return [$this, null];
     }
 
@@ -318,6 +453,10 @@ final class App implements Model
         bool $collectingMergeTarget = null,
         string $mergeTarget = null,
         bool $showRebaseMenu = null,
+        ?StashManager $stashManager = null,
+        ?CherryPick $cherryPick = null,
+        ?Worktrees $worktrees = null,
+        ?InteractiveRebase $interactiveRebase = null,
     ): self {
         return new self(
             git: $this->git,
@@ -341,6 +480,10 @@ final class App implements Model
             collectingMergeTarget: $collectingMergeTarget ?? $this->collectingMergeTarget,
             mergeTarget: $mergeTarget ?? $this->mergeTarget,
             showRebaseMenu: $showRebaseMenu ?? $this->showRebaseMenu,
+            stashManager: $stashManager ?? $this->stashManager,
+            cherryPick: $cherryPick ?? $this->cherryPick,
+            worktrees: $worktrees ?? $this->worktrees,
+            interactiveRebase: $interactiveRebase ?? $this->interactiveRebase,
         );
     }
 
@@ -502,6 +645,10 @@ final class App implements Model
             collectingMergeTarget: $this->collectingMergeTarget,
             mergeTarget: $this->mergeTarget,
             showRebaseMenu: $this->showRebaseMenu,
+            stashManager: $this->stashManager,
+            cherryPick: $this->cherryPick,
+            worktrees: $this->worktrees,
+            interactiveRebase: $this->interactiveRebase,
         );
     }
 
@@ -759,5 +906,291 @@ final class App implements Model
         } catch (\RuntimeException $e) {
             return $this->withError($e->getMessage());
         }
+    }
+
+    // ---- Stash manager ----
+
+    private function showStashManager(): self
+    {
+        try {
+            $stashEntries = $this->git->stashList();
+            return $this->withStashManager(new StashManager($stashEntries));
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function withStashManager(?StashManager $sm): self
+    {
+        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
+        return new self(
+            git: $this->git,
+            status: $this->status,
+            branches: $this->branches,
+            log: $this->log,
+            branchSummary: $this->branchSummary,
+            pane: $this->pane,
+            statusCursor: $this->statusCursor,
+            branchesCursor: $this->branchesCursor,
+            logCursor: $this->logCursor,
+            error: $this->error,
+            showHelp: $this->showHelp,
+            collectingCommit: $this->collectingCommit,
+            commitMessage: $this->commitMessage,
+            diffViewer: $this->diffViewer,
+            collectingBranchName: $this->collectingBranchName,
+            branchName: $this->branchName,
+            successMessage: $this->successMessage,
+            history: $this->history,
+            collectingMergeTarget: $this->collectingMergeTarget,
+            mergeTarget: $this->mergeTarget,
+            showRebaseMenu: $this->showRebaseMenu,
+            stashManager: $sm,
+            cherryPick: $this->cherryPick,
+            worktrees: $this->worktrees,
+            interactiveRebase: $this->interactiveRebase,
+        );
+    }
+
+    private function navigateStash(int $dir): self
+    {
+        $sm = $this->stashManager;
+        if ($sm === null) return $this;
+        return $this->withStashManager($sm->withCursor($dir));
+    }
+
+    private function executeStashApply(): self
+    {
+        $sm = $this->stashManager;
+        if ($sm === null) return $this;
+        $current = $sm->current();
+        if ($current === null) return $this;
+        try {
+            $this->git->stashApply($current->stashRef());
+            return $this->withStashManager(null)->refresh()->withAll(
+                successMessage: Lang::t('stash.applied', ['ref' => $current->stashRef()])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeStashDrop(): self
+    {
+        $sm = $this->stashManager;
+        if ($sm === null) return $this;
+        $current = $sm->current();
+        if ($current === null) return $this;
+        try {
+            $this->git->stashDrop($current->stashRef());
+            $newStashes = array_filter($sm->stashes, fn($s) => $s->index !== $current->index);
+            // Reindex
+            $reindexed = [];
+            foreach ($newStashes as $s) {
+                $reindexed[] = $s;
+            }
+            return $this->withStashManager(new StashManager($reindexed))->withAll(
+                successMessage: Lang::t('stash.dropped', ['ref' => $current->stashRef()])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    // ---- Cherry-pick ----
+
+    private function startCherryPick(): self
+    {
+        return $this->withCherryPick(CherryPick::collecting());
+    }
+
+    private function withCherryPick(?CherryPick $cp): self
+    {
+        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
+        return new self(
+            git: $this->git,
+            status: $this->status,
+            branches: $this->branches,
+            log: $this->log,
+            branchSummary: $this->branchSummary,
+            pane: $this->pane,
+            statusCursor: $this->statusCursor,
+            branchesCursor: $this->branchesCursor,
+            logCursor: $this->logCursor,
+            error: $this->error,
+            showHelp: $this->showHelp,
+            collectingCommit: $this->collectingCommit,
+            commitMessage: $this->commitMessage,
+            diffViewer: $this->diffViewer,
+            collectingBranchName: $this->collectingBranchName,
+            branchName: $this->branchName,
+            successMessage: $this->successMessage,
+            history: $this->history,
+            collectingMergeTarget: $this->collectingMergeTarget,
+            mergeTarget: $this->mergeTarget,
+            showRebaseMenu: $this->showRebaseMenu,
+            stashManager: $this->stashManager,
+            cherryPick: $cp,
+            worktrees: $this->worktrees,
+            interactiveRebase: $this->interactiveRebase,
+        );
+    }
+
+    private function executeCherryPick(): self
+    {
+        $cp = $this->cherryPick;
+        if ($cp === null || $cp->commitRef === '') {
+            return $this->withError(Lang::t('cherry_pick.empty_ref'));
+        }
+        try {
+            $this->git->cherryPick($cp->commitRef);
+            return $this->withCherryPick(null)->refresh()->withAll(
+                successMessage: Lang::t('cherry_pick.success', ['ref' => $cp->commitRef])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    // ---- Worktrees ----
+
+    private function showWorktrees(): self
+    {
+        try {
+            $entries = $this->git->worktreeList();
+            return $this->withWorktrees(new Worktrees($entries));
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function withWorktrees(?Worktrees $wt): self
+    {
+        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
+        return new self(
+            git: $this->git,
+            status: $this->status,
+            branches: $this->branches,
+            log: $this->log,
+            branchSummary: $this->branchSummary,
+            pane: $this->pane,
+            statusCursor: $this->statusCursor,
+            branchesCursor: $this->branchesCursor,
+            logCursor: $this->logCursor,
+            error: $this->error,
+            showHelp: $this->showHelp,
+            collectingCommit: $this->collectingCommit,
+            commitMessage: $this->commitMessage,
+            diffViewer: $this->diffViewer,
+            collectingBranchName: $this->collectingBranchName,
+            branchName: $this->branchName,
+            successMessage: $this->successMessage,
+            history: $this->history,
+            collectingMergeTarget: $this->collectingMergeTarget,
+            mergeTarget: $this->mergeTarget,
+            showRebaseMenu: $this->showRebaseMenu,
+            stashManager: $this->stashManager,
+            cherryPick: $this->cherryPick,
+            worktrees: $wt,
+            interactiveRebase: $this->interactiveRebase,
+        );
+    }
+
+    private function navigateWorktree(int $dir): self
+    {
+        $wt = $this->worktrees;
+        if ($wt === null) return $this;
+        return $this->withWorktrees($wt->withCursor($dir));
+    }
+
+    private function executeWorktreeAdd(): self
+    {
+        $wt = $this->worktrees;
+        if ($wt === null || $wt->newPath === '') {
+            return $this->withError(Lang::t('worktree.empty_path'));
+        }
+        try {
+            $branch = $wt->newBranch !== '' ? $wt->newBranch : 'HEAD';
+            $this->git->worktreeAdd($wt->newPath, $branch);
+            return $this->withWorktrees(null)->refresh()->withAll(
+                successMessage: Lang::t('worktree.added', ['path' => $wt->newPath])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function executeWorktreeRemove(): self
+    {
+        $wt = $this->worktrees;
+        if ($wt === null) return $this;
+        $current = $wt->current();
+        if ($current === null) return $this;
+        try {
+            $this->git->worktreeRemove($current->path);
+            return $this->withWorktrees(null)->refresh()->withAll(
+                successMessage: Lang::t('worktree.removed', ['path' => $current->path])
+            );
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    // ---- Interactive rebase ----
+
+    private function startInteractiveRebase(): self
+    {
+        return $this->withInteractiveRebase(InteractiveRebase::selectingN());
+    }
+
+    private function withInteractiveRebase(?InteractiveRebase $ir): self
+    {
+        // Bypass withAll to avoid ?? operator treating explicit null as "keep existing"
+        return new self(
+            git: $this->git,
+            status: $this->status,
+            branches: $this->branches,
+            log: $this->log,
+            branchSummary: $this->branchSummary,
+            pane: $this->pane,
+            statusCursor: $this->statusCursor,
+            branchesCursor: $this->branchesCursor,
+            logCursor: $this->logCursor,
+            error: $this->error,
+            showHelp: $this->showHelp,
+            collectingCommit: $this->collectingCommit,
+            commitMessage: $this->commitMessage,
+            diffViewer: $this->diffViewer,
+            collectingBranchName: $this->collectingBranchName,
+            branchName: $this->branchName,
+            successMessage: $this->successMessage,
+            history: $this->history,
+            collectingMergeTarget: $this->collectingMergeTarget,
+            mergeTarget: $this->mergeTarget,
+            showRebaseMenu: $this->showRebaseMenu,
+            stashManager: $this->stashManager,
+            cherryPick: $this->cherryPick,
+            worktrees: $this->worktrees,
+            interactiveRebase: $ir,
+        );
+    }
+
+    private function confirmRebaseCount(): self
+    {
+        $ir = $this->interactiveRebase;
+        if ($ir === null || !$ir->selectingN) return $this;
+        try {
+            $log = $this->git->log(50);
+            return $this->withInteractiveRebase($ir->confirmCount($log));
+        } catch (\RuntimeException $e) {
+            return $this->withError($e->getMessage());
+        }
+    }
+
+    private function navigateRebaseCommit(int $dir): self
+    {
+        $ir = $this->interactiveRebase;
+        if ($ir === null) return $this;
+        return $this->withInteractiveRebase($ir->withCursor($dir));
     }
 }

@@ -149,6 +149,55 @@ final class Git implements GitDriver
         $this->run(['reset', '--soft', 'HEAD~1']);
     }
 
+    /** @return list<StashEntry> */
+    public function stashList(): array
+    {
+        $out = $this->run(['stash', 'list']);
+        return StashManager::fromGitOutput($out);
+    }
+
+    public function stashApply(string $stashRef): void
+    {
+        $this->run(['stash', 'apply', $stashRef]);
+    }
+
+    public function stashDrop(string $stashRef): void
+    {
+        $this->run(['stash', 'drop', $stashRef]);
+    }
+
+    public function cherryPick(string $commit): void
+    {
+        $this->run(['cherry-pick', $commit]);
+    }
+
+    public function cherryPickContinue(): void
+    {
+        $this->run(['cherry-pick', '--continue']);
+    }
+
+    public function cherryPickAbort(): void
+    {
+        $this->run(['cherry-pick', '--abort']);
+    }
+
+    /** @return list<WorktreeEntry> */
+    public function worktreeList(): array
+    {
+        $out = $this->run(['worktree', 'list', '--porcelain']);
+        return Worktrees::fromGitOutput($out);
+    }
+
+    public function worktreeAdd(string $path, string $branch): void
+    {
+        $this->run(['worktree', 'add', $path, $branch]);
+    }
+
+    public function worktreeRemove(string $path): void
+    {
+        $this->run(['worktree', 'remove', $path]);
+    }
+
     /** @return list<string> */
     private function run(array $args): array
     {
