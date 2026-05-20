@@ -278,11 +278,11 @@ final class Renderer
             '',
             Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('rebase.prompt')),
             '',
-            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . 'continue',
-            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . 'abort',
-            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . 'skip',
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . Lang::t('rebase.continue'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('rebase.abort'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('rebase.skip'),
             '',
-            '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . 'cancel',
+            '  ' . Style::new()->foreground(Color::hex('#7d6e98'))->render('esc') . '  ' . Lang::t('rebase.cancel'),
         ];
 
         $border = Border::rounded();

@@ -34,6 +34,11 @@ sugar-stash    # run inside any git working tree
 | `c`                      | Commit (type message, Enter to confirm, Esc to cancel) |
 | `A`                      | Amend last commit                                        |
 | `n`                      | Create and switch to a new branch                        |
+| `u`                      | Undo last operation                                    |
+| `Ctrl+r`                 | Redo last undone operation                             |
+| `D` (branches pane)      | Delete the selected branch                             |
+| `M`                      | Merge selected branch into current                     |
+| `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
 | `q` / `Esc`              | Quit                                                    |
