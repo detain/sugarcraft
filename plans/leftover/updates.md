@@ -364,8 +364,15 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.03 · PR#688 · sugar-prompt: add withAsyncSuggestions() to Input/Select (150ms debounce + SuggestionsReadyMsg + Deferred pattern; leftover-rollout step 08.03)
   review for step 08.03 · clean · PR#688
   tests-ci for step 08.03 · clean
-  docs for step 08.03 · PR#689 · document withAsyncSuggestions() in README (Input/Select tables + async section) + end-user HTML (feature grid + API table + quickstart) + CALIBER [pattern:async-suggestions-debounce]
   step 08.04 · PR#690 · sugar-prompt: MultiSelect vim keys (j/k nav + space toggle) + Form::validateAll() + Select::withEnum(\BackedEnum) + Theme::$errorSummary slot (leftover-rollout step 08.04)
+  review for step 08.04 · clean · PR#690 (2 docs gaps: validateAll + withEnum not in README API tables)
+  tests-ci for step 08.04 · clean
+  docs for step 08.04 · PR#691 · document validateAll in Form chainables table + withEnum in Select knobs + MultiSelect vim keys + errorSummary in README/end-user HTML
+
+## Open review findings — 08.04
+
+- [x] sugar-prompt/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
+- [x] sugar-prompt/README.md: `Select::withEnum(\BackedEnum::class)` not documented in the Select field notable knobs column (line 47) — ✅ resolved PR#691
 
 ## Open review findings — 08.03
 
