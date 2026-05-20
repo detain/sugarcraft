@@ -155,11 +155,16 @@ echo Tree::new()
 - **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `primary`/`secondary` are aliased as `accent`/`muted`. Every `with*($color)` setter returns a new `Theme`. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
 - **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
-  reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
+  rapidBlink/reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
   maxWidth/maxHeight, align (Align/VAlign), inline, transform, tabWidth,
-  marginBackground, colorWhitespace. Plus 21 getters and 15 `unset*()`.
+  marginBackground, colorWhitespace. Plus 21 getters, 15 `unset*()`,
+  `copy()` (shallow clone), `inherit($parent)` (unset-only merge), and
+  `patch($other)` (incremental merge — only props set in $other are applied).
 - **`Border`** — `normal()`, `rounded()`, `thick()`, `double()`, `block()`,
   `hidden()`. Per-side toggles via `Style::border*`.
+- **`BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
+  colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
+  left) are interpolated around the perimeter. Use with `Style::borderColor()`.
 - **`AdaptiveColor` / `CompleteColor` / `CompleteAdaptiveColor`** — pick the
   right concrete colour at render time per `ColorProfile` (TrueColor / 256 /
   Ansi) or per dark-vs-light background.
