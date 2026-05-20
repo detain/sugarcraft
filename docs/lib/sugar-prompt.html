@@ -57,6 +57,7 @@
     <pre class="code"><code>use SugarCraft\Prompt\Form;
 use SugarCraft\Prompt\Field\{Input, Confirm, Select, Note};
 use SugarCraft\Prompt\Validator\{Required, Email, MinLength};
+use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
 
 $form = Form::new(
     Note::new('welcome')
@@ -72,18 +73,23 @@ $form = Form::new(
         -&gt;withPlaceholder('you@example.com')
         -&gt;withValidator(new Required())
         -&gt;withValidator(new Email()),
-    Confirm::new('newsletter')
-        -&gt;withTitle('Subscribe to the newsletter?'),
     Select::new('lang')
         -&gt;withTitle('Favorite language?')
-        -&gt;withOptions('PHP', 'Go', 'Rust', 'Python'),
+        -&gt;withOptions('PHP', 'Go', 'Rust', 'Python')
+        -&gt;withFuzzySuggestions(['PHP', 'Go', 'Rust', 'Python', 'JavaScript', 'TypeScript']),
 );
-// $form is a SugarCraft Model — drop it into a Program.</code></pre>
+// $form is a SugarCraft Model — drop it into a Program.
+
+// FuzzyMatcher API:
+$matcher = new FuzzyMatcher();
+$score = $matcher-&gt;score('js', 'JavaScript'); // 9
+$matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8], ...]</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Field types</strong><span>Note, Input, Confirm, Select, MultiSelect, Text, FilePicker.</span></div>
       <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit. Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Chain multiple with <code>->withValidator(new Validator())</code>.</span></div>
+      <div class="feature"><strong>Fuzzy suggestions</strong><span><code>->withFuzzySuggestions([...])</code> on Input and Select — Smith-Waterman scoring ranks candidates by match quality. Use <code>FuzzyMatcher</code> directly for programmatic scoring: <code>$matcher->score($query, $candidate)</code>.</span></div>
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
       <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
@@ -107,11 +113,15 @@ $form = Form::new(
 <tr><td>Form</td><td>new(...fields)</td><td>Create a new form</td></tr>
 <tr><td>Form</td><td>getValue(name)</td><td>Get field value after submit</td></tr>
 <tr><td>Input</td><td>new(name)</td><td>Create input field</td></tr>
+<tr><td>Input</td><td>withFuzzySuggestions(list)</td><td>Filter suggestions by fuzzy match score</td></tr>
 <tr><td>Confirm</td><td>new(name)</td><td>Create confirm field</td></tr>
 <tr><td>Select</td><td>new(name)</td><td>Create select field</td></tr>
+<tr><td>Select</td><td>withFuzzySuggestions(list)</td><td>Filter options by fuzzy match score</td></tr>
 <tr><td>MultiSelect</td><td>new(name)</td><td>Create multi-select field</td></tr>
 <tr><td>Note</td><td>new(content)</td><td>Create note field</td></tr>
 <tr><td>Group</td><td>new(...forms)</td><td>Create wizard group</td></tr>
+<tr><td>FuzzyMatcher</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int)</td></tr>
+<tr><td>FuzzyMatcher</td><td>match(query, candidates)</td><td>Ranked matches list&lt;[string,int]&gt;</td></tr>
 </table>
   </div>
 </section>
