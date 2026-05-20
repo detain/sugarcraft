@@ -18,13 +18,57 @@ composer require sugarcraft/candy-metrics
 
 ## Concepts
 
-| Primitive   | Behaviour                                                                                              |
-|-------------|---------------------------------------------------------------------------------------------------------|
-| Counter     | Monotonic value that accumulates (connect counts, errors).                                                |
-| Gauge       | Instantaneous value that replaces on set (queue depth, RSS).                                            |
-| Histogram   | Distribution of samples (latency, payload size); Prometheus backend emits 14 classic `le` buckets +Inf. |
+| Primitive        | Behaviour                                                                                                                               |
+|------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| Counter          | Monotonic value that accumulates (connect counts, errors).                                                                             |
+| Gauge            | Instantaneous value that replaces on set (queue depth, RSS).                                                                            |
+| Histogram        | Distribution of samples (latency, payload size); Prometheus backend emits 14 classic `le` buckets +Inf.                          |
+| UpDownCounter    | Synchronous counter that supports positive *and* negative increments — used for values that go up and down (active connections).     |
+| AsyncCounter     | Asynchronous counter whose value is observed at collection time via a callback. External values (DB pool size, GC counts).               |
+| AsyncGauge       | Asynchronous gauge whose value is observed at collection time via a callback. External instantaneous readings (memory, queue depth). |
 
 A `Registry` is the application-facing facade; it forwards every emit to the configured `Backend`. Backends decide how to persist or forward.
+
+## Instrument factory helpers
+
+The registry exposes dedicated factory methods that return instrument objects — useful when an instrument is held for repeated `add()` / `observe()` calls:
+
+```php
+$connCounter = $reg->upDownCounter('server.active_connections', ['host' => $host]);
+$connCounter->add(1);    // connection opened
+// ... later ...
+$connCounter->add(-1);    // connection closed
+```
+
+Async instruments accept a callback that is invoked at collection time:
+
+```php
+$gcCount = $reg->asyncCounter('jvm.gc.count', 'JVM garbage collection count', fn() => $jvm->gcCount());
+$gcCount->observe();   // called during collection sweep
+```
+
+## Cardinality management
+
+Every unique label-value combination is a distinct time series. High-cardinality labels (e.g. `user_id`, `request_id`) can exhaust memory if left unchecked.
+
+The registry tracks per-metric cardinality and evicts the oldest combination when the limit (default: 10 000) is reached:
+
+```php
+// Default limit of 10 000 label combinations per metric
+$reg = new Registry($backend);
+
+// Custom limit
+$reg = new Registry($backend, [], 500);
+
+// Inspect current cardinality
+$reg->cardinality('http.requests');   // → int
+
+// Manually evict a label combination (e.g. after a session ends)
+$reg->deleteLabelValues('http.requests', ['route' => '/logout']);
+
+// Eviction is also called automatically — FIFO; the oldest entry
+// is removed when the limit is exceeded.
+```
 
 ## Descriptor registration
 
@@ -141,4 +185,4 @@ Pass `extraTags` (a callable receiving the `Session`) to add things like client 
 
 ## Status
 
-Phase 9 — histogram bucket emission + Descriptor DTO. 38 tests / 95 assertions across Registry, four backends, SessionMetrics middleware, and histogram bucket coverage.
+Phase 9 — UpDownCounter, AsyncCounter, AsyncGauge instrument kinds + Registry cardinality tracking with FIFO DeleteLabelValues eviction. 41 tests across Registry, four backends, SessionMetrics middleware, and instrument coverage.
