@@ -369,10 +369,12 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   tests-ci for step 08.04 · clean
   docs for step 08.04 · PR#691 · document validateAll in Form chainables table + withEnum in Select knobs + MultiSelect vim keys + errorSummary in README/end-user HTML
   step 08.05 · PR#692 · sugar-bits: add withValidateOn(ValidateOn) timing control + withRestrict(string $pattern) keystroke filter to TextInput (leftover-rollout step 08.05)
-  review for step 08.05 · clean · PR#692
   tests-ci for step 08.05 · clean
   docs for step 08.05 · PR#693 · document ValidateOn + withRestrict in README + end-user HTML
-  step 08.06 · PR#694 · sugar-bits: add Table sort (withSort/thenSortBy/clearSort) + SortDirection enum + SortState DTO (leftover-rollout step 08.06)
+  step 08.06 · PR#694 · sugar-bits: Table sort (withSort/thenSortBy/clearSort + SortDirection/SortState; 32 SortTest tests; leftover-rollout step 08.06)
+  review for step 08.06 · clean · PR#694
+  tests-ci for step 08.06 · clean
+  docs for step 08.06 · PR#695 · document SortDirection/SortState/withSort/thenSortBy/clearSort/getSortState in README + end-user HTML
 
 ## Open review findings — 08.04
 
