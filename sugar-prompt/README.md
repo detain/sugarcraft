@@ -41,10 +41,10 @@ $form = Form::new(
 
 | Field         | Description                                                 | Notable knobs |
 | ------------- | ----------------------------------------------------------- | ------------- |
-| `Input`       | Single-line text (wraps `SugarBits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)` |
+| `Input`       | Single-line text (wraps `SugarBits\TextInput`)              | `withPlaceholder`, `withCharLimit`, `withWidth`, `withPrompt`, `withValidator(\Closure)`, `withTitleFunc` / `withDescriptionFunc`, `withPassword(bool, string $echo = '*')`, `withSuggestions(list<string>)`, `withSuggestionsFunc(\Closure(string):list<string>)`, `withFuzzySuggestions(list<string>)` |
 | `Text`        | Multi-line text editor                                      | `withCharLimit`, `withMaxLines`, `withShowLineNumbers`, `withValidator` |
 | `Confirm`     | Yes/no boolean                                              | `withAffirmative`/`withNegative`, `withValidator(\Closure(bool):?string)`, `withTitleFunc`, `withDescriptionFunc` |
-| `Select`      | Single-choice list (wraps `SugarBits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc` |
+| `Select`      | Single-choice list (wraps `SugarBits\ItemList`)             | `withOptions(...)`, `withTitleFunc`, `withDescriptionFunc`, `withFuzzySuggestions(list<string>)` |
 | `MultiSelect` | Multi-choice list                                           | `withOptions(...)`, `withLimit(int)` |
 | `Note`        | Read-only paragraph; skipped by tab navigation              | `withTitle`, `withDescription`, `withHeight(int)`, `withNext(bool)`, `withNextLabel(string)` (turns it into an interactive button page) |
 | `FilePicker`  | Filesystem picker (wraps `SugarBits\FileTree`)              | `withCwd`, `withAllowDirs`, `withAllowFiles`, `withShowSize`, `withShowHidden` |
@@ -172,6 +172,52 @@ final class NoSpaces implements Validator
     }
 }
 ```
+
+### Fuzzy suggestions
+
+`Input` and `Select` fields support `withFuzzySuggestions()` for
+fuzzy substring matching via Smith-Waterman local alignment scoring.
+Candidates are ranked by score and filtered to only matches with a
+positive score.
+
+```php
+use SugarCraft\Prompt\Form;
+use SugarCraft\Prompt\Field\{Input, Select};
+
+$form = Form::new(
+    Input::new('language')
+        ->withTitle('Pick a language')
+        ->withFuzzySuggestions(['PHP', 'Python', 'Go', 'Rust', 'JavaScript', 'TypeScript']),
+    Select::new('framework')
+        ->withTitle('Pick a framework')
+        ->withOptions(['Laravel', 'Symfony', 'Rails', 'Django', 'FastAPI', 'Fiber'])
+        ->withFuzzySuggestions(['Laravel', 'Symfony', 'Rails', 'Django', 'FastAPI', 'Fiber']),
+);
+```
+
+The `fuzzy()` short alias is equivalent:
+
+```php
+->fuzzy(['PHP', 'Python', 'Go', 'Rust'])
+```
+
+For fine-grained control, use `FuzzyMatcher` directly:
+
+```php
+use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
+
+$matcher = new FuzzyMatcher();
+
+// Score a single candidate (higher = better match)
+$score = $matcher->score('js', 'JavaScript'); // 9
+
+// Rank all candidates — returns list<[string, int]> sorted by score desc
+$matches = $matcher->match('py', ['Python', 'PHP', 'Ruby', 'JavaScript']);
+// [['Python', 8], ['JavaScript', 1]]
+```
+
+Scoring constants: match=`+3`, mismatch=`-3`, gap open=`-5`, gap extend=`-1`,
+adjacent bonus=`+5` for consecutive matches.
 
 ## Validation
 
