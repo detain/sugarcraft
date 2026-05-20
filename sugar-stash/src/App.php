@@ -13,8 +13,10 @@ use SugarCraft\Core\Msg\KeyMsg;
 /**
  * Three-pane git TUI: status (left), branches (top right), log (bottom
  * right). Tab cycles focus; up/down moves the cursor in the active
- * pane; `s` stages / unstages the highlighted status entry; `R`
- * refreshes from disk.
+ * pane; `s` stages / unstages the highlighted status entry; `a`
+ * stages all files; Space (branches pane) checks out the selected
+ * branch; `c` opens inline commit message collection; `?` shows the
+ * help overlay; `R` refreshes from disk.
  */
 final class App implements Model
 {
@@ -34,8 +36,11 @@ final class App implements Model
         public readonly int $branchesCursor = 0,
         public readonly int $logCursor      = 0,
         public readonly ?string $error = null,
+        /** Whether the help overlay is currently displayed. */
         public readonly bool $showHelp = false,
+        /** Whether the app is collecting a commit message character-by-character. */
         public readonly bool $collectingCommit = false,
+        /** The accumulated commit message while collectingCommit is true. */
         public readonly string $commitMessage = '',
     ) {}
 
@@ -253,6 +258,7 @@ final class App implements Model
         }
     }
 
+    /** Runs `git add -A` via the GitDriver, then refreshes the status list. */
     private function stageAll(): self
     {
         try {
@@ -263,6 +269,7 @@ final class App implements Model
         }
     }
 
+    /** Checks out the branch at the current branches cursor via GitDriver::checkout(). */
     private function checkoutBranch(): self
     {
         $branch = $this->branches[$this->branchesCursor] ?? null;
@@ -277,11 +284,13 @@ final class App implements Model
         }
     }
 
+    /** Opens inline commit message collection — sets collectingCommit=true, clears commitMessage. */
     private function startCommit(): self
     {
         return $this->withCommitCollection(true, '');
     }
 
+    /** Calls GitDriver::commit() with the accumulated message, then exits collection mode and refreshes. */
     private function executeCommit(): self
     {
         if ($this->commitMessage === '') {
