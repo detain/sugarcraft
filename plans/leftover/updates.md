@@ -467,5 +467,6 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 
 step 09.06 · PR#721 · candy-mines: chord clicks + microtime timer + DifficultyStats persistence
 step 09.07 · PR#723 · candy-mines: O(1) win detection via revealedCount + serialize/unserialize + CustomDifficulty UI
+review for step 09.07 · clean · PR#723
 docs for step 09.06 · PR#722 · document chord()/microtimer/DifficultyStats in README + end-user HTML + new CALIBER_LEARNINGS.md
 
