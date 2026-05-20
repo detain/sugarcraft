@@ -525,17 +525,9 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     docs for step 10.01 · PR#753 · document copy/move/rename in README (c/m/R keys + Status section) + end-user HTML (keys/feature grid/API table) + Manager.php PHPDoc (@throws/@return on copy/move/rename + docblocks on arm* helpers)
     step 10.02 · PR#754 · super-candy: add bulk rename + preview pane + async ops (leftover-rollout step 10.02)
     fix for step 10.02 · PR#755 · resolved 4 findings (finfo warning suppression + WHAT-comment removal + README Architecture table update)
+    fix for step 10.03 · PR#757 · resolved 1 finding
 
 ## Open review findings — 09.19
 
 - [ ] 🟢 Nitpick: `Game::PIPE_GAP` (line 30) is defined but never used — the old static gap constant replaced by `PipeGenerator::GAP_DEFAULT`. No functional impact; consider removing in a follow-up cleanup pass.
-
-## Open review findings — 10.03
-
-- [ ] 🟡 Minor: `sugar-stash/README.md` — the "Keys" table (lines 23–31) documents `Tab`/`k`/`j`/`s`/`R`/`q`/`Esc` but is missing all four new bindings added by this PR:
-  - `?` — context-sensitive help overlay
-  - `c` — commit with inline message collection
-  - `a` (status pane) — stage all files  
-  - `Space` (branches pane) — checkout selected branch
-  Additionally, `lang/en.php`'s `help.keyhints` footer string was not updated to include the new bindings alongside the existing ones.
 
