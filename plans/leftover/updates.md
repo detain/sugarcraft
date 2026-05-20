@@ -378,8 +378,11 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   step 08.07 · PR#696 · sugar-bits: Table filter (withFilterable/withFilter/withFilterPredicate + 27 FilterTest tests; leftover-rollout step 08.07)
   review for step 08.07 · clean · PR#696
   tests-ci for step 08.07 · clean
+  step 08.08 · PR#698 · sugar-bits: Table pagination (withPageSize/getPaginator + pageFirst/pageLast/nextPage/prevPage + 27 PaginationTest; leftover-rollout step 08.08)
+  review for step 08.08 · clean · PR#698
+  tests-ci for step 08.08 · clean
   docs for step 08.07 · PR#697 · document withFilterable/withFilter/withFilterPredicate + default substring-match in README + end-user HTML
-  step 08.08 · PR#698 · sugar-bits: Table pagination (withPageSize/getPaginator/nextPage/prevPage/pageFirst/pageLast + 27 PaginationTest tests; leftover-rollout step 08.08)
+  docs for step 08.08 · PR#699 · document withPageSize/getPaginator/navigation methods in README + end-user HTML
 
 ## Open review findings — 08.04
 
