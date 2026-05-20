@@ -44,6 +44,7 @@ final class Table implements Model
         public readonly ?Styles $styles = null,
         /** @var ?\Closure(int $row, int $col): \SugarCraft\Sprinkles\Style */
         public readonly ?\Closure $styleFunc = null,
+        public readonly ?SortState $sortState = null,
     ) {}
 
     /**
@@ -56,14 +57,15 @@ final class Table implements Model
             throw new \InvalidArgumentException(Lang::t('table.dim_nonneg'));
         }
         return new self(
-            headers: array_values($headers),
-            rows:    array_values(array_map('array_values', $rows)),
-            cursor:  0,
-            offset:  0,
-            width:   $width,
-            height:  $height,
-            focused: false,
+            headers:   array_values($headers),
+            rows:      array_values(array_map('array_values', $rows)),
+            cursor:    0,
+            offset:    0,
+            width:     $width,
+            height:    $height,
+            focused:   false,
             colWidths: [],
+            sortState: SortState::empty(),
         );
     }
 
@@ -150,7 +152,8 @@ final class Table implements Model
         }
 
         $top    = max(0, $this->offset);
-        $window = array_slice($this->rows, $top, $this->height);
+        $sortedRows = $this->sortedRows();
+        $window = array_slice($sortedRows, $top, $this->height);
         foreach ($window as $i => $row) {
             $idx = $top + $i;
             $line = $this->renderRow($row, $cols, $idx);
@@ -269,7 +272,81 @@ final class Table implements Model
     /** Move cursor down `$n` rows. */
     public function moveDown(int $n = 1): self { return $this->moveCursor($this->cursor + max(1, $n)); }
 
+    /**
+     * Set the primary sort column and direction. Clears any prior sort chain.
+     */
+    public function withSort(string $column, SortDirection $dir = SortDirection::Asc): self
+    {
+        $colIndex = $this->resolveColumnIndex($column);
+        $state = SortState::empty()->withCriterion($colIndex, $dir);
+        return $this->mutate(sortState: $state, sortStateSet: true);
+    }
+
+    /**
+     * Add a secondary (or further) sort criterion. The chain is applied
+     * in order — first `withSort()` is primary, each `thenSortBy()` is a
+     * tiebreaker.
+     */
+    public function thenSortBy(string $column, SortDirection $dir = SortDirection::Asc): self
+    {
+        $colIndex = $this->resolveColumnIndex($column);
+        $state = $this->sortState ?? SortState::empty();
+        return $this->mutate(sortState: $state->withCriterion($colIndex, $dir), sortStateSet: true);
+    }
+
+    /** Remove all sort criteria, restoring insertion order. */
+    public function clearSort(): self
+    {
+        return $this->mutate(sortState: SortState::empty(), sortStateSet: true);
+    }
+
+    /** @return SortState */
+    public function getSortState(): SortState
+    {
+        return $this->sortState ?? SortState::empty();
+    }
+
     // ---- internals ---------------------------------------------------
+
+    /**
+     * Resolve a column name to its index. Throws if the column is not found.
+     */
+    private function resolveColumnIndex(string $column): int
+    {
+        $idx = array_search($column, $this->headers, true);
+        if ($idx === false) {
+            throw new \InvalidArgumentException(Lang::t('table.sort_unknown_column', ['column' => $column]));
+        }
+        return (int) $idx;
+    }
+
+    /**
+     * Return the rows sorted according to the current sortState chain.
+     * Returns the original rows array when no sort criteria are set.
+     *
+     * @return list<list<string>>
+     */
+    private function sortedRows(): array
+    {
+        $state = $this->sortState ?? SortState::empty();
+        if ($state->isEmpty()) {
+            return $this->rows;
+        }
+
+        $rows = $this->rows;
+        // Apply sort criteria in reverse order (last criterion is applied first
+        // by usort, so we need to reverse the chain).
+        $criteria = array_reverse($state->criteria);
+        foreach ($criteria as [$col, $dir]) {
+            usort($rows, static function (array $a, array $b) use ($col, $dir): int {
+                $va = $a[$col] ?? '';
+                $vb = $b[$col] ?? '';
+                $cmp = strnatcasecmp((string) $va, (string) $vb);
+                return $dir === SortDirection::Desc ? -$cmp : $cmp;
+            });
+        }
+        return $rows;
+    }
 
     /** @return list<int> */
     private function columnWidths(): array
@@ -381,6 +458,8 @@ final class Table implements Model
         bool $stylesSet = false,
         ?\Closure $styleFunc = null,
         bool $styleFuncSet = false,
+        ?SortState $sortState = null,
+        bool $sortStateSet = false,
     ): self {
         return new self(
             headers:   $headers   ?? $this->headers,
@@ -393,6 +472,7 @@ final class Table implements Model
             colWidths: $colWidths ?? $this->colWidths,
             styles:    $stylesSet ? $styles : $this->styles,
             styleFunc: $styleFuncSet ? $styleFunc : $this->styleFunc,
+            sortState: $sortStateSet ? $sortState : $this->sortState,
         );
     }
 }
