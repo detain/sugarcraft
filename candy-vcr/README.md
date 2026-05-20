@@ -426,11 +426,11 @@ substring always matches.
 
 `SugarCraft\Vcr\Msg\Registry::default()` is preloaded with:
 
-- **`BuiltinSerializer`** — covers 14 candy-core Msgs: `KeyMsg`,
+- **`BuiltinSerializer`** — covers 19 Msgs: `KeyMsg`,
   `MouseClickMsg / MotionMsg / WheelMsg / ReleaseMsg`, `WindowSizeMsg`,
-  `FocusMsg`, `BlurMsg`, `PasteStartMsg / EndMsg / Msg`,
-  `BackgroundColorMsg`, `ForegroundColorMsg`, `CursorPositionMsg`. Tag
-  is the unqualified class name.
+  `FocusGainedMsg / FocusLostMsg / BlurMsg`, `FocusInMsg / FocusOutMsg`,
+  `PasteStartMsg / EndMsg / Msg`, `BackgroundColorMsg`, `ForegroundColorMsg`,
+  `CursorPositionMsg`. Tag is the unqualified class name.
 - **`JsonableSerializer`** — catch-all for any Msg implementing
   `\JsonSerializable`. Tag is the FQCN; `data` is the
   `jsonSerialize()` result. Round-trip works when the constructor's

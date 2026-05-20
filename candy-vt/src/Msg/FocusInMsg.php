@@ -10,6 +10,8 @@ use SugarCraft\Core\Msg;
  * Focus-in event — terminal received focus (CSI I).
  *
  * Mirrors charmbracelet/x/vt FocusInMsg.
+ *
+ * @implements Msg
  */
 final readonly class FocusInMsg implements Msg
 {
