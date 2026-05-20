@@ -10,6 +10,8 @@ use SugarCraft\Core\Msg;
  * Focus-out event — terminal lost focus (CSI O).
  *
  * Mirrors charmbracelet/x/vt FocusOutMsg.
+ *
+ * @implements Msg
  */
 final readonly class FocusOutMsg implements Msg
 {
