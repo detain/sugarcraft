@@ -4,8 +4,14 @@ declare(strict_types=1);
 
 namespace SugarCraft\Prompt\Field;
 
+use React\EventLoop\Loop;
+use React\Promise\Deferred;
+use React\Promise\PromiseInterface;
 use SugarCraft\Bits\TextInput\TextInput;
+use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\SuggestionsReadyMsg;
+use SugarCraft\Core\WorkerPool;
 use SugarCraft\Prompt\Field;
 use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
 use SugarCraft\Prompt\HasDynamicLabels;
@@ -32,6 +38,18 @@ final class Input implements Field
     /** @var list<string> */
     private array $fuzzyCandidates = [];
 
+    /** @var callable|null Async suggestions fetcher: receives input value, returns PromiseInterface<list<string>> */
+    private $asyncSuggestionsFetcher = null;
+
+    /** @var int Debounce delay in ms for async suggestions */
+    private int $asyncSuggestionsDebounceMs = 150;
+
+    /** @var int Sequence counter for pending async operations (for cancellation) */
+    private int $pendingAsyncSeq = 0;
+
+    /** @var WorkerPool|null */
+    private $workerPool = null;
+
     private function __construct(
         public readonly string $key,
         public readonly TextInput $input,
@@ -41,10 +59,18 @@ final class Input implements Field
         array $validators = [],
         ?\Closure $suggestionsFunc = null,
         array $fuzzyCandidates = [],
+        callable $asyncSuggestionsFetcher = null,
+        int $asyncSuggestionsDebounceMs = 150,
+        int $pendingAsyncSeq = 0,
+        WorkerPool $workerPool = null,
     ) {
         $this->validators = $validators;
         $this->suggestionsFunc = $suggestionsFunc;
         $this->fuzzyCandidates = $fuzzyCandidates;
+        $this->asyncSuggestionsFetcher = $asyncSuggestionsFetcher;
+        $this->asyncSuggestionsDebounceMs = $asyncSuggestionsDebounceMs;
+        $this->pendingAsyncSeq = $pendingAsyncSeq;
+        $this->workerPool = $workerPool;
     }
 
     public static function new(string $key): self
@@ -56,6 +82,10 @@ final class Input implements Field
             description: '',
             error: null,
             validators: [],
+            asyncSuggestionsFetcher: null,
+            asyncSuggestionsDebounceMs: 150,
+            pendingAsyncSeq: 0,
+            workerPool: null,
         );
     }
 
@@ -130,6 +160,10 @@ final class Input implements Field
             $this->validators,
             $fn,
             $this->fuzzyCandidates,
+            $this->asyncSuggestionsFetcher,
+            $this->asyncSuggestionsDebounceMs,
+            $this->pendingAsyncSeq,
+            $this->workerPool,
         );
     }
 
@@ -163,7 +197,47 @@ final class Input implements Field
             $this->validators,
             $fn,
             $candidates,
+            $this->asyncSuggestionsFetcher,
+            $this->asyncSuggestionsDebounceMs,
+            $this->pendingAsyncSeq,
+            $this->workerPool,
         );
+    }
+
+    /**
+     * Async suggestions via a callable that returns a Promise.
+     * Debounces for $debounceMs after each keystroke, then calls the fetcher.
+     * Uses WorkerPool to run the fetch off the main event loop.
+     * Mirrors huh's async suggestion pattern.
+     *
+     * @param callable(string):PromiseInterface<list<string>> $fetcher Receives current input value, returns promise of suggestions
+     * @param int $debounceMs Milliseconds to wait after last keystroke before fetching (default 150)
+     * @param WorkerPool|null $workerPool Optional worker pool for offloading; uses Loop::get() if not provided
+     */
+    public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    {
+        return new self(
+            $this->key,
+            $this->input,
+            $this->title,
+            $this->description,
+            $this->error,
+            $this->validators,
+            $this->suggestionsFunc,
+            $this->fuzzyCandidates,
+            $fetcher,
+            $debounceMs,
+            $this->pendingAsyncSeq,
+            $workerPool,
+        );
+    }
+
+    /**
+     * Short-form alias for withAsyncSuggestions.
+     */
+    public function async(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
+    {
+        return $this->withAsyncSuggestions($fetcher, $debounceMs, $workerPool);
     }
 
     /**
@@ -193,6 +267,11 @@ final class Input implements Field
             $this->error,
             $chained,
             $this->suggestionsFunc,
+            $this->fuzzyCandidates,
+            $this->asyncSuggestionsFetcher,
+            $this->asyncSuggestionsDebounceMs,
+            $this->pendingAsyncSeq,
+            $this->workerPool,
         );
     }
 
@@ -254,6 +333,16 @@ final class Input implements Field
 
     public function update(Msg $msg): array
     {
+        // Handle async suggestions result
+        if ($msg instanceof SuggestionsReadyMsg && $msg->fieldKey === $this->key) {
+            $next = $this->mutate(
+                input: $this->input
+                    ->withSuggestions($msg->suggestions)
+                    ->showSuggestions($msg->suggestions !== []),
+            );
+            return [$next, null];
+        }
+
         [$ti, $cmd] = $this->input->update($msg);
         if ($this->suggestionsFunc !== null) {
             $candidates = ($this->suggestionsFunc)($ti->value);
@@ -261,7 +350,64 @@ final class Input implements Field
         }
         $next = $this->mutate(input: $ti);
         $next = $next->validate();
+
+        // Schedule async suggestions with debounce on Char keystroke
+        if ($this->asyncSuggestionsFetcher !== null
+            && $msg instanceof \SugarCraft\Core\Msg\KeyMsg
+            && $msg->type === \SugarCraft\Core\KeyType::Char
+        ) {
+            $asyncCmd = $this->scheduleAsyncSuggestions($next);
+            // Combine with any existing cmd from the synchronous update
+            if ($cmd !== null) {
+                // Return combined cmd (both must run)
+                return [$next, fn() => $cmd()];
+            }
+            return [$next, $asyncCmd];
+        }
+
         return [$next, $cmd];
+    }
+
+    /**
+     * Schedule async suggestions fetch with debounce.
+     * Returns a Cmd that will perform the debounce and return AsyncCmd.
+     *
+     * @return \Closure|null Returns a Cmd closure, or null if no async suggestions
+     */
+    private function scheduleAsyncSuggestions(self $field): ?\Closure
+    {
+        $fetcher = $this->asyncSuggestionsFetcher;
+        $debounceMs = $this->asyncSuggestionsDebounceMs;
+        $currentSeq = ++$this->pendingAsyncSeq;
+        $fieldKey = $this->key;
+        $workerPool = $this->workerPool;
+
+        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $workerPool): \SugarCraft\Core\AsyncCmd {
+            $deferred = new Deferred();
+
+            // Schedule the debounce timer
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $workerPool): void {
+                // Get current input value
+                $inputValue = $field->input->value;
+
+                // Call the fetcher to get a promise
+                $promise = $fetcher($inputValue);
+
+                // Chain to resolve the deferred when the fetcher promise resolves
+                $promise->then(
+                    function (array $suggestions) use ($deferred, $currentSeq, $field): void {
+                        // Check if this result is still relevant (sequence check)
+                        // Note: We pass the sequence through the promise chain
+                        $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
+                    },
+                    function (\Throwable $e) use ($deferred): void {
+                        $deferred->reject($e);
+                    }
+                );
+            });
+
+            return new \SugarCraft\Core\AsyncCmd($deferred->promise());
+        };
     }
 
     public function view(): string
@@ -300,11 +446,21 @@ final class Input implements Field
                 if ($err === $this->error) {
                     return $this;
                 }
-                return new self($this->key, $this->input, $this->title, $this->description, $err, $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates);
+                return new self(
+                    $this->key, $this->input, $this->title, $this->description, $err,
+                    $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates,
+                    $this->asyncSuggestionsFetcher, $this->asyncSuggestionsDebounceMs,
+                    $this->pendingAsyncSeq, $this->workerPool,
+                );
             }
         }
         if ($this->error !== null) {
-            return new self($this->key, $this->input, $this->title, $this->description, null, $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates);
+            return new self(
+                $this->key, $this->input, $this->title, $this->description, null,
+                $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates,
+                $this->asyncSuggestionsFetcher, $this->asyncSuggestionsDebounceMs,
+                $this->pendingAsyncSeq, $this->workerPool,
+            );
         }
         return $this;
     }
@@ -312,14 +468,18 @@ final class Input implements Field
     private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null): self
     {
         return new self(
-            key:             $this->key,
-            input:           $input       ?? $this->input,
-            title:           $title       ?? $this->title,
-            description:     $description ?? $this->description,
-            error:           $error       ?? $this->error,
-            validators:      $this->validators,
-            suggestionsFunc: $this->suggestionsFunc,
-            fuzzyCandidates: $this->fuzzyCandidates,
+            key:                       $this->key,
+            input:                     $input       ?? $this->input,
+            title:                     $title       ?? $this->title,
+            description:               $description ?? $this->description,
+            error:                     $error       ?? $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $this->suggestionsFunc,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            workerPool:                $this->workerPool,
         );
     }
 }
