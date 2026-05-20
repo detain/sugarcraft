@@ -30,11 +30,31 @@ final class ReplayCommand implements Command
         $path = null;
         $speed = 'instant';
         $noTrim = false;
-        foreach ($args as $arg) {
+        $idleTrim = null;
+        for ($i = 0; $i < count($args); $i++) {
+            $arg = $args[$i];
             if (str_starts_with($arg, '--speed=')) {
                 $speed = substr($arg, 8);
             } elseif ($arg === '--no-trim') {
                 $noTrim = true;
+            } elseif (str_starts_with($arg, '--idle-trim=')) {
+                $idleTrim = (float) substr($arg, 12);
+                if ($idleTrim <= 0.0) {
+                    fwrite($stderr, "candy-vcr replay: --idle-trim must be > 0 seconds\n");
+                    return 2;
+                }
+            } elseif ($arg === '--idle-trim') {
+                $next = $args[$i + 1] ?? null;
+                if ($next === null || str_starts_with($next, '--')) {
+                    fwrite($stderr, "candy-vcr replay: --idle-trim requires a positive seconds argument\n");
+                    return 2;
+                }
+                $i++;
+                $idleTrim = (float) $next;
+                if ($idleTrim <= 0.0) {
+                    fwrite($stderr, "candy-vcr replay: --idle-trim must be > 0 seconds\n");
+                    return 2;
+                }
             } elseif (str_starts_with($arg, '--')) {
                 fwrite($stderr, "candy-vcr replay: unknown option {$arg}\n");
                 return 2;
@@ -44,7 +64,7 @@ final class ReplayCommand implements Command
         }
 
         if ($path === null) {
-            fwrite($stderr, "usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--no-trim]\n");
+            fwrite($stderr, "usage: candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim N] [--no-trim]\n");
             return 2;
         }
         if (!in_array($speed, ['instant', 'realtime'], true)) {
@@ -71,6 +91,12 @@ final class ReplayCommand implements Command
                 : $event->t;
             if ($speed === 'realtime') {
                 $delta = $effectiveT - $previousT;
+                // Apply idle-trim: clamp long delays to the specified threshold
+                // so playback doesn't wait for multi-second gaps that were
+                // only present in the recording environment.
+                if ($idleTrim !== null && $delta > $idleTrim) {
+                    $delta = $idleTrim;
+                }
                 if ($delta > 0) {
                     usleep((int) ($delta * 1_000_000));
                 }
