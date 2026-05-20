@@ -46,6 +46,20 @@ for ($frame = 0; $frame < 60; $frame++) {
 `Spring::fps(int $n)` returns `1.0 / $n` for the deltaTime — pair with the
 same `$n` per-second simulation cadence.
 
+### Reduced motion
+
+When the `REDUCE_MOTION=1` environment variable is set or the terminal
+signals `prefers-reduced-motion`, `Spring::update()` snaps to `$target`
+instantly and returns `[<target>, 0.0]`. This satisfies the
+[WCAG 2.1 reduced-motion guideline](https://www.w3.org/WIA/WDAG-ACCRM/)
+and matches the behaviour of `SugarCraft\Palette\Probe::reducedMotion()`.
+
+```php
+// With REDUCE_MOTION=1 the spring skips animation entirely:
+putenv('REDUCE_MOTION=1');
+[$pos, $vel] = $spring->update(0.0, 0.0, 100.0);  // returns [100.0, 0.0]
+```
+
 ### Spring presets
 
 `Spring::fromPreset(SpringPreset $preset, ?float $deltaTime = null)` constructs
@@ -153,6 +167,31 @@ call (immutable-with-pattern); upstream `Projectile.Update()` returns
 the new `Point` and mutates the receiver in place. Read the new
 position from `result->position` rather than `$p->position()`.
 
+## SpringChain
+
+Sequence multiple springs so that one spring's settle triggers the next.
+Useful for staggered animations where each stage must complete before
+the next begins.
+
+```php
+use SugarCraft\Bounce\{SpringChain, Spring, SpringPreset};
+
+$chain = (new SpringChain([]))
+    ->withStage(Spring::fromPreset(SpringPreset::Gentle), 0.0, 0.0, 50.0)
+    ->withStage(Spring::fromPreset(SpringPreset::Wobbly), 0.0, 0.0, 100.0)
+    ->withStage(Spring::fromPreset(SpringPreset::Stiff),  0.0, 0.0, 75.0);
+
+while (!$chain->isComplete()) {
+    [$positions, $complete] = $chain->tick();
+    // $positions reflects settled stages + the currently animating stage
+}
+```
+
+Each `tick()` call advances only the active stage. When that stage reaches
+its target (position and velocity both within 0.001 of target), the chain
+activates the next stage. `isComplete()` returns `true` when all stages
+have settled.
+
 ## Easing
 
 `SugarCraft\Bounce\Easing\Easing` provides named easing curves via its
@@ -230,7 +269,16 @@ using the Newton-Raphson algorithm from the W3C CSS Easing spec.
 ## Public API
 
 - **`Spring`** — `__construct($dt, $ω, $ζ)` / `update($pos, $vel, $target)` /
-  `fps(int)` / `fromPreset(SpringPreset, ?float)`.
+  `fps(int)` / `fromPreset(SpringPreset, ?float)`. `update()` short-circuits
+  to `[$target, 0.0]` when `Probe::reducedMotion()` is true.
+- **`SpringChain`** — `__construct($stages)` / `build($stages)` /
+  `withStage(Spring, $pos, $vel, $target)` / `tick(): (list<float>, bool)` /
+  `currentPositions(): list<float>` / `isComplete(): bool` /
+  `activeStage(): int`.
+- **`SpringCollection`** — `add($id, Spring, ...)` / `remove($id)` /
+  `tick(): array<string,float>` / `get($id): float` / `has($id): bool` /
+  `all(): array<string,float>` / `setTarget($id, $target)` /
+  `getTarget($id): float`.
 - **`SpringPreset`** — `Gentle` / `Wobbly` / `Stiff` / `Slow` / `Molasses`.
   `resolve()` returns a `SpringConfig`.
 - **`SpringConfig`** — `__construct(tension, friction, mass)` /

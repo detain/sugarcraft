@@ -14,6 +14,17 @@ composer require sugarcraft/honey-bounce
 
 ## Quickstart
 
+### Reduced motion
+
+When `REDUCE_MOTION=1` is set in the environment, `Spring::update()`
+snaps to its target instantly and returns `[<target>, 0.0]`, satisfying
+the WCAG 2.1 reduced-motion guideline via `SugarCraft\Palette\Probe::reducedMotion()`:
+
+```php
+putenv('REDUCE_MOTION=1');
+[$pos, $vel] = $spring->update(0.0, 0.0, 100.0);  // returns [100.0, 0.0]
+```
+
 ### Spring preset
 
 ```php
@@ -67,6 +78,23 @@ $ease = CubicBezier::easeInOutCubic();
 for ($f = 0; $f <= 60; $f++) {
     $t = $f / 60.0;
     $eased = $ease->evaluate($t);  // maps [0,1] → [0,1]
+}
+```
+
+### SpringChain (staggered animation)
+
+Chain multiple springs so each one begins only when the previous settles:
+
+```php
+use SugarCraft\Bounce\{SpringChain, Spring, SpringPreset};
+
+$chain = (new SpringChain([]))
+    ->withStage(Spring::fromPreset(SpringPreset::Gentle),  0.0, 0.0, 50.0)
+    ->withStage(Spring::fromPreset(SpringPreset::Wobbly), 0.0, 0.0, 100.0)
+    ->withStage(Spring::fromPreset(SpringPreset::Stiff),  0.0, 0.0, 75.0);
+
+while (!$chain->isComplete()) {
+    [$positions, $complete] = $chain->tick();
 }
 ```
 
