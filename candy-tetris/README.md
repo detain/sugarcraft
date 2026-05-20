@@ -56,7 +56,9 @@ The computer opponent uses weighted heuristics (board height, holes, gaps, lines
 | p         | Pause / resume    |
 | q         | Quit              |
 
-## Scoring (NES-classic)
+## Scoring
+
+### Line-clear scoring
 
 | Lines cleared | Base points × (level + 1) |
 |---------------|----------------------------|
@@ -66,6 +68,47 @@ The computer opponent uses weighted heuristics (board height, holes, gaps, lines
 | 4 (Tetris)    | 1200                       |
 
 Level rises every 10 lines. Gravity speeds up at every level — by level 9 pieces fall every 6 frames, by level 29+ they fall every frame. The frame-rate-agnostic `Score::framesPerRow()` is what the gravity tick consults.
+
+### T-Spin scoring
+
+When a T piece is rotated into a position where two or more of its four diagonal corner cells are already filled (walls count as filled), it scores as a **T-Spin**:
+
+| Type     | Base points |
+|----------|-------------|
+| T-Spin   | 400 × (level + 1) |
+| T-Spin Mini | 100 × (level + 1) |
+
+T-Spin Mini is detected when exactly two front corners are filled (the side the piece entered from).
+
+**3-corner rule:** A T-Spin is active when the locked T piece's final position differs in rotation from its pre-lock rotation, AND at least two of the four diagonal corner cells around the T are occupied (wall/out-of-bounds = occupied). See `Scoring\TSpin::detect()`.
+
+### Back-to-Back (B2B) bonus
+
+Consecutive Tetris clears or full T-Spins (non-mini) carry a **1.5× multiplier** on the line-clear base points:
+
+- 4-line Tetris after a prior Tetris → 1200 × 1.5 × (level + 1)
+- Full T-Spin after a prior full T-Spin → 400 × 1.5 × (level + 1)
+
+B2B resets when a 1–3 line clear or a T-Spin Mini breaks the streak.
+
+### Combo bonus
+
+Consecutive line clears (regardless of type) build a **combo counter** — each combo step adds `combo × 10 × (level + 1)` bonus points. The counter resets to 0 on any clean (zero-line) piece placement.
+
+### Perfect clear bonus
+
+When all lines are cleared at once and the board becomes completely empty, an additional **+5000 × (level + 1)** bonus is awarded.
+
+### DAS / ARR keyboard timing
+
+Horizontal movement uses **Delayed Auto Shift (DAS)** and **Auto Repeat Rate (ARR)** for precise key repeat:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| DAS delay | 167 ms  | Time a direction key must be held before auto-repeat begins |
+| ARR interval | 50 ms | Interval between repeated actions once DAS threshold is passed |
+
+This gives precise single-tap control (release before DAS) and smooth continuous movement (hold past DAS threshold). Defaults can be overridden via `Das::create($dasMicroseconds, $arrMicroseconds)`. See `Input\Das`.
 
 ## Architecture
 
