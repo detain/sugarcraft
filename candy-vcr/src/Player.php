@@ -11,6 +11,7 @@ use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ByteAssertion;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Matcher\EventMatcher;
 use SugarCraft\Vcr\Msg\Registry;
 
@@ -66,7 +67,49 @@ final class Player
 
     public static function open(string $path): self
     {
-        return new self((new JsonlFormat())->read($path));
+        return new self(self::detectFormat($path)->read($path));
+    }
+
+    /**
+     * Detect which format to use by examining the first event line.
+     * RelativeFormat uses `dt` field; JsonlFormat uses `t` field.
+     */
+    private static function detectFormat(string $path): Format
+    {
+        $fh = @fopen($path, 'rb');
+        if ($fh === false) {
+            throw new \RuntimeException("candy-vcr: cannot open cassette {$path}");
+        }
+
+        try {
+            // Skip header line
+            $headerLine = fgets($fh);
+            if ($headerLine === false) {
+                throw new \RuntimeException('candy-vcr: cassette is empty');
+            }
+
+            // Read first event line to detect format
+            $eventLine = fgets($fh);
+            if ($eventLine === false) {
+                // No events, default to JsonlFormat
+                return new JsonlFormat();
+            }
+
+            $data = json_decode($eventLine, true);
+            if (!is_array($data)) {
+                // Can't detect, default to JsonlFormat
+                return new JsonlFormat();
+            }
+
+            // RelativeFormat uses `dt` field instead of `t`
+            if (array_key_exists('dt', $data)) {
+                return new RelativeFormat();
+            }
+
+            return new JsonlFormat();
+        } finally {
+            @fclose($fh);
+        }
     }
 
     /**
