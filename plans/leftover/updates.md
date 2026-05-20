@@ -394,8 +394,10 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   docs for step 08.10 · clean
   step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11)
   fix for step 08.11 · PR#703 · resolved 3 findings (path-repo restored + README docs + CALIBER_LEARNINGS)
-  step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend 5-color + Style::patch + rapid blink (leftover-rollout step 08.12)
-
+  step 08.12 · PR#704 · candy-sprinkles: BorderGradientBlend N-color (1-5) + Style::patch() + rapidBlink(SGR 6) (leftover-rollout step 08.12)
+  review for step 08.12 · clean · PR#704
+  tests-ci for step 08.12 · clean
+  docs for step 08.12 · direct-to-master · document BorderGradientBlend/Style::patch/rapidBlink
  ## Open review findings — 08.04
 
 - [x] sugar-prompt/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
