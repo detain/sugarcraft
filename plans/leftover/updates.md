@@ -529,4 +529,13 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
 ## Open review findings — 09.19
 
 - [ ] 🟢 Nitpick: `Game::PIPE_GAP` (line 30) is defined but never used — the old static gap constant replaced by `PipeGenerator::GAP_DEFAULT`. No functional impact; consider removing in a follow-up cleanup pass.
-    
+
+## Open review findings — 10.03
+
+- [ ] 🟡 Minor: `sugar-stash/README.md` — the "Keys" table (lines 23–31) documents `Tab`/`k`/`j`/`s`/`R`/`q`/`Esc` but is missing all four new bindings added by this PR:
+  - `?` — context-sensitive help overlay
+  - `c` — commit with inline message collection
+  - `a` (status pane) — stage all files  
+  - `Space` (branches pane) — checkout selected branch
+  Additionally, `lang/en.php`'s `help.keyhints` footer string was not updated to include the new bindings alongside the existing ones.
+
