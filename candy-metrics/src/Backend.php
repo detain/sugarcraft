@@ -39,4 +39,25 @@ interface Backend
      * @param array<string,string> $tags
      */
     public function histogram(string $name, float $value, array $tags = []): void;
+
+    /**
+     * Add a positive or negative increment to a synchronous up-down counter.
+     *
+     * @param array<string,string> $tags
+     */
+    public function upDownCounter(string $name, float $amount, array $tags = []): void;
+
+    /**
+     * Record an observation from an asynchronous counter callback.
+     *
+     * @param array<string,string> $tags
+     */
+    public function asyncCounter(string $name, float $value, array $tags = []): void;
+
+    /**
+     * Record an observation from an asynchronous gauge callback.
+     *
+     * @param array<string,string> $tags
+     */
+    public function asyncGauge(string $name, float $value, array $tags = []): void;
 }
