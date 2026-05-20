@@ -47,6 +47,7 @@ final class SvgRenderer
         public readonly bool $lineNumbers  = false,
         public readonly int $borderRadius  = 8,
         public readonly WindowStyle $windowStyle = WindowStyle::Macos,
+        public readonly bool $ligatures    = false,
     ) {}
 
     public static function dark():       self { return new self(theme: Theme::dark()); }
@@ -62,6 +63,7 @@ final class SvgRenderer
     public function withBorder(bool $on):    self { return $this->copy(border: $on); }
     public function withLineNumbers(bool $on): self { return $this->copy(lineNumbers: $on); }
     public function withBorderRadius(int $r): self { return $this->copy(borderRadius: max(0, $r)); }
+    public function withLigatures(bool $on): self { return $this->copy(ligatures: $on); }
     public function withWindowStyle(WindowStyle|string $style): self
     {
         $style = $style instanceof WindowStyle ? $style : WindowStyle::from($style);
@@ -137,10 +139,11 @@ final class SvgRenderer
         $textY0 = $shadowMargin + $this->padding + $headerHeight + $this->theme->fontSize;
         $textX0 = $shadowMargin + $this->padding;
 
+        $ligatureAttr = $this->ligatures ? ' font-variant-ligatures="normal"' : '';
         $svg .= '<g font-family="' . self::xmlEscape($this->theme->fontFamily) . '" '
               . 'font-size="' . $this->theme->fontSize . '" '
-              . 'fill="' . self::xmlEscape($this->theme->foreground) . '" '
-              . 'xml:space="preserve">' . "\n";
+              . 'fill="' . self::xmlEscape($this->theme->foreground) . '"'
+              . $ligatureAttr . ' xml:space="preserve">' . "\n";
 
         foreach ($lines as $i => $line) {
             $y = $textY0 + $i * $cellH;
@@ -156,6 +159,15 @@ final class SvgRenderer
             $segments = AnsiParser::parse($line);
             $x = $textX0 + $gutter * $cellW;
             foreach ($segments as $seg) {
+                $textLen = mb_strlen($seg->text, 'UTF-8');
+                $segW = $textLen * $cellW;
+                if ($seg->bg !== null) {
+                    $svg .= sprintf(
+                        '<rect x="%.2f" y="%.2f" width="%.2f" height="%.2f" fill="%s" />' . "\n",
+                        $x, $y - $this->theme->fontSize, $segW, $cellH,
+                        self::xmlEscape($seg->bg),
+                    );
+                }
                 $attrs = '';
                 if ($seg->fg !== null) {
                     $attrs .= ' fill="' . self::xmlEscape($seg->fg) . '"';
@@ -167,7 +179,7 @@ final class SvgRenderer
                     '<text x="%.2f" y="%.2f"%s>%s</text>' . "\n",
                     $x, $y, $attrs, self::xmlEscape($seg->text),
                 );
-                $x += mb_strlen($seg->text, 'UTF-8') * $cellW;
+                $x += $segW;
             }
         }
         $svg .= '</g>' . "\n";
@@ -314,6 +326,7 @@ final class SvgRenderer
         ?bool $lineNumbers = null,
         ?int $borderRadius = null,
         ?WindowStyle $windowStyle = null,
+        ?bool $ligatures = null,
     ): self {
         return new self(
             theme:        $theme        ?? $this->theme,
@@ -324,6 +337,7 @@ final class SvgRenderer
             lineNumbers:  $lineNumbers  ?? $this->lineNumbers,
             borderRadius: $borderRadius ?? $this->borderRadius,
             windowStyle:  $windowStyle  ?? $this->windowStyle,
+            ligatures:    $ligatures    ?? $this->ligatures,
         );
     }
 }
