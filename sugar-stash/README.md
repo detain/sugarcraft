@@ -39,6 +39,10 @@ sugar-stash    # run inside any git working tree
 | `D` (branches pane)      | Delete the selected branch                             |
 | `M`                      | Merge selected branch into current                     |
 | `r`                      | Open rebase menu (continue / abort / skip / cancel)   |
+| `S`                      | Open stash manager (list / apply / drop)                |
+| `V`                      | Cherry-pick — type a commit ref and press Enter       |
+| `w` (branches pane)     | Open worktrees manager (list / add / remove)            |
+| `i`                      | Interactive rebase — select N commits, set actions      |
 | `R`                      | Refresh from disk                                       |
 | `?`                      | Context-sensitive help                                  |
 | `q` / `Esc`              | Quit                                                    |
@@ -53,15 +57,23 @@ sugar-stash    # run inside any git working tree
 
 ## Architecture
 
-| File         | Role                                                                   |
-|--------------|------------------------------------------------------------------------|
-| `Git`        | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`. Throws `RuntimeException` on non-zero exit. |
-| `GitDriver`  | Interface for the four read methods + stage/unstage. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
-| `Pane`       | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.    |
-| `App` (Model)| Owns the three lists + cursors + focus + error string. Pure-state — every key returns a fresh App. |
-| `Renderer`   | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
+| File               | Role                                                                                                                             |
+|--------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `Git`             | Concrete `git` shell-out — `status --porcelain=v1 -b`, `for-each-ref`, `log --pretty=format:…`, `add`, `restore --staged`. Throws `RuntimeException` on non-zero exit. |
+| `GitDriver`        | Interface for all git operations. Tests inject a fixture-backed driver so transition correctness is asserted without staging a real repo. |
+| `Pane`            | Enum — `Status`, `Branches`, `Log` — with `next()` for Tab cycling.                                                               |
+| `App` (Model)     | Owns the three lists + cursors + focus + overlays (stash/cherry-pick/worktrees/interactive-rebase). Pure-state — every key returns a fresh App. |
+| `Renderer`        | Pure view function — three `Style::border(rounded)` panes joined horizontally / vertically; the focused pane gets a brighter accent. |
+| `StashEntry`        | Immutable stash entry — `index`, `sha`, `branch`, `message` + `stashRef()` / `displayLine()`.                                      |
+| `StashManager`     | Immutable stash list state — `stashes`, `cursor`, `withCursor()`, `withStashes()`, `current()`, `count()`.                        |
+| `CherryPick`       | Immutable cherry-pick state — `collecting` flag + `commitRef` accumulator + `withChar()`/`cancel()`.                              |
+| `WorktreeEntry`    | Immutable worktree entry — `path`, `branch`, `isBare`, `HEAD`.                                                                     |
+| `Worktrees`        | Immutable worktree manager state — `worktrees`, `cursor`, `adding`/`removing` modes + path/branch collection.                      |
+| `RebaseAction`      | Enum — `Pick`, `Reword`, `Edit`, `Squash`, `Drop`.                                                                               |
+| `RebaseCommit`      | Immutable rebase todo entry — `sha`, `subject`, `action` + `withAction()` / `displayLine()`.                                      |
+| `InteractiveRebase` | Immutable interactive-rebase state — `commits` todo list, `cursor`, `selectingN`/`countInput`, `cycleAction()`, `dropCurrent()`.    |
 
-`SugarStash` is intentionally read-mostly: every git mutation that goes beyond stage / unstage shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config. Anything more (interactive rebase, cherry-pick, bisect) belongs in a follow-up release.
+`SugarStash` shells out to `git` directly via the system, so users keep their existing aliases, hooks, and signing config.
 
 ## Internationalization
 
