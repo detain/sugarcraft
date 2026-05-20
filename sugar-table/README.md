@@ -25,10 +25,11 @@ PHP port of [Evertras/bubble-table](https://github.com/Evertras/bubble-table) �
 - **Frozen columns**: pin columns from the left
 - **Horizontal scroll**: max width with overflow, frozen columns stay visible
 - **Missing data indicator**: configurable placeholder for absent cells
-- **Border styling**: customizable border chars + ANSI color
+- **Border styling**: `withBorder(Border $border)` — consume any `SugarCraft\Sprinkles\Border` family (normal/rounded/thick/double/block/ascii/hidden/markdownBorder) + `withBorderStyle(string $ansiStyle)` for ANSI color/styling on default border
 - **Viewport virtualization**: render only visible rows via `withViewportHeight()` + `withScrollY()`
 - **Column width modes**: `ColumnWidth` enum — Fixed, Percent, Dynamic, Content
 - **Cell text wrapping**: `WrapMode` enum — None, WordWrap, Character
+- **Multi-line row rendering**: `withMultilineMode(bool $multiline)` — when enabled, rows expand to the maximum height of any cell; when disabled (default), cells are clamped to one line (backward compatible)
 
 ## Install
 
@@ -205,6 +206,42 @@ use SugarCraft\Table\Lang;
 $label = Lang::t('sort');                  // 'Sort'
 $pager = Lang::t('page_of', ['page' => 2, 'total' => 4]); // 'Page 2 of 4'
 ```
+
+## Border Styling
+
+Customize the table border using the `SugarCraft\Sprinkles\Border` family:
+
+```php
+use SugarCraft\Table\Table;
+use SugarCraft\Sprinkles\Border;
+
+$t = Table::withColumns([...])
+    ->withRows([...])
+    ->withBorder(Border::rounded());   // ─ │ ╭ ╮ ╰ ╯
+    // ->withBorder(Border::thick())  // ━ ┃ ┏ ┓ ┗ ┛
+    // ->withBorder(Border::double())  // ═ ║ ╔ ╗ ╚ ╝
+    // ->withBorder(Border::ascii())  // - | + + + +
+    // ->withBorder(Border::hidden())  // all spaces
+    // ->withBorder(Border::markdownBorder())  // | - | ...
+
+// Or style the default border with ANSI colors:
+$t = $t->withBorderStyle('1;32');       // bold green
+```
+
+Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
+
+## Multi-line Rows
+
+Enable multi-line row rendering to display tall cell content:
+
+```php
+$t = Table::withColumns([...])
+    ->withRows([...])
+    ->withMultilineMode(true);          // rows expand to max cell height
+    // ->withMultilineMode(false);     // default, clamps to single line
+```
+
+When enabled, each row's height equals the maximum number of lines across all its cells after text wrapping. `renderRowLines()` iterates all cell lines to build the full row. When disabled (the default), cells are clamped to one line for backward compatibility.
 
 ## License
 
