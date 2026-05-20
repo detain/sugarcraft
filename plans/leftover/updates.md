@@ -414,6 +414,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     review for step 09.01 · clean · PR#708
     tests-ci for step 09.01 · clean
     docs for step 09.01 · PR#709 · document imagecreatefromstring() decode in README + new CALIBER_LEARNINGS.md (leftover-rollout step 09.01)
+    step 09.02 · PR#710 · candy-flip: area downsample + Floyd-Steinberg dithering + per-frame local color tables + GCE transparency/disposal
     ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
