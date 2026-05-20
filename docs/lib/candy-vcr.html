@@ -97,7 +97,14 @@ vendor/bin/candy-vcr record --no-ctty -- /bin/echo 'hello'   # non-interactive, 
 vendor/bin/candy-vcr record --shell                          # spawn $SHELL -l
 vendor/bin/candy-vcr record --env -- bash -c 'echo hi'         # capture filtered host env
 vendor/bin/candy-vcr record --env-regex='/(SECRET|TOKEN)/i' -- bash -c 'echo hi'  # custom filter
-vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering</code></pre>
+vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # ⚠️ DANGEROUS — no filtering
+vendor/bin/candy-vcr record --idle-trim 1.0 -- bash demo.sh  # compress idle gaps > 1s (asciinema-style)</code></pre>
+
+    <h4 style="margin-top: 20px;"><code>replay</code> subcommand</h4>
+    <p>Stream a cassette's recorded output to stdout with optional timing control:</p>
+    <pre class="code"><code>vendor/bin/candy-vcr replay  session.cas --speed=realtime          # honour recorded cadence
+vendor/bin/candy-vcr replay  session.cas --idle-trim=1.0              # clamp gaps > 1s during replay
+vendor/bin/candy-vcr replay  session.cas --no-trim                     # use original (uncompressed) timestamps</code></pre>
     <p style="margin-top: 8px;"><strong>⚠️ <code>--env-allow-secrets</code></strong> disables all secret-key filtering. The cassette will contain credentials verbatim — only use in fully isolated, trusted environments and never share the resulting cassette.</p>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
@@ -135,6 +142,7 @@ vendor/bin/candy-vcr record --env-allow-secrets -- bash -c 'echo $API_KEY'  # �
 <tr><td>Recorder</td><td>withFormat(format)</td><td>Select timestamp encoding (e.g. <code>new RelativeFormat()</code> for delta-time)</td></tr>
 <tr><td>Recorder</td><td>close()</td><td>Close and finalize cassette</td></tr>
 <tr><td>Player</td><td>open(path)</td><td>Open cassette for replay</td></tr>
+<tr><td>Player</td><td>withIdleTrim(?float $seconds)</td><td>Fluent idle-gap threshold for SPEED_REALTIME playback (clamp pauses > N seconds)</td></tr>
 <tr><td>Player</td><td>play(factory, assertion)</td><td>Replay session with assertion</td></tr>
 <tr><td>ByteAssertion</td><td>new()</td><td>Strict byte-equality assertion</td></tr>
 <tr><td>ScreenAssertion</td><td>new(cols, rows)</td><td>Cell-grid equality assertion</td></tr>
