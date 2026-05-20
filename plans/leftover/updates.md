@@ -427,6 +427,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     tests-ci for step 09.04 · clean
     docs for step 09.04 · PR#718 · document Item/FilteredItem/FileHistory/setFilterFn in README + end-user HTML + new CALIBER_LEARNINGS.md
     step 09.05 · PR#719 · candy-hermit: border/Style (sprinkles) + SIGWINCH + help/status bar (leftover-rollout step 09.05)
+    review for step 09.05 · clean · PR#719
 
     ## Open review findings — 08.04
 
