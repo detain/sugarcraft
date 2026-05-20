@@ -116,7 +116,7 @@ final class ColumnTest extends TestCase
         $col = Column::new('count', 'Count', 8);
         $cell = $col->renderCell(42);
 
-        $this->assertSame('      42', $cell);
+        $this->assertSame('      42', $cell[0]);
     }
 
     public function testRenderCellStringValue(): void
@@ -124,7 +124,7 @@ final class ColumnTest extends TestCase
         $col = Column::new('name', 'Name', 10);
         $cell = $col->renderCell('Alice');
 
-        $this->assertSame('     Alice', $cell);
+        $this->assertSame('     Alice', $cell[0]);
     }
 
     public function testRenderCellWithCustomWidth(): void
@@ -132,7 +132,7 @@ final class ColumnTest extends TestCase
         $col = Column::new('val', 'Val', 5);
         $cell = $col->renderCell(123, 10);
 
-        $this->assertSame('       123', $cell);
+        $this->assertSame('       123', $cell[0]);
     }
 
     public function testRenderCellTruncatesLongValue(): void
@@ -141,7 +141,7 @@ final class ColumnTest extends TestCase
         $cell = $col->renderCell('Christopher');
 
         // Default alignment is right-align, truncates from end
-        $this->assertSame('Chris', $cell);
+        $this->assertSame('Chris', $cell[0]);
     }
 
     public function testRenderCellWithObjectHavingToString(): void
@@ -156,7 +156,7 @@ final class ColumnTest extends TestCase
         $cell = $col->renderCell($obj);
 
         // 'TestObject' is exactly 10 chars, no padding needed
-        $this->assertSame('TestObject', $cell);
+        $this->assertSame('TestObject', $cell[0]);
     }
 
     public function testRenderCellWithStyle(): void
@@ -164,9 +164,9 @@ final class ColumnTest extends TestCase
         $col = Column::new('status', 'Status', 10)->withStyle('1;32');
         $cell = $col->renderCell('Active');
 
-        $this->assertStringStartsWith("\x1b[1;32m", $cell);
-        $this->assertStringEndsWith("\x1b[0m", $cell);
-        $this->assertStringContainsString('Active', $cell);
+        $this->assertStringStartsWith("\x1b[1;32m", $cell[0]);
+        $this->assertStringEndsWith("\x1b[0m", $cell[0]);
+        $this->assertStringContainsString('Active', $cell[0]);
     }
 
     public function testRenderCellEmptyForNonScalarWithoutToString(): void
@@ -174,7 +174,7 @@ final class ColumnTest extends TestCase
         $col = Column::new('arr', 'Arr', 10);
         $cell = $col->renderCell(['nested', 'array']);
 
-        $this->assertSame('          ', $cell);
+        $this->assertSame('          ', $cell[0]);
     }
 
     public function testImmutabilityWithMethods(): void
