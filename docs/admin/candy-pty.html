@@ -57,6 +57,11 @@
       <tr><td><code>SUGARCRAFT_LIBC</code></td><td>Path to libc shared object</td><td>Override the libc path for FFI. Defaults to <code>libc.so.6</code> on Linux, <code>/usr/lib/libSystem.B.dylib</code> on macOS. Useful for musl/Alpine or custom sysroots.</td></tr>
     </table>
 
+    <h3 style="margin-top: 32px;">Child-exit detection</h3>
+    <p><code>Child::exited()</code> and <code>Child::wait()</code> first attempt a <code>waitpid(pid, &status, WNOHANG)</code> call via FFI — a sub-ms non-blocking probe. If the child has exited, the exit code is captured immediately. If FFI is unavailable or <code>waitpid</code> is not in the cdef, the methods fall back to PHP's <code>proc_get_status()</code> with a 10 ms poll interval.</p>
+    <p>Signal-terminated exits use the Unix convention: exit code is <code>128 + signal_number</code> (e.g. SIGTERM=15 → exit code 143). This matches shell convention and is compatible with <code>bash -c 'trap ... TERM; kill -TERM $child'</code> patterns.</p>
+    <p>Always call <code>$child->wait()</code> or poll <code>$child->exited()</code> to reap the child — unreaped children become zombies.</p>
+
     <h3 style="margin-top: 32px;">Platform behaviour — PTY allocation</h3>
     <ul>
       <li><strong>macOS</strong> — <code>openpty(3)</code> is attempted first (single call that opens both master and slave fds). On failure it falls back to the POSIX quartet: <code>posix_openpt + grantpt + unlockpt + ptsname_r</code>.</li>
