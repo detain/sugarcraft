@@ -28,6 +28,9 @@ final class Registry
     /** @var array<string,string> */
     private array $defaultTags;
 
+    /** @var array<string, Descriptor> */
+    private array $descriptors = [];
+
     /**
      * @param array<string,string> $defaultTags
      */
@@ -36,6 +39,14 @@ final class Registry
         array $defaultTags = [],
     ) {
         $this->defaultTags = $defaultTags;
+    }
+
+    /**
+     * Register a metric descriptor for early TYPE/HELP emission.
+     */
+    public function register(Descriptor $descriptor): void
+    {
+        $this->descriptors[$descriptor->name] = $descriptor;
     }
 
     public function counter(string $name, float $value = 1.0, array $tags = []): void
