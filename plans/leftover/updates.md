@@ -398,6 +398,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.12 · clean · PR#704
   tests-ci for step 08.12 · clean
   docs for step 08.12 · direct-to-master · document BorderGradientBlend/Style::patch/rapidBlink
+  step 08.13 · PR#705 · candy-freeze: Segment bg field + AnsiParser background SGR + SvgRenderer per-segment rect + withLigatures + LanguageDetector (leftover-rollout step 08.13)
  ## Open review findings — 08.04
 
 - [x] sugar-prompt/README.md: `Form::validateAll(): array<string,string>` not documented in the Form-level chainables table (lines 80-88) — ✅ resolved PR#691
