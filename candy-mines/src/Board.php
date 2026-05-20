@@ -218,4 +218,68 @@ final class Board
         }
         return $n;
     }
+
+    /**
+     * Chord click — reveal all unflagged neighbors of a "satisfied" number.
+     *
+     * A cell is satisfied when its adjacent count equals the number of
+     * flagged neighbors. Chord-clicking it is safe because the player
+     * has correctly identified all mines around that cell.
+     *
+     * Mirrors standard minesweeper left+right / middle-click chord.
+     */
+    public function chord(int $x, int $y): self
+    {
+        $cell = $this->cell($x, $y);
+        if ($cell === null || !$cell->revealed || $cell->adjacent === 0) {
+            return $this;
+        }
+
+        // Count flagged neighbors.
+        $flagCount = 0;
+        for ($dy = -1; $dy <= 1; $dy++) {
+            for ($dx = -1; $dx <= 1; $dx++) {
+                if ($dx === 0 && $dy === 0) {
+                    continue;
+                }
+                $nx = $x + $dx;
+                $ny = $y + $dy;
+                $n = $this->cell($nx, $ny);
+                if ($n !== null && $n->flagged) {
+                    $flagCount++;
+                }
+            }
+        }
+
+        // Not satisfied — player hasn't flagged the right number yet.
+        if ($flagCount !== $cell->adjacent) {
+            return $this;
+        }
+
+        // Reveal all unflagged, unrevealed neighbors.
+        $rows = $this->rows;
+        $exploded = $this->exploded;
+        for ($dy = -1; $dy <= 1; $dy++) {
+            for ($dx = -1; $dx <= 1; $dx++) {
+                if ($dx === 0 && $dy === 0) {
+                    continue;
+                }
+                $nx = $x + $dx;
+                $ny = $y + $dy;
+                $n = $this->cell($nx, $ny);
+                if ($n === null || $n->revealed || $n->flagged) {
+                    continue;
+                }
+                $rows[$ny][$nx] = $n->reveal();
+                if ($n->mine) {
+                    $exploded = true;
+                }
+            }
+        }
+
+        return new self(
+            $this->width, $this->height, $this->mineCount,
+            $rows, $this->minesPlaced, $exploded,
+        );
+    }
 }
