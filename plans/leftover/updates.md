@@ -387,7 +387,12 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   tests-ci for step 08.09 · clean
   docs for step 08.08 · PR#699 · document withPageSize/getPaginator/navigation methods in README + end-user HTML
   docs for step 08.09 · clean
+  step 08.10 · PR#701 · sugar-charts: aggregations (BucketByTime/MovingAverage/Resample) + withCanvas(BrailleCanvas) + withTheme(Theme) + 4 CALIBER patterns (leftover-rollout step 08.10)
+  review for step 08.10 · clean · PR#701
+  tests-ci for step 08.10 · clean
   fix for step 08.10 · PR#701 · resolved 4 findings (duplicate docblock + README docs + CALIBER_LEARNINGS + PR not merged)
+  docs for step 08.10 · clean
+  step 08.11 · PR#702 · candy-sprinkles: Color::parse + Layout spacing + Hsl factory + Markup parser (leftover-rollout step 08.11)
 
 ## Open review findings — 08.04
 
