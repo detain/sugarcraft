@@ -95,11 +95,13 @@ $matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Field types</strong><span>Note, Input, Confirm, Select, MultiSelect, Text, FilePicker.</span></div>
-      <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit. Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Chain multiple with <code>->withValidator(new Validator())</code>.</span></div>
+      <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit. Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Chain multiple with <code>->withValidator(new Validator())</code>. Cross-field validation via <code>Form::validateAll(): array&lt;string,string&gt;</code> after submit. Enable error summary with <code>Form::withErrorSummary(true)</code> to show all errors at once.</span></div>
       <div class="feature"><strong>Fuzzy suggestions</strong><span><code>->withFuzzySuggestions([...])</code> on Input and Select — Smith-Waterman scoring ranks candidates by match quality. Use <code>FuzzyMatcher</code> directly for programmatic scoring: <code>$matcher->score($query, $candidate)</code>.</span></div>
       <div class="feature"><strong>Async suggestions</strong><span><code>->withAsyncSuggestions(callable $fetcher, int $debounceMs = 150)</code> on Input and Select — fetches suggestions asynchronously with a configurable debounce delay. The <code>SuggestionsReadyMsg</code> message is dispatched via the event loop when results are available.</span></div>
+      <div class="feature"><strong>MultiSelect vim keys</strong><span><code>j</code> / <code>k</code> navigate, <code>Space</code> toggles selection — mirrors vim-style keybindings.</span></div>
+      <div class="feature"><strong>Select enum mode</strong><span><code>Select::withEnum(\BackedEnum::class)</code> coerces the selected value to the given enum type automatically.</span></div>
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
-      <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink.</span></div>
+      <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink. Custom error summary slot via <code>Theme::$errorSummary</code>.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
       <div class="feature"><strong>Submit hook</strong><span><code>$form->getValue('name')</code> after the Program ends — typed value retrieval.</span></div>
       <div class="feature"><strong>Form-level KeyMap</strong><span><code>Form::keyMap($keymap)</code> rebinds Next / Prev / Submit / Quit per form (mirrors huh #272).</span></div>
@@ -120,6 +122,8 @@ $matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Form</td><td>new(...fields)</td><td>Create a new form</td></tr>
 <tr><td>Form</td><td>getValue(name)</td><td>Get field value after submit</td></tr>
+<tr><td>Form</td><td>validateAll()</td><td>Run all field validators, return [fieldKey => errorMessage]</td></tr>
+<tr><td>Form</td><td>withErrorSummary(bool)</td><td>Show all errors at once on submit failure</td></tr>
 <tr><td>Input</td><td>new(name)</td><td>Create input field</td></tr>
 <tr><td>Input</td><td>withFuzzySuggestions(list)</td><td>Filter suggestions by fuzzy match score</td></tr>
 <tr><td>Input</td><td>withAsyncSuggestions(callable, int = 150)</td><td>Async suggestions with debounce</td></tr>
@@ -127,11 +131,13 @@ $matches = $matcher-&gt;match('py', ['Python', 'PHP', 'Ruby']); // [['Python', 8
 <tr><td>Select</td><td>new(name)</td><td>Create select field</td></tr>
 <tr><td>Select</td><td>withFuzzySuggestions(list)</td><td>Filter options by fuzzy match score</td></tr>
 <tr><td>Select</td><td>withAsyncSuggestions(callable, int = 150)</td><td>Async suggestions with debounce</td></tr>
-<tr><td>MultiSelect</td><td>new(name)</td><td>Create multi-select field</td></tr>
+<tr><td>Select</td><td>withEnum(BackedEnum::class)</td><td>Coerce selected value to enum type</td></tr>
+<tr><td>MultiSelect</td><td>new(name)</td><td>Create multi-select field (j/k nav, Space toggle)</td></tr>
 <tr><td>Note</td><td>new(content)</td><td>Create note field</td></tr>
 <tr><td>Group</td><td>new(...forms)</td><td>Create wizard group</td></tr>
 <tr><td>FuzzyMatcher</td><td>score(query, candidate)</td><td>Smith-Waterman alignment score (int)</td></tr>
 <tr><td>FuzzyMatcher</td><td>match(query, candidates)</td><td>Ranked matches list&lt;[string,int]&gt;</td></tr>
+<tr><td>Theme</td><td>errorSummary</td><td>Renderable slot for custom error summary display</td></tr>
 </table>
   </div>
 </section>
