@@ -347,8 +347,9 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
  docs for step 07.18 · PR#675 · document attachSigwinchToFd() in README (resize forwarding + Mirrors table) + end-user HTML (resize section + API table) + dev HTML (SignalForwarder extension point note) + CALIBER_LEARNINGS.md [pattern:attachSigwinchToFd-fd-based]
   step 07.19 · PR#676 · candy-pty: add ControllingTerminal::claim(int $fd) static method (setsid+ioctl(TIOCSCTTY)); bin/pty-shim.php delegates to it
   docs for step 07.19 · PR#677 · document ControllingTerminal::claim() in README (Mirrors + API table + Controlling terminal section) + end-user HTML (feature + API table) + admin HTML (new section) + dev HTML (new section + namespace tree) + CALIBER [pattern:claim-setsid-ioctl]
-  step 07.20 · PR#678 · candy-vcr: add RelativeFormat (dt field at file level) + Recorder::withFormat() + Player auto-detect; 48 Format tests green
-docs for step 07.20 · PR#679 · document RelativeFormat + withFormat() + detectFormat() in README/end-user HTML/dev HTML + CALIBER entry
+ step 07.20 · PR#678 · candy-vcr: add RelativeFormat (dt field at file level) + Recorder::withFormat() + Player auto-detect; 48 Format tests green
+ docs for step 07.20 · PR#679 · document RelativeFormat + withFormat() + detectFormat() in README/end-user HTML/dev HTML + CALIBER entry
+ step 07.21 · PR#680 · candy-vcr: add withIdleTrim() fluent setter + --idle-trim CLI flag for SPEED_REALTIME playback; fix detectFormat() missing Format import; 5 IdleTrimTest tests
 
 ## Open review findings — 07.16
 
