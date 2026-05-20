@@ -16,7 +16,7 @@ final class Styles
     /** @var array<int, Style> keyed by Level->value */
     public array $levels = [];
 
-    /** @var array<string, Style> */
+    /** @var array<string, Style> per-field key styling */
     public array $keys = [];
 
     /** @var array<string, Style> */
@@ -26,6 +26,8 @@ final class Styles
     public Style $prefix;
     public Style $caller;
     public Style $message;
+
+    private const PAD_LENGTH = 5;
 
     public function __construct()
     {
@@ -43,10 +45,36 @@ final class Styles
                 Level::Fatal => Style::new()->foreground(Color::ansi(7))->background(Color::ansi(1))->bold(),
             };
         }
+
+        // Per-field key styles (e.g., "time", "level", "msg", "caller")
+        $this->keys['time']    = Style::new()->foreground(Color::ansi(8));
+        $this->keys['level']   = Style::new()->foreground(Color::ansi(8));
+        $this->keys['prefix']  = Style::new()->foreground(Color::ansi(5));
+        $this->keys['caller']  = Style::new()->foreground(Color::ansi(8));
+        $this->keys['message'] = Style::new();
+        $this->keys['key']     = Style::new()->foreground(Color::ansi(8));
+        $this->keys['value']  = Style::new();
     }
 
     public static function default(): self
     {
         return new self();
+    }
+
+    /**
+     * Pad a level label to a fixed width for visual alignment.
+     * Mirrors charmbracelet/log's padLevelText.
+     */
+    public static function padLevelText(string $label): string
+    {
+        return \str_pad($label, self::PAD_LENGTH, ' ', STR_PAD_RIGHT);
+    }
+
+    /**
+     * Get style for a specific field key.
+     */
+    public function keyStyle(string $field): Style
+    {
+        return $this->keys[$field] ?? Style::new();
     }
 }
