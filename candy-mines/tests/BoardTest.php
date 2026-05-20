@@ -200,4 +200,121 @@ final class BoardTest extends TestCase
 
         $this->assertSame($board, $board->chord(1, 1));
     }
+
+    // ─── O(1) win detection via revealedCount ─────────────────────────────────
+
+    public function testRevealedCountIncrementsOnFloodReveal(): void
+    {
+        $rand = static fn(int $max): int => 0;
+        $b = Board::blank(5, 5, 1);
+        $this->assertSame(0, $b->revealedCount);
+        $b = $b->reveal(2, 2, $rand);
+        $this->assertGreaterThan(0, $b->revealedCount);
+    }
+
+    public function testIsWonUsesO1RevealedCountCheck(): void
+    {
+        $rand = static fn(int $max): int => 0;
+        $b = Board::blank(3, 3, 1)->reveal(0, 0, $rand);
+        // Reveal all non-mine cells.
+        for ($y = 0; $y < 3; $y++) {
+            for ($x = 0; $x < 3; $x++) {
+                if (!$b->cell($x, $y)->mine && !$b->cell($x, $y)->revealed) {
+                    $b = $b->reveal($x, $y, $rand);
+                }
+            }
+        }
+        $this->assertFalse($b->exploded);
+        $this->assertTrue($b->isWon());
+        // O(1) check: revealedCount must equal total safe cells.
+        $this->assertSame(3 * 3 - 1, $b->revealedCount);
+    }
+
+    public function testIsWonFalseBeforeAllCellsRevealed(): void
+    {
+        $rand = static fn(int $max): int => 0;
+        $b = Board::blank(5, 5, 1)->reveal(0, 0, $rand);
+        $this->assertFalse($b->isWon());
+    }
+
+    public function testChordIncrementsRevealedCount(): void
+    {
+        $rows = [];
+        for ($y = 0; $y < 3; $y++) {
+            $row = [];
+            for ($x = 0; $x < 3; $x++) {
+                $row[] = new \SugarCraft\Mines\Cell(false, false, false, 0);
+            }
+            $rows[] = $row;
+        }
+        // Center revealed with adjacent=1, one neighbor flagged.
+        $rows[1][1] = new \SugarCraft\Mines\Cell(false, true, false, 1);
+        $rows[1][0] = new \SugarCraft\Mines\Cell(false, false, true, 0);
+
+        $board = new Board(3, 3, 1, $rows, true, false, 1);
+        $this->assertSame(1, $board->revealedCount);
+
+        // Chord reveals all 7 unflagged neighbors → 1 + 7 = 8.
+        $next = $board->chord(1, 1);
+        $this->assertSame(8, $next->revealedCount);
+    }
+
+    // ─── Board serialization ─────────────────────────────────────────────────────
+
+    public function testSerializeProducesString(): void
+    {
+        $b = Board::blank(5, 5, 3);
+        $s = $b->serialize();
+        $this->assertIsString($s);
+        $this->assertNotEmpty($s);
+    }
+
+    public function testUnserializeRoundTrips(): void
+    {
+        $rand = static fn(int $max): int => 0;
+        $original = Board::blank(5, 5, 3)->reveal(2, 2, $rand);
+
+        $serialized = $original->serialize();
+        $restored = Board::unserialize($serialized);
+
+        $this->assertSame($original->width, $restored->width);
+        $this->assertSame($original->height, $restored->height);
+        $this->assertSame($original->mineCount, $restored->mineCount);
+        $this->assertSame($original->minesPlaced, $restored->minesPlaced);
+        $this->assertSame($original->exploded, $restored->exploded);
+        $this->assertSame($original->revealedCount, $restored->revealedCount);
+
+        // Check cells match.
+        for ($y = 0; $y < $original->height; $y++) {
+            for ($x = 0; $x < $original->width; $x++) {
+                $oc = $original->cell($x, $y);
+                $rc = $restored->cell($x, $y);
+                $this->assertSame($oc->mine, $rc->mine);
+                $this->assertSame($oc->revealed, $rc->revealed);
+                $this->assertSame($oc->flagged, $rc->flagged);
+                $this->assertSame($oc->adjacent, $rc->adjacent);
+            }
+        }
+    }
+
+    public function testUnserializeInvalidPayloadThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Board::unserialize('not valid json');
+    }
+
+    public function testUnserializePartialPayloadThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Board::unserialize('{"w":5}');
+    }
+
+    public function testSerializeAfterFlagUnaffected(): void
+    {
+        $b = Board::blank(5, 5, 3)->toggleFlag(1, 1)->toggleFlag(2, 2);
+        $s = $b->serialize();
+        $r = Board::unserialize($s);
+        $this->assertTrue($r->cell(1, 1)->flagged);
+        $this->assertTrue($r->cell(2, 2)->flagged);
+    }
 }
