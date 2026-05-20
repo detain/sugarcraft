@@ -162,16 +162,23 @@ final class MultiSelect implements Field
     public function skippable(): bool         { return false; }
 
     /**
-     * Up / Down move the inner cursor; without claiming them the form
-     * would steal the keys for between-field navigation, leaving the
-     * checkbox cursor unreachable except via j/k.
+     * Up / Down / j / k move the inner cursor; without claiming them
+     * the form would steal the keys for between-field navigation,
+     * leaving the checkbox cursor unreachable.
      */
     public function consumes(Msg $msg): bool
     {
         if (!$this->focused || !$msg instanceof KeyMsg) {
             return false;
         }
-        return $msg->type === KeyType::Up || $msg->type === KeyType::Down;
+        if ($msg->type === KeyType::Up || $msg->type === KeyType::Down) {
+            return true;
+        }
+        // Claim j/k vim navigation keys when in char form.
+        if ($msg->type === KeyType::Char && ($msg->rune === 'j' || $msg->rune === 'k')) {
+            return true;
+        }
+        return false;
     }
 
     private function moveCursor(int $idx): self

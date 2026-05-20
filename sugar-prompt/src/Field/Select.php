@@ -57,6 +57,7 @@ final class Select implements Field
         int $asyncSuggestionsDebounceMs = 150,
         int $pendingAsyncSeq = 0,
         string $pendingAsyncFilterText = '',
+        public readonly ?string $enumClass = null,
     ) {
         $this->fuzzyCandidates = $fuzzyCandidates;
         $this->asyncSuggestionsFetcher = $asyncSuggestionsFetcher;
@@ -141,18 +142,35 @@ final class Select implements Field
     public function withDescription(string $d): self  { return $this->mutate(description: $d); }
     public function withHeight(int $h): self          { return $this->mutate(list: $this->list->setSize($this->list->width, max(1, $h))); }
 
+    /**
+     * When a backed enum class is provided, the selected value is coerced
+     * to the enum via `EnumClass::from($stringValue)`. The option titles
+     * must match the enum case values exactly. Mirrors huh's enum mode.
+     *
+     * @param class-string<\BackedEnum> $enumClass
+     */
+    public function withEnum(string $enumClass): self
+    {
+        return $this->mutate(enumClass: $enumClass);
+    }
+
     // Short-form aliases.
     public function title(string $t): self                { return $this->withTitle($t); }
     public function desc(string $d): self                 { return $this->withDescription($d); }
     public function height(int $h): self                  { return $this->withHeight($h); }
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
     public function fuzzy(array $candidates): self         { return $this->withFuzzySuggestions($candidates); }
+    public function enum(string $enumClass): self         { return $this->withEnum($enumClass); }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed
     {
         $sel = $this->list->selectedItem();
-        return $sel?->title();
+        $value = $sel?->title();
+        if ($value === null || $this->enumClass === null) {
+            return $value;
+        }
+        return $this->enumClass::from($value);
     }
 
     public function focus(): array
@@ -298,7 +316,7 @@ final class Select implements Field
         return false;
     }
 
-    private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null): self
+    private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null): self
     {
         return new self(
             key:                       $this->key,
@@ -310,6 +328,7 @@ final class Select implements Field
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
             pendingAsyncSeq:           $this->pendingAsyncSeq,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
+            enumClass:                 $enumClass  ?? $this->enumClass,
         );
     }
 }
