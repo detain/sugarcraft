@@ -13,9 +13,14 @@ namespace SugarCraft\Flip;
  */
 final class Frame
 {
-    /** @param list<list<array{0:int,1:int,2:int}>> $cells */
-    public function __construct(public readonly array $cells)
-    {}
+    /**
+     * @param list<list<array{0:int,1:int,2:int}>> $cells
+     * @param int $delay  Centiseconds (1/100 s) from GIF Graphic Control Extension; 0 means no delay specified
+     */
+    public function __construct(
+        public readonly array $cells,
+        public readonly int $delay = 10,
+    ) {}
 
     public function width(): int
     {
