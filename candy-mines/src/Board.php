@@ -30,6 +30,7 @@ final class Board
         array $rows,
         public readonly bool $minesPlaced = false,
         public readonly bool $exploded = false,
+        public readonly int $revealedCount = 0,
     ) {
         if ($width < 2 || $height < 2) {
             throw new \InvalidArgumentException(Lang::t('board.too_small'));
@@ -101,7 +102,7 @@ final class Board
         $rows[$y][$x] = $cell->toggleFlag();
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, $this->minesPlaced, $this->exploded,
+            $rows, $this->minesPlaced, $this->exploded, $this->revealedCount,
         );
     }
 
@@ -151,7 +152,7 @@ final class Board
         }
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, true, $this->exploded,
+            $rows, true, $this->exploded, $this->revealedCount,
         );
     }
 
@@ -159,6 +160,7 @@ final class Board
     {
         $rows = $this->rows;
         $exploded = $this->exploded;
+        $revealedCount = $this->revealedCount;
         $stack = [[$sx, $sy]];
         $seen = [];
         while ($stack !== []) {
@@ -171,6 +173,7 @@ final class Board
                 continue;
             }
             $rows[$y][$x] = $cell->reveal();
+            $revealedCount++;
             if ($cell->mine) {
                 $exploded = true;
                 continue;
@@ -190,22 +193,15 @@ final class Board
         }
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, $this->minesPlaced, $exploded,
+            $rows, $this->minesPlaced, $exploded, $revealedCount,
         );
     }
 
-    /** True iff every non-mine cell has been revealed. */
+    /** True iff every non-mine cell has been revealed. O(1) via revealedCount. */
     public function isWon(): bool
     {
         if ($this->exploded) return false;
-        foreach ($this->rows as $row) {
-            foreach ($row as $c) {
-                if (!$c->mine && !$c->revealed) {
-                    return false;
-                }
-            }
-        }
-        return true;
+        return $this->revealedCount === $this->width * $this->height - $this->mineCount;
     }
 
     public function flagCount(): int
@@ -217,6 +213,84 @@ final class Board
             }
         }
         return $n;
+    }
+
+    /**
+     * Serialize the board to a string for save/load mid-game.
+     *
+     * Format: JSON with version tag for forward compatibility.
+     * Each cell is stored as [mine, revealed, flagged, adjacent].
+     */
+    public function serialize(): string
+    {
+        $cells = [];
+        for ($y = 0; $y < $this->height; $y++) {
+            $row = [];
+            for ($x = 0; $x < $this->width; $x++) {
+                $c = $this->rows[$y][$x];
+                $row[] = [$c->mine, $c->revealed, $c->flagged, $c->adjacent];
+            }
+            $cells[] = $row;
+        }
+        $payload = [
+            'v' => 1,
+            'w' => $this->width,
+            'h' => $this->height,
+            'm' => $this->mineCount,
+            'p' => $this->minesPlaced,
+            'e' => $this->exploded,
+            'r' => $this->revealedCount,
+            'c' => $cells,
+        ];
+        return json_encode($payload, JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Reconstruct a Board from a string produced by {@see serialize()}.
+     *
+     * @throws \InvalidArgumentException if the payload is malformed
+     */
+    public static function unserialize(string $data): self
+    {
+        try {
+            $p = json_decode($data, true, 16, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw new \InvalidArgumentException('Invalid board serialization', 0, $e);
+        }
+        if (!is_array($p)) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        $w = $p['w'] ?? null;
+        $h = $p['h'] ?? null;
+        $m = $p['m'] ?? null;
+        $p2 = $p['p'] ?? null;
+        $e = $p['e'] ?? null;
+        $r = $p['r'] ?? 0;
+        $cells = $p['c'] ?? null;
+        if ($w === null || $h === null || $m === null || $p2 === null || $e === null || $cells === null) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
+        $rows = [];
+        for ($y = 0; $y < $h; $y++) {
+            $row = [];
+            for ($x = 0; $x < $w; $x++) {
+                $cellData = $cells[$y][$x] ?? null;
+                if (!is_array($cellData) || count($cellData) < 4) {
+                    throw new \InvalidArgumentException('Invalid board serialization');
+                }
+                $row[] = new Cell(
+                    (bool) $cellData[0],
+                    (bool) $cellData[1],
+                    (bool) $cellData[2],
+                    (int) $cellData[3],
+                );
+            }
+            $rows[] = $row;
+        }
+        return new self(
+            (int) $w, (int) $h, (int) $m,
+            $rows, (bool) $p2, (bool) $e, (int) $r,
+        );
     }
 
     /**
@@ -259,6 +333,7 @@ final class Board
         // Reveal all unflagged, unrevealed neighbors.
         $rows = $this->rows;
         $exploded = $this->exploded;
+        $revealedCount = $this->revealedCount;
         for ($dy = -1; $dy <= 1; $dy++) {
             for ($dx = -1; $dx <= 1; $dx++) {
                 if ($dx === 0 && $dy === 0) {
@@ -271,6 +346,7 @@ final class Board
                     continue;
                 }
                 $rows[$ny][$nx] = $n->reveal();
+                $revealedCount++;
                 if ($n->mine) {
                     $exploded = true;
                 }
@@ -279,7 +355,7 @@ final class Board
 
         return new self(
             $this->width, $this->height, $this->mineCount,
-            $rows, $this->minesPlaced, $exploded,
+            $rows, $this->minesPlaced, $exploded, $revealedCount,
         );
     }
 }
