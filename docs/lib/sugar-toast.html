@@ -68,9 +68,10 @@ echo $toast-&gt;view($bg);</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>Four types</strong><span>Info, Success, Warning, Error — each with a distinct symbol and color.</span></div>
             <div class="feature"><strong>Positions</strong><span>9 positions: TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight.</span></div>
-            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; Toast::Update triggers removal.</span></div>
-            <div class="feature"><strong>Symbol sets</strong><span>Default, SuccessCheck, WarningTriangle, ErrorX.</span></div>
-            
+            <div class="feature"><strong>Auto-dismiss</strong><span>Configurable duration; null for persistent (never expires).</span></div>
+            <div class="feature"><strong>Symbol sets</strong><span>NerdFont, Unicode, or ASCII.</span></div>
+            <div class="feature"><strong>Overflow control</strong><span>DropOldest, DropNewest, or Enqueue when maxConcurrent is exceeded.</span></div>
+
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -93,7 +94,9 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>Toast</td><td>withMaxWidth(int)</td><td>Set maximum alert width in cells</td></tr>
 <tr><td>Toast</td><td>withMinWidth(int)</td><td>Set minimum alert width in cells</td></tr>
 <tr><td>Toast</td><td>withSymbolSet(SymbolSet)</td><td>NerdFont, Unicode, or ASCII symbol sets</td></tr>
-<tr><td>Toast</td><td>alert(ToastType, string, ?float $expiresAt)</td><td>Add alert to the queue</td></tr>
+<tr><td>Toast</td><td>withMaxConcurrent(?int)</td><td>Cap concurrent alerts (<code>null</code> = unlimited)</td></tr>
+<tr><td>Toast</td><td>withOverflow(Overflow)</td><td>Strategy when cap exceeded: DropOldest, DropNewest, Enqueue</td></tr>
+<tr><td>Toast</td><td>alert(ToastType|string, string, ?float $expiresAt)</td><td>Add alert; string type = case-insensitive lookup; <code>null</code> expiry = never auto-dismisses</td></tr>
 <tr><td>Toast</td><td>error(string), warning(string), info(string), success(string)</td><td>Convenience alert helpers</td></tr>
 <tr><td>Toast</td><td>hasActiveAlert(): bool</td><td>Returns true if non-expired alerts are queued</td></tr>
 <tr><td>Toast</td><td>dismiss(), clear(), pruneExpired()</td><td>Manage alert lifecycle</td></tr>
@@ -101,6 +104,7 @@ echo $toast-&gt;view($bg);</code></pre>
 <tr><td>ToastType</td><td>Info, Success, Warning, Error</td><td>Toast type constants</td></tr>
 <tr><td>ToastType</td><td>label()</td><td>Translated label via Lang::t() (i18n-aware)</td></tr>
 <tr><td>Position</td><td>TopLeft, TopCenter, TopRight, MiddleLeft, MiddleCenter, MiddleRight, BottomLeft, BottomCenter, BottomRight</td><td>9 screen positions</td></tr>
+<tr><td>Overflow</td><td>DropOldest, DropNewest, Enqueue</td><td>Overflow strategy when maxConcurrent is exceeded</td></tr>
 <tr><td>SymbolSet</td><td>NerdFont, Unicode, ASCII</td><td>Symbol set for alert icons</td></tr>
 <tr><td>Lang</td><td>t(key, params)</td><td>Translate a string: 'dismiss', 'count', 'type.*'</td></tr>
 </table>
