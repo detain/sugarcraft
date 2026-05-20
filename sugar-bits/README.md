@@ -43,7 +43,7 @@ to keep the static `Progress` lean).
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (HoneyBounce-driven) | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Elapsed-time counter; `interval()`, `withInterval(float)` | `Stopwatch\TickMsg` |
-| `TextInput\TextInput` | Single-line input with autocomplete + validators + vim mode + placeholder styling + prefix/suffix + `Styles` | — |
+| `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` | — |
 | `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) | `TextArea\TextAreaEditedMsg` |
 | `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
@@ -138,6 +138,45 @@ $ti = TextInput::new()
 echo $ti->view();
 // $ Enter command… <
 ```
+
+## TextInput — ValidateOn and restrict
+
+`TextInput` supports deferred and filtered validation via two new builders:
+
+### ValidateOn timing control
+
+```php
+use SugarCraft\Bits\TextInput\{TextInput, ValidateOn};
+
+$ti = TextInput::new()
+    ->withValidateOn(ValidateOn::Blur);   // validate when focus leaves
+```
+
+| Case | When validation fires |
+|------|-----------------------|
+| `ValidateOn::None` | Never (default — use when you drive validation manually) |
+| `ValidateOn::Blur` | When the input loses focus |
+| `ValidateOn::Change` | On every keystroke |
+| `ValidateOn::Submit` | Only on `Enter` keypress |
+
+### Keystroke filter (restrict)
+
+```php
+use SugarCraft\Bits\TextInput\TextInput;
+
+// Accept only digits
+$numeric = TextInput::new()->withRestrict('[0-9]');
+
+// Accept alphanumeric only
+$alphanum = TextInput::new()->withRestrict('[a-zA-Z0-9]');
+```
+
+### TextInput notable builders
+
+| Method | What it does |
+|--------|--------------|
+| `withValidateOn(ValidateOn $timing)` | Set validation timing (`None` / `Blur` / `Change` / `Submit`) |
+| `withRestrict(string $pattern)` | Set a PCRE regex — only matching characters are accepted (no delimiters) |
 
 ## Test
 
