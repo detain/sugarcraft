@@ -532,6 +532,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 10.04 · PR#760 · resolved 8 findings
     tests-ci for step 10.04 · clean
     step 10.05 · PR#761 · sugar-stash: undo/redo (u/Ctrl+r) + delete branch (D) + merge (M) + rebase continue/abort/skip (r when in progress); line-level staging deferred
+    fix for step 10.05 · PR#762 · resolved 3 findings
 
 ## Open review findings — 09.19
 
