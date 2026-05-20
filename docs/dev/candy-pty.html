@@ -40,7 +40,7 @@
     </div>
 
     <h3 style="margin-top: 32px;">Extension points</h3>
-    <p>The primary extension point is the <code>Contract\PtySystem</code> interface. Implement this interface to provide a custom PTY backend (e.g. Windows ConPTY sidecar, pecl extension):</p>
+    <p>The primary extension point is the <code>Contract\PtySystem</code> interface. Implement this interface to provide a custom PTY backend (e.g. Windows ConPTY sidecar, pecl extension). <code>SignalForwarder</code> is <code>@internal</code> but its public static methods (<code>attachSigwinch</code>, <code>attachSigwinchToFd</code>, <code>attachSigchld</code>) are the supported entry points for wiring signal handlers in consumer code:</p>
     <pre class="code"><code>interface PtySystem
 {
     public function open(int $cols, int $rows): PtyPair;
