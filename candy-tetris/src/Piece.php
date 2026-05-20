@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris;
 
+use SugarCraft\Tetris\Rotation\SrsKickTable;
+
 /**
  * A live (falling) Tetris piece. Immutable: every transform —
  * `withX()`, `rotated()`, `dropped()` — returns a fresh instance,
@@ -40,6 +42,31 @@ final class Piece
     public function moved(int $dx, int $dy): self
     {
         return new self($this->kind, $this->rotation, $this->x + $dx, $this->y + $dy);
+    }
+
+    /**
+     * All possible piece positions after rotation with SRS wall kicks.
+     *
+     * Mirrors charmbracelet/bubbletea Tetris — SRS applies a series of
+     * (dx, dy) offset candidates to the rotated piece and returns every
+     * resulting position. Callers (e.g. Game) can test each candidate
+     * for board validity and use the first that fits.
+     *
+     * @return list<self> first element is the naive rotation; subsequent
+     *                    elements are wall-kick offsets in SRS order
+     */
+    public function rotationsWithKicks(int $delta = 1): array
+    {
+        $to = ((($this->rotation + $delta) % 4) + 4) % 4;
+        $naive = new self($this->kind, $to, $this->x, $this->y);
+
+        $candidates = [$naive];
+
+        foreach (SrsKickTable::kicks($this->kind, $this->rotation, $to) as [$dx, $dy]) {
+            $candidates[] = new self($this->kind, $to, $this->x + $dx, $this->y + $dy);
+        }
+
+        return $candidates;
     }
 
     /**
