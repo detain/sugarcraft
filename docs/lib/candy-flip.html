@@ -70,7 +70,11 @@ $frames = Decoder::decode('cat.gif', cellsW: 80, cellsH: 30);
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>ext-gd decode</strong><span>Walks the GIF byte stream for image-descriptor offsets, hands each frame to GD, downsamples to cell space.</span></div>
+      <div class="feature"><strong>ext-gd decode</strong><span>Walks the GIF byte stream for image-descriptor offsets, hands each frame to GD, area-average downsamples to cell space.</span></div>
+      <div class="feature"><strong>Area-average downsampling</strong><span>Higher quality than nearest-neighbor — averages all source pixels in each cell region, skipping transparent pixels. {@see SugarCraft\Flip\Downsampler}.</span></div>
+      <div class="feature"><strong>Floyd-Steinberg dithering</strong><span>Error-diffusion dithering against a fixed palette via {@see SugarCraft\Flip\Dither\FloydSteinberg}. Source image is not modified.</span></div>
+      <div class="feature"><strong>Local color tables</strong><span>Per-frame Local Color Table (LCT) extracted from the GIF Image Descriptor; falls back to the Global Color Table (GCT) when no LCT is present.</span></div>
+      <div class="feature"><strong>GCE transparency + disposal</strong><span>Graphic Control Extension (GCE) transparent-color index and disposal method (none/restore-bg/restore-prev) tracked per-frame in {@see SugarCraft\Flip\Frame}.</span></div>
       <div class="feature"><strong>Two presets</strong><span><code>solid</code> — full-cell <code>█</code> in 24-bit truecolor. <code>density</code> — luminance ramp <code>` .:-=+*#%@`</code>.</span></div>
       <div class="feature"><strong>Pause + step</strong><span><code>Space</code> pauses; <code>←</code> / <code>→</code> step through frames manually.</span></div>
       <div class="feature"><strong>Preset toggle</strong><span><code>d</code> swaps solid ↔ density without losing your position.</span></div>
