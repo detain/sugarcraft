@@ -7,6 +7,39 @@ sanitisation, metadata injection, and custom message serialisation.
 
 ## Extension points
 
+### `Format` interface
+
+The `Format` interface (`SugarCraft\Vcr\Format\Format`) is the primary
+extension point for cassette serialization:
+
+```php
+use SugarCraft\Vcr\Format\Format;
+use SugarCraft\Vcr\Cassette;
+
+interface Format
+{
+    public function write(Cassette $cassette, string $path): void;
+    public function read(string $path): Cassette;
+    public function encode(Cassette $cassette): string;
+    public function decode(string $contents): Cassette;
+}
+```
+
+**Built-in implementations:**
+
+| Format | Timestamp field | Use case |
+|--------|----------------|----------|
+| `JsonlFormat` | `t` (absolute) | Default; playback timing |
+| `RelativeFormat` | `dt` (delta) | Deterministic replay; asciinema v3 compat |
+| `AsciinemaFormat` | import only | Ingest asciinema v3 `.cast` files |
+| `YamlFormat` | `t` (absolute) | Hand-written test fixtures |
+| `CompressedJsonlFormat` | `t` (absolute) | 5–10× smaller cassettes |
+
+`Recorder::withFormat(Format $f)` selects which format to use at record time.
+`Player::open()` auto-detects `RelativeFormat` vs `JsonlFormat` by looking
+for the `dt` field on the first event line — callers do not need to specify
+a format when opening a cassette for replay.
+
 ### `Recorder` interface
 
 ```php
