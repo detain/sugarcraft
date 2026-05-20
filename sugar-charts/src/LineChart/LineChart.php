@@ -9,6 +9,8 @@ use SugarCraft\Charts\Chart\Position;
 use SugarCraft\Charts\Lang;
 use SugarCraft\Charts\Canvas\Canvas;
 use SugarCraft\Charts\Canvas\Graph;
+use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Sprinkles\Theme;
 
 /**
  * Single-series line plot drawn onto a {@see Canvas}. Each data point
@@ -32,7 +34,7 @@ final class LineChart extends Chart
      * @param list<string>               $xLabels
      * @param list<string>               $yLabels
      */
-    private function __construct(
+    public function __construct(
         public readonly array $data,
         int $width,
         int $height,
@@ -63,6 +65,8 @@ final class LineChart extends Chart
         float $animationProgress = 1.0,
         int $animationDuration = 0,
         public readonly bool $fill = false,
+        ?BrailleCanvas $brailleCanvas = null,
+        ?Theme $theme = null,
     ) {
         parent::__construct(
             width: $width,
@@ -79,6 +83,8 @@ final class LineChart extends Chart
             legendItems: $legendItems,
             animationProgress: $animationProgress,
             animationDuration: $animationDuration,
+            brailleCanvas: $brailleCanvas,
+            theme: $theme,
         );
 
         if ($width < 0 || $height < 0) {
@@ -296,6 +302,22 @@ final class LineChart extends Chart
     public function withTitle(string $title, Position $position = Position::Top): self
     {
         return $this->lineChartCopy(title: $title, titlePosition: $position);
+    }
+
+    /**
+     * Use a BrailleCanvas for higher-resolution rendering.
+     */
+    public function withCanvas(BrailleCanvas $canvas): self
+    {
+        return $this->lineChartCopy(brailleCanvas: $canvas);
+    }
+
+    /**
+     * Apply a named color theme to the chart.
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return $this->lineChartCopy(theme: $theme);
     }
 
     // ─── Animation Support ──────────────────────────────────────────────
@@ -557,6 +579,8 @@ final class LineChart extends Chart
         ?float $animationProgress = null,
         ?int $animationDuration = null,
         ?bool $fill = null,
+        ?BrailleCanvas $brailleCanvas = null,
+        ?Theme $theme = null,
     ): self {
         return new self(
             data:               $data               ?? $this->data,
@@ -589,6 +613,8 @@ final class LineChart extends Chart
             animationProgress:  $animationProgress  ?? $this->getAnimationProgress(),
             animationDuration:  $animationDuration  ?? $this->getAnimationDuration(),
             fill:              $fill              ?? $this->fill,
+            brailleCanvas:     $brailleCanvas     ?? $this->brailleCanvas,
+            theme:             $theme             ?? $this->theme,
         );
     }
 

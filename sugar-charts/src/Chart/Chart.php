@@ -6,6 +6,8 @@ namespace SugarCraft\Charts\Chart;
 
 use SugarCraft\Charts\Legend\Legend;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+use SugarCraft\Sprinkles\Theme;
 
 /**
  * Base chart class providing common features like legend, title,
@@ -36,11 +38,21 @@ abstract class Chart
         private float $animationProgress = 1.0,
         /** @var int Animation duration in milliseconds (0 = instant) */
         private int $animationDuration = 0,
+        ?BrailleCanvas $brailleCanvas = null,
+        ?Theme $theme = null,
     ) {
         if ($width < 0 || $height < 0) {
             throw new \InvalidArgumentException(Lang::t('chart.dim_nonneg'));
         }
+        $this->brailleCanvas = $brailleCanvas;
+        $this->theme = $theme;
     }
+
+    /** @var BrailleCanvas|null Alternative braille-rendered canvas */
+    public readonly ?BrailleCanvas $brailleCanvas;
+
+    /** @var Theme|null Named color theme for rendering */
+    public readonly ?Theme $theme;
 
     /**
      * Render the raw chart content without legend, title, or labels.
@@ -233,7 +245,29 @@ abstract class Chart
         return $this->copy(title: $title, titlePosition: $position);
     }
 
-    // ─── Short-form Aliases ─────────────────────────────────────────────
+    /**
+     * Use a BrailleCanvas for higher-resolution rendering.
+     * When set, the chart renders using dot-matrix braille characters
+     * instead of standard character cells (2x horizontal, 4x vertical
+     * resolution). Mirrors sugar-dash Plot/Braille canvas mode.
+     */
+    public function withCanvas(BrailleCanvas $canvas): self
+    {
+        return $this->copy(brailleCanvas: $canvas);
+    }
+
+    /**
+     * Apply a named color theme to the chart.
+     * Themes provide consistent foreground/background/primary/secondary
+     * colors. Use Theme::dracula(), Theme::oneDark(), etc.
+     * Mirrors candy-sprinkles Theme palette (step 02.01).
+     */
+    public function withTheme(Theme $theme): self
+    {
+        return $this->copy(theme: $theme);
+    }
+
+    // ─── Short-form Aliases ──────────────────────────────────────────────
 
     /** @param list<array{label: string, color: string}> $items */
     public function legendItems(array $items): self { return $this->copy(legendItems: $items); }
@@ -295,6 +329,8 @@ abstract class Chart
         ?array $legendItems = null,
         ?float $animationProgress = null,
         ?int $animationDuration = null,
+        ?BrailleCanvas $brailleCanvas = null,
+        ?Theme $theme = null,
     ): self {
         return new static(
             width:              $width              ?? $this->width,
@@ -311,6 +347,8 @@ abstract class Chart
             legendItems:        $legendItems        ?? $this->legendItems,
             animationProgress:  $animationProgress  ?? $this->animationProgress,
             animationDuration:  $animationDuration  ?? $this->animationDuration,
+            brailleCanvas:      $brailleCanvas      ?? $this->brailleCanvas,
+            theme:              $theme              ?? $this->theme,
         );
     }
 }

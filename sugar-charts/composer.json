@@ -35,8 +35,18 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master"
+        "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-dash": "dev-master"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../sugar-dash",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
