@@ -25,7 +25,7 @@ return [
     'log.empty'             => '(empty log)',
 
     // Key hints
-    'help.keyhints'         => 'tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit',
+    'help.keyhints'         => 'S  stash  ·  V  cherry-pick  ·  i  rebase-i  ·  w  worktrees  ·  tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  d  discard  ·  P  diff  ·  space  checkout  ·  c  commit  ·  A  amend  ·  n  new branch  ·  R  refresh  ·  u  undo  ·  M  merge  ·  r  rebase  ·  ?  help  ·  q  quit',
 
     // Help overlay
     'help.context_general'  => 'show this help',
@@ -92,4 +92,36 @@ return [
     'help.delete_branch'      => 'delete branch',
     'help.merge'             => 'merge branch',
     'help.rebase'            => 'rebase options (when in progress)',
+
+    // Stash
+    'stash.empty'             => '(no stashes)',
+    'stash.apply'             => 'apply stash',
+    'stash.drop'             => 'drop stash',
+    'stash.applied'          => 'applied {ref}',
+    'stash.dropped'          => 'dropped {ref}',
+
+    // Cherry-pick
+    'cherry_pick.prompt'      => 'cherry-pick: ',
+    'cherry_pick.empty_ref'  => 'cherry-pick: commit ref required',
+    'cherry_pick.success'    => 'cherry-picked {ref}',
+
+    // Worktrees
+    'worktree.empty'          => '(no worktrees)',
+    'worktree.empty_path'    => 'worktree: path required',
+    'worktree.add_prompt'   => 'add worktree:',
+    'worktree.confirm_add'  => 'confirm add',
+    'worktree.added'        => 'added worktree {path}',
+    'worktree.remove_confirm' => 'remove worktree {path}?',
+    'worktree.confirm_remove'=> 'confirm remove',
+    'worktree.removed'      => 'removed worktree {path}',
+    'worktree.add'           => 'add worktree',
+    'worktree.remove'        => 'remove worktree',
+
+    // Interactive rebase
+    'rebase_i.select_count'  => 'select number of commits to rebase:',
+    'rebase_i.confirm_count' => 'confirm (enter)',
+    'rebase_i.no_commits'   => '(no commits)',
+    'rebase_i.todo_list'    => 'todo list:',
+    'rebase_i.cycle_action'  => 'cycle action',
+    'rebase_i.drop'          => 'drop commit',
 ];

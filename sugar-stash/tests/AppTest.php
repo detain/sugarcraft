@@ -34,6 +34,21 @@ final class FixtureGit implements GitDriver
     public bool $rebaseContinueCalled = false;
     public bool $rebaseAbortCalled = false;
     public bool $rebaseSkipCalled = false;
+    /** @var list<\SugarCraft\Stash\StashEntry> */
+    public array $stashListResult = [];
+    /** @var list<string> */
+    public array $stashApplies = [];
+    /** @var list<string> */
+    public array $stashDrops = [];
+    public array $cherryPicks = [];
+    public bool $cherryPickContinueCalled = false;
+    public bool $cherryPickAbortCalled = false;
+    /** @var list<\SugarCraft\Stash\WorktreeEntry> */
+    public array $worktreeListResult = [];
+    /** @var list<array{path:string, branch:string}> */
+    public array $worktreeAdds = [];
+    /** @var list<string> */
+    public array $worktreeRemoves = [];
 
     public function __construct(array $statusRows, array $branchRows, array $logRows)
     {
@@ -61,6 +76,16 @@ final class FixtureGit implements GitDriver
     public function rebaseAbort(): void { $this->rebaseAbortCalled = true; }
     public function rebaseSkip(): void { $this->rebaseSkipCalled = true; }
     public function reset(): void { $this->resetCalled = true; }
+
+    public function stashList(): array { return $this->stashListResult; }
+    public function stashApply(string $stashRef): void { $this->stashApplies[] = $stashRef; }
+    public function stashDrop(string $stashRef): void { $this->stashDrops[] = $stashRef; }
+    public function cherryPick(string $commit): void { $this->cherryPicks[] = $commit; }
+    public function cherryPickContinue(): void { $this->cherryPickContinueCalled = true; }
+    public function cherryPickAbort(): void { $this->cherryPickAbortCalled = true; }
+    public function worktreeList(): array { return $this->worktreeListResult; }
+    public function worktreeAdd(string $path, string $branch): void { $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
+    public function worktreeRemove(string $path): void { $this->worktreeRemoves[] = $path; }
 }
 
 final class AppTest extends TestCase
@@ -544,5 +569,137 @@ final class AppTest extends TestCase
         // This test would require a real git rebase in progress to be meaningful
         // For the fixture, pressing r shows an error, not the menu
         $this->markTestSkipped('Rebase menu requires real git repo with rebase in progress');
+    }
+
+    public function testSKeyOpensStashManager(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertNull($a->stashManager);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        $this->assertNotNull($a->stashManager);
+    }
+
+    public function testEscapeClosesStashManager(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'S'));
+        $this->assertNotNull($a->stashManager);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->stashManager);
+    }
+
+    public function testVKeyStartsCherryPickCollection(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertNull($a->cherryPick);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'V'));
+        $this->assertNotNull($a->cherryPick);
+        $this->assertTrue($a->cherryPick->collecting);
+        $this->assertSame('', $a->cherryPick->commitRef);
+    }
+
+    public function testCherryPickCommitRefCollection(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'V'));
+        $this->assertTrue($a->cherryPick->collecting);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertSame('a', $a->cherryPick->commitRef);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame('ab', $a->cherryPick->commitRef);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertSame('abc', $a->cherryPick->commitRef);
+    }
+
+    public function testCherryPickExecutesOnEnter(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'V'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'b'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(['ab'], $g->cherryPicks);
+        $this->assertNull($a->cherryPick);
+    }
+
+    public function testCherryPickEscapeCancelsCollection(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'V'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->cherryPick);
+    }
+
+    public function testWKeyOpensWorktreeManagerInBranchesPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // → branches
+        $this->assertSame(Pane::Branches, $a->pane);
+        $this->assertNull($a->worktrees);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertNotNull($a->worktrees);
+    }
+
+    public function testWKeyDoesNothingInStatusPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertSame(Pane::Status, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertNull($a->worktrees);
+    }
+
+    public function testEscapeClosesWorktreeManager(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));  // → branches
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'w'));
+        $this->assertNotNull($a->worktrees);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->worktrees);
+    }
+
+    public function testIKeyStartsInteractiveRebase(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        $this->assertNull($a->interactiveRebase);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertNotNull($a->interactiveRebase);
+        $this->assertTrue($a->interactiveRebase->selectingN);
+    }
+
+    public function testInteractiveRebaseCountInput(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertTrue($a->interactiveRebase->selectingN);
+        $this->assertSame('', $a->interactiveRebase->countInput);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '3'));
+        $this->assertSame('3', $a->interactiveRebase->countInput);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '2'));
+        $this->assertSame('32', $a->interactiveRebase->countInput);
+    }
+
+    public function testEscapeClosesInteractiveRebase(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertNotNull($a->interactiveRebase);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertNull($a->interactiveRebase);
     }
 }

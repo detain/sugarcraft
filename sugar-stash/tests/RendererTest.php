@@ -87,6 +87,15 @@ final class RendererTest extends TestCase
             public function rebaseAbort(): void {}
             public function rebaseSkip(): void {}
             public function reset(): void {}
+            public function stashList(): array { return []; }
+            public function stashApply(string $stashRef): void {}
+            public function stashDrop(string $stashRef): void {}
+            public function cherryPick(string $commit): void {}
+            public function cherryPickContinue(): void {}
+            public function cherryPickAbort(): void {}
+            public function worktreeList(): array { return []; }
+            public function worktreeAdd(string $path, string $branch): void {}
+            public function worktreeRemove(string $path): void {}
         };
         $a = App::start($g);
         $out = Renderer::render($a);
