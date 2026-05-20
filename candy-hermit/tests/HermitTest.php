@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit\Tests;
 
-use SugarCraft\Hermit\{Hermit, FilteredItem, Item};
+use SugarCraft\Hermit\{Hermit, FilteredItem, Item, HelpBar, StatusBar};
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
 final class HermitTest extends TestCase
@@ -208,5 +210,71 @@ final class HermitTest extends TestCase
 
         // Cursor resets to 0 after setFilterFn
         $this->assertSame(0, $h->cursor());
+    }
+
+    public function testBorderStyleComposition(): void
+    {
+        $border = Border::rounded();
+        $style = Style::new()->fg('#ffffff')->on('#0000ff');
+
+        $h = $this->makeHermit()
+            ->withBorder($border)
+            ->withStyle($style);
+
+        $this->assertSame($border, $h->border());
+        $this->assertSame($style, $h->style());
+
+        // Immutability: original unchanged
+        $h2 = $h->withBorder(Border::block());
+        $this->assertSame($border, $h->border());
+        $this->assertNotSame($h2->border(), $h->border());
+    }
+
+    public function testHelpBarAndStatusBar(): void
+    {
+        $helpBar = new HelpBar(['↑↓' => 'navigate', 'Enter' => 'select']);
+        $statusBar = new StatusBar('5 items');
+
+        $h = $this->makeHermit()
+            ->withHelpBar($helpBar)
+            ->withStatusBar($statusBar);
+
+        $this->assertSame($helpBar, $h->helpBar());
+        $this->assertSame($statusBar, $h->statusBar());
+
+        // Test rendering
+        $this->assertSame('↑↓: navigate │ Enter: select', $helpBar->render());
+        $this->assertSame('5 items', $statusBar->render());
+
+        // Immutability
+        $h2 = $h->withHelpBar(new HelpBar(['Esc' => 'quit']));
+        $this->assertNotSame($h->helpBar(), $h2->helpBar());
+        $this->assertSame($h->statusBar(), $h2->statusBar());
+    }
+
+    public function testSigwinchOnResizeCallback(): void
+    {
+        $receivedCols = -1;
+        $receivedRows = -1;
+
+        $h = $this->makeHermit()->withOnResize(
+            static function (int $cols, int $rows) use (&$receivedCols, &$receivedRows): void {
+                $receivedCols = $cols;
+                $receivedRows = $rows;
+            }
+        );
+
+        $this->assertNotNull($h->onResize());
+
+        // Simulate invoking the callback directly (as SignalForwarder would)
+        $cb = $h->onResize();
+        $cb(120, 40);
+
+        $this->assertSame(120, $receivedCols);
+        $this->assertSame(40, $receivedRows);
+
+        // attachSigwinch returns false when no callback is set
+        $hNoCb = $this->makeHermit();
+        $this->assertFalse($hNoCb->attachSigwinch());
     }
 }
