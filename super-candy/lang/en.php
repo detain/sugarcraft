@@ -33,7 +33,7 @@ return [
     'status.cannot_close_last_tab' => 'Cannot close last tab',
 
     // Key help
-    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle',
+    'keyhelp.default' => 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle',
 
     // Search
     'search.prompt'   => 'Search: {query}',
