@@ -69,7 +69,11 @@ $child-&gt;info('Batch complete');</code></pre>
             <div class="feature"><strong>Structured context</strong><span>Arbitrary key/value pairs attached to every log call.</span></div>
             <div class="feature"><strong>Sub-loggers</strong><span>`with(...)` creates a child logger that inherits all context.</span></div>
             <div class="feature"><strong>StandardLogAdapter</strong><span>Wrap any PSR-3 logger for `*log.Logger` compatibility.</span></div>
-            
+            <div class="feature"><strong>PSR-3 bridge</strong><span>`PsrBridge` wraps a Logger and exposes the full PSR-3 LoggerInterface API.</span></div>
+            <div class="feature"><strong>Hook system</strong><span>Register per-level callbacks via `HookRegistry::onLevel()` for middleware-style interceptors.</span></div>
+            <div class="feature"><strong>Caller info</strong><span>`reportCaller` on Logger adds `file:line` of the true call site to every entry.</span></div>
+            <div class="feature"><strong>PartsOrder DTO</strong><span>Configure which log-parts appear and in what order — default, syslog, or custom.</span></div>
+
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -91,8 +95,43 @@ $child-&gt;info('Batch complete');</code></pre>
 <tr><td>Logger</td><td>warn(msg, context)</td><td>Log warning message</td></tr>
 <tr><td>Logger</td><td>error(msg, context)</td><td>Log error message</td></tr>
 <tr><td>Logger</td><td>fatal(msg, context)</td><td>Log fatal message</td></tr>
-<tr><td>Logger</td><td>with(key, value)</td><td>Create child logger with context</td></tr>
+<tr><td>Logger</td><td>with(array)</td><td>Create child logger with persistent context</td></tr>
 <tr><td>Logger</td><td>withFormatter(Formatter)</td><td>Set output formatter</td></tr>
+<tr><td>Logger</td><td>withMinLevel(Level)</td><td>Set minimum output level</td></tr>
+<tr><td>Logger</td><td>withPrefix(string)</td><td>Set per-line prefix</td></tr>
+<tr><td>Logger</td><td>setReportCaller(bool)</td><td>Enable/disable caller file:line reporting</td></tr>
+<tr><td>Logger</td><td>setReportTimestamp(bool)</td><td>Enable/disable timestamp</td></tr>
+<tr><td>Logger</td><td>styles()</td><td>Get Styles object for level/field styling</td></tr>
+<tr><td>Logger</td><td>styles()->keys[name]</td><td>Per-field ANSI style override (time, level, caller, message, key, value)</td></tr>
+<tr><td>PsrBridge</td><td>new(Logger, ?HookRegistry)</td><td>Wrap a Logger with full PSR-3 API</td></tr>
+<tr><td>PsrBridge</td><td>emergency(msg, ctx)</td><td>PSR-3 emergency — maps to Level::Fatal</td></tr>
+<tr><td>PsrBridge</td><td>alert(msg, ctx)</td><td>PSR-3 alert — maps to Level::Fatal</td></tr>
+<tr><td>PsrBridge</td><td>critical(msg, ctx)</td><td>PSR-3 critical — maps to Level::Fatal</td></tr>
+<tr><td>PsrBridge</td><td>error(msg, ctx)</td><td>PSR-3 error — maps to Level::Error</td></tr>
+<tr><td>PsrBridge</td><td>warning(msg, ctx)</td><td>PSR-3 warning — maps to Level::Warn</td></tr>
+<tr><td>PsrBridge</td><td>notice(msg, ctx)</td><td>PSR-3 notice — maps to Level::Info</td></tr>
+<tr><td>PsrBridge</td><td>info(msg, ctx)</td><td>PSR-3 info — maps to Level::Info</td></tr>
+<tr><td>PsrBridge</td><td>debug(msg, ctx)</td><td>PSR-3 debug — maps to Level::Debug</td></tr>
+<tr><td>PsrBridge</td><td>log(level, msg, ctx)</td><td>Generic PSR-3 log dispatch</td></tr>
+<tr><td>HookRegistry</td><td>onLevel(Level, callable): int</td><td>Register a callback for all events at/above Level</td></tr>
+<tr><td>HookRegistry</td><td>fire(Level, psrLevel, msg, ctx)</td><td>Dispatch to all matching handlers</td></tr>
+<tr><td>Hook</td><td>onLevel(Level, string, string, array)</td><td>Interface for structured hook implementations</td></tr>
+<tr><td>PartsOrder</td><td>new(?list)</td><td>Config DTO for log-part ordering</td></tr>
+<tr><td>PartsOrder</td><td>default(): self</td><td>Preset: timestamp, level, prefix, caller, message, fields</td></tr>
+<tr><td>PartsOrder</td><td>syslog(): self</td><td>Preset: timestamp, level, message, fields (no prefix/caller)</td></tr>
+<tr><td>PartsOrder</td><td>messageFirst(): self</td><td>Preset: message, level, timestamp, fields</td></tr>
+<tr><td>PartsOrder</td><td>has(PART_*): bool</td><td>Check whether a part is included in the order</td></tr>
+<tr><td>PartsOrder</td><td>PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS</td><td>Part name constants</td></tr>
+<tr><td>CallerFormatter</td><td>find(): ?string</td><td>Walk call stack, return "file:line" of first external caller</td></tr>
+<tr><td>Level</td><td>Debug, Info, Warn, Error, Fatal</td><td>Enum: syslog-aligned int values (-4, 0, 4, 8, 12)</td></tr>
+<tr><td>TextFormatter</td><td>new(bool, ?string, bool, bool)</td><td>Human-readable formatter with ANSI color</td></tr>
+<tr><td>JsonFormatter</td><td>new(bool)</td><td>JSON object per log line</td></tr>
+<tr><td>LogfmtFormatter</td><td>new()</td><td>Logfmt key=value format</td></tr>
+<tr><td>Log</td><td>installPanicHandler()</td><td>Install global panic handler (catches fatal errors + uncaught exceptions)</td></tr>
+<tr><td>Log</td><td>restoreTerminal()</td><td>Restore terminal from altscreen mode</td></tr>
+<tr><td>Log</td><td>setLogger(Logger)</td><td>Set the global logger instance</td></tr>
+<tr><td>Log</td><td>info(msg, ctx)</td><td>Static shorthand — delegates to global logger</td></tr>
+<tr><td>Log</td><td>debug/warn/error/fatal(msg, ctx)</td><td>Static shorthands for each level</td></tr>
 </table>
   </div>
 </section>
