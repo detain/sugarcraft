@@ -7,6 +7,7 @@ namespace SugarCraft\Prompt\Field;
 use SugarCraft\Bits\TextInput\TextInput;
 use SugarCraft\Core\Msg;
 use SugarCraft\Prompt\Field;
+use SugarCraft\Prompt\Fuzzy\FuzzyMatcher;
 use SugarCraft\Prompt\HasDynamicLabels;
 use SugarCraft\Prompt\HasHideFunc;
 use SugarCraft\Prompt\Validator\Validator;
@@ -28,6 +29,9 @@ final class Input implements Field
     /** @var (\Closure(string):list<string>)|null */
     private $suggestionsFunc;
 
+    /** @var list<string> */
+    private array $fuzzyCandidates = [];
+
     private function __construct(
         public readonly string $key,
         public readonly TextInput $input,
@@ -36,9 +40,11 @@ final class Input implements Field
         public readonly ?string $error,
         array $validators = [],
         ?\Closure $suggestionsFunc = null,
+        array $fuzzyCandidates = [],
     ) {
         $this->validators = $validators;
         $this->suggestionsFunc = $suggestionsFunc;
+        $this->fuzzyCandidates = $fuzzyCandidates;
     }
 
     public static function new(string $key): self
@@ -69,6 +75,7 @@ final class Input implements Field
     public function width(int $w): self           { return $this->withWidth($w); }
     public function password(bool $on = true, string $echoChar = '*'): self { return $this->withPassword($on, $echoChar); }
     public function suggest(array $candidates): self { return $this->withSuggestions($candidates); }
+    public function fuzzy(array $candidates): self { return $this->withFuzzySuggestions($candidates); }
     public function validator(\Closure $fn): self { return $this->withValidator($fn); }
     public function validation(callable $predicate, string $errorMessage): self { return $this->withValidation($predicate, $errorMessage); }
 
@@ -122,6 +129,40 @@ final class Input implements Field
             $this->error,
             $this->validators,
             $fn,
+            $this->fuzzyCandidates,
+        );
+    }
+
+    /**
+     * Provide an autocomplete pool that is filtered and ranked by fuzzy
+     * substring match (Smith-Waterman scoring) against the current input
+     * value. The user picks from the ranked suggestion list via arrow keys.
+     * Mirrors huh's `WithFuzzySuggestions([]string)`.
+     *
+     * @param list<string> $candidates
+     */
+    public function withFuzzySuggestions(array $candidates): self
+    {
+        $matcher = new FuzzyMatcher();
+        $pool = $candidates;
+
+        $fn = static function (string $input) use ($matcher, $pool): array {
+            if ($input === '') {
+                return [];
+            }
+            $scored = $matcher->match($input, $pool);
+            return array_column($scored, 0);
+        };
+
+        return new self(
+            $this->key,
+            $this->input,
+            $this->title,
+            $this->description,
+            $this->error,
+            $this->validators,
+            $fn,
+            $candidates,
         );
     }
 
@@ -259,11 +300,11 @@ final class Input implements Field
                 if ($err === $this->error) {
                     return $this;
                 }
-                return new self($this->key, $this->input, $this->title, $this->description, $err, $this->validators, $this->suggestionsFunc);
+                return new self($this->key, $this->input, $this->title, $this->description, $err, $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates);
             }
         }
         if ($this->error !== null) {
-            return new self($this->key, $this->input, $this->title, $this->description, null, $this->validators, $this->suggestionsFunc);
+            return new self($this->key, $this->input, $this->title, $this->description, null, $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates);
         }
         return $this;
     }
@@ -278,6 +319,7 @@ final class Input implements Field
             error:           $error       ?? $this->error,
             validators:      $this->validators,
             suggestionsFunc: $this->suggestionsFunc,
+            fuzzyCandidates: $this->fuzzyCandidates,
         );
     }
 }
