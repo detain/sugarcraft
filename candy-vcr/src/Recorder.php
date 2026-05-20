@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr;
 
 use SugarCraft\Core\Recorder as RecorderInterface;
+use SugarCraft\Vcr\Format\Format;
+use SugarCraft\Vcr\Format\RelativeFormat;
 use SugarCraft\Vcr\Hook\HookRegistry;
 
 /**
@@ -60,6 +62,18 @@ final class Recorder implements RecorderInterface
 
     /** Cumulative seconds shaved off the timeline by all trims so far. */
     private float $cumulativeTrim = 0.0;
+
+    /**
+     * When true, events are written with `dt` (delta since previous event)
+     * instead of `t` (absolute timestamp). Set via {@see withFormat()}.
+     */
+    private bool $useRelativeTimestamps = false;
+
+    /**
+     * Cumulative absolute timestamp used to calculate deltas for relative mode.
+     * Tracked separately from $cumulativeTrim so deltas reflect effective time.
+     */
+    private float $cumulativeEffectiveT = 0.0;
 
     /**
      * @param resource $fh  Open writable stream — typically a file opened
@@ -169,6 +183,19 @@ final class Recorder implements RecorderInterface
         return $this->hooks;
     }
 
+    /**
+     * Select the cassette format for timestamp encoding. Currently only
+     * {@see RelativeFormat} is supported for relative timestamps; all other
+     * formats produce absolute `t` values.
+     *
+     * @return $this
+     */
+    public function withFormat(Format $f): self
+    {
+        $this->useRelativeTimestamps = $f instanceof RelativeFormat;
+        return $this;
+    }
+
     public function recordResize(int $cols, int $rows): void
     {
         if ($this->closed) {
@@ -245,6 +272,12 @@ final class Recorder implements RecorderInterface
         }
 
         $line = ['t' => $event->t, 'k' => $event->kind->value, ...$event->payload];
+        if ($this->useRelativeTimestamps) {
+            $delta = round($event->t - $this->cumulativeEffectiveT, 3);
+            unset($line['t']);
+            $line['dt'] = $delta;
+            $this->cumulativeEffectiveT = $event->t;
+        }
         if ($this->cumulativeTrim > 0.0 && !isset($line['tRaw'])) {
             // P6.5.3 dual-timestamp: any event after a trim carries the
             // original wallclock-relative timestamp so a replay can opt
