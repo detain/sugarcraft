@@ -470,4 +470,5 @@ step 09.07 · PR#723 · candy-mines: O(1) win detection via revealedCount + seri
 review for step 09.07 · clean · PR#723
 tests-ci for step 09.07 · clean
 docs for step 09.06 · PR#722 · document chord()/microtimer/DifficultyStats in README + end-user HTML + new CALIBER_LEARNINGS.md
+docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, CustomDifficulty in README + end-user HTML + CALIBER_LEARNINGS.md
 
