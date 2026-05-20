@@ -483,4 +483,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.10 · clean · PR#729
     tests-ci for step 09.10 · clean
     docs for step 09.10 · PR#730 · document FilterState/FuzzyMatch/withFilterFn in README + end-user HTML + new CALIBER_LEARNINGS.md
+    step 09.11 · PR#731 · candy-log: Probe-driven color + PadLevelText + syslog level values + key styles (leftover-rollout step 09.11)
 
