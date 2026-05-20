@@ -8,10 +8,10 @@ namespace SugarCraft\Freeze;
  * Splits a single line of ANSI-styled text into typed {@see Segment}s
  * for {@see SvgRenderer}.
  *
- * Handles SGR foreground colours (16-color / 256-color / 24-bit RGB)
- * and the standard attribute flags (bold, italic, underline).
- * Background colours are recognised but currently dropped — the SVG
- * output paints the whole line on the theme's background.
+ * Handles SGR foreground and background colours (16-color / 256-color
+ * / 24-bit RGB) and the standard attribute flags (bold, italic,
+ * underline). Background colours are passed through to segments for
+ * per-segment rendering.
  *
  * Other ANSI sequences (CSI cursor moves, OSC, etc.) pass through
  * silently — they have no visible effect in a static SVG.
@@ -34,7 +34,7 @@ final class AnsiParser
     public static function parse(string $line): array
     {
         $segments = [];
-        $current  = new Segment('', null, false, false, false);
+        $current  = new Segment('', null, false, false, false, null);
         $len = strlen($line);
         $i = 0;
         $textBuffer = '';
@@ -48,6 +48,7 @@ final class AnsiParser
                 bold:      $current->bold,
                 italic:    $current->italic,
                 underline: $current->underline,
+                bg:        $current->bg,
             );
             $textBuffer = '';
         };
@@ -100,6 +101,7 @@ final class AnsiParser
             $params = array_map('intval', explode(';', $body));
         }
         $fg        = $cur->fg;
+        $bg        = $cur->bg;
         $bold      = $cur->bold;
         $italic    = $cur->italic;
         $underline = $cur->underline;
@@ -108,7 +110,7 @@ final class AnsiParser
         for ($i = 0; $i < $count; $i++) {
             $p = $params[$i];
             if ($p === 0) {
-                $fg = null; $bold = false; $italic = false; $underline = false;
+                $fg = null; $bg = null; $bold = false; $italic = false; $underline = false;
                 continue;
             }
             if ($p === 1) { $bold = true; continue; }
@@ -118,12 +120,21 @@ final class AnsiParser
             if ($p === 23) { $italic = false; continue; }
             if ($p === 24) { $underline = false; continue; }
             if ($p === 39) { $fg = null; continue; }
+            if ($p === 49) { $bg = null; continue; }
             if ($p >= 30 && $p <= 37) {
                 $fg = self::ANSI16[$p - 30] ?? null;
                 continue;
             }
             if ($p >= 90 && $p <= 97) {
                 $fg = self::ANSI16[$p - 90 + 8] ?? null;
+                continue;
+            }
+            if ($p >= 40 && $p <= 47) {
+                $bg = self::ANSI16[$p - 40] ?? null;
+                continue;
+            }
+            if ($p >= 100 && $p <= 107) {
+                $bg = self::ANSI16[$p - 100 + 8] ?? null;
                 continue;
             }
             if ($p === 38 && isset($params[$i + 1])) {
@@ -139,9 +150,21 @@ final class AnsiParser
                     continue;
                 }
             }
-            // Background (40-47, 100-107, 48;...) and other params silently ignored.
+            if ($p === 48 && isset($params[$i + 1])) {
+                $mode = $params[$i + 1];
+                if ($mode === 5 && isset($params[$i + 2])) {
+                    $bg = self::xterm256ToHex($params[$i + 2]);
+                    $i += 2;
+                    continue;
+                }
+                if ($mode === 2 && isset($params[$i + 2], $params[$i + 3], $params[$i + 4])) {
+                    $bg = sprintf('#%02x%02x%02x', $params[$i + 2], $params[$i + 3], $params[$i + 4]);
+                    $i += 4;
+                    continue;
+                }
+            }
         }
-        return new Segment('', $fg, $bold, $italic, $underline);
+        return new Segment('', $fg, $bold, $italic, $underline, $bg);
     }
 
     private static function xterm256ToHex(int $i): string
