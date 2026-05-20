@@ -415,6 +415,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     tests-ci for step 09.01 · clean
     docs for step 09.01 · PR#709 · document imagecreatefromstring() decode in README + new CALIBER_LEARNINGS.md (leftover-rollout step 09.01)
     step 09.02 · PR#710 · candy-flip: area downsample + Floyd-Steinberg dithering + per-frame local color tables + GCE transparency/disposal
+    fix for step 09.02 · PR#711 · resolved 1 finding
     ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
@@ -442,10 +443,6 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 ## Open review findings — 02.03
 
 - [x] candy-palette/README.md: new Probe class + ColorProfile enum not yet documented (docs sub-step needed, matching pattern from 02.01 docs PR#520 / 02.02 docs entry) — resolved PR#523
-
-## Open review findings — 09.02
-
-- [ ] candy-flip/CALIBER_LEARNINGS.md: not updated with 4 new patterns from step 09.02 (area-average-downsample, floyd-steinberg-dithering, local-color-table-per-frame, gce-transparency-disposal) — the brief and step spec both require new patterns to be logged; file currently has only the 3 patterns from step 09.01
 
 ## Open review findings — 01.08
 
