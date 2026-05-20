@@ -89,7 +89,7 @@ final class Search implements Model {
       <div class="feature"><strong>Progress</strong><span>Static <code>Progress</code> + spring-physics <code>AnimatedProgress</code> driven by HoneyBounce.</span></div>
       <div class="feature"><strong>TextInput / TextArea</strong><span>Single + multi-line. Autocomplete, validators, <code>ValidateOn</code> timing control, keystroke <code>restrict</code> pattern filter, line numbers, soft-wrap, dynamic-height growth (mirrors upstream bubbles #910).</span></div>
       <div class="feature"><strong>ItemList</strong><span>Selectable, scrollable, filterable. Status messages, custom delegates.</span></div>
-      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246).</span></div>
+      <div class="feature"><strong>Table</strong><span>Selectable data table with Column DTOs, header highlight, vertical nav, per-cell <code>styleFunc(row, col) =&gt; Style</code> (mirrors bubbles #246), multi-column sort with <code>withSort()</code> / <code>thenSortBy()</code> / <code>clearSort()</code>.</span></div>
       <div class="feature"><strong>Tree</strong><span>Interactive tree view — cursor nav, expand / collapse, viewport scroll, <code>g</code> / <code>G</code> jump (mirrors bubbles #233).</span></div>
       <div class="feature"><strong>Viewport</strong><span>Scrollable text region. Mouse wheel, scrollbar, keyboard nav.</span></div>
       <div class="feature"><strong>FilePicker</strong><span>Directory browser with icons, size, sort modes.</span></div>
@@ -118,6 +118,12 @@ final class Search implements Model {
 <tr><td>Spinner</td><td>new(Style)</td><td>Create spinner with given style</td></tr>
 <tr><td>Spinner</td><td>tick()</td><td>Return tick command for animation</td></tr>
 <tr><td>Table</td><td>new(headers, rows)</td><td>Create data table</td></tr>
+<tr><td>Table</td><td>withSort(string $column, SortDirection $dir = Asc)</td><td>Set primary sort column and direction — clears prior sort chain</td></tr>
+<tr><td>Table</td><td>thenSortBy(string $column, SortDirection $dir = Asc)</td><td>Add secondary (or further) sort tiebreaker</td></tr>
+<tr><td>Table</td><td>clearSort()</td><td>Remove all sort criteria, restoring insertion order</td></tr>
+<tr><td>Table</td><td>getSortState(): SortState</td><td>Return current sort criteria (readonly)</td></tr>
+<tr><td>SortDirection</td><td>enum</td><td>Cases: Asc / Desc — use toggle() to flip direction</td></tr>
+<tr><td>SortState</td><td>DTO</td><td>Immutable list of (column index, SortDirection) pairs</td></tr>
 <tr><td>Tree</td><td>new(root)</td><td>Create tree view</td></tr>
 <tr><td>Viewport</td><td>new(content)</td><td>Create scrollable viewport</td></tr>
 <tr><td>Progress</td><td>new(ratio)</td><td>Create progress bar</td></tr>
