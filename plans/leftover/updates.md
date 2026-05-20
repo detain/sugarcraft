@@ -357,6 +357,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.01 · clean · PR#684
   tests-ci for step 08.01 · clean
   docs for step 08.01 · PR#685 · document Validator interface + 5 built-in subclasses in README (chaining quickstart + API table + custom impl example) + update docs/lib/sugar-prompt.html quickstart + feature grid
+  step 08.02 · PR#686 · sugar-prompt: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() on Input and Select fields + 17 tests (leftover-rollout step 08.02)
 
 ## Open review findings — 07.16
 
