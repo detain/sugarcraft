@@ -26,6 +26,7 @@
     },
     "require": {
         "php": "^8.3",
+        "psr/log": "^3.0",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-palette": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
