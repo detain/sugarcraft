@@ -63,6 +63,13 @@ final class Table
     // Horizontal scroll offset (character cells)
     private int $scrollX = 0;
 
+    // Viewport virtualization
+    /** Number of visible rows. 0 = no virtualization (render all). */
+    private int $viewportHeight = 0;
+
+    /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
+    private int $scrollY = 0;
+
     // Zebra stripes
     private bool $zebraEnabled = false;
     private string $zebraStyleOdd  = '100';  // bright black (dim)
@@ -168,6 +175,25 @@ final class Table
         $clone = clone $this;
         $clone->scrollX = \max(0, $offset);
         return $clone;
+    }
+
+    public function withViewportHeight(int $height): self
+    {
+        $clone = clone $this;
+        $clone->viewportHeight = \max(0, $height);
+        return $clone;
+    }
+
+    public function withScrollY(int $offset): self
+    {
+        $clone = clone $this;
+        $clone->scrollY = \max(0, $offset);
+        return $clone;
+    }
+
+    public function scrollY(): int
+    {
+        return $this->scrollY;
     }
 
     public function withZebra(bool $v = true): self
@@ -434,6 +460,96 @@ final class Table
         return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->TotalPages()]);
     }
 
+    /**
+     * Compute actual column widths based on ColumnWidth enum values.
+     *
+     * @return array<int, int>  colIndex => computed width in chars
+     */
+    public function computeColumnWidths(int $tableWidth): array
+    {
+        $widths = [];
+        $flexCount = 0;
+        $reservedWidth = 0;  // borders between columns
+
+        // First pass: collect Fixed/Percent widths, count flexible columns
+        foreach ($this->columns as $col) {
+            $cw = $col->columnWidth;
+            if ($cw === ColumnWidth::Fixed) {
+                $widths[] = $col->width;
+            } elseif ($cw === ColumnWidth::Percent) {
+                $widths[] = (int) \floor($tableWidth * $col->percentValue / 100);
+            } else {
+                $widths[] = null;  // Dynamic or Content — placeholder
+                $flexCount++;
+            }
+        }
+
+        // Count borders: one between each column
+        $borderCount = \count($this->columns) - 1;
+        if ($borderCount > 0) {
+            $reservedWidth += $borderCount;
+        }
+
+        // Flexible columns get remaining space
+        if ($flexCount > 0) {
+            $fixedWidth = 0;
+            foreach ($widths as $w) {
+                if ($w !== null) {
+                    $fixedWidth += $w;
+                }
+            }
+            $remaining = $tableWidth - $reservedWidth - $fixedWidth;
+            $flexWidth = $remaining > 0 ? (int) \floor($remaining / $flexCount) : 0;
+
+            // Apply Dynamic/Content as content-based or minimum flex
+            foreach ($this->columns as $i => $col) {
+                if ($widths[$i] === null) {
+                    $contentLen = $this->contentWidthForColumn($col);
+                    if ($col->columnWidth === ColumnWidth::Dynamic) {
+                        // Dynamic: use content length or flex width, whichever is larger
+                        $widths[$i] = \max($contentLen, $flexWidth);
+                    } else {
+                        // Content: use exact content length
+                        $widths[$i] = \max(1, $contentLen);
+                    }
+                }
+            }
+        }
+
+        // Any nulls left (no flex columns) become their original width
+        foreach ($widths as $i => $w) {
+            if ($w === null) {
+                $widths[$i] = $this->columns[$i]->width;
+            }
+        }
+
+        return $widths;
+    }
+
+    /**
+     * Estimate the maximum content width for a column from row data.
+     */
+    private function contentWidthForColumn(Column $col): int
+    {
+        $maxLen = \strlen($col->title);
+
+        foreach ($this->rows as $row) {
+            $val = $row->data->get($col->key);
+            if ($val === null) {
+                continue;
+            }
+            $str = \is_object($val) && method_exists($val, '__toString')
+                ? (string) $val
+                : (\is_scalar($val) ? (string) $val : '');
+            $len = \strlen($str);
+            if ($len > $maxLen) {
+                $maxLen = $len;
+            }
+        }
+
+        return $maxLen;
+    }
+
     // -------------------------------------------------------------------------
     // Rendering
     // -------------------------------------------------------------------------
@@ -447,6 +563,15 @@ final class Table
         $totalWidth = $this->computeTotalWidth();
         $rows     = $this->pagedRows();
 
+        // Apply viewport virtualization — scrollY offset into the paged view
+        if ($this->viewportHeight > 0) {
+            if ($this->scrollY >= \count($rows)) {
+                $rows = [];  // No rows visible when scrollY exceeds row count
+            } else {
+                $rows = \array_slice($rows, $this->scrollY, $this->viewportHeight);
+            }
+        }
+
         // Top border
         $lines[] = $this->renderTopBorder($totalWidth);
 
@@ -458,8 +583,12 @@ final class Table
 
         // Data rows
         foreach ($rows as $ri => $row) {
-            $isSelected = $ri === $this->selectedIndex && $this->selectable;
-            $lines[] = $this->renderRow($row, $ri, $totalWidth, $isSelected);
+            // selectedIndex is relative to the full paged view; adjust for scroll offset
+            $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
+            $rowLines = $this->renderRowLines($row, $ri, $totalWidth, $isSelected);
+            foreach ($rowLines as $rowLine) {
+                $lines[] = $rowLine;
+            }
         }
 
         // Footer
@@ -541,9 +670,15 @@ final class Table
         return $this->ansi($line, $this->footerStyle);
     }
 
-    private function renderRow(Row $row, int $rowIndex, int $totalWidth, bool $isSelected): string
+    /**
+     * Render a row as one or more lines (for wrapped cells).
+     *
+     * @return list<string>
+     */
+    private function renderRowLines(Row $row, int $rowIndex, int $totalWidth, bool $isSelected): array
     {
-        $cells = [];
+        $columnLines = [];
+        $colWidths = [];
 
         foreach ($this->columns as $colIndex => $col) {
             $val = $row->data->get($col->key);
@@ -575,12 +710,40 @@ final class Table
                 ? (string) $val
                 : (\is_scalar($val) ? (string) $val : '');
 
-            $cellStr = $col->renderCell($str);
-            $cellStr = $this->ansi($cellStr, $style);
-            $cells[] = $cellStr;
+            $cellLines = $col->renderCell($str);
+            // Apply style to each line
+            $styledLines = [];
+            foreach ($cellLines as $cellLine) {
+                $styledLines[] = $this->ansi($cellLine, $style);
+            }
+            $columnLines[] = $styledLines;
+            $colWidths[] = $col->width;
         }
 
-        return $this->borderLeft . \implode($this->borderCenterV, $cells) . $this->borderRight;
+        // Find max number of lines across all columns
+        $maxLines = 0;
+        foreach ($columnLines as $colLines) {
+            if (\count($colLines) > $maxLines) {
+                $maxLines = \count($colLines);
+            }
+        }
+
+        // Build output lines, one per row
+        $result = [];
+        for ($i = 0; $i < $maxLines; $i++) {
+            $cells = [];
+            foreach ($columnLines as $ci => $colLines) {
+                if (isset($colLines[$i])) {
+                    $cells[] = $colLines[$i];
+                } else {
+                    // Fill with spaces matching the column width
+                    $cells[] = \str_repeat(' ', $colWidths[$ci]);
+                }
+            }
+            $result[] = $this->borderLeft . \implode($this->borderCenterV, $cells) . $this->borderRight;
+        }
+
+        return $result;
     }
 
     private function applyBorderStyle(string $s): string
