@@ -46,25 +46,46 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Fuzzy-search overlay — type to filter a list, arrow keys to select, Enter to confirm. Ships as a model wrapper that composes into any bubbletea program.</p>
+    <p class="lede" style="margin-top: 28px;">Fuzzy-search overlay — type to filter a list, arrow keys to select, Enter to confirm. Ships as a model wrapper that composes into any bubbletea program. Supports structured Item objects, custom filter predicates, and persistent JSONL history.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/candy-hermit</code></pre>
 
-    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <h3 style="margin-top: 32px;">Quickstart — plain strings</h3>
     <pre class="code"><code>use SugarCraft\Hermit\Hermit;
 
 $hermit = Hermit::new(
     items: ['Ruby', 'PHP', 'Go', 'Rust', 'Python'],
-    prompt: 'Choose language: ',
-);</code></pre>
+)->setPrompt('Choose language: ');</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart — numbered items + history</h3>
+    <pre class="code"><code>use SugarCraft\Hermit\Hermit;
+use SugarCraft\Hermit\FilteredItem;
+use SugarCraft\Hermit\History\FileHistory;
+
+$items = [
+    new FilteredItem(1, 'apple'),
+    new FilteredItem(2, 'banana'),
+    new FilteredItem(3, 'cherry'),
+];
+
+$hermit = Hermit::new($items)
+    ->setFilterFn(fn($item) => $item->number() > 0)
+    ->setPrompt('> ');
+
+// Persist selections
+$history = new FileHistory('/tmp/hermit.jsonl');
+$history->append($hermit->selected());
+$allItems = $history->all();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>Fuzzy matching</strong><span>Fuse.js-style fuzzy search on item text.</span></div>
+      <div class="feature"><strong>Fuzzy matching</strong><span>Anchor-aware substring filter on item text as you type.</span></div>
             <div class="feature"><strong>Hermit model</strong><span>Full bubbletea Model with init / update / view.</span></div>
-            <div class="feature"><strong>Configurable</strong><span>Custom formatter, header text, empty message.</span></div>
-            
+            <div class="feature"><strong>Configurable</strong><span>Custom formatter, prompt, match highlight style, window size.</span></div>
+            <div class="feature"><strong>Item interface</strong><span>Structured Item objects with number() + value() instead of raw strings.</span></div>
+            <div class="feature"><strong>Custom filter predicates</strong><span>setFilterFn() applies arbitrary Closure(Item): bool logic.</span></div>
+            <div class="feature"><strong>Persistent history</strong><span>FileHistory stores items as JSONL lines, one item per line.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -80,10 +101,28 @@ $hermit = Hermit::new(
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Hermit</td><td>new(items, prompt)</td><td>Create fuzzy finder</td></tr>
-<tr><td>Hermit</td><td>update(msg)</td><td>Handle input messages</td></tr>
-<tr><td>Hermit</td><td>view()</td><td>Render the overlay</td></tr>
-<tr><td>Hermit</td><td>selected()</td><td>Get selected item</td></tr>
+<tr><td>Hermit</td><td>new(array $items, ?Closure $itemFormatter)</td><td>Create fuzzy finder (items: string[] or Item[])</td></tr>
+<tr><td>Hermit</td><td>withItems(array $items)</td><td>Replace items and reset filter state</td></tr>
+<tr><td>Hermit</td><td>setPrompt(string)</td><td>Set filter prompt string</td></tr>
+<tr><td>Hermit</td><td>setFilterFn(Closure)</td><td>Set custom filter predicate: Closure(Item): bool</td></tr>
+<tr><td>Hermit</td><td>setItemFormatter(Closure)</td><td>Set item formatter: Closure(item, isSelected): string</td></tr>
+<tr><td>Hermit</td><td>setMatchStyle(string)</td><td>Set ANSI SGR codes for match highlighting</td></tr>
+<tr><td>Hermit</td><td>setWindowHeight(int)</td><td>Set visible item window height</td></tr>
+<tr><td>Hermit</td><td>setWindowWidth(int)</td><td>Set overlay width (0 = auto)</td></tr>
+<tr><td>Hermit</td><td>setOffset(int $x, int $y)</td><td>Position overlay and show</td></tr>
+<tr><td>Hermit</td><td>show() / hide()</td><td>Show or hide the overlay</td></tr>
+<tr><td>Hermit</td><td>type(string) / backspace() / clear()</td><td>Modify filter text</td></tr>
+<tr><td>Hermit</td><td>cursorUp/Down/Top/Bottom()</td><td>Navigate item cursor</td></tr>
+<tr><td>Hermit</td><td>selected()</td><td>Get currently selected Item</td></tr>
+<tr><td>Hermit</td><td>items() / itemCount() / allCount()</td><td>Query filtered/all item state</td></tr>
+<tr><td>Hermit</td><td>View(string $backgroundView)</td><td>Render composited overlay over background</td></tr>
+<tr><td>Item</td><td>interface number(), value()</td><td>Contract for filterable items</td></tr>
+<tr><td>FilteredItem</td><td>new(int $number, string $value)</td><td>Numbered Item implementation</td></tr>
+<tr><td>FileHistory</td><td>new(string $path)</td><td>Open/create JSONL history file</td></tr>
+<tr><td>FileHistory</td><td>append(Item)</td><td>Append item as JSON line</td></tr>
+<tr><td>FileHistory</td><td>all()</td><td>Read all items from history</td></tr>
+<tr><td>FileHistory</td><td>clear() / path()</td><td>Clear history or get file path</td></tr>
+<tr><td>Model</td><td>interface update(Hermit, string), view(Hermit)</td><td>Bubble-Tea embedding contract</td></tr>
 </table>
   </div>
 </section>
