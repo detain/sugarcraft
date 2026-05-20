@@ -410,10 +410,11 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
    step 08.14 · PR#707 · candy-freeze: VS Code/chroma JSON theme loaders + font embed + line highlight (leftover-rollout step 08.14)
    review for step 08.14 · clean · PR#707
    docs for step 08.14 · direct-to-master · document VsCodeThemeLoader/ChromaThemeLoader/withFont/withHighlight in README/end-user HTML/CALIBER_LEARNINGS.md
-   step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)
-   review for step 09.01 · clean · PR#708
-   tests-ci for step 09.01 · clean
-   ## Open review findings — 08.04
+    step 09.01 · PR#708 · candy-flip: imagecreatefromstring() + per-frame GCE timing (leftover-rollout step 09.01)
+    review for step 09.01 · clean · PR#708
+    tests-ci for step 09.01 · clean
+    docs for step 09.01 · PR#709 · document imagecreatefromstring() decode in README + new CALIBER_LEARNINGS.md (leftover-rollout step 09.01)
+    ## Open review findings — 08.04
 
 ### Phase 08 complete (all 14 steps shipped)
 
