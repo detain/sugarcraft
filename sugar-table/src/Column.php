@@ -99,6 +99,9 @@ final class Column
 
     public function withColumnWidth(ColumnWidth $columnWidth, float $percentValue = 0.0): self
     {
+        if ($columnWidth === ColumnWidth::Percent && ($percentValue < 0.0 || $percentValue > 100.0)) {
+            throw new \InvalidArgumentException('Percent value must be between 0.0 and 100.0');
+        }
         return new self($this->key, $this->title, $this->width, $this->flexibleWidth, $this->maxWidth, $this->filterable, $this->alignLeft, $this->style, $columnWidth, $percentValue, $this->wrapMode);
     }
 
@@ -110,7 +113,7 @@ final class Column
     /**
      * Build the header cell content, padded to $totalWidth.
      *
-     * @return list<string> One or more lines
+     * @return string
      */
     public function renderHeader(int $totalWidth = 0): string
     {
