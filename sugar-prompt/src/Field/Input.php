@@ -9,6 +9,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Prompt\Field;
 use SugarCraft\Prompt\HasDynamicLabels;
 use SugarCraft\Prompt\HasHideFunc;
+use SugarCraft\Prompt\Validator\Validator;
 
 /**
  * Single-line text field. Wraps a {@see TextInput} and exposes an
@@ -19,8 +20,10 @@ final class Input implements Field
     use HasHideFunc;
     use HasDynamicLabels;
 
-    /** @var (\Closure(string):?string)|null */
-    private $validator;
+    /**
+     * @var list<\Closure(string):?string>
+     */
+    private array $validators = [];
 
     /** @var (\Closure(string):list<string>)|null */
     private $suggestionsFunc;
@@ -31,10 +34,10 @@ final class Input implements Field
         public readonly string $title,
         public readonly string $description,
         public readonly ?string $error,
-        ?\Closure $validator = null,
+        array $validators = [],
         ?\Closure $suggestionsFunc = null,
     ) {
-        $this->validator = $validator;
+        $this->validators = $validators;
         $this->suggestionsFunc = $suggestionsFunc;
     }
 
@@ -46,6 +49,7 @@ final class Input implements Field
             title: '',
             description: '',
             error: null,
+            validators: [],
         );
     }
 
@@ -116,23 +120,69 @@ final class Input implements Field
             $this->title,
             $this->description,
             $this->error,
-            $this->validator,
+            $this->validators,
             $fn,
         );
     }
 
-    /** @param \Closure(string):?string $fn returns null on valid, error string on invalid */
-    public function withValidator(\Closure $fn): self
+    /**
+     * Attach a validator. Accepts a Validator instance or a closure.
+     * Multiple calls chain validators together — each runs in sequence
+     * and the first error message is returned.
+     *
+     * @param Validator|\Closure(string):?string $validator
+     */
+    public function withValidator(Validator|\Closure $validator): self
     {
+        if ($validator instanceof Validator) {
+            $fn = static fn (string $v): ?string => match (true) {
+                $validator->validate($v) === true => null,
+                default => (string) $validator->validate($v),
+            };
+        } else {
+            $fn = $validator;
+        }
+
+        $chained = $this->buildChainedValidator($fn);
         return new self(
             $this->key,
             $this->input,
             $this->title,
             $this->description,
             $this->error,
-            $fn,
+            $chained,
             $this->suggestionsFunc,
         );
+    }
+
+    /**
+     * Build a new validator closure that runs $fn in sequence with
+     * the existing chained validator (first error wins).
+     *
+     * @param \Closure(string):?string $fn
+     * @return list<\Closure(string):?string>
+     */
+    private function buildChainedValidator(\Closure $fn): array
+    {
+        $existing = $this->validators;
+
+        // If no existing validators, just return the new one wrapped in array.
+        if ($existing === []) {
+            return [$fn];
+        }
+
+        // Chain: run existing first, then $fn.
+        $chained = static function (string $v) use ($existing, $fn): ?string {
+            foreach ($existing as $vfn) {
+                $err = $vfn($v);
+                if ($err !== null) {
+                    return $err;
+                }
+            }
+            return $fn($v);
+        };
+
+        return [$chained];
     }
 
     /**
@@ -200,14 +250,22 @@ final class Input implements Field
 
     private function validate(): self
     {
-        if ($this->validator === null) {
+        if ($this->validators === []) {
             return $this;
         }
-        $err = ($this->validator)($this->input->value);
-        if ($err === $this->error) {
-            return $this;
+        foreach ($this->validators as $vfn) {
+            $err = $vfn($this->input->value);
+            if ($err !== null) {
+                if ($err === $this->error) {
+                    return $this;
+                }
+                return new self($this->key, $this->input, $this->title, $this->description, $err, $this->validators, $this->suggestionsFunc);
+            }
         }
-        return new self($this->key, $this->input, $this->title, $this->description, $err, $this->validator, $this->suggestionsFunc);
+        if ($this->error !== null) {
+            return new self($this->key, $this->input, $this->title, $this->description, null, $this->validators, $this->suggestionsFunc);
+        }
+        return $this;
     }
 
     private function mutate(?TextInput $input = null, ?string $title = null, ?string $description = null, ?string $error = null): self
@@ -218,7 +276,7 @@ final class Input implements Field
             title:           $title       ?? $this->title,
             description:     $description ?? $this->description,
             error:           $error       ?? $this->error,
-            validator:       $this->validator,
+            validators:      $this->validators,
             suggestionsFunc: $this->suggestionsFunc,
         );
     }
