@@ -491,4 +491,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 09.12 · PR#734 · resolved 1 finding (remove broken HookRegistry::remove() + 3 CALIBER entries)
     tests-ci for step 09.12 · clean
     docs for step 09.12 · PR#735 · document CallerFormatter/PsrBridge/Hook/PartsOrder in README + end-user HTML + PHPDoc
+    step 09.13 · PR#736 · candy-metrics: histogram buckets (14 classic buckets) + Descriptor DTO + Registry::register() (leftover-rollout step 09.13)
 
