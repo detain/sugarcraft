@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Flap\PipeGenerator;
 
 /**
  * Flappy-Bird as a SugarCraft Model. The world is `width × height`
@@ -201,11 +202,7 @@ final class Game implements Model
         // Spawn a new pipe every PIPE_EVERY ticks.
         $tick = $this->tickIndex + 1;
         if ($tick % self::PIPE_EVERY === 0) {
-            $rand = $this->rand;
-            $minY = 3 + intdiv(self::PIPE_GAP, 2);
-            $maxY = self::HEIGHT - 3 - intdiv(self::PIPE_GAP, 2);
-            $gapY = $minY + $rand($maxY - $minY);
-            $pipes[] = new Pipe(self::WIDTH - 1, $gapY, self::PIPE_GAP);
+            $pipes[] = PipeGenerator::makePipe($this->score, $this->rand);
         }
 
         // Score = number of pipes the bird has passed in this tick.
