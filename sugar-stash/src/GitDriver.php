@@ -37,4 +37,10 @@ interface GitDriver
     public function stage(string $path): void;
 
     public function unstage(string $path): void;
+
+    public function checkout(string $branch): void;
+
+    public function commit(string $message): void;
+
+    public function stageAll(): void;
 }

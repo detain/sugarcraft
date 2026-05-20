@@ -78,6 +78,21 @@ final class Git implements GitDriver
         $this->run(['restore', '--staged', '--', $path]);
     }
 
+    public function checkout(string $branch): void
+    {
+        $this->run(['checkout', $branch]);
+    }
+
+    public function commit(string $message): void
+    {
+        $this->run(['commit', '-m', $message]);
+    }
+
+    public function stageAll(): void
+    {
+        $this->run(['add', '-A']);
+    }
+
     /** @return list<string> */
     private function run(array $args): array
     {

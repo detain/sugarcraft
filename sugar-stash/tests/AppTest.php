@@ -18,6 +18,9 @@ final class FixtureGit implements GitDriver
     public array $logRows;
     public array $stages = [];
     public array $unstages = [];
+    public array $checkouts = [];
+    public array $commits = [];
+    public bool $stageAllCalled = false;
 
     public function __construct(array $statusRows, array $branchRows, array $logRows)
     {
@@ -31,6 +34,9 @@ final class FixtureGit implements GitDriver
     public function log(int $limit = 25): array { return $this->logRows; }
     public function stage(string $path): void   { $this->stages[]   = $path; }
     public function unstage(string $path): void { $this->unstages[] = $path; }
+    public function checkout(string $branch): void { $this->checkouts[] = $branch; }
+    public function commit(string $message): void  { $this->commits[] = $message; }
+    public function stageAll(): void             { $this->stageAllCalled = true; }
 }
 
 final class AppTest extends TestCase
@@ -136,5 +142,108 @@ final class AppTest extends TestCase
         $a = App::start($this->git());
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'R'));
         $this->assertCount(2, $a->status);
+    }
+
+    public function testHelpKeySetsShowHelp(): void
+    {
+        $a = App::start($this->git());
+        $this->assertFalse($a->showHelp);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+    }
+
+    public function testEscapeClosesHelpOverlay(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '?'));
+        $this->assertTrue($a->showHelp);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->showHelp);
+    }
+
+    public function testBranchCheckoutOnSpaceKey(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → branches
+        $this->assertSame(Pane::Branches, $a->pane);
+        // cursor 0 is 'main' (current), cursor 1 is 'feature'
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'j'));  // move to index 1 → feature
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame(['feature'], $g->checkouts);
+    }
+
+    public function testBranchCheckoutOnlyInBranchesPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        // Try Space while in Status pane
+        [$a, ] = $a->update(new KeyMsg(KeyType::Space, ''));
+        $this->assertSame([], $g->checkouts);
+    }
+
+    public function testCommitKeyStartsMessageCollection(): void
+    {
+        $a = App::start($this->git());
+        $this->assertFalse($a->collectingCommit);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertTrue($a->collectingCommit);
+        $this->assertSame('', $a->commitMessage);
+    }
+
+    public function testCommitMessageCollection(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        $this->assertTrue($a->collectingCommit);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        $this->assertSame('f', $a->commitMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        $this->assertSame('fi', $a->commitMessage);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        $this->assertSame('fix', $a->commitMessage);
+    }
+
+    public function testCommitExecutesOnEnter(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'i'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'x'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame(['fix'], $g->commits);
+        $this->assertFalse($a->collectingCommit);
+    }
+
+    public function testCommitEscapeCancelsCollection(): void
+    {
+        $a = App::start($this->git());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'c'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'f'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Escape, ''));
+        $this->assertFalse($a->collectingCommit);
+        $this->assertSame('', $a->commitMessage);
+    }
+
+    public function testStageAllOnAKey(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        // 'a' only works in Status pane — stay there
+        $this->assertSame(Pane::Status, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertTrue($g->stageAllCalled);
+    }
+
+    public function testStageAllOnlyInStatusPane(): void
+    {
+        $g = $this->git();
+        $a = App::start($g);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → branches
+        $this->assertSame(Pane::Branches, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        $this->assertFalse($g->stageAllCalled);
     }
 }

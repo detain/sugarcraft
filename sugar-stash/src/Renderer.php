@@ -41,7 +41,18 @@ final class Renderer
                 ->render(Lang::t('ui.error_prefix') . $a->error);
         }
 
-        return $header . "\n" . $body . "\n " . $help . $err . "\n";
+        $commitBar = '';
+        if ($a->collectingCommit) {
+            $commitBar = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
+                ->render(Lang::t('commit.prompt') . $a->commitMessage . '_');
+        }
+
+        $overlay = '';
+        if ($a->showHelp) {
+            $overlay = self::helpOverlay($a);
+        }
+
+        return $header . "\n" . $body . "\n " . $help . $err . $commitBar . $overlay . "\n";
     }
 
     private static function statusPane(App $a): string
@@ -121,5 +132,48 @@ final class Renderer
             $st = $st->borderForeground(Color::hex('#4a3868'));
         }
         return $st->render(Style::new()->bold()->render($title) . "\n" . $body);
+    }
+
+    private static function helpOverlay(App $a): string
+    {
+        $lines = [
+            Style::new()->bold()->foreground(Color::hex('#fde68a'))->render(' Help '),
+            '',
+            Style::new()->foreground(Color::hex('#c5b6dd'))->render('General:'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('?') . '  ' . Lang::t('help.context_general'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('q') . '  ' . Lang::t('help.quit'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('R') . '  ' . Lang::t('help.refresh'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('tab') . '  ' . Lang::t('help.switch_pane'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('c') . '  ' . Lang::t('help.commit'),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('esc') . '  ' . Lang::t('help.close_help'),
+            '',
+            Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_navigation')),
+            '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('j/k') . '  ' . Lang::t('help.move_cursor'),
+            '',
+        ];
+
+        if ($a->pane === Pane::Status) {
+            $lines = array_merge($lines, [
+                Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_status')),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('s') . '  ' . Lang::t('help.stage_single'),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('a') . '  ' . Lang::t('help.stage_all'),
+            ]);
+        } elseif ($a->pane === Pane::Branches) {
+            $lines = array_merge($lines, [
+                Style::new()->foreground(Color::hex('#c5b6dd'))->render(Lang::t('help.pane_branches')),
+                '  ' . Style::new()->foreground(Color::hex('#6ee7b7'))->render('space') . '  ' . Lang::t('help.checkout'),
+            ]);
+        }
+
+        $border = Border::rounded();
+        $box = Style::new()
+            ->border($border)
+            ->borderForeground(Color::hex('#a78bfa'))
+            ->foreground(Color::hex('#c5b6dd'))
+            ->padding(0, 1)
+            ->width(52)
+            ->render(implode("\n", $lines));
+
+        return "\n\n" . $box . "\n";
     }
 }
