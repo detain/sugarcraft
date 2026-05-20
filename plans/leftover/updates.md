@@ -537,6 +537,8 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.07 · PR#766 · sugar-toast: Middle* positions + allowEscToClose + stack Y-offset fix
     fix for step 10.07 · PR#767 · resolved 3 findings
     docs for step 10.07 · PR#768 · refresh docs/lib/sugar-toast.html (9 positions in feature grid + current API quickstart + withAllowEscToClose/hasActiveAlert in API table)
+    step 10.08 · PR#769 · sugar-toast: persistent toasts + maxConcurrent + overflow enum + custom alert types (leftover-rollout step 10.08)
+    review for step 10.08 · clean · PR#769
 
 ## Open review findings — 09.19
 
