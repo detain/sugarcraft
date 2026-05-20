@@ -494,4 +494,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.13 · PR#736 · candy-metrics: histogram buckets (14 classic buckets) + Descriptor DTO + Registry::register() (leftover-rollout step 09.13)
     review for step 09.13 · clean · PR#736
     tests-ci for step 09.13 · clean
+    step 09.14 · PR#738 · candy-metrics: cardinality tracking (DeleteLabelValues cap per metric) + UpDownCounter/AsyncCounter/AsyncGauge instruments (leftover-rollout step 09.14)
 
