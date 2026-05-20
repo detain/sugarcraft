@@ -15,9 +15,8 @@ use SugarCraft\Metrics\Backend;
  * exporter scrapes.
  *
  * Counter values accumulate across `flush()` calls, gauges hold
- * their last set value, histograms expose `_count` and `_sum`
- * (no buckets — those belong in a real client lib; this is the
- * lightweight diagnostic build).
+ * their last set value, histograms emit the full set of bucket
+ * lines (`*_bucket{le="..."}`) plus `_count` and `_sum`.
  *
  * Call {@see flush()} manually after a batch, or rely on the
  * destructor (which calls it automatically).
@@ -28,11 +27,14 @@ use SugarCraft\Metrics\Backend;
  */
 final class PrometheusFileBackend implements Backend
 {
+    /** Classic Prometheus histogram bucket boundaries. */
+    private const BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 25.0, 50.0, 100.0];
+
     /** @var array<string,float> */
     private array $counters = [];
     /** @var array<string,float> */
     private array $gauges = [];
-    /** @var array<string,array{count:int,sum:float}> */
+    /** @var array<string,array{count:int,sum:float,buckets:array<string,int>}> */
     private array $histograms = [];
 
     public function __construct(private readonly string $path)
@@ -61,9 +63,21 @@ final class PrometheusFileBackend implements Backend
     public function histogram(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
-        $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0];
+        $buckets = [];
+        foreach (self::BUCKETS as $b) {
+            $buckets[(string) $b] = 0;
+        }
+        $buckets['+Inf'] = 0;
+        $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0, 'buckets' => $buckets];
         $h['count']++;
         $h['sum'] += $value;
+        foreach (self::BUCKETS as $b) {
+            if ($value <= $b) {
+                $h['buckets'][(string) $b]++;
+            }
+        }
+        // +Inf bucket always gets the sample
+        $h['buckets']['+Inf']++;
         $this->histograms[$key] = $h;
     }
 
@@ -80,7 +94,13 @@ final class PrometheusFileBackend implements Backend
         }
         foreach ($this->histograms as $key => $h) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} summary\n";
+            $body .= "# TYPE {$name} histogram\n";
+            foreach (self::BUCKETS as $b) {
+                $leAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="' . $b . '"}' : '{le="' . $b . '"}';
+                $body .= "{$name}_bucket{$leAttr} {$h['buckets'][(string) $b]}\n";
+            }
+            $infAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="+Inf"}' : '{le="+Inf"}';
+            $body .= "{$name}_bucket{$infAttr} {$h['buckets']['+Inf']}\n";
             $body .= "{$name}_count{$labels} {$h['count']}\n";
             $body .= "{$name}_sum{$labels} " . self::fmt($h['sum']) . "\n";
         }
