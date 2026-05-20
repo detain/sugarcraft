@@ -53,16 +53,83 @@ echo LineChart::new([1, 4, 2, 8, 6, 3, 7], 30, 6)->view() . PHP_EOL;
 | `Charts\Canvas\Graph` | Drawing primitives over a `Canvas`. | `drawHLine` / `drawVLine` / `drawXYAxis` / `drawXYAxisLabel` / `drawString` / `drawLine` / `drawLinePoints` / `fillRect` / `drawColumn` / `drawColumns` / `drawRows` / `drawCandlestick` / `drawBrailleRune` / `drawBraillePatterns` / `drawVerticalLineUp` / `drawVerticalLineDown` / `drawHorizontalLineLeft` / `drawHorizontalLineRight` / `getCirclePoints` / `getCirclePointsWithLimit` / `getFullCirclePoints` / `getFullCirclePointsWithLimit` / `getLinePointsWithLimit` |
 | `Charts\Sparkline\Sparkline` | Single-row series renderer using the 8 Unicode bar glyphs. | `push` / `pushAll` / `clear` / `withMin` / `withMax` / `withStyle(?Style)` / `withNoAutoMaxValue(bool)` / `withWidth` |
 | `Charts\BarChart\BarChart` | Labeled vertical bars; auto-scales to a configurable min / max. | `withBarWidth` / `withBarGap` / `withNoAutoBarWidth` / `push(Bar\|array)` / `pushAll(iterable)` / `clear` |
-| `Charts\LineChart\LineChart` | Single-series ASCII plot drawn onto a Canvas with configurable axes. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` |
+| `Charts\LineChart\LineChart` | Single-series ASCII plot drawn onto a Canvas with configurable axes. | `withYRange` / `withXRange` / `withXYRange` / `autoAdjustRange` / `withXLabelFormatter` / `withYLabelFormatter` / `withAxes` / `withXLabels` / `withYLabels` / `withCanvas` / `withTheme` / `withFill` |
 | `Charts\LineChart\TimeSeries` | LineChart variant accepting `[\DateTimeImmutable, value]` tuples. | `push` / `withPoints` / `withTimeFormat` / `withXLabelCount` / `withTimeRange(?start, ?end)` / `getTimeRange()` |
 | `Charts\LineChart\Streamline` | Single-row streaming line — auto-windowed to width. | `push` / `pushAll` / `clear` / `withSize` / `withMin` / `withMax` / `withYRange` |
 | `Charts\LineChart\Wavelinechart` | XY scatter / wave plot driven by `(x, y)` pairs. | `push` / `pushAll` / `clear` / `withSize` / `withXRange` / `withYRange` / `withXYRange` / `withPoint` |
 | `Charts\Heatmap\Heatmap` | 2D grid coloured by value with optional palette / legend. | `withSize` / `withMin` / `withMax` / `withPalette` / `withLegend` / `withColors(cold, hot)` / `withColorProfile` / `withCellStyle(?Style)` / `withAutoValueRange(bool)` / `pushPoint(HeatPoint)` / `pushAll` |
 | `Charts\OHLC\OHLC` | Candlestick chart for `(high, open, close, low)` rows. | `withSize` / `withCandleStyle` / `withWickStyle` |
 | `Charts\Scatter\Scatter` | XY scatter plot. | `push` / `pushAll` / `withSize` / `withMin` / `withMax` |
+| `Charts\Aggregation\BucketByTime` | Groups timestamped values into time buckets with configurable aggregation. | `sum` / `mean` / `min` / `max` / `first` / `last` factory methods + `add` / `addMany` / `compute` |
+| `Charts\Aggregation\MovingAverage` | Sliding-window aggregator — SMA and EMA. | `simple` / `centered` / `ema` static factories + `add` / `addMany` / `computeSimple` / `values` / `clear` |
+| `Charts\Aggregation\Resample` | Upsample or downsample timestamped series to a target cadence. | `last` / `mean` / `linear` / `nearest` factories + `resample` auto-detection |
 | `Charts\Picture\Picture` | Inline image renderer (Sixel today; Kitty / iTerm2 protocols pending). | `withFromFile` / `withDimensions` / `view` |
 
-### Graph primitives at a glance
+### Aggregation
+
+Aggregation classes process raw time-series data before charting:
+
+```php
+use SugarCraft\Charts\Aggregation\{BucketByTime, MovingAverage, Resample};
+
+// BucketByTime: group into 1-hour buckets, sum values per bucket.
+$buckets = BucketByTime::sum(3600, [
+    ['ts' => strtotime('2024-01-01 00:10'), 'value' => 10],
+    ['ts' => strtotime('2024-01-01 00:45'), 'value' => 15],
+    ['ts' => strtotime('2024-01-01 01:05'), 'value' => 20],
+]);
+// → [{ts: 0, value: 25}, {ts: 3600, value: 20}]
+
+// MovingAverage: 3-point SMA and EMA.
+$sma = MovingAverage::simple(3, [1, 4, 2, 8, 6]);
+// → [0.0, 0.0, 2.33…, 4.67…, 5.33…]
+
+$ema = MovingAverage::ema(3, [1, 4, 2, 8, 6]);
+// → [1.0, 2.5, 2.25, 5.13, 5.56]
+
+// Resample: downsample to 30-second cadence (last value), or upsample (linear interp).
+$down = Resample::last(30, $timestampedData);
+$up   = Resample::linear(30, $timestampedData);
+```
+
+### Braille canvas rendering
+
+Charts support high-resolution dot-matrix (braille) rendering via
+`SugarCraft\Dash\Plot\Braille\BrailleCanvas`. Pass a `BrailleCanvas`
+instance via `withCanvas()` to switch from character-cell to 2×4
+sub-cell resolution:
+
+```php
+use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Dash\Plot\Braille\BrailleCanvas;
+
+$canvas = new BrailleCanvas(80, 24);
+$chart  = LineChart::new([1, 4, 2, 8, 6], 80, 24)
+    ->withCanvas($canvas);
+echo $chart->view();
+```
+
+### Named color themes
+
+Charts inherit [candy-sprinkles](https://github.com/detain/sugarcraft/tree/master/candy-sprinkles)
+`Theme` palette support via `withTheme()`. All `Theme::` factory methods
+are supported:
+
+```php
+use SugarCraft\Charts\LineChart\LineChart;
+use SugarCraft\Sprinkles\Theme;
+
+$chart = LineChart::new([3, 1, 4, 1, 5, 9, 2, 6], 40, 8)
+    ->withTheme(Theme::dracula())
+    ->withLegend();
+echo $chart->view();
+```
+
+Available themes: `Theme::ansi()` / `Theme::dark()` / `Theme::light()` /
+`Theme::dracula()` / `Theme::tokyoNight()` / `Theme::oneDark()` /
+`Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()`.
+
+## Graph primitives at a glance
 
 `Graph` is a static-method utility — every draw call takes a `Canvas`
 plus coordinates in canvas (cell) space (top-left origin). Pair with
