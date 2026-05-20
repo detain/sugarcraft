@@ -120,7 +120,22 @@ SignalForwarder::attachSigwinch(
 // Now every host SIGWINCH triggers $pty->resize($cols, $rows).
 ```
 
-The forwarder defaults to `pcntl_async_signals(true)` so handlers
+For callers that hold a raw `/dev/tty` fd (no `MasterPty` object),
+`attachSigwinchToFd()` calls `TIOCSWINSZ` directly on the fd:
+
+```php
+use SugarCraft\Pty\SignalForwarder;
+use SugarCraft\Pty\Libc;
+
+$ttyFd = Libc::lib()->open('/dev/tty', 0x0002);   // O_RDWR
+SignalForwarder::attachSigwinchToFd(
+    $ttyFd,
+    fn () => Tty::size(),
+    fn (int $cols, int $rows) => null,     // optional post-resize callback
+);
+```
+
+Both methods default to `pcntl_async_signals(true)` so handlers
 fire between PHP opcodes; pass `async: false` if your event loop
 already polls `pcntl_signal_dispatch()` itself.
 
@@ -257,6 +272,7 @@ Alpine, custom sysroots).
 | `xpty.Pty.Resize(cols, rows)`     | `Pty::resize(cols, rows)`                                |
 | `xpty.Pty.Size()`                 | `Pty::size()`                                            |
 | `signalpty.NotifyResize(c, pty)`  | `SignalForwarder::attachSigwinch($pty, $sizeProvider)`   |
+| _fd-based variant_                | `SignalForwarder::attachSigwinchToFd($fd, $sizeProvider)` |
 
 ## Compared to node-pty / creack/pty / portable-pty
 
