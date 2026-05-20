@@ -57,39 +57,47 @@ composer require sugarcraft/candy-vcr
   `quit`) with kind-specific payload fields.
 - `t` is seconds since cassette start (ms precision).
 
+### Formats
+
+| Format | File extension | Description |
+|--------|---------------|-------------|
+| `JsonlFormat` | `.cas` | Absolute timestamps (`t`). Default. |
+| `RelativeFormat` | `.cas` | Relative/delta timestamps (`dt`). Deterministic replay. |
+| `AsciinemaFormat` | `.cast` | Import asciinema v3 cast files. |
+| `YamlFormat` | `.yaml` | Human-readable YAML (test fixtures). |
+| `CompressedJsonlFormat` | `.cas.gz` | Gzip-compressed JSONL (5–10× smaller). |
+
+All formats share the same `Cassette` value-object model and are
+interchangeable via the `Format` interface. `Player::open()` auto-detects
+`RelativeFormat` vs `JsonlFormat` from the first event line.
+
 ### Timestamp modes
 
 Cassettes support two timestamp modes:
 
-| Mode | Description | Use case |
-|------|-------------|-----------|
-| `absolute` (default) | `t` is seconds since cassette start | Playback timing |
-| `relative` | `t` is interval since previous event (like asciinema v3) | Easier manual editing |
+| Mode | Field | Use case |
+|------|-------|----------|
+| `absolute` (default) | `t` = seconds since cassette start | Playback timing |
+| `relative` | `dt` = interval since previous event (like asciinema v3) | Deterministic replay; easier manual editing |
 
-Set the mode when creating a cassette header:
+Select the mode at record time via `Recorder::withFormat()`:
 
 ```php
-use SugarCraft\Vcr\CassetteHeader;
+use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Format\RelativeFormat;
 
-// Absolute timestamps (default)
-$header = new CassetteHeader(
-    version: 1,
-    createdAt: '2026-05-07T10:00:00Z',
-    cols: 80,
-    rows: 24,
-    runtime: 'sugarcraft/candy-core@dev',
-);
+// Relative timestamps (delta between events)
+$recorder = Recorder::open('/tmp/session.cas')
+    ->withFormat(new RelativeFormat());
 
-// Relative timestamps (interval since previous event)
-$header = new CassetteHeader(
-    version: 1,
-    createdAt: '2026-05-07T10:00:00Z',
-    cols: 80,
-    rows: 24,
-    runtime: 'sugarcraft/candy-core@dev',
-    timestampMode: CassetteHeader::TIMESTAMP_MODE_RELATIVE,
-);
+(new Program($model))
+    ->withRecorder($recorder)
+    ->run();
 ```
+
+The `Player::open()` factory auto-detects which format a cassette uses by
+examining the first event line — `dt` field means RelativeFormat, `t` field
+means JsonlFormat. No format parameter needed on replay.
 
 **Absolute mode example:**
 ```jsonl
@@ -100,12 +108,14 @@ $header = new CassetteHeader(
 
 **Relative mode example (same events):**
 ```jsonl
-{"t":0.000,"k":"output","b":"$ "}
-{"t":0.500,"k":"output","b":"ls\r\n"}
-{"t":0.002,"k":"output","b":"file1.txt file2.txt\r\n"}
+{"dt":0.000,"k":"output","b":"$ "}
+{"dt":0.500,"k":"output","b":"ls\r\n"}
+{"dt":0.002,"k":"output","b":"file1.txt file2.txt\r\n"}
 ```
 
-The JsonlFormat reader and writer handle conversion automatically based on the header's `timestampMode`. Backwards compatibility is preserved — cassettes without a `timestampMode` key default to `absolute`.
+The header carries `timestampMode` so the format is self-describing.
+Backwards compatibility is preserved — cassettes without a `timestampMode`
+key default to `absolute`.
 
 ### Gzip compression
 
