@@ -113,6 +113,66 @@ Use `withTitleFunc(\Closure(): string)` / `withDescriptionFunc(...)`
 on any field to compute labels lazily — handy when the label depends
 on values from a previous group.
 
+### Built-in validators
+
+`SugarCraft\Prompt\Validator` provides five ready-made validators that
+cover the most common input constraints. All five implement the
+`Validator` interface (which returns `true` on valid input, an error
+`string` on invalid). Pass one or more to `Input::withValidator()` —
+multiple calls chain validators together, each running in sequence with
+the first error message winning.
+
+```php
+use SugarCraft\Prompt\Form;
+use SugarCraft\Prompt\Field\Input;
+use SugarCraft\Prompt\Validator\{Required, Email, MinLength, MaxLength, Pattern};
+
+$form = Form::new(
+    Input::new('name')
+        ->withTitle('Full name')
+        ->withPlaceholder('Ada Lovelace')
+        ->withValidator(new Required())
+        ->withValidator(new MinLength(2)),
+    Input::new('email')
+        ->withTitle('Email address')
+        ->withPlaceholder('you@example.com')
+        ->withValidator(new Required())
+        ->withValidator(new Email()),
+    Input::new('username')
+        ->withTitle('Username')
+        ->withPlaceholder('ada_lovelace')
+        ->withValidator(new Required())
+        ->withValidator(new MinLength(3))
+        ->withValidator(new MaxLength(20))
+        ->withValidator(new Pattern('/^[a-z0-9_]+$/i', 'Only letters, numbers, and underscores')),
+);
+```
+
+| Class | Error message | Notes |
+| ----- | ------------- | ----- |
+| `Required` | `Value is required` | Fails on empty string only |
+| `Email` | `Must be a valid email address` | Skipped when empty; uses `filter_var` |
+| `MinLength(int $min)` | `Must be at least N characters` | Uses `mb_strlen` (UTF-8 safe) |
+| `MaxLength(int $max)` | `Must be no more than N characters` | Uses `mb_strlen` (UTF-8 safe) |
+| `Pattern(string $pattern, string $message)` | `$message` | Skipped when empty; uses `preg_match` |
+
+To create a custom validator, implement `Validator` yourself:
+
+```php
+use SugarCraft\Prompt\Validator\Validator;
+
+final class NoSpaces implements Validator
+{
+    public function validate(string $input): true|string
+    {
+        if (str_contains($input, ' ')) {
+            return 'Spaces are not allowed';
+        }
+        return true;
+    }
+}
+```
+
 ## Validation
 
 ### Field-level validation with `withValidation`

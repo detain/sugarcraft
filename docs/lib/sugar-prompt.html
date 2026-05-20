@@ -56,6 +56,7 @@
     <h3 style="margin-top: 32px;">Quickstart</h3>
     <pre class="code"><code>use SugarCraft\Prompt\Form;
 use SugarCraft\Prompt\Field\{Input, Confirm, Select, Note};
+use SugarCraft\Prompt\Validator\{Required, Email, MinLength};
 
 $form = Form::new(
     Note::new('welcome')
@@ -64,7 +65,13 @@ $form = Form::new(
     Input::new('name')
         -&gt;withTitle('Your name?')
         -&gt;withPlaceholder('Ada Lovelace')
-        -&gt;withValidate(fn($v) =&gt; strlen($v) &gt;= 2 ? null : 'too short'),
+        -&gt;withValidator(new Required())
+        -&gt;withValidator(new MinLength(2)),
+    Input::new('email')
+        -&gt;withTitle('Email address')
+        -&gt;withPlaceholder('you@example.com')
+        -&gt;withValidator(new Required())
+        -&gt;withValidator(new Email()),
     Confirm::new('newsletter')
         -&gt;withTitle('Subscribe to the newsletter?'),
     Select::new('lang')
@@ -76,7 +83,7 @@ $form = Form::new(
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
       <div class="feature"><strong>Field types</strong><span>Note, Input, Confirm, Select, MultiSelect, Text, FilePicker.</span></div>
-      <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit.</span></div>
+      <div class="feature"><strong>Validation</strong><span><code>->withValidate(fn($v) => …)</code> — return null to pass, error string to block submit. Five built-in validators: <code>Required</code>, <code>Email</code>, <code>MinLength</code>, <code>MaxLength</code>, <code>Pattern</code>. Chain multiple with <code>->withValidator(new Validator())</code>.</span></div>
       <div class="feature"><strong>Multi-page Groups</strong><span><code>Group::new()</code> stacks Forms into a wizard. Conditional <code>->withSkipFn()</code>.</span></div>
       <div class="feature"><strong>Six themes</strong><span>Default, charm, dracula, base16, catppuccin, pink.</span></div>
       <div class="feature"><strong>Tab nav</strong><span>Tab / Shift+Tab between fields, Enter on the last submits, Esc / Ctrl+C aborts.</span></div>
