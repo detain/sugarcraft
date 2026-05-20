@@ -516,4 +516,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     review for step 09.17 · clean · PR#744
     fix for step 09.17 · duplicate docblock in CubicBezier::evaluate() · PR#745
     tests-ci for step 09.17 · clean
+    step 09.19 · PR#749 · honey-flap: variable pipe-gap height (gap shrinks from 6→3 as score increases; floor at 3; PipeGenerator + tests)
 
