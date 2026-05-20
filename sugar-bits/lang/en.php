@@ -23,6 +23,7 @@ return [
     'timer.interval_positive'    => 'timer interval must be > 0',
     'table.dim_nonneg'           => 'table width/height must be >= 0',
     'table.set_columns_type'     => 'setColumns expects Column instances',
+    'table.sort_unknown_column' => 'sort column not found: {column}',
     'progress.width_nonneg'      => 'progress width must be >= 0',
     'tree.dim_nonneg'            => 'tree width/height must be >= 0',
     'help.width_nonneg'          => 'help width must be >= 0',
