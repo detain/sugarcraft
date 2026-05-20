@@ -79,7 +79,7 @@ Tests can swap in a stub `PtySystem` without touching libc.
 | `$pty->stream(): resource` | Cached `php://fd/` wrapper around the master fd for direct PHP-stream use. |
 | `$pty->close(): void` | Idempotent. Routes through `fclose` if `stream()` was materialised, else `close(2)` via FFI. |
 | `$child->pid: int` | OS process id. |
-| `$child->wait(): int` | Blocks via 10ms `proc_get_status` poll, returns exit code. Idempotent. |
+| `$child->wait(): int` | Waits via `waitpid` FFI (sub-ms) first, falls back to 10ms `proc_get_status` poll. Returns exit code (signal death = 128+signal). Idempotent. |
 | `$child->exited(): bool` | Non-blocking probe. |
 
 ## Non-PTY processes
