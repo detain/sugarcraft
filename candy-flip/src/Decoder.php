@@ -13,13 +13,15 @@ use SugarCraft\Flip\Lang;
  *
  * Parses the GIF Logical Screen Descriptor and Global Color Table (GCT)
  * from the header, then walks the frame stream to:
- *   1. Find each frame's Graphic Control Extension (GCE) delay value.
- *   2. Extract the corresponding image data as an in-memory single-frame
- *      GIF compatible with `imagecreatefromstring()`.
+ *   1. Find each frame's Graphic Control Extension (GCE) delay, disposal,
+ *      and transparent-index values.
+ *   2. Extract the per-frame local color table when present.
+ *   3. Build a single-frame GIF in memory compatible with
+ *      `imagecreatefromstring()`.
+ *   4. Downsample each frame using the area-average method.
  *
- * Plenty of GIFs out there don't quite follow the spec — when the decoder
- * can't find another image descriptor, it stops. Callers still get
- * whatever frames did parse.
+ * Disposal methods are tracked per-frame and passed to {@see Frame}
+ * so callers can render correctly when animating.
  */
 final class Decoder
 {
@@ -47,7 +49,15 @@ final class Decoder
         }
         if ($frames === []) {
             // Static fallback — still returns one frame.
-            $info = ['offset' => 0, 'delay' => 10];
+            $info = [
+                'offset' => 0,
+                'delay' => 10,
+                'disposal' => Frame::DISPOSAL_NONE,
+                'transparent' => false,
+                'transparentIndex' => -1,
+                'hasLct' => false,
+                'lctBytes' => 0,
+            ];
             $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH);
             if ($frame !== null) {
                 $frames[] = $frame;
@@ -58,14 +68,15 @@ final class Decoder
 
     /**
      * Parse the GIF header: logical screen dimensions, GCT flag + size,
-     * and per-frame info (GCE delay + image descriptor offset).
+     * and per-frame info (GCE delay + image descriptor offset + disposal
+     * + transparency).
      *
      * @return array{
      *   width: int,
      *   height: int,
      *   hasGct: bool,
      *   gctBytes: int,
-     *   frameInfos: list<array{offset: int, delay: int}>
+     *   frameInfos: list<array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int}>
      * }
      */
     private static function parseHeader(string $bytes): array
@@ -80,6 +91,9 @@ final class Decoder
 
         $frameInfos = [];
         $lastDelay = 10; // Default 100ms (10 centiseconds) per GIF spec.
+        $lastDisposal = Frame::DISPOSAL_NONE;
+        $lastTransparent = false;
+        $lastTransparentIndex = -1;
         $len = strlen($bytes);
 
         // Walk the GIF byte stream block-by-block.
@@ -95,8 +109,17 @@ final class Decoder
                 $label = ord($bytes[$i + 1] ?? '');
                 if ($label === 0xF9) {
                     // GCE: 0x21 0xF9 0x04 <packed> <delayL> <delayH> <transparent> 0x00
+                    $gcePacked = ord($bytes[$i + 3] ?? '');
+                    $disposal = ($gcePacked >> 2) & 0x07;
+                    $transparent = (bool) ($gcePacked & 0x01);
+                    $transparentIndex = ord($bytes[$i + 6] ?? '');
                     $delay = ord($bytes[$i + 4]) | (ord($bytes[$i + 5]) << 8);
-                    $lastDelay = $delay > 0 ? $delay : $lastDelay;
+                    if ($delay > 0) {
+                        $lastDelay = $delay;
+                    }
+                    $lastDisposal = $disposal;
+                    $lastTransparent = $transparent;
+                    $lastTransparentIndex = $transparentIndex;
                     $i += 8; // Fixed 8-byte GCE: skip to next block.
                 } else {
                     // Skip extension block: read sub-block length bytes until 0x00 terminator.
@@ -114,15 +137,29 @@ final class Decoder
                 continue;
             }
             if ($blockType === 0x2C) {
-                // Image Descriptor — record its offset and the last-seen GCE delay.
-                $frameInfos[] = ['offset' => $i, 'delay' => $lastDelay];
+                // Image Descriptor — record its offset and the last-seen GCE values.
+                $descPacked = ord($bytes[$i + 9] ?? '');
+                $hasLct = (bool) ($descPacked & 0x80);
+                $lctSizeExp = $descPacked & 0x07;
+                $lctEntryCount = $hasLct ? (1 << ($lctSizeExp + 1)) : 0;
+                $lctBytes = $lctEntryCount * 3;
+
+                $frameInfos[] = [
+                    'offset' => $i,
+                    'delay' => $lastDelay,
+                    'disposal' => $lastDisposal,
+                    'transparent' => $lastTransparent,
+                    'transparentIndex' => $lastTransparentIndex,
+                    'hasLct' => $hasLct,
+                    'lctBytes' => $lctBytes,
+                ];
                 // Skip image data: LZW sub-blocks (length-prefixed) until block terminator (0x00).
                 $j = $i + 10;
                 while ($j < $len) {
                     $subLen = ord($bytes[$j]);
                     $j++;
                     if ($subLen === 0) {
-                        break; // Block terminator found.
+                        break; // Sub-block terminator.
                     }
                     $j += $subLen; // Skip the sub-block data.
                 }
@@ -142,11 +179,12 @@ final class Decoder
         ];
     }
 
-
-
     /**
      * Build a single-frame GIF payload in memory and render it with
      * `imagecreatefromstring()` — no temp files needed.
+     *
+     * Passes transparent pixels through as null so downsampling can
+     * skip them in area-average mode.
      */
     private static function renderSingleFrame(
         string $bytes,
@@ -157,33 +195,52 @@ final class Decoder
     ): ?Frame {
         $offset = $info['offset'];
         $delay = $info['delay'];
+        $disposal = $info['disposal'];
+        $transparent = $info['transparent'];
+        $transparentIndex = $info['transparentIndex'];
+        $hasLct = $info['hasLct'];
+        $lctBytes = $info['lctBytes'];
+
+        // Determine effective color table for this frame.
+        $hasGlobal = $header['hasGct'];
+        $globalBytes = $header['gctBytes'];
+        $effectiveHasColorTable = $hasGlobal || $hasLct;
+        $effectiveColorTableBytes = $hasGlobal ? $globalBytes : $lctBytes;
 
         // Build a minimal single-frame GIF in memory:
-        //   GIF header (13 bytes) + GCT (if present) + one GCE block + one Image Descriptor + image data + trailer.
+        //   GIF header (13 bytes) + effective color table + one GCE block
+        //   + one Image Descriptor + image data + trailer.
         $gifData = '';
         // Header slice (first 13 bytes).
         $gifData .= substr($bytes, 0, 13);
-        // GCT if present.
-        if ($header['hasGct']) {
-            $gifData .= substr($bytes, 13, $header['gctBytes']);
+        // Color table: global (first) or local (after GCE).
+        if ($hasGlobal) {
+            $gifData .= substr($bytes, 13, $globalBytes);
         }
-        // GCE block for this frame (if delay > 0 or non-default).
-        // Write GCE block: 0x21 0xF9 0x04 <packed> <delayL> <delayH> <transparent> 0x00
+        // GCE block for this frame.
         $delayLo = $delay & 0xFF;
         $delayHi = ($delay >> 8) & 0xFF;
-        $gifData .= "\x21\xF9\x04\x00" . chr($delayLo) . chr($delayHi) . "\x00\x00";
-        // Now extract the image data for this frame: skip Image Descriptor + LZW sub-blocks.
-        $j = $offset + 10; // skip Image Descriptor header (10 bytes: separator + left/top/width/height + packed + LZW min)
-        while ($j < strlen($bytes)) {
-            $subLen = ord($bytes[$j]);
-            $j++;
-            if ($subLen === 0) {
-                break; // Block terminator found.
-            }
-            $j += $subLen; // Skip the sub-block data.
+        $disposalByte = ($disposal & 0x07) << 2;
+        $transparentByte = $transparent ? 0x01 : 0x00;
+        $gifData .= "\x21\xF9\x04"
+            . chr($disposalByte | $transparentByte)
+            . chr($delayLo) . chr($delayHi)
+            . chr($transparentIndex)
+            . "\x00";
+        // Local color table when present (after the Image Descriptor header).
+        if ($hasLct) {
+            // The Image Descriptor is always 10 bytes; the LCT follows it directly.
+            $lctOffset = $offset + 10;
+            $gifData .= substr($bytes, $lctOffset, $lctBytes);
         }
-        $imgDataEnd = $j - 1; // $j is past the 0x00 terminator; $imgDataEnd is the terminator byte
-        $frameData = substr($bytes, $offset, $imgDataEnd - $offset);
+        // The Image Descriptor (10 bytes) is always present and must precede the LZW data.
+        $gifData .= substr($bytes, $offset, 10);
+        // Extract the LZW image data: find where the LZW sub-blocks end.
+        // LZW minimum code size follows the Image Descriptor (offset + 10).
+        $lzwStart = $offset + 10 + ($hasLct ? $lctBytes : 0);
+        $imgDataEnd = self::findImageDataEnd($bytes, $lzwStart);
+        // Extract just the LZW data (LZW min code + compressed bytes + terminator).
+        $frameData = substr($bytes, $lzwStart, $imgDataEnd - $lzwStart + 1);
         $gifData .= $frameData;
         // GIF trailer.
         $gifData .= "\x3B";
@@ -192,29 +249,104 @@ final class Decoder
         if ($img === false) {
             return null;
         }
-        $frame = self::sample($img, $cellsW, $cellsH, $delay);
+        $frame = self::sample($img, $cellsW, $cellsH, $delay, $disposal, $transparent, $transparentIndex, $hasLct, $lctBytes, $bytes, $offset);
         return $frame;
     }
 
-    private static function sample(\GdImage $img, int $cellsW, int $cellsH, int $delay): Frame
-    {
+    /**
+     * Area-average downsampling with transparent-pixel awareness.
+     */
+    private static function sample(
+        \GdImage $img,
+        int $cellsW,
+        int $cellsH,
+        int $delay,
+        int $disposal,
+        bool $transparent,
+        int $transparentIndex,
+        bool $hasLct,
+        int $lctBytes,
+        string $bytes,
+        int $frameOffset,
+    ): Frame {
         $w = imagesx($img);
         $h = imagesy($img);
+
+        // If the frame has transparency, allocate the transparent color index
+        // so we can test individual pixels for transparency.
+        $transparentColor = null;
+        if ($transparent && $transparentIndex >= 0) {
+            $transparentColor = imagecolortransparent($img);
+        }
+
         $rows = [];
         for ($cy = 0; $cy < $cellsH; $cy++) {
             $row = [];
             for ($cx = 0; $cx < $cellsW; $cx++) {
-                $sx = (int) (($cx + 0.5) * $w / $cellsW);
-                $sy = (int) (($cy + 0.5) * $h / $cellsH);
-                $rgb = imagecolorat($img, min($w - 1, $sx), min($h - 1, $sy));
-                $r = ($rgb >> 16) & 0xff;
-                $g = ($rgb >>  8) & 0xff;
-                $b = ($rgb)       & 0xff;
-                $row[] = [$r, $g, $b];
+                $x0 = (int) ($cx * $w / $cellsW);
+                $x1 = (int) (($cx + 1) * $w / $cellsW) - 1;
+                $y0 = (int) ($cy * $h / $cellsH);
+                $y1 = (int) (($cy + 1) * $h / $cellsH) - 1;
+                $x1 = max($x0, $x1);
+                $y1 = max($y0, $y1);
+
+                $sumR = 0;
+                $sumG = 0;
+                $sumB = 0;
+                $count = 0;
+                $allTransparent = true;
+                for ($sy = $y0; $sy <= $y1; $sy++) {
+                    for ($sx = $x0; $sx <= $x1; $sx++) {
+                        $rgb = imagecolorat($img, $sx, $sy);
+                        $idx = imagecolorat($img, $sx, $sy) >> 24;
+                        // A pixel is transparent when it uses the transparent color index.
+                        if ($transparent && $idx === $transparentColor) {
+                            continue; // Skip transparent pixel in average.
+                        }
+                        $allTransparent = false;
+                        $sumR += ($rgb >> 16) & 0xff;
+                        $sumG += ($rgb >>  8) & 0xff;
+                        $sumB += ($rgb)       & 0xff;
+                        $count++;
+                    }
+                }
+                if ($count > 0) {
+                    $row[] = [
+                        (int) round($sumR / $count),
+                        (int) round($sumG / $count),
+                        (int) round($sumB / $count),
+                    ];
+                } elseif ($allTransparent) {
+                    // Every pixel in the cell was transparent.
+                    $row[] = null;
+                } else {
+                    // No opaque pixels in this cell.
+                    $row[] = null;
+                }
             }
             $rows[] = $row;
         }
         imagedestroy($img);
-        return new Frame($rows, $delay);
+        return new Frame($rows, $delay, $disposal, $transparent);
+    }
+
+    /**
+     * Walk LZW sub-blocks starting at $start and return the index of the
+     * last data byte (before the 0x00 sub-block terminator or any byte
+     * ≥ 0x80, which signals a GIF control byte mid-stream).
+     */
+    private static function findImageDataEnd(string $bytes, int $start): int
+    {
+        $j = $start;
+        $len = strlen($bytes);
+        while ($j < $len) {
+            $subLen = ord($bytes[$j]);
+            $j++;
+            if ($subLen === 0 || $subLen >= 0x80) {
+                break;
+            }
+            $j += $subLen;
+        }
+        return $j - 1;
     }
 }

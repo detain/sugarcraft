@@ -25,8 +25,13 @@ final class Renderer
         $rows = [];
         foreach ($f->cells as $row) {
             $line = '';
-            foreach ($row as [$r, $g, $b]) {
-                $line .= self::cell($r, $g, $b, $preset);
+            foreach ($row as $cell) {
+                if ($cell === null) {
+                    $line .= self::transparent();
+                } else {
+                    [$r, $g, $b] = $cell;
+                    $line .= self::cell($r, $g, $b, $preset);
+                }
             }
             $rows[] = $line . "\033[0m";
         }
@@ -44,5 +49,14 @@ final class Renderer
         }
         // Solid block — full-cell colour fill via 24-bit truecolor escape.
         return sprintf("\033[48;2;%d;%d;%dm ", $r, $g, $b);
+    }
+
+    /**
+     * Emit a transparent-cell placeholder (resets bg so the terminal
+     * background shows through).
+     */
+    private static function transparent(): string
+    {
+        return "\033[49m "; // Reset to default background.
     }
 }
