@@ -8,11 +8,15 @@ use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 
 /**
- * `candy-vcr replay <cassette> [--speed=instant|realtime]`
+ * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N]`
  *
  * Stream the cassette's recorded output bytes to stdout. With
  * `--speed=realtime`, sleeps between events so playback matches the
  * recorded cadence (useful for visual inspection and demos).
+ *
+ * `--idle-trim=N` clamps inter-event gaps longer than N seconds to N,
+ * so long pauses in the recording don't produce long pauses in replay.
+ * Use `--no-trim` to restore original (pre-trim) wall-clock timing.
  *
  * No Program is involved — this just plays back what was recorded.
  * For round-trip-replay-into-a-fresh-Program use the

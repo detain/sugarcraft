@@ -40,23 +40,26 @@ interface Format
 for the `dt` field on the first event line — callers do not need to specify
 a format when opening a cassette for replay.
 
-### `Recorder` interface
+### `Player` interface
+
+`Player` drives a fresh `Program` through a recorded cassette:
 
 ```php
-use SugarCraft\Vcr\Recorder;
-use SugarCraft\Vcr\Cassette;
+use SugarCraft\Vcr\Player;
 
-$recorder = Recorder::open('/tmp/session.cas');
-$recorder->recordInput(string $bytes): void;
-$recorder->recordOutput(string $bytes): void;
-$recorder->recordResize(int $cols, int $rows): void;
-$recorder->recordQuit(): void;
-$recorder->close(): Cassette;
+$player = Player::open('/tmp/session.cas');
+$result = $player
+    ->withIdleTrim(0.5)         // clamp pauses > 500ms to 500ms in SPEED_REALTIME
+    ->play(
+        programFactory: fn($in, $out, $loop) => new Program($model, $opts),
+        speed: Player::SPEED_REALTIME,
+    );
 ```
 
-`Recorder::open(string $path): Recorder` opens (or creates) a cassette for
-writing. All `record*` methods are idemponent — calling them after `close()`
-is a no-op.
+`withIdleTrim(?float $seconds)` is a fluent setter — it returns a new
+`Player` instance with the idle-gap threshold set. Pass `null` to disable
+trimming. The threshold can also be passed directly to `play()` via
+`$idleThresholdSeconds`; the explicit parameter wins over the fluent setting.
 
 ### Hook system
 
