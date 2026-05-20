@@ -1,0 +1,1 @@
+[pattern:srs-kick-table-separation] — Keep kick-offset data in a stateless table class (SrsKickTable) separate from Piece; Piece just queries the table and builds candidate positions. This keeps the rotation logic testable in isolation.
