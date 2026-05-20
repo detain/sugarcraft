@@ -47,6 +47,9 @@
             "SugarCraft\\Sprinkles\\Tests\\": "tests/"
         }
     },
+    "repositories": [
+        {"type": "path", "url": "../candy-core", "options": {"symlink": true}}
+    ],
     "minimum-stability": "dev",
     "prefer-stable": true
 }
