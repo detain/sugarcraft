@@ -142,6 +142,7 @@ final class Table
         return $clone;
     }
 
+    /** Apply an ANSI SGR style string to the default border (e.g. "1;32" for bold green). */
     public function withBorderStyle(string $ansiStyle): self
     {
         $clone = clone $this;
@@ -231,6 +232,12 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Set the border character family for the table.
+     *
+     * @param Border $border Any Border from \SugarCraft\Sprinkles\Border
+     *                      (normal/rounded/thick/double/block/ascii/hidden/markdownBorder)
+     */
     public function withBorder(Border $border): self
     {
         $clone = clone $this;
@@ -238,6 +245,15 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Toggle multi-line row rendering.
+     *
+     * When enabled, each row's height equals the maximum number of lines
+     * across all its cells after text wrapping. When disabled (the default),
+     * cells are clamped to one line for backward compatibility.
+     *
+     * @param bool $multiline True to enable multi-line rows, false to clamp to single line
+     */
     public function withMultilineMode(bool $multiline = true): self
     {
         $clone = clone $this;
