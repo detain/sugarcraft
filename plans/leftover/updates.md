@@ -528,45 +528,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     fix for step 10.03 · PR#757 · resolved 1 finding
     docs for step 10.03 · PR#758 · refresh App.php PHPDoc (7 keys in class block + showHelp/collectingCommit/commitMessage comments + docblocks on stageAll/checkoutBranch/startCommit/executeCommit) + document [pattern:inline-commit-collection] in CALIBER_LEARNINGS.md + enumerate all Phase 1 i18n keys
     step 10.04 · PR#759 · sugar-stash: diff viewer + discard + amend + hunk staging + create branch (leftover-rollout step 10.04 Phase 2)
-
-## Open review findings — 10.04
-
-### 🟠 Major — `d` key is diff viewer, not discard (step spec mismatch)
-
-- **Step spec:** "Discard (`d`) — `git checkout -- <path>` via GitDriver"
-- **Actual:** `d` in status pane opens the diff viewer (`App::showDiff()` at line 162)
-- `GitDriver::discard()` is fully implemented (`Git.php:102-104`) and stubbed in `FixtureGit`, but **never called** from any `update()` branch — there is no keybinding for discard
-- Discards would have been testable via `FixtureGit::$discards[]` but no test calls the discard path
-- **Impact:** This is a missing feature deliverable, not merely a docs gap
-
-### 🟠 Major — README.md keys table missing new bindings
-
-- `d` (diff), `A` (amend), `n` (create branch) absent from the keys table at lines 23-35
-- `↑↓`/`j`/`k` for diff-viewer hunk navigation absent
-- `Space` for staging a hunk inside the diff overlay absent
-
-### 🟡 Minor — `help.keyhints` bottom-bar string not updated
-
-- `lang/en.php:28` `help.keyhints` — `"tab  switch pane  ·  j/k  move  ·  s  stage/unstage  ·  a  stage all  ·  space  checkout  ·  c  commit  ·  R  refresh  ·  ?  help  ·  q  quit"` — does not mention `d`/`A`/`n`
-- The diff overlay hint (`Renderer.php:236`) is raw inline text, not a `Lang::t()` key
-
-### 🟡 Minor — `diff.hunk_staged` key defined but never used
-
-- `lang/en.php:57` defines `'diff.hunk_staged' => 'hunk staged'`
-- **Zero references** in `src/` or `tests/` — `stageCurrentHunk()` (line 434) calls `->refresh()` with no success/failure message; error path uses `withError()` but success path is silent
-
-### 🟡 Minor — Help overlay pane-specific sections missing `A` and `n`
-
-- `Renderer::helpOverlay()` (lines 166-177) adds pane-specific hints for status and branches panes but does not mention `A` (amend) or `n` (create branch) — both work from any pane
-- `A` and `n` are mentioned nowhere in the help overlay
-
-### 🟢 Nitpick — CALIBER_LEARNINGS.md not updated with Phase 2 patterns
-
-- File was updated during PR#759 but only documents Phase 1 patterns (inline-commit-collection, sugar-stash-i18n)
-- `[pattern:diff-viewer-hunk-cursor]` — DiffViewer as immutable value object with hunk navigation — not logged
-- `[pattern:branch-collection-mode]` — the `collectingBranchName`/`branchName` inline text input (App.php:468-479) mirrors the documented inline-commit-collection pattern but is not noted as a reusable pattern
-
----
+    fix for step 10.04 · PR#760 · resolved 8 findings
 
 ## Open review findings — 09.19
 
