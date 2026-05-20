@@ -379,6 +379,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.07 · clean · PR#696
   tests-ci for step 08.07 · clean
   docs for step 08.07 · PR#697 · document withFilterable/withFilter/withFilterPredicate + default substring-match in README + end-user HTML
+  step 08.08 · PR#698 · sugar-bits: Table pagination (withPageSize/getPaginator/nextPage/prevPage/pageFirst/pageLast + 27 PaginationTest tests; leftover-rollout step 08.08)
 
 ## Open review findings — 08.04
 
