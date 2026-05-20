@@ -526,6 +526,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.02 · PR#754 · super-candy: add bulk rename + preview pane + async ops (leftover-rollout step 10.02)
     fix for step 10.02 · PR#755 · resolved 4 findings (finfo warning suppression + WHAT-comment removal + README Architecture table update)
     fix for step 10.03 · PR#757 · resolved 1 finding
+    docs for step 10.03 · PR#758 · refresh App.php PHPDoc (7 keys in class block + showHelp/collectingCommit/commitMessage comments + docblocks on stageAll/checkoutBranch/startCommit/executeCommit) + document [pattern:inline-commit-collection] in CALIBER_LEARNINGS.md + enumerate all Phase 1 i18n keys
 
 ## Open review findings — 09.19
 
