@@ -488,8 +488,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     tests-ci for step 09.11 · clean
     docs for step 09.11 · clean · PR#732
     step 09.12 · PR#733 · candy-log: CallerFormatter + PsrBridge (PSR-3 bridge) + Hook/HookRegistry + PartsOrder config DTO (leftover-rollout step 09.12)
-
-## Open review findings — 09.12
-
-- [ ] **candy-log/src/Hook/HookRegistry.php:62 `remove(int $id)` throws `TypeError` on any call** — `Closure::fromCallable($id)` requires a callable (string/array/Closure) but `$id` is an `int`, causing `Failed to create closure from callable: no array or string given`. The method is unreachable. Fix: either remove `remove()` from the public API (if not needed for the step's hook-system deliverable), or fix the ID-to-callback mapping (e.g., store `$this->handlers[$level->value][$id] = $callback` and use direct key lookup for removal). Not covered by tests — `HookRegistryTest` has no `remove()` test.
+    fix for step 09.12 · PR#734 · resolved 1 finding (remove broken HookRegistry::remove() + 3 CALIBER entries)
 
