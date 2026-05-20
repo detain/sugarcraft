@@ -546,6 +546,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.10 · PR#773 · sugar-table: viewport virtualization + column widths + wrapping (leftover-rollout step 10.10)
     fix for step 10.10 · PR#774 · resolved 4 findings
     step 10.11 · PR#776 · sugar-table: multi-line row support + candy-sprinkles Border integration (leftover-rollout step 10.11)
+    fix for step 10.11 · PR#777 · resolved 2 findings (CALIBER_LEARNINGS: add [pattern:border-from-sprinkles] + [pattern:multilineMode-row-height]; README: document withBorder() + withMultilineMode())
 
 ## Open review findings — 09.19
 
