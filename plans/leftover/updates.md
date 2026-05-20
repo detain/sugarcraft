@@ -382,8 +382,12 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.08 · clean · PR#698
   tests-ci for step 08.08 · clean
   docs for step 08.07 · PR#697 · document withFilterable/withFilter/withFilterPredicate + default substring-match in README + end-user HTML
+  step 08.09 · PR#700 · sugar-charts: niceNumbers + push() streaming + withFill(bool) + MarkLine annotation (leftover-rollout step 08.09)
+  review for step 08.09 · clean · PR#700
+  tests-ci for step 08.09 · clean
   docs for step 08.08 · PR#699 · document withPageSize/getPaginator/navigation methods in README + end-user HTML
-  step 08.09 · PR#700 · sugar-charts: niceNumbers() axis-tick helper + LineChart::push() sliding-window streaming + LineChart::withFill() area fill + MarkLine annotation type (leftover-rollout step 08.09)
+  docs for step 08.09 · clean
+  fix for step 08.10 · PR#701 · resolved 4 findings (duplicate docblock + README docs + CALIBER_LEARNINGS + PR not merged)
 
 ## Open review findings — 08.04
 
