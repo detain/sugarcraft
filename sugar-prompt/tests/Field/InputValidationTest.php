@@ -101,7 +101,7 @@ final class InputValidationTest extends TestCase
         $this->assertStringNotContainsString('!', $view);
     }
 
-    public function testWithValidatorReplacesPreviousValidator(): void
+    public function testWithValidatorChainsMultipleValidators(): void
     {
         $field = $this->focusInput(Input::new('name'))
             ->validator(static fn (string $v): ?string => 'Error 1')
@@ -110,7 +110,9 @@ final class InputValidationTest extends TestCase
         // Trigger validation
         [$field] = $field->update(new KeyMsg(KeyType::Char, 'x'));
 
-        $this->assertSame('Error 2', $field->getError());
+        // Chaining runs validators in sequence; first error wins.
+        // Error 1 is returned because the first validator in the chain fails.
+        $this->assertSame('Error 1', $field->getError());
     }
 
     // -------------------------------------------------------------------------
