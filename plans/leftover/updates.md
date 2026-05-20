@@ -505,4 +505,5 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 09.16 · PR#742 · candy-query: SnippetStore (file-backed JSON snippets) + ExplainView (EXPLAIN QUERY PLAN renderer) + ResultTable (h-scroll + JSON pretty-print + NULL formatting) (leftover-rollout step 09.16)
     review for step 09.16 · clean · PR#742
     tests-ci for step 09.16 · clean
+    docs for step 09.16 · PR#743 · document SnippetStore/ExplainView/ResultTable in README (architecture table + 3 feature sections) + end-user HTML (feature grid + API table rows) + CALIBER_LEARNINGS.md (file-backed-json-store, horizontal-scroll-table patterns)
 
