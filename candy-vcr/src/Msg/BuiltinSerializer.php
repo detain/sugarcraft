@@ -15,6 +15,8 @@ use SugarCraft\Core\Msg\FocusGainedMsg;
 use SugarCraft\Core\Msg\FocusLostMsg;
 use SugarCraft\Core\Msg\ForegroundColorMsg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Vt\Msg\FocusInMsg;
+use SugarCraft\Vt\Msg\FocusOutMsg;
 use SugarCraft\Core\Msg\MouseClickMsg;
 use SugarCraft\Core\Msg\MouseMotionMsg;
 use SugarCraft\Core\Msg\MouseReleaseMsg;
@@ -32,6 +34,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
  * - MouseClickMsg / MouseMotionMsg / MouseWheelMsg / MouseReleaseMsg
  * - WindowSizeMsg
  * - FocusGainedMsg / FocusLostMsg / BlurMsg
+ * - FocusInMsg / FocusOutMsg (candy-vt CSI I/O focus events)
  * - PasteStartMsg / PasteEndMsg / PasteMsg
  * - BackgroundColorMsg / ForegroundColorMsg
  * - CursorPositionMsg
@@ -142,6 +145,14 @@ final class BuiltinSerializer implements MsgSerializer
                     row: (int) $e['row'], col: (int) $e['col'],
                 ),
             ],
+            FocusInMsg::class => [
+                'encode' => static fn(FocusInMsg $m): array => ['@type' => 'FocusInMsg'],
+                'decode' => static fn(array $e): FocusInMsg => new FocusInMsg(),
+            ],
+            FocusOutMsg::class => [
+                'encode' => static fn(FocusOutMsg $m): array => ['@type' => 'FocusOutMsg'],
+                'decode' => static fn(array $e): FocusOutMsg => new FocusOutMsg(),
+            ],
         ];
     }
 
@@ -187,6 +198,7 @@ final class BuiltinSerializer implements MsgSerializer
             'MouseClickMsg', 'MouseMotionMsg', 'MouseWheelMsg', 'MouseReleaseMsg',
             'WindowSizeMsg',
             'FocusGainedMsg', 'FocusLostMsg', 'BlurMsg',
+            'FocusInMsg', 'FocusOutMsg',
             'PasteStartMsg', 'PasteEndMsg', 'PasteMsg',
             'BackgroundColorMsg', 'ForegroundColorMsg',
             'CursorPositionMsg',
@@ -206,6 +218,8 @@ final class BuiltinSerializer implements MsgSerializer
             'FocusGainedMsg' => FocusGainedMsg::class,
             'FocusLostMsg' => FocusLostMsg::class,
             'BlurMsg' => BlurMsg::class,
+            'FocusInMsg' => FocusInMsg::class,
+            'FocusOutMsg' => FocusOutMsg::class,
             'PasteStartMsg' => PasteStartMsg::class,
             'PasteEndMsg' => PasteEndMsg::class,
             'PasteMsg' => PasteMsg::class,
