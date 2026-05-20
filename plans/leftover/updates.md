@@ -357,7 +357,16 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
   review for step 08.01 · clean · PR#684
   tests-ci for step 08.01 · clean
   docs for step 08.01 · PR#685 · document Validator interface + 5 built-in subclasses in README (chaining quickstart + API table + custom impl example) + update docs/lib/sugar-prompt.html quickstart + feature grid
+  step 08.02 · PR#686 · sugar-prompt: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() in Input/Select (leftover-rollout step 08.02)
+  review for step 08.02 · clean · PR#686
+  tests-ci for step 08.02 · clean
   step 08.02 · PR#686 · sugar-prompt: add FuzzyMatcher (Smith-Waterman scoring) + withFuzzySuggestions() on Input and Select fields + 17 tests (leftover-rollout step 08.02)
+  review for step 08.02 · clean · PR#686 (one docs gap: withFuzzySuggestions() not yet in README — see note below)
+  docs for step 08.02 · PR#687 · document FuzzyMatcher + withFuzzySuggestions() in README (fuzzy quickstart + field tables) + end-user HTML (quickstart/feature grid/API table) + new CALIBER_LEARNINGS.md [pattern:fuzzy-smith-waterman-two-row]
+
+## Open review findings — 08.02
+
+- [x] sugar-prompt/README.md: `withFuzzySuggestions()` and the `FuzzyMatcher` class are not documented in the API tables or elsewhere. Per the step 08.01 pattern (docs PR#685 followed implementation PR#684), a docs sub-step for step 08.02 is needed to add FuzzyMatcher to the README and to file/update CALIBER_LEARNINGS.md once the lib has one. — ✅ resolved PR#687
 
 ## Open review findings — 07.16
 
