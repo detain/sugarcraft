@@ -81,4 +81,37 @@ interface GitDriver
 
     /** Reset HEAD to the parent of the last commit (undo last commit, keep changes staged). */
     public function reset(): void;
+
+    /**
+     * List stashes (parse `git stash list`).
+     * @return list<StashEntry>
+     */
+    public function stashList(): array;
+
+    /** Apply a stash by its ref (e.g. "stash@{0}"). */
+    public function stashApply(string $stashRef): void;
+
+    /** Drop (delete) a stash by its ref. */
+    public function stashDrop(string $stashRef): void;
+
+    /** Cherry-pick a commit. */
+    public function cherryPick(string $commit): void;
+
+    /** Continue an in-progress cherry-pick. */
+    public function cherryPickContinue(): void;
+
+    /** Abort an in-progress cherry-pick. */
+    public function cherryPickAbort(): void;
+
+    /**
+     * List worktrees (parse `git worktree list --porcelain`).
+     * @return list<WorktreeEntry>
+     */
+    public function worktreeList(): array;
+
+    /** Add a new worktree at $path based on $branch. */
+    public function worktreeAdd(string $path, string $branch): void;
+
+    /** Remove an existing worktree at $path. */
+    public function worktreeRemove(string $path): void;
 }
