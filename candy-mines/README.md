@@ -26,26 +26,31 @@ composer install
 
 ## Keys
 
-| Key                | Action                |
-|--------------------|-----------------------|
-| `↑/↓/←/→` or `hjkl`| Move cursor           |
-| `Space` / `Enter`  | Reveal cell           |
-| `f`                | Toggle flag           |
-| `r`                | Restart with new mines|
-| `q` / `Esc`        | Quit                  |
+| Key                | Action                           |
+|--------------------|----------------------------------|
+| `↑/↓/←/→` or `hjkl`| Move cursor                      |
+| `Space` / `Enter`  | Reveal cell                      |
+| `f`                | Toggle flag                      |
+| `c` / middle-click  | Chord — reveal safe neighbors     |
+| `r`                | Restart with new mines           |
+| `q` / `Esc`        | Quit                             |
 
 ## Architecture
 
-Three pure-state classes plus the runtime Model and a one-pass renderer:
+Four pure-state classes plus the runtime Model, renderer, and persistence helper:
 
-| File              | Role                                                                |
-|-------------------|---------------------------------------------------------------------|
-| `Cell`            | Value object — mine / revealed / flagged / adjacent count           |
-| `Board`           | The grid + every transition (reveal, flag, flood-fill). PRNG injected as `Closure(int):int` for deterministic tests |
-| `Game` (Model)    | Cursor + key routing + restart + win/lose gate                      |
-| `Renderer`        | Pure view function. CandySprinkles `Style` + `Border::rounded()`    |
+| File                    | Role                                                                                              |
+|-------------------------|----------------------------------------------------------------------------------------------------|
+| `Cell`                  | Value object — mine / revealed / flagged / adjacent count                                          |
+| `Board`                 | The grid + every transition (reveal, flag, flood-fill, chord). PRNG injected as `Closure(int):int` for deterministic tests |
+| `Game` (Model)          | Cursor + key routing + restart + win/lose gate + sub-second timer (`microtime(true)`)             |
+| `Stats`                 | Immutable difficulty stats — games, wins, best time per preset                                    |
+| `DifficultyStats`       | Atomic JSON persistence wrapper (tmp+rename, Homestead pattern)                                   |
+| `Renderer`              | Pure view function. CandySprinkles `Style` + `Border::rounded()`                                   |
 
 The first reveal is always safe — mines are placed only after click 1, with the clicked cell's 3×3 neighbourhood excluded so the player gets a non-trivial flood-fill on every game.
+
+**Chord click** (`c` / middle-click): when a revealed number has exactly the right number of flagged neighbours, chord-clicking it safely reveals all remaining neighbours. This mirrors the standard left+right simultaneous press in classic minesweeper.
 
 ## Demos
 

@@ -72,6 +72,9 @@ use SugarCraft\Mines\Game;
       <div class="feature"><strong>Recursive flood fill</strong><span>Zero-adjacency cells reveal their neighbours transitively, exactly like the original.</span></div>
       <div class="feature"><strong>Vim-style movement</strong><span><code>hjkl</code> alongside arrows; cursor clamps at board edges.</span></div>
       <div class="feature"><strong>Flag toggle</strong><span><code>f</code> flags / unflags the cursor cell; flagged cells can't be revealed by accident.</span></div>
+      <div class="feature"><strong>Chord click</strong><span><code>c</code> or middle-click on a satisfied number reveals all unflagged neighbours — mirrors classic left+right chord behaviour.</span></div>
+      <div class="feature"><strong>Sub-second timer</strong><span>Game timer uses <code>microtime(true)</code> for millisecond precision; frozen on win/lose and stored in stats.</span></div>
+      <div class="feature"><strong>Best-time persistence</strong><span><code>DifficultyStats</code> persists games/wins/best time per difficulty to JSON atomically (tmp+rename) so crashes never corrupt the record.</span></div>
       <div class="feature"><strong>Win + lose detection</strong><span><code>isWon</code> = every non-mine revealed; <code>exploded</code> = at least one mine was clicked.</span></div>
       <div class="feature"><strong>Restart key</strong><span><code>r</code> reseeds with a fresh layout, preserving the chosen board size.</span></div>
     </div>
@@ -90,12 +93,15 @@ use SugarCraft\Mines\Game;
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Game</td><td>start(width, height, mines)</td><td>Start a new game</td></tr>
-<tr><td>Game</td><td>reveal(x, y)</td><td>Reveal cell at position</td></tr>
-<tr><td>Game</td><td>toggleFlag(x, y)</td><td>Toggle flag at position</td></tr>
-<tr><td>Game</td><td>isWon()</td><td>Check if game is won</td></tr>
-<tr><td>Game</td><td>exploded()</td><td>Check if mine was hit</td></tr>
+<tr><td>Game</td><td>withDifficulty(d)</td><td>Start with a preset difficulty</td></tr>
+<tr><td>Game</td><td>elapsed()</td><td>Elapsed time in seconds (sub-second precision)</td></tr>
+<tr><td>Game</td><td>recordResult(elapsed)</td><td>Record win/loss and update stats</td></tr>
 <tr><td>Board</td><td>new(width, height, mines)</td><td>Create game board</td></tr>
 <tr><td>Board</td><td>cell(x, y)</td><td>Get cell at position</td></tr>
+<tr><td>Board</td><td>chord(x, y)</td><td>Chord-click — reveal safe neighbours of a satisfied number</td></tr>
+<tr><td>DifficultyStats</td><td>load(path)</td><td>Load stats from atomic JSON file (null if absent)</td></tr>
+<tr><td>DifficultyStats</td><td>save(path)</td><td>Persist stats atomically (tmp+rename)</td></tr>
+<tr><td>DifficultyStats</td><td>withGame(d, won, time)</td><td>Return new DifficultyStats with the game recorded</td></tr>
 </table>
   </div>
 </section>
