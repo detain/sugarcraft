@@ -79,6 +79,8 @@ echo $table-&gt;view();</code></pre>
             <div class="feature"><strong>Viewport virtualization</strong><span>Render only visible rows with withViewportHeight() + withScrollY().</span></div>
             <div class="feature"><strong>Column width modes</strong><span>ColumnWidth enum — Fixed, Percent, Dynamic, Content.</span></div>
             <div class="feature"><strong>Cell text wrapping</strong><span>WrapMode enum — None, WordWrap, Character.</span></div>
+            <div class="feature"><strong>Border styling</strong><span>withBorder(Border) — 8 border families from \SugarCraft\Sprinkles\Border.</span></div>
+            <div class="feature"><strong>Multi-line rows</strong><span>withMultilineMode(bool) — rows expand to max cell height.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -103,6 +105,9 @@ echo $table-&gt;view();</code></pre>
 <tr><td>Table</td><td>scrollY()</td><td>Get current scroll offset</td></tr>
 <tr><td>Table</td><td>view()</td><td>Render the table to string</td></tr>
 <tr><td>Table</td><td>computeColumnWidths(total)</td><td>Compute actual widths from ColumnWidth enum values</td></tr>
+<tr><td>Table</td><td>withBorder(border)</td><td>Set border family (Border::normal/rounded/thick/double/block/ascii/hidden/markdownBorder)</td></tr>
+<tr><td>Table</td><td>withBorderStyle(ansiStyle)</td><td>Apply ANSI SGR style to default border</td></tr>
+<tr><td>Table</td><td>withMultilineMode(bool)</td><td>Enable multi-line rows (expands to max cell height)</td></tr>
 <tr><td>Column</td><td>new(key, title, width)</td><td>Create a column</td></tr>
 <tr><td>Column</td><td>withAlignLeft(bool)</td><td>Left-align (default is right)</td></tr>
 <tr><td>Column</td><td>withColumnWidth(mode, value)</td><td>Set ColumnWidth::Fixed|Percent|Dynamic|Content</td></tr>
