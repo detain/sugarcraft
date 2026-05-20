@@ -66,6 +66,7 @@ final class Style
         private readonly bool $strike = false,
         private readonly bool $faint = false,
         private readonly bool $blink = false,
+        private readonly bool $rapidBlink = false,
         private readonly bool $reverse = false,
         private readonly bool $overline = false,
         private readonly bool $invisible = false,
@@ -322,6 +323,8 @@ final class Style
     public function dim(bool $on = true): self           { return $this->faint($on); }
     /** Toggle blink (SGR 5) — terminal-dependent; many emulators ignore it. */
     public function blink(bool $on = true): self         { return $this->with(blink: $on, propsAdded: ['blink']); }
+    /** Toggle rapid blink (SGR 6) — distinct from plain blink (SGR 5). */
+    public function rapidBlink(bool $on = true): self     { return $this->with(rapidBlink: $on, propsAdded: ['rapidBlink']); }
     /** Toggle reverse video — swap fg / bg (SGR 7). */
     public function reverse(bool $on = true): self       { return $this->with(reverse: $on, propsAdded: ['reverse']); }
     /** Toggle overline (SGR 53). */
@@ -603,6 +606,7 @@ final class Style
     public function isStrikethrough(): bool    { return $this->strike; }
     public function isFaint(): bool            { return $this->faint; }
     public function isBlink(): bool            { return $this->blink; }
+    public function isRapidBlink(): bool        { return $this->rapidBlink; }
     public function isReverse(): bool          { return $this->reverse; }
     public function isOverline(): bool         { return $this->overline; }
     public function isInvisible(): bool        { return $this->invisible; }
@@ -801,6 +805,110 @@ final class Style
             colorWhitespace:  $has('colorWhitespace')  ? $this->colorWhitespace  : $parent->colorWhitespace,
             tabWidth:         $has('tabWidth')         ? $this->tabWidth         : $parent->tabWidth,
             transform:        $has('transform')        ? $this->transform        : $parent->transform,
+        );
+    }
+
+    /**
+     * Incrementally merge {@see $other} into this style. Only properties
+     * that are explicitly set in {@see $other} (recorded in its propsSet)
+     * or have non-null / non-zero values are merged — null and zero values
+     * in {@see $other} are skipped, leaving the current style's values
+     * intact.
+     *
+     * This differs from {@see inherit()} in that inherit() always takes the
+     * parent's value when the child hasn't explicitly set a property,
+     * whereas patch() only applies changes from $other when $other has
+     * actually set those properties.
+     *
+     * Mirrors lipgloss v2's `Style.Patch()`.
+     */
+    public function patch(self $other): self
+    {
+        $applied = fn(string $p, mixed $otherValue): mixed =>
+            $otherValue !== null && $otherValue !== [] && $otherValue !== false
+                ? $otherValue
+                : null;
+
+        $mergedFg           = $applied('fg', $other->fg);
+        $mergedBg           = $applied('bg', $other->bg);
+        $mergedFgAdaptive   = $applied('fgAdaptive', $other->fgAdaptive);
+        $mergedBgAdaptive   = $applied('bgAdaptive', $other->bgAdaptive);
+        $mergedFgComplete  = $applied('fgComplete', $other->fgComplete);
+        $mergedBgComplete   = $applied('bgComplete', $other->bgComplete);
+        $mergedBold         = $other->isSet('bold')         ? $other->bold         : null;
+        $mergedItalic       = $other->isSet('italic')        ? $other->italic       : null;
+        $mergedUnderline    = $other->isSet('underline')     ? $other->underline   : null;
+        $mergedStrike       = $other->isSet('strike')       ? $other->strike      : null;
+        $mergedFaint        = $other->isSet('faint')        ? $other->faint        : null;
+        $mergedBlink        = $other->isSet('blink')        ? $other->blink       : null;
+        $mergedRapidBlink   = $other->isSet('rapidBlink')   ? $other->rapidBlink   : null;
+        $mergedReverse      = $other->isSet('reverse')       ? $other->reverse      : null;
+        $mergedOverline     = $other->isSet('overline')      ? $other->overline     : null;
+        $mergedInvisible    = $other->isSet('invisible')     ? $other->invisible   : null;
+        $mergedPadding      = $applied('padding', $other->padding);
+        $mergedMargin       = $applied('margin', $other->margin);
+        $mergedWidth        = $applied('width', $other->width);
+        $mergedHeight       = $applied('height', $other->height);
+        $mergedMaxWidth     = $applied('maxWidth', $other->maxWidth);
+        $mergedMaxHeight    = $applied('maxHeight', $other->maxHeight);
+        $mergedAlignH       = $other->isSet('alignH')        ? $other->alignH       : null;
+        $mergedAlignV       = $other->isSet('alignV')        ? $other->alignV       : null;
+        $mergedBorder       = $applied('border', $other->border);
+        $mergedBorderSides   = $applied('borderSides', $other->borderSides);
+        $mergedBorderFg     = $applied('borderFg', $other->borderFg);
+        $mergedBorderBg     = $applied('borderBg', $other->borderBg);
+        $mergedBorderSideFg = $applied('borderSideFg', $other->borderSideFg);
+        $mergedBorderSideBg = $applied('borderSideBg', $other->borderSideBg);
+        $mergedProfile      = $other->isSet('profile')      ? $other->profile      : null;
+        $mergedInline       = $other->isSet('inline')        ? $other->inline       : null;
+        $mergedMarginBg     = $applied('marginBg', $other->marginBg);
+        $mergedColorWhitespace = $other->isSet('colorWhitespace') ? $other->colorWhitespace : null;
+        $mergedTabWidth     = $other->isSet('tabWidth')      ? $other->tabWidth     : null;
+        $mergedTransform   = $applied('transform', $other->transform);
+
+        $newProps = $this->propsSet;
+        foreach ($other->propsSet as $p => $v) {
+            $newProps[$p] = $v;
+        }
+
+        return new self(
+            fg:               $mergedFg           ?? $this->fg,
+            bg:               $mergedBg           ?? $this->bg,
+            fgAdaptive:       $mergedFgAdaptive   ?? $this->fgAdaptive,
+            bgAdaptive:       $mergedBgAdaptive   ?? $this->bgAdaptive,
+            fgComplete:       $mergedFgComplete  ?? $this->fgComplete,
+            bgComplete:       $mergedBgComplete   ?? $this->bgComplete,
+            bold:             $mergedBold         ?? $this->bold,
+            italic:           $mergedItalic       ?? $this->italic,
+            underline:       $mergedUnderline    ?? $this->underline,
+            strike:           $mergedStrike       ?? $this->strike,
+            faint:            $mergedFaint        ?? $this->faint,
+            blink:            $mergedBlink        ?? $this->blink,
+            rapidBlink:       $mergedRapidBlink   ?? $this->rapidBlink,
+            reverse:          $mergedReverse      ?? $this->reverse,
+            overline:         $mergedOverline     ?? $this->overline,
+            invisible:        $mergedInvisible    ?? $this->invisible,
+            padding:          $mergedPadding      ?? $this->padding,
+            margin:           $mergedMargin       ?? $this->margin,
+            width:            $mergedWidth        ?? $this->width,
+            height:           $mergedHeight       ?? $this->height,
+            maxWidth:         $mergedMaxWidth     ?? $this->maxWidth,
+            maxHeight:        $mergedMaxHeight    ?? $this->maxHeight,
+            alignH:           $mergedAlignH       ?? $this->alignH,
+            alignV:           $mergedAlignV       ?? $this->alignV,
+            border:           $mergedBorder       ?? $this->border,
+            borderSides:      $mergedBorderSides  ?? $this->borderSides,
+            borderFg:         $mergedBorderFg     ?? $this->borderFg,
+            borderBg:         $mergedBorderBg    ?? $this->borderBg,
+            borderSideFg:     $mergedBorderSideFg ?? $this->borderSideFg,
+            borderSideBg:     $mergedBorderSideBg ?? $this->borderSideBg,
+            profile:          $mergedProfile     ?? $this->profile,
+            propsSet:         $newProps,
+            inline:           $mergedInline       ?? $this->inline,
+            marginBg:         $mergedMarginBg     ?? $this->marginBg,
+            colorWhitespace:  $mergedColorWhitespace ?? $this->colorWhitespace,
+            tabWidth:         $mergedTabWidth     ?? $this->tabWidth,
+            transform:        $mergedTransform   ?? $this->transform,
         );
     }
 
@@ -1274,6 +1382,7 @@ final class Style
             $codes[] = Ansi::UNDERLINE;
         }
         if ($this->blink)     $codes[] = Ansi::BLINK;
+        if ($this->rapidBlink) $codes[] = Ansi::RAPID_BLINK;
         if ($this->reverse)   $codes[] = Ansi::REVERSE;
         if ($this->strike)    $codes[] = Ansi::STRIKE;
         if ($this->overline)  $codes[] = Ansi::OVERLINE;
@@ -1360,6 +1469,7 @@ final class Style
         ?bool $strike = null,
         ?bool $faint = null,
         ?bool $blink = null,
+        ?bool $rapidBlink = null,
         ?bool $reverse = null,
         ?bool $overline = null,
         ?bool $invisible = null,
@@ -1409,6 +1519,7 @@ final class Style
             strike:           $strike        ?? $this->strike,
             faint:            $faint         ?? $this->faint,
             blink:            $blink         ?? $this->blink,
+            rapidBlink:       $rapidBlink    ?? $this->rapidBlink,
             reverse:          $reverse       ?? $this->reverse,
             overline:         $overline      ?? $this->overline,
             invisible:        $invisible     ?? $this->invisible,
@@ -1484,6 +1595,7 @@ final class Style
             strike:           $prop === 'strike'     ? false        : $next->strike,
             faint:            $prop === 'faint'      ? false        : $next->faint,
             blink:            $prop === 'blink'      ? false        : $next->blink,
+            rapidBlink:       $prop === 'rapidBlink' ? false        : $next->rapidBlink,
             reverse:          $prop === 'reverse'    ? false        : $next->reverse,
             overline:         $prop === 'overline'   ? false        : $next->overline,
             invisible:        $prop === 'invisible'  ? false        : $next->invisible,
@@ -1533,7 +1645,7 @@ final class Style
             fgAdaptive: $this->fgAdaptive, bgAdaptive: $this->bgAdaptive,
             fgComplete: $this->fgComplete, bgComplete: $this->bgComplete,
             bold: $this->bold, italic: $this->italic, underline: $this->underline,
-            strike: $this->strike, faint: $this->faint, blink: $this->blink, reverse: $this->reverse,
+            strike: $this->strike, faint: $this->faint, blink: $this->blink, rapidBlink: $this->rapidBlink, reverse: $this->reverse,
             overline: $this->overline, invisible: $this->invisible,
             padding: $this->padding, margin: $this->margin,
             width: $this->width, height: $this->height,
