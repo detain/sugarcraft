@@ -84,7 +84,15 @@ SignalForwarder::attachSigwinch(
     $pty,
     fn () =&gt; Tty::size(),                // [cols =&gt; N, rows =&gt; N]
 );
-// Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).</code></pre>
+// Now every host SIGWINCH triggers $pty-&gt;resize($cols, $rows).
+
+// For raw /dev/tty fds (no MasterPty object):
+$ttyFd = \SugarCraft\Pty\Libc::lib()-&gt;open('/dev/tty', 0x0002); // O_RDWR
+SignalForwarder::attachSigwinchToFd(
+    $ttyFd,
+    fn () =&gt; Tty::size(),
+    fn (int $cols, int $rows) =&gt; null,  // optional post-resize callback
+);</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -143,6 +151,7 @@ $pty-&gt;write("\x03");              // Ctrl+C → SIGINT to the child</code></p
 <tr><td>Pty</td><td>size()</td><td>Get current terminal size</td></tr>
 <tr><td>Pty</td><td>close()</td><td>Close the PTY</td></tr>
 <tr><td>SignalForwarder</td><td>attachSigwinch(pty, provider)</td><td>Forward SIGWINCH to PTY resize</td></tr>
+<tr><td>SignalForwarder</td><td>attachSigwinchToFd(fd, provider, onResize?)</td><td>Forward SIGWINCH to raw /dev/tty fd via TIOCSWINSZ</td></tr>
 <tr><td>PosixPump</td><td>run(master, stdin, stdout, child?, opts?)</td><td>Run byte pump with optional PumpOptions callbacks</td></tr>
 <tr><td>PumpOptions</td><td>withOnIdle(fn)</td><td>Register idle-tick callback (fires every stream_select timeout)</td></tr>
 <tr><td>PumpOptions</td><td>withOnSigwinch(fn(cols, rows))</td><td>Register SIGWINCH callback (fires on terminal resize)</td></tr>
