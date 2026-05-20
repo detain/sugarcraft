@@ -466,4 +466,5 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
 - [x] candy-pty/CALIBER_LEARNINGS.md: new UnsupportedPlatformException + forDeferredBackend() pattern not logged — needs [pattern:deferred-backend-exception] entry so phase-12 implementers know to remove the throw when wiring sidecar/pecl
 
 step 09.06 · PR#721 · candy-mines: chord clicks + microtime timer + DifficultyStats persistence
+docs for step 09.06 · PR#722 · document chord()/microtimer/DifficultyStats in README + end-user HTML + new CALIBER_LEARNINGS.md
 
