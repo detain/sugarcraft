@@ -431,6 +431,7 @@ docs for step 07.17 · PR#673 · document waitpid FFI fast-path in README + CALI
     tests-ci for step 09.05 · clean
     docs for step 09.05 · PR#720 · document Border/Style/HelpBar/StatusBar/SIGWINCH in README + end-user HTML + CALIBER_LEARNINGS.md
     review for step 09.06 · clean · PR#721
+    tests-ci for step 09.06 · clean
 
     ## Open review findings — 08.04
 
