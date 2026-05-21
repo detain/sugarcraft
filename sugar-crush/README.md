@@ -98,6 +98,13 @@ final class MyBackend implements Backend {
 | `Chat`                       | SugarCraft Model — history, input buffer, inFlight gate         |
 | `Renderer`                   | Pure view fn — CandyShine-rendered scrollback + input box      |
 | `Session`                    | Persists UI state to ~/.config/sugarcraft-crush/session.json |
+| `CommandParser`              | Parses `/command` slash-input; extracts name + shell-quoted args |
+| `ParsedCommand`               | Result VO: `name` (lowercase) + `args` list                   |
+| `ToolRegistry`               | Registry of slash-commands; 5 built-ins (filter/sort/goto/select/quit) |
+| `Tool`                       | Registered tool: name, signature, execute handler               |
+| `ToolSignature`              | Tool arg spec: positional names + named flags + description    |
+| `ToolCall`                   | VO: name, arguments, optional id — from AI backend              |
+| `ToolResult`                 | VO: name, result, optional error, optional id — to AI backend   |
 
 ## Session persistence
 
@@ -113,7 +120,7 @@ final class MyBackend implements Backend {
 
 ## Test plan
 
-- 95 tests / 247 assertions
+- 128 tests / 340 assertions
 - `Message`: factories, wire shape, custom timestamps
 - `EchoBackend`: echoes most recent user, handles empty history
 - `CommandBackend`: history is JSON-piped to stdin, exit code surfaced as error message, missing command handled gracefully
@@ -121,6 +128,10 @@ final class MyBackend implements Backend {
 - `Chat`: type accumulation, space, UTF-8-aware backspace, Enter submits + clears + arms inFlight, empty submit no-op, AssistantMsg appends + clears inFlight, keystrokes ignored while inFlight, Esc quits, full echo round-trip via the real `EchoBackend`
 - `StreamingDirectoryLister`: lazy yield, empty/non-dir/no-handle handled gracefully, listFiles filters correctly, count scans without loading entries
 - `Compactor`: threshold partitions small vs large, extension maps to correct category, maxPerGroup splits oversized buckets, CompactedGroup value object methods
+- `CommandParser`: slash vs plain text discrimination, name normalization (lowercase/alphanumeric/hyphens), colon/space delimiter parsing, shell-quoted arg splitting (single/double quotes, whitespace separation), empty/no-op edge cases
+- `ToolRegistry`: register overrides existing, get/has/execute/all, 5 built-in tools (filter/sort/goto/select/quit) with correct signatures and execute output
+- `ToolCall`: fromArray/toArray round-trip, defaults for optional fields
+- `ToolResult`: ok() / error() factories, isError() predicate, toWire() role/tool_call_id shape
 
 ## Status
 
