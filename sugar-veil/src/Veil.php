@@ -171,6 +171,17 @@ final class Veil
     }
 
     /**
+     * Set the zone manager for click-outside hit testing.
+     *
+     * Required when using clickOutsideDismiss to determine
+     * whether a mouse click fell inside or outside the veil zone.
+     */
+    public function withManager(Manager $manager): self
+    {
+        return $this->mutate(manager: $manager);
+    }
+
+    /**
      * Zone manager for click-outside hit testing.
      */
     public function manager(): ?Manager
@@ -310,9 +321,15 @@ final class Veil
         int $yOffset = 0,
     ): string {
         $bgLines  = $this->splitLines($background);
-        $fgLines  = $this->splitLines($foreground);
         $bgHeight = \count($bgLines);
         $bgWidth  = $this->maxLineWidth($bgLines);
+
+        // When autoSize is enabled, apply border chrome first and compute dimensions from bordered content
+        if ($this->autoSize) {
+            $foreground = $this->applyBorderChrome($foreground);
+        }
+
+        $fgLines  = $this->splitLines($foreground);
         $fgHeight = \count($fgLines);
         $fgWidth  = $this->maxLineWidth($fgLines);
 
