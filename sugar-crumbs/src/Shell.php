@@ -46,4 +46,21 @@ final class Shell
     {
         return $this->breadcrumb->render($this->stack);
     }
+
+    /**
+     * Parse a directory path and push each segment as a navigation item.
+     * e.g. "/home/user/projects" pushes "home", then "user", then "projects"
+     * Each segment's data is set to the full path up to that segment.
+     */
+    public function pushDirectory(string $path): self
+    {
+        $segments = \array_filter(\explode('/', \trim($path, '/')));
+        $newStack = (new NavStack())->setItems($this->stack->items());
+        $acc = '';
+        foreach ($segments as $segment) {
+            $acc .= '/' . $segment;
+            $newStack->push($segment, $acc);
+        }
+        return new self($newStack, $this->breadcrumb);
+    }
 }
