@@ -71,6 +71,86 @@ final class HeartbeatTest extends TestCase
             'language' => 'php',
             'file' => 'a.php',
             'duration' => 60,
+            'tags' => [],
+        ];
+        $this->assertSame($row, Heartbeat::fromArray($row)->toArray());
+    }
+
+    public function testConstructorStoresTags(): void
+    {
+        $hb = new Heartbeat(time: 1234, project: 'demo', language: 'php', file: 'a.php', duration: 30, tags: ['refactoring']);
+        $this->assertSame(['refactoring'], $hb->tags);
+    }
+
+    public function testDefaultTagsIsEmptyArray(): void
+    {
+        $hb = new Heartbeat(0, 'p', 'l', 'f');
+        $this->assertSame([], $hb->tags);
+    }
+
+    public function testWithTagsReturnsNewInstance(): void
+    {
+        $hb = new Heartbeat(time: 1234, project: 'demo', language: 'php', file: 'a.php', duration: 30);
+        $hb2 = $hb->withTags(['feature', 'bugfix']);
+        $this->assertSame([], $hb->tags);
+        $this->assertSame(['feature', 'bugfix'], $hb2->tags);
+    }
+
+    public function testFromArrayParsesTags(): void
+    {
+        $hb = Heartbeat::fromArray([
+            'time' => 1700000000,
+            'project' => 'sugarcraft',
+            'language' => 'php',
+            'file' => '/src/a.php',
+            'duration' => 120,
+            'tags' => ['refactoring', 'feature'],
+        ]);
+        $this->assertSame(['refactoring', 'feature'], $hb->tags);
+    }
+
+    public function testFromArrayDefaultsTagsToEmptyArray(): void
+    {
+        $hb = Heartbeat::fromArray([
+            'time' => 1700000000,
+            'project' => 'sugarcraft',
+            'language' => 'php',
+            'file' => '/src/a.php',
+            'duration' => 120,
+        ]);
+        $this->assertSame([], $hb->tags);
+    }
+
+    public function testFromArrayIgnoresNonStringTags(): void
+    {
+        $hb = Heartbeat::fromArray([
+            'time' => 1700000000,
+            'project' => 'sugarcraft',
+            'language' => 'php',
+            'file' => '/src/a.php',
+            'duration' => 120,
+            'tags' => ['valid', 123, 'also-valid', null, false],
+        ]);
+        $this->assertSame(['valid', 'also-valid'], $hb->tags);
+    }
+
+    public function testToArrayIncludesTags(): void
+    {
+        $hb = new Heartbeat(time: 1234, project: 'demo', language: 'php', file: 'a.php', duration: 60, tags: ['tag1', 'tag2']);
+        $arr = $hb->toArray();
+        $this->assertArrayHasKey('tags', $arr);
+        $this->assertSame(['tag1', 'tag2'], $arr['tags']);
+    }
+
+    public function testToArrayRoundTripsWithTags(): void
+    {
+        $row = [
+            'time' => 1234,
+            'project' => 'demo',
+            'language' => 'php',
+            'file' => 'a.php',
+            'duration' => 60,
+            'tags' => ['tag1', 'tag2'],
         ];
         $this->assertSame($row, Heartbeat::fromArray($row)->toArray());
     }
