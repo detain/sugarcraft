@@ -13,6 +13,8 @@ use SugarCraft\Readline\{
     TextareaPrompt,
     TextPrompt,
 };
+use SugarCraft\Readline\History\InMemoryHistory;
+use SugarCraft\Readline\History\FileHistory;
 
 final class ReadlineTest extends TestCase
 {
@@ -207,6 +209,159 @@ final class ReadlineTest extends TestCase
         $p = TextPrompt::new('Name: ')->handleChar('A');
         $this->assertStringContainsString('Name:', $p->view());
         $this->assertStringContainsString('A', $p->view());
+    }
+
+    // =========================================================================
+    // TextPrompt — History navigation
+    // =========================================================================
+
+    public function testTextPromptUpNavigatesToHistoryEntry(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('previous cmd');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('x');
+
+        // Up should navigate to history entry.
+        $p = $p->handleKey(Key::Up);
+        $this->assertSame('previous cmd', $p->value());
+    }
+
+    public function testTextPromptUpSavesCurrentBufferWhenStartingNavigation(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('old entry');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('x')->handleChar('y');
+
+        $p = $p->handleKey(Key::Up);
+
+        // Buffer should now be the history entry.
+        $this->assertSame('old entry', $p->value());
+    }
+
+    public function testTextPromptDownAfterUpRestoresSavedBuffer(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('old entry');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('x');
+
+        $p = $p->handleKey(Key::Up);   // navigate to history
+        $p = $p->handleKey(Key::Down); // back to live buffer
+
+        $this->assertSame('x', $p->value());
+    }
+
+    public function testTextPromptDownAtLiveBufferIsNoOp(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('old');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('x');
+
+        // Not navigating history yet — Down should be no-op.
+        $p = $p->handleKey(Key::Down);
+        $this->assertSame('x', $p->value());
+    }
+
+    public function testTextPromptUpThenDownTwiceRestoresSavedBuffer(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('first');
+        $history->push('second');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('l')->handleChar('i')->handleChar('v')->handleChar('e');
+
+        $p = $p->handleKey(Key::Up);   // to 'second'
+        $p = $p->handleKey(Key::Up);   // to 'first'
+        $p = $p->handleKey(Key::Down); // back to 'second'
+        $p = $p->handleKey(Key::Down); // back to 'first'
+        $p = $p->handleKey(Key::Down); // back to 'live'
+
+        $this->assertSame('live', $p->value());
+    }
+
+    public function testTextPromptTypingResetsHistoryNavigation(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('history cmd');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('x');
+
+        $p = $p->handleKey(Key::Up);   // now at history entry
+        $p = $p->handleChar('y');      // typing resets navigation position
+
+        // After typing 'y', buffer contains 'history cmd' + 'y' appended at the
+        // cursor position (end of buffer), and history navigation is reset.
+        $this->assertSame('history cmdy', $p->value());
+
+        // Next Up should navigate from the live buffer — starting fresh at 'history cmd'.
+        $p = $p->handleKey(Key::Up);
+        $this->assertSame('history cmd', $p->value());
+    }
+
+    public function testTextPromptSubmitPushesToHistory(): void
+    {
+        $history = new InMemoryHistory();
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('a')->handleChar('b')->submit();
+
+        // History should now contain 'ab'.
+        $this->assertSame('ab', $history->getPrevious());
+    }
+
+    public function testTextPromptAbortDoesNotPushToHistory(): void
+    {
+        $history = new InMemoryHistory();
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('a')->handleKey(Key::Escape);
+
+        // History should be empty — abort does not push.
+        $this->assertNull($history->getPrevious());
+    }
+
+    public function testTextPromptUpWithEmptyBufferDoesNotSaveToHistory(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('old entry');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleKey(Key::Up);
+
+        // Empty buffer is not saved; navigates directly to history entry.
+        $this->assertSame('old entry', $p->value());
+    }
+
+    public function testTextPromptUpNavigationPastOldestStaysAtOldest(): void
+    {
+        $history = new InMemoryHistory();
+        $history->push('only');
+
+        $p = TextPrompt::new('> ')->withHistory($history)
+            ->handleChar('current');
+
+        $p = $p->handleKey(Key::Up);   // to 'only'
+        $p = $p->handleKey(Key::Up);   // past oldest — stays at 'only'
+
+        $this->assertSame('only', $p->value());
+    }
+
+    public function testTextPromptWithoutHistoryIgnoresUpDown(): void
+    {
+        $p = TextPrompt::new('> ')->handleChar('x');
+        $p = $p->handleKey(Key::Up);
+        $this->assertSame('x', $p->value());
+        $p = $p->handleKey(Key::Down);
+        $this->assertSame('x', $p->value());
     }
 
     // =========================================================================
