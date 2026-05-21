@@ -91,14 +91,38 @@ final class JsonImporter
         };
 
         if ($atomic) {
-            // Use Store's default database for atomic transaction
-            $defaultDb = $this->store->listDatabases()[0] ?? 'default';
-            // Open the database through Store so we get the cached connection
+            // Collect the databases actually used by the parsed keys so we can
+            // route each to its own transaction rather than blindly wrapping
+            // everything on the default database (which would NOT cover keys
+            // that carry @db suffixes — those land on entirely different dbs).
+            $dbNames = [];
+            foreach ($data as $key => $value) {
+                if (!\is_string($key) || !\is_string($value)) {
+                    continue;
+                }
+                $at = \strrpos($key, '@');
+                $dbNames[] = $at === false ? $this->store->defaultDatabase() : \substr($key, $at + 1);
+            }
+
+            $uniqueDbs = \array_unique($dbNames);
+
+            // Multi-database atomic import is not supported — cross-db
+            // SQLite transactions cannot be atomic across separate .db files.
+            if (\count($uniqueDbs) > 1) {
+                throw new \RuntimeException(
+                    'Atomic import is not supported across multiple databases. ' .
+                    'Use atomic=false for multi-database imports, or import each ' .
+                    'database separately.'
+                );
+            }
+
+            // Single-database: run all sets inside a transaction on that db.
+            $targetDb = $uniqueDbs[0] ?? $this->store->defaultDatabase();
             $reflection = new \ReflectionClass($this->store);
             $method = $reflection->getMethod('database');
             $method->setAccessible(true);
             /** @var \SugarCraft\Skate\Database $db */
-            $db = $method->invoke($this->store, $defaultDb);
+            $db = $method->invoke($this->store, $targetDb);
             return $db->transaction($import);
         }
 
