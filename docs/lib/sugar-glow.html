@@ -48,7 +48,7 @@
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Composes CandyShine (rendering) and SugarBits Viewport (scrolling). Render to stdout or open in a fullscreen pager. All eight CandyShine themes plus custom JSON.</p>
+    <p class="lede" style="margin-top: 28px;">Composes CandyShine (rendering) and SugarBits Viewport (scrolling). Render to stdout or open in a fullscreen pager. Eleven built-in themes (ansi, plain, dark, light, notty, dracula, tokyo-night, pink, solarized, monokai, github) plus custom JSON.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/sugar-glow</code></pre>
@@ -65,7 +65,7 @@ sugarglow --theme-config ./my-theme.json README.md</code></pre>
     <div class="feature-grid">
       <div class="feature"><strong>Stdout mode</strong><span><code>sugarglow README.md</code> — pipe-friendly, exits clean.</span></div>
       <div class="feature"><strong>Pager mode</strong><span><code>-p / --pager</code> — fullscreen scrollable Viewport. Esc / q to exit.</span></div>
-      <div class="feature"><strong>Theme picker</strong><span><code>--theme dracula</code>, <code>--theme-config ./my.json</code>, <code>-s</code> alias for glamour-compat.</span></div>
+      <div class="feature"><strong>Theme picker</strong><span><code>--theme {ansi|plain|dark|light|notty|dracula|tokyo-night|pink|solarized|monokai|github}</code>, <code>--theme-config ./my.json</code>, <code>-s</code> alias for glamour-compat. Three themes (solarized/monokai/github) load from JSON in <code>themes/</code>.</span></div>
       <div class="feature"><strong>Word-wrap</strong><span><code>-w 80</code> — column width control. <code>0</code> disables.</span></div>
       <div class="feature"><strong>OSC 8 toggle</strong><span><code>--no-hyperlinks</code> falls back to <code>text (url)</code> rendering.</span></div>
       <div class="feature"><strong>Stdin support</strong><span><code>git log -1 --pretty=%B | sugarglow -p</code>.</span></div>
