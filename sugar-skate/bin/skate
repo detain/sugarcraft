@@ -7,18 +7,25 @@ declare(strict_types=1);
  * SugarSkate CLI — charmbracelet/skate equivalent.
  *
  * Usage:
- *   skate set <key> [value]          Set a key (reads from stdin if no value)
- *   skate get <key>                  Get a value
+ *   skate set <key> [value] [--ttl=SECONDS]  Set a key (reads from stdin if no value)
+ *   skate get <key>                         Get a value (suggests typo on miss)
  *   skate list [-k|-v] [-r] [-d delim] [pattern]  List entries
- *   skate delete <key>               Delete a key (supports glob)
- *   skate list-dbs                   List all databases
+ *   skate delete <key>                       Delete a key (supports glob)
+ *   skate list-dbs                          List all databases
+ *   skate import <format> <path>           Import from JSON/YAML file
+ *   skate export <format> [db] [pattern]    Export to JSON/YAML
  *
  * Database suffix: key@dbname
+ *
+ * Formats: json, yaml (or yml)
+ * Path '-' or '/dev/stdin' reads from standard input for import.
  */
 namespace SugarCraft\Skate;
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Skate\Cli\ImportCommand;
+use SugarCraft\Skate\Cli\ExportCommand;
 use SugarCraft\Skate\Lang;
 use SugarCraft\Skate\Store;
 
@@ -34,13 +41,17 @@ $cmd = $argv[1];
 
 switch ($cmd) {
     case 'set':
-        if ($argc < 3) {
+        $opts = parseSetOpts($argv, 2);
+        if ($opts['key'] === null) {
             fwrite(STDERR, Lang::t('cli.usage_set', ['bin' => $bin]) . "\n");
             exit(1);
         }
-        $key = $argv[2];
-        $value = $argc >= 4 ? $argv[3] : trim(fgets(STDIN) ?: '');
-        $store->set($key, $value);
+        // Read value from stdin if not provided as argument
+        $value = $opts['value'];
+        if ($value === null) {
+            $value = trim(fgets(STDIN) ?: '');
+        }
+        $store->set($opts['key'], $value, false, $opts['ttl']);
         break;
 
     case 'get':
@@ -49,9 +60,13 @@ switch ($cmd) {
             exit(1);
         }
         $val = $store->get($argv[2]);
-        if ($val === '') {
-            // silent exit for missing keys — matches Go skate behaviour
-            exit(1);
+        // stderr may contain typo suggestion; only exit 1 on truly missing
+        if ($val === '' && !isset($argv[3])) {
+            // Check if key actually exists (might be empty value)
+            $entry = $store->entry($argv[2]);
+            if ($entry === null) {
+                exit(1);
+            }
         }
         echo $val;
         break;
@@ -83,6 +98,32 @@ switch ($cmd) {
         }
         break;
 
+    case 'import':
+        $opts = parseImportOpts($argv, 2);
+        if ($opts['format'] === null || $opts['path'] === null) {
+            fwrite(STDERR, Lang::t('cli.usage_import', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        $exitCode = (new ImportCommand($store))->run(
+            $opts['format'],
+            $opts['path'],
+            $opts['atomic'],
+        );
+        exit($exitCode);
+
+    case 'export':
+        $opts = parseExportOpts($argv, 2);
+        if ($opts['format'] === null) {
+            fwrite(STDERR, Lang::t('cli.usage_export', ['bin' => $bin]) . "\n");
+            exit(1);
+        }
+        $exitCode = (new ExportCommand($store))->run(
+            $opts['format'],
+            $opts['db'],
+            $opts['pattern'],
+        );
+        exit($exitCode);
+
     case '--help':
     case '-h':
     case 'help':
@@ -101,13 +142,21 @@ function help(string $bin): void
 SugarSkate — personal key/value store
 
 Usage:
-  {$bin} set <key> [value]       Set a key
-  {$bin} get <key>               Get a value
+  {$bin} set <key> [value] [--ttl=SECONDS]
+                                  Set a key (reads stdin if no value)
+  {$bin} get <key>                Get a value (suggests typo on miss)
   {$bin} list [-k|-v] [-r] [-d delim] [pattern]
-                                 List entries (default: keys+values)
-  {$bin} delete <key>            Delete a key (glob patterns supported)
-  {$bin} list-dbs                List all databases
-  {$bin} --help                  Show this help
+                                  List entries (default: keys+values)
+  {$bin} delete <key>             Delete a key (glob patterns supported)
+  {$bin} list-dbs                 List all databases
+  {$bin} import <format> <path>   Import entries (json|yaml, path=- for stdin)
+  {$bin} export <format> [db] [pattern]
+                                  Export entries (json|yaml)
+  {$bin} --help                   Show this help
+
+Options:
+  --ttl=SECONDS   Set a TTL (expiry in seconds) for the key.
+  --no-atomic      Disable atomic transaction for import.
 
 Patterns:
   *  matches any characters
@@ -117,7 +166,37 @@ Database suffix:
   Use key@dbname to target a specific database.
   E.g. {$bin} get token@passwords
 
+Import/Export:
+  JSON and YAML formats supported.
+  Use path '-' to read import data from STDIN.
+
 HELP;
+}
+
+function parseSetOpts(array $argv, int $offset): array
+{
+    $key = null;
+    $value = null;
+    $ttl = null;
+    $atomic = true;
+
+    $remaining = \array_slice($argv, $offset);
+    $positional = [];
+
+    foreach ($remaining as $arg) {
+        if (\str_starts_with($arg, '--ttl=')) {
+            $ttl = (int) \substr($arg, 6);
+        } elseif (\str_starts_with($arg, '--')) {
+            // ignore unknown flags
+        } else {
+            $positional[] = $arg;
+        }
+    }
+
+    $key = $positional[0] ?? null;
+    $value = $positional[1] ?? null;
+
+    return ['key' => $key, 'value' => $value, 'ttl' => $ttl];
 }
 
 function parseListOpts(array $argv, int $offset): array
@@ -152,4 +231,50 @@ function parseListOpts(array $argv, int $offset): array
         'delimiter' => $delimiter,
         'pattern' => $positional[0] ?? null,
     ];
+}
+
+function parseImportOpts(array $argv, int $offset): array
+{
+    $format = null;
+    $path = null;
+    $atomic = true;
+
+    $remaining = \array_slice($argv, $offset);
+    foreach ($remaining as $arg) {
+        if (\str_starts_with($arg, '--')) {
+            if ($arg === '--no-atomic') {
+                $atomic = false;
+            }
+        } elseif ($format === null) {
+            $format = $arg;
+        } elseif ($path === null) {
+            $path = $arg;
+        }
+    }
+
+    return ['format' => $format, 'path' => $path, 'atomic' => $atomic];
+}
+
+function parseExportOpts(array $argv, int $offset): array
+{
+    $format = null;
+    $db = null;
+    $pattern = null;
+
+    $remaining = \array_slice($argv, $offset);
+    $positional = [];
+
+    foreach ($remaining as $arg) {
+        if (\str_starts_with($arg, '-')) {
+            // ignore unknown flags
+        } else {
+            $positional[] = $arg;
+        }
+    }
+
+    $format = $positional[0] ?? null;
+    $db = $positional[1] ?? null;
+    $pattern = $positional[2] ?? null;
+
+    return ['format' => $format, 'db' => $db, 'pattern' => $pattern];
 }

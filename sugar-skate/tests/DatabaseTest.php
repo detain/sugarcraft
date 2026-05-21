@@ -166,4 +166,110 @@ final class DatabaseTest extends TestCase
         $dbs = Database::listDatabases($this->tmpDir);
         $this->assertContains('test', $dbs);
     }
+
+    public function testSetWithTtl(): void
+    {
+        $e = $this->db->set('ttl-key', 'value', false, 3600);
+        $this->assertNotNull($e->expiresAt);
+        $this->assertFalse($e->isExpired());
+        $this->assertGreaterThan(new \DateTimeImmutable(), $e->expiresAt);
+    }
+
+    public function testSetWithTtlZeroClearsExpiry(): void
+    {
+        $e = $this->db->set('a', 'v', false, 3600);
+        $e2 = $this->db->set('a', 'v', false, null);
+        $this->assertNull($e2->expiresAt);
+    }
+
+    public function testGetSkipsExpiredEntry(): void
+    {
+        // Manually insert an already-expired entry using getRaw + raw SQLite3
+        $reflection = new \ReflectionClass($this->db);
+        $prop = $reflection->getProperty('db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($this->db);
+
+        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $stmt = $sqlite->prepare(
+            'INSERT INTO entries (key, value, binary, created, modified, expires_at)
+             VALUES (:key, :value, 0, :now, :now, :expires_at)'
+        );
+        $stmt->bindValue(':key', 'expired-key', \SQLITE3_TEXT);
+        $stmt->bindValue(':value', 'should-not-see', \SQLITE3_TEXT);
+        $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+
+        $this->assertNull($this->db->get('expired-key'));
+        // But getRaw should still find it
+        $raw = $this->db->getRaw('expired-key');
+        $this->assertNotNull($raw);
+    }
+
+    public function testTransactionCommitsOnSuccess(): void
+    {
+        $result = $this->db->transaction(function (): string {
+            $this->db->set('tx-a', '1');
+            $this->db->set('tx-b', '2');
+            return 'ok';
+        });
+
+        $this->assertSame('ok', $result);
+        $this->assertSame('1', $this->db->get('tx-a')->value);
+        $this->assertSame('2', $this->db->get('tx-b')->value);
+    }
+
+    public function testTransactionRollsBackOnException(): void
+    {
+        try {
+            $this->db->transaction(function (): void {
+                $this->db->set('tx-rollback', 'should-not-exist');
+                throw new \RuntimeException('intentional failure');
+            });
+        } catch (\RuntimeException $e) {
+            $this->assertSame('intentional failure', $e->getMessage());
+        }
+
+        $this->assertNull($this->db->get('tx-rollback'));
+    }
+
+    public function testAllKeys(): void
+    {
+        $this->db->set('apple', 'a');
+        $this->db->set('banana', 'b');
+        $this->db->set('cherry', 'c');
+
+        $keys = $this->db->allKeys();
+        $this->assertSame(['apple', 'banana', 'cherry'], $keys);
+    }
+
+    public function testAllKeysExcludesExpired(): void
+    {
+        $this->db->set('good', 'v');
+
+        $reflection = new \ReflectionClass($this->db);
+        $prop = $reflection->getProperty('db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($this->db);
+
+        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $stmt = $sqlite->prepare(
+            'INSERT INTO entries (key, value, binary, created, modified, expires_at)
+             VALUES (:key, :value, 0, :now, :now, :expires_at)'
+        );
+        $stmt->bindValue(':key', 'expired', \SQLITE3_TEXT);
+        $stmt->bindValue(':value', 'v', \SQLITE3_TEXT);
+        $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+
+        $keys = $this->db->allKeys();
+        $this->assertNotContains('expired', $keys);
+        $this->assertContains('good', $keys);
+    }
 }

@@ -244,4 +244,67 @@ final class StoreTest extends TestCase
         $this->assertFalse($entry->binary);
         $this->assertSame('plain-text', $entry->value);
     }
+
+    public function testSetWithTtl(): void
+    {
+        $this->store->setWithTtl('ttl-key', 'ttl-value', 3600);
+        $entry = $this->store->entry('ttl-key');
+        $this->assertNotNull($entry);
+        $this->assertNotNull($entry->expiresAt);
+        $this->assertFalse($entry->isExpired());
+    }
+
+    public function testSetWithTtlZeroIsNoOp(): void
+    {
+        $this->store->setWithTtl('nope', 'val', 0);
+        $this->assertSame('', $this->store->get('nope'));
+    }
+
+    public function testSetWithTtlNegativeIsNoOp(): void
+    {
+        $this->store->setWithTtl('neg', 'val', -10);
+        $this->assertSame('', $this->store->get('neg'));
+    }
+
+    public function testSetPassesTtlToDatabase(): void
+    {
+        $e = $this->store->set('t', 'v', false, 7200);
+        $this->assertNotNull($e->expiresAt);
+    }
+
+    public function testSetWithTtlOnExistingKeyOverwrites(): void
+    {
+        $this->store->set('overwrite-ttl', 'v1');
+        $this->store->setWithTtl('overwrite-ttl', 'v2', 60);
+        $this->assertSame('v2', $this->store->get('overwrite-ttl'));
+        $entry = $this->store->entry('overwrite-ttl');
+        $this->assertNotNull($entry->expiresAt);
+    }
+
+    public function testEntryReturnsNullForExpiredKey(): void
+    {
+        $tmpDir = $this->tmpDir;
+        $dbPath = $tmpDir . '/testdb.db';
+        $db = new \SugarCraft\Skate\Database($dbPath, 'testdb');
+
+        $reflection = new \ReflectionClass($db);
+        $prop = $reflection->getProperty('db');
+        $prop->setAccessible(true);
+        /** @var \SQLite3 $sqlite */
+        $sqlite = $prop->getValue($db);
+
+        $past = (new \DateTimeImmutable('-1 hour'))->format(\DATE_ATOM);
+        $stmt = $sqlite->prepare(
+            'INSERT INTO entries (key, value, binary, created, modified, expires_at)
+             VALUES (:key, :value, 0, :now, :now, :expires_at)'
+        );
+        $stmt->bindValue(':key', 'old-entry', \SQLITE3_TEXT);
+        $stmt->bindValue(':value', 'old-value', \SQLITE3_TEXT);
+        $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $past, \SQLITE3_TEXT);
+        $stmt->execute();
+        $stmt->close();
+
+        $this->assertNull($this->store->entry('old-entry'));
+    }
 }
