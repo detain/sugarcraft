@@ -26,25 +26,30 @@ CandyServe is a self-hostable Git server you run on a VPS or machine. Users auth
 
 ```
 candy-serve/
-├── bin/soft-serve          Entry point (serve command)
+├── bin/soft-serve                Entry point (serve command)
 ├── src/
-│   ├── Server.php          Config (SSH/HTTP/Git daemon listen addrs)
-│   ├── Config.php          YAML config loader
-│   ├── Repo.php            Bare Git repo (init, access, metadata)
-│   ├── User.php            SSH public key auth + user model
-│   ├── AccessControl.php   Permissions (admin/read/write)
+│   ├── Config.php                YAML config loader
+│   ├── Repo.php                  Bare Git repo (init, access, metadata)
+│   ├── User.php                  SSH public key auth + user model
+│   ├── AccessControl.php         Permissions (admin/read/write)
+│   ├── Lang.php                 i18n strings
 │   ├── SSH/
-│   │   ├── SSHServer.php   libssh2-based SSH server
-│   │   ├── Auth.php        Public key authentication
-│   │   └── Commands.php    git-upload-pack / git-receive-pack
+│   │   ├── SSHServer.php        libssh2-based SSH server
+│   │   ├── Auth.php             Public key authentication
+│   │   └── Commands.php         git-upload-pack / git-receive-pack
 │   ├── Git/
-│   │   ├── Protocol.php    Smart HTTP Git protocol handler
-│   │   ├── UploadPack.php  git-upload-pack (clone/fetch)
-│   │   └── ReceivePack.php git-receive-pack (push)
+│   │   ├── UploadPack.php       git-upload-pack (clone/fetch)
+│   │   └── ReceivePack.php      git-receive-pack (push)
+│   ├── HttpSmartProtocol/
+│   │   └── Server.php           HTTP smart protocol server (git-over-HTTP)
+│   ├── Clipboard/
+│   │   └── Osc52.php            OSC 52 clipboard handler
 │   └── LFS/
-│       └── LFSHandler.php  Git LFS batch API
+│       ├── LFSHandler.php       Git LFS batch API
+│       ├── LocalStorageBackend.php
+│       └── LFSStorageBackendInterface.php
 ├── cmd/
-│   └── serve.php           Serve command implementation
+│   └── serve.php                 Serve command implementation
 └── tests/
 ```
 
@@ -102,6 +107,36 @@ ssh -p 23231 user@your-server repo tree repo-name
 # View a file with syntax highlighting
 ssh -p 23231 user@your-server repo blob repo-name path/to/file.php -c -l
 ```
+
+## HTTP Smart Protocol
+
+CandyServe supports Git clone/fetch/push over HTTP using the smart protocol (not the dumb HTTP transport).
+
+```bash
+# Clone over HTTP
+git clone http://user@your-server:23232/repo-name.git
+
+# Authenticate with Basic auth (when required)
+git clone http://username:token@your-server:23232/repo-name.git
+```
+
+The smart protocol flow:
+1. Client GETs `/repo.git/info/refs?service=git-upload-pack` — receives ref advertisement
+2. Client POSTs `/repo.git/git-upload-pack` — exchanges pack data for fetch/clone
+3. For push: Client POSTs `/repo.git/git-receive-pack` — sends pack and receives status
+
+Authentication uses HTTP Basic auth or the `X-CandyServe-User` header.
+
+## OSC 52 Clipboard
+
+The TUI supports clipboard operations via OSC 52 (Operating System Command 52). This enables:
+- Copying repo URLs, file content, or commit hashes from the TUI to the system clipboard
+- Reading clipboard content into the TUI (e.g., for pasting)
+
+Supported selections:
+- `c` — system clipboard (default)
+- `p` — primary selection (X11)
+- `s` — secondary selection
 
 ## Repo Permissions
 
