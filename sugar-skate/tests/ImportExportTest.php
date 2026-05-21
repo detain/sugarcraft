@@ -102,6 +102,18 @@ final class ImportExportTest extends TestCase
         $this->assertSame('alice', $this->store->get('user@meta'));
     }
 
+    public function testJsonImporterAtomicMultiDatabaseThrows(): void
+    {
+        $path = $this->tmpDir . '/multi-db.json';
+        \file_put_contents($path, '{"token@pw":"secret","user@meta":"alice"}');
+
+        $importer = new JsonImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Atomic import is not supported across multiple databases');
+        $importer->importFromFile($path, true);
+    }
+
     public function testJsonImporterSkipsNonStringValues(): void
     {
         $path = $this->tmpDir . '/mixed.json';
@@ -148,6 +160,18 @@ final class ImportExportTest extends TestCase
 
         $entry = $this->store->entry('timed-key');
         $this->assertNotNull($entry->expiresAt);
+    }
+
+    public function testYamlImporterAtomicMultiDatabaseThrows(): void
+    {
+        $path = $this->tmpDir . '/multi-db.yaml';
+        \file_put_contents($path, "token@pw: secret\nuser@meta: alice\n");
+
+        $importer = new YamlImporter($this->store);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Atomic import is not supported across multiple databases');
+        $importer->importFromFile($path, true);
     }
 
     // ─── Export ────────────────────────────────────────────────────────────────
