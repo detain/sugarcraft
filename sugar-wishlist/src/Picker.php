@@ -130,6 +130,9 @@ class Picker
         foreach ($matches as $i => $e) {
             $marker = $i === $this->cursor ? "\x1b[1;36m▸\x1b[0m " : '  ';
             $line   = $e->displayLine();
+            if ($e->description !== null && $e->description !== '') {
+                $line .= '  \x1b[2m' . $e->description . '\x1b[0m';
+            }
             fwrite($this->out, "{$marker}{$line}\r\n");
         }
         fwrite($this->out, "\r\n  ↑/↓ select · Enter connect · Esc quit · type to filter\r\n");

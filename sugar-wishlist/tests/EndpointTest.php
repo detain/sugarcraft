@@ -19,7 +19,7 @@ final class EndpointTest extends TestCase
     {
         $e = new Endpoint(
             name: 'prod', host: 'prod.example.com', port: 2222,
-            user: 'deploy', identityFile: '/home/me/.ssh/prod',
+            user: 'deploy', identityFiles: ['/home/me/.ssh/prod'],
         );
         $this->assertSame(
             ['ssh', '-p', '2222', '-i', '/home/me/.ssh/prod', 'deploy@prod.example.com'],
