@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Veil\Tests;
 
+use SugarCraft\Core\{MouseAction, MouseButton, Msg\MouseMsg};
+use SugarCraft\Sprinkles\Border;
 use SugarCraft\Veil\{Position, Veil};
+use SugarCraft\Zone\Manager;
 use PHPUnit\Framework\TestCase;
 
 final class VeilTest extends TestCase
@@ -181,5 +184,171 @@ final class VeilTest extends TestCase
         $this->assertSame(0,       Position::LEFT->xOffset(10, 40));
         $this->assertSame(30,      Position::RIGHT->xOffset(10, 40));
         $this->assertSame(15,      Position::CENTER->xOffset(10, 40));
+    }
+
+    // ─── z-index ─────────────────────────────────────────────────────────────
+
+    public function testZIndexDefaultsToZero(): void
+    {
+        $this->assertSame(0, $this->veil->zIndex());
+    }
+
+    public function testWithZIndex(): void
+    {
+        $v = $this->veil->withZIndex(42);
+        $this->assertSame(42, $v->zIndex());
+    }
+
+    public function testZIndexIsImmutable(): void
+    {
+        $v1 = $this->veil->withZIndex(1);
+        $v2 = $v1->withZIndex(2);
+        $this->assertSame(1, $v1->zIndex());
+        $this->assertSame(2, $v2->zIndex());
+    }
+
+    public function testZIndexNegative(): void
+    {
+        $v = $this->veil->withZIndex(-10);
+        $this->assertSame(-10, $v->zIndex());
+    }
+
+    // ─── click-outside-dismiss ─────────────────────────────────────────────────
+
+    public function testClickOutsideDismissDefaultsToFalse(): void
+    {
+        $this->assertFalse($this->veil->clickOutsideDismiss());
+    }
+
+    public function testWithClickOutsideDismiss(): void
+    {
+        $v = $this->veil->withClickOutsideDismiss(true);
+        $this->assertTrue($v->clickOutsideDismiss());
+    }
+
+    public function testClickOutsideDismissImmutable(): void
+    {
+        $v1 = $this->veil->withClickOutsideDismiss(true);
+        $v2 = $v1->withClickOutsideDismiss(false);
+        $this->assertTrue($v1->clickOutsideDismiss());
+        $this->assertFalse($v2->clickOutsideDismiss());
+    }
+
+    public function testIsClickOutsideReturnsFalseWhenDismissDisabled(): void
+    {
+        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
+        $this->assertFalse($this->veil->isClickOutside($mouse));
+    }
+
+    public function testIsClickOutsideReturnsFalseWhenManagerNotSet(): void
+    {
+        $v = $this->veil->withClickOutsideDismiss(true);
+        $mouse = new MouseMsg(999, 999, MouseButton::Left, MouseAction::Press);
+        $this->assertFalse($v->isClickOutside($mouse));
+    }
+
+    // ─── auto-size ──────────────────────────────────────────────────────────
+
+    public function testAutoSizeDefaultsToFalse(): void
+    {
+        $this->assertFalse($this->veil->autoSize());
+    }
+
+    public function testWithAutoSize(): void
+    {
+        $v = $this->veil->withAutoSize(true);
+        $this->assertTrue($v->autoSize());
+    }
+
+    public function testAutoSizeImmutable(): void
+    {
+        $v1 = $this->veil->withAutoSize(true);
+        $v2 = $v1->withAutoSize(false);
+        $this->assertTrue($v1->autoSize());
+        $this->assertFalse($v2->autoSize());
+    }
+
+    // ─── border chrome ──────────────────────────────────────────────────────
+
+    public function testBorderDefaultsToNull(): void
+    {
+        $this->assertNull($this->veil->border());
+    }
+
+    public function testWithBorder(): void
+    {
+        $border = Border::normal();
+        $v = $this->veil->withBorder($border);
+        $this->assertNotNull($v->border());
+        $this->assertSame($border, $v->border());
+    }
+
+    public function testBorderImmutable(): void
+    {
+        $border1 = Border::normal();
+        $border2 = Border::thick();
+        $v1 = $this->veil->withBorder($border1);
+        $v2 = $v1->withBorder($border2);
+        $this->assertSame($border1, $v1->border());
+        $this->assertSame($border2, $v2->border());
+    }
+
+    public function testApplyBorderChromeReturnsContentUnchangedWhenNoBorder(): void
+    {
+        $content = "Hello\nWorld";
+        $result = $this->veil->applyBorderChrome($content);
+        $this->assertSame($content, $result);
+    }
+
+    public function testApplyBorderChromeWrapsContentWithBorder(): void
+    {
+        $v = $this->veil->withBorder(Border::normal());
+        $content = "Hi";
+        $result = $v->applyBorderChrome($content);
+        // Normal border adds box-drawing characters around content
+        $this->assertStringContainsString('┌', $result);
+        $this->assertStringContainsString('─', $result);
+        $this->assertStringContainsString('┐', $result);
+    }
+
+    public function testApplyBorderChromeWithThickBorder(): void
+    {
+        $v = $this->veil->withBorder(Border::thick());
+        $result = $v->applyBorderChrome("X");
+        $this->assertStringContainsString('━', $result);
+    }
+
+    // ─── manager ────────────────────────────────────────────────────────────
+
+    public function testManagerDefaultsToNull(): void
+    {
+        $this->assertNull($this->veil->manager());
+        $this->assertNull($this->veil->getManager());
+    }
+
+    // ─── combinations ─────────────────────────────────────────────────────────
+
+    public function testChainingAllNewMethods(): void
+    {
+        $border = Border::rounded();
+        $v = $this->veil
+            ->withZIndex(5)
+            ->withClickOutsideDismiss(true)
+            ->withAutoSize(true)
+            ->withBorder($border);
+
+        $this->assertSame(5, $v->zIndex());
+        $this->assertTrue($v->clickOutsideDismiss());
+        $this->assertTrue($v->autoSize());
+        $this->assertSame($border, $v->border());
+    }
+
+    public function testWithZIndexReturnsNewInstance(): void
+    {
+        $original = $this->veil;
+        $modified = $this->veil->withZIndex(10);
+        $this->assertNotSame($original, $modified);
+        $this->assertSame(0, $original->zIndex());
+        $this->assertSame(10, $modified->zIndex());
     }
 }
