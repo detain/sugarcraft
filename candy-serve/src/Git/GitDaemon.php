@@ -268,62 +268,47 @@ final class GitDaemon
     }
 
     /**
-     * Handle a git protocol request by redirecting stdio.
+     * Handle a git protocol request.
      *
      * @param resource $socket  Client socket
      */
     private function handleGitRequest($socket, object $handler): void
     {
-        // Create pipes for stdio redirection
-        $stdinPipe = $stdoutPipe = $stderrPipe = null;
-
-        // For simplicity, read the full buffer and write to a temp file
-        // Then use proc_open to run the handler with redirected stdio
-        // This is a simplified approach - in production, you'd want full stdio redirection
-
         $buffer = $this->clients[\count($this->clients) - 1]['buffer'] ?? '';
 
-        // Use a bidirectional approach with temporary files
+        // Write client buffer to temp file for processing
         $tmpDir = $this->config->dataPath . '/tmp';
         if (!\is_dir($tmpDir)) {
             \mkdir($tmpDir, 0755, true);
         }
 
         $stdinFile = $tmpDir . '/git-stdin-' . \uniqid();
-        $stdoutFile = $tmpDir . '/git-stdout-' . \uniqid();
-        $stderrFile = $tmpDir . '/git-stderr-' . \uniqid();
-
         \file_put_contents($stdinFile, $buffer);
 
-        // For git-upload-pack, we use git pack-objects directly
         if ($handler instanceof UploadPack) {
-            $this->handleUploadPack($socket, $handler, $stdinFile, $stdoutFile);
+            $this->handleUploadPack($socket, $handler, $stdinFile);
         } elseif ($handler instanceof ReceivePack) {
-            $this->handleReceivePack($socket, $handler, $stdinFile, $stdoutFile);
+            $this->handleReceivePack($socket, $handler, $stdinFile);
         }
 
-        // Cleanup
         @\unlink($stdinFile);
-        @\unlink($stdoutFile);
-        @\unlink($stderrFile);
     }
 
     /**
      * Handle git-upload-pack (clone/fetch) request.
      */
-    private function handleUploadPack($socket, UploadPack $handler, string $stdinFile, string $stdoutFile): void
+    private function handleUploadPack($socket, UploadPack $handler, string $stdinFile): void
     {
-        $repo = $handler;
+        $uploadPack = $handler;
         $ac = AccessControl::getInstance();
 
-        if (!$ac->canRead(null, $repo->repo)) {
+        if (!$ac->canRead(null, $uploadPack->repo)) {
             $this->writePacket($socket, "err Access denied\n");
             return;
         }
 
-        // Send refs advertisement
-        $packet = $this->buildRefAdvertisement($repo->repo);
-        $this->writePacket($socket, $packet);
+        // Send refs advertisement (each ref as separate pkt-line)
+        $this->sendRefAdvertisement($socket, $uploadPack->repo);
 
         // Read wants from client
         $wants = $this->readWantsFromFile($stdinFile);
@@ -332,29 +317,30 @@ final class GitDaemon
         }
 
         // Send pack data
-        $this->sendPack($socket, $repo->repo, $wants);
+        $this->sendPack($socket, $uploadPack->repo, $wants);
     }
 
     /**
-     * Build refs advertisement packet.
+     * Build and send refs advertisement.
      */
-    private function buildRefAdvertisement(Repo $repo): string
+    private function sendRefAdvertisement($socket, Repo $repo): void
     {
-        $lines = [];
-
         $branches = $repo->branches();
         $head = $branches !== [] ? $branches[0] : 'main';
         $headHash = $repo->refs("refs/heads/{$head}")["refs/heads/{$head}"] ?? '';
-        $lines[] = "{$headHash} refs/heads/{$head}";
 
+        // First ref (no capabilities for git-daemon protocol)
+        $this->writePacket($socket, "{$headHash} refs/heads/{$head}");
+
+        // Subsequent refs
         foreach ($repo->refs() as $ref => $hash) {
             if (!\str_starts_with($ref, 'refs/heads/' . $head)) {
-                $lines[] = "{$hash} {$ref}";
+                $this->writePacket($socket, "{$hash} {$ref}");
             }
         }
 
-        $lines[] = '';  // flush
-        return \implode("\n", $lines);
+        // Flush
+        $this->writePacket($socket, '');
     }
 
     /**
@@ -419,9 +405,10 @@ final class GitDaemon
     /**
      * Handle git-receive-pack (push) request.
      */
-    private function handleReceivePack($socket, ReceivePack $handler, string $stdinFile, string $stdoutFile): void
+    private function handleReceivePack($socket, ReceivePack $handler, string $stdinFile): void
     {
-        $repo = $handler->repo;
+        $receivePack = $handler;
+        $repo = $receivePack->repo;
 
         // Send refs advertisement
         $refs = $repo->refs();
@@ -590,7 +577,8 @@ final class GitDaemon
 
     private function registerSignalHandlers(): void
     {
-        if (\function_exists('pcntl_signal')) {
+        if (\function_exists('pcntl_signal') && \function_exists('pcntl_async_signals')) {
+            \pcntl_async_signals(true);
             \pcntl_signal(\SIGTERM, fn() => $this->handleSignal());
             \pcntl_signal(\SIGINT, fn() => $this->handleSignal());
             \pcntl_signal(\SIGHUP, fn() => $this->handleSignal());
