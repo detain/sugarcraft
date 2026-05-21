@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Boxer\Tests;
 
 use SugarCraft\Boxer\{Node, SugarBoxer};
+use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\VAlign;
 use PHPUnit\Framework\TestCase;
 
 final class SugarBoxerTest extends TestCase
@@ -197,5 +199,65 @@ final class SugarBoxerTest extends TestCase
         $this->assertSame(50, $n->maxWidth);
         $this->assertSame(5,  $n->minHeight);
         $this->assertSame(20, $n->maxHeight);
+    }
+
+    public function testNodeWithMargin(): void
+    {
+        $n = Node::leaf('x')->withMargin(1, 2, 3, 4);
+        $this->assertSame([1, 2, 3, 4], $n->margin);
+    }
+
+    public function testNodeWithMarginDefaultValues(): void
+    {
+        $n = Node::leaf('x')->withMargin(1);
+        $this->assertSame([1, 1, 1, 1], $n->margin);
+    }
+
+    public function testNodeWithMarginZero(): void
+    {
+        $n = Node::leaf('x')->withMargin(0);
+        $this->assertSame([0, 0, 0, 0], $n->margin);
+    }
+
+    public function testNodeWithMarginTwoValues(): void
+    {
+        $n = Node::leaf('x')->withMargin(1, 2);
+        $this->assertSame([1, 2, 1, 2], $n->margin);
+    }
+
+    public function testNodeWithAlignHCenter(): void
+    {
+        $n = Node::leaf('x')->withAlignH(Align::Center);
+        $this->assertSame(Align::Center, $n->alignH);
+    }
+
+    public function testNodeWithAlignHLeft(): void
+    {
+        $n = Node::leaf('x')->withAlignH(Align::Left);
+        $this->assertSame(Align::Left, $n->alignH);
+    }
+
+    public function testNodeWithAlignHRight(): void
+    {
+        $n = Node::leaf('x')->withAlignH(Align::Right);
+        $this->assertSame(Align::Right, $n->alignH);
+    }
+
+    public function testNodeWithAlignVTop(): void
+    {
+        $n = Node::leaf('x')->withAlignV(VAlign::Top);
+        $this->assertSame(VAlign::Top, $n->alignV);
+    }
+
+    public function testNodeWithAlignVCenter(): void
+    {
+        $n = Node::leaf('x')->withAlignV(VAlign::Middle);
+        $this->assertSame(VAlign::Middle, $n->alignV);
+    }
+
+    public function testNodeWithAlignVBottom(): void
+    {
+        $n = Node::leaf('x')->withAlignV(VAlign::Bottom);
+        $this->assertSame(VAlign::Bottom, $n->alignV);
     }
 }
