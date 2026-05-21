@@ -184,7 +184,28 @@ final class Inspector
         return implode("\n", $lines);
     }
 
-    private static function describeCsi(string $params, string $final): string
+    /**
+     * Render parsed segments as a machine-readable JSON array.
+     *
+     * Each entry: {"type": "text"|"sequence", "content": "...", "description": "..."}
+     *
+     * @return list<array{type: string, content: string, description: string}>
+     */
+    public static function reportAsJson(string $input): string
+    {
+        $segments = self::parse($input);
+        $result = [];
+        foreach ($segments as $seg) {
+            $result[] = [
+                'type' => $seg instanceof TextSegment ? 'text' : 'sequence',
+                'content' => $seg->raw(),
+                'description' => $seg->describe(),
+            ];
+        }
+        return json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
+
+    public static function describeCsi(string $params, string $final): string
     {
         // Bracketed paste, focus reporting, mouse modes — DEC private.
         if (isset($params[0]) && $params[0] === '?' && ($final === 'h' || $final === 'l')) {
@@ -425,7 +446,7 @@ final class Inspector
         };
     }
 
-    private static function describeOsc(string $payload): string
+    public static function describeOsc(string $payload): string
     {
         if (preg_match('/^(\d+);(.*)$/s', $payload, $m) === 1) {
             return match ($m[1]) {
@@ -458,7 +479,7 @@ final class Inspector
     }
 
     /** Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel. */
-    private static function describeDcs(string $payload): string
+    public static function describeDcs(string $payload): string
     {
         if (str_starts_with($payload, '>|')) {
             return 'terminal version (XTVERSION reply): ' . substr($payload, 2);
@@ -473,7 +494,7 @@ final class Inspector
     }
 
     /** Decode APC payloads — CandyZone markers, kitty graphics. */
-    private static function describeApc(string $payload): string
+    public static function describeApc(string $payload): string
     {
         if (str_starts_with($payload, 'candyzone:')) {
             return 'CandyZone marker ' . substr($payload, strlen('candyzone:'));
@@ -484,7 +505,7 @@ final class Inspector
         return 'APC ' . $payload;
     }
 
-    private static function describeSs3(string $final): string
+    public static function describeSs3(string $final): string
     {
         return match ($final) {
             'P' => 'F1',
@@ -501,7 +522,7 @@ final class Inspector
         };
     }
 
-    private static function describeEsc(string $byte): string
+    public static function describeEsc(string $byte): string
     {
         return match ($byte) {
             '7'  => 'save cursor (DECSC)',
