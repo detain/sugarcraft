@@ -34,8 +34,34 @@
 - Reveals lines from the center of the foreground outward
 - `round($eased * $totalLines)` clamped to `[1, totalLines]` ensures at least one line shows above 0%
 
+## Z-Index and Stacking
+
+- `zIndex` defaults to `0` — higher values render on top of lower values
+- VeilStack sorts ascending by z-index before compositing so each subsequent veil layers on top
+- `VeilStack::composite()` feeds each veil's output as the next veil's background — order matters
+
+## Auto-Size
+
+- When `autoSize` is `true`, `composite()` calls `applyBorderChrome()` on the foreground BEFORE measuring dimensions
+- This means border chrome is already baked in when computing line width and count
+- Without autoSize, foreground dimensions are measured raw then the border is not accounted for
+
+## Border Chrome
+
+- Uses `SugarCraft\Sprinkles\Style::new()->border($border)->render($content)` to wrap content
+- `applyBorderChrome()` returns content unchanged when `$this->border === null`
+- `withBorder()` accepts a `SugarCraft\Sprinkles\Border` instance (not a raw value)
+
+## Click-Outside Dismiss
+
+- `isClickOutside(MouseMsg $mouse): bool` returns `false` when either `clickOutsideDismiss` is `false` or `manager` is `null`
+- When both are set, delegates to `Manager::anyInBounds($mouse)` — returns `null` when click is outside all zones (i.e., click was outside the veil)
+- Multiple veils can share the same `Manager` instance for shared spatial hit testing
+
 ## Immutable Pattern
 
 - `withBackdrop()` and `withAnimation()` return new instances via private `mutate()`
+- `withZIndex()`, `withClickOutsideDismiss()`, `withAutoSize()`, `withBorder()`, and `withManager()` also return new instances via `mutate()`
 - `animate()` delegates to `composite()` after applying animation transforms
 - All state held in `readonly` private properties
+- `mutate()` accepts nulls for optional parameters and falls back to `$this->property`
