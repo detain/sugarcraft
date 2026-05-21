@@ -43,9 +43,17 @@
 - **`ToolCall`** and **`ToolResult`** are plain readonly VOs with `fromArray`/`toArray` serialization and `ok()`/`error()` factories.
 - `ToolResult::toWire()` formats as `['role' => 'tool', 'tool_call_id' => $id, 'name' => $name, 'content' => $result]` — matches the OpenAI/Anthropic tool-result wire format.
 
-## Test patterns
+## MCP client (stdio transport)
 
-- **Snapshot tests** for renderers assert raw `\x1b[...m` SGR bytes directly.
+- **`McpClient`** spawns a child process via `proc_open` with piped stdio; non-blocking reads via `stream_set_blocking(false)` keep the TUI loop responsive.
+- **JSON-RPC 2.0 framing**: messages are newline-delimited (`$message->toJson() . "\n"`); `readMessages()` splits on `\n` and parses each chunk via `McpMessage::parse()`.
+- **`McpMessage`** covers all four JSON-RPC 2.0 packet types: request, response, notification, error. Factory methods: `request()`, `notification()`, `success()`, `error()`.
+- **`McpMessage::parse()`** validates `jsonrpc: "2.0"` presence and returns `null` for malformed input — callers handle null gracefully.
+- **Polling loop** with `usleep(10000)` (10 ms) waits up to 100 attempts for a matching response id — avoids blocking the TUI while still being responsive.
+- **`McpClient::forClaudeCode()`** factory provides the canonical `command: 'claude', args: ['--mcp']` invocation for the official Claude Code MCP server.
+- **`disconnect()`** closes pipes and calls `proc_close()` in a loop; `__destruct()` ensures cleanup if the client is abandoned.
+
+## Test patterns
 - **Behaviour tests** for `Chat` drive `update()` with scripted `KeyMsg` / `MouseMsg` / `Tick` objects and assert the `[Model, ?Cmd]` tuple shape.
 - **Coercion tests** for `Session` feed edge cases (missing file, empty string, wrong type) and assert the no-op / clamp / fresh-session outcome.
 - **Generator tests** for `StreamingDirectoryLister` assert the yielded `[index, absolutePath]` pairs and handle early-exit by exhausting the generator normally.
