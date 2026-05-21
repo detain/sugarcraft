@@ -90,10 +90,16 @@ sugarglow --theme-config ./my-theme.json README.md</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Glow</td><td>render(markdown, ?Theme)</td><td>Render markdown to stdout</td></tr>
-<tr><td>Glow</td><td>pager(markdown, ?Theme)</td><td>Open markdown in fullscreen pager</td></tr>
-<tr><td>Glow</td><td>setTheme(name)</td><td>Set the color theme</td></tr>
-<tr><td>Glow</td><td>setWidth(columns)</td><td>Set word-wrap column width</td></tr>
+<tr><td>GlamourTheme</td><td>fromJson(json)</td><td>Parse a Glamour theme JSON string</td></tr>
+<tr><td>GlamourTheme</td><td>fromFile(path)</td><td>Load a Glamour theme from a JSON file</td></tr>
+<tr><td>GlamourTheme</td><td>resolve(token)</td><td>Resolve a chroma token to its SGR color</td></tr>
+<tr><td>FileWatcher</td><td>hasChangedSince(mtime)</td><td>Check if file modified since given mtime</td></tr>
+<tr><td>FileWatcher</td><td>watch(path, intervalMs)</td><td>Generator watching a file for changes (mtime polling)</td></tr>
+<tr><td>WidthHelper</td><td>visualWidth(text)</td><td>Visual width accounting for CJK/emoji</td></tr>
+<tr><td>WidthHelper</td><td>padRight(text, width)</td><td>Pad string to fixed visual width</td></tr>
+<tr><td>WidthHelper</td><td>slice(text, start, end)</td><td>Slice string by visual width offsets</td></tr>
+<tr><td>WidthHelper</td><td>isFullWidth(char)</td><td>Check if character is full-width</td></tr>
+<tr><td>WidthHelper</td><td>truncate(text, maxWidth)</td><td>Truncate string to max visual width</td></tr>
 </table>
   </div>
 </section>
