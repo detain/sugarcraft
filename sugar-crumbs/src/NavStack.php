@@ -23,6 +23,9 @@ namespace SugarCraft\Crumbs;
  */
 final class NavStack
 {
+    /** Default separator used in view() and viewHtml() output. */
+    private const SEPARATOR = ' > ';
+
     /** @var list<NavigationItem> */
     private array $items = [];
 
@@ -96,7 +99,9 @@ final class NavStack
      */
     public function updateTop(mixed $data): self
     {
-        if ($this->items === []) return $this;
+        if ($this->items === []) {
+            return $this;
+        }
         $top = $this->items[\count($this->items) - 1];
         $this->items[\count($this->items) - 1] = new NavigationItem($top->title, $data);
         return $this;
@@ -135,6 +140,40 @@ final class NavStack
             static fn(NavigationItem $item): string => $item->title,
             $this->items
         ));
+    }
+
+    /**
+     * Render the stack as semantic HTML.
+     * Last item gets aria-current="page" for accessibility.
+     *
+     * Example output:
+     * <nav class="breadcrumb" aria-label="Breadcrumb">
+     *   <span>Home</span> > <span>Settings</span> > <span aria-current="page">Display</span>
+     * </nav>
+     */
+    public function viewHtml(): string
+    {
+        $items = $this->items;
+        if ($items === []) {
+            return '';
+        }
+
+        $parts = [];
+        for ($i = 0; $i < \count($items); $i++) {
+            $item = $items[$i];
+            $isLast = ($i === \count($items) - 1);
+            $escaped = \htmlspecialchars($item->title, \ENT_QUOTES, 'UTF-8');
+            if ($isLast) {
+                $parts[] = '<span aria-current="page">' . $escaped . '</span>';
+            } else {
+                $parts[] = '<span>' . $escaped . '</span>';
+            }
+        }
+
+        $separator = \htmlspecialchars(self::SEPARATOR, \ENT_QUOTES, 'UTF-8');
+        return '<nav class="breadcrumb" aria-label="Breadcrumb">'
+            . \implode($separator, $parts)
+            . '</nav>';
     }
 
     /**
