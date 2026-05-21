@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace SugarCraft\Veil;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Veil\Animation\AnimationKind;
+use SugarCraft\Veil\Animation\Fade;
+use SugarCraft\Veil\Animation\Scale;
+use SugarCraft\Veil\Animation\Slide;
 
 /**
  * Terminal overlay compositor.
  *
  * Composites a foreground string over a background string at a given
- * position with optional pixel offsets.
+ * position with optional pixel offsets. Supports backdrop dimming
+ * and animated transitions via honey-bounce CubicBezier easing.
  *
  * Port of rmhubbert/bubbletea-overlay.
  *
@@ -18,6 +23,24 @@ use SugarCraft\Core\Util\Width;
  */
 final class Veil
 {
+    /** @var int Backdrop opacity 0–100 (0 = no dimming, 100 = fully dimmed) */
+    private readonly int $backdropOpacity;
+
+    /** @var AnimationKind|null Animation to apply during transitions */
+    private readonly ?AnimationKind $animationKind;
+
+    /**
+     * @param int             $backdropOpacity 0–100 backdrop dimming
+     * @param AnimationKind|null $animationKind Animation kind for transitions
+     */
+    private function __construct(
+        int $backdropOpacity = 0,
+        ?AnimationKind $animationKind = null,
+    ) {
+        $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
+        $this->animationKind = $animationKind;
+    }
+
     /**
      * Create a new Veil instance.
      */
@@ -27,15 +50,109 @@ final class Veil
     }
 
     /**
+     * Set the backdrop opacity for dimming the background.
+     *
+     * @param int $opacity 0–100 (0 = no dimming, 100 = fully dimmed)
+     */
+    public function withBackdrop(int $opacity): self
+    {
+        return $this->mutate(backdropOpacity: $opacity);
+    }
+
+    /**
+     * Set the animation kind for overlay transitions.
+     */
+    public function withAnimation(AnimationKind $kind): self
+    {
+        return $this->mutate(animationKind: $kind);
+    }
+
+    /**
+     * Apply animation and composite the overlay onto the background.
+     *
+     * @param string    $foreground  The overlay content (e.g. a modal)
+     * @param string    $background    The base content
+     * @param Position  $vertical     Vertical position anchor
+     * @param Position  $horizontal   Horizontal position anchor
+     * @param float     $progress    Animation progress 0.0–1.0 (0=start, 1=end)
+     * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
+     * @param int       $yOffset     Additional lines downward (+) / upward (-)
+     * @return string                 The composited output
+     */
+    public function animate(
+        string $foreground,
+        string $background,
+        Position $vertical,
+        Position $horizontal,
+        float $progress,
+        int $xOffset = 0,
+        int $yOffset = 0,
+    ): string {
+        $animFg = $foreground;
+        $animXOffset = $xOffset;
+        $animYOffset = $yOffset;
+
+        if ($this->animationKind !== null && $progress < 1.0) {
+            $result = $this->applyAnimation($foreground, $progress, $vertical, $horizontal);
+            $animFg = $result['foreground'];
+            $animXOffset = $xOffset + $result['horizontalOffset'];
+            $animYOffset = $yOffset + $result['verticalOffset'];
+        }
+
+        return $this->composite($animFg, $background, $vertical, $horizontal, $animXOffset, $animYOffset);
+    }
+
+    /**
+     * Apply the configured animation to the foreground at the given progress.
+     *
+     * @return array{foreground: string, verticalOffset: int, horizontalOffset: int}
+     */
+    private function applyAnimation(
+        string $foreground,
+        float $progress,
+        Position $vertical,
+        Position $horizontal,
+    ): array {
+        if ($this->animationKind === AnimationKind::SLIDE) {
+            $slide = new Slide();
+            return $slide->apply($foreground, $progress, $vertical, $horizontal);
+        }
+
+        if ($this->animationKind === AnimationKind::FADE) {
+            $fade = new Fade();
+            return [
+                'foreground' => $fade->apply($foreground, $progress),
+                'verticalOffset' => 0,
+                'horizontalOffset' => 0,
+            ];
+        }
+
+        if ($this->animationKind === AnimationKind::SCALE) {
+            $scale = new Scale();
+            return [
+                'foreground' => $scale->apply($foreground, $progress),
+                'verticalOffset' => 0,
+                'horizontalOffset' => 0,
+            ];
+        }
+
+        return [
+            'foreground' => $foreground,
+            'verticalOffset' => 0,
+            'horizontalOffset' => 0,
+        ];
+    }
+
+    /**
      * Composite a foreground string over a background string.
      *
      * @param string    $foreground  The overlay content (e.g. a modal)
-     * @param string    $background  The base content
-     * @param Position  $vertical    Vertical position anchor
-     * @param Position  $horizontal  Horizontal position anchor
-     * @param int       $xOffset     Additional columns rightward (+) / leftward (-)
-     * @param int       $yOffset     Additional lines downward (+) / upward (-)
-     * @return string                The composited output
+     * @param string    $background   The base content
+     * @param Position $vertical     Vertical position anchor
+     * @param Position $horizontal    Horizontal position anchor
+     * @param int       $xOffset      Additional columns rightward (+) / leftward (-)
+     * @param int       $yOffset      Additional lines downward (+) / upward (-)
+     * @return string                 The composited output
      */
     public function composite(
         string $foreground,
@@ -54,6 +171,11 @@ final class Veil
 
         if ($bgHeight === 0 || $bgWidth === 0) {
             return $background;
+        }
+
+        // Apply backdrop dimming to background if configured
+        if ($this->backdropOpacity > 0) {
+            $bgLines = $this->applyBackdrop($bgLines);
         }
 
         // Resolve base position
@@ -93,6 +215,41 @@ final class Veil
         }
 
         return \implode("\n", $output);
+    }
+
+    /**
+     * Apply backdrop dimming to background lines.
+     *
+     * @param list<string> $lines
+     * @return list<string>
+     */
+    private function applyBackdrop(array $lines): array
+    {
+        // Convert 0-100 opacity to ANSI dim level
+        // SGR code 2 = dim (reduced intensity)
+        // Higher opacity = more dim passes
+        $dimPasses = (int) \round($this->backdropOpacity / 33); // 0-100 → 0-3 passes
+        $dimPasses = \max(0, \min(3, $dimPasses));
+
+        if ($dimPasses === 0) {
+            return $lines;
+        }
+
+        $dimCode = "\x1b[2m";
+        $resetCode = "\x1b[0m";
+
+        // Wrap each line with dim codes
+        $dimmed = [];
+        foreach ($lines as $line) {
+            $wrapped = $dimCode . $line . $resetCode;
+            // Apply multiple passes for stronger dimming
+            for ($i = 1; $i < $dimPasses; $i++) {
+                $wrapped = $dimCode . $wrapped . $resetCode;
+            }
+            $dimmed[] = $wrapped;
+        }
+
+        return $dimmed;
     }
 
     /**
@@ -196,5 +353,21 @@ final class Veil
         }
 
         return $result;
+    }
+
+    /**
+     * Create a new instance with updated properties.
+     *
+     * @param int             $backdropOpacity
+     * @param AnimationKind|null $animationKind
+     */
+    private function mutate(
+        ?int $backdropOpacity = null,
+        ?AnimationKind $animationKind = null,
+    ): self {
+        return new self(
+            backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
+            animationKind: $animationKind ?? $this->animationKind,
+        );
     }
 }
