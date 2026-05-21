@@ -556,6 +556,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.18 · PR#785 · sugar-tick: CSV/JSON export + tags + sugartrackignore + gaps
     step 10.19 · PR#786 · sugar-tick: SQLite backend + milestones + iCal export + auto-backups + theme
     step 10.20 · PR#787 · sugar-calendar: date range select + keyboard nav + EventStore
+    step 10.21 · PR#788 · sugar-crumbs: pushDirectory + view + filter
 
 ## Open review findings — 09.19
 
