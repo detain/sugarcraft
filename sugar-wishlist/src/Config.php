@@ -206,4 +206,24 @@ final class Config
             options:      $opts,
         );
     }
+
+    /**
+     * Import endpoints from an OpenSSH config file (~/.ssh/config).
+     *
+     * Parses `Host` blocks and `Host *` global defaults (IdentityFile,
+     * ProxyJump, User, Port, HostName). Per-host options override global
+     * defaults. Host patterns become the endpoint `name`; HostName (or
+     * the pattern itself if no HostName is given) becomes the `host`.
+     *
+     * @return list<Endpoint>
+     */
+    public static function importFromSshConfig(string $path): array
+    {
+        if (!is_file($path)) {
+            throw new \RuntimeException(Lang::t('config.not_found', ['path' => $path]));
+        }
+        $raw = (string) file_get_contents($path);
+        $parser = new SshConfigParser();
+        return $parser->parse($raw);
+    }
 }
