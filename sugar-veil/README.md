@@ -20,7 +20,12 @@ PHP port of [rmhubbert/bubbletea-overlay](https://github.com/rmhubbert/bubbletea
 - **Works with any TUI framework**: render your models first, then composite
 - **Backdrop dimming**: apply ANSI dim overlay (0–100 opacity) to background
 - **Animated transitions**: Slide, Fade, and Scale animations driven by honey-bounce CubicBezier easing
-- **No dependencies**: pure PHP, no FFI
+- **Z-index stacking**: control render order across multiple overlays via `withZIndex()`
+- **Click-outside dismiss**: detect when a mouse click falls outside a veil's zone via `withClickOutsideDismiss()`
+- **Auto-size**: compute veil dimensions from content rather than fixed width/height via `withAutoSize()`
+- **Border chrome**: wrap veil content in a terminal border via `withBorder()`
+- **VeilStack**: ordered collection of veils sorted by z-index for rendering layered overlays
+- **Zone manager integration**: integrate with candy-zone `Manager` for hit testing
 
 ## Install
 
@@ -112,6 +117,131 @@ for ($p = 0.0; $p <= 1.0; $p += 0.1) {
 ```
 
 The `animate()` method composes the overlay with the animation applied at the given progress value. For `SLIDE`, the foreground is offset toward the anchor direction. For `SCALE`, lines are revealed from the center outward. For `FADE`, the foreground is returned unchanged but the easing progress is calculated for external use.
+
+## Z-Index Stacking
+
+Use `withZIndex(int $zIndex)` to control the stacking order when rendering multiple overlays. Veils with higher z-index values render on top of those with lower values.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Veil\Position;
+
+$veil = Veil::new()
+    ->withZIndex(10);  // renders above veils with zIndex < 10
+
+$output = $veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+```
+
+Accessor: `zIndex(): int`
+
+## VeilStack (Multi-Veil Rendering)
+
+`VeilStack` manages multiple veils ordered by z-index. When compositing, it sorts veils ascending by z-index and composites each onto the result of the previous one, so higher z-index veils appear on top of lower ones.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Veil\VeilStack;
+use SugarCraft\Veil\Position;
+
+$stack = VeilStack::new()
+    ->add(Veil::new()->withZIndex(0)->withBackdrop(30))           // base dim layer
+    ->add(Veil::new()->withZIndex(10)->withBackdrop(0));           // modal on top
+
+$output = $stack->composite($background, Position::CENTER, Position::CENTER);
+```
+
+### VeilStack API
+
+| Method | Description |
+|--------|-------------|
+| `add(Veil $veil): self` | Add a veil (returns new stack) |
+| `clear(): self` | Remove all veils |
+| `removeWhere(\Closure $pred): self` | Remove veils matching predicate |
+| `filter(\Closure $pred): self` | Keep only veils matching predicate |
+| `composite($background, $v, $h, $xOff, $yOff): string` | Composite all with shared position |
+| `compositeAll($background): string` | Composite all with their own positions |
+| `sorted(): list<Veil>` | Veils sorted by z-index ascending |
+| `all(): list<Veil>` | All veils in insertion order |
+| `maxZIndex(): int` | Highest z-index in stack (0 if empty) |
+| `minZIndex(): int` | Lowest z-index in stack (0 if empty) |
+| `isEmpty(): bool` | True if stack has no veils |
+| `count(): int` | Number of veils in stack |
+
+## Auto-Size
+
+Use `withAutoSize(bool $enabled = true)` to compute veil dimensions from content rather than from fixed width/height. When combined with `withBorder()`, the border chrome is applied to the content before dimension computation.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Veil\Position;
+
+$veil = Veil::new()
+    ->withAutoSize()
+    ->withBorder(Border::new()->style(Border::STYLE_ROUND));
+
+$output = $veil->composite($content, $bg, Position::CENTER, Position::CENTER);
+```
+
+Accessor: `autoSize(): bool`
+
+## Border Chrome
+
+Use `withBorder(Border $border)` to wrap veil content in a terminal border rendered by candy-sprinkles `Style`. The `applyBorderChrome(string $content)` method applies the border to arbitrary content.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
+
+$veil = Veil::new()
+    ->withBorder(Border::new()->style(Border::STYLE_ROUND));
+
+// Apply border to arbitrary content
+$bordered = $veil->applyBorderChrome("Hello, World!");
+```
+
+Accessors: `border(): ?Border`
+
+## Click-Outside Dismiss
+
+Use `withClickOutsideDismiss(bool $enabled = true)` to flag a veil for dismissal when a mouse click falls outside its rendered zone. A `Manager` from candy-zone is required to perform hit testing.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Zone\Manager;
+
+$manager = Manager::new();
+
+$veil = Veil::new()
+    ->withClickOutsideDismiss()
+    ->withManager($manager);
+
+// Check if a mouse message is outside the veil's zone
+$outside = $veil->isClickOutside($mouseMsg);
+if ($outside) {
+    // dismiss the veil
+}
+```
+
+Accessors: `clickOutsideDismiss(): bool`, `manager(): ?Manager`
+
+The `isClickOutside(MouseMsg $mouse): bool` method uses `Manager::anyInBounds()` to determine if the click landed within any veil zone. Returns `true` when `clickOutsideDismiss` is enabled and the click is outside all tracked zones.
+
+## Zone Manager Integration
+
+A `Manager` from candy-zone tracks regions and handles hit testing. Wire it into a veil via `withManager(Manager $manager)` for click-outside detection. This allows the veil to share a common spatial database with other zone-aware components.
+
+```php
+use SugarCraft\Veil\Veil;
+use SugarCraft\Zone\Manager;
+
+$manager = Manager::new();
+
+// Multiple veils can share the same manager
+$modal = Veil::new()->withManager($manager)->withClickOutsideDismiss();
+$tooltip = Veil::new()->withManager($manager)->withZIndex(5);
+```
 
 ## License
 
