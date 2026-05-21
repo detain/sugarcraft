@@ -24,6 +24,8 @@ final class McpClient
         public readonly array $args = [],
         public readonly ?array $initialOptions = null,
         private mixed $process = null,
+        /** @var array<int, resource>|null */
+        private ?array $pipes = null,
         private bool $connected = false,
         private int $requestId = 0,
     ) {}
@@ -56,6 +58,7 @@ final class McpClient
         }
 
         $this->process = $processHandles;
+        $this->pipes = $pipes;
         $this->connected = true;
 
         // Set non-blocking mode on stdout so we can read without blocking the TUI
@@ -216,7 +219,6 @@ final class McpClient
             return;
         }
 
-        /** @var array<int, resource> $pipes */
         $pipes = $this->getPipes();
 
         foreach ($pipes as $pipe) {
@@ -226,6 +228,7 @@ final class McpClient
         proc_close($this->process);
 
         $this->process = null;
+        $this->pipes = null;
         $this->connected = false;
     }
 
@@ -244,11 +247,11 @@ final class McpClient
      */
     private function getPipes(): array
     {
-        if (!is_resource($this->process)) {
+        if ($this->pipes === null) {
             throw new RuntimeException('Process not running');
         }
         /** @var array<int, resource> */
-        return proc_get_status($this->process)['pipes'] ?? [];
+        return $this->pipes;
     }
 
     /**
