@@ -30,6 +30,8 @@ final class Key
     public const CtrlU     = 'ctrl_u';
     public const CtrlK     = 'ctrl_k';
     public const CtrlW     = 'ctrl_w';
+    public const Undo      = 'undo';
+    public const Redo      = 'redo';
 
     private function __construct() {}
 }
