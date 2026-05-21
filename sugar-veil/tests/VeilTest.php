@@ -326,6 +326,90 @@ final class VeilTest extends TestCase
         $this->assertNull($this->veil->getManager());
     }
 
+    public function testWithManager(): void
+    {
+        $manager = Manager::newGlobal();
+        $v = $this->veil->withManager($manager);
+        $this->assertSame($manager, $v->manager());
+    }
+
+    public function testManagerIsImmutable(): void
+    {
+        $manager1 = Manager::newGlobal();
+        $manager2 = Manager::newGlobal();
+        $v1 = $this->veil->withManager($manager1);
+        $v2 = $v1->withManager($manager2);
+        $this->assertSame($manager1, $v1->manager());
+        $this->assertSame($manager2, $v2->manager());
+    }
+
+    public function testWithManagerReturnsNewInstance(): void
+    {
+        $original = $this->veil;
+        $manager = Manager::newGlobal();
+        $modified = $this->veil->withManager($manager);
+        $this->assertNotSame($original, $modified);
+        $this->assertNull($original->manager());
+        $this->assertSame($manager, $modified->manager());
+    }
+
+    // ─── autoSize behavior in composite ─────────────────────────────────────
+
+    public function testCompositeAutoSizeComputesDimensionsFromBorderedContent(): void
+    {
+        // When autoSize is true and border is set, dimensions should be computed
+        // from the border-chromed content, not the raw content.
+        $v = Veil::new()
+            ->withAutoSize(true)
+            ->withBorder(Border::normal());
+
+        $bg = "....................\n....................\n....................";
+        $fg = "Hi";
+
+        // With normal border around "Hi", the bordered content is ~5 chars wide
+        // (┌──┐ + Hi + ──┐ = more than just "Hi")
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // The bordered content starts with box-drawing chars, not raw content
+        $this->assertStringStartsWith('┌', $lines[0]);
+        $this->assertStringContainsString('Hi', $result);
+    }
+
+    public function testCompositeAutoSizeWithoutBorderBehavesNormally(): void
+    {
+        // When autoSize is true but no border is set, dimensions come from raw content
+        $v = Veil::new()->withAutoSize(true);
+
+        $bg = "....................\n....................";
+        $fg = "Hi";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // Should have "Hi" at the start, no border chars
+        $this->assertStringStartsWith('Hi', $lines[0]);
+    }
+
+    public function testCompositeAutoSizeFalseUsesRawContentDimensions(): void
+    {
+        // When autoSize is false, raw content dimensions are used regardless of border
+        $v = Veil::new()
+            ->withAutoSize(false)
+            ->withBorder(Border::normal());
+
+        $bg = "....................\n....................\n....................";
+        $fg = "Hi";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = $v->splitLines($result);
+
+        // Without autoSize, border chrome is NOT applied during composite
+        // So raw "Hi" is placed, not the bordered version
+        $this->assertStringStartsWith('Hi', $lines[0]);
+        $this->assertStringNotContainsString('┌', $result);
+    }
+
     // ─── combinations ─────────────────────────────────────────────────────────
 
     public function testChainingAllNewMethods(): void
