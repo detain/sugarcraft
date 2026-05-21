@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Readline;
 
 use SugarCraft\Readline\History\HistoryInterface;
+use SugarCraft\Readline\Mode\ModeInterface;
 
 /**
  * Single-line text input with cursor, optional validation, auto-completion,
@@ -64,6 +65,9 @@ final class TextPrompt
      * restored when the user navigates past the oldest entry.
      */
     private ?string $bufferBeforeHistory = null;
+
+    /** Active key-binding mode (vi or emacs), or null for default bindings. */
+    private ?ModeInterface $mode = null;
 
     public function __construct(private readonly string $label) {}
 
@@ -125,6 +129,13 @@ final class TextPrompt
         return $clone;
     }
 
+    public function withMode(ModeInterface $mode): self
+    {
+        $clone = clone $this;
+        $clone->mode = $mode;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
@@ -158,6 +169,24 @@ final class TextPrompt
     }
 
     public function handleKey(string $key): self
+    {
+        if ($this->submitted || $this->aborted) {
+            return $this;
+        }
+
+        // Delegate to active key-binding mode if set
+        if ($this->mode !== null) {
+            return $this->mode->handleKey($this, $key);
+        }
+
+        return $this->handleKeyDirect($key);
+    }
+
+    /**
+     * Handle a key directly, bypassing the active mode.
+     * Used internally by modes to apply standard TextPrompt operations.
+     */
+    public function handleKeyDirect(string $key): self
     {
         if ($this->submitted || $this->aborted) {
             return $this;
