@@ -107,6 +107,46 @@ if ($picked !== null) {
 }
 ```
 
+## Import from SSH Config
+
+`wishlist` can import endpoints directly from your OpenSSH config file (`~/.ssh/config`):
+
+```php
+use SugarCraft\Wishlist\Config;
+
+$endpoints = Config::importFromSshConfig('/home/user/.ssh/config');
+```
+
+The parser handles:
+
+| SSH Config Key      | Endpoint Field    |
+|---------------------|-------------------|
+| `Host <pattern>`     | `name`            |
+| `HostName <value>`   | `host`            |
+| `User <value>`       | `user`            |
+| `Port <value>`       | `port`            |
+| `IdentityFile <path>` | `identityFiles[]` |
+| `ProxyJump <host>`   | `proxyJump`       |
+
+`Host *` global defaults are inherited by all subsequent host blocks. Host patterns are used as the endpoint name (when no `HostName` is specified, the pattern itself becomes the host).
+
+## Programmatic Use
+
+```php
+use SugarCraft\Wishlist\Config;
+use SugarCraft\Wishlist\Picker;
+use SugarCraft\Wishlist\Launcher;
+
+$endpoints = Config::load('/etc/wishlist.yml');
+$picked    = (new Picker())->pick($endpoints);
+if ($picked !== null) {
+    (new Launcher())->dispatch($picked);
+}
+
+// Or import from SSH config:
+$sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
+```
+
 ## Status
 
-Phase 9+ — first cut. 26 tests / 67 assertions. Endpoint, Config (JSON + flat-YAML), Picker, Launcher are all covered.
+Phase 10.28 — SSH config import. 69 tests / 176 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.
