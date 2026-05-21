@@ -105,6 +105,8 @@ final class MyBackend implements Backend {
 | `ToolSignature`              | Tool arg spec: positional names + named flags + description    |
 | `ToolCall`                   | VO: name, arguments, optional id — from AI backend              |
 | `ToolResult`                 | VO: name, result, optional error, optional id — to AI backend   |
+| `McpMessage`                  | JSON-RPC 2.0 envelope: request/response/notification/error  |
+| `McpClient`                   | MCP stdio client for Claude Code — connect/callTool/listTools  |
 
 ## Session persistence
 
@@ -120,7 +122,7 @@ final class MyBackend implements Backend {
 
 ## Test plan
 
-- 128 tests / 340 assertions
+- 158 tests / 444 assertions
 - `Message`: factories, wire shape, custom timestamps
 - `EchoBackend`: echoes most recent user, handles empty history
 - `CommandBackend`: history is JSON-piped to stdin, exit code surfaced as error message, missing command handled gracefully
