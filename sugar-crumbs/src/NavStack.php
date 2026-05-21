@@ -121,4 +121,38 @@ final class NavStack
         $this->items = $items;
         return $this;
     }
+
+    /**
+     * Render the navigation stack as a breadcrumb string.
+     * e.g. "Home > Settings > Display"
+     */
+    public function view(string $separator = ' > '): string
+    {
+        if ($this->items === []) {
+            return '';
+        }
+        return \implode($separator, \array_map(
+            static fn(NavigationItem $item): string => $item->title,
+            $this->items
+        ));
+    }
+
+    /**
+     * Filter items by title or data matching $term.
+     * Returns a new NavStack with only matching items.
+     */
+    public function filter(string $term): self
+    {
+        $filtered = \array_filter(
+            $this->items,
+            static function(NavigationItem $item) use ($term): bool {
+                $titleMatch = \stripos($item->title, $term) !== false;
+                $dataMatch = $item->data !== null && \stripos((string) $item->data, $term) !== false;
+                return $titleMatch || $dataMatch;
+            }
+        );
+        $new = new self();
+        $new->items = \array_values($filtered);
+        return $new;
+    }
 }
