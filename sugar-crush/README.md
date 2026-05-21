@@ -90,10 +90,14 @@ final class MyBackend implements Backend {
 | `Backend` interface          | `complete(list<Message>): Message`                             |
 | `Backend\EchoBackend`        | Offline default — echoes the last user message                 |
 | `Backend\CommandBackend`     | Shells out via proc_open; JSON history → stdin → stdout reply  |
+| `Backend\StreamingCommandBackend` | Streams backend output line-by-line as it arrives     |
+| `StreamingDirectoryLister`    | Generator-based lazy directory listing — memory-safe for huge dirs |
+| `Compactor`                  | Groups small files by extension/type to reduce visual clutter |
+| `CompactedGroup`             | Value object: label, paths, and isCompact flag per group     |
 | `AssistantMsg`               | Internal `Msg` — fires when a backend completion arrives       |
 | `Chat`                       | SugarCraft Model — history, input buffer, inFlight gate         |
 | `Renderer`                   | Pure view fn — CandyShine-rendered scrollback + input box      |
-| `Session`                    | Persists UI state to ~/.config/sugarcraft-crush/session.json  |
+| `Session`                    | Persists UI state to ~/.config/sugarcraft-crush/session.json |
 
 ## Session persistence
 
@@ -109,12 +113,14 @@ final class MyBackend implements Backend {
 
 ## Test plan
 
-- 70 tests / 185 assertions
+- 95 tests / 247 assertions
 - `Message`: factories, wire shape, custom timestamps
 - `EchoBackend`: echoes most recent user, handles empty history
 - `CommandBackend`: history is JSON-piped to stdin, exit code surfaced as error message, missing command handled gracefully
 - `Session`: load returns fresh on missing/corrupted file, save creates directory hierarchy, with*() builders are immutable and fluent, home-directory resolution via $HOME / posix_getpwuid / getcwd fallback
 - `Chat`: type accumulation, space, UTF-8-aware backspace, Enter submits + clears + arms inFlight, empty submit no-op, AssistantMsg appends + clears inFlight, keystrokes ignored while inFlight, Esc quits, full echo round-trip via the real `EchoBackend`
+- `StreamingDirectoryLister`: lazy yield, empty/non-dir/no-handle handled gracefully, listFiles filters correctly, count scans without loading entries
+- `Compactor`: threshold partitions small vs large, extension maps to correct category, maxPerGroup splits oversized buckets, CompactedGroup value object methods
 
 ## Status
 
