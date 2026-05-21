@@ -38,6 +38,14 @@ final class Inspector
         while ($i < $len) {
             $b = $input[$i];
             if ($b !== "\x1b") {
+                $byte = ord($b);
+                // C0 control codes 0x00-0x1F (except ESC which is handled separately).
+                if ($byte <= 0x1F) {
+                    $flushText();
+                    $out[] = new SequenceSegment($b, 'C0 ' . C0C1::c0Name($byte));
+                    $i++;
+                    continue;
+                }
                 $textBuf .= $b;
                 $i++;
                 continue;
@@ -140,6 +148,22 @@ final class Inspector
             }
 
             // Two-byte ESC <c> (e.g. ESC 7 = save cursor).
+            // C1 control codes are 0x80-0x9F. In 7-bit form they are ESC + chr(0x40 + code).
+            // e.g. C1 0x98 (SOS) = ESC + chr(0x58) = "ESC X".
+            // NOTE: This is ambiguous with standard 7-bit escapes that use the same bytes
+            // (e.g. ESC D = both 7-bit index AND 7-bit representation of C1 0x84).
+            // We check for ord >= 0x80 to avoid colliding with standard escapes.
+            // For raw 8-bit C1 (when the terminal sends actual 8-bit bytes), the C0
+            // handler catches chr(0x80-0x9F) as control codes.
+            $afterEscByte = ord($input[$i + 1]);
+            if ($afterEscByte >= 0x80) {
+                // C1 in 8-bit form: byte after ESC is raw C1 code 0x80-0x9F.
+                $bytes = substr($input, $i, 2);
+                $flushText();
+                $out[] = new SequenceSegment($bytes, 'C1 ' . C0C1::c1Name($afterEscByte));
+                $i += 2;
+                continue;
+            }
             $bytes = substr($input, $i, 2);
             $flushText();
             $out[] = new SequenceSegment($bytes, self::describeEsc($next));
@@ -260,10 +284,36 @@ final class Inspector
         if ($params === '' || $params === '0') {
             return 'reset';
         }
+        // Handle SGR underline styles 4:1 through 4:5 (single, double, curly, dotted, dashed).
+        if (preg_match('/^(\d+):(\d+)$/', $params, $m) === 1) {
+            $main = (int) $m[1];
+            $sub = (int) $m[2];
+            if ($main === 4) {
+                return self::underlineStyleName($sub);
+            }
+            return 'SGR ' . $params;
+        }
         $codes = explode(';', $params);
         $parts = [];
         for ($i = 0; $i < count($codes); $i++) {
-            $code = (int) $codes[$i];
+            $codeStr = $codes[$i];
+            $code = (int) $codeStr;
+            // Handle SGR 4:N underline styles - either standalone "4:2" or embedded in codeStr "4:2".
+            if ($code === 4) {
+                // Check if current codeStr is "4:N" format (sub-param embedded in same element).
+                if (preg_match('/^4:(\d+)$/', $codeStr, $m) === 1) {
+                    $sub = (int) $m[1];
+                    $parts[] = self::underlineStyleName($sub);
+                    continue;
+                }
+                // Also check if next element is "4:N" format.
+                if (isset($codes[$i + 1]) && preg_match('/^4:(\d+)$/', $codes[$i + 1]) === 1) {
+                    $sub = (int) $codes[$i + 1];
+                    $parts[] = self::underlineStyleName($sub);
+                    $i++; // Skip the sub-parameter.
+                    continue;
+                }
+            }
             // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg).
             if ($code === 38 || $code === 48) {
                 $kind = $code === 38 ? 'foreground' : 'background';
@@ -463,6 +513,18 @@ final class Inspector
             'E' => 'next line',
             'c' => 'reset to initial state',
             default => 'ESC ' . $byte,
+        };
+    }
+
+    private static function underlineStyleName(int $n): string
+    {
+        return match ($n) {
+            1 => 'underline single',
+            2 => 'underline double',
+            3 => 'underline curly',
+            4 => 'underline dotted',
+            5 => 'underline dashed',
+            default => 'underline style ' . $n,
         };
     }
 }
