@@ -78,41 +78,90 @@ final class Store
      *                       E.g. "token@passwords" sets "token" in the "passwords" database.
      * @param string $value  The value to store. For binary data use Entry::binary().
      * @param bool   $binary Whether to treat $value as base64-encoded binary data.
+     * @param int|null $ttlSeconds If > 0, entry expires after this many seconds.
      */
-    public function set(string $key, string $value, bool $binary = false): Entry
+    public function set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry
     {
         [$dbName, $entryKey] = $this->parseKey($key);
         $stored = $binary ? \base64_encode($value) : $value;
-        return $this->database($dbName)->set($entryKey, $stored, $binary);
+        return $this->database($dbName)->set($entryKey, $stored, $binary, $ttlSeconds);
     }
 
     /**
-     * Get a value by key.
+     * Set a value that automatically expires after $ttlSeconds.
+     *
+     * @param string $key         Entry key (supports @dbname suffix).
+     * @param mixed  $value       The value to store (cast to string).
+     * @param int    $ttlSeconds  Seconds until the entry expires.
+     */
+    public function setWithTtl(string $key, mixed $value, int $ttlSeconds): void
+    {
+        if ($ttlSeconds <= 0) {
+            return;
+        }
+        $this->set($key, (string) $value, false, $ttlSeconds);
+    }
+
+    /**
+     * Get a value by key, with levenshtein-based typo suggestions on miss.
      *
      * @param string $key      Key name. Supports @dbname suffix for cross-database access.
      * @param string $fallback Value to return if the key does not exist.
+     * @return string The value, or $fallback if not found.
      */
     public function get(string $key, string $fallback = ''): string
     {
         [$dbName, $entryKey] = $this->parseKey($key);
         $entry = $this->database($dbName)->get($entryKey);
 
-        if ($entry === null) {
-            return $fallback;
+        if ($entry !== null) {
+            return $entry->rawValue();
         }
 
-        return $entry->rawValue();
+        $suggestion = $this->suggestSimilar($entryKey, $dbName);
+        if ($suggestion !== null) {
+            // Emit suggestion to stderr so it doesn't pollute stdout
+            \fwrite(STDERR, "key not found; did you mean '{$suggestion}'?" . \PHP_EOL);
+        }
+
+        return $fallback;
     }
 
     /**
      * Get the full Entry object for a key (includes metadata).
      *
-     * Returns null if the key does not exist.
+     * Returns null if the key does not exist or has expired.
      */
     public function entry(string $key): ?Entry
     {
         [$dbName, $entryKey] = $this->parseKey($key);
         return $this->database($dbName)->get($entryKey);
+    }
+
+    /**
+     * Suggest a similar key using Levenshtein distance.
+     *
+     * @return string|null The closest matching key, or null if none are close.
+     */
+    private function suggestSimilar(string $key, string $dbName): ?string
+    {
+        $allKeys = $this->database($dbName)->allKeys();
+        if ($allKeys === []) {
+            return null;
+        }
+
+        $best = null;
+        $bestDist = \PHP_INT_MAX;
+
+        foreach ($allKeys as $candidate) {
+            $dist = \levenshtein($key, $candidate);
+            if ($dist < $bestDist && $dist <= (int) (\strlen($key) / 2)) {
+                $bestDist = $dist;
+                $best = $candidate;
+            }
+        }
+
+        return $best;
     }
 
     /**
