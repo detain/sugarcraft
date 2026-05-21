@@ -69,6 +69,15 @@ final class TextPrompt
     /** Active key-binding mode (vi or emacs), or null for default bindings. */
     private ?ModeInterface $mode = null;
 
+    /** Undo/redo manager for buffer changes. */
+    private ?UndoManager $undoManager = null;
+
+    /** Syntax highlighter for buffer display. */
+    private ?Highlight $highlight = null;
+
+    /** Whether fish-style autosuggest from history is enabled. */
+    private bool $autoSuggestEnabled = true;
+
     public function __construct(private readonly string $label) {}
 
     public static function new(string $label): self
@@ -136,6 +145,27 @@ final class TextPrompt
         return $clone;
     }
 
+    public function withUndoManager(UndoManager $undoManager): self
+    {
+        $clone = clone $this;
+        $clone->undoManager = $undoManager;
+        return $clone;
+    }
+
+    public function withHighlight(Highlight $highlight): self
+    {
+        $clone = clone $this;
+        $clone->highlight = $highlight;
+        return $clone;
+    }
+
+    public function withAutoSuggest(bool $enabled): self
+    {
+        $clone = clone $this;
+        $clone->autoSuggestEnabled = $enabled;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
@@ -156,6 +186,10 @@ final class TextPrompt
         // Clone history so each TextPrompt instance has independent navigation state.
         if ($clone->history !== null) {
             $clone->history = clone $clone->history;
+        }
+        // Push current state to undo manager before modification.
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
         }
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
                        . $char
@@ -208,6 +242,8 @@ final class TextPrompt
             Key::CtrlK     => $this->deleteAllAfterCursor(),
             Key::Tab       => $this->applyCompletion(),
             Key::Enter     => $this->submit(),
+            Key::Undo      => $this->undo(),
+            Key::Redo      => $this->redo(),
             Key::Escape, Key::CtrlC => $this->abort(),
             default        => $this,
         };
@@ -239,6 +275,44 @@ final class TextPrompt
         }
         $clone = clone $this;
         $clone->aborted = true;
+        return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Undo / Redo
+    // -------------------------------------------------------------------------
+
+    private function undo(): self
+    {
+        if ($this->undoManager === null || !$this->undoManager->canUndo()) {
+            return $this;
+        }
+        [$newManager, $restored, $ok] = $this->undoManager->undo($this->buffer);
+        if (!$ok) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->undoManager = $newManager;
+        $clone->buffer = $restored;
+        $clone->cursor = self::charCount($restored);
+        $clone->error = '';
+        return $clone;
+    }
+
+    private function redo(): self
+    {
+        if ($this->undoManager === null || !$this->undoManager->canRedo()) {
+            return $this;
+        }
+        [$newManager, $restored, $ok] = $this->undoManager->redo($this->buffer);
+        if (!$ok) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->undoManager = $newManager;
+        $clone->buffer = $restored;
+        $clone->cursor = self::charCount($restored);
+        $clone->error = '';
         return $clone;
     }
 
@@ -351,6 +425,26 @@ final class TextPrompt
         $under  = self::sliceChars($display, $this->cursor, 1);
         $after  = self::sliceChars($display, $this->cursor + 1);
 
+        // Apply syntax highlighting if set.
+        $highlightedBuffer = $display;
+        if ($this->highlight !== null) {
+            $spans = $this->highlight->highlight($display);
+            $highlightedBuffer = '';
+            foreach ($spans as $span) {
+                if ($span['style'] === '') {
+                    $highlightedBuffer .= $span['text'];
+                } else {
+                    $highlightedBuffer .= Ansi::wrap($span['text'], $span['style']);
+                }
+            }
+        }
+
+        // Compute fish-style autosuggestion from history.
+        $autoSuggestText = '';
+        if ($this->autoSuggestEnabled && $this->historyOriginal !== null && $this->buffer !== '') {
+            $autoSuggestText = $this->computeAutoSuggest();
+        }
+
         $line = Ansi::wrap($this->label, $this->labelStyle)
               . $before
               . Ansi::wrap($under === '' ? ' ' : $under, $this->cursorStyle)
@@ -367,6 +461,12 @@ final class TextPrompt
             $tail = substr($hint, strlen($this->buffer));
             $lines[] = str_repeat(' ', self::charCount($this->label) + $this->cursor)
                      . Ansi::wrap($tail, $this->completionStyle);
+        }
+
+        // Render fish-style autosuggestion in dim gray.
+        if ($autoSuggestText !== '') {
+            $lines[] = str_repeat(' ', self::charCount($this->label) + $this->cursor)
+                     . Ansi::wrap($autoSuggestText, '2'); // dim style
         }
 
         return implode("\n", $lines);
@@ -399,6 +499,9 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        }
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor - 1)
                        . self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor--;
@@ -412,6 +515,9 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        }
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
                        . self::sliceChars($clone->buffer, $clone->cursor + 1);
         $clone->error = '';
@@ -424,6 +530,9 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        }
         $clone->buffer = self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor = 0;
         $clone->error  = '';
@@ -436,6 +545,9 @@ final class TextPrompt
             return $this;
         }
         $clone = clone $this;
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        }
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor);
         $clone->error  = '';
         return $clone;
@@ -464,5 +576,37 @@ final class TextPrompt
         return $length === null
             ? mb_substr($s, $start, null, 'UTF-8')
             : mb_substr($s, $start, $length, 'UTF-8');
+    }
+
+    /**
+     * Compute fish-style autosuggestion from history.
+     *
+     * Finds the first history entry that starts with the current buffer
+     * and returns the remainder of that entry.
+     */
+    private function computeAutoSuggest(): string
+    {
+        if ($this->historyOriginal === null || $this->buffer === '') {
+            return '';
+        }
+
+        // Scan history entries (newest first) for one that starts with buffer.
+        // We need to peek at history without advancing position.
+        // Clone the history to peek.
+        $history = clone $this->historyOriginal;
+        $history->reset();
+
+        while (true) {
+            $entry = $history->getPrevious();
+            if ($entry === null) {
+                break;
+            }
+            if (str_starts_with($entry, $this->buffer)) {
+                // Return the remainder after the buffer prefix.
+                return self::sliceChars($entry, self::charCount($this->buffer));
+            }
+        }
+
+        return '';
     }
 }
