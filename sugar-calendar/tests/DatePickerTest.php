@@ -225,4 +225,160 @@ final class DatePickerTest extends TestCase
         $this->assertNotNull($dp->SelectedDate());
         $this->assertTrue($dp->IsSelecting());
     }
+
+    // -------------------------------------------------------------------------
+    // Range selection + keyboard navigation
+    // -------------------------------------------------------------------------
+
+    public function testWithRangeModeEnablesRangeSelection(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        $this->assertTrue($dp->isRangeMode());
+    }
+
+    public function testWithRangeModeFalseClearsRange(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true)
+            ->withRangeMode(false);
+
+        $this->assertFalse($dp->isRangeMode());
+        $this->assertNull($dp->rangeStart());
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testHandleKeyLeft(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        // cursor starts at 0, move right first then left
+        $dp = $dp->handleKey('right');
+        $this->assertSame(1, $dp->CursorIndex());
+
+        $dp = $dp->handleKey('left');
+        $this->assertSame(0, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyRight(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $dp = $dp->handleKey('right');
+        $this->assertSame(1, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyUp(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $dp = $dp->MoveCursorDown()->MoveCursorDown();
+        $dp = $dp->handleKey('up');
+        $this->assertLessThan(14, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyDown(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $dp = $dp->handleKey('down');
+        $this->assertSame(7, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyHome(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->MoveCursorDown()
+            ->MoveCursorRight();
+
+        $dp = $dp->handleKey('home');
+        $this->assertSame(0, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyEnd(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        $dp = $dp->handleKey('end');
+        $this->assertSame(41, $dp->CursorIndex());
+    }
+
+    public function testHandleKeyEnterSetsRangeStart(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        // Navigate to a valid day cell
+        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
+        for ($i = 0; $i < $firstDow; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $dp = $dp->handleKey('enter');
+
+        $this->assertNotNull($dp->rangeStart());
+        $this->assertSame('2026-05-01', $dp->rangeStart()->format('Y-m-d'));
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testHandleKeyEnterSetsRangeEnd(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        // Navigate to May 1
+        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
+        for ($i = 0; $i < $firstDow; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        $dp = $dp->handleKey('enter');
+
+        // Navigate to May 5
+        for ($i = 0; $i < 4; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        $dp = $dp->handleKey('enter');
+
+        $this->assertNotNull($dp->rangeStart());
+        $this->assertNotNull($dp->rangeEnd());
+        $this->assertSame('2026-05-01', $dp->rangeStart()->format('Y-m-d'));
+        $this->assertSame('2026-05-05', $dp->rangeEnd()->format('Y-m-d'));
+    }
+
+    public function testHandleKeyEscapeClearsRange(): void
+    {
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withRangeMode(true);
+
+        $firstDow = (int) (new \DateTimeImmutable('2026-05-01'))->format('w');
+        for ($i = 0; $i < $firstDow; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+        $dp = $dp->handleKey('enter');
+
+        $this->assertNotNull($dp->rangeStart());
+
+        $dp = $dp->handleKey('esc');
+        $this->assertNull($dp->rangeStart());
+        $this->assertNull($dp->rangeEnd());
+    }
+
+    public function testRangeSelectionNormalizesStartEnd(): void
+    {
+        // May 2026: firstDow = 5 (Fri), so index 5 = May 1, index 14 = May 10
+        // Start at index 5 (May 1) and navigate to May 10
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
+        for ($i = 0; $i < 14; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $dp = $dp->withRangeMode(true);
+        $dp = $dp->handleKey('enter'); // rangeStart = May 10
+
+        // Navigate back to May 5 (index 9)
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorLeft();
+        }
+
+        $dp = $dp->handleKey('enter'); // rangeEnd = May 5, then normalize to start=May 5, end=May 10
+
+        $this->assertSame('2026-05-05', $dp->rangeStart()->format('Y-m-d'));
+        $this->assertSame('2026-05-10', $dp->rangeEnd()->format('Y-m-d'));
+    }
 }

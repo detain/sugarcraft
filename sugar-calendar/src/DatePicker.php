@@ -20,6 +20,16 @@ final class DatePicker
 {
     private const DAYS_IN_WEEK = 7;
 
+    // Key constants for handleKey()
+    public const KEY_LEFT  = 'left';
+    public const KEY_RIGHT = 'right';
+    public const KEY_UP    = 'up';
+    public const KEY_DOWN  = 'down';
+    public const KEY_ENTER = 'enter';
+    public const KEY_ESCAPE = 'esc';
+    public const KEY_HOME  = 'home';
+    public const KEY_END   = 'end';
+
     /** Currently viewed month (1-indexed). */
     private int $viewMonth;
 
@@ -35,6 +45,15 @@ final class DatePicker
     /** Whether the date is currently being selected (cursor shown). */
     private bool $selecting = false;
 
+    /** Range selection start date. */
+    private ?\DateTimeImmutable $rangeStart = null;
+
+    /** Range selection end date. */
+    private ?\DateTimeImmutable $rangeEnd = null;
+
+    /** Whether range selection mode is active. */
+    private bool $rangeMode = false;
+
     /** Styling (SGR ANSI codes). */
     private string $headerStyle       = '1;37';  // bold white
     private string $dayNameStyle      = '90';    // bright black
@@ -43,6 +62,7 @@ final class DatePicker
     private string $selectedTodayStyle = '1;33'; // bold yellow
     private string $cursorStyle       = '7';     // reverse
     private string $normalDayStyle    = '';
+    private string $rangeStyle        = '1;35'; // bold magenta (range highlight)
 
     // -------------------------------------------------------------------------
     // i18n helpers
@@ -211,6 +231,107 @@ final class DatePicker
     }
 
     // -------------------------------------------------------------------------
+    // Range selection
+    // -------------------------------------------------------------------------
+
+    public function withRangeMode(bool $mode): self
+    {
+        $clone = clone $this;
+        $clone->rangeMode = $mode;
+        if (!$mode) {
+            $clone->rangeStart = null;
+            $clone->rangeEnd = null;
+        }
+        return $clone;
+    }
+
+    public function rangeStart(): ?\DateTimeImmutable
+    {
+        return $this->rangeStart;
+    }
+
+    public function rangeEnd(): ?\DateTimeImmutable
+    {
+        return $this->rangeEnd;
+    }
+
+    public function isRangeMode(): bool
+    {
+        return $this->rangeMode;
+    }
+
+    /**
+     * Handle keyboard navigation and range selection.
+     *
+     * Arrow keys: move cursor
+     * Enter: set range start (first press) or range end (second press)
+     * Escape: clear range when in range mode
+     * Home/End: jump to first/last cell
+     */
+    public function handleKey(string $key): self
+    {
+        $clone = clone $this;
+
+        if ($key === self::KEY_LEFT) {
+            return $clone->MoveCursorLeft();
+        }
+        if ($key === self::KEY_RIGHT) {
+            return $clone->MoveCursorRight();
+        }
+        if ($key === self::KEY_UP) {
+            return $clone->MoveCursorUp();
+        }
+        if ($key === self::KEY_DOWN) {
+            return $clone->MoveCursorDown();
+        }
+        if ($key === self::KEY_HOME) {
+            $clone->cursorIndex = 0;
+            return $clone;
+        }
+        if ($key === self::KEY_END) {
+            $clone->cursorIndex = 41;
+            return $clone;
+        }
+        if ($key === self::KEY_ENTER && $this->rangeMode) {
+            return $this->handleRangeEnter($clone);
+        }
+        if ($key === self::KEY_ESCAPE && $this->rangeMode) {
+            $clone->rangeStart = null;
+            $clone->rangeEnd = null;
+            return $clone;
+        }
+
+        return $clone;
+    }
+
+    private function handleRangeEnter(self $clone): self
+    {
+        $date = $this->dateAtCursor();
+        if ($date === null) {
+            return $clone;
+        }
+
+        if ($this->rangeStart === null) {
+            $clone->rangeStart = $date;
+            $clone->rangeEnd = null;
+        } elseif ($this->rangeEnd === null) {
+            // Set end to cursor date; ensure start <= end
+            if ($date < $this->rangeStart) {
+                $clone->rangeEnd = $this->rangeStart;
+                $clone->rangeStart = $date;
+            } else {
+                $clone->rangeEnd = $date;
+            }
+        } else {
+            // Both set — start fresh
+            $clone->rangeStart = $date;
+            $clone->rangeEnd = null;
+        }
+
+        return $clone;
+    }
+
+    // -------------------------------------------------------------------------
     // Queries
     // -------------------------------------------------------------------------
 
@@ -334,6 +455,13 @@ final class DatePicker
         return $clone;
     }
 
+    public function WithRangeStyle(string $s): self
+    {
+        $clone = clone $this;
+        $clone->rangeStyle = $s;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
@@ -368,6 +496,8 @@ final class DatePicker
         $selectedDay = $this->selectedDate !== null
             ? (int) $this->selectedDate->format('j') : 0;
 
+        $range = $this->buildRange();
+
         $cells = [];
 
         for ($i = 0; $i < 42; $i++) {
@@ -381,8 +511,13 @@ final class DatePicker
             $isToday   = $dayNum === $todayDay && $this->viewMonth === $todayMonth && $this->viewYear === $todayYear;
             $isCurrentMonth = $dayNum >= 1 && $dayNum <= $daysInMonth;
 
+            $cellDate = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
+            $isInRange = $range !== null && $range->contains($cellDate);
+
             if ($isToday && $dayNum === $selectedDay) {
                 $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->selectedTodayStyle);
+            } elseif ($isInRange) {
+                $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->rangeStyle);
             } elseif ($dayNum === $selectedDay && $this->selecting) {
                 $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->selectedStyle);
             } elseif ($isToday) {
@@ -393,6 +528,19 @@ final class DatePicker
         }
 
         return $cells;
+    }
+
+    private function buildRange(): ?DateRange
+    {
+        if ($this->rangeStart === null || $this->rangeEnd === null) {
+            return null;
+        }
+        // Only highlight range when start and end are in the view month/year
+        if ($this->rangeStart->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth
+            && $this->rangeEnd->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth) {
+            return null;
+        }
+        return new DateRange($this->rangeStart, $this->rangeEnd);
     }
 
     private function firstDayOffset(): int
