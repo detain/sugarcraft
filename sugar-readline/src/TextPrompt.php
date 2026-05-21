@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline;
 
+use SugarCraft\Readline\History\HistoryInterface;
+
 /**
  * Single-line text input with cursor, optional validation, auto-completion,
  * and hidden (password) display mode.
@@ -40,6 +42,28 @@ final class TextPrompt
     private string $errorStyle      = '31';     // red
     private string $completionStyle = '90';     // bright black
     private string $hideMask        = '*';
+
+    /** History store for ↑/↓ navigation (cloned per-operation for independent state). */
+    private ?HistoryInterface $history = null;
+
+    /**
+     * The original history passed to withHistory(), used for persistence (push).
+     * This is separate from $history so that cloning in navigation doesn't affect
+     * the caller's history reference.
+     */
+    private ?HistoryInterface $historyOriginal = null;
+
+    /**
+     * Navigation cursor into history: -1 = live buffer (no history entry selected).
+     * 0 = most recent entry, higher = older entries.
+     */
+    private int $historyPosition = -1;
+
+    /**
+     * Saved buffer captured when history navigation begins, so it can be
+     * restored when the user navigates past the oldest entry.
+     */
+    private ?string $bufferBeforeHistory = null;
 
     public function __construct(private readonly string $label) {}
 
@@ -91,6 +115,16 @@ final class TextPrompt
         return $clone;
     }
 
+    public function withHistory(HistoryInterface $history): self
+    {
+        $clone = clone $this;
+        // Clone the history so each TextPrompt instance has independent navigation state.
+        $clone->history = clone $history;
+        // Keep reference to the original history for persistence (push) operations.
+        $clone->historyOriginal = $history;
+        return $clone;
+    }
+
     // -------------------------------------------------------------------------
     // Input
     // -------------------------------------------------------------------------
@@ -108,11 +142,18 @@ final class TextPrompt
         }
 
         $clone = clone $this;
+        // Clone history so each TextPrompt instance has independent navigation state.
+        if ($clone->history !== null) {
+            $clone->history = clone $clone->history;
+        }
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor)
                        . $char
                        . self::sliceChars($clone->buffer, $clone->cursor);
         $clone->cursor++;
         $clone->error = '';
+        // Reset history navigation so ↑ goes back to the start of history.
+        $clone->historyPosition = -1;
+        $clone->bufferBeforeHistory = null;
         return $clone;
     }
 
@@ -120,6 +161,11 @@ final class TextPrompt
     {
         if ($this->submitted || $this->aborted) {
             return $this;
+        }
+
+        // History navigation: ↑ / ↓
+        if ($key === Key::Up || $key === Key::Down) {
+            return $this->navigateHistory($key);
         }
 
         return match ($key) {
@@ -148,6 +194,10 @@ final class TextPrompt
             $clone->error = 'Invalid input';
             return $clone;
         }
+        // Push to the ORIGINAL history so the caller's reference is updated.
+        if ($clone->historyOriginal !== null && $clone->buffer !== '') {
+            $clone->historyOriginal->push($clone->buffer);
+        }
         $clone->submitted = true;
         $clone->error     = '';
         return $clone;
@@ -160,6 +210,70 @@ final class TextPrompt
         }
         $clone = clone $this;
         $clone->aborted = true;
+        return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // History navigation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Navigate history with ↑ (previous) or ↓ (next) keys.
+     */
+    private function navigateHistory(string $key): self
+    {
+        if ($this->history === null) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        // Clone history so each TextPrompt instance has independent navigation state.
+        if ($clone->history !== null) {
+            $clone->history = clone $clone->history;
+            // Reset history object's position so getPrevious() fetches from newest.
+            $clone->history->reset();
+        }
+
+        if ($key === Key::Up) {
+            if ($clone->historyPosition === -1) {
+                // Starting history navigation: save current buffer.
+                if ($clone->buffer !== '') {
+                    $clone->bufferBeforeHistory = $clone->buffer;
+                }
+                $entry = $clone->history->getPrevious();
+                if ($entry !== null) {
+                    $clone->historyPosition = 0;
+                    $clone->buffer = $entry;
+                    $clone->cursor = self::charCount($entry);
+                }
+            } else {
+                $entry = $clone->history->getPrevious();
+                if ($entry !== null) {
+                    $clone->historyPosition++;
+                    $clone->buffer = $entry;
+                    $clone->cursor = self::charCount($entry);
+                }
+            }
+        } else {
+            // Key::Down
+            if ($clone->historyPosition === -1) {
+                // Already at live buffer — nothing to navigate.
+                return $clone;
+            }
+            $entry = $clone->history->getNext();
+            if ($entry === null) {
+                // Exhausted history; restore saved buffer.
+                $clone->buffer = $clone->bufferBeforeHistory ?? '';
+                $clone->cursor = self::charCount($clone->buffer);
+                $clone->historyPosition = -1;
+                $clone->bufferBeforeHistory = null;
+            } else {
+                $clone->historyPosition--;
+                $clone->buffer = $entry;
+                $clone->cursor = self::charCount($entry);
+            }
+        }
+
         return $clone;
     }
 
