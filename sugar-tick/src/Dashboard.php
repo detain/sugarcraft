@@ -83,4 +83,9 @@ final class Dashboard implements Model
         }
         return (new self($this->store, $next, $this->days))->reload();
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
