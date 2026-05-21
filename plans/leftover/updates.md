@@ -559,6 +559,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.21 · PR#788 · sugar-crumbs: pushDirectory + view + filter
     step 10.22 · PR#789 · sugar-crumbs: Closable + URL derivation + escape + semantic HTML
     step 10.23 · PR#790 · sugar-boxer: alignment + margin tests (methods already existed)
+    step 10.24 · PR#791 · sugar-glow: syntax highlighting + streaming pager
 
 ## Open review findings — 09.19
 
