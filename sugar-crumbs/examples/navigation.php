@@ -27,11 +27,12 @@ $nav = $nav->push('Resolution', '/settings/display/resolution');
 echo "Resolution: " . $nav->view() . "\n\n";
 
 echo "--- Pop back one level (Settings) ---\n";
-$nav = $nav->pop();
+$nav->pop(); // pop() modifies NavStack in-place, ignore returned item
 echo $nav->view() . "\n\n";
 
 echo "--- Pop back to Home ---\n";
-$nav = $nav->pop()->pop();
+$nav->pop(); // pop twice to get back to Home
+$nav->pop();
 echo $nav->view() . "\n\n";
 
 echo "--- Push more items ---\n";
@@ -46,6 +47,6 @@ echo "Filter 'dis': " . $nav2->filter('dis')->view() . "\n";
 echo "Total items: " . $nav2->depth() . ", Filtered: " . $nav2->filter('dis')->depth() . "\n\n";
 
 echo "--- Shell integration (auto-detect directory changes) ---\n";
-$shell = new \SugarCraft\Crumbs\Shell();
+$shell = \SugarCraft\Crumbs\Shell::new();
 $shell = $shell->pushDirectory('/home/user/projects/sugarcraft/src');
-echo "Shell crumb: " . $shell->view() . "\n";
+echo "Shell crumb: " . $shell->renderBreadcrumb() . "\n";

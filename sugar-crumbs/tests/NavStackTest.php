@@ -180,4 +180,96 @@ final class NavStackTest extends TestCase
 
         $this->assertSame('Root > Child', $shell->renderBreadcrumb());
     }
+
+    public function testViewWithItems(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display');
+
+        $this->assertSame('Home > Settings > Display', $s->view());
+    }
+
+    public function testViewWithCustomSeparator(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings');
+
+        $this->assertSame('Home / Settings', $s->view(' / '));
+    }
+
+    public function testViewWithEmptyStack(): void
+    {
+        $s = new NavStack();
+        $this->assertSame('', $s->view());
+    }
+
+    public function testFilterMatchingTitle(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display')->push('Sound');
+
+        $filtered = $s->filter('dis');
+        $this->assertSame(1, $filtered->depth());
+        $this->assertSame('Display', $filtered->items()[0]->title);
+    }
+
+    public function testFilterMatchingData(): void
+    {
+        $s = new NavStack();
+        $s->push('Home', '/home');
+        $s->push('Settings', '/settings/display');
+        $s->push('Display', '/settings/display/resolution');
+
+        $filtered = $s->filter('/display');
+        $this->assertSame(2, $filtered->depth());
+    }
+
+    public function testFilterNonMatching(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings');
+
+        $filtered = $s->filter('nonexistent');
+        $this->assertSame(0, $filtered->depth());
+    }
+
+    public function testFilterCaseInsensitive(): void
+    {
+        $s = new NavStack();
+        $s->push('Home')->push('Settings')->push('Display');
+
+        $filtered = $s->filter('SET');
+        $this->assertSame(1, $filtered->depth());
+        $this->assertSame('Settings', $filtered->items()[0]->title);
+    }
+
+    public function testPushDirectory(): void
+    {
+        $shell = Shell::new();
+        $shell = $shell->pushDirectory('/home/user/projects/sugarcraft/src');
+
+        $this->assertSame(5, $shell->stack->depth());
+        $this->assertSame('home', $shell->stack->items()[0]->title);
+        $this->assertSame('/home', $shell->stack->items()[0]->data);
+        $this->assertSame('src', $shell->stack->items()[4]->title);
+        $this->assertSame('/home/user/projects/sugarcraft/src', $shell->stack->items()[4]->data);
+    }
+
+    public function testPushDirectoryEmpty(): void
+    {
+        $shell = Shell::new();
+        $shell = $shell->pushDirectory('');
+
+        $this->assertSame(0, $shell->stack->depth());
+    }
+
+    public function testPushDirectoryNoLeadingSlash(): void
+    {
+        $shell = Shell::new();
+        $shell = $shell->pushDirectory('home/user/projects');
+
+        $this->assertSame(3, $shell->stack->depth());
+        $this->assertSame('home', $shell->stack->items()[0]->title);
+        $this->assertSame('/home', $shell->stack->items()[0]->data);
+    }
 }
