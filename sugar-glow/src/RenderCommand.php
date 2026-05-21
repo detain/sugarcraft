@@ -88,6 +88,9 @@ final class RenderCommand extends Command
             'tokyo-night',
             'tokyonight'       => Theme::tokyoNight(),
             'pink'             => Theme::pink(),
+            'solarized'        => Theme::fromJson(__DIR__ . '/../themes/solarized.json'),
+            'monokai'          => Theme::fromJson(__DIR__ . '/../themes/monokai.json'),
+            'github'           => Theme::fromJson(__DIR__ . '/../themes/github.json'),
             default            => throw new \InvalidArgumentException(Lang::t('render.unknown_theme', ['name' => $name])),
         };
     }

@@ -33,8 +33,9 @@ sugarglow --theme-config ./my-theme.json README.md
 ```
 
 Flags:
-- `--theme {ansi|plain|dark|light|notty|dracula|tokyo-night|pink}`
-  — picks a CandyShine preset.
+- `--theme {ansi|plain|dark|light|notty|dracula|tokyo-night|pink|solarized|monokai|github}`
+  — picks a CandyShine preset. `solarized`, `monokai`, and `github` load
+  JSON theme files from `themes/`.
 - `--style` / `-s` — alias for `--theme` (glamour-compat).
 - `--theme-config <path>` — load a custom JSON theme via
   `Theme::fromJson`. Overrides `--theme`.
