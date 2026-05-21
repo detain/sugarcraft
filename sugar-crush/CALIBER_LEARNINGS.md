@@ -27,6 +27,22 @@
 - `CompactedGroup` is a `readonly` value object with three fields: `label` (category name or single file path), `paths` (list of absolute paths), and `isCompact` (true for grouped small files, false for single large files).
 - `categoryFor()` falls back to `'other'` for unknown extensions — callers should handle this edge case.
 
+## Slash-command parsing
+
+- **`CommandParser`** detects `/`-prefixed input, strips leading whitespace before the slash, then extracts name + args.
+- Name termination: first `:` or whitespace; name normalized to lowercase alphanumeric + hyphens via `preg_replace` + `strtolower`.
+- Args split respecting single- and double-quote boundaries (quote chars stripped from tokens); whitespace (space/tab) separates positional tokens; unclosed quotes are silently kept as part of the token.
+- Empty input, pure whitespace, lone `/`, or `/` followed only by whitespace all return `null` — callers should treat null as ordinary text input.
+- `ParsedCommand` is a simple readonly VO with `withArgs()` factory for derived instances.
+
+## Tool registry and tool calls
+
+- **`ToolRegistry`** holds named `Tool` instances; `register()` overwrites on collision, enabling override of built-ins.
+- Each `Tool` carries a `ToolSignature` (positional param names, named flags with bool value-requirement, description) and a closure execute handler.
+- Built-in tools: `filter <expr>`, `sort [-r] [-n]`, `goto <line>`, `select <start> <end>`, `quit`.
+- **`ToolCall`** and **`ToolResult`** are plain readonly VOs with `fromArray`/`toArray` serialization and `ok()`/`error()` factories.
+- `ToolResult::toWire()` formats as `['role' => 'tool', 'tool_call_id' => $id, 'name' => $name, 'content' => $result]` — matches the OpenAI/Anthropic tool-result wire format.
+
 ## Test patterns
 
 - **Snapshot tests** for renderers assert raw `\x1b[...m` SGR bytes directly.
