@@ -185,14 +185,24 @@ final class Config
                 $opts[] = (string) $o;
             }
         }
+        $identityFiles = [];
+        if (isset($row['identityFiles']) && is_array($row['identityFiles'])) {
+            foreach ($row['identityFiles'] as $f) {
+                $identityFiles[] = (string) $f;
+            }
+        } elseif (isset($row['identity_file']) && $row['identity_file'] !== null) {
+            $identityFiles[] = (string) $row['identity_file'];
+        } elseif (isset($row['identityFile']) && $row['identityFile'] !== null) {
+            $identityFiles[] = (string) $row['identityFile'];
+        }
         return new Endpoint(
             name:         (string) $row['name'],
             host:         (string) $row['host'],
             port:         isset($row['port']) ? (int) $row['port'] : 22,
             user:         isset($row['user']) ? (string) $row['user'] : null,
-            identityFile: isset($row['identity_file']) ? (string) $row['identity_file']
-                          : (isset($row['identityFile']) ? (string) $row['identityFile'] : null),
+            identityFiles: $identityFiles,
             description:  isset($row['description']) ? (string) $row['description'] : null,
+            proxyJump:     isset($row['proxyJump']) && $row['proxyJump'] !== null ? (string) $row['proxyJump'] : null,
             options:      $opts,
         );
     }
