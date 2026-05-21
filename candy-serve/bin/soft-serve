@@ -20,7 +20,7 @@ namespace SugarCraft\Serve\Bin;
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Serve\{AccessControl, Config, Lang, Repo, SSH\SSHServer, User};
+use SugarCraft\Serve\{AccessControl, Config, Git\GitDaemon, Lang, Repo, SSH\SSHServer, User};
 
 const VERSION = '0.1.0';
 
@@ -48,9 +48,17 @@ function main(array $argv): int
 function cmdServe(array $args): int
 {
     $configPath = null;
-    foreach ($args as $i => $arg) {
+    $daemonMode = false;
+    $pidFile = '';
+
+    for ($i = 0; $i < \count($args); $i++) {
+        $arg = $args[$i];
         if ($arg === '--config' && isset($args[$i + 1])) {
-            $configPath = $args[$i + 1];
+            $configPath = $args[++$i];
+        } elseif ($arg === '--daemon') {
+            $daemonMode = true;
+        } elseif ($arg === '--pid-file' && isset($args[$i + 1])) {
+            $pidFile = $args[++$i];
         }
     }
 
@@ -67,30 +75,56 @@ function cmdServe(array $args): int
         'http_addr' => $config->httpListenAddr,
         'git_addr'  => $config->gitListenAddr,
     ]) . "\n";
-    echo "\n" . Lang::t('cli.starting_servers') . "\n";
-    echo Lang::t('cli.note_ssh2_required') . "\n";
-    echo Lang::t('cli.note_run_init') . "\n\n";
 
-    // List registered repos
-    $dataPath = $config->dataPath;
-    $reposPath = $dataPath . '/repositories';
+    if (!$daemonMode) {
+        echo "\n" . Lang::t('cli.starting_servers') . "\n";
+        echo Lang::t('cli.note_ssh2_required') . "\n";
+        echo Lang::t('cli.note_run_init') . "\n\n";
 
-    echo Lang::t('cli.repos_header') . "\n";
+        // List registered repos
+        $dataPath = $config->dataPath;
+        $reposPath = $dataPath . '/repositories';
+
+        echo Lang::t('cli.repos_header') . "\n";
+        if (\is_dir($reposPath)) {
+            foreach (\scandir($reposPath) as $entry) {
+                if ($entry === '.' || $entry === '..') continue;
+                $repoPath = $reposPath . '/' . $entry;
+                if (\is_dir($repoPath . '/.git')) {
+                    echo Lang::t('cli.repo_listing_entry', ['name' => $entry]) . "\n";
+                }
+            }
+        }
+
+        echo "\n" . Lang::t('cli.note_not_a_daemon') . "\n";
+        echo Lang::t('cli.note_http_help') . "\n";
+        echo Lang::t('cli.note_ssh_help') . "\n";
+
+        return 0;
+    }
+
+    // Daemon mode: start the git daemon
+    $gitDaemon = new GitDaemon($config);
+
+    // Register repos from filesystem
+    $reposPath = $config->reposPath();
     if (\is_dir($reposPath)) {
         foreach (\scandir($reposPath) as $entry) {
             if ($entry === '.' || $entry === '..') continue;
             $repoPath = $reposPath . '/' . $entry;
             if (\is_dir($repoPath . '/.git')) {
-                echo Lang::t('cli.repo_listing_entry', ['name' => $entry]) . "\n";
+                $repo = Repo::new($entry, $repoPath);
+                $gitDaemon->registerRepo($repo);
             }
         }
     }
 
-    echo "\n" . Lang::t('cli.note_not_a_daemon') . "\n";
-    echo Lang::t('cli.note_http_help') . "\n";
-    echo Lang::t('cli.note_ssh_help') . "\n";
+    // Use default PID file location if not specified
+    if ($pidFile === '') {
+        $pidFile = $config->dataPath . '/git-daemon.pid';
+    }
 
-    return 0;
+    return $gitDaemon->serve($pidFile);
 }
 
 function cmdInit(array $args): int
