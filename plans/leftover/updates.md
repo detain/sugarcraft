@@ -560,6 +560,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.22 · PR#789 · sugar-crumbs: Closable + URL derivation + escape + semantic HTML
     step 10.23 · PR#790 · sugar-boxer: alignment + margin tests (methods already existed)
     step 10.24 · PR#791 · sugar-glow: syntax highlighting + streaming pager
+    docs for step 10.26 · PR#795 · refresh docs/lib/sugar-glow.html (lede: eight→eleven themes; Theme picker feature lists all 11 options; note solarized/monokai/github JSON loading)
 
 ## Open review findings — 09.19
 
