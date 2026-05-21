@@ -196,10 +196,8 @@ final class Server
                 return $this->errorResponse(403, 'Access denied');
             }
         } else {
-            // receive-pack info/refs is publicly accessible - actual push requires auth
-            if (!$ac->canRead($this->getUserFromHeaders($headers), $repo)) {
-                return $this->errorResponse(403, 'Access denied');
-            }
+            // receive-pack info/refs is publicly accessible for ref discovery.
+            // Actual push operation (POST) requires canWrite() auth.
         }
 
         // Build the advertisement packet
@@ -442,7 +440,11 @@ final class Server
             } else {
                 $len = \strlen($line) + 4;
                 $hex = \str_pad(\dechex($len), 4, '0', \STR_PAD_LEFT);
-                $result .= \hex2bin($hex) ?: '';
+                $pktLen = \hex2bin($hex);
+                if ($pktLen === false) {
+                    throw new \RuntimeException('Invalid pkt-line length: ' . $hex);
+                }
+                $result .= $pktLen;
                 $result .= $line . "\n";
             }
         }
