@@ -14,15 +14,19 @@ namespace SugarCraft\Wishlist;
  */
 final class Endpoint
 {
+    /**
+     * @param array<string> $identityFiles
+     */
     public function __construct(
-        public readonly string  $name,
-        public readonly string  $host,
-        public readonly int     $port = 22,
-        public readonly ?string $user = null,
-        public readonly ?string $identityFile = null,
-        public readonly ?string $description = null,
+        public readonly string        $name,
+        public readonly string        $host,
+        public readonly int           $port = 22,
+        public readonly ?string      $user = null,
+        public readonly array         $identityFiles = [],
+        public readonly ?string       $description = null,
+        public readonly ?string      $proxyJump = null,
         /** @var list<string> Extra `-o KEY=VALUE` options for ssh */
-        public readonly array   $options = [],
+        public readonly array         $options = [],
     ) {}
 
     /**
@@ -39,9 +43,13 @@ final class Endpoint
             $argv[] = '-p';
             $argv[] = (string) $this->port;
         }
-        if ($this->identityFile !== null && $this->identityFile !== '') {
+        if ($this->identityFiles !== [] && $this->identityFiles[0] !== '') {
             $argv[] = '-i';
-            $argv[] = $this->identityFile;
+            $argv[] = $this->identityFiles[0];
+        }
+        if ($this->proxyJump !== null && $this->proxyJump !== '') {
+            $argv[] = '-J';
+            $argv[] = $this->proxyJump;
         }
         foreach ($this->options as $opt) {
             $argv[] = '-o';
@@ -60,5 +68,36 @@ final class Endpoint
             $dest .= ":{$this->port}";
         }
         return "{$this->name}  ─  {$dest}";
+    }
+
+    /**
+     * @param array<string> $files
+     */
+    public function withIdentityFiles(array $files): self
+    {
+        return new self(
+            name:          $this->name,
+            host:          $this->host,
+            port:          $this->port,
+            user:          $this->user,
+            identityFiles: $files,
+            description:   $this->description,
+            proxyJump:     $this->proxyJump,
+            options:       $this->options,
+        );
+    }
+
+    public function withProxyJump(?string $jump): self
+    {
+        return new self(
+            name:          $this->name,
+            host:          $this->host,
+            port:          $this->port,
+            user:          $this->user,
+            identityFiles: $this->identityFiles,
+            description:   $this->description,
+            proxyJump:     $jump,
+            options:       $this->options,
+        );
     }
 }

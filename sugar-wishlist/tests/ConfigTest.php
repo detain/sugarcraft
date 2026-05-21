@@ -83,8 +83,8 @@ final class ConfigTest extends TestCase
           identityFile: /tmp/key2
         YAML;
         $endpoints = Config::parse($raw, 'wishlist.yml');
-        $this->assertSame('/tmp/key1', $endpoints[0]->identityFile);
-        $this->assertSame('/tmp/key2', $endpoints[1]->identityFile);
+        $this->assertSame(['/tmp/key1'], $endpoints[0]->identityFiles);
+        $this->assertSame(['/tmp/key2'], $endpoints[1]->identityFiles);
     }
 
     public function testYamlNestedOptionsList(): void
