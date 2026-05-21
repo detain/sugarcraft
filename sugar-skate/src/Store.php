@@ -266,6 +266,12 @@ final class Store
         return $this->dataDir;
     }
 
+    /** Get the default database name. */
+    public function defaultDatabase(): string
+    {
+        return $this->defaultDb;
+    }
+
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
