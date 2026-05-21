@@ -553,6 +553,7 @@ docs for step 09.07 · PR#724 · document O(1) win, serialize/unserialize, Custo
     step 10.14 · PR#781 · sugar-readline: vi mode + emacs mode key-binding modes (ModeInterface/ViMode/EmacsMode + withMode/handleKeyDirect on TextPrompt)
     step 10.15 · PR#782 · sugar-readline: autosuggest from history (fish-style gray dim completion) + undo/redo (UndoManager + Key::Undo/Key::Redo) + Highlight stub (awaiting sugar-glow step 10.24)
     step 10.17 · PR#784 · sugar-spark: reportAsJson + StreamingInspector
+    step 10.18 · PR#785 · sugar-tick: CSV/JSON export + tags + sugartrackignore + gaps
 
 ## Open review findings — 09.19
 
