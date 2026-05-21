@@ -38,6 +38,7 @@ candy-serve/
 │   │   ├── Auth.php             Public key authentication
 │   │   └── Commands.php         git-upload-pack / git-receive-pack
 │   ├── Git/
+│   │   ├── GitDaemon.php        Real daemon with socket connections, PID file, signal handling
 │   │   ├── UploadPack.php       git-upload-pack (clone/fetch)
 │   │   └── ReceivePack.php      git-receive-pack (push)
 │   ├── HttpSmartProtocol/
@@ -126,6 +127,41 @@ The smart protocol flow:
 3. For push: Client POSTs `/repo.git/git-receive-pack` — sends pack and receives status
 
 Authentication uses HTTP Basic auth or the `X-CandyServe-User` header.
+
+## Git Protocol (Daemon Mode)
+
+CandyServe can run as a real background daemon serving Git clone/fetch/push over the native Git protocol on port 9418.
+
+```bash
+# Start as a daemon (forks to background, writes PID file)
+CANDY_SERVE_DATA_PATH=/var/lib/candy-serve composer serve --daemon --pid-file /var/run/candy-serve-git.pid
+
+# Run in foreground (shows banner and repo list, stays attached)
+CANDY_SERVE_DATA_PATH=/var/lib/candy-serve composer serve
+```
+
+**Daemon mode behavior:**
+- Uses `pcntl_fork()` to detach and become a session leader
+- Listens on `git.listen_addr` from `config.yaml` (default `:9418`)
+- Writes PID to `--pid-file` (or `<data_path>/git-daemon.pid` by default)
+- Handles `SIGTERM`, `SIGINT`, and `SIGHUP` for graceful shutdown
+- Cleans up PID file and closes all connections on exit
+
+**Signal handling:**
+- `SIGTERM` / `SIGINT` — graceful shutdown (closes connections, removes PID file)
+- `SIGHUP` — reload configuration (restarts the daemon)
+
+**Clone over Git protocol:**
+```bash
+# Anonymous clone (for public repos)
+git clone git://your-server:9418/repo-name
+
+# The git protocol is stateless; access is controlled per-repo (public/private)
+```
+
+The Git protocol supports:
+- `git-upload-pack` — clone and fetch (read access)
+- `git-receive-pack` — push (write access, requires collaborator permission)
 
 ## OSC 52 Clipboard
 
