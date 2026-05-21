@@ -69,6 +69,67 @@ Standard reader keys come from `Viewport`:
 
 ![pager](.vhs/pager.gif)
 
+## Library API
+
+Beyond the CLI, sugar-glow exposes three utility classes for integrating its
+behaviour into other PHP projects.
+
+### GlamourTheme
+
+Loads and parses Glamour-style theme JSON files (block_prefix/suffix,
+indent_token, margin, chroma token mapping).
+
+```php
+use SugarCraft\Glow\GlamourTheme;
+
+// From a JSON string
+$theme = GlamourTheme::fromJson(file_get_contents('./my-theme.json'));
+
+// From a file path
+$theme = GlamourTheme::fromFile('./my-theme.json');
+
+// Resolve a chroma token to an SGR color code (e.g., "31" for red)
+$sgr = $theme->resolve('emphasis'); // => "31" or null
+```
+
+### FileWatcher
+
+File watching via mtime polling — works cross-platform with no extensions.
+
+```php
+use SugarCraft\Glow\FileWatcher;
+
+$watcher = new FileWatcher('/path/to/file.md');
+
+// Check if modified since a given mtime
+if ($watcher->hasChangedSince($lastMtime)) {
+    // re-render
+}
+
+// Generator-based watch loop (e.g., in a ReactPHP stream)
+foreach (FileWatcher::watch('/path/to/file.md', 500) as $changed) {
+    // $changed === true each time the file is modified
+}
+```
+
+### WidthHelper
+
+CJK and emoji width handling via `mb_strwidth` — ensures visual truncation
+and padding are accurate regardless of character encoding.
+
+```php
+use SugarCraft\Glow\WidthHelper;
+
+WidthHelper::visualWidth('hello');        // 5
+WidthHelper::visualWidth('你好');        // 4 (full-width)
+WidthHelper::visualWidth('📦');           // 2 (emoji)
+
+WidthHelper::padRight('hi', 8);          // "hi      "
+WidthHelper::slice('hello', 1, 4);       // "ell"
+WidthHelper::isFullWidth('你');           // true
+WidthHelper::truncate('hello world', 8);  // "hello wo"
+```
+
 ## Test
 
 ```sh
