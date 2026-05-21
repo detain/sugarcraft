@@ -42,21 +42,53 @@ final class Database
                 value       TEXT NOT NULL,
                 binary      INTEGER NOT NULL DEFAULT 0,
                 created     TEXT NOT NULL,
-                modified    TEXT NOT NULL
+                modified    TEXT NOT NULL,
+                expires_at  TEXT
             )
         ');
+        // Migrate legacy schema (no expires_at column)
+        $result = $this->db->query("PRAGMA table_info(entries)");
+        $columns = [];
+        while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
+            $columns[] = $row['name'];
+        }
+        if (!\in_array('expires_at', $columns, true)) {
+            $this->db->exec('ALTER TABLE entries ADD COLUMN expires_at TEXT');
+        }
         $this->db->exec('PRAGMA journal_mode = WAL');
         $this->db->exec('PRAGMA foreign_keys = ON');
     }
 
     /**
      * Get a single entry by key.
-     * Returns null if not found.
+     * Returns null if not found or if the entry has expired.
      */
     public function get(string $key): ?Entry
     {
         $stmt = $this->db->prepare(
-            'SELECT key, value, binary, created, modified FROM entries WHERE key = :key'
+            'SELECT key, value, binary, created, modified, expires_at
+             FROM entries
+             WHERE key = :key
+               AND (expires_at IS NULL OR expires_at >= :now)'
+        );
+        $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', (new \DateTimeImmutable())->format(\DATE_ATOM), \SQLITE3_TEXT);
+        $result = $stmt->execute();
+
+        $row = $result->fetchArray(\SQLITE3_ASSOC);
+        $stmt->close();
+
+        return $row ? Entry::fromRow($row) : null;
+    }
+
+    /**
+     * Get a single entry by key, bypassing TTL / expiry filter.
+     * Returns null if not found.
+     */
+    public function getRaw(string $key): ?Entry
+    {
+        $stmt = $this->db->prepare(
+            'SELECT key, value, binary, created, modified, expires_at FROM entries WHERE key = :key'
         );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
         $result = $stmt->execute();
@@ -73,24 +105,32 @@ final class Database
      * @param string $key    Entry key (unique within this database)
      * @param string $value  Value string (pass Entry::binary() for raw bytes)
      * @param bool   $binary Whether the value is base64-encoded binary data
+     * @param int|null $ttlSeconds If set, entry expires after this many seconds
      */
-    public function set(string $key, string $value, bool $binary = false): Entry
+    public function set(string $key, string $value, bool $binary = false, ?int $ttlSeconds = null): Entry
     {
         $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
 
+        $expiresAt = null;
+        if ($ttlSeconds !== null && $ttlSeconds > 0) {
+            $expiresAt = (new \DateTimeImmutable())->modify("+{$ttlSeconds} seconds")->format(\DATE_ATOM);
+        }
+
         $stmt = $this->db->prepare(
-            'INSERT INTO entries (key, value, binary, created, modified)
-             VALUES (:key, :value, :binary, :created, :modified)
+            'INSERT INTO entries (key, value, binary, created, modified, expires_at)
+             VALUES (:key, :value, :binary, :created, :modified, :expires_at)
              ON CONFLICT(key) DO UPDATE SET
-               value    = excluded.value,
-               binary   = excluded.binary,
-               modified = excluded.modified'
+               value     = excluded.value,
+               binary    = excluded.binary,
+               modified  = excluded.modified,
+               expires_at = excluded.expires_at'
         );
         $stmt->bindValue(':key', $key, \SQLITE3_TEXT);
         $stmt->bindValue(':value', $value, \SQLITE3_TEXT);
         $stmt->bindValue(':binary', $binary ? 1 : 0, \SQLITE3_INTEGER);
         $stmt->bindValue(':created', $now, \SQLITE3_TEXT);
         $stmt->bindValue(':modified', $now, \SQLITE3_TEXT);
+        $stmt->bindValue(':expires_at', $expiresAt, \SQLITE3_TEXT);
         $stmt->execute();
         $stmt->close();
 
@@ -129,11 +169,15 @@ final class Database
     ): \Generator {
         $order = $reverse ? 'DESC' : 'ASC';
 
+        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
         if ($pattern !== null) {
-            [$sql, $bindings] = $this->buildGlobQuery($pattern, $order);
+            [$sql, $bindings] = $this->buildGlobQuery($pattern, $order, $now);
         } else {
-            $sql = "SELECT key, value, binary, created, modified FROM entries ORDER BY key {$order}";
-            $bindings = [];
+            $sql = "SELECT key, value, binary, created, modified, expires_at
+                    FROM entries
+                    WHERE expires_at IS NULL OR expires_at >= :now
+                    ORDER BY key {$order}";
+            $bindings = [':now' => $now];
         }
 
         $stmt = $this->db->prepare($sql);
@@ -188,6 +232,29 @@ final class Database
     }
 
     /**
+     * Return all non-expired keys in this database.
+     *
+     * @return list<string>
+     */
+    public function allKeys(): array
+    {
+        $keys = [];
+        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+        $stmt = $this->db->prepare(
+            'SELECT key FROM entries
+             WHERE expires_at IS NULL OR expires_at >= :now
+             ORDER BY key ASC'
+        );
+        $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+        while ($row = $result->fetchArray(\SQLITE3_ASSOC)) {
+            $keys[] = $row['key'];
+        }
+        $stmt->close();
+        return $keys;
+    }
+
+    /**
      * Get all database names from the config directory.
      *
      * @return list<string>
@@ -210,19 +277,42 @@ final class Database
         return $dbs;
     }
 
+    /**
+     * Execute a callback inside an atomic SQLite transaction.
+     *
+     * If the callback throws, the transaction is rolled back and the exception
+     * propagates outward. On success the transaction is committed.
+     *
+     * @param callable(): mixed $fn
+     * @return mixed The return value of the callback.
+     * @throws \Throwable Re-throws any exception from the callback after rollback.
+     */
+    public function transaction(callable $fn): mixed
+    {
+        $this->db->exec('BEGIN IMMEDIATE');
+        try {
+            $result = $fn();
+            $this->db->exec('COMMIT');
+            return $result;
+        } catch (\Throwable $e) {
+            $this->db->exec('ROLLBACK');
+            throw $e;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
     /**
-     * Build SQL + bindings for a glob pattern.
+     * Build SQL + bindings for a glob pattern (excludes expired).
      *
      * Translates shell wildcards to SQL LIKE:
      *   *     → %
      *   ?     → _
      *   other glob chars are escaped
      */
-    private function buildGlobQuery(string $pattern, string $order): array
+    private function buildGlobQuery(string $pattern, string $order, string $now): array
     {
         $like = '';
         $i = 0;
@@ -244,8 +334,12 @@ final class Database
         }
 
         return [
-            "SELECT key, value, binary, created, modified FROM entries WHERE key LIKE :pat ESCAPE '\\' ORDER BY key {$order}",
-            [':pat' => $like],
+            "SELECT key, value, binary, created, modified, expires_at
+             FROM entries
+             WHERE key LIKE :pat ESCAPE '\\'
+               AND (expires_at IS NULL OR expires_at >= :now)
+             ORDER BY key {$order}",
+            [':pat' => $like, ':now' => $now],
         ];
     }
 }
