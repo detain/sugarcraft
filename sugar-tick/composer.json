@@ -34,6 +34,29 @@
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/sugar-charts": "dev-master"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-charts",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require-dev": {
         "phpunit/phpunit": "^10.0"
     },
