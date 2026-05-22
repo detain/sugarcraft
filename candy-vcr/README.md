@@ -23,6 +23,7 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 | PR8 | Tape lexer/parser/compiler (`.tape` → Cassette) |
 | PR9 | Renderer + FrameStream + FrameDedup (Phase 3 of vhs-replacement) |
 | PR10 | Raster + Glyphs + FontLoader (Phase 4 of vhs-replacement) |
+| PR11 | GIF encoder — GifEncoder interface + FfmpegGifEncoder + PhpGifEncoder + TapeToGif (Phase 5 of vhs-replacement) |
 
 ## Use cases
 
@@ -489,6 +490,59 @@ advances 2 columns after blitting. Checked via `mb_strwidth($char) > 1`.
 - Block (shape=1): glyph rendered in reverse-video (fg/bg swapped)
 - Underline (shape=2): filled rect at y = cellH × 0.75
 - Bar (shape=3): narrow filled rect at left edge
+
+## GIF encoder (Phase 5)
+
+The `SugarCraft\Vcr\Encode` namespace converts a stream of rasterized PNG frames
+into an animated GIF:
+
+```php
+use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
+use SugarCraft\Vcr\Encode\TapeToGif;
+
+$tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
+$tapeToGif->render('demo.tape', 'demo.gif');
+```
+
+**Pipeline:** `.tape` → Lexer → Parser → Compiler → Cassette → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → FfmpegGifEncoder → `.gif`
+
+**Encoders:**
+
+| Encoder | Description |
+|--------|-------------|
+| `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via concat demuxer with process substitution. |
+| `PhpGifEncoder` | Pure-PHP fallback; stub that throws `RuntimeException`. LZW encoding in pure PHP is 5-10× slower than ffmpeg. |
+
+**VFR (Variable Frame Rate):** When `frameHolds` differ between frames, FfmpegGifEncoder writes a concat demuxer file and pipes it to ffmpeg's stdin:
+
+```
+file 'frame00000.png'
+duration 0.033
+file 'frame00001.png'
+duration 0.100
+...
+file 'frame00004.png'
+duration 0.033
+file 'frame00004.png'
+```
+
+The last frame is listed twice to give it a display duration (the entry before it carries the duration). This produces accurate per-frame timing without re-encoding artifacts.
+
+**Two-pass palette:** `palettegen=stats_mode=diff` computes an optimal 256-color palette by analyzing frame-to-frame pixel differences. `paletteuse=dither=bayer:bayer_scale=5` applies the palette with ordered dithering. This produces significantly better quality than single-pass GIF encoding.
+
+**TapeToGif options:**
+
+```php
+$tapeToGif->render($tapePath, $outputPath, [
+    'fps'      => 30.0,        // frames per second
+    'theme'    => 'TokyoNight', // theme name
+    'fontSize' => 14,           // terminal font size
+    'backend'  => 'gd',        // 'gd' (default) or 'imagick'
+    'encoder'  => 'ffmpeg',   // 'ffmpeg' (default) or 'php'
+]);
+```
+
+**Requirements:** `ffmpeg` must be in `$PATH` for `FfmpegGifEncoder`. The `symfony/process` package is required as a runtime dependency.
 
 ## Examples
 

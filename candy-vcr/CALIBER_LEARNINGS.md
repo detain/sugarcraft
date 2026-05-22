@@ -87,6 +87,56 @@ The tape `Compiler` now stores `Set TypingSpeed` values in the `CassetteHeader::
 - **Primary GIF encoder:** `FfmpegGifEncoder` — ffmpeg already present in CI runner image; `palettegen=stats_mode=diff` + `paletteuse` two-pass produces quality GIFs at acceptable speed.
 - **Font:** JetBrainsMono Regular + Bold — OFL license, excellent monospace coverage, broad glyph support including box-drawing characters used in terminal UIs.
 
+## Phase 5 GIF Encoder (2026-05-22)
+
+**Scope:** GifEncoder interface + FfmpegGifEncoder + PhpGifEncoder + TapeToGif pipeline + tests.
+
+### Namespace: `SugarCraft\Vcr\Encode`
+
+New files created:
+- `src/Encode/GifEncoder.php` — interface `encode(\Iterator, int $cols, int $rows, array $frameHolds, string $outputPath): void`
+- `src/Encode/FfmpegGifEncoder.php` — default ffmpeg implementation; two-pass palettegen with `stats_mode=diff`; CFR via `-framerate` and VFR via concat demuxer with `proc_open` + process substitution
+- `src/Encode/PhpGifEncoder.php` — pure-PHP stub throwing `RuntimeException('Pure-PHP GIF encoder not yet implemented; use FfmpegGifEncoder')`
+- `src/Encode/TapeToGif.php` — full pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder
+
+### Frame hold tracking
+
+`FrameDedup::dedup()` collapses identical adjacent snapshots but does not expose how many frames were collapsed per emitted snapshot. `TapeToGif::buildFramesWithHolds()` tracks the virtual timestamp of each emitted snapshot and computes hold as the delta from the previous emitted snapshot's time. This correctly distributes the total display duration across collapsed runs.
+
+Example: if FrameStream emits frames 0, 1, 2, 3, 4 at t=0.000, 0.033, 0.067, 0.100, 0.133 (all identical), and frame 5 at t=0.167 (different), FrameDedup yields only snapshot 0 and snapshot 5. The hold for snapshot 0 is 5 × 0.033 = 0.167 seconds (all five original frames collapsed into one).
+
+### FfmpegGifEncoder VFR concat format
+
+```
+file 'frame00000.png'
+duration 0.033
+file 'frame00001.png'
+duration 0.033
+...
+file 'frame00004.png'
+duration 0.033
+file 'frame00004.png'
+```
+
+The last frame is listed twice without a trailing duration — this is the standard technique for giving the final frame a display duration (the second listing's duration applies to the frame listed BEFORE it in the concat format). The GIF loops forever after the last frame.
+
+### Symfony Process v7 signature
+
+`Process::run(?array $env = null, ?float $timeout = null)` — the `$timeout` is `?float`, not `int`. Passing an `int` causes a TypeError. Always use `5.0` not `5` when setting a timeout in seconds.
+
+### Decision log
+
+- **`cols`/`rows` in GifEncoder interface:** These parameters exist on the interface but are not used inside `FfmpegGifEncoder::encode()` — the PNG frames are already rasterized at the correct pixel dimensions by the `Rasterizer`. The parameters exist for `PhpGifEncoder` (which would need them to construct a GIF from scratch). This is a minor API design smell but not a bug.
+- **symfony/process as runtime dep:** `FfmpegGifEncoder` directly uses `Symfony\Component\Process\Process` and `proc_open`, so `symfony/process` is in `require` (not `require-dev`).
+- **Empty frames fallback:** When `encode()` receives zero frames, it creates a 1×1 empty PNG and encodes it — this produces a minimal valid GIF (required for zero-duration/concatenation-safe encoders).
+- **Temp file cleanup:** All temp PNGs are cleaned up in a `finally` block even on encode failure.
+
+### Tests
+
+- `tests/Encode/FfmpegGifEncoderTest.php` — 6 tests: CFR encode, VFR encode, empty frames, ffmpeg failure, temp cleanup.
+- `tests/Encode/PhpGifEncoderTest.php` — 1 test: asserts RuntimeException is thrown.
+- `tests/Encode/TapeToGifTest.php` — 7 tests: end-to-end smoke, custom options, default output path, php encoder throws, nonexistent tape throws, encoder/backend selection.
+
 ## Phase 4 Rasterizer (2026-05-22)
 
 **Scope:** Raster + Glyphs + FontLoader for Snapshot → PNG rendering.
