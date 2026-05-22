@@ -6,153 +6,198 @@ namespace SugarCraft\Vcr\Tests\Encode;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Encode\FfmpegGifEncoder;
+use SugarCraft\Vcr\Encode\GifEncoder;
 
 /**
  * Tests for FfmpegGifEncoder.
  */
 final class FfmpegGifEncoderTest extends TestCase
 {
-    private string $tempDir;
+    private string $tmpDir;
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir();
+        $this->tmpDir = sys_get_temp_dir() . '/candy-vcr-test-' . getmypid();
+        if (!mkdir($this->tmpDir) && !is_dir($this->tmpDir)) {
+            throw new \RuntimeException('Failed to create temp dir');
+        }
+    }
 
-        if (!$this->isFfmpegAvailable()) {
+    protected function tearDown(): void
+    {
+        $files = glob($this->tmpDir . '/*') ?: [];
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->tmpDir);
+    }
+
+    public function testIsAvailableReturnsBool(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        $result = $encoder->isAvailable();
+
+        $this->assertIsBool($result);
+    }
+
+    public function testNameReturnsString(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        $this->assertEquals('ffmpeg', $encoder->name());
+    }
+
+    public function testNameIsFfmpeg(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        $this->assertSame('ffmpeg', $encoder->name());
+    }
+
+    public function testCustomBinName(): void
+    {
+        $encoder = new FfmpegGifEncoder('/usr/local/bin/ffmpeg');
+        $this->assertSame('ffmpeg', $encoder->name());
+    }
+
+    public function testEncodeRequiresFrames(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        $outputPath = $this->tmpDir . '/out.gif';
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('No frames provided');
+        $encoder->encode([], $outputPath);
+    }
+
+    public function testEncodeThrowsWhenFfmpegUnavailable(): void
+    {
+        $encoder = new FfmpegGifEncoder('/nonexistent/ffmpeg');
+        if ($encoder->isAvailable()) {
+            $this->markTestSkipped('ffmpeg is actually available');
+        }
+
+        $pngPath = $this->createPngFrame('test');
+        $outputPath = $this->tmpDir . '/out.gif';
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not available');
+        $encoder->encode([$pngPath], $outputPath);
+    }
+
+    public function testEncodeSingleFrame(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        if (!$encoder->isAvailable()) {
             $this->markTestSkipped('ffmpeg not available');
         }
-    }
 
-    public function testEncodeProducesValidGif(): void
-    {
-        $encoder = new FfmpegGifEncoder('ffmpeg', $this->tempDir);
+        $pngPath = $this->createPngFrame('A');
+        $outputPath = $this->tmpDir . '/out.gif';
 
-        $frames = [];
-        for ($i = 0; $i < 3; $i++) {
-            $img = imagecreatetruecolor(10, 10);
-            $color = imagecolorallocate($img, $i * 80, 100, 150);
-            imagefilledrectangle($img, 0, 0, 9, 9, $color);
-            $frames[] = $img;
-        }
+        $result = $encoder->encode([$pngPath], $outputPath, 30);
 
-        $frameHolds = [0.033, 0.033, 0.033];
-        $outputPath = $this->tempDir . '/test_encode_' . uniqid() . '.gif';
-
-        $framesIter = new \ArrayIterator($frames);
-        $encoder->encode($framesIter, 10, 10, $frameHolds, $outputPath);
-
+        $this->assertTrue($result);
         $this->assertFileExists($outputPath);
         $this->assertGreaterThan(0, filesize($outputPath));
-
-        $header = file_get_contents($outputPath, false, null, 0, 6);
-        $this->assertSame('GIF89a', $header);
-
-        foreach ($frames as $img) {
-            imagedestroy($img);
-        }
-        @unlink($outputPath);
     }
 
-    public function testEncodeWithVaryingFrameHolds(): void
+    public function testEncodeMultipleFrames(): void
     {
-        $encoder = new FfmpegGifEncoder('ffmpeg', $this->tempDir);
-
-        $frames = [];
-        for ($i = 0; $i < 3; $i++) {
-            $img = imagecreatetruecolor(10, 10);
-            $color = imagecolorallocate($img, $i * 80, 100, 150);
-            imagefilledrectangle($img, 0, 0, 9, 9, $color);
-            $frames[] = $img;
+        $encoder = new FfmpegGifEncoder();
+        if (!$encoder->isAvailable()) {
+            $this->markTestSkipped('ffmpeg not available');
         }
 
-        $frameHolds = [0.033, 0.100, 0.050];
-        $outputPath = $this->tempDir . '/test_vfr_' . uniqid() . '.gif';
+        $frames = [
+            $this->createPngFrame('A'),
+            $this->createPngFrame('B'),
+            $this->createPngFrame('C'),
+        ];
+        $outputPath = $this->tmpDir . '/out.gif';
 
-        $framesIter = new \ArrayIterator($frames);
-        $encoder->encode($framesIter, 10, 10, $frameHolds, $outputPath);
+        $result = $encoder->encode($frames, $outputPath, 10);
 
+        $this->assertTrue($result);
         $this->assertFileExists($outputPath);
         $this->assertGreaterThan(0, filesize($outputPath));
-
-        $header = file_get_contents($outputPath, false, null, 0, 6);
-        $this->assertSame('GIF89a', $header);
-
-        foreach ($frames as $img) {
-            imagedestroy($img);
-        }
-        @unlink($outputPath);
     }
 
-    public function testEncodeEmptyFrames(): void
+    public function testEncodeOutputIsNotEmpty(): void
     {
-        $encoder = new FfmpegGifEncoder('ffmpeg', $this->tempDir);
+        $encoder = new FfmpegGifEncoder();
+        if (!$encoder->isAvailable()) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
 
-        $framesIter = new \EmptyIterator();
-        $frameHolds = [];
-        $outputPath = $this->tempDir . '/test_empty_' . uniqid() . '.gif';
+        $pngPath = $this->createPngFrame('X');
+        $outputPath = $this->tmpDir . '/out.gif';
 
-        $encoder->encode($framesIter, 10, 10, $frameHolds, $outputPath);
+        $encoder->encode([$pngPath], $outputPath, 30);
 
+        $content = file_get_contents($outputPath);
+        $this->assertNotEmpty($content);
+        $this->assertStringStartsWith('GIF89a', $content);
+    }
+
+    public function testEncodeWithDurations(): void
+    {
+        $encoder = new FfmpegGifEncoder();
+        if (!$encoder->isAvailable()) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        $frames = [
+            $this->createPngFrame('A'),
+            $this->createPngFrame('B'),
+        ];
+        $outputPath = $this->tmpDir . '/out.gif';
+        $durations = [100, 200];
+
+        $result = $encoder->encode($frames, $outputPath, 30, $durations);
+
+        $this->assertTrue($result);
         $this->assertFileExists($outputPath);
-        $this->assertGreaterThan(0, filesize($outputPath));
-
-        @unlink($outputPath);
     }
 
-    public function testEncodeThrowsRuntimeExceptionOnFfmpegFailure(): void
+    public function testImplementsGifEncoderInterface(): void
     {
-        $encoder = new FfmpegGifEncoder('nonexistent-ffmpeg', $this->tempDir);
-
-        $frames = [];
-        $img = imagecreatetruecolor(10, 10);
-        $frames[] = $img;
-
-        $frameHolds = [0.033];
-        $outputPath = $this->tempDir . '/test_fail_' . uniqid() . '.gif';
-
-        $framesIter = new \ArrayIterator($frames);
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('ffmpeg failed');
-
-        try {
-            $encoder->encode($framesIter, 10, 10, $frameHolds, $outputPath);
-        } finally {
-            imagedestroy($img);
-            @unlink($outputPath);
-        }
+        $encoder = new FfmpegGifEncoder();
+        $this->assertInstanceOf(GifEncoder::class, $encoder);
     }
 
-    public function testEncodeCleansUpTempFilesOnSuccess(): void
+    private function createPngFrame(string $char): string
     {
-        $encoder = new FfmpegGifEncoder('ffmpeg', $this->tempDir);
+        $img = imagecreatetruecolor(8, 16);
+        $bg = imagecolorallocate($img, 0, 0, 0);
+        $fg = imagecolorallocate($img, 255, 255, 255);
+        imagefilledrectangle($img, 0, 0, 7, 15, $bg);
+        imagettftext($img, 14, 0, 0, 13, $fg, $this->getFontPath(), $char);
 
-        $frames = [];
-        for ($i = 0; $i < 3; $i++) {
-            $img = imagecreatetruecolor(10, 10);
-            $color = imagecolorallocate($img, $i * 80, 100, 150);
-            imagefilledrectangle($img, 0, 0, 9, 9, $color);
-            $frames[] = $img;
-        }
+        $path = $this->tmpDir . '/frame_' . md5($char . microtime()) . '.png';
+        imagepng($img, $path);
+        imagedestroy($img);
 
-        $frameHolds = [0.033, 0.033, 0.033];
-        $outputPath = $this->tempDir . '/test_cleanup_' . uniqid() . '.gif';
-
-        $framesIter = new \ArrayIterator($frames);
-        $encoder->encode($framesIter, 10, 10, $frameHolds, $outputPath);
-
-        $tempPngs = glob($this->tempDir . '/frame*.png');
-        $this->assertEmpty($tempPngs, 'Temp PNG files should be cleaned up');
-
-        foreach ($frames as $img) {
-            imagedestroy($img);
-        }
-        @unlink($outputPath);
+        return $path;
     }
 
-    private function isFfmpegAvailable(): bool
+    private function getFontPath(): string
     {
-        $process = \Symfony\Component\Process\Process::fromShellCommandline('ffmpeg -version');
-        $process->run();
-        return $process->isSuccessful();
+        $font = __DIR__ . '/../../fonts/DejaVuSansMono.ttf';
+        if (is_file($font)) {
+            return $font;
+        }
+
+        $systemFonts = [
+            '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+            '/usr/share/fonts/truetype/freefont/FreeMono.ttf',
+            '/usr/share/fonts/truetype/noto/NotoSansMono-Regular.ttf',
+        ];
+
+        foreach ($systemFonts as $f) {
+            if (is_file($f)) {
+                return $f;
+            }
+        }
+
+        return '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf';
     }
 }
