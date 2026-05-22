@@ -65,6 +65,7 @@ final class Compiler
             runtime: 'SugarCraft/Vcr',
             timestampMode: CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
             env: $this->env,
+            typingSpeed: $this->typingSpeed,
         );
 
         return new Cassette($header, $this->events);

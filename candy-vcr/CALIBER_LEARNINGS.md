@@ -21,6 +21,10 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:idle-trim-realtime-playback]** `Player::withIdleTrim(?float $seconds)` sets a replay-time idle-gap ceiling: when `SPEED_REALTIME` playback encounters a delay between events that exceeds the threshold, the delay is clamped to the threshold so CI tests don't hang on multi-second gaps from the original recording. The same pattern (clamp `delta` when `idleTrim !== null && delta > idleTrim`) is applied in `ReplayCommand` so the CLI honours `--idle-trim` flags. `withIdleTrim(null)` disables trimming. The explicit `$idleThresholdSeconds` parameter to `play()` overrides the fluent setting — the parameter form is useful for one-off test overrides while the fluent form suits library-level configuration.
 - **[pattern:tape-compiler-emits-raw-bytes]** The `Compiler::compile()` for `TypeDirective` emits `Input` events with `['b' => string]` payload (raw bytes) rather than `['msg' => [...]]` envelope form. This avoids the need to serialize `KeyMsg` objects (which don't implement `\JsonSerializable`) and is the simplest path since the downstream `Player` handles both forms identically. Direct raw-byte emission also avoids double-parsing through `InputReader`. The trade-off: `TypeDirective` can't emit non-KeyMsg input events (mouse, focus, etc.) — but those never appear in `.tape` files so this is not a limitation in practice.
 - **[gotcha:tape-parser-env-value-quoting]** `Env KEY "value"` directives have their value stored with quotes intact in the lexer token; the `Compiler` strips surrounding quotes with `trim($node->value, '"\' ')`. This is correct for the common case (`"xterm-256color"`, `'demo'`). Unquoting at compile time (rather than parse time) avoids needing to handle mismatched quote styles in the parser.
+- **[pattern:snapshot-equality-excludes-time]** `Snapshot::equals()` compares `grid` and `cursor` but NOT `time`. This is intentional — two frames captured at different virtual times but with identical terminal state should be considered equal for frame-dedup purposes. Use `equalsWithTime()` when exact reproducibility at a specific timestamp matters. Mirrors charmbracelet/x/vcr snapshot equality.
+- **[gotcha:frame-dedup-holdmax-off-by-one]** The `FrameDedup::dedup()` holdMax logic uses `$prevHold <= $holdMax` to decide whether to skip emitting a duplicate frame. When `$prevHold` equals `holdMax`, the duplicate IS emitted (since the condition becomes false). This means with `holdMax=300`, a run of 300 identical frames yields 1 output frame (the 301st identical frame is emitted). Document this as "at most `holdMax` collapses" semantics.
+- **[pattern:frame-stream-iterator-memory]** `FrameStream` implements `\IteratorAggregate` (not `\Iterator`) so that iteration is lazy — only one frame is held in memory at a time. The `getIterator()` method yields frames via `yield`, never buffering. This is critical for long-running renders that could otherwise exhaust memory with accumulated snapshots.
+- **[gotcha:frame-stream-final-frame-logic]** The final frame emission check in `FrameStream::getIterator()` uses `$virtualTime > $lastSnapshotTime` (strict greater-than, not `>=`). This prevents duplicate frame emission when the last event timestamp equals the last frame boundary. The check `0 > 0` is false, so no extra frame is emitted at the same virtual time as the previous emission.
 
 ---
 
@@ -52,7 +56,32 @@ Mode: SPEED_INSTANT
 
 This is the baseline before render-pipeline work. Per-event cost will grow as Phases 3–6 add Terminal feed + snapshot + rasterize + GIF encode steps.
 
+## Phase 3 Renderer (2026-05-22)
+
+**Scope:** Renderer + FrameStream + FrameDedup + Snapshot equality methods.
+
+### Snapshot equality
+
+Added `Snapshot::equals()` that compares `grid` and `cursor` (but NOT `time`) to enable frame dedup across different virtual timestamps. Also added `equalsWithTime()` for exact reproducibility checks. Added `CellGrid::equals()` by iterating all cells and delegating to `Cell::equals()`. Added `Cursor::equals()` for completeness (already had in original implementation).
+
+### typingSpeed in CassetteHeader
+
+The tape `Compiler` now stores `Set TypingSpeed` values in the `CassetteHeader::typingSpeed` field. This field is nullable (`?float`) with `null` meaning "not set / use default 50ms". Existing cassettes without this field (recorded before Phase 3) remain compatible.
+
+### FrameStream design
+
+`FrameStream` implements `\IteratorAggregate` (not `\Iterator`) for lazy iteration — only one frame in memory at a time. The `getIterator()` method uses `Generator::yield` to emit frames at 1/fps intervals as the virtual clock advances through cassette events. Resize events cause a new `Terminal` instance to be created; subsequent events feed to the new terminal.
+
 ### Decision log
+
+- **Snapshot::equals excludes time:** For frame dedup, we want to collapse identical visual states regardless of when they were captured. Including time would prevent any dedup since each frame has a unique virtual timestamp.
+- **holdMax default 300:** At 30fps, 300 frames = 10 seconds of hold. This prevents infinite holds from frozen/stuck terminal states while still collapsing the common case of cursor-blink idle time.
+- **Cell equality is O(cols × rows):** Documented as a known bottleneck for Phase 4 optimization (possible hash-based fast path).
+
+### Tests
+
+- `tests/Render/RendererTest.php` — 7 tests covering empty cassette, fps cadence, input byte feeding, resize handling, quit behavior, typing speed header usage.
+- `tests/Render/FrameDedupTest.php` — 7 tests covering identical frame collapse, unique frame passthrough, middle identical runs, 10-identical + 1-different case, holdMax honoring, empty stream, and holdMax=0 edge case.
 
 - **Primary rasterizer backend:** `ext-gd` — universal availability (bundled with PHP), sufficient for cell-grid rendering at 800×480.
 - **Primary GIF encoder:** `FfmpegGifEncoder` — ffmpeg already present in CI runner image; `palettegen=stats_mode=diff` + `paletteuse` two-pass produces quality GIFs at acceptable speed.
