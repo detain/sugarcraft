@@ -26,6 +26,34 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:frame-stream-iterator-memory]** `FrameStream` implements `\IteratorAggregate` (not `\Iterator`) so that iteration is lazy — only one frame is held in memory at a time. The `getIterator()` method yields frames via `yield`, never buffering. This is critical for long-running renders that could otherwise exhaust memory with accumulated snapshots.
 - **[gotcha:frame-stream-final-frame-logic]** The final frame emission check in `FrameStream::getIterator()` uses `$virtualTime > $lastSnapshotTime` (strict greater-than, not `>=`). This prevents duplicate frame emission when the last event timestamp equals the last frame boundary. The check `0 > 0` is false, so no extra frame is emitted at the same virtual time as the previous emission.
 
+## Phase 7 CI migration (2026-05-22)
+
+### New VHS runner image
+
+`ghcr.io/detain/sugarcraft-vhs-runner-php:latest` — PHP 8.3 CLI image for
+`candy-vcr render-batch`. Built from `scripts/Dockerfile.vhs-runner`
+(php:8.3-cli-bookworm + ffmpeg + gd + mbstring + intl + curl + ssh2 +
+bundled JetBrainsMono TTF fonts from candy-vcr/fonts/).
+
+Local build:
+  docker build -f scripts/Dockerfile.vhs-runner -t sugarcraft-vhs-runner-php:local .
+
+Local smoke test:
+  php candy-vcr/bin/candy-vcr render-tape candy-vcr/.vhs/smoke.tape --output /tmp/smoke.gif
+  file /tmp/smoke.gif   # must contain "GIF image"
+
+### A/B migration strategy
+
+The new `vhs-candy-vcr` job in vhs.yml runs in parallel with the
+upstream `vhs` job. It uses `candy-vcr render-batch` (PHP) instead of
+the Go `vhs` binary. Only `candy-core` is rendered during the soak
+period — the parallel job uses `|| true` so one lib's failure does not
+fail the whole workflow.
+
+After a 2-week soak with no regressions, the upstream `vhs` job is
+switched to use the PHP image and the Go-based renderer is retired.
+The A/B parallel run ensures zero downtime risk during the switchover.
+
 ---
 
 ## Phase 0 benchmark (2026-05-21)
