@@ -197,3 +197,25 @@ Bar cursor (shape=3): narrow filled rectangle at left edge.
 - `tests/Raster/GlyphsTest.php` — 9 tests: cache hits (same instance), cache misses (different instance), wide char double-width, measure() dimensions, space character tile.
 - `tests/Raster/GdRasterizerTest.php` — 11 tests: returns GdImage, correct dimensions, empty grid, cursor visible, bold/underline/inverse attrs, hidden cursor, different cursor shapes, auto FontLoader, non-zero pixels.
 
+## Phase 6 CLI integration (2026-05-22)
+
+**Scope:** `render-tape` and `render-batch` Symfony Console commands.
+
+### Symfony Console integration
+
+Added `symfony/console` to `require` (was only `symfony/process` before). The existing `Application` class used a custom `Command` interface with manual argument parsing. To integrate Symfony commands without rewriting existing commands, `Application::runSymfonyCommand()` bridges the custom argv/stream interface to Symfony's `InputInterface`/`OutputInterface` using `ArrayInput` + `StreamOutput`.
+
+### Static property inheritance issue
+
+`protected static $defaultName` on a Symfony Command subclass is not automatically picked up when the command is added to Symfony's Application. The fix is to explicitly call `parent::__construct('command-name')` in the constructor rather than relying on the static property alone.
+
+### GlobIterator for batch rendering
+
+`render-batch` uses `GlobIterator` (not `glob()`) to find `.tape` files. `GlobIterator` is an Iterator (not just an array), so the results are collected into an array before sorting. Sorting is done with `sort($tapeFiles, SORT_STRING)` for deterministic ordering.
+
+### Decision log
+
+- **`$strict` option:** The `--strict` flag triggers pre-render validation of the parsed AST for `ParseError` nodes (unknown directives). `TapeToGif::render()` itself doesn't use a `strict` option — validation happens in the command layer before calling `render()`.
+- **`--font` option accepted but not used:** The `--font/-f` option is defined in both commands (accepting a TTF font family name) but is not currently passed to `TapeToGif::create()` or `render()` since the pipeline doesn't yet support custom font families. The option is accepted for future compatibility.
+- **ProgressBar phase labels:** Four phases: "Parsing tape...", "Compiling events...", "Rendering frames...", "Encoding GIF...". Progress is advanced after each phase to show the user's position in the pipeline.
+
