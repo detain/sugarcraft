@@ -22,12 +22,16 @@ use SugarCraft\Core\Program;
 
 final class TickMsg implements Msg
 {
-    public function __construct(public readonly float $now) {}
+    public function __construct(public readonly float $now)
+    {
+    }
 }
 
 final class Realtime implements Model
 {
-    public function __construct(public readonly float $now = 0.0) {}
+    public function __construct(public readonly float $now = 0.0)
+    {
+    }
 
     public function init(): ?\Closure
     {

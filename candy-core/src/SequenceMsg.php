@@ -17,5 +17,7 @@ namespace SugarCraft\Core;
 final class SequenceMsg implements Msg
 {
     /** @param list<\Closure> $cmds */
-    public function __construct(public readonly array $cmds) {}
+    public function __construct(public readonly array $cmds)
+    {
+    }
 }

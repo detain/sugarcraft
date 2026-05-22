@@ -32,9 +32,13 @@ final class ScreenModel implements Model
 
     public function __construct(
         public readonly int $level,
-    ) {}
+    ) {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {
@@ -63,7 +67,8 @@ final class DemoRootModel implements Model, \SugarCraft\Core\ScreenStackCapable
     public function __construct(
         public ScreenStack $screens = new ScreenStack(),
         public ?Model $currentModel = null,
-    ) {}
+    ) {
+    }
 
     public function screens(): ScreenStack
     {

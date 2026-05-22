@@ -20,7 +20,7 @@ final class PushScreenCmd
 
     public function __construct(Screen $screen)
     {
-        $this->cmd = static fn(): \SugarCraft\Core\Msg\ScreenStackPushedMsg =>
+        $this->cmd = static fn (): \SugarCraft\Core\Msg\ScreenStackPushedMsg =>
             new \SugarCraft\Core\Msg\ScreenStackPushedMsg($screen);
     }
 

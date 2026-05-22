@@ -197,7 +197,7 @@ final class RendererTest extends TestCase
         $this->assertStringContainsString('2', $delta);
         // Wrapped in sync markers.
         $this->assertStringContainsString(Ansi::syncBegin(), $delta);
-        $this->assertStringContainsString(Ansi::syncEnd(),   $delta);
+        $this->assertStringContainsString(Ansi::syncEnd(), $delta);
         fclose($out);
     }
 
@@ -253,7 +253,7 @@ final class RendererTest extends TestCase
         $cell = new Renderer($cellOut, inline: false, cellDiff: true);
         $line = new Renderer($lineOut, inline: false, cellDiff: false);
 
-        $frame = static fn(int $n): string
+        $frame = static fn (int $n): string
             => "Status: OK\nProcessed: {$n} items\nElapsed: {$n}s";
         for ($i = 0; $i <= 50; $i++) {
             $cell->render($frame($i));
@@ -265,8 +265,11 @@ final class RendererTest extends TestCase
         // Cell-diff should write meaningfully fewer bytes — exact
         // ratio depends on the line content but should be at least
         // 25% smaller for this counter scenario.
-        $this->assertLessThan($lineLen * 0.85, $cellLen,
-            "cell-diff ($cellLen B) should beat line-diff ($lineLen B) by >15% on a counter");
+        $this->assertLessThan(
+            $lineLen * 0.85,
+            $cellLen,
+            "cell-diff ($cellLen B) should beat line-diff ($lineLen B) by >15% on a counter"
+        );
         fclose($cellOut);
         fclose($lineOut);
     }

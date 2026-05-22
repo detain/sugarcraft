@@ -71,8 +71,8 @@ final class TTest extends TestCase
     {
         // pt-br.php (Brazilian) takes precedence over pt.php (European) when
         // the active locale is pt-br.
-        $this->writeLang('en',    ['noun.you' => 'you']);
-        $this->writeLang('pt',    ['noun.you' => 'tu']);
+        $this->writeLang('en', ['noun.you' => 'you']);
+        $this->writeLang('pt', ['noun.you' => 'tu']);
         $this->writeLang('pt-br', ['noun.you' => 'você']);
         T::register('demo', $this->tmpDir);
         T::setLocale('pt-br');

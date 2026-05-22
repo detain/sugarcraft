@@ -24,13 +24,17 @@ use SugarCraft\Core\Program;
 
 final class StepMsg implements Msg
 {
-    public function __construct(public readonly string $label) {}
+    public function __construct(public readonly string $label)
+    {
+    }
 }
 
 final class Sequence implements Model
 {
     /** @param list<string> $log */
-    public function __construct(public readonly array $log = []) {}
+    public function __construct(public readonly array $log = [])
+    {
+    }
 
     public function init(): ?\Closure
     {

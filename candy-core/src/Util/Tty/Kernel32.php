@@ -312,10 +312,10 @@ CPROTO
         $bottom = (int) \FFI::cast('short*', \FFI::ptr($info, 10))->cdata;
 
         // Handle -1 (unset by ConHost) with sensible floor defaults.
-        $left   = $left   < 0 ? 0   : $left;
-        $right  = $right  < 0 ? 79  : $right;
-        $top    = $top    < 0 ? 0   : $top;
-        $bottom = $bottom < 0 ? 23  : $bottom;
+        $left   = $left   < 0 ? 0 : $left;
+        $right  = $right  < 0 ? 79 : $right;
+        $top    = $top    < 0 ? 0 : $top;
+        $bottom = $bottom < 0 ? 23 : $bottom;
 
         return [
             'cols' => $right - $left + 1,

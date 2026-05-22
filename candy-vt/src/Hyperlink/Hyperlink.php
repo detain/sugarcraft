@@ -14,7 +14,8 @@ final readonly class Hyperlink
     public function __construct(
         public string $id = '',
         public string $uri = '',
-    ) {}
+    ) {
+    }
 
     public static function fromRaw(string $id, string $uri): self
     {

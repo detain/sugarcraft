@@ -118,9 +118,18 @@ enum ColorProfile: int
         return self::Ascii;
     }
 
-    public function supportsAnsi(): bool      { return $this->value >= self::Ansi->value; }
-    public function supports256(): bool       { return $this->value >= self::Ansi256->value; }
-    public function supportsTrueColor(): bool { return $this->value >= self::TrueColor->value; }
+    public function supportsAnsi(): bool
+    {
+        return $this->value >= self::Ansi->value;
+    }
+    public function supports256(): bool
+    {
+        return $this->value >= self::Ansi256->value;
+    }
+    public function supportsTrueColor(): bool
+    {
+        return $this->value >= self::TrueColor->value;
+    }
 
     /** @return array<string,string> */
     private static function defaultEnv(): array

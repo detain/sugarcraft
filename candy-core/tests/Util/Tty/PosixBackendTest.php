@@ -26,8 +26,12 @@ final class PosixBackendTest extends TestCase
             $this->assertSame(80, $size['cols']);
             $this->assertSame(24, $size['rows']);
         } finally {
-            if ($prevCols !== false) putenv('COLUMNS=' . $prevCols);
-            if ($prevRows !== false) putenv('LINES='   . $prevRows);
+            if ($prevCols !== false) {
+                putenv('COLUMNS=' . $prevCols);
+            }
+            if ($prevRows !== false) {
+                putenv('LINES='   . $prevRows);
+            }
             fclose($r);
         }
     }
@@ -46,7 +50,7 @@ final class PosixBackendTest extends TestCase
         try {
             $size = $tty->size();
             $this->assertSame(132, $size['cols']);
-            $this->assertSame(50,  $size['rows']);
+            $this->assertSame(50, $size['rows']);
         } finally {
             putenv('COLUMNS' . ($prevCols === false ? '' : '=' . $prevCols));
             putenv('LINES'   . ($prevRows === false ? '' : '=' . $prevRows));
@@ -94,11 +98,11 @@ final class PosixBackendTest extends TestCase
     public function testOnResizeNoOpWithoutPcntl(): void
     {
         if (!function_exists('pcntl_signal')) {
-            $this->assertFalse(PosixBackend::onResize(static fn() => null));
+            $this->assertFalse(PosixBackend::onResize(static fn () => null));
             return;
         }
         // On posix with pcntl available, the install should succeed.
-        $installed = PosixBackend::onResize(static fn() => null);
+        $installed = PosixBackend::onResize(static fn () => null);
         $this->assertTrue($installed);
         // Restore default handler so the test doesn't leak a closure.
         if (defined('SIGWINCH')) {

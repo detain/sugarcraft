@@ -27,5 +27,6 @@ final class Subscription
         public readonly Kind $kind,
         public readonly array $params,
         public readonly \Closure $produce,
-    ) {}
+    ) {
+    }
 }

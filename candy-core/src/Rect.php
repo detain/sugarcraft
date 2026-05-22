@@ -19,7 +19,8 @@ final readonly class Rect
         public int $y,
         public int $width,
         public int $height,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a 0,0 origin rect of the given dimensions.

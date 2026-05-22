@@ -134,17 +134,37 @@ final class SgrState
             return '';
         }
         $codes = [0];
-        if ($this->bold)      $codes[] = 1;
-        if ($this->faint)     $codes[] = 2;
-        if ($this->italic)    $codes[] = 3;
-        if ($this->underline) $codes[] = 4;
-        if ($this->blink)     $codes[] = 5;
-        if ($this->reverse)   $codes[] = 7;
-        if ($this->conceal)   $codes[] = 8;
-        if ($this->strike)    $codes[] = 9;
+        if ($this->bold) {
+            $codes[] = 1;
+        }
+        if ($this->faint) {
+            $codes[] = 2;
+        }
+        if ($this->italic) {
+            $codes[] = 3;
+        }
+        if ($this->underline) {
+            $codes[] = 4;
+        }
+        if ($this->blink) {
+            $codes[] = 5;
+        }
+        if ($this->reverse) {
+            $codes[] = 7;
+        }
+        if ($this->conceal) {
+            $codes[] = 8;
+        }
+        if ($this->strike) {
+            $codes[] = 9;
+        }
         $out = "\x1b[" . implode(';', $codes) . 'm';
-        if ($this->fg !== '') $out .= $this->fg;
-        if ($this->bg !== '') $out .= $this->bg;
+        if ($this->fg !== '') {
+            $out .= $this->fg;
+        }
+        if ($this->bg !== '') {
+            $out .= $this->bg;
+        }
         return $out;
     }
 

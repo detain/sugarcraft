@@ -38,12 +38,30 @@ function worker_task_add_seven_three(): int
     return 7 + 3;
 }
 
-function worker_task_value_1(): int { return 1 * 2; }
-function worker_task_value_2(): int { return 2 * 2; }
-function worker_task_value_3(): int { return 3 * 2; }
-function worker_task_value_4(): int { return 4 * 2; }
-function worker_task_value_5(): int { return 5 * 2; }
-function worker_task_value_6(): int { return 6 * 2; }
+function worker_task_value_1(): int
+{
+    return 1 * 2;
+}
+function worker_task_value_2(): int
+{
+    return 2 * 2;
+}
+function worker_task_value_3(): int
+{
+    return 3 * 2;
+}
+function worker_task_value_4(): int
+{
+    return 4 * 2;
+}
+function worker_task_value_5(): int
+{
+    return 5 * 2;
+}
+function worker_task_value_6(): int
+{
+    return 6 * 2;
+}
 
 final class WorkerPoolTest extends TestCase
 {

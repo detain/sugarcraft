@@ -31,32 +31,77 @@ final class ComponentLifecycleTest extends TestCase
 
         $this->assertEmpty($composite->children());
 
-        $c1 = new class implements Component {
+        $c1 = new class () implements Component {
             use SubscriptionCapable;
             public string $id = 'c1';
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
-            public function onMount(): ?\Closure { return null; }
-            public function onUnmount(): ?\Closure { return null; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
+            public function onMount(): ?\Closure
+            {
+                return null;
+            }
+            public function onUnmount(): ?\Closure
+            {
+                return null;
+            }
         };
-        $c2 = new class implements Component {
+        $c2 = new class () implements Component {
             use SubscriptionCapable;
             public string $id = 'c2';
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
-            public function onMount(): ?\Closure { return null; }
-            public function onUnmount(): ?\Closure { return null; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
+            public function onMount(): ?\Closure
+            {
+                return null;
+            }
+            public function onUnmount(): ?\Closure
+            {
+                return null;
+            }
         };
-        $c3 = new class implements Component {
+        $c3 = new class () implements Component {
             use SubscriptionCapable;
             public string $id = 'c3';
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
-            public function onMount(): ?\Closure { return null; }
-            public function onUnmount(): ?\Closure { return null; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
+            public function onMount(): ?\Closure
+            {
+                return null;
+            }
+            public function onUnmount(): ?\Closure
+            {
+                return null;
+            }
         };
 
         $composite = $composite->withChildren(['c1' => $c1, 'c2' => $c2, 'c3' => $c3]);
@@ -65,12 +110,12 @@ final class ComponentLifecycleTest extends TestCase
 
     public function testAddComponentMsgCallsOnMountOnce(): void
     {
-        $counter = new class {
+        $counter = new class () {
             public int $mountCount = 0;
             public int $unmountCount = 0;
         };
 
-        $component = new class($counter) implements Component {
+        $component = new class ($counter) implements Component {
             use SubscriptionCapable;
             private object $counter;
 
@@ -79,9 +124,18 @@ final class ComponentLifecycleTest extends TestCase
                 $this->counter = $counter;
             }
 
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
 
             public function onMount(): ?\Closure
             {
@@ -110,12 +164,12 @@ final class ComponentLifecycleTest extends TestCase
 
     public function testRemoveComponentMsgCallsOnUnmountOnce(): void
     {
-        $counter = new class {
+        $counter = new class () {
             public int $mountCount = 0;
             public int $unmountCount = 0;
         };
 
-        $component = new class($counter) implements Component {
+        $component = new class ($counter) implements Component {
             use SubscriptionCapable;
             private object $counter;
 
@@ -124,9 +178,18 @@ final class ComponentLifecycleTest extends TestCase
                 $this->counter = $counter;
             }
 
-            public function init(): ?\Closure { return null; }
-            public function update(Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
 
             public function onMount(): ?\Closure
             {
@@ -160,14 +223,14 @@ final class ComponentLifecycleTest extends TestCase
 
     public function testThreeComponentsAddedOneRemovedMidSession(): void
     {
-        $counter = new class {
+        $counter = new class () {
             public array $mountCounts = ['a' => 0, 'b' => 0, 'c' => 0];
             public array $unmountCounts = ['a' => 0, 'b' => 0, 'c' => 0];
         };
 
         $components = [];
         foreach (['a', 'b', 'c'] as $id) {
-            $components[$id] = new class($id, $counter) implements Component {
+            $components[$id] = new class ($id, $counter) implements Component {
                 use SubscriptionCapable;
                 public string $id;
                 private object $counter;
@@ -178,14 +241,25 @@ final class ComponentLifecycleTest extends TestCase
                     $this->counter = $counter;
                 }
 
-                public function init(): ?\Closure { return null; }
-                public function update(Msg $msg): array { return [$this, null]; }
-                public function view(): string { return ''; }
-                public function onMount(): ?\Closure {
+                public function init(): ?\Closure
+                {
+                    return null;
+                }
+                public function update(Msg $msg): array
+                {
+                    return [$this, null];
+                }
+                public function view(): string
+                {
+                    return '';
+                }
+                public function onMount(): ?\Closure
+                {
                     $this->counter->mountCounts[$this->id]++;
                     return null;
                 }
-                public function onUnmount(): ?\Closure {
+                public function onUnmount(): ?\Closure
+                {
                     $this->counter->unmountCounts[$this->id]++;
                     return null;
                 }

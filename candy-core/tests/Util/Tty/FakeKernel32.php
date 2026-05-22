@@ -352,7 +352,7 @@ final class FakeKernel32 implements \SugarCraft\Core\Util\Tty\Kernel32Interface
 
         // Normalise to the shape expected by WindowsBackend drainSignals.
         return \array_map(
-            fn(array $r): array => ['type' => $r['type'], 'index' => 0],
+            fn (array $r): array => ['type' => $r['type'], 'index' => 0],
             $records,
         );
     }

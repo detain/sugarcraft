@@ -58,7 +58,7 @@ final class BuiltinSerializer implements MsgSerializer
     {
         $this->handlers = [
             KeyMsg::class => [
-                'encode' => static fn(KeyMsg $m): array => [
+                'encode' => static fn (KeyMsg $m): array => [
                     '@type' => 'KeyMsg',
                     'type' => $m->type->value,
                     'rune' => $m->rune,
@@ -66,7 +66,7 @@ final class BuiltinSerializer implements MsgSerializer
                     'ctrl' => $m->ctrl,
                     'shift' => $m->shift,
                 ],
-                'decode' => static fn(array $e): KeyMsg => new KeyMsg(
+                'decode' => static fn (array $e): KeyMsg => new KeyMsg(
                     type: KeyType::from((string) $e['type']),
                     rune: (string) ($e['rune'] ?? ''),
                     alt: (bool) ($e['alt'] ?? false),
@@ -79,79 +79,84 @@ final class BuiltinSerializer implements MsgSerializer
             MouseWheelMsg::class => self::mouseHandler(MouseWheelMsg::class, 'MouseWheelMsg'),
             MouseReleaseMsg::class => self::mouseHandler(MouseReleaseMsg::class, 'MouseReleaseMsg'),
             WindowSizeMsg::class => [
-                'encode' => static fn(WindowSizeMsg $m): array => [
+                'encode' => static fn (WindowSizeMsg $m): array => [
                     '@type' => 'WindowSizeMsg',
                     'cols' => $m->cols,
                     'rows' => $m->rows,
                 ],
-                'decode' => static fn(array $e): WindowSizeMsg => new WindowSizeMsg(
+                'decode' => static fn (array $e): WindowSizeMsg => new WindowSizeMsg(
                     cols: (int) $e['cols'],
                     rows: (int) $e['rows'],
                 ),
             ],
             FocusGainedMsg::class => [
-                'encode' => static fn(FocusGainedMsg $m): array => ['@type' => 'FocusGainedMsg'],
-                'decode' => static fn(array $e): FocusGainedMsg => new FocusGainedMsg(),
+                'encode' => static fn (FocusGainedMsg $m): array => ['@type' => 'FocusGainedMsg'],
+                'decode' => static fn (array $e): FocusGainedMsg => new FocusGainedMsg(),
             ],
             FocusLostMsg::class => [
-                'encode' => static fn(FocusLostMsg $m): array => ['@type' => 'FocusLostMsg'],
-                'decode' => static fn(array $e): FocusLostMsg => new FocusLostMsg(),
+                'encode' => static fn (FocusLostMsg $m): array => ['@type' => 'FocusLostMsg'],
+                'decode' => static fn (array $e): FocusLostMsg => new FocusLostMsg(),
             ],
             BlurMsg::class => [
-                'encode' => static fn(BlurMsg $m): array => ['@type' => 'BlurMsg'],
-                'decode' => static fn(array $e): BlurMsg => new BlurMsg(),
+                'encode' => static fn (BlurMsg $m): array => ['@type' => 'BlurMsg'],
+                'decode' => static fn (array $e): BlurMsg => new BlurMsg(),
             ],
             PasteStartMsg::class => [
-                'encode' => static fn(PasteStartMsg $m): array => ['@type' => 'PasteStartMsg'],
-                'decode' => static fn(array $e): PasteStartMsg => new PasteStartMsg(),
+                'encode' => static fn (PasteStartMsg $m): array => ['@type' => 'PasteStartMsg'],
+                'decode' => static fn (array $e): PasteStartMsg => new PasteStartMsg(),
             ],
             PasteEndMsg::class => [
-                'encode' => static fn(PasteEndMsg $m): array => ['@type' => 'PasteEndMsg'],
-                'decode' => static fn(array $e): PasteEndMsg => new PasteEndMsg(),
+                'encode' => static fn (PasteEndMsg $m): array => ['@type' => 'PasteEndMsg'],
+                'decode' => static fn (array $e): PasteEndMsg => new PasteEndMsg(),
             ],
             PasteMsg::class => [
-                'encode' => static fn(PasteMsg $m): array => [
+                'encode' => static fn (PasteMsg $m): array => [
                     '@type' => 'PasteMsg',
                     'content' => $m->content,
                 ],
-                'decode' => static fn(array $e): PasteMsg => new PasteMsg(
+                'decode' => static fn (array $e): PasteMsg => new PasteMsg(
                     content: (string) ($e['content'] ?? ''),
                 ),
             ],
             BackgroundColorMsg::class => [
-                'encode' => static fn(BackgroundColorMsg $m): array => [
+                'encode' => static fn (BackgroundColorMsg $m): array => [
                     '@type' => 'BackgroundColorMsg',
                     'r' => $m->r, 'g' => $m->g, 'b' => $m->b,
                 ],
-                'decode' => static fn(array $e): BackgroundColorMsg => new BackgroundColorMsg(
-                    r: (int) $e['r'], g: (int) $e['g'], b: (int) $e['b'],
+                'decode' => static fn (array $e): BackgroundColorMsg => new BackgroundColorMsg(
+                    r: (int) $e['r'],
+                    g: (int) $e['g'],
+                    b: (int) $e['b'],
                 ),
             ],
             ForegroundColorMsg::class => [
-                'encode' => static fn(ForegroundColorMsg $m): array => [
+                'encode' => static fn (ForegroundColorMsg $m): array => [
                     '@type' => 'ForegroundColorMsg',
                     'r' => $m->r, 'g' => $m->g, 'b' => $m->b,
                 ],
-                'decode' => static fn(array $e): ForegroundColorMsg => new ForegroundColorMsg(
-                    r: (int) $e['r'], g: (int) $e['g'], b: (int) $e['b'],
+                'decode' => static fn (array $e): ForegroundColorMsg => new ForegroundColorMsg(
+                    r: (int) $e['r'],
+                    g: (int) $e['g'],
+                    b: (int) $e['b'],
                 ),
             ],
             CursorPositionMsg::class => [
-                'encode' => static fn(CursorPositionMsg $m): array => [
+                'encode' => static fn (CursorPositionMsg $m): array => [
                     '@type' => 'CursorPositionMsg',
                     'row' => $m->row, 'col' => $m->col,
                 ],
-                'decode' => static fn(array $e): CursorPositionMsg => new CursorPositionMsg(
-                    row: (int) $e['row'], col: (int) $e['col'],
+                'decode' => static fn (array $e): CursorPositionMsg => new CursorPositionMsg(
+                    row: (int) $e['row'],
+                    col: (int) $e['col'],
                 ),
             ],
             FocusInMsg::class => [
-                'encode' => static fn(FocusInMsg $m): array => ['@type' => 'FocusInMsg'],
-                'decode' => static fn(array $e): FocusInMsg => new FocusInMsg(),
+                'encode' => static fn (FocusInMsg $m): array => ['@type' => 'FocusInMsg'],
+                'decode' => static fn (array $e): FocusInMsg => new FocusInMsg(),
             ],
             FocusOutMsg::class => [
-                'encode' => static fn(FocusOutMsg $m): array => ['@type' => 'FocusOutMsg'],
-                'decode' => static fn(array $e): FocusOutMsg => new FocusOutMsg(),
+                'encode' => static fn (FocusOutMsg $m): array => ['@type' => 'FocusOutMsg'],
+                'decode' => static fn (array $e): FocusOutMsg => new FocusOutMsg(),
             ],
         ];
     }
@@ -237,7 +242,7 @@ final class BuiltinSerializer implements MsgSerializer
     private static function mouseHandler(string $class, string $tag): array
     {
         return [
-            'encode' => static fn($m): array => [
+            'encode' => static fn ($m): array => [
                 '@type' => $tag,
                 'x' => $m->x,
                 'y' => $m->y,
@@ -247,7 +252,7 @@ final class BuiltinSerializer implements MsgSerializer
                 'alt' => $m->alt,
                 'ctrl' => $m->ctrl,
             ],
-            'decode' => static fn(array $e) => new $class(
+            'decode' => static fn (array $e) => new $class(
                 x: (int) $e['x'],
                 y: (int) $e['y'],
                 button: MouseButton::from((string) $e['button']),

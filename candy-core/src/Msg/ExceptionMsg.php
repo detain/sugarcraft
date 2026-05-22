@@ -13,5 +13,6 @@ final readonly class ExceptionMsg implements Msg
 {
     public function __construct(
         public \Throwable $exception,
-    ) {}
+    ) {
+    }
 }

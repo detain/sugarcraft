@@ -108,8 +108,13 @@ final class EnumsAndDtosTest extends TestCase
 
     public function testCursorWithFields(): void
     {
-        $c = new Cursor(row: 5, col: 10, shape: CursorShape::Bar, blink: true,
-            color: Color::rgb(255, 255, 0));
+        $c = new Cursor(
+            row: 5,
+            col: 10,
+            shape: CursorShape::Bar,
+            blink: true,
+            color: Color::rgb(255, 255, 0)
+        );
         $this->assertSame(5, $c->row);
         $this->assertSame(10, $c->col);
         $this->assertSame(CursorShape::Bar, $c->shape);

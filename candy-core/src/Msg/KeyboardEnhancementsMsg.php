@@ -28,7 +28,8 @@ final class KeyboardEnhancementsMsg implements Msg
 
     public function __construct(
         public readonly int $flags,
-    ) {}
+    ) {
+    }
 
     /** True if every flag in `$mask` is set. */
     public function has(int $mask): bool

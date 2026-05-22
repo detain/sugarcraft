@@ -18,50 +18,66 @@ final readonly class Cursor
         public int $shape = 0,    // 0=block 1=underline 2=pipe
         public ?int $savedRow = null,
         public ?int $savedCol = null,
-    ) {}
+    ) {
+    }
 
     public function withRow(int $row): self
     {
         return new self(
-            row: $row, col: $this->col,
-            visible: $this->visible, shape: $this->shape,
-            savedRow: $this->savedRow, savedCol: $this->savedCol,
+            row: $row,
+            col: $this->col,
+            visible: $this->visible,
+            shape: $this->shape,
+            savedRow: $this->savedRow,
+            savedCol: $this->savedCol,
         );
     }
 
     public function withCol(int $col): self
     {
         return new self(
-            row: $this->row, col: $col,
-            visible: $this->visible, shape: $this->shape,
-            savedRow: $this->savedRow, savedCol: $this->savedCol,
+            row: $this->row,
+            col: $col,
+            visible: $this->visible,
+            shape: $this->shape,
+            savedRow: $this->savedRow,
+            savedCol: $this->savedCol,
         );
     }
 
     public function withVisible(bool $v): self
     {
         return new self(
-            row: $this->row, col: $this->col,
-            visible: $v, shape: $this->shape,
-            savedRow: $this->savedRow, savedCol: $this->savedCol,
+            row: $this->row,
+            col: $this->col,
+            visible: $v,
+            shape: $this->shape,
+            savedRow: $this->savedRow,
+            savedCol: $this->savedCol,
         );
     }
 
     public function withShape(int $shape): self
     {
         return new self(
-            row: $this->row, col: $this->col,
-            visible: $this->visible, shape: $shape,
-            savedRow: $this->savedRow, savedCol: $this->savedCol,
+            row: $this->row,
+            col: $this->col,
+            visible: $this->visible,
+            shape: $shape,
+            savedRow: $this->savedRow,
+            savedCol: $this->savedCol,
         );
     }
 
     public function save(): self
     {
         return new self(
-            row: $this->row, col: $this->col,
-            visible: $this->visible, shape: $this->shape,
-            savedRow: $this->row, savedCol: $this->col,
+            row: $this->row,
+            col: $this->col,
+            visible: $this->visible,
+            shape: $this->shape,
+            savedRow: $this->row,
+            savedCol: $this->col,
         );
     }
 
@@ -70,8 +86,10 @@ final readonly class Cursor
         return new self(
             row: $this->savedRow ?? $this->row,
             col: $this->savedCol ?? $this->col,
-            visible: $this->visible, shape: $this->shape,
-            savedRow: $this->savedRow, savedCol: $this->savedCol,
+            visible: $this->visible,
+            shape: $this->shape,
+            savedRow: $this->savedRow,
+            savedCol: $this->savedCol,
         );
     }
 

@@ -17,5 +17,6 @@ final class ColorProfileMsg implements Msg
 {
     public function __construct(
         public readonly ColorProfile $profile,
-    ) {}
+    ) {
+    }
 }

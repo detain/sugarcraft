@@ -40,8 +40,8 @@ final class SubscriptionsReconcileTest extends TestCase
     public function testSubscriptionsHasWithTickAndHas(): void
     {
         $subs = (new Subscriptions())
-            ->withTick('a', 1.0, static fn() => null)
-            ->withTick('b', 2.0, static fn() => null);
+            ->withTick('a', 1.0, static fn () => null)
+            ->withTick('b', 2.0, static fn () => null);
 
         $this->assertTrue($subs->has('a'));
         $this->assertTrue($subs->has('b'));
@@ -53,8 +53,8 @@ final class SubscriptionsReconcileTest extends TestCase
     {
         $signo = defined('SIG_HUP') ? SIG_HUP : 1;
         $subs = (new Subscriptions())
-            ->withKey('key-sub', static fn() => null)
-            ->withSignal('sig-hup', $signo, static fn() => null);
+            ->withKey('key-sub', static fn () => null)
+            ->withSignal('sig-hup', $signo, static fn () => null);
 
         $this->assertTrue($subs->has('key-sub'));
         $this->assertTrue($subs->has('sig-hup'));
@@ -69,7 +69,7 @@ final class SubscriptionsReconcileTest extends TestCase
         $subs = (new Subscriptions())->withCustom(
             'custom',
             ['interval' => 0.5],
-            static fn() => null,
+            static fn () => null,
         );
 
         $all = $subs->all();
@@ -88,7 +88,7 @@ final class SubscriptionsReconcileTest extends TestCase
 
     public function testSubscribeCmdProducesSubscriptionsMsg(): void
     {
-        $subs = (new Subscriptions())->withTick('test', 1.0, static fn() => null);
+        $subs = (new Subscriptions())->withTick('test', 1.0, static fn () => null);
         $cmd = new \SugarCraft\Core\Cmd\SubscribeCmd($subs);
         $result = $cmd();
 
@@ -98,11 +98,20 @@ final class SubscriptionsReconcileTest extends TestCase
 
     public function testModelWithoutSubscriptionsReturnsNull(): void
     {
-        $model = new class implements \SugarCraft\Core\Model {
+        $model = new class () implements \SugarCraft\Core\Model {
             use SubscriptionCapable;
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
         };
 
         $this->assertNull($model->subscriptions());
@@ -110,15 +119,24 @@ final class SubscriptionsReconcileTest extends TestCase
 
     public function testModelWithTickSubscription(): void
     {
-        $model = new class implements \SugarCraft\Core\Model {
+        $model = new class () implements \SugarCraft\Core\Model {
             use SubscriptionCapable;
             public const TICK_ID = 'test-tick';
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): string { return ''; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): string
+            {
+                return '';
+            }
             public function subscriptions(): ?Subscriptions
             {
-                return (new Subscriptions())->withTick(self::TICK_ID, 0.1, static fn() => null);
+                return (new Subscriptions())->withTick(self::TICK_ID, 0.1, static fn () => null);
             }
         };
 
@@ -139,16 +157,22 @@ final class SubscriptionsReconcileTest extends TestCase
         // Track ticks received.
         $receivedTicks = [];
 
-        $model = new class($receivedTicks) implements \SugarCraft\Core\Model {
+        $model = new class ($receivedTicks) implements \SugarCraft\Core\Model {
             use SubscriptionCapable;
             public const TICK_ID = 'model-tick';
 
             /** @var list<object> */
             private array $ticks;
 
-            public function __construct(array &$ticks) { $this->ticks = &$ticks; }
+            public function __construct(array &$ticks)
+            {
+                $this->ticks = &$ticks;
+            }
 
-            public function init(): ?\Closure { return null; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
 
             public function update(\SugarCraft\Core\Msg $msg): array
             {
@@ -158,11 +182,14 @@ final class SubscriptionsReconcileTest extends TestCase
                 return [$this, null];
             }
 
-            public function view(): string { return ''; }
+            public function view(): string
+            {
+                return '';
+            }
 
             public function subscriptions(): ?Subscriptions
             {
-                return (new Subscriptions())->withTick(self::TICK_ID, 0.1, static fn() => new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
+                return (new Subscriptions())->withTick(self::TICK_ID, 0.1, static fn () => new \SugarCraft\Core\Msg\WindowSizeMsg(80, 24));
             }
         };
 
@@ -174,10 +201,10 @@ final class SubscriptionsReconcileTest extends TestCase
             input: $in,
             output: $out,
             loop: $loop,
-            subscriptions: static fn($m) => $m->subscriptions(),
+            subscriptions: static fn ($m) => $m->subscriptions(),
         ));
 
-        $loop->addTimer(0.3, static fn() => $loop->stop());
+        $loop->addTimer(0.3, static fn () => $loop->stop());
         $program->run();
 
         $this->assertNotEmpty($receivedTicks, 'Should have received at least one tick');
@@ -206,7 +233,7 @@ final class SubscriptionsReconcileTest extends TestCase
             'test',
             Kind::Tick,
             ['seconds' => 1.0],
-            static fn() => new \SugarCraft\Core\Msg\QuitMsg(),
+            static fn () => new \SugarCraft\Core\Msg\QuitMsg(),
         );
 
         $produce = $sub->produce;

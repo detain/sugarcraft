@@ -104,16 +104,34 @@ final class Ansi
         return self::CSI . "48;2;$r;$g;{$b}m";
     }
 
-    public static function cursorUp(int $n = 1): string    { return self::CSI . max(1, $n) . 'A'; }
-    public static function cursorDown(int $n = 1): string  { return self::CSI . max(1, $n) . 'B'; }
-    public static function cursorRight(int $n = 1): string { return self::CSI . max(1, $n) . 'C'; }
-    public static function cursorLeft(int $n = 1): string  { return self::CSI . max(1, $n) . 'D'; }
+    public static function cursorUp(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'A';
+    }
+    public static function cursorDown(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'B';
+    }
+    public static function cursorRight(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'C';
+    }
+    public static function cursorLeft(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'D';
+    }
     public static function cursorTo(int $row, int $col): string
     {
         return self::CSI . max(1, $row) . ';' . max(1, $col) . 'H';
     }
-    public static function cursorHide(): string { return self::CSI . '?25l'; }
-    public static function cursorShow(): string { return self::CSI . '?25h'; }
+    public static function cursorHide(): string
+    {
+        return self::CSI . '?25l';
+    }
+    public static function cursorShow(): string
+    {
+        return self::CSI . '?25h';
+    }
 
     /**
      * Emit DECSCUSR to set the cursor shape (block / underline /
@@ -130,21 +148,45 @@ final class Ansi
         $code = $blink ? $shape->value - 1 : $shape->value;
         return self::CSI . $code . ' q';
     }
-    public static function cursorSave(): string    { return self::ESC . '7'; }
-    public static function cursorRestore(): string { return self::ESC . '8'; }
+    public static function cursorSave(): string
+    {
+        return self::ESC . '7';
+    }
+    public static function cursorRestore(): string
+    {
+        return self::ESC . '8';
+    }
 
-    public static function eraseLine(): string   { return self::CSI . '2K'; }
-    public static function eraseScreen(): string { return self::CSI . '2J'; }
-    public static function eraseToEnd(): string  { return self::CSI . '0J'; }
+    public static function eraseLine(): string
+    {
+        return self::CSI . '2K';
+    }
+    public static function eraseScreen(): string
+    {
+        return self::CSI . '2J';
+    }
+    public static function eraseToEnd(): string
+    {
+        return self::CSI . '0J';
+    }
 
     /** Erase from the cursor to the start of the line (`CSI 1K`). */
-    public static function eraseToLineStart(): string { return self::CSI . '1K'; }
+    public static function eraseToLineStart(): string
+    {
+        return self::CSI . '1K';
+    }
 
     /** Erase from the cursor to the end of the line (`CSI 0K`). */
-    public static function eraseToLineEnd(): string { return self::CSI . '0K'; }
+    public static function eraseToLineEnd(): string
+    {
+        return self::CSI . '0K';
+    }
 
     /** Erase from the start of the screen to the cursor (`CSI 1J`). */
-    public static function eraseToScreenStart(): string { return self::CSI . '1J'; }
+    public static function eraseToScreenStart(): string
+    {
+        return self::CSI . '1J';
+    }
 
     /**
      * Set the scrolling region (DECSTBM): rows below the top margin and
@@ -265,27 +307,60 @@ final class Ansi
      * `cursorSave()` — kept as an alias for parity with terminal-control
      * documentation that uses the SCO/DECSC distinction.
      */
-    public static function decsc(): string { return self::ESC . '7'; }
-    public static function decrc(): string { return self::ESC . '8'; }
+    public static function decsc(): string
+    {
+        return self::ESC . '7';
+    }
+    public static function decrc(): string
+    {
+        return self::ESC . '8';
+    }
 
     /** Save the cursor position via SCO `CSI s`. */
-    public static function scoSave(): string { return self::CSI . 's'; }
+    public static function scoSave(): string
+    {
+        return self::CSI . 's';
+    }
     /** Restore the cursor position via SCO `CSI u`. */
-    public static function scoRestore(): string { return self::CSI . 'u'; }
+    public static function scoRestore(): string
+    {
+        return self::CSI . 'u';
+    }
 
     /** Set a horizontal tab stop at the current column (HTS). */
-    public static function setTabStop(): string { return self::ESC . 'H'; }
+    public static function setTabStop(): string
+    {
+        return self::ESC . 'H';
+    }
     /** Clear the tab stop at the current column (`CSI 0g`). */
-    public static function clearTabStop(): string { return self::CSI . '0g'; }
+    public static function clearTabStop(): string
+    {
+        return self::CSI . '0g';
+    }
     /** Clear all tab stops (`CSI 3g`). */
-    public static function clearAllTabStops(): string { return self::CSI . '3g'; }
+    public static function clearAllTabStops(): string
+    {
+        return self::CSI . '3g';
+    }
     /** Move forward to the next tab stop, `$n` times (`CSI <n> I`). */
-    public static function tabForward(int $n = 1): string { return self::CSI . max(1, $n) . 'I'; }
+    public static function tabForward(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'I';
+    }
     /** Move backward to the previous tab stop, `$n` times (`CSI <n> Z`). */
-    public static function tabBackward(int $n = 1): string { return self::CSI . max(1, $n) . 'Z'; }
+    public static function tabBackward(int $n = 1): string
+    {
+        return self::CSI . max(1, $n) . 'Z';
+    }
 
-    public static function altScreenEnter(): string { return self::CSI . '?1049h'; }
-    public static function altScreenLeave(): string { return self::CSI . '?1049l'; }
+    public static function altScreenEnter(): string
+    {
+        return self::CSI . '?1049h';
+    }
+    public static function altScreenLeave(): string
+    {
+        return self::CSI . '?1049l';
+    }
 
     /**
      * Synchronized output (DEC mode 2026). Wrap each rendered frame in
@@ -294,8 +369,14 @@ final class Ansi
      * on slow terminals. Bubble Tea v2 enables this by default; we
      * follow.
      */
-    public static function syncBegin(): string { return self::CSI . '?2026h'; }
-    public static function syncEnd(): string   { return self::CSI . '?2026l'; }
+    public static function syncBegin(): string
+    {
+        return self::CSI . '?2026h';
+    }
+    public static function syncEnd(): string
+    {
+        return self::CSI . '?2026l';
+    }
 
     /**
      * Grapheme cluster mode (DEC mode 2027). Tells the terminal to
@@ -303,39 +384,81 @@ final class Ansi
      * per code point — fixes the long-standing emoji-width drift.
      * Toggle once at program startup; restore on teardown.
      */
-    public static function unicodeOn(): string  { return self::CSI . '?2027h'; }
-    public static function unicodeOff(): string { return self::CSI . '?2027l'; }
+    public static function unicodeOn(): string
+    {
+        return self::CSI . '?2027h';
+    }
+    public static function unicodeOff(): string
+    {
+        return self::CSI . '?2027l';
+    }
 
-    public static function bracketedPasteOn(): string  { return self::CSI . '?2004h'; }
-    public static function bracketedPasteOff(): string { return self::CSI . '?2004l'; }
+    public static function bracketedPasteOn(): string
+    {
+        return self::CSI . '?2004h';
+    }
+    public static function bracketedPasteOff(): string
+    {
+        return self::CSI . '?2004l';
+    }
 
-    public static function mouseAllOn(): string   { return self::CSI . '?1000h' . self::CSI . '?1006h'; }
-    public static function mouseAllOff(): string  { return self::CSI . '?1006l' . self::CSI . '?1000l'; }
+    public static function mouseAllOn(): string
+    {
+        return self::CSI . '?1000h' . self::CSI . '?1006h';
+    }
+    public static function mouseAllOff(): string
+    {
+        return self::CSI . '?1006l' . self::CSI . '?1000l';
+    }
 
     /** Cell-motion tracking: report when a button is held and the mouse moves. */
-    public static function mouseCellMotionOn(): string  { return self::CSI . '?1002h' . self::CSI . '?1006h'; }
-    public static function mouseCellMotionOff(): string { return self::CSI . '?1006l' . self::CSI . '?1002l'; }
+    public static function mouseCellMotionOn(): string
+    {
+        return self::CSI . '?1002h' . self::CSI . '?1006h';
+    }
+    public static function mouseCellMotionOff(): string
+    {
+        return self::CSI . '?1006l' . self::CSI . '?1002l';
+    }
 
     /** All-motion tracking: report every move regardless of button state. */
-    public static function mouseAllMotionOn(): string  { return self::CSI . '?1003h' . self::CSI . '?1006h'; }
-    public static function mouseAllMotionOff(): string { return self::CSI . '?1006l' . self::CSI . '?1003l'; }
+    public static function mouseAllMotionOn(): string
+    {
+        return self::CSI . '?1003h' . self::CSI . '?1006h';
+    }
+    public static function mouseAllMotionOff(): string
+    {
+        return self::CSI . '?1006l' . self::CSI . '?1003l';
+    }
 
-    public static function focusReportingOn(): string  { return self::CSI . '?1004h'; }
-    public static function focusReportingOff(): string { return self::CSI . '?1004l'; }
+    public static function focusReportingOn(): string
+    {
+        return self::CSI . '?1004h';
+    }
+    public static function focusReportingOff(): string
+    {
+        return self::CSI . '?1004l';
+    }
 
     /**
      * Ask the terminal where the cursor is. The reply comes back as a
      * CSI sequence: `ESC [ <row> ; <col> R` (DSR-CPR), parsed into a
      * {@see \SugarCraft\Core\Msg\CursorPositionMsg}.
      */
-    public static function requestCursorPosition(): string { return self::CSI . '6n'; }
+    public static function requestCursorPosition(): string
+    {
+        return self::CSI . '6n';
+    }
 
     /**
      * Ask the terminal for its current default foreground colour. Reply
      * arrives as `OSC 10 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
      * {@see \SugarCraft\Core\Msg\ForegroundColorMsg}.
      */
-    public static function requestForegroundColor(): string { return self::OSC . '10;?' . self::BEL; }
+    public static function requestForegroundColor(): string
+    {
+        return self::OSC . '10;?' . self::BEL;
+    }
 
     /**
      * Ask the terminal for its current default background colour. Reply
@@ -343,7 +466,10 @@ final class Ansi
      * {@see \SugarCraft\Core\Msg\BackgroundColorMsg}. Useful for picking
      * a theme that contrasts the user's background.
      */
-    public static function requestBackgroundColor(): string { return self::OSC . '11;?' . self::BEL; }
+    public static function requestBackgroundColor(): string
+    {
+        return self::OSC . '11;?' . self::BEL;
+    }
 
     /**
      * Set the terminal's default foreground colour (OSC 10) using
@@ -367,7 +493,10 @@ final class Ansi
      * `OSC 12 ; rgb:RRRR/GGGG/BBBB ST|BEL` and is parsed into
      * {@see \SugarCraft\Core\Msg\CursorColorMsg}.
      */
-    public static function requestCursorColor(): string { return self::OSC . '12;?' . self::BEL; }
+    public static function requestCursorColor(): string
+    {
+        return self::OSC . '12;?' . self::BEL;
+    }
 
     /**
      * Ask the terminal to identify itself (XTVERSION). Reply arrives
@@ -377,7 +506,10 @@ final class Ansi
      * gating capabilities (sixel, kitty keyboard, etc.) on the
      * specific terminal.
      */
-    public static function requestTerminalVersion(): string { return self::CSI . '>0q'; }
+    public static function requestTerminalVersion(): string
+    {
+        return self::CSI . '>0q';
+    }
 
     /**
      * Ask the terminal whether a given mode is set (DECRQM). Reply

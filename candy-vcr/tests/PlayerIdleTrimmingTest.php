@@ -48,7 +48,7 @@ final class PlayerIdleTrimmingTest extends TestCase
 
             // With SPEED_INSTANT, idleThreshold shouldn't matter
             $result = $player->play(
-                fn($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
+                fn ($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
                 speed: Player::SPEED_INSTANT,
                 idleThresholdSeconds: 0.5,
             );
@@ -86,7 +86,7 @@ final class PlayerIdleTrimmingTest extends TestCase
 
             // No exception should be thrown
             $result = $player->play(
-                fn($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
+                fn ($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
                 speed: Player::SPEED_INSTANT,
                 idleThresholdSeconds: null,
             );
@@ -100,7 +100,7 @@ final class PlayerIdleTrimmingTest extends TestCase
     private function createEchoProgram($input, $output, $loop): Program
     {
         return new Program(
-            new class implements Model {
+            new class () implements Model {
                 public int $count = 0;
 
                 public function init(): ?\Closure
@@ -118,6 +118,11 @@ final class PlayerIdleTrimmingTest extends TestCase
                 public function view(): string
                 {
                     return "tick: {$this->count}";
+                }
+
+                public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+                {
+                    return null;
                 }
             },
             new ProgramOptions(

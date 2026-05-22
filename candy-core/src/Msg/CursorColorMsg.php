@@ -17,7 +17,8 @@ final class CursorColorMsg implements Msg
         public readonly int $r,
         public readonly int $g,
         public readonly int $b,
-    ) {}
+    ) {
+    }
 
     public function hex(): string
     {

@@ -21,7 +21,8 @@ final readonly class Screen
         public readonly int $cols,
         public readonly int $rows,
         private ?Scrollback $scrollback = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Build a Screen snapshot from the current Buffer state.

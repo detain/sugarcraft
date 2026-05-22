@@ -21,7 +21,8 @@ final readonly class Pane
     public function __construct(
         public Model $model,
         public Rect $bounds,
-    ) {}
+    ) {
+    }
 
     /**
      * Route a message to the underlying model, returning an updated Pane.

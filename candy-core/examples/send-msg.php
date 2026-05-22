@@ -24,14 +24,21 @@ use SugarCraft\Core\Program;
 
 final class PingMsg implements Msg
 {
-    public function __construct(public readonly int $count) {}
+    public function __construct(public readonly int $count)
+    {
+    }
 }
 
 final class SendMsg implements Model
 {
-    public function __construct(public readonly int $pings = 0) {}
+    public function __construct(public readonly int $pings = 0)
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

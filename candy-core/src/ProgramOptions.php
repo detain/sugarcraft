@@ -140,5 +140,6 @@ final class ProgramOptions
          * @var ?\Closure(Model): ?Subscriptions
          */
         public readonly ?\Closure $subscriptions = null,
-    ) {}
+    ) {
+    }
 }

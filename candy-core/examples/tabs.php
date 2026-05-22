@@ -27,9 +27,13 @@ final class Tabs implements Model
         public readonly array $names,
         public readonly array $bodies,
         public readonly int $cursor = 0,
-    ) {}
+    ) {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

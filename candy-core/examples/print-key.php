@@ -22,9 +22,14 @@ use SugarCraft\Core\Program;
 final class PrintKey implements Model
 {
     /** @param list<string> $log */
-    public function __construct(public readonly array $log = []) {}
+    public function __construct(public readonly array $log = [])
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {
@@ -36,8 +41,8 @@ final class PrintKey implements Model
                 'type=%-12s rune=%-6s ctrl=%s alt=%s shift=%s string=%s',
                 $msg->type->name,
                 $msg->rune === '' ? '∅' : json_encode($msg->rune),
-                $msg->ctrl  ? '✓' : '·',
-                $msg->alt   ? '✓' : '·',
+                $msg->ctrl ? '✓' : '·',
+                $msg->alt ? '✓' : '·',
                 $msg->shift ? '✓' : '·',
                 $msg->string(),
             );

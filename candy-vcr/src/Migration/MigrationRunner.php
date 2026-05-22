@@ -84,7 +84,7 @@ final class MigrationRunner
     public function describeMigrators(): array
     {
         return array_map(
-            fn(CassetteMigrator $m) => [
+            fn (CassetteMigrator $m) => [
                 'source' => $m->getSourceVersion(),
                 'target' => $m->getTargetVersion(),
                 'description' => $m->describe(),
@@ -99,6 +99,6 @@ final class MigrationRunner
     public function register(CassetteMigrator $migrator): void
     {
         $this->migrators[] = $migrator;
-        usort($this->migrators, fn($a, $b) => $a->getSourceVersion() <=> $b->getSourceVersion());
+        usort($this->migrators, fn ($a, $b) => $a->getSourceVersion() <=> $b->getSourceVersion());
     }
 }
