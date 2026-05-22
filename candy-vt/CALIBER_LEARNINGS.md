@@ -475,3 +475,20 @@ Cursor `shape` uses raw int values matching the VT spec:
 `0` = block (blinking), `1` = underline, `2` = pipe (bar).
 `CursorShape` enum (in root namespace) maps symbolic names to these ints.
 
+## Parser::reset() flushes then clears
+
+`Parser::reset()` calls `flush()` first (dispatching any in-flight
+string sequences) then `clear()` (resetting params/cmd/stringBuffer).
+Calling reset() mid-sequence flushes that sequence rather than
+discarding it silently — use this when repositioning the parser at a
+known sync point rather than waiting for proper termination.
+
+## CsiHandler / OscHandler interfaces (PR11)
+
+`Parser\CsiHandler` and `Parser\OscHandler` are the handler contracts
+for Phase 1c. They are currently empty shells; the implementation
+fills in during Phase 1c. The Parser itself uses a separate `Handler`
+interface internally — CsiHandler/OscHandler are for external consumers
+who only need CSI or OSC handling without the full ScreenHandler
+complexity.
+

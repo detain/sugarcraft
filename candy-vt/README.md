@@ -48,6 +48,8 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 |---|---|---|
 | Facade | `Terminal\Terminal` | Owns a Parser + ScreenHandler; `feed()` drives bytes in |
 | Parser | `Parser\Parser` | VT500 state machine — Paul-Williams algorithm, handles partial input, parses subparameters (`:) |
+| Handler | `Parser\CsiHandler` | CSI sequence handler contract — Phase 1c implementation fills in CUP/SGR/ED/EL/DECSET/DECRST/DECSTBM/TBC |
+| Handler | `Parser\OscHandler` | OSC sequence handler contract — Phase 1c implementation fills in title/hyperlink |
 | Handler | `Handler\ScreenHandler` | Dispatches parser actions to Buffer / Cursor / Sgr / Mode |
 | Screen | `Screen\Screen` | Immutable snapshot — read current grid after feeding bytes |
 | Buffer | `Buffer\Buffer` | Cell grid — `rows × cols` of styled grapheme cells |
