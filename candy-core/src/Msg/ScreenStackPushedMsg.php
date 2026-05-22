@@ -15,5 +15,6 @@ final class ScreenStackPushedMsg implements Msg
 {
     public function __construct(
         public readonly Screen $screen,
-    ) {}
+    ) {
+    }
 }

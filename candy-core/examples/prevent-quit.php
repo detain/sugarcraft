@@ -23,9 +23,14 @@ use SugarCraft\Core\ProgramOptions;
 
 final class PreventQuit implements Model
 {
-    public function __construct(public readonly bool $confirming = false) {}
+    public function __construct(public readonly bool $confirming = false)
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

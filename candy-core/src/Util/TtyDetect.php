@@ -19,7 +19,9 @@ use SugarCraft\Pty\TermiosFactory;
  */
 final class TtyDetect
 {
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     /**
      * True when the given stream refers to a terminal device.

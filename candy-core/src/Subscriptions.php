@@ -22,7 +22,8 @@ final class Subscriptions
      */
     public function __construct(
         private readonly array $subscriptions = [],
-    ) {}
+    ) {
+    }
 
     /**
      * Add a tick subscription — fires `produce` every `$seconds`.

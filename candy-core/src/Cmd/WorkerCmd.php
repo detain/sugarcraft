@@ -29,7 +29,8 @@ final class WorkerCmd
 {
     private function __construct(
         private readonly WorkerPool $pool,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a Cmd that dispatches `$task` to the worker pool.
@@ -46,7 +47,7 @@ final class WorkerCmd
     {
         $cmd = new self($pool);
 
-        return static fn(): AsyncCmd => $cmd->dispatch($task);
+        return static fn (): AsyncCmd => $cmd->dispatch($task);
     }
 
     private function dispatch(callable|string $task): AsyncCmd

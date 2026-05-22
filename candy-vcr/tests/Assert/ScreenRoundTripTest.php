@@ -101,8 +101,8 @@ final class ScreenRoundTripTest extends TestCase
         $loop->futureTick(static function () use ($writer): void {
             fwrite($writer, 'abc');
         });
-        $loop->addTimer(0.020, static fn() => $program->quit());
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(0.020, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         fclose($writer);
@@ -141,7 +141,8 @@ final class TickModel implements Model
     public function __construct(
         public readonly int $quitAfter = 4,
         public readonly bool $divergent = false,
-    ) {}
+    ) {
+    }
 
     public function init(): ?\Closure
     {
@@ -159,5 +160,10 @@ final class TickModel implements Model
     public function view(): string
     {
         return ($this->divergent ? 'DIVERGED: ' : 'tick: ') . $this->count;
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
     }
 }

@@ -15,5 +15,7 @@ namespace SugarCraft\Core;
  */
 final class RawMsg implements Msg
 {
-    public function __construct(public readonly string $bytes) {}
+    public function __construct(public readonly string $bytes)
+    {
+    }
 }

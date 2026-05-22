@@ -22,7 +22,7 @@ final class DiffCommand implements Command
 
     public function run(array $args, $stdout, $stderr): int
     {
-        $paths = array_values(array_filter($args, static fn($a) => !str_starts_with($a, '--')));
+        $paths = array_values(array_filter($args, static fn ($a) => !str_starts_with($a, '--')));
         if (count($paths) !== 2) {
             fwrite($stderr, "usage: candy-vcr diff <a.cas> <b.cas>\n");
             return 2;
@@ -58,7 +58,10 @@ final class DiffCommand implements Command
         if ($a->header->cols !== $b->header->cols || $a->header->rows !== $b->header->rows) {
             $diffs[] = sprintf(
                 'header dimensions: %dx%d != %dx%d',
-                $a->header->cols, $a->header->rows, $b->header->cols, $b->header->rows,
+                $a->header->cols,
+                $a->header->rows,
+                $b->header->cols,
+                $b->header->rows,
             );
         }
         if ($a->header->runtime !== $b->header->runtime) {
@@ -87,7 +90,9 @@ final class DiffCommand implements Command
             if ($aEvent->kind !== $bEvent->kind) {
                 $diffs[] = sprintf(
                     'event[%d]: kind %s != %s',
-                    $i, $aEvent->kind->value, $bEvent->kind->value,
+                    $i,
+                    $aEvent->kind->value,
+                    $bEvent->kind->value,
                 );
             }
             if ($aEvent->payload !== $bEvent->payload) {

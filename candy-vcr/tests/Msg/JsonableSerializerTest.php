@@ -96,4 +96,3 @@ final class JsonableSerializerTest extends TestCase
         (new JsonableSerializer())->encode(new BadJsonableMsg());
     }
 }
-

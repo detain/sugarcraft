@@ -158,8 +158,14 @@ for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
          candy-wish sugar-wishlist candy-metrics \
          candy-mold candy-tetris super-candy sugar-crush \
          sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
-    (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
+     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
+```
+
+Code style is enforced via `php-cs-fixer` (root `.php-cs-fixer.dist.php`). Run from the repo root:
+
+```sh
+PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 ```
 
 ## Contributing

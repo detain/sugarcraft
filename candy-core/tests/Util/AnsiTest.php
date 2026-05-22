@@ -12,8 +12,8 @@ final class AnsiTest extends TestCase
     public function testSgrEmitsCsi(): void
     {
         $this->assertSame("\x1b[1;31m", Ansi::sgr(1, 31));
-        $this->assertSame("\x1b[m",     Ansi::sgr());
-        $this->assertSame("\x1b[0m",    Ansi::reset());
+        $this->assertSame("\x1b[m", Ansi::sgr());
+        $this->assertSame("\x1b[0m", Ansi::reset());
     }
 
     public function testFgRgb(): void
@@ -34,8 +34,8 @@ final class AnsiTest extends TestCase
 
     public function testCursorMovement(): void
     {
-        $this->assertSame("\x1b[1A",   Ansi::cursorUp());
-        $this->assertSame("\x1b[5B",   Ansi::cursorDown(5));
+        $this->assertSame("\x1b[1A", Ansi::cursorUp());
+        $this->assertSame("\x1b[5B", Ansi::cursorDown(5));
         $this->assertSame("\x1b[3;7H", Ansi::cursorTo(3, 7));
     }
 
@@ -70,10 +70,10 @@ final class AnsiTest extends TestCase
 
     public function testModeToggles(): void
     {
-        $this->assertSame("\x1b[?1049h",                  Ansi::altScreenEnter());
-        $this->assertSame("\x1b[?1049l",                  Ansi::altScreenLeave());
-        $this->assertSame("\x1b[?2004h",                  Ansi::bracketedPasteOn());
-        $this->assertSame("\x1b[?1000h\x1b[?1006h",       Ansi::mouseAllOn());
+        $this->assertSame("\x1b[?1049h", Ansi::altScreenEnter());
+        $this->assertSame("\x1b[?1049l", Ansi::altScreenLeave());
+        $this->assertSame("\x1b[?2004h", Ansi::bracketedPasteOn());
+        $this->assertSame("\x1b[?1000h\x1b[?1006h", Ansi::mouseAllOn());
     }
 
     public function testEraseHelpers(): void
@@ -86,9 +86,9 @@ final class AnsiTest extends TestCase
     public function testScrollRegion(): void
     {
         $this->assertSame("\x1b[2;10r", Ansi::setScrollRegion(2, 10));
-        $this->assertSame("\x1b[r",     Ansi::setScrollRegion(2, 0));
-        $this->assertSame("\x1b[r",     Ansi::resetScrollRegion());
-        $this->assertSame("\x1b[1;5r",  Ansi::setScrollRegion(0, 5));
+        $this->assertSame("\x1b[r", Ansi::setScrollRegion(2, 0));
+        $this->assertSame("\x1b[r", Ansi::resetScrollRegion());
+        $this->assertSame("\x1b[1;5r", Ansi::setScrollRegion(0, 5));
     }
 
     public function testScrollUpDown(): void
@@ -148,39 +148,39 @@ final class AnsiTest extends TestCase
 
     public function testTabStops(): void
     {
-        $this->assertSame("\x1b[1I",    Ansi::tabForward());
-        $this->assertSame("\x1b[3I",    Ansi::tabForward(3));
-        $this->assertSame("\x1b[2Z",    Ansi::tabBackward(2));
-        $this->assertSame("\x1bH",      Ansi::setTabStop());
-        $this->assertSame("\x1b[0g",    Ansi::clearTabStop());
-        $this->assertSame("\x1b[3g",    Ansi::clearAllTabStops());
+        $this->assertSame("\x1b[1I", Ansi::tabForward());
+        $this->assertSame("\x1b[3I", Ansi::tabForward(3));
+        $this->assertSame("\x1b[2Z", Ansi::tabBackward(2));
+        $this->assertSame("\x1bH", Ansi::setTabStop());
+        $this->assertSame("\x1b[0g", Ansi::clearTabStop());
+        $this->assertSame("\x1b[3g", Ansi::clearAllTabStops());
     }
 
     public function testScoCursorSave(): void
     {
-        $this->assertSame("\x1b[s",  Ansi::scoSave());
-        $this->assertSame("\x1b[u",  Ansi::scoRestore());
-        $this->assertSame("\x1b7",   Ansi::decsc());
-        $this->assertSame("\x1b8",   Ansi::decrc());
+        $this->assertSame("\x1b[s", Ansi::scoSave());
+        $this->assertSame("\x1b[u", Ansi::scoRestore());
+        $this->assertSame("\x1b7", Ansi::decsc());
+        $this->assertSame("\x1b8", Ansi::decrc());
     }
 
     public function testDecPrivateModeConstants(): void
     {
-        $this->assertSame(1,     Ansi::DECCKM);
-        $this->assertSame(7,     Ansi::DECAWM);
-        $this->assertSame(1000,  Ansi::MOUSE_NORMAL);
-        $this->assertSame(1002,  Ansi::MOUSE_BUTTON);
-        $this->assertSame(1003,  Ansi::MOUSE_ANY);
-        $this->assertSame(1006,  Ansi::MOUSE_SGR);
-        $this->assertSame(1049,  Ansi::ALT_SCREEN_BUFFER);
-        $this->assertSame(2004,  Ansi::BRACKETED_PASTE);
-        $this->assertSame(2026,  Ansi::SYNCHRONIZED_OUTPUT);
+        $this->assertSame(1, Ansi::DECCKM);
+        $this->assertSame(7, Ansi::DECAWM);
+        $this->assertSame(1000, Ansi::MOUSE_NORMAL);
+        $this->assertSame(1002, Ansi::MOUSE_BUTTON);
+        $this->assertSame(1003, Ansi::MOUSE_ANY);
+        $this->assertSame(1006, Ansi::MOUSE_SGR);
+        $this->assertSame(1049, Ansi::ALT_SCREEN_BUFFER);
+        $this->assertSame(2004, Ansi::BRACKETED_PASTE);
+        $this->assertSame(2026, Ansi::SYNCHRONIZED_OUTPUT);
     }
 
     public function testDecSetDecReset(): void
     {
-        $this->assertSame("\x1b[?1h",    Ansi::decSet(Ansi::DECCKM));
-        $this->assertSame("\x1b[?1l",    Ansi::decReset(Ansi::DECCKM));
+        $this->assertSame("\x1b[?1h", Ansi::decSet(Ansi::DECCKM));
+        $this->assertSame("\x1b[?1l", Ansi::decReset(Ansi::DECCKM));
         $this->assertSame("\x1b[?1049h", Ansi::decSet(Ansi::ALT_SCREEN_BUFFER));
         $this->assertSame("\x1b[?1049l", Ansi::decReset(Ansi::ALT_SCREEN_BUFFER));
         $this->assertSame("\x1b[?1006h", Ansi::decSet(Ansi::MOUSE_SGR));

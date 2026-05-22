@@ -28,7 +28,9 @@ $path = $argv[1] ?? __DIR__ . '/cassettes/recorded.cas';
 
 final class CounterModel implements Model
 {
-    public function __construct(public readonly int $count = 0) {}
+    public function __construct(public readonly int $count = 0)
+    {
+    }
 
     public function init(): ?\Closure
     {
@@ -69,8 +71,8 @@ $program->withRecorder(Recorder::open($path));
 $loop->futureTick(static function () use ($inputWrite): void {
     fwrite($inputWrite, "abc");
 });
-$loop->addTimer(0.030, static fn() => $program->quit());
-$loop->addTimer(2.0, static fn() => $loop->stop());
+$loop->addTimer(0.030, static fn () => $program->quit());
+$loop->addTimer(2.0, static fn () => $loop->stop());
 $program->run();
 
 fclose($inputWrite);

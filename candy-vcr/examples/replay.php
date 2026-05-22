@@ -30,9 +30,17 @@ if (!file_exists($path)) {
 
 final class CounterModel implements Model
 {
-    public function __construct(public readonly int $count = 0) {}
-    public function init(): ?\Closure { return null; }
-    public function update(Msg $msg): array { return [new self($this->count + 1), null]; }
+    public function __construct(public readonly int $count = 0)
+    {
+    }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+    public function update(Msg $msg): array
+    {
+        return [new self($this->count + 1), null];
+    }
     public function view(): string
     {
         return "counter: {$this->count}\n  press any key, q to quit\n";

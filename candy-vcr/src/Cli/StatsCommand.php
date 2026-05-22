@@ -29,7 +29,7 @@ final class StatsCommand implements Command
 
     public function run(array $args, $stdout, $stderr): int
     {
-        $path = array_values(array_filter($args, static fn($a) => !str_starts_with($a, '--')))[0] ?? null;
+        $path = array_values(array_filter($args, static fn ($a) => !str_starts_with($a, '--')))[0] ?? null;
 
         if ($path === null) {
             fwrite($stderr, "usage: candy-vcr stats <cassette>\n");

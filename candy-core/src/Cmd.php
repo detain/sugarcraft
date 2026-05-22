@@ -20,7 +20,7 @@ final class Cmd
     /** Quit the program when executed. */
     public static function quit(): \Closure
     {
-        return static fn(): Msg => new QuitMsg();
+        return static fn (): Msg => new QuitMsg();
     }
 
     /**
@@ -31,7 +31,7 @@ final class Cmd
      */
     public static function suspend(): \Closure
     {
-        return static fn(): Msg => new SuspendMsg();
+        return static fn (): Msg => new SuspendMsg();
     }
 
     /**
@@ -41,7 +41,7 @@ final class Cmd
      */
     public static function interrupt(): \Closure
     {
-        return static fn(): Msg => new InterruptMsg();
+        return static fn (): Msg => new InterruptMsg();
     }
 
     /**
@@ -52,7 +52,7 @@ final class Cmd
     public static function batch(?\Closure ...$cmds): \Closure
     {
         /** @var list<\Closure> $filtered */
-        $filtered = array_values(array_filter($cmds, static fn($c) => $c !== null));
+        $filtered = array_values(array_filter($cmds, static fn ($c) => $c !== null));
         return static function () use ($filtered): Msg {
             // The Program inspects this sentinel and explodes it into
             // separate dispatches. See Program::runCmd().
@@ -71,8 +71,8 @@ final class Cmd
     public static function sequence(?\Closure ...$cmds): \Closure
     {
         /** @var list<\Closure> $filtered */
-        $filtered = array_values(array_filter($cmds, static fn($c) => $c !== null));
-        return static fn(): Msg => new SequenceMsg($filtered);
+        $filtered = array_values(array_filter($cmds, static fn ($c) => $c !== null));
+        return static fn (): Msg => new SequenceMsg($filtered);
     }
 
     /**
@@ -107,7 +107,7 @@ final class Cmd
      */
     public static function send(Msg $msg): \Closure
     {
-        return static fn(): Msg => $msg;
+        return static fn (): Msg => $msg;
     }
 
     /**
@@ -119,7 +119,7 @@ final class Cmd
      */
     public static function tick(float $seconds, \Closure $produce): \Closure
     {
-        return static fn(): Msg => new TickRequest($seconds, $produce);
+        return static fn (): Msg => new TickRequest($seconds, $produce);
     }
 
     /**
@@ -132,7 +132,7 @@ final class Cmd
      */
     public static function promise(\Closure $factory): \Closure
     {
-        return static fn(): AsyncCmd => new AsyncCmd($factory());
+        return static fn (): AsyncCmd => new AsyncCmd($factory());
     }
 
     /**
@@ -146,7 +146,7 @@ final class Cmd
      */
     public static function raw(string $bytes): \Closure
     {
-        return static fn(): Msg => new RawMsg($bytes);
+        return static fn (): Msg => new RawMsg($bytes);
     }
 
     /**
@@ -156,7 +156,7 @@ final class Cmd
      */
     public static function println(string $text): \Closure
     {
-        return static fn(): Msg => new PrintMsg($text);
+        return static fn (): Msg => new PrintMsg($text);
     }
 
     /**
@@ -167,7 +167,7 @@ final class Cmd
     public static function printf(string $fmt, mixed ...$args): \Closure
     {
         $text = sprintf($fmt, ...$args);
-        return static fn(): Msg => new PrintMsg($text);
+        return static fn (): Msg => new PrintMsg($text);
     }
 
     /**
@@ -195,7 +195,7 @@ final class Cmd
         bool $captureOutput = false,
         ?\Closure $onComplete = null,
     ): \Closure {
-        return static fn(): Msg => new ExecRequest($command, $captureOutput, $onComplete);
+        return static fn (): Msg => new ExecRequest($command, $captureOutput, $onComplete);
     }
 
     /**
@@ -206,7 +206,7 @@ final class Cmd
      */
     public static function requestCursorPosition(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestCursorPosition());
+        return static fn (): Msg => new RawMsg(Ansi::requestCursorPosition());
     }
 
     /**
@@ -215,7 +215,7 @@ final class Cmd
      */
     public static function requestForegroundColor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestForegroundColor());
+        return static fn (): Msg => new RawMsg(Ansi::requestForegroundColor());
     }
 
     /**
@@ -226,7 +226,7 @@ final class Cmd
      */
     public static function requestBackgroundColor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestBackgroundColor());
+        return static fn (): Msg => new RawMsg(Ansi::requestBackgroundColor());
     }
 
     /**
@@ -235,7 +235,7 @@ final class Cmd
      */
     public static function requestCursorColor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestCursorColor());
+        return static fn (): Msg => new RawMsg(Ansi::requestCursorColor());
     }
 
     /**
@@ -245,7 +245,7 @@ final class Cmd
      */
     public static function requestTerminalVersion(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestTerminalVersion());
+        return static fn (): Msg => new RawMsg(Ansi::requestTerminalVersion());
     }
 
     /**
@@ -256,7 +256,7 @@ final class Cmd
      */
     public static function requestMode(int $mode, bool $private = true): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestMode($mode, $private));
+        return static fn (): Msg => new RawMsg(Ansi::requestMode($mode, $private));
     }
 
     /**
@@ -266,7 +266,7 @@ final class Cmd
      */
     public static function setClipboard(string $text, string $selection = 'c'): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setClipboard($text, $selection));
+        return static fn (): Msg => new RawMsg(Ansi::setClipboard($text, $selection));
     }
 
     /**
@@ -276,7 +276,7 @@ final class Cmd
      */
     public static function readClipboard(string $selection = 'c'): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::readClipboard($selection));
+        return static fn (): Msg => new RawMsg(Ansi::readClipboard($selection));
     }
 
     /**
@@ -286,7 +286,7 @@ final class Cmd
      */
     public static function setWindowTitle(string $title, bool $icon = false): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setWindowTitle($title, $icon));
+        return static fn (): Msg => new RawMsg(Ansi::setWindowTitle($title, $icon));
     }
 
     /**
@@ -296,7 +296,7 @@ final class Cmd
      */
     public static function setWorkingDirectory(string $path, string $host = ''): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setWorkingDirectory($path, $host));
+        return static fn (): Msg => new RawMsg(Ansi::setWorkingDirectory($path, $host));
     }
 
     /**
@@ -307,7 +307,7 @@ final class Cmd
      */
     public static function setProgressBar(ProgressBarState $state, int $percent = 0): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setProgressBar($state, $percent));
+        return static fn (): Msg => new RawMsg(Ansi::setProgressBar($state, $percent));
     }
 
     /**
@@ -319,13 +319,13 @@ final class Cmd
      */
     public static function pushKittyKeyboard(int $flags): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::pushKittyKeyboard($flags));
+        return static fn (): Msg => new RawMsg(Ansi::pushKittyKeyboard($flags));
     }
 
     /** Pop `$n` Kitty keyboard flag layers. */
     public static function popKittyKeyboard(int $n = 1): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::popKittyKeyboard($n));
+        return static fn (): Msg => new RawMsg(Ansi::popKittyKeyboard($n));
     }
 
     /**
@@ -335,7 +335,7 @@ final class Cmd
      */
     public static function requestKittyKeyboard(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::requestKittyKeyboard());
+        return static fn (): Msg => new RawMsg(Ansi::requestKittyKeyboard());
     }
 
     // ─── Stateful Cmd helpers ──────────────────────────────────────────
@@ -348,43 +348,43 @@ final class Cmd
     /** Switch into the alt screen (`CSI ?1049h`). */
     public static function enterAltScreen(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::altScreenEnter());
+        return static fn (): Msg => new RawMsg(Ansi::altScreenEnter());
     }
 
     /** Leave the alt screen (`CSI ?1049l`). */
     public static function exitAltScreen(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::altScreenLeave());
+        return static fn (): Msg => new RawMsg(Ansi::altScreenLeave());
     }
 
     /** Erase the entire screen and home the cursor. */
     public static function clearScreen(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::eraseScreen() . Ansi::cursorTo(1, 1));
+        return static fn (): Msg => new RawMsg(Ansi::eraseScreen() . Ansi::cursorTo(1, 1));
     }
 
     /** Show the cursor (`CSI ?25h`). */
     public static function showCursor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::cursorShow());
+        return static fn (): Msg => new RawMsg(Ansi::cursorShow());
     }
 
     /** Hide the cursor (`CSI ?25l`). */
     public static function hideCursor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::cursorHide());
+        return static fn (): Msg => new RawMsg(Ansi::cursorHide());
     }
 
     /** Enable cell-motion mouse tracking (button-only motion + SGR encoding). */
     public static function enableMouseCellMotion(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::mouseCellMotionOn());
+        return static fn (): Msg => new RawMsg(Ansi::mouseCellMotionOn());
     }
 
     /** Enable all-motion mouse tracking (every move regardless of button state). */
     public static function enableMouseAllMotion(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::mouseAllMotionOn());
+        return static fn (): Msg => new RawMsg(Ansi::mouseAllMotionOn());
     }
 
     /**
@@ -393,41 +393,41 @@ final class Cmd
      */
     public static function disableMouse(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::mouseAllMotionOff() . Ansi::mouseCellMotionOff());
+        return static fn (): Msg => new RawMsg(Ansi::mouseAllMotionOff() . Ansi::mouseCellMotionOff());
     }
 
     /** Enable focus-in/out reporting (`CSI ?1004h`). */
     public static function enableReportFocus(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::focusReportingOn());
+        return static fn (): Msg => new RawMsg(Ansi::focusReportingOn());
     }
 
     public static function disableReportFocus(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::focusReportingOff());
+        return static fn (): Msg => new RawMsg(Ansi::focusReportingOff());
     }
 
     /** Enable bracketed paste mode (`CSI ?2004h`). */
     public static function enableBracketedPaste(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::bracketedPasteOn());
+        return static fn (): Msg => new RawMsg(Ansi::bracketedPasteOn());
     }
 
     public static function disableBracketedPaste(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::bracketedPasteOff());
+        return static fn (): Msg => new RawMsg(Ansi::bracketedPasteOff());
     }
 
     /** Scroll the active region up `$n` lines. */
     public static function scrollUp(int $n = 1): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::scrollUp($n));
+        return static fn (): Msg => new RawMsg(Ansi::scrollUp($n));
     }
 
     /** Scroll the active region down `$n` lines. */
     public static function scrollDown(int $n = 1): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::scrollDown($n));
+        return static fn (): Msg => new RawMsg(Ansi::scrollDown($n));
     }
 
     /**
@@ -438,12 +438,12 @@ final class Cmd
      */
     public static function setForegroundColor(int $r, int $g, int $b): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setForegroundColor($r, $g, $b));
+        return static fn (): Msg => new RawMsg(Ansi::setForegroundColor($r, $g, $b));
     }
 
     public static function setBackgroundColor(int $r, int $g, int $b): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::setBackgroundColor($r, $g, $b));
+        return static fn (): Msg => new RawMsg(Ansi::setBackgroundColor($r, $g, $b));
     }
 
     /**
@@ -452,13 +452,15 @@ final class Cmd
      */
     public static function resetForegroundColor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::OSC . '110' . Ansi::ST);
+        return static fn (): Msg => new RawMsg(Ansi::OSC . '110' . Ansi::ST);
     }
 
     public static function resetBackgroundColor(): \Closure
     {
-        return static fn(): Msg => new RawMsg(Ansi::OSC . '111' . Ansi::ST);
+        return static fn (): Msg => new RawMsg(Ansi::OSC . '111' . Ansi::ST);
     }
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 }

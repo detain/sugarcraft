@@ -28,5 +28,6 @@ class MouseMsg implements Msg
         public readonly bool $shift = false,
         public readonly bool $alt = false,
         public readonly bool $ctrl = false,
-    ) {}
+    ) {
+    }
 }

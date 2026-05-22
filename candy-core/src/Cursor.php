@@ -23,5 +23,6 @@ final class Cursor
         public readonly CursorShape $shape = CursorShape::Block,
         public readonly bool $blink = false,
         public readonly ?Util\Color $color = null,
-    ) {}
+    ) {
+    }
 }

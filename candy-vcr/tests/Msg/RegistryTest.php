@@ -32,11 +32,23 @@ final class RegistryTest extends TestCase
 
     public function testEncodeFirstMatchWins(): void
     {
-        $custom = new class implements MsgSerializer {
-            public function canEncode(Msg $msg): bool { return $msg instanceof KeyMsg; }
-            public function canDecode(array $envelope): bool { return ($envelope['@type'] ?? null) === 'CustomKey'; }
-            public function encode(Msg $msg): array { return ['@type' => 'CustomKey']; }
-            public function decode(array $envelope): Msg { return new KeyMsg(KeyType::Char, 'X'); }
+        $custom = new class () implements MsgSerializer {
+            public function canEncode(Msg $msg): bool
+            {
+                return $msg instanceof KeyMsg;
+            }
+            public function canDecode(array $envelope): bool
+            {
+                return ($envelope['@type'] ?? null) === 'CustomKey';
+            }
+            public function encode(Msg $msg): array
+            {
+                return ['@type' => 'CustomKey'];
+            }
+            public function decode(array $envelope): Msg
+            {
+                return new KeyMsg(KeyType::Char, 'X');
+            }
         };
 
         $r = (new Registry())->register($custom)->register(new BuiltinSerializer());
@@ -46,11 +58,23 @@ final class RegistryTest extends TestCase
 
     public function testDecodeFirstMatchWins(): void
     {
-        $custom = new class implements MsgSerializer {
-            public function canEncode(Msg $msg): bool { return false; }
-            public function canDecode(array $envelope): bool { return ($envelope['@type'] ?? null) === 'KeyMsg'; }
-            public function encode(Msg $msg): array { throw new \LogicException(); }
-            public function decode(array $envelope): Msg { return new KeyMsg(KeyType::Char, 'CUSTOM'); }
+        $custom = new class () implements MsgSerializer {
+            public function canEncode(Msg $msg): bool
+            {
+                return false;
+            }
+            public function canDecode(array $envelope): bool
+            {
+                return ($envelope['@type'] ?? null) === 'KeyMsg';
+            }
+            public function encode(Msg $msg): array
+            {
+                throw new \LogicException();
+            }
+            public function decode(array $envelope): Msg
+            {
+                return new KeyMsg(KeyType::Char, 'CUSTOM');
+            }
         };
 
         $r = (new Registry())->register($custom)->register(new BuiltinSerializer());

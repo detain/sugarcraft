@@ -17,7 +17,8 @@ final class EnvMsg implements Msg
     /** @param array<string,string> $vars */
     public function __construct(
         public readonly array $vars,
-    ) {}
+    ) {
+    }
 
     /** Convenience accessor with optional default. */
     public function get(string $key, ?string $default = null): ?string

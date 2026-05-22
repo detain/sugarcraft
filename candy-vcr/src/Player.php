@@ -67,7 +67,8 @@ final class Player
     public function __construct(
         public readonly Cassette $cassette,
         private readonly ?float $idleTrimSeconds = null,
-    ) {}
+    ) {
+    }
 
     public static function open(string $path): self
     {
@@ -259,7 +260,7 @@ final class Player
 
         // Safety net: stop the loop if the program never quits.
         $cap = $timeoutSeconds ?? max(5.0, $this->cassette->duration() + 5.0);
-        $loop->addTimer($cap, static fn() => $loop->stop());
+        $loop->addTimer($cap, static fn () => $loop->stop());
 
         $program->run();
 

@@ -22,9 +22,14 @@ use SugarCraft\Core\Program;
 
 final class Views implements Model
 {
-    public function __construct(public readonly int $current = 0) {}
+    public function __construct(public readonly int $current = 0)
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

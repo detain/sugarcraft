@@ -19,5 +19,6 @@ final readonly class SuggestionsReadyMsg implements Msg
     public function __construct(
         public string $fieldKey,
         public array $suggestions,
-    ) {}
+    ) {
+    }
 }

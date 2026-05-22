@@ -167,8 +167,14 @@ final class Width
             if ($b === "\x1b" && ($s[$i + 1] ?? '') === ']') {
                 $j = $i + 2;
                 while ($j < $len) {
-                    if ($s[$j] === "\x07") { $j++; break; }
-                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                    if ($s[$j] === "\x07") {
+                        $j++;
+                        break;
+                    }
+                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') {
+                        $j += 2;
+                        break;
+                    }
                     $j++;
                 }
                 $word .= substr($s, $i, $j - $i);
@@ -346,8 +352,14 @@ final class Width
             if ($b === "\x1b" && ($s[$i + 1] ?? '') === ']') {
                 $j = $i + 2;
                 while ($j < $len) {
-                    if ($s[$j] === "\x07") { $j++; break; }
-                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                    if ($s[$j] === "\x07") {
+                        $j++;
+                        break;
+                    }
+                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') {
+                        $j += 2;
+                        break;
+                    }
                     $j++;
                 }
                 $out .= substr($s, $i, $j - $i);
@@ -430,8 +442,14 @@ final class Width
             if ($b === "\x1b" && ($s[$i + 1] ?? '') === ']') {
                 $j = $i + 2;
                 while ($j < $len) {
-                    if ($s[$j] === "\x07") { $j++; break; }
-                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                    if ($s[$j] === "\x07") {
+                        $j++;
+                        break;
+                    }
+                    if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') {
+                        $j += 2;
+                        break;
+                    }
                     $j++;
                 }
                 $seq = substr($s, $i, $j - $i);
@@ -535,7 +553,9 @@ final class Width
             return $cp === false ? 0 : $cp;
         }
         $b1 = ord($g[0]);
-        if ($b1 < 0x80) return $b1;
+        if ($b1 < 0x80) {
+            return $b1;
+        }
         if (($b1 & 0xe0) === 0xc0 && strlen($g) >= 2) {
             return (($b1 & 0x1f) << 6) | (ord($g[1]) & 0x3f);
         }
@@ -560,18 +580,32 @@ final class Width
         if ($cp === 0x200b || $cp === 0x200c || $cp === 0x200d || $cp === 0xfeff) {
             return true;
         }
-        if ($cp >= 0x0300 && $cp <= 0x036f) return true;
-        if ($cp >= 0x1ab0 && $cp <= 0x1aff) return true;
-        if ($cp >= 0x1dc0 && $cp <= 0x1dff) return true;
-        if ($cp >= 0x20d0 && $cp <= 0x20ff) return true;
-        if ($cp >= 0xfe00 && $cp <= 0xfe0f) return true;
-        if ($cp >= 0xfe20 && $cp <= 0xfe2f) return true;
+        if ($cp >= 0x0300 && $cp <= 0x036f) {
+            return true;
+        }
+        if ($cp >= 0x1ab0 && $cp <= 0x1aff) {
+            return true;
+        }
+        if ($cp >= 0x1dc0 && $cp <= 0x1dff) {
+            return true;
+        }
+        if ($cp >= 0x20d0 && $cp <= 0x20ff) {
+            return true;
+        }
+        if ($cp >= 0xfe00 && $cp <= 0xfe0f) {
+            return true;
+        }
+        if ($cp >= 0xfe20 && $cp <= 0xfe2f) {
+            return true;
+        }
         return false;
     }
 
     private static function isWide(int $cp): bool
     {
-        if ($cp < 0x1100) return false;
+        if ($cp < 0x1100) {
+            return false;
+        }
         // At this point we know $cp >= 0x1100
         return ($cp <= 0x115f)
             || ($cp >= 0x2e80 && $cp <= 0x303e)

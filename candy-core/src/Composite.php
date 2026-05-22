@@ -25,7 +25,8 @@ final class Composite implements Model
     public function __construct(
         private readonly array $children = [],
         private readonly array $pendingCmds = [],
-    ) {}
+    ) {
+    }
 
     public function init(): ?\Closure
     {
@@ -185,7 +186,8 @@ final class AddComponentMsg implements ComponentAddressedMsg
     public function __construct(
         public readonly string $id,
         public readonly Component $component,
-    ) {}
+    ) {
+    }
 
     public function componentId(): ?string
     {
@@ -198,7 +200,9 @@ final class AddComponentMsg implements ComponentAddressedMsg
  */
 final class RemoveComponentMsg implements ComponentAddressedMsg
 {
-    public function __construct(public readonly string $id) {}
+    public function __construct(public readonly string $id)
+    {
+    }
 
     public function componentId(): ?string
     {

@@ -59,5 +59,6 @@ final class View
          * current state alone.
          */
         public readonly ?bool $bracketedPaste = null,
-    ) {}
+    ) {
+    }
 }

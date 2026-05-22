@@ -99,7 +99,7 @@ final class WindowsBackendTest extends TestCase
         $size = $this->backend($fake)->size();
 
         $this->assertSame(120, $size['cols']);
-        $this->assertSame(40,  $size['rows']);
+        $this->assertSame(40, $size['rows']);
     }
 
     // ─── enableRawMode() / restore() ─────────────────────────────────────────
@@ -160,9 +160,9 @@ final class WindowsBackendTest extends TestCase
         $this->assertCount(2, $cpInCalls);   // set UTF-8, then restore
         $this->assertCount(2, $cpOutCalls);  // set UTF-8, then restore
         $this->assertSame(65001, $cpInCalls[0]);
-        $this->assertSame(437,    $cpInCalls[1]);    // restored
+        $this->assertSame(437, $cpInCalls[1]);    // restored
         $this->assertSame(65001, $cpOutCalls[0]);
-        $this->assertSame(437,    $cpOutCalls[1]);   // restored
+        $this->assertSame(437, $cpOutCalls[1]);   // restored
     }
 
     public function testEnableRawModeIsIdempotent(): void

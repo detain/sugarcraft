@@ -34,5 +34,6 @@ final class CapabilityMsg implements Msg
         public readonly string $capability,
         /** Raw response payload (typically the bytes between the OSC/CSI/DCS opener and ST). */
         public readonly string $response,
-    ) {}
+    ) {
+    }
 }

@@ -24,7 +24,8 @@ final class CompressedJsonlFormat implements Format
     public function __construct(
         private readonly JsonlFormat $inner = new JsonlFormat(),
         private readonly int $compressionLevel = self::DEFAULT_COMPRESSION_LEVEL,
-    ) {}
+    ) {
+    }
 
     public function write(Cassette $cassette, string $path): void
     {

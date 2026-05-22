@@ -17,7 +17,8 @@ final class BackgroundColorMsg implements Msg
         public readonly int $r,
         public readonly int $g,
         public readonly int $b,
-    ) {}
+    ) {
+    }
 
     /**
      * Returns true when the reported background looks dark, so callers

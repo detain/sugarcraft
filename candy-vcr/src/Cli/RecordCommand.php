@@ -81,7 +81,8 @@ final class RecordCommand implements Command
      */
     public function __construct(
         private $stdin = null,
-    ) {}
+    ) {
+    }
 
     public function summary(): string
     {
@@ -369,8 +370,8 @@ final class RecordCommand implements Command
         if (\function_exists('pcntl_signal') && \function_exists('pcntl_async_signals')) {
             \pcntl_async_signals(true);
             \pcntl_signal(\SIGTERM, [self::class, 'handleRescueSignal']);
-            \pcntl_signal(\SIGHUP,  [self::class, 'handleRescueSignal']);
-            \pcntl_signal(\SIGINT,  [self::class, 'handleRescueSignal']);
+            \pcntl_signal(\SIGHUP, [self::class, 'handleRescueSignal']);
+            \pcntl_signal(\SIGINT, [self::class, 'handleRescueSignal']);
         }
     }
 

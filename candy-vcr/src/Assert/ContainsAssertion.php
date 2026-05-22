@@ -86,7 +86,7 @@ final class ContainsAssertion implements Assertion
      */
     private function escapeString(string $str): string
     {
-        $escaped = preg_replace('/[^\x20-\x7e]/', '.', $str);
+        $escaped = (string) preg_replace('/[^\x20-\x7e]/', '.', $str);
         if (strlen($escaped) > 50) {
             return substr($escaped, 0, 50) . '…';
         }

@@ -66,8 +66,12 @@ final class PosixBackend implements Backend
         $in  = @fopen('/dev/tty', 'rb');
         $out = @fopen('/dev/tty', 'wb');
         if ($in === false || $out === false) {
-            if (is_resource($in))  fclose($in);
-            if (is_resource($out)) fclose($out);
+            if (is_resource($in)) {
+                fclose($in);
+            }
+            if (is_resource($out)) {
+                fclose($out);
+            }
             return null;
         }
         return [$in, $out];
@@ -77,7 +81,7 @@ final class PosixBackend implements Backend
     public function size(): array
     {
         $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES')   ?: 0);
+        $rows = (int) (getenv('LINES') ?: 0);
         if ($cols > 0 && $rows > 0) {
             return ['cols' => $cols, 'rows' => $rows];
         }

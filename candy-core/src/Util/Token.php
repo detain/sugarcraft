@@ -53,7 +53,8 @@ final class Token
         public readonly string $intermediate = '',
         public readonly string $params = '',
         public readonly string $final = '',
-    ) {}
+    ) {
+    }
 
     /**
      * Parse `$params` as a semicolon-separated list of integer params

@@ -26,9 +26,13 @@ final class WindowSize implements Model
     public function __construct(
         public readonly int $width  = 0,
         public readonly int $height = 0,
-    ) {}
+    ) {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

@@ -24,7 +24,8 @@ final readonly class ReplayResult
         public int $outputCount,
         public int $quitCount,
         public bool $programQuitCleanly,
-    ) {}
+    ) {
+    }
 
     /**
      * Human-readable summary suitable for failure messages.

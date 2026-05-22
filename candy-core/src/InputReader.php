@@ -87,7 +87,9 @@ final class InputReader
                 }
                 $next = $this->buf[$i + 1];
                 if ($next === '[') {
-                    if ($remain < 3) break;
+                    if ($remain < 3) {
+                        break;
+                    }
                     $j = $i + 2;
                     while ($j < $len) {
                         $c = ord($this->buf[$j]);
@@ -107,7 +109,9 @@ final class InputReader
                                 continue 2;
                             }
                             $msg = $this->decodeCsi($params, $final);
-                            if ($msg !== null) $msgs[] = $msg;
+                            if ($msg !== null) {
+                                $msgs[] = $msg;
+                            }
                             $i = $j;
                             continue 2;
                         }
@@ -117,9 +121,13 @@ final class InputReader
                 if ($next === 'O') {
                     // SS3: ESC O <single byte>. Used for F1-F4 on most
                     // terminals (xterm sends "ESC O P" for F1, etc.).
-                    if ($remain < 3) break;
+                    if ($remain < 3) {
+                        break;
+                    }
                     $msg = $this->decodeSs3($this->buf[$i + 2]);
-                    if ($msg !== null) $msgs[] = $msg;
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
                     $i += 3;
                     continue;
                 }
@@ -135,7 +143,9 @@ final class InputReader
                     }
                     [$payload, $next_i] = $end;
                     $msg = $this->decodeOsc($payload);
-                    if ($msg !== null) $msgs[] = $msg;
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
                     $i = $next_i;
                     continue;
                 }
@@ -150,7 +160,9 @@ final class InputReader
                     }
                     [$payload, $next_i] = $end;
                     $msg = $this->decodeDcs($payload);
-                    if ($msg !== null) $msgs[] = $msg;
+                    if ($msg !== null) {
+                        $msgs[] = $msg;
+                    }
                     $i = $next_i;
                     continue;
                 }
@@ -199,13 +211,13 @@ final class InputReader
     private function decodeChar(int $code, bool $alt = false): KeyMsg
     {
         return match (true) {
-            $code === 0x09 => new KeyMsg(KeyType::Tab,       alt: $alt),
+            $code === 0x09 => new KeyMsg(KeyType::Tab, alt: $alt),
             $code === 0x0d, $code === 0x0a
-                          => new KeyMsg(KeyType::Enter,     alt: $alt),
+                          => new KeyMsg(KeyType::Enter, alt: $alt),
             $code === 0x7f, $code === 0x08
                           => new KeyMsg(KeyType::Backspace, alt: $alt),
-            $code === 0x20 => new KeyMsg(KeyType::Space,    rune: ' ', alt: $alt),
-            $code === 0x1b => new KeyMsg(KeyType::Escape,   alt: $alt),
+            $code === 0x20 => new KeyMsg(KeyType::Space, rune: ' ', alt: $alt),
+            $code === 0x1b => new KeyMsg(KeyType::Escape, alt: $alt),
             $code >= 1 && $code <= 26
                           => new KeyMsg(KeyType::Char, rune: chr(0x60 + $code), alt: $alt, ctrl: true),
             $code >= 0x20 && $code < 0x7f
@@ -218,8 +230,12 @@ final class InputReader
     {
         // Focus reporting (CSI ?1004h): ESC[I → focus in, ESC[O → focus out.
         if ($params === '') {
-            if ($final === 'I') return new FocusGainedMsg();
-            if ($final === 'O') return new BlurMsg();
+            if ($final === 'I') {
+                return new FocusGainedMsg();
+            }
+            if ($final === 'O') {
+                return new BlurMsg();
+            }
         }
 
         // SGR-encoded mouse (CSI ?1006h): ESC[< b ; x ; y M|m

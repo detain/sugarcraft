@@ -22,23 +22,28 @@ use SugarCraft\Core\Program;
 
 final class FrameMsg implements Msg
 {
-    public function __construct(public readonly int $frame) {}
+    public function __construct(public readonly int $frame)
+    {
+    }
 }
 
-final class FinishedMsg implements Msg {}
+final class FinishedMsg implements Msg
+{
+}
 
 final class Splash implements Model
 {
     public function __construct(
         public readonly int $frame    = 0,
         public readonly bool $finished = false,
-    ) {}
+    ) {
+    }
 
     public function init(): ?\Closure
     {
         return Cmd::batch(
             Cmd::tick(0.15, static fn (): Msg => new FrameMsg(1)),
-            Cmd::tick(3.0,  static fn (): Msg => new FinishedMsg()),
+            Cmd::tick(3.0, static fn (): Msg => new FinishedMsg()),
         );
     }
 
