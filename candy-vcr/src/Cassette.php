@@ -40,6 +40,14 @@ final class Cassette
         return count($this->events);
     }
 
+    /**
+     * @deprecated Use $header property directly (readonly).
+     */
+    public function header(): CassetteHeader
+    {
+        return $this->header;
+    }
+
     public function duration(): float
     {
         $count = count($this->events);
