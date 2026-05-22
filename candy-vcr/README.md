@@ -20,6 +20,7 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 | PR5 | ScreenAssertion via candy-vt |
 | PR6 | YamlFormat |
 | PR7 | `bin/candy-vcr` CLI + examples + tracking |
+| PR8 | Tape lexer/parser/compiler (`.tape` → Cassette) |
 
 ## Use cases
 
@@ -327,6 +328,58 @@ The migration system is pluggable via `SugarCraft\Vcr\Migration\CassetteMigrator
 `V1ToV2Migrator` upgrades v1 cassettes by adding sequential event IDs, explicit
 encoding metadata on output events, and other structural improvements. Future version
 migrators slot in without modifying the core infrastructure.
+
+## Tape compiler (PR8)
+
+candy-vcr ships a `SugarCraft\Vcr\Tape` layer that parses `.tape` files (the
+VHS DSL) into a `Cassette` that the existing `Player` can replay. This
+decouples the render pipeline (Phase 3+) from the tape format.
+
+```php
+use SugarCraft\Vcr\Tape\Compiler;
+
+$source = file_get_contents('demo.tape');
+$result = Compiler::parseSource($source);
+
+if (!empty($result['errors'])) {
+    foreach ($result['errors'] as $error) {
+        echo $error->getLine(), ': ', $error->getMessage(), "\n";
+    }
+    exit(1);
+}
+
+$cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
+// Feed to Player::play() for replay...
+```
+
+**Supported directives:**
+
+| Directive | Supported | Notes |
+|---|---|---|
+| `Type "..."` | ✅ | Each char emits a KeyMsg at TypingSpeed cadence |
+| `Enter`, `Tab`, `Backspace` | ✅ | Raw bytes: `\r`, `\t`, `\x7f` |
+| `Space`, `Escape` | ✅ | Raw bytes: ` `, `\x1b` |
+| `Up`, `Down`, `Left`, `Right` | ✅ | CSI sequences: `\x1b[A` etc. |
+| `Ctrl+<letter>` | ✅ | Control character (char & 0x1F) |
+| `Sleep <duration>` | ✅ | Advances virtual clock only |
+| `Set Width/Height` | ✅ | Sets cassette header cols/rows |
+| `Set Theme` | ✅ | Sets theme name in header |
+| `Set TypingSpeed` | ✅ | Typing cadence (ms per keystroke) |
+| `Env KEY "value"` | ✅ | Adds to cassette header env |
+| `Output <path>` | ✅ | Accepted (stored for render step) |
+| `Hide`, `Show` | ⚠️ | Parsed, no-op (deferred to v2) |
+| `Wait <duration>` | ⚠️ | Parsed, no-op (deferred to v2) |
+| `Screenshot <path>` | ⚠️ | Parsed, no-op (deferred to v2) |
+| `Screen /regex/` | ⚠️ | Parsed, ignored (deferred to v2) |
+
+The `Compiler::compile()` method produces a `Cassette` with a `CassetteHeader`
+carrying the configured cols/rows/theme/env and a list of `Event` objects
+typed as `EventKind::Input` with raw bytes (`['b' => string]`) payloads.
+`Sleep` directives advance the virtual clock without emitting events, so
+inter-event timing is preserved for the Player.
+
+**Corpus coverage:** All 841+ `.tape` files in the monorepo parse without
+error and compile to valid Cassettes (verified by `TapeCorpusTest`).
 
 ## Examples
 
