@@ -433,6 +433,67 @@ final class ParserTest extends TestCase
         ], $h->log);
     }
 
+    public function testResetClearsInFlightCsi(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        $p->feed("\x1b[1;2");
+        $this->assertSame(State::CsiParam, $p->currentState());
+        $p->reset();
+        $this->assertSame(State::Ground, $p->currentState());
+        $this->assertSame([], $h->log);
+    }
+
+    public function testResetClearsInFlightOsc(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        $p->feed("\x1b]2;Title");
+        $this->assertSame(State::OscString, $p->currentState());
+        $p->reset();
+        $this->assertSame(State::Ground, $p->currentState());
+        // reset() flushes pending sequences, so OSC is dispatched with content
+        $this->assertSame([['type' => 'osc', 'detail' => '2;Title']], $h->log);
+    }
+
+    public function testResetClearsUtf8InFlight(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        $p->feed("\xE6\x97"); // first 2 bytes of 日
+        $this->assertSame(State::Utf8, $p->currentState());
+        $p->reset();
+        $this->assertSame(State::Ground, $p->currentState());
+        $this->assertSame([], $h->log);
+    }
+
+    public function testResetThenNewInputProcessesCorrectly(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        $p->reset();
+        $p->feed("ABC");
+        $this->assertSame([
+            ['type' => 'print', 'detail' => 'A'],
+            ['type' => 'print', 'detail' => 'B'],
+            ['type' => 'print', 'detail' => 'C'],
+        ], $h->log);
+    }
+
+    public function testResetClearsParams(): void
+    {
+        $h = new DebugHandler();
+        $p = new Parser($h);
+        $p->feed("\x1b[1;2H"); // CUP with params [1, 2]
+        $p->reset();
+        $p->feed("\x1b[H"); // CUP with no params (new sequence after reset)
+        $csiEntries = $h->filter('csi');
+        $this->assertCount(2, $csiEntries);
+        // First CSI had params [1, 2], second has empty params (reset started fresh sequence)
+        $this->assertSame([1, 2], $csiEntries[0]['detail']['params']);
+        $this->assertSame([], $csiEntries[1]['detail']['params']);
+    }
+
     // ─── Volume / sanity ───────────────────────────────────────────────────
 
     public function testLargeMixedInput(): void
