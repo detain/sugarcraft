@@ -72,6 +72,15 @@ final class Parser
         $this->utf8Need = 0;
     }
 
+    /**
+     * Reset the parser to ground state, clearing all accumulated state.
+     */
+    public function reset(): void
+    {
+        $this->flush();
+        $this->clear();
+    }
+
     /** @internal Exposed for tests asserting partial-input progress. */
     public function currentState(): State
     {
