@@ -58,6 +58,39 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
 | Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I/O, mode 1004) |
 
+### Renderer value objects (vcr path)
+
+The `SugarCraft\Vt` root namespace provides simplified value objects for the
+candy-vcr VHS renderer path — independent of the full VT parser stack:
+
+```php
+use SugarCraft\Vt\Cell;
+use SugarCraft\Vt\CellGrid;
+use SugarCraft\Vt\Cursor;
+
+// Cell — char + fg (0-255) + bg (0-255) + attrs bitfield
+$cell = new Cell(char: 'X', fg: 196, bg: 21, attrs: Cell::ATTR_BOLD);
+$cell = $cell->withFg(34);            // green foreground
+$cell = $cell->withBg(226);           // yellow background
+$cell = $cell->withAttrs(Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE);
+
+// CellGrid — 2D grid with dirty-region tracking
+$grid = new CellGrid(cols: 80, rows: 24);
+$grid = $grid->set(0, 0, new Cell(char: 'H'));
+$grid = $grid->set(0, 1, new Cell(char: 'i'));
+echo $grid->get(0, 0)->char;          // 'H'
+echo implode(',', $grid->dirtyRegion()); // minRow, maxRow, minCol, maxCol
+$grid = $grid->clear();               // resets dirtyRegion
+$grid = $grid->resize(100, 40);     // grow/shrink preserving content
+
+// Cursor — row + col + shape + visibility
+$cursor = new Cursor(row: 0, col: 0, shape: 0, visible: true);
+$cursor = $cursor->at(5, 10);        // move to row 5, col 10
+$cursor = $cursor->withShape(2);      // shape 2 = pipe
+$cursor = $cursor->hidden();           // hide cursor
+$cursor = $cursor->shown();          // show cursor
+```
+
 ### Parser handlers
 
 Each handler translates parser actions into handler state mutations:

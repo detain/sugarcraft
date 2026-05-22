@@ -417,3 +417,61 @@ Never `ftruncate; rewind;` between writes — slice deltas with
 
 Fixtures must be LF-only (`\n`). Add `*.ansi binary` to `.gitattributes`
 to prevent CRLF normalization on checkout.
+
+## Renderer value objects — Phase 1a patterns
+
+The `SugarCraft\Vt` root namespace holds simplified value objects
+(`Cell`, `CellGrid`, `Cursor`) for the vcr renderer path, distinct from
+the full VT parser stack in subdirectories.
+
+### Private mutate() helper for fluent with*() methods
+
+Each root-namespace value object uses a private `mutate()` helper to
+avoid repeating all fields in every `with*()` method:
+
+```php
+private function mutate(array $changes): self
+{
+    return new self(
+        char: $changes['char'] ?? $this->char,
+        fg: $changes['fg'] ?? $this->fg,
+        ...
+    );
+}
+
+public function withFg(int $c): self
+{
+    return $this->mutate(['fg' => $c]);
+}
+```
+
+This keeps `with*()` methods to a single line while remaining explicit
+about which field changes.
+
+### Cell attribute bitfield
+
+`Cell::$attrs` is an int bitfield (not booleans) to match the raw SGR
+model upstream. Constants are defined on `Cell`:
+
+```php
+Cell::ATTR_BOLD | Cell::ATTR_ITALIC | Cell::ATTR_UNDERLINE ...
+```
+
+### CellGrid dirty-region tracking
+
+`CellGrid` tracks a minimal bounding box of dirty cells
+(`minRow`, `maxRow`, `minCol`, `maxCol`) as **private** properties,
+not constructor parameters. Constructor params are `cols` + `rows` only.
+The `dirtyRegion()` method exposes the bounds as a typed array return.
+
+`clear()` creates a fresh grid (dirty region resets to zero/empty).
+`resize()` creates a fresh grid with content copied, also resetting
+dirty region. `set()` expands the bounding box to include the
+written cell and returns a new `CellGrid` instance.
+
+### Cursor shape values
+
+Cursor `shape` uses raw int values matching the VT spec:
+`0` = block (blinking), `1` = underline, `2` = pipe (bar).
+`CursorShape` enum (in root namespace) maps symbolic names to these ints.
+
