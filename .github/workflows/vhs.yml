@@ -36,6 +36,25 @@ jobs:
   # .vhs/*.tape didn't change in this push. workflow_dispatch
   # (manual trigger) and the first commit on a branch render
   # everything.
+  vhs-candy-vcr:
+    container: ghcr.io/detain/sugarcraft-vhs-runner-php:latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install composer deps
+        run: composer install --quiet --no-dev
+      - name: Render tapes with candy-vcr
+        run: |
+          for lib in candy-core; do
+            php vendor/bin/candy-vcr render-batch "$lib/.vhs/" || true
+          done
+      - name: Upload rendered GIFs
+        uses: actions/upload-artifact@v5
+        with:
+          name: gifs-candy-vcr
+          path: "**/*.gif"
+          retention-days: 7
+
   changed:
     runs-on: ubuntu-latest
     outputs:
