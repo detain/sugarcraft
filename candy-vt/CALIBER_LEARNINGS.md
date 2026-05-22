@@ -492,3 +492,51 @@ interface internally — CsiHandler/OscHandler are for external consumers
 who only need CSI or OSC handling without the full ScreenHandler
 complexity.
 
+## 256-color palette structure
+
+The 256-color palette is structured as:
+- Indexes 0-15: standard ANSI 16 colors
+- Indexes 16-231: 6×6×6 RGB color cube (216 colors)
+- Indexes 232-255: 24-step grayscale (dark to light)
+
+The `cubePalette()` method generates the color cube:
+```php
+for ($r = 0; $r < 6; $r++) {
+    for ($g = 0; $g < 6; $g++) {
+        for ($b = 0; $b < 6; $b++) {
+            $cube[] = (($r ? $r * 40 + 55 : 0) << 16)
+                     | (($g ? $g * 40 + 55 : 0) << 8)
+                     | ($b ? $b * 40 + 55 : 0);
+        }
+    }
+}
+```
+
+The `rgb()` method reverses this: for the cube range it extracts r/g/b
+components; for grayscale it computes `floor($i * 10 + 8)`.
+
+## Theme attribute constants match Cell
+
+`Theme::ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
+and `ATTR_STRIKETHROUGH` have the same bitfield values as `Cell::ATTR_*`
+so they can be used interchangeably when building SGR state.
+
+## TokyoNight palette specifics
+
+TokyoNight uses `defaultFg: 7` (Ansi7 White) and `defaultBg: 0`
+(Ansi0 Black). The 16 ANSI slots (Ansi0–Ansi15) in the TokyoNight
+palette map to:
+- 0: #15161e (Black), 1: #f7768e (Red), 2: #9ece6a (Green), 3: #e0af68 (Yellow)
+- 4: #7aa2f7 (Blue), 5: #bb9af7 (Magenta), 6: #7dcfff (Cyan), 7: #a9b1d6 (White)
+- 8: #414868 (BrightBlack), 9–14: bright variants, 15: #c0caf5 (BrightWhite)
+
+The `Theme::color($index)` method handles out-of-range indices by
+returning 0 (black), matching the expected safe-default behavior.
+
+## Themes catalog
+
+`Themes::all()` returns all named themes including deferred stubs.
+`Themes::v1()` returns only the v1-ready themes (TokyoNight family) with
+TokyoNight first in the array to match its priority as the monorepo
+standard. Both methods return `array<string, Theme>`.
+

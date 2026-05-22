@@ -59,6 +59,8 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Hyperlink | `Hyperlink\Hyperlink` | OSC 8 URL + id tracker |
 | Scrollback | `Screen\Scrollback` | Ring buffer — stores rows that scroll off the top (default 1000) |
 | Msg | `Msg\FocusInMsg / FocusOutMsg` | Focus-in / focus-out event records (CSI I/O, mode 1004) |
+| Theme | `Theme` | 256-color palette + default fg/bg + factory methods for named themes |
+| Catalog | `Themes` | Bundled theme catalog: `all()` and `v1()` accessors |
 
 ### Renderer value objects (vcr path)
 
@@ -349,6 +351,53 @@ $vt->feed("\x1b[?2026l");    // flush → both cells appear together
 Mutations are queued in `ScreenHandler::$pendingMutations` and flushed by
 `flushPendingMutations()` when sync mode is exited. BCE erase (CSI ?12 h)
 and combining-char attachments are both eligible for queued writes.
+
+## Theme catalog
+
+`Theme` provides a 256-color palette with factory methods for named themes.
+`Themes` is the catalog listing all available themes:
+
+```php
+use SugarCraft\Vt\Theme;
+use SugarCraft\Vt\Themes;
+
+// Tokyo Night — the only theme used in the monorepo's 277 .tape files
+$theme = Theme::tokyoNight();
+
+// Index into the 256-color palette
+$red = $theme->color(1);       // 0xf7768e
+
+// Resolve RGB components from a 256-color index
+$rgb = Theme::rgb(196);        // [255, 85, 85]
+
+// Map ANSI 0-15 slot to its 256-color index
+$idx = Theme::fgIndex(1);        // 1 (Ansi1 → index 1)
+
+// V1-ready themes
+foreach (Themes::v1() as $name => $theme) {
+    echo "$name\n";
+}
+// TokyoNight, TokyoNightLight, TokyoNightStorm
+
+// All themes (including deferred stubs)
+foreach (Themes::all() as $name => $theme) {
+    echo "$name\n";
+}
+// TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark
+```
+
+Available themes:
+
+| Theme | Status | Description |
+|---|---|---|
+| `TokyoNight` | ✅ v1 | Dark theme — used in all 277 monorepo tapes |
+| `TokyoNightLight` | ✅ v1 | Light variant of TokyoNight |
+| `TokyoNightStorm` | ✅ v1 | Storm variant of TokyoNight |
+| `Dracula` | ✅ v1 | Full Dracula palette |
+| `SolarizedDark` | ✅ v1 | Full Solarized Dark palette |
+
+Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield construction:
+`Theme::ATTR_BOLD`, `Theme::ATTR_ITALIC`, `Theme::ATTR_UNDERLINE`, `Theme::ATTR_INVERSE`, `Theme::ATTR_STRIKETHROUGH`.
 
 ## Test
 
