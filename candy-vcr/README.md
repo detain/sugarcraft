@@ -22,6 +22,7 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 | PR7 | `bin/candy-vcr` CLI + examples + tracking |
 | PR8 | Tape lexer/parser/compiler (`.tape` → Cassette) |
 | PR9 | Renderer + FrameStream + FrameDedup (Phase 3 of vhs-replacement) |
+| PR10 | Raster + Glyphs + FontLoader (Phase 4 of vhs-replacement) |
 
 ## Use cases
 
@@ -436,6 +437,58 @@ checks.
 for a typical 80×24 terminal that's 1920 cell comparisons. At 30fps with dedup
 disabled, that's ~57,600 cell comparisons per second. This is acceptable
 for now (Phase 3) but is a known bottleneck for optimization in Phase 4.
+
+## Frame rasterizer (Phase 4)
+
+The `SugarCraft\Vcr\Raster` namespace converts terminal `Snapshot` frames
+into PNG images for GIF encoding:
+
+```php
+use SugarCraft\Vcr\Raster\GdRasterizer;
+use SugarCraft\Vcr\Raster\FontLoader;
+
+$rasterizer = new GdRasterizer(fontSize: 14, fontFamily: 'DejaVuSansMono');
+
+$png = $rasterizer->rasterize($snapshot, cellW: 8, cellH: 16);
+
+$pngData = stream_get_contents(fopen('php://memory', 'r+'), null, 0);
+imagepng($png);
+imagedestroy($png);
+```
+
+**Cell metrics (FontSize 14, JetBrainsMono / DejaVuSansMono):**
+```
+  cellW = 8px, cellH = 16px
+  80×24 terminal → 640×384 px
+  120×40 terminal → 960×640 px
+```
+
+**Architecture:**
+
+| Class | Role |
+|---|---|
+| `FontLoader` | Resolves TTF font paths from `fonts/` bundle + system dirs |
+| `Glyphs` | Per-(char, fg, bg, bold, italic, underline) tile cache — the performance key |
+| `Rasterizer` | Interface: `rasterize(Snapshot, cellW, cellH, ?FontLoader): GdImage\|Imagick` |
+| `GdRasterizer` | Default ext-gd backend; blits tiles + renders cursor |
+| `ImagickRasterizer` | ext-imagick alternative; better anti-aliasing |
+
+**Bundled fonts:** `fonts/DejaVuSansMono-Regular.ttf` and `DejaVuSansMono-Bold.ttf`
+(vendored fallback; JetBrainsMono pending OFL download). FontLoader tries the
+`fonts/` dir first, then system font directories
+(`/usr/share/fonts/`, `~/.fonts/`, etc.).
+
+**Glyphs cache:** Typical terminal frames have thousands of cells but only ~50
+unique (char, attrs) combinations. The tile cache makes rasterization O(unique
+tiles) instead of O(cells). Cache key: `"$char|$fg|$bg|$bold|$italic|$underline"`.
+
+**Wide chars:** CJK and fullwidth characters get a 2×-wide tile; the rasterizer
+advances 2 columns after blitting. Checked via `mb_strwidth($char) > 1`.
+
+**Cursor shapes:**
+- Block (shape=1): glyph rendered in reverse-video (fg/bg swapped)
+- Underline (shape=2): filled rect at y = cellH × 0.75
+- Bar (shape=3): narrow filled rect at left edge
 
 ## Examples
 
