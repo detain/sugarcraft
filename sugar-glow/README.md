@@ -113,22 +113,20 @@ foreach (FileWatcher::watch('/path/to/file.md', 500) as $changed) {
 }
 ```
 
-### WidthHelper
+### Width helpers
 
-CJK and emoji width handling via `mb_strwidth` — ensures visual truncation
-and padding are accurate regardless of character encoding.
+CJK and emoji width handling lives in `SugarCraft\Core\Util\Width`. Use it
+directly for visual truncation, padding, and ANSI-aware measurement:
 
 ```php
-use SugarCraft\Glow\WidthHelper;
+use SugarCraft\Core\Util\Width;
 
-WidthHelper::visualWidth('hello');        // 5
-WidthHelper::visualWidth('你好');        // 4 (full-width)
-WidthHelper::visualWidth('📦');           // 2 (emoji)
+Width::string('hello');           // 5
+Width::string('你好');            // 4 (full-width)
+Width::string('📦');              // 2 (emoji)
 
-WidthHelper::padRight('hi', 8);          // "hi      "
-WidthHelper::slice('hello', 1, 4);       // "ell"
-WidthHelper::isFullWidth('你');           // true
-WidthHelper::truncate('hello world', 8);  // "hello wo"
+Width::padRight('hi', 8);         // "hi      "
+Width::truncate('hello world', 8); // "hello wo"
 ```
 
 ## Test

@@ -145,18 +145,15 @@ final class Scrollbar implements \SugarCraft\Dash\Foundation\Sizer
 
         $result = implode("\n", $lines);
 
-        // Pad to allocated width if needed. str_pad counts bytes, so for
-        // ANSI-prefixed lines we have to budget by visible width (strip the
-        // escape sequences first) and append spaces manually.
+        // Pad to allocated width if needed. Width::padRight strips ANSI
+        // sequences when measuring so coloured lines budget correctly.
         $useWidth = $this->width ?? 1;
         if ($useWidth > 1) {
             $resultLines = explode("\n", $result);
-            $resultLines = array_map(function (string $line) use ($useWidth): string {
-                $visible = preg_replace('/\x1b\[[0-9;]*m/', '', $line);
-                $visibleWidth = mb_strlen($visible, 'UTF-8');
-                $pad = max(0, $useWidth - $visibleWidth);
-                return $line . str_repeat(' ', $pad);
-            }, $resultLines);
+            $resultLines = array_map(
+                static fn (string $line): string => Width::padRight($line, $useWidth),
+                $resultLines,
+            );
             $result = implode("\n", $resultLines);
         }
 

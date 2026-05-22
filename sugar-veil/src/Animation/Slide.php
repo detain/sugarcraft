@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Veil\Animation;
 
 use SugarCraft\Bounce\Easing\CubicBezier;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Veil\Position;
 
 /**
@@ -117,7 +118,6 @@ final class Slide
 
     private function strWidth(string $str): int
     {
-        $clean = \preg_replace('/\x1b\[[0-9;]*m/', '', $str);
-        return \mb_strwidth($clean ?? '');
+        return Width::string($str);
     }
 }

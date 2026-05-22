@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Components\Feedback;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 
 /**
  * A non-modal alert feedback component.
@@ -180,7 +181,7 @@ final class Alert implements \SugarCraft\Dash\Foundation\Sizer
             }
 
             $potentialLine = $currentLine === '' ? $word : $currentLine . $word;
-            $lineLength = mb_strlen($this->stripAnsi($potentialLine));
+            $lineLength = Width::string($potentialLine);
 
             if ($lineLength <= $width) {
                 $currentLine = $potentialLine;
@@ -189,7 +190,7 @@ final class Alert implements \SugarCraft\Dash\Foundation\Sizer
                     $lines[] = $currentLine;
                 }
                 // If a single word is longer than width, break it
-                if (mb_strlen($this->stripAnsi($word)) > $width) {
+                if (Width::string($word) > $width) {
                     $lines[] = $word;
                     $currentLine = '';
                 } else {
@@ -206,21 +207,11 @@ final class Alert implements \SugarCraft\Dash\Foundation\Sizer
     }
 
     /**
-     * Strip ANSI escape codes from a string.
-     */
-    private function stripAnsi(string $text): string
-    {
-        return preg_replace('/\x1b\[[0-9;]*m/', '', $text) ?? $text;
-    }
-
-    /**
-     * Pad a string to the right to fill a given width.
+     * Pad a string to the right to fill a given width (ANSI-aware).
      */
     private function padRight(string $text, int $width): string
     {
-        $plainLength = mb_strlen($this->stripAnsi($text));
-        $padding = $width - $plainLength;
-        return $text . ($padding > 0 ? str_repeat(' ', $padding) : '');
+        return Width::padRight($text, $width);
     }
 
     /**

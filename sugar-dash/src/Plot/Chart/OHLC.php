@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Plot\Chart;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
+use SugarCraft\Core\Util\Width;
 
 /**
  * An OHLC (Open-High-Low-Close) chart component for financial data.
@@ -309,7 +310,7 @@ final class OHLC implements \SugarCraft\Dash\Foundation\Sizer
                 $x = $index * $cellWidth;
                 $labelLine .= str_pad($label, $cellWidth, ' ', STR_PAD_RIGHT);
             }
-            $remaining = max(0, $chartWidth - $priceScaleWidth - 1 - mb_strlen(preg_replace('/\x1b\[[0-9;]*m/', '', $labelLine), 'UTF-8') + 1);
+            $remaining = max(0, $chartWidth - $priceScaleWidth - 1 - Width::string($labelLine) + 1);
             $labelLine .= str_repeat(' ', $remaining) . $v;
             $result .= $labelLine . "\n";
         }
