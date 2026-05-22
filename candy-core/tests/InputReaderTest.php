@@ -63,29 +63,29 @@ final class InputReaderTest extends TestCase
     public function testTabEnterBackspaceSpace(): void
     {
         $msgs = (new InputReader())->parse("\t\r\x7f ");
-        $this->assertSame(KeyType::Tab,       $msgs[0]->type);
-        $this->assertSame(KeyType::Enter,     $msgs[1]->type);
+        $this->assertSame(KeyType::Tab, $msgs[0]->type);
+        $this->assertSame(KeyType::Enter, $msgs[1]->type);
         $this->assertSame(KeyType::Backspace, $msgs[2]->type);
-        $this->assertSame(KeyType::Space,     $msgs[3]->type);
+        $this->assertSame(KeyType::Space, $msgs[3]->type);
     }
 
     public function testArrowKeys(): void
     {
         $msgs = (new InputReader())->parse("\x1b[A\x1b[B\x1b[C\x1b[D");
         $this->assertCount(4, $msgs);
-        $this->assertSame(KeyType::Up,    $msgs[0]->type);
-        $this->assertSame(KeyType::Down,  $msgs[1]->type);
+        $this->assertSame(KeyType::Up, $msgs[0]->type);
+        $this->assertSame(KeyType::Down, $msgs[1]->type);
         $this->assertSame(KeyType::Right, $msgs[2]->type);
-        $this->assertSame(KeyType::Left,  $msgs[3]->type);
+        $this->assertSame(KeyType::Left, $msgs[3]->type);
     }
 
     public function testHomeEndDeletePageKeys(): void
     {
         $msgs = (new InputReader())->parse("\x1b[H\x1b[F\x1b[3~\x1b[5~\x1b[6~");
-        $this->assertSame(KeyType::Home,     $msgs[0]->type);
-        $this->assertSame(KeyType::End,      $msgs[1]->type);
-        $this->assertSame(KeyType::Delete,   $msgs[2]->type);
-        $this->assertSame(KeyType::PageUp,   $msgs[3]->type);
+        $this->assertSame(KeyType::Home, $msgs[0]->type);
+        $this->assertSame(KeyType::End, $msgs[1]->type);
+        $this->assertSame(KeyType::Delete, $msgs[2]->type);
+        $this->assertSame(KeyType::PageUp, $msgs[3]->type);
         $this->assertSame(KeyType::PageDown, $msgs[4]->type);
     }
 
@@ -94,7 +94,7 @@ final class InputReaderTest extends TestCase
         $msgs = (new InputReader())->parse("\x1ba");
         $this->assertCount(1, $msgs);
         $this->assertSame(KeyType::Char, $msgs[0]->type);
-        $this->assertSame('a',           $msgs[0]->rune);
+        $this->assertSame('a', $msgs[0]->rune);
         $this->assertTrue($msgs[0]->alt);
         $this->assertFalse($msgs[0]->ctrl);
         $this->assertSame('alt+a', $msgs[0]->string());
@@ -145,10 +145,10 @@ final class InputReaderTest extends TestCase
 
     public function testKeyMsgString(): void
     {
-        $this->assertSame('a',        (new KeyMsg(KeyType::Char, 'a'))->string());
-        $this->assertSame('ctrl+a',   (new KeyMsg(KeyType::Char, 'a', ctrl: true))->string());
-        $this->assertSame('alt+a',    (new KeyMsg(KeyType::Char, 'a', alt: true))->string());
-        $this->assertSame('up',       (new KeyMsg(KeyType::Up))->string());
+        $this->assertSame('a', (new KeyMsg(KeyType::Char, 'a'))->string());
+        $this->assertSame('ctrl+a', (new KeyMsg(KeyType::Char, 'a', ctrl: true))->string());
+        $this->assertSame('alt+a', (new KeyMsg(KeyType::Char, 'a', alt: true))->string());
+        $this->assertSame('up', (new KeyMsg(KeyType::Up))->string());
         $this->assertSame('ctrl+alt+a', (new KeyMsg(KeyType::Char, 'a', alt: true, ctrl: true))->string());
     }
 
@@ -175,10 +175,10 @@ final class InputReaderTest extends TestCase
         $msgs = (new InputReader())->parse("\x1b[<0;5;10M");
         $this->assertCount(1, $msgs);
         $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
-        $this->assertSame(5,  $msgs[0]->x);
+        $this->assertSame(5, $msgs[0]->x);
         $this->assertSame(10, $msgs[0]->y);
-        $this->assertSame(MouseButton::Left,    $msgs[0]->button);
-        $this->assertSame(MouseAction::Press,   $msgs[0]->action);
+        $this->assertSame(MouseButton::Left, $msgs[0]->button);
+        $this->assertSame(MouseAction::Press, $msgs[0]->action);
         $this->assertFalse($msgs[0]->shift);
         $this->assertFalse($msgs[0]->alt);
         $this->assertFalse($msgs[0]->ctrl);
@@ -188,7 +188,7 @@ final class InputReaderTest extends TestCase
     {
         $msgs = (new InputReader())->parse("\x1b[<0;5;10m");
         $this->assertSame(MouseAction::Release, $msgs[0]->action);
-        $this->assertSame(MouseButton::Left,    $msgs[0]->button);
+        $this->assertSame(MouseButton::Left, $msgs[0]->button);
     }
 
     public function testMouseRightPress(): void
@@ -212,7 +212,7 @@ final class InputReaderTest extends TestCase
         // Left + motion(32) = 32
         $msgs = (new InputReader())->parse("\x1b[<32;7;8M");
         $this->assertSame(MouseAction::Motion, $msgs[0]->action);
-        $this->assertSame(MouseButton::Left,   $msgs[0]->button);
+        $this->assertSame(MouseButton::Left, $msgs[0]->button);
     }
 
     public function testMouseWheelUp(): void
@@ -220,7 +220,7 @@ final class InputReaderTest extends TestCase
         // 64 = wheel up
         $msgs = (new InputReader())->parse("\x1b[<64;1;1M");
         $this->assertSame(MouseButton::WheelUp, $msgs[0]->button);
-        $this->assertSame(MouseAction::Press,   $msgs[0]->action);
+        $this->assertSame(MouseAction::Press, $msgs[0]->action);
     }
 
     public function testMouseWheelDown(): void
@@ -234,7 +234,7 @@ final class InputReaderTest extends TestCase
         // 128 = extra btn 0 (backward)
         $msgs = (new InputReader())->parse("\x1b[<128;1;1M");
         $this->assertSame(MouseButton::Backward, $msgs[0]->button);
-        $this->assertSame(MouseAction::Press,    $msgs[0]->action);
+        $this->assertSame(MouseAction::Press, $msgs[0]->action);
     }
 
     public function testMouseSplitAcrossReads(): void
@@ -244,7 +244,7 @@ final class InputReaderTest extends TestCase
         $msgs = $r->parse(";10M");
         $this->assertCount(1, $msgs);
         $this->assertInstanceOf(MouseMsg::class, $msgs[0]);
-        $this->assertSame(5,  $msgs[0]->x);
+        $this->assertSame(5, $msgs[0]->x);
         $this->assertSame(10, $msgs[0]->y);
     }
 
@@ -325,8 +325,8 @@ final class InputReaderTest extends TestCase
         $msgs = (new InputReader())->parse("\x1b[200~hello world\x1b[201~");
         $this->assertCount(3, $msgs);
         $this->assertInstanceOf(PasteStartMsg::class, $msgs[0]);
-        $this->assertInstanceOf(PasteEndMsg::class,   $msgs[1]);
-        $this->assertInstanceOf(PasteMsg::class,      $msgs[2]);
+        $this->assertInstanceOf(PasteEndMsg::class, $msgs[1]);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[2]);
         $this->assertSame('hello world', $msgs[2]->content);
     }
 
@@ -338,8 +338,8 @@ final class InputReaderTest extends TestCase
         $msgs    = (new InputReader())->parse("\x1b[200~" . $payload . "\x1b[201~");
         $this->assertCount(3, $msgs);
         $this->assertInstanceOf(PasteStartMsg::class, $msgs[0]);
-        $this->assertInstanceOf(PasteEndMsg::class,   $msgs[1]);
-        $this->assertInstanceOf(PasteMsg::class,      $msgs[2]);
+        $this->assertInstanceOf(PasteEndMsg::class, $msgs[1]);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[2]);
         $this->assertSame($payload, $msgs[2]->content);
     }
 
@@ -354,7 +354,7 @@ final class InputReaderTest extends TestCase
         $msgs = $r->parse(" world\x1b[201~");
         $this->assertCount(2, $msgs);
         $this->assertInstanceOf(PasteEndMsg::class, $msgs[0]);
-        $this->assertInstanceOf(PasteMsg::class,    $msgs[1]);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[1]);
         $this->assertSame('hello world', $msgs[1]->content);
     }
 
@@ -363,8 +363,8 @@ final class InputReaderTest extends TestCase
         $msgs = (new InputReader())->parse("\x1b[200~paste\x1b[201~q");
         $this->assertCount(4, $msgs);
         $this->assertInstanceOf(PasteStartMsg::class, $msgs[0]);
-        $this->assertInstanceOf(PasteEndMsg::class,   $msgs[1]);
-        $this->assertInstanceOf(PasteMsg::class,      $msgs[2]);
+        $this->assertInstanceOf(PasteEndMsg::class, $msgs[1]);
+        $this->assertInstanceOf(PasteMsg::class, $msgs[2]);
         $this->assertSame('paste', $msgs[2]->content);
         $this->assertInstanceOf(KeyMsg::class, $msgs[3]);
         $this->assertSame('q', $msgs[3]->rune);
@@ -372,7 +372,7 @@ final class InputReaderTest extends TestCase
 
     public function testKeyMsgStringForFunctionKeys(): void
     {
-        $this->assertSame('f1',  (new KeyMsg(KeyType::F1))->string());
+        $this->assertSame('f1', (new KeyMsg(KeyType::F1))->string());
         $this->assertSame('f12', (new KeyMsg(KeyType::F12))->string());
     }
 
@@ -444,7 +444,7 @@ final class InputReaderTest extends TestCase
         $msgs = $r->parse("10R");
         $this->assertCount(1, $msgs);
         $this->assertInstanceOf(CursorPositionMsg::class, $msgs[0]);
-        $this->assertSame(5,  $msgs[0]->row);
+        $this->assertSame(5, $msgs[0]->row);
         $this->assertSame(10, $msgs[0]->col);
     }
 
@@ -455,8 +455,8 @@ final class InputReaderTest extends TestCase
         $this->assertInstanceOf(CursorColorMsg::class, $msgs[0]);
         // 0x8080 / 0xffff * 255 ≈ 128.
         $this->assertSame(128, $msgs[0]->r);
-        $this->assertSame(64,  $msgs[0]->g);
-        $this->assertSame(32,  $msgs[0]->b);
+        $this->assertSame(64, $msgs[0]->g);
+        $this->assertSame(32, $msgs[0]->b);
         $this->assertSame('#804020', $msgs[0]->hex());
     }
 
@@ -584,11 +584,11 @@ final class InputReaderTest extends TestCase
     public function testKeyMsgTextAndCodeAliases(): void
     {
         $printable = (new InputReader())->parse('a')[0];
-        $this->assertSame('a',           $printable->text());
+        $this->assertSame('a', $printable->text());
         $this->assertSame(KeyType::Char, $printable->code());
 
         $named = (new InputReader())->parse("\x1b[A")[0];
-        $this->assertSame('',          $named->text());
+        $this->assertSame('', $named->text());
         $this->assertSame(KeyType::Up, $named->code());
     }
 
@@ -617,8 +617,8 @@ final class InputReaderTest extends TestCase
     {
         $this->assertTrue(Modifiers::fromXtermMod(1)->isEmpty()); // 1 = no mods
         $this->assertEquals(Modifiers::SHIFT, Modifiers::fromXtermMod(2)->toBitfield());
-        $this->assertEquals(Modifiers::ALT,   Modifiers::fromXtermMod(3)->toBitfield());
-        $this->assertEquals(Modifiers::CTRL,  Modifiers::fromXtermMod(5)->toBitfield());
+        $this->assertEquals(Modifiers::ALT, Modifiers::fromXtermMod(3)->toBitfield());
+        $this->assertEquals(Modifiers::CTRL, Modifiers::fromXtermMod(5)->toBitfield());
         $this->assertEquals(
             Modifiers::SHIFT | Modifiers::ALT | Modifiers::CTRL,
             Modifiers::fromXtermMod(8)->toBitfield(),

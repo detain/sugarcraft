@@ -155,12 +155,25 @@ final class TrackingTermios implements Termios
 {
     public int $restoreCalls = 0;
 
-    public function __construct(private readonly ?string $markerPath = null) {}
+    public function __construct(private readonly ?string $markerPath = null)
+    {
+    }
 
-    public function current(): self { return $this; }
-    public function makeRaw(): self { return $this; }
-    public function apply(int $when = self::TCSANOW): void {}
-    public function isAtty(): bool { return true; }
+    public function current(): self
+    {
+        return $this;
+    }
+    public function makeRaw(): self
+    {
+        return $this;
+    }
+    public function apply(int $when = self::TCSANOW): void
+    {
+    }
+    public function isAtty(): bool
+    {
+        return true;
+    }
 
     public function restore(): void
     {

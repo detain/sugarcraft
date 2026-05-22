@@ -17,5 +17,6 @@ final class CursorPositionMsg implements Msg
     public function __construct(
         public readonly int $row,
         public readonly int $col,
-    ) {}
+    ) {
+    }
 }

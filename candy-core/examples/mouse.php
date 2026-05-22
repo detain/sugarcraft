@@ -26,9 +26,14 @@ use SugarCraft\Core\ProgramOptions;
 final class MouseDemo implements Model
 {
     /** @param list<string> $log */
-    public function __construct(public readonly array $log = []) {}
+    public function __construct(public readonly array $log = [])
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

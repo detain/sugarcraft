@@ -19,7 +19,10 @@ use SugarCraft\Core\Program;
 
 final class Hello implements Model
 {
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

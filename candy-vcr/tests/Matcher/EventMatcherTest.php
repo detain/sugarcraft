@@ -15,7 +15,9 @@ use SugarCraft\Vcr\Matcher\PassthroughMatcher;
  */
 final class StubEventMatcher implements EventMatcher
 {
-    public function __construct(private readonly bool $result) {}
+    public function __construct(private readonly bool $result)
+    {
+    }
 
     public function matches(Event $recorded, Event $actual): bool
     {

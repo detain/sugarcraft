@@ -27,7 +27,11 @@ final class ExecMsg implements Msg
         public readonly ?\Throwable $error = null,
         public readonly string $stdout = '',
         public readonly string $stderr = '',
-    ) {}
+    ) {
+    }
 
-    public function ok(): bool { return $this->error === null && $this->exitCode === 0; }
+    public function ok(): bool
+    {
+        return $this->error === null && $this->exitCode === 0;
+    }
 }

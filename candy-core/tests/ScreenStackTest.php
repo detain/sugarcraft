@@ -15,11 +15,22 @@ final class DummyScreenModel implements Model
 {
     use SubscriptionCapable;
 
-    public function __construct(public readonly string $id) {}
+    public function __construct(public readonly string $id)
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
-    public function update(Msg $msg): array { return [$this, null]; }
-    public function view(): string { return "screen: {$this->id}"; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
+    public function update(Msg $msg): array
+    {
+        return [$this, null];
+    }
+    public function view(): string
+    {
+        return "screen: {$this->id}";
+    }
 }
 
 final class ScreenStackTest extends TestCase
@@ -44,7 +55,8 @@ final class ScreenStackTest extends TestCase
         $screen = new Screen(
             new DummyScreenModel('A'),
             title: 'Screen A',
-            onEnter: static function (): void { /* lifecycle handled by caller */ },
+            onEnter: static function (): void { /* lifecycle handled by caller */
+            },
         );
 
         $stack = (new ScreenStack())->push($screen);
@@ -79,7 +91,9 @@ final class ScreenStackTest extends TestCase
         $exited = false;
         $screen = new Screen(
             new DummyScreenModel('A'),
-            onExit: static function () use (&$exited): void { $exited = true; },
+            onExit: static function () use (&$exited): void {
+                $exited = true;
+            },
         );
 
         $stack = (new ScreenStack())->push($screen);

@@ -20,7 +20,7 @@ final class PopScreenCmd
 
     public function __construct()
     {
-        $this->cmd = static fn(): ScreenStackPoppedMsg => new ScreenStackPoppedMsg();
+        $this->cmd = static fn (): ScreenStackPoppedMsg => new ScreenStackPoppedMsg();
     }
 
     public function __invoke(): ScreenStackPoppedMsg

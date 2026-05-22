@@ -66,7 +66,8 @@ final readonly class Mode
          * focus-out (CSI O) events to the focusEvents list.
          */
         public bool $reportFocusEvents = false,
-    ) {}
+    ) {
+    }
 
     public function withAltScreen(bool $v): self
     {

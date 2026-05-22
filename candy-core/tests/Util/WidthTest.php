@@ -79,22 +79,22 @@ final class WidthTest extends TestCase
 
     public function testPadRight(): void
     {
-        $this->assertSame('hi   ',   Width::padRight('hi', 5));
-        $this->assertSame('hello',   Width::padRight('hello', 5));
-        $this->assertSame('hello',   Width::padRight('hello', 3));
-        $this->assertSame('hi***',   Width::padRight('hi', 5, '*'));
+        $this->assertSame('hi   ', Width::padRight('hi', 5));
+        $this->assertSame('hello', Width::padRight('hello', 5));
+        $this->assertSame('hello', Width::padRight('hello', 3));
+        $this->assertSame('hi***', Width::padRight('hi', 5, '*'));
     }
 
     public function testPadLeft(): void
     {
-        $this->assertSame('   hi',   Width::padLeft('hi', 5));
-        $this->assertSame('00042',   Width::padLeft('42', 5, '0'));
+        $this->assertSame('   hi', Width::padLeft('hi', 5));
+        $this->assertSame('00042', Width::padLeft('42', 5, '0'));
     }
 
     public function testPadCenter(): void
     {
-        $this->assertSame(' hi  ',   Width::padCenter('hi', 5));
-        $this->assertSame('  hi  ',  Width::padCenter('hi', 6));
+        $this->assertSame(' hi  ', Width::padCenter('hi', 5));
+        $this->assertSame('  hi  ', Width::padCenter('hi', 6));
     }
 
     public function testPadIgnoresAnsi(): void
@@ -106,28 +106,28 @@ final class WidthTest extends TestCase
 
     public function testWrapShortText(): void
     {
-        $this->assertSame('hello',           Width::wrap('hello', 10));
+        $this->assertSame('hello', Width::wrap('hello', 10));
     }
 
     public function testWrapBreaksOnSpaces(): void
     {
-        $this->assertSame("hello\nworld",    Width::wrap('hello world', 5));
+        $this->assertSame("hello\nworld", Width::wrap('hello world', 5));
     }
 
     public function testWrapHonorsExistingNewlines(): void
     {
-        $this->assertSame("a\nb",            Width::wrap("a\nb", 80));
+        $this->assertSame("a\nb", Width::wrap("a\nb", 80));
     }
 
     public function testWrapBreaksLongWord(): void
     {
-        $this->assertSame("abcd\nefgh\ni",   Width::wrap('abcdefghi', 4));
+        $this->assertSame("abcd\nefgh\ni", Width::wrap('abcdefghi', 4));
     }
 
     public function testWrapZeroOrNegativeReturnsInput(): void
     {
-        $this->assertSame('hello world',     Width::wrap('hello world', 0));
-        $this->assertSame('hello world',     Width::wrap('hello world', -1));
+        $this->assertSame('hello world', Width::wrap('hello world', 0));
+        $this->assertSame('hello world', Width::wrap('hello world', -1));
     }
 
     public function testWrapMultipleWordsAcrossLines(): void

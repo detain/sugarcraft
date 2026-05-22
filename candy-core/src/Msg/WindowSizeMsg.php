@@ -15,5 +15,6 @@ final class WindowSizeMsg implements Msg
     public function __construct(
         public readonly int $cols,
         public readonly int $rows,
-    ) {}
+    ) {
+    }
 }

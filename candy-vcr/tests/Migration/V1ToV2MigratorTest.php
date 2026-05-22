@@ -214,7 +214,7 @@ final class V1ToV2MigratorTest extends TestCase
         // Verify output events got encoding
         $outputEvents = array_filter(
             $migrated->events,
-            fn($e) => $e->kind === EventKind::Output,
+            fn ($e) => $e->kind === EventKind::Output,
         );
         foreach ($outputEvents as $event) {
             $this->assertArrayHasKey('_enc', $event->payload);

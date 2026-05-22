@@ -28,7 +28,8 @@ final class Modifiers
         public readonly bool $shift = false,
         public readonly bool $alt   = false,
         public readonly bool $ctrl  = false,
-    ) {}
+    ) {
+    }
 
     public static function none(): self
     {
@@ -59,8 +60,8 @@ final class Modifiers
     public function toBitfield(): int
     {
         return ($this->shift ? self::SHIFT : 0)
-             | ($this->alt   ? self::ALT   : 0)
-             | ($this->ctrl  ? self::CTRL  : 0);
+             | ($this->alt ? self::ALT : 0)
+             | ($this->ctrl ? self::CTRL : 0);
     }
 
     public function isEmpty(): bool

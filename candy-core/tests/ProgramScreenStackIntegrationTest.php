@@ -33,14 +33,18 @@ final class ScreenStackRecordingModel implements Model, ScreenStackCapable
         public ScreenStack $screens = new ScreenStack(),
         public readonly int $quitAfter = PHP_INT_MAX,
         public readonly string $id = 'root',
-    ) {}
+    ) {
+    }
 
     public function screens(): ScreenStack
     {
         return $this->screens;
     }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {
@@ -141,8 +145,8 @@ final class ProgramScreenStackIntegrationTest extends TestCase
             new Screen(new ScreenStackRecordingModel(id: 'inner-screen'), title: 'Inner')
         ));
 
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 

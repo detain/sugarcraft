@@ -21,5 +21,6 @@ final readonly class WorkerResultMsg implements Msg
         public mixed $result,
         public ?\Throwable $error = null,
         public int $workerId = 0,
-    ) {}
+    ) {
+    }
 }

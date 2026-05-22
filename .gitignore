@@ -28,4 +28,5 @@
 .claude/ide/
 .claude/policy-limits.json
 .claude/sessions/
+.php-cs-fixer.cache
 

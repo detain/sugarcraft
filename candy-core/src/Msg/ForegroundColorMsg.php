@@ -18,7 +18,8 @@ final class ForegroundColorMsg implements Msg
         public readonly int $r,
         public readonly int $g,
         public readonly int $b,
-    ) {}
+    ) {
+    }
 
     /**
      * Standard relative-luminance check. True iff the reported colour

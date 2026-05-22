@@ -17,15 +17,19 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
 
-final class TickMsg implements Msg {}
+final class TickMsg implements Msg
+{
+}
 
 final class Timer implements Model
 {
-    public function __construct(public readonly int $seconds = 0) {}
+    public function __construct(public readonly int $seconds = 0)
+    {
+    }
 
     public function init(): ?\Closure
     {
-        return Cmd::tick(1.0, static fn(): Msg => new TickMsg());
+        return Cmd::tick(1.0, static fn (): Msg => new TickMsg());
     }
 
     public function update(Msg $msg): array
@@ -36,7 +40,7 @@ final class Timer implements Model
         if ($msg instanceof TickMsg) {
             return [
                 new self($this->seconds + 1),
-                Cmd::tick(1.0, static fn(): Msg => new TickMsg()),
+                Cmd::tick(1.0, static fn (): Msg => new TickMsg()),
             ];
         }
         return [$this, null];

@@ -26,7 +26,8 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     public function __construct(
         public ScreenStack $screens = new ScreenStack(),
         public ?Model $currentModel = null,
-    ) {}
+    ) {
+    }
 
     public function screens(): ScreenStack
     {

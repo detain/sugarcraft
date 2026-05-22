@@ -15,7 +15,7 @@ final class ColorTest extends TestCase
         $c = Color::hex('#ff8000');
         $this->assertSame(255, $c->r);
         $this->assertSame(128, $c->g);
-        $this->assertSame(0,   $c->b);
+        $this->assertSame(0, $c->b);
     }
 
     public function testHexShort(): void
@@ -23,7 +23,7 @@ final class ColorTest extends TestCase
         $c = Color::hex('#f80');
         $this->assertSame(255, $c->r);
         $this->assertSame(136, $c->g);
-        $this->assertSame(0,   $c->b);
+        $this->assertSame(0, $c->b);
     }
 
     public function testHexRoundTrip(): void
@@ -71,7 +71,7 @@ final class ColorTest extends TestCase
     {
         $first = Color::ansi256(0);
         $last  = Color::ansi256(255);
-        $this->assertSame(0,   $first->r);
+        $this->assertSame(0, $first->r);
         $this->assertSame(238, $last->r);
         $this->assertSame(238, $last->g);
         $this->assertSame(238, $last->b);
@@ -81,8 +81,8 @@ final class ColorTest extends TestCase
     {
         $c = Color::ansi256(124);
         $this->assertSame(175, $c->r);
-        $this->assertSame(0,   $c->g);
-        $this->assertSame(0,   $c->b);
+        $this->assertSame(0, $c->g);
+        $this->assertSame(0, $c->b);
     }
 
     public function testNeutralGrayPrefersGrayscaleRamp(): void
@@ -106,8 +106,8 @@ final class ColorTest extends TestCase
         // Pure red: hue=0, sat=1, lightness=0.5
         $c = Color::hsl(0.0, 1.0, 0.5);
         $this->assertSame(255, $c->r);
-        $this->assertSame(0,   $c->g);
-        $this->assertSame(0,   $c->b);
+        $this->assertSame(0, $c->g);
+        $this->assertSame(0, $c->b);
         // Pure white
         $w = Color::hsl(0.0, 0.0, 1.0);
         $this->assertSame(255, $w->r);
@@ -119,9 +119,9 @@ final class ColorTest extends TestCase
     {
         // Pure green: hue=120, sat=1, value=1
         $c = Color::hsv(120.0, 1.0, 1.0);
-        $this->assertSame(0,   $c->r);
+        $this->assertSame(0, $c->r);
         $this->assertSame(255, $c->g);
-        $this->assertSame(0,   $c->b);
+        $this->assertSame(0, $c->b);
     }
 
     public function testToHslRoundTrip(): void
@@ -131,7 +131,7 @@ final class ColorTest extends TestCase
         $back = Color::hsl($h, $s, $l);
         $this->assertEqualsWithDelta(128, $back->r, 1.0);
         $this->assertEqualsWithDelta(200, $back->g, 1.0);
-        $this->assertEqualsWithDelta(50,  $back->b, 1.0);
+        $this->assertEqualsWithDelta(50, $back->b, 1.0);
     }
 
     public function testLighten(): void
@@ -174,7 +174,7 @@ final class ColorTest extends TestCase
         $mid = $a->blend($b, 0.5);
         $this->assertSame(50, $mid->r);
         $start = $a->blend($b, 0.0);
-        $this->assertSame(0,   $start->r);
+        $this->assertSame(0, $start->r);
         $end = $a->blend($b, 1.0);
         $this->assertSame(100, $end->r);
     }
@@ -185,7 +185,7 @@ final class ColorTest extends TestCase
         $b = Color::rgb(255, 255, 255);
         $stops = $a->blend1d($b, 5);
         $this->assertCount(5, $stops);
-        $this->assertSame(0,   $stops[0]->r);
+        $this->assertSame(0, $stops[0]->r);
         $this->assertSame(255, $stops[4]->r);
     }
 
@@ -198,9 +198,9 @@ final class ColorTest extends TestCase
         $grid = $tl->blend2d($tr, $bl, $br, 3, 3);
         $this->assertCount(3, $grid);
         $this->assertCount(3, $grid[0]);
-        $this->assertSame(0,   $grid[0][0]->r);
+        $this->assertSame(0, $grid[0][0]->r);
         $this->assertSame(255, $grid[0][2]->r);
-        $this->assertSame(0,   $grid[2][0]->r);
+        $this->assertSame(0, $grid[2][0]->r);
         $this->assertSame(255, $grid[2][2]->r);
     }
 
@@ -208,7 +208,7 @@ final class ColorTest extends TestCase
     {
         // Red → cyan
         $c = Color::rgb(255, 0, 0)->complementary();
-        $this->assertSame(0,   $c->r);
+        $this->assertSame(0, $c->r);
         $this->assertEqualsWithDelta(255, $c->g, 1.0);
         $this->assertEqualsWithDelta(255, $c->b, 1.0);
     }

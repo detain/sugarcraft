@@ -16,7 +16,8 @@ final class UserJsonableMsg implements Msg, \JsonSerializable
     public function __construct(
         public readonly string $name,
         public readonly int $count,
-    ) {}
+    ) {
+    }
 
     public function jsonSerialize(): array
     {

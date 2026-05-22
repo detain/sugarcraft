@@ -41,7 +41,8 @@ final class RecordingModel implements Model
     public function __construct(
         public readonly int $quitAfter = PHP_INT_MAX,
         public readonly ?\Closure $initCmd = null,
-    ) {}
+    ) {
+    }
 
     public function init(): ?\Closure
     {
@@ -99,15 +100,15 @@ final class ProgramTest extends TestCase
         $program->send(new KeyMsg(\SugarCraft\Core\KeyType::Char, 'q'));
 
         // Safety net: stop the loop after 2s if our quit logic is broken.
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
         $this->assertInstanceOf(RecordingModel::class, $final);
         $this->assertCount(4, $final->log);
-        $this->assertInstanceOf(WindowSizeMsg::class,  $final->log[0]);
-        $this->assertInstanceOf(EnvMsg::class,         $final->log[1]);
+        $this->assertInstanceOf(WindowSizeMsg::class, $final->log[0]);
+        $this->assertInstanceOf(EnvMsg::class, $final->log[1]);
         $this->assertInstanceOf(ColorProfileMsg::class, $final->log[2]);
-        $this->assertInstanceOf(KeyMsg::class,         $final->log[3]);
+        $this->assertInstanceOf(KeyMsg::class, $final->log[3]);
 
         fclose($writer);
         fclose($in);
@@ -127,7 +128,7 @@ final class ProgramTest extends TestCase
             fwrite($writer, "ab");
             fclose($writer);
         });
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
@@ -145,15 +146,15 @@ final class ProgramTest extends TestCase
         [$in, $out, $writer] = $this->pipes();
         $loop = new StreamSelectLoop();
 
-        $marker = new class implements Msg {};
+        $marker = new class () implements Msg {};
         $model = new RecordingModel(
             // 3 startup msgs + the init-Cmd marker = 4.
             quitAfter: 4,
-            initCmd: static fn() => $marker,
+            initCmd: static fn () => $marker,
         );
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
 
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
@@ -178,7 +179,7 @@ final class ProgramTest extends TestCase
 
         rewind($out);
         $written = (string) stream_get_contents($out);
-        $this->assertStringContainsString(Ansi::unicodeOn(),  $written);
+        $this->assertStringContainsString(Ansi::unicodeOn(), $written);
         $this->assertStringContainsString(Ansi::unicodeOff(), $written);
         // Enable must come before disable.
         $this->assertLessThan(
@@ -211,7 +212,7 @@ final class ProgramTest extends TestCase
 
         rewind($out);
         $written = (string) stream_get_contents($out);
-        $this->assertStringNotContainsString(Ansi::unicodeOn(),  $written);
+        $this->assertStringNotContainsString(Ansi::unicodeOn(), $written);
         $this->assertStringNotContainsString(Ansi::unicodeOff(), $written);
 
         fclose($writer);
@@ -230,8 +231,8 @@ final class ProgramTest extends TestCase
             initCmd: Cmd::raw($payload),
         );
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
@@ -259,8 +260,8 @@ final class ProgramTest extends TestCase
             initCmd: Cmd::println('side-channel'),
         );
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
@@ -290,8 +291,8 @@ final class ProgramTest extends TestCase
         // QuitMsg short-circuits before the loop, so only the 3
         // startup msgs hit update().
         $this->assertCount(3, $final->log);
-        $this->assertInstanceOf(WindowSizeMsg::class,   $final->log[0]);
-        $this->assertInstanceOf(EnvMsg::class,          $final->log[1]);
+        $this->assertInstanceOf(WindowSizeMsg::class, $final->log[0]);
+        $this->assertInstanceOf(EnvMsg::class, $final->log[1]);
         $this->assertInstanceOf(ColorProfileMsg::class, $final->log[2]);
 
         fclose($writer);
@@ -356,13 +357,24 @@ final class ProgramTest extends TestCase
             cursor: new Cursor(row: 5, col: 7, shape: CursorShape::Bar, blink: true),
             windowTitle: 'demo',
         );
-        $model = new class($view) implements \SugarCraft\Core\Model {
+        $model = new class ($view) implements \SugarCraft\Core\Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
-            public function __construct(private readonly View $v) {}
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): View { return $this->v; }
+            public function __construct(private readonly View $v)
+            {
+            }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): View
+            {
+                return $this->v;
+            }
         };
 
         $opts = new ProgramOptions(
@@ -375,8 +387,8 @@ final class ProgramTest extends TestCase
             loop: $loop,
         );
         $program = new Program($model, $opts);
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         rewind($out);
@@ -403,13 +415,24 @@ final class ProgramTest extends TestCase
             foregroundColor: Color::hex('#ff0000'),
             backgroundColor: Color::hex('#00ff00'),
         );
-        $model = new class($view) implements \SugarCraft\Core\Model {
+        $model = new class ($view) implements \SugarCraft\Core\Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
-            public function __construct(private readonly View $v) {}
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): View { return $this->v; }
+            public function __construct(private readonly View $v)
+            {
+            }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): View
+            {
+                return $this->v;
+            }
         };
 
         $opts = new ProgramOptions(
@@ -422,13 +445,13 @@ final class ProgramTest extends TestCase
             loop: $loop,
         );
         $program = new Program($model, $opts);
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         rewind($out);
         $written = (string) stream_get_contents($out);
-        $this->assertStringContainsString("\x1b]9;4;1;33\x07",     $written);
+        $this->assertStringContainsString("\x1b]9;4;1;33\x07", $written);
         $this->assertStringContainsString("\x1b]10;rgb:ff/00/00\x07", $written);
         $this->assertStringContainsString("\x1b]11;rgb:00/ff/00\x07", $written);
 
@@ -448,13 +471,24 @@ final class ProgramTest extends TestCase
             reportFocus: true,
             bracketedPaste: true,
         );
-        $model = new class($view) implements \SugarCraft\Core\Model {
+        $model = new class ($view) implements \SugarCraft\Core\Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
-            public function __construct(private readonly View $v) {}
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): View { return $this->v; }
+            public function __construct(private readonly View $v)
+            {
+            }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): View
+            {
+                return $this->v;
+            }
         };
 
         $opts = new ProgramOptions(
@@ -467,19 +501,19 @@ final class ProgramTest extends TestCase
             loop: $loop,
         );
         $program = new Program($model, $opts);
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         rewind($out);
         $written = (string) stream_get_contents($out);
-        $this->assertStringContainsString(Ansi::mouseCellMotionOn(),   $written);
-        $this->assertStringContainsString(Ansi::focusReportingOn(),    $written);
-        $this->assertStringContainsString(Ansi::bracketedPasteOn(),    $written);
+        $this->assertStringContainsString(Ansi::mouseCellMotionOn(), $written);
+        $this->assertStringContainsString(Ansi::focusReportingOn(), $written);
+        $this->assertStringContainsString(Ansi::bracketedPasteOn(), $written);
         // Teardown should disable everything we activated.
-        $this->assertStringContainsString(Ansi::mouseCellMotionOff(),  $written);
-        $this->assertStringContainsString(Ansi::focusReportingOff(),   $written);
-        $this->assertStringContainsString(Ansi::bracketedPasteOff(),   $written);
+        $this->assertStringContainsString(Ansi::mouseCellMotionOff(), $written);
+        $this->assertStringContainsString(Ansi::focusReportingOff(), $written);
+        $this->assertStringContainsString(Ansi::bracketedPasteOff(), $written);
 
         fclose($writer);
         fclose($in);
@@ -536,7 +570,7 @@ final class ProgramTest extends TestCase
         $size = $final->log[0];
         $this->assertInstanceOf(WindowSizeMsg::class, $size);
         $this->assertSame(132, $size->cols);
-        $this->assertSame(50,  $size->rows);
+        $this->assertSame(50, $size->rows);
 
         fclose($writer);
         fclose($in);
@@ -576,13 +610,24 @@ final class ProgramTest extends TestCase
         $loop = new StreamSelectLoop();
 
         $view = new View(body: 'x', cursor: null);
-        $model = new class($view) implements \SugarCraft\Core\Model {
+        $model = new class ($view) implements \SugarCraft\Core\Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
-            public function __construct(private readonly View $v) {}
-            public function init(): ?\Closure { return null; }
-            public function update(\SugarCraft\Core\Msg $msg): array { return [$this, null]; }
-            public function view(): View { return $this->v; }
+            public function __construct(private readonly View $v)
+            {
+            }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                return [$this, null];
+            }
+            public function view(): View
+            {
+                return $this->v;
+            }
         };
 
         $opts = new ProgramOptions(
@@ -595,8 +640,8 @@ final class ProgramTest extends TestCase
             loop: $loop,
         );
         $program = new Program($model, $opts);
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         rewind($out);
@@ -622,16 +667,16 @@ final class ProgramTest extends TestCase
             output: $out,
             loop: $loop,
             // Drop every WindowSizeMsg (and any other Msg if you wanted).
-            filter: static fn(Model $m, Msg $msg): ?Msg
+            filter: static fn (Model $m, Msg $msg): ?Msg
                 => $msg instanceof WindowSizeMsg ? null : $msg,
         );
         $program = new Program($model, $opts);
         // Inject a few extra non-WindowSize messages.
-        $loop->addTimer(0.02, static fn() => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'a')));
-        $loop->addTimer(0.04, static fn() => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'b')));
-        $loop->addTimer(0.06, static fn() => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'c')));
-        $loop->addTimer(0.08, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.02, static fn () => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'a')));
+        $loop->addTimer(0.04, static fn () => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'b')));
+        $loop->addTimer(0.06, static fn () => $program->send(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, 'c')));
+        $loop->addTimer(0.08, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $finalModel = $program->run();
 
         $this->assertInstanceOf(RecordingModel::class, $finalModel);
@@ -662,8 +707,8 @@ final class ProgramTest extends TestCase
             withoutRenderer: true,
         );
         $program = new Program($model, $opts);
-        $loop->addTimer(0.05, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
         rewind($out);
@@ -681,9 +726,9 @@ final class ProgramTest extends TestCase
         [$in, $out, $writer] = $this->pipes();
         $loop = new StreamSelectLoop();
 
-        $marker1 = new class implements Msg {};
-        $marker2 = new class implements Msg {};
-        $marker3 = new class implements Msg {};
+        $marker1 = new class () implements Msg {};
+        $marker2 = new class () implements Msg {};
+        $marker3 = new class () implements Msg {};
 
         $cmd = Cmd::sequence(
             Cmd::send($marker1),
@@ -693,16 +738,24 @@ final class ProgramTest extends TestCase
         $model = new RecordingModel(quitAfter: 6, initCmd: $cmd);
         $opts = $this->makeOptions($in, $out, $loop);
         $program = new Program($model, $opts);
-        $loop->addTimer(0.5, static fn() => $program->quit());
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(0.5, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $finalModel = $program->run();
         $this->assertInstanceOf(RecordingModel::class, $finalModel);
         // Find the marker indices.
-        $idx1 = -1; $idx2 = -1; $idx3 = -1;
+        $idx1 = -1;
+        $idx2 = -1;
+        $idx3 = -1;
         foreach ($finalModel->log as $i => $m) {
-            if ($m === $marker1) $idx1 = $i;
-            if ($m === $marker2) $idx2 = $i;
-            if ($m === $marker3) $idx3 = $i;
+            if ($m === $marker1) {
+                $idx1 = $i;
+            }
+            if ($m === $marker2) {
+                $idx2 = $i;
+            }
+            if ($m === $marker3) {
+                $idx3 = $i;
+            }
         }
         $this->assertGreaterThanOrEqual(0, $idx1);
         $this->assertGreaterThan($idx1, $idx2);
@@ -719,8 +772,8 @@ final class ProgramTest extends TestCase
 
         $model = new RecordingModel(quitAfter: PHP_INT_MAX);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->kill());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->kill());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
 
@@ -760,9 +813,9 @@ final class ProgramTest extends TestCase
 
         $model = new RecordingModel(quitAfter: PHP_INT_MAX);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->println('hello', 'world'));
-        $loop->addTimer(0.10, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->println('hello', 'world'));
+        $loop->addTimer(0.10, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $final = $program->run();
         foreach ($final->log as $msg) {
@@ -785,9 +838,9 @@ final class ProgramTest extends TestCase
 
         $model = new RecordingModel(quitAfter: PHP_INT_MAX);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->printf('count=%d ratio=%0.2f', 42, 0.5));
-        $loop->addTimer(0.10, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->printf('count=%d ratio=%0.2f', 42, 0.5));
+        $loop->addTimer(0.10, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $program->run();
 
@@ -807,9 +860,9 @@ final class ProgramTest extends TestCase
 
         $model = new RecordingModel(quitAfter: PHP_INT_MAX);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->enableBracketedPaste());
-        $loop->addTimer(0.10, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->enableBracketedPaste());
+        $loop->addTimer(0.10, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $program->run();
 
@@ -831,9 +884,9 @@ final class ProgramTest extends TestCase
 
         $model = new RecordingModel(quitAfter: PHP_INT_MAX);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
-        $loop->addTimer(0.05, static fn() => $program->disableBracketedPaste());
-        $loop->addTimer(0.10, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.05, static fn () => $program->disableBracketedPaste());
+        $loop->addTimer(0.10, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $program->run();
 
@@ -868,8 +921,8 @@ final class ProgramTest extends TestCase
             $program->releaseTerminal();
             $program->restoreTerminal();
         });
-        $loop->addTimer(0.08, static fn() => $program->quit());
-        $loop->addTimer(2.0,  static fn() => $loop->stop());
+        $loop->addTimer(0.08, static fn () => $program->quit());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
 
         $program->run();
 

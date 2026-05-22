@@ -37,7 +37,7 @@ final class ProgramRecordingTest extends TestCase
             $program->withRecorder(Recorder::open($cassette, Recorder::defaultHeader(120, 40)));
             $program->send(new KeyMsg(KeyType::Char, 'q'));
 
-            $loop->addTimer(2.0, static fn() => $loop->stop());
+            $loop->addTimer(2.0, static fn () => $loop->stop());
             $program->run();
 
             $tape = (new JsonlFormat())->read($cassette);
@@ -46,7 +46,7 @@ final class ProgramRecordingTest extends TestCase
             $this->assertSame(120, $tape->header->cols);
             $this->assertSame(40, $tape->header->rows);
 
-            $kinds = array_map(fn($e) => $e->kind, $tape->events);
+            $kinds = array_map(fn ($e) => $e->kind, $tape->events);
             $this->assertContains(EventKind::Resize, $kinds, 'startup WindowSizeMsg should be recorded as resize');
             $this->assertContains(EventKind::Output, $kinds, 'renderer frames should produce output events');
             $this->assertContains(EventKind::Quit, $kinds, 'QuitMsg should produce a quit event');
@@ -72,7 +72,7 @@ final class ProgramRecordingTest extends TestCase
             // the last event.
             $quitIndices = array_keys(array_filter(
                 $tape->events,
-                static fn($e) => $e->kind === EventKind::Quit,
+                static fn ($e) => $e->kind === EventKind::Quit,
             ));
             $this->assertCount(1, $quitIndices);
         } finally {
@@ -101,12 +101,12 @@ final class ProgramRecordingTest extends TestCase
             $loop->futureTick(static function () use ($writer): void {
                 fwrite($writer, "hello");
             });
-            $loop->addTimer(2.0, static fn() => $loop->stop());
+            $loop->addTimer(2.0, static fn () => $loop->stop());
 
             $program->run();
 
             $tape = (new JsonlFormat())->read($cassette);
-            $inputs = array_filter($tape->events, fn($e) => $e->kind === EventKind::Input);
+            $inputs = array_filter($tape->events, fn ($e) => $e->kind === EventKind::Input);
             $this->assertNotEmpty($inputs, 'piped input bytes should be recorded');
             $bytes = '';
             foreach ($inputs as $e) {
@@ -137,7 +137,7 @@ final class ProgramRecordingTest extends TestCase
             $recorder->close();
 
             $program->send(new KeyMsg(KeyType::Char, 'q'));
-            $loop->addTimer(2.0, static fn() => $loop->stop());
+            $loop->addTimer(2.0, static fn () => $loop->stop());
             $program->run();
 
             // Cassette only has the header line (and nothing else, since
@@ -210,7 +210,9 @@ final class CountingModel implements Model
 {
     public int $count = 0;
 
-    public function __construct(public readonly int $quitAfter = 5) {}
+    public function __construct(public readonly int $quitAfter = 5)
+    {
+    }
 
     public function init(): ?\Closure
     {
@@ -228,5 +230,10 @@ final class CountingModel implements Model
     public function view(): string
     {
         return 'tick: ' . $this->count;
+    }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
     }
 }

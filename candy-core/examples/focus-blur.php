@@ -26,9 +26,14 @@ use SugarCraft\Core\ProgramOptions;
 
 final class FocusBlur implements Model
 {
-    public function __construct(public readonly bool $focused = true) {}
+    public function __construct(public readonly bool $focused = true)
+    {
+    }
 
-    public function init(): ?\Closure { return null; }
+    public function init(): ?\Closure
+    {
+        return null;
+    }
 
     public function update(Msg $msg): array
     {

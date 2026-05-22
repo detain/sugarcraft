@@ -98,7 +98,7 @@ final class MigrationRunnerTest extends TestCase
         $initialCount = count($runner->describeMigrators());
 
         // Create a mock migrator
-        $mockMigrator = new class implements CassetteMigrator {
+        $mockMigrator = new class () implements CassetteMigrator {
             public function canMigrate(Cassette $cassette): bool
             {
                 return $cassette->header->version < 99;

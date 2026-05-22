@@ -26,5 +26,6 @@ final class ExecRequest implements Msg
         public readonly string|array $command,
         public readonly bool $captureOutput = false,
         public readonly ?\Closure $onComplete = null,
-    ) {}
+    ) {
+    }
 }

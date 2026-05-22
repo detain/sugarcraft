@@ -20,5 +20,6 @@ final class TerminalVersionMsg implements Msg
 {
     public function __construct(
         public readonly string $version,
-    ) {}
+    ) {
+    }
 }

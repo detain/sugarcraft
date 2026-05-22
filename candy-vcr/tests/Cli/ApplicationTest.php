@@ -48,9 +48,12 @@ final class ApplicationTest extends TestCase
 
     public function testCustomCommandRouting(): void
     {
-        $stub = new class implements Command {
+        $stub = new class () implements Command {
             public int $called = 0;
-            public function summary(): string { return 'stub'; }
+            public function summary(): string
+            {
+                return 'stub';
+            }
             public function run(array $args, $stdout, $stderr): int
             {
                 $this->called++;

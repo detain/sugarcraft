@@ -16,5 +16,7 @@ namespace SugarCraft\Core;
  */
 final class PrintMsg implements Msg
 {
-    public function __construct(public readonly string $text) {}
+    public function __construct(public readonly string $text)
+    {
+    }
 }

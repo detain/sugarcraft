@@ -160,7 +160,7 @@ final class WorkerPool
             return;
         }
 
-        $data = @unserialize(base64_decode($line));
+        $data = @unserialize(base64_decode($line, true));
         if (!is_array($data)) {
             $result = new WorkerResultMsg(
                 result: null,
@@ -450,5 +450,6 @@ final class WorkerState
         public $stdin,
         public $stdout,
         public $stderr,
-    ) {}
+    ) {
+    }
 }

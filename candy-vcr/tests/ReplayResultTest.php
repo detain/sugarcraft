@@ -12,8 +12,13 @@ final class ReplayResultTest extends TestCase
     public function testSuccessSummary(): void
     {
         $r = new ReplayResult(
-            ok: true, diff: '', eventCount: 7,
-            inputCount: 1, resizeCount: 1, outputCount: 4, quitCount: 1,
+            ok: true,
+            diff: '',
+            eventCount: 7,
+            inputCount: 1,
+            resizeCount: 1,
+            outputCount: 4,
+            quitCount: 1,
             programQuitCleanly: true,
         );
         $summary = $r->diffSummary();
@@ -27,8 +32,13 @@ final class ReplayResultTest extends TestCase
     public function testFailureSummary(): void
     {
         $r = new ReplayResult(
-            ok: false, diff: 'byte mismatch at 5', eventCount: 3,
-            inputCount: 0, resizeCount: 1, outputCount: 2, quitCount: 0,
+            ok: false,
+            diff: 'byte mismatch at 5',
+            eventCount: 3,
+            inputCount: 0,
+            resizeCount: 1,
+            outputCount: 2,
+            quitCount: 0,
             programQuitCleanly: false,
         );
         $summary = $r->diffSummary();

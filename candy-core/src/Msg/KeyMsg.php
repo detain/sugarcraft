@@ -26,16 +26,23 @@ class KeyMsg implements Msg
         public readonly bool $alt = false,
         public readonly bool $ctrl = false,
         public readonly bool $shift = false,
-    ) {}
+    ) {
+    }
 
     /** Human-readable label, e.g. "ctrl+c", "shift+up", "alt+a", "a". */
     public function string(): string
     {
         $base = $this->type === KeyType::Char ? $this->rune : $this->type->value;
         $prefix = '';
-        if ($this->ctrl)  $prefix .= 'ctrl+';
-        if ($this->alt)   $prefix .= 'alt+';
-        if ($this->shift) $prefix .= 'shift+';
+        if ($this->ctrl) {
+            $prefix .= 'ctrl+';
+        }
+        if ($this->alt) {
+            $prefix .= 'alt+';
+        }
+        if ($this->shift) {
+            $prefix .= 'shift+';
+        }
         return $prefix . $base;
     }
 

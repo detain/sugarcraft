@@ -110,7 +110,7 @@ final class PlayerIdleTrimTest extends TestCase
             // Without idle trim, the 10s gap would cause a long wait
             $start = microtime(true);
             $result = $player->play(
-                fn($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
+                fn ($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
                 speed: Player::SPEED_REALTIME,
                 timeoutSeconds: 2.0,
             );
@@ -154,7 +154,7 @@ final class PlayerIdleTrimTest extends TestCase
 
             $start = microtime(true);
             $result = $player->play(
-                fn($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
+                fn ($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
                 speed: Player::SPEED_REALTIME,
                 idleThresholdSeconds: 0.2,
                 timeoutSeconds: 2.0,
@@ -197,7 +197,7 @@ final class PlayerIdleTrimTest extends TestCase
 
             // In SPEED_INSTANT, idleTrim should be ignored
             $result = $player->play(
-                fn($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
+                fn ($in, $out, $loop) => $this->createEchoProgram($in, $out, $loop),
                 speed: Player::SPEED_INSTANT,
                 timeoutSeconds: 2.0,
             );
@@ -211,7 +211,7 @@ final class PlayerIdleTrimTest extends TestCase
     private function createEchoProgram($input, $output, $loop): Program
     {
         return new Program(
-            new class implements Model {
+            new class () implements Model {
                 public int $count = 0;
 
                 public function init(): ?\Closure

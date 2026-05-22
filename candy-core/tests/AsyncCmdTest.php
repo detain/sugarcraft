@@ -20,8 +20,12 @@ use PHPUnit\Framework\TestCase;
 use React\EventLoop\StreamSelectLoop;
 
 // Test-specific message classes
-final class FirstMsg implements Msg {}
-final class SecondMsg implements Msg {}
+final class FirstMsg implements Msg
+{
+}
+final class SecondMsg implements Msg
+{
+}
 
 /**
  * Simple model that records received messages.
@@ -35,7 +39,8 @@ final class MessageRecordingModel implements Model
 
     public function __construct(
         public readonly ?\Closure $initCmd = null,
-    ) {}
+    ) {
+    }
 
     public function init(): ?\Closure
     {
@@ -70,7 +75,7 @@ final class AsyncCmdTest extends TestCase
         $innerPromise = new Promise(function (callable $resolve): void {
             $resolve(null);
         });
-        $factory = Cmd::promise(static fn() => $innerPromise);
+        $factory = Cmd::promise(static fn () => $innerPromise);
         $this->assertInstanceOf(\Closure::class, $factory);
         $result = $factory();
         $this->assertInstanceOf(AsyncCmd::class, $result);
@@ -82,16 +87,16 @@ final class AsyncCmdTest extends TestCase
         [$in, $out, $writer] = $this->pipes();
         $loop = new StreamSelectLoop();
 
-        $resolvedMsg = new class implements Msg {};
+        $resolvedMsg = new class () implements Msg {};
 
-        $initCmd = Cmd::promise(static fn() => new Promise(
-            static fn(callable $resolve) => $resolve($resolvedMsg)
+        $initCmd = Cmd::promise(static fn () => new Promise(
+            static fn (callable $resolve) => $resolve($resolvedMsg)
         ));
 
         $model = new MessageRecordingModel($initCmd);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
 
-        $loop->addTimer(1.0, static fn() => $loop->stop());
+        $loop->addTimer(1.0, static fn () => $loop->stop());
         $program->run();
 
         $this->assertContains($resolvedMsg, $model->log);
@@ -105,19 +110,19 @@ final class AsyncCmdTest extends TestCase
 
         $exception = new \RuntimeException('async error');
 
-        $initCmd = Cmd::promise(static fn() => new Promise(
-            static fn(callable $resolve, callable $reject) => $reject($exception)
+        $initCmd = Cmd::promise(static fn () => new Promise(
+            static fn (callable $resolve, callable $reject) => $reject($exception)
         ));
 
         $model = new MessageRecordingModel($initCmd);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
 
-        $loop->addTimer(1.0, static fn() => $loop->stop());
+        $loop->addTimer(1.0, static fn () => $loop->stop());
         $program->run();
 
         $exceptionMsgs = array_filter(
             $model->log,
-            static fn(Msg $m) => $m instanceof ExceptionMsg
+            static fn (Msg $m) => $m instanceof ExceptionMsg
         );
         $this->assertCount(1, $exceptionMsgs);
         $exceptionMsg = array_values($exceptionMsgs)[0];
@@ -129,21 +134,21 @@ final class AsyncCmdTest extends TestCase
         [$in, $out, $writer] = $this->pipes();
         $loop = new StreamSelectLoop();
 
-        $initCmd = Cmd::promise(static fn() => new Promise(
-            static fn(callable $resolve) => $resolve(null)
+        $initCmd = Cmd::promise(static fn () => new Promise(
+            static fn (callable $resolve) => $resolve(null)
         ));
 
         $model = new MessageRecordingModel($initCmd);
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
 
-        $loop->addTimer(1.0, static fn() => $loop->stop());
+        $loop->addTimer(1.0, static fn () => $loop->stop());
         $program->run();
 
         // Should only have WindowSizeMsg, EnvMsg, ColorProfileMsg from startup
         // The null resolve should NOT add any new messages
         $nonStartupMsgs = array_filter(
             $model->log,
-            static fn(Msg $m) => !($m instanceof WindowSizeMsg)
+            static fn (Msg $m) => !($m instanceof WindowSizeMsg)
         );
         $this->assertCount(2, $nonStartupMsgs); // EnvMsg + ColorProfileMsg
     }
@@ -167,14 +172,16 @@ final class AsyncCmdTest extends TestCase
             });
         });
 
-        $model = new class($initCmd) implements Model {
+        $model = new class ($initCmd) implements Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
             /** @var list<Msg> */
             public array $log = [];
             private int $phase = 0;
 
-            public function __construct(private readonly ?\Closure $initCmd) {}
+            public function __construct(private readonly ?\Closure $initCmd)
+            {
+            }
 
             public function init(): ?\Closure
             {
@@ -189,7 +196,7 @@ final class AsyncCmdTest extends TestCase
                 if ($msg instanceof FirstMsg && $this->phase === 0) {
                     $this->phase = 1;
                     $secondMsg = new SecondMsg();
-                    return [$this, Cmd::promise(static fn() => new Promise(
+                    return [$this, Cmd::promise(static fn () => new Promise(
                         static function (callable $resolve) use ($secondMsg): void {
                             $resolve($secondMsg);
                         }
@@ -207,11 +214,11 @@ final class AsyncCmdTest extends TestCase
 
         $program = new Program($model, $this->makeOptions($in, $out, $loop));
 
-        $loop->addTimer(2.0, static fn() => $loop->stop());
+        $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
-        $firstMsgs = array_filter($model->log, static fn(Msg $m) => $m instanceof FirstMsg);
-        $secondMsgs = array_filter($model->log, static fn(Msg $m) => $m instanceof SecondMsg);
+        $firstMsgs = array_filter($model->log, static fn (Msg $m) => $m instanceof FirstMsg);
+        $secondMsgs = array_filter($model->log, static fn (Msg $m) => $m instanceof SecondMsg);
         $this->assertCount(1, $firstMsgs);
         $this->assertCount(1, $secondMsgs);
         fclose($writer);

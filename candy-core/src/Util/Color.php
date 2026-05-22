@@ -32,7 +32,8 @@ final class Color
         public readonly int $r,
         public readonly int $g,
         public readonly int $b,
-    ) {}
+    ) {
+    }
 
     /**
      * Construct from 24-bit RGB. Each component must be in `[0, 255]`
@@ -189,13 +190,28 @@ final class Color
         $c = (1.0 - abs(2.0 * $l - 1.0)) * $s;
         $x = $c * (1.0 - abs(fmod($h / 60.0, 2.0) - 1.0));
         $m = $l - $c / 2.0;
-        $rp = 0.0; $gp = 0.0; $bp = 0.0;
-        if    ($h <  60) { $rp = $c; $gp = $x; }
-        elseif ($h < 120) { $rp = $x; $gp = $c; }
-        elseif ($h < 180) { $gp = $c; $bp = $x; }
-        elseif ($h < 240) { $gp = $x; $bp = $c; }
-        elseif ($h < 300) { $rp = $x; $bp = $c; }
-        else              { $rp = $c; $bp = $x; }
+        $rp = 0.0;
+        $gp = 0.0;
+        $bp = 0.0;
+        if ($h <  60) {
+            $rp = $c;
+            $gp = $x;
+        } elseif ($h < 120) {
+            $rp = $x;
+            $gp = $c;
+        } elseif ($h < 180) {
+            $gp = $c;
+            $bp = $x;
+        } elseif ($h < 240) {
+            $gp = $x;
+            $bp = $c;
+        } elseif ($h < 300) {
+            $rp = $x;
+            $bp = $c;
+        } else {
+            $rp = $c;
+            $bp = $x;
+        }
         return new self(
             (int) round(($rp + $m) * 255.0),
             (int) round(($gp + $m) * 255.0),
@@ -218,13 +234,28 @@ final class Color
         $c = $v * $s;
         $x = $c * (1.0 - abs(fmod($h / 60.0, 2.0) - 1.0));
         $m = $v - $c;
-        $rp = 0.0; $gp = 0.0; $bp = 0.0;
-        if    ($h <  60) { $rp = $c; $gp = $x; }
-        elseif ($h < 120) { $rp = $x; $gp = $c; }
-        elseif ($h < 180) { $gp = $c; $bp = $x; }
-        elseif ($h < 240) { $gp = $x; $bp = $c; }
-        elseif ($h < 300) { $rp = $x; $bp = $c; }
-        else              { $rp = $c; $bp = $x; }
+        $rp = 0.0;
+        $gp = 0.0;
+        $bp = 0.0;
+        if ($h <  60) {
+            $rp = $c;
+            $gp = $x;
+        } elseif ($h < 120) {
+            $rp = $x;
+            $gp = $c;
+        } elseif ($h < 180) {
+            $gp = $c;
+            $bp = $x;
+        } elseif ($h < 240) {
+            $gp = $x;
+            $bp = $c;
+        } elseif ($h < 300) {
+            $rp = $x;
+            $bp = $c;
+        } else {
+            $rp = $c;
+            $bp = $x;
+        }
         return new self(
             (int) round(($rp + $m) * 255.0),
             (int) round(($gp + $m) * 255.0),
@@ -462,7 +493,7 @@ final class Color
     private function nearest256(): int
     {
         // Cube candidate (indices 16-231).
-        $q = static fn(int $v): int => match (true) {
+        $q = static fn (int $v): int => match (true) {
             $v < 48  => 0,
             $v < 115 => 1,
             default  => intdiv($v - 35, 40),
