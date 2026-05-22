@@ -86,3 +86,64 @@ The tape `Compiler` now stores `Set TypingSpeed` values in the `CassetteHeader::
 - **Primary rasterizer backend:** `ext-gd` — universal availability (bundled with PHP), sufficient for cell-grid rendering at 800×480.
 - **Primary GIF encoder:** `FfmpegGifEncoder` — ffmpeg already present in CI runner image; `palettegen=stats_mode=diff` + `paletteuse` two-pass produces quality GIFs at acceptable speed.
 - **Font:** JetBrainsMono Regular + Bold — OFL license, excellent monospace coverage, broad glyph support including box-drawing characters used in terminal UIs.
+
+## Phase 4 Rasterizer (2026-05-22)
+
+**Scope:** Raster + Glyphs + FontLoader for Snapshot → PNG rendering.
+
+### Namespace: `SugarCraft\Vcr\Raster`
+
+New files created:
+- `src/Raster/FontLoader.php` — TTF font path resolver; tries `candy-vcr/fonts/` first, then system dirs. Returns file path string for `imagettftext()`.
+- `src/Raster/Glyphs.php` — per-(char, fg, bg, bold, italic, underline) tile cache. Cache key: `"$char|$fg|$bg|$bold|$italic|$underline"`. Pre-renders tiles at cell dimensions; wide chars get a 2× wide tile.
+- `src/Raster/Rasterizer.php` — interface `rasterize(Snapshot, cellW, cellH, ?FontLoader): GdImage|Imagick`.
+- `src/Raster/GdRasterizer.php` — default ext-gd implementation; blits glyph tiles onto canvas, renders cursor overlay.
+- `src/Raster/ImagickRasterizer.php` — ext-imagick alternative; better anti-aliasing.
+
+### Cell metrics
+
+```
+Cell metrics at FontSize 14:
+  charWidth  = 8px
+  charHeight = 16px (includes descent)
+  cellW     = charWidth
+  cellH     = charHeight
+  GIF dims  = cols * cellW × rows * cellH
+  Example: 80 cols × 24 rows → 640 × 384 px at FontSize 14
+```
+
+### Font vendoring
+
+DejaVuSansMono is vendored as a fallback (no JetBrainsMono in env). The `fonts/` directory contains:
+- `JetBrainsMono-Regular.ttf` — pending download
+- `JetBrainsMono-Bold.ttf` — pending download
+- `DejaVuSansMono.ttf` — fallback
+- `DejaVuSansMono-Bold.ttf` — fallback
+
+FontLoader tries bundled fonts first, then system dirs (`/usr/share/fonts/`, `~/.fonts/`, etc.). Italic style falls back to regular if Italic variant unavailable.
+
+### Glyphs cache
+
+Cache key: `"$char|$fg|$bg|$bold|$italic|$underline"`. Wide chars (mb_strwidth > 1) get a 2×-wide tile; the rasterizer advances 2 columns after blitting. Typical terminal frame has thousands of cells but only ~50 unique combinations — caching converts rasterization from O(cells) to O(unique tiles).
+
+### Cursor rendering
+
+Block cursor (shape=1): renders the glyph in reverse video (swapped fg/bg colors).
+Underline cursor (shape=2): filled rectangle at y = cellH × 0.75.
+Bar cursor (shape=3): narrow filled rectangle at left edge.
+
+### Decision log
+
+- **Snapshot property access:** `Snapshot` has `$grid` and `$cursor` as public properties (not methods). Use `$snapshot->grid` and `$snapshot->cursor`, not `$snapshot->grid()`.
+- **`imagettftext()` font path:** ext-gd requires an actual file path string, not a font resource ID. `FontLoader::load()` returns `string` (absolute path).
+- **`imagecreatetruecolor` assertion:** width/height must be `int<1, max>`. `assert($width >= 1 && $height >= 1)` added before call since both dimensions derive from positive integers.
+- **`imagecolorallocate` color values:** palette index 0-255 maps to 0-255 RGB. Values must be explicitly clamped with `max(0, min(255, $val))` before passing to `imagecolorallocate` so PHPStan understands the type constraint.
+- **PHPStan 2.0 static var inference:** `static $palette` inside methods with complex array types caused `return.type` errors ("returns mixed"). Fixed by returning array literals directly (16-element static is negligible perf). Do not use `@var` annotation on static to suppress this — return the literal directly.
+- **FontLoader `$_SERVER['HOME']`:** In PHP 8.1+ this can be `false`, not just `string|null`. Must use `is_string($_SERVER['HOME']) ? $_SERVER['HOME'] : '/root'`, not `(string) ($_SERVER['HOME'] ?? '/root')`.
+
+### Tests
+
+- `tests/Raster/FontLoaderTest.php` — 9 tests: load bundled font, bold variant, missing font throws RuntimeException, resolve path, lastResolvedPath tracking, systemDirs(), italic/bolditalic fallback.
+- `tests/Raster/GlyphsTest.php` — 9 tests: cache hits (same instance), cache misses (different instance), wide char double-width, measure() dimensions, space character tile.
+- `tests/Raster/GdRasterizerTest.php` — 11 tests: returns GdImage, correct dimensions, empty grid, cursor visible, bold/underline/inverse attrs, hidden cursor, different cursor shapes, auto FontLoader, non-zero pixels.
+
