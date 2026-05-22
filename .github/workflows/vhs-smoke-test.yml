@@ -1,0 +1,44 @@
+name: VHS smoke test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, json, pcntl, gd, curl, ssh2, ffi
+          tools: composer:v2
+
+      - name: Install composer deps
+        run: composer install --quiet
+
+      - name: Run smoke tape
+        run: php vendor/bin/candy-vcr render-tape candy-vcr/.vhs/smoke.tape --output /tmp/smoke.gif
+
+      - name: Verify output
+        run: |
+          if [ ! -s /tmp/smoke.gif ]; then
+            echo "ERROR: /tmp/smoke.gif is empty or missing"
+            exit 1
+          fi
+          file_out=$(file /tmp/smoke.gif)
+          echo "file output: $file_out"
+          if ! echo "$file_out" | grep -q "GIF image"; then
+            echo "ERROR: /tmp/smoke.gif is not a GIF image"
+            exit 1
+          fi
+          echo "Smoke test passed"
+
