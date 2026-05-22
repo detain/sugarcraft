@@ -53,7 +53,7 @@ final class ScreenTest extends TestCase
         $diff = $s1->diff($s2);
         $this->assertCount(2, $diff); // B→X and ' '→C at col 2
 
-        $change1 = array_filter($diff, fn($d) => $d['row'] === 0 && $d['col'] === 1);
+        $change1 = array_filter($diff, fn ($d) => $d['row'] === 0 && $d['col'] === 1);
         $this->assertCount(1, $change1);
         $this->assertSame('B', $change1[array_key_first($change1)]['prev']->grapheme);
         $this->assertSame('X', $change1[array_key_first($change1)]['next']->grapheme);

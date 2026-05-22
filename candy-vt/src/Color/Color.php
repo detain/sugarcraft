@@ -14,7 +14,8 @@ final readonly class Color
     private function __construct(
         public int $kind,   // 0=Default, 1=Indexed16, 2=Indexed256, 3=Truecolor
         public int $value,  // index or 0xRRGGBB
-    ) {}
+    ) {
+    }
 
     /** Default terminal color (reset). */
     public static function default(): self

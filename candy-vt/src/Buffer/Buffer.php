@@ -102,6 +102,6 @@ final class Buffer
      */
     public function copy(): array
     {
-        return array_map(fn(array $row) => array_map(fn(Cell $c) => $c, $row), $this->grid);
+        return array_map(fn (array $row) => array_map(fn (Cell $c) => $c, $row), $this->grid);
     }
 }

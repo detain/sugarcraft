@@ -164,8 +164,15 @@ final class MsgValueObjectsTest extends TestCase
 
     public function testMouseMsgModifiers(): void
     {
-        $msg = new MouseMsg(0, 0, MouseButton::Left, MouseAction::Press,
-            shift: true, alt: true, ctrl: true);
+        $msg = new MouseMsg(
+            0,
+            0,
+            MouseButton::Left,
+            MouseAction::Press,
+            shift: true,
+            alt: true,
+            ctrl: true
+        );
         $this->assertTrue($msg->shift);
         $this->assertTrue($msg->alt);
         $this->assertTrue($msg->ctrl);

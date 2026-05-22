@@ -14,5 +14,6 @@ final readonly class AsyncCmd implements Msg
 {
     public function __construct(
         public PromiseInterface $promise,
-    ) {}
+    ) {
+    }
 }

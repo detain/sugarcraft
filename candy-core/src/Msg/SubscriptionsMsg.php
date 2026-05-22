@@ -17,5 +17,6 @@ final class SubscriptionsMsg implements Msg
 {
     public function __construct(
         public readonly Subscriptions $subscriptions,
-    ) {}
+    ) {
+    }
 }

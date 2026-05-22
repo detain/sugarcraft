@@ -63,7 +63,7 @@ final class ScreenStack
     public function breadcrumb(): array
     {
         return array_values(array_filter(
-            array_map(static fn(Screen $s): ?string => $s->title, $this->screens)
+            array_map(static fn (Screen $s): ?string => $s->title, $this->screens)
         ));
     }
 

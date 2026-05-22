@@ -21,14 +21,14 @@ final class ParserTest extends TestCase
     public function testControlBytes(): void
     {
         $tokens = (new Parser())->parse("a\nb\tc");
-        $this->assertSame(Token::TEXT,    $tokens[0]->type);
-        $this->assertSame('a',            $tokens[0]->data);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame('a', $tokens[0]->data);
         $this->assertSame(Token::CONTROL, $tokens[1]->type);
-        $this->assertSame("\n",           $tokens[1]->data);
-        $this->assertSame('b',            $tokens[2]->data);
+        $this->assertSame("\n", $tokens[1]->data);
+        $this->assertSame('b', $tokens[2]->data);
         $this->assertSame(Token::CONTROL, $tokens[3]->type);
-        $this->assertSame("\t",           $tokens[3]->data);
-        $this->assertSame('c',            $tokens[4]->data);
+        $this->assertSame("\t", $tokens[3]->data);
+        $this->assertSame('c', $tokens[4]->data);
     }
 
     public function testCsiBasic(): void
@@ -37,9 +37,9 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $tokens);
         $t = $tokens[0];
         $this->assertSame(Token::CSI, $t->type);
-        $this->assertSame('',          $t->intermediate);
-        $this->assertSame('31',        $t->params);
-        $this->assertSame('m',         $t->final);
+        $this->assertSame('', $t->intermediate);
+        $this->assertSame('31', $t->params);
+        $this->assertSame('m', $t->final);
     }
 
     public function testCsiWithPrivateMarker(): void
@@ -48,9 +48,9 @@ final class ParserTest extends TestCase
         $this->assertCount(1, $tokens);
         $t = $tokens[0];
         $this->assertSame(Token::CSI, $t->type);
-        $this->assertSame('?',         $t->intermediate);
-        $this->assertSame('2026',      $t->params);
-        $this->assertSame('h',         $t->final);
+        $this->assertSame('?', $t->intermediate);
+        $this->assertSame('2026', $t->params);
+        $this->assertSame('h', $t->final);
     }
 
     public function testCsiWithMultipleParams(): void
@@ -70,25 +70,25 @@ final class ParserTest extends TestCase
     {
         // DECRQM private mode 2026: "CSI ?2026$p"
         $tokens = (new Parser())->parse("\x1b[?2026\$p");
-        $this->assertSame('?$',    $tokens[0]->intermediate);
-        $this->assertSame('2026',  $tokens[0]->params);
-        $this->assertSame('p',     $tokens[0]->final);
+        $this->assertSame('?$', $tokens[0]->intermediate);
+        $this->assertSame('2026', $tokens[0]->params);
+        $this->assertSame('p', $tokens[0]->final);
     }
 
     public function testOscWithBel(): void
     {
         $tokens = (new Parser())->parse("\x1b]0;hello\x07");
         $this->assertCount(1, $tokens);
-        $this->assertSame(Token::OSC,  $tokens[0]->type);
-        $this->assertSame('0;hello',   $tokens[0]->data);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('0;hello', $tokens[0]->data);
     }
 
     public function testOscWithSt(): void
     {
         $tokens = (new Parser())->parse("\x1b]52;c;dGVzdA==\x1b\\");
         $this->assertCount(1, $tokens);
-        $this->assertSame(Token::OSC,         $tokens[0]->type);
-        $this->assertSame('52;c;dGVzdA==',    $tokens[0]->data);
+        $this->assertSame(Token::OSC, $tokens[0]->type);
+        $this->assertSame('52;c;dGVzdA==', $tokens[0]->data);
     }
 
     public function testDcs(): void
@@ -96,7 +96,7 @@ final class ParserTest extends TestCase
         // XTVERSION reply: ESC P > | xterm(367) ESC \
         $tokens = (new Parser())->parse("\x1bP>|xterm(367)\x1b\\");
         $this->assertCount(1, $tokens);
-        $this->assertSame(Token::DCS,    $tokens[0]->type);
+        $this->assertSame(Token::DCS, $tokens[0]->type);
         $this->assertSame('>|xterm(367)', $tokens[0]->data);
     }
 
@@ -105,8 +105,8 @@ final class ParserTest extends TestCase
         // CandyZone marker: ESC _ candyzone:S:foo ESC \
         $tokens = (new Parser())->parse("\x1b_candyzone:S:foo\x1b\\");
         $this->assertCount(1, $tokens);
-        $this->assertSame(Token::APC,         $tokens[0]->type);
-        $this->assertSame('candyzone:S:foo',  $tokens[0]->data);
+        $this->assertSame(Token::APC, $tokens[0]->type);
+        $this->assertSame('candyzone:S:foo', $tokens[0]->data);
     }
 
     public function testShortEscSequence(): void
@@ -114,20 +114,20 @@ final class ParserTest extends TestCase
         $tokens = (new Parser())->parse("\x1b7");
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::ESC, $tokens[0]->type);
-        $this->assertSame('7',         $tokens[0]->data);
+        $this->assertSame('7', $tokens[0]->data);
     }
 
     public function testMixedStream(): void
     {
         $stream = "hello\x1b[31mworld\x1b[0m\n";
         $tokens = (new Parser())->parse($stream);
-        $this->assertSame(Token::TEXT,    $tokens[0]->type);
-        $this->assertSame('hello',        $tokens[0]->data);
-        $this->assertSame(Token::CSI,     $tokens[1]->type);
-        $this->assertSame('m',            $tokens[1]->final);
-        $this->assertSame(Token::TEXT,    $tokens[2]->type);
-        $this->assertSame('world',        $tokens[2]->data);
-        $this->assertSame(Token::CSI,     $tokens[3]->type);
+        $this->assertSame(Token::TEXT, $tokens[0]->type);
+        $this->assertSame('hello', $tokens[0]->data);
+        $this->assertSame(Token::CSI, $tokens[1]->type);
+        $this->assertSame('m', $tokens[1]->final);
+        $this->assertSame(Token::TEXT, $tokens[2]->type);
+        $this->assertSame('world', $tokens[2]->data);
+        $this->assertSame(Token::CSI, $tokens[3]->type);
         $this->assertSame(Token::CONTROL, $tokens[4]->type);
     }
 
@@ -141,8 +141,8 @@ final class ParserTest extends TestCase
         $tokens = $p->parse('1m');
         $this->assertCount(1, $tokens);
         $this->assertSame(Token::CSI, $tokens[0]->type);
-        $this->assertSame('31',        $tokens[0]->params);
-        $this->assertSame('m',         $tokens[0]->final);
+        $this->assertSame('31', $tokens[0]->params);
+        $this->assertSame('m', $tokens[0]->final);
     }
 
     public function testIncompleteOscBuffers(): void
@@ -152,8 +152,8 @@ final class ParserTest extends TestCase
         $tokens = $p->parse("le\x07after");
         $this->assertCount(2, $tokens);
         $this->assertSame(Token::OSC, $tokens[0]->type);
-        $this->assertSame('0;title',  $tokens[0]->data);
-        $this->assertSame('after',    $tokens[1]->data);
+        $this->assertSame('0;title', $tokens[0]->data);
+        $this->assertSame('after', $tokens[1]->data);
     }
 
     public function testFlushReturnsBufferedAsText(): void
@@ -163,6 +163,6 @@ final class ParserTest extends TestCase
         $flushed = $p->flush();
         $this->assertCount(1, $flushed);
         $this->assertSame(Token::TEXT, $flushed[0]->type);
-        $this->assertSame("\x1b[31",   $flushed[0]->data);
+        $this->assertSame("\x1b[31", $flushed[0]->data);
     }
 }

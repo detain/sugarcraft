@@ -23,7 +23,9 @@ use SugarCraft\Core\Program;
 
 final class WindowTitle implements Model
 {
-    public function __construct(public readonly string $current = '(default)') {}
+    public function __construct(public readonly string $current = '(default)')
+    {
+    }
 
     public function init(): ?\Closure
     {

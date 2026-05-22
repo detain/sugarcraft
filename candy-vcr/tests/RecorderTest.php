@@ -241,7 +241,9 @@ final class RecorderTest extends TestCase
         $events = [];
         while (($line = fgets($fh)) !== false) {
             $line = trim($line);
-            if ($line === '') continue;
+            if ($line === '') {
+                continue;
+            }
             $data = json_decode($line, true);
             $this->assertIsArray($data);
             $events[] = $data;

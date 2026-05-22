@@ -19,5 +19,6 @@ final class ModeReportMsg implements Msg
         public readonly int $mode,
         public readonly bool $private,
         public readonly ModeState $state,
-    ) {}
+    ) {
+    }
 }

@@ -14,5 +14,6 @@ final class Progress
     public function __construct(
         public readonly ProgressBarState $state,
         public readonly int $percent = 0,
-    ) {}
+    ) {
+    }
 }

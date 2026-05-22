@@ -26,7 +26,7 @@ final class SubscribeCmd
      */
     public function __construct(Subscriptions $subscriptions)
     {
-        $this->cmd = static fn(): SubscriptionsMsg => new SubscriptionsMsg($subscriptions);
+        $this->cmd = static fn (): SubscriptionsMsg => new SubscriptionsMsg($subscriptions);
     }
 
     public function __invoke(): SubscriptionsMsg

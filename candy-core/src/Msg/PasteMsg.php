@@ -18,5 +18,7 @@ use SugarCraft\Core\Msg;
  */
 final class PasteMsg implements Msg
 {
-    public function __construct(public readonly string $content) {}
+    public function __construct(public readonly string $content)
+    {
+    }
 }

@@ -22,5 +22,6 @@ final class Screen
         public readonly ?string $title = null,
         public readonly ?\Closure $onEnter = null,
         public readonly ?\Closure $onExit = null,
-    ) {}
+    ) {
+    }
 }

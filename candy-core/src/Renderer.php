@@ -61,7 +61,8 @@ final class Renderer
         private $out,
         private readonly bool $inline = false,
         private readonly bool $cellDiff = false,
-    ) {}
+    ) {
+    }
 
     /**
      * Tee every byte chunk this renderer emits to the given recorder

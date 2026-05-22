@@ -54,8 +54,12 @@ final class InspectCommand implements Command
         $this->renderHeader($stdout, $cassette);
         $shown = 0;
         foreach ($cassette->events as $event) {
-            if ($since !== null && $event->t < $since) continue;
-            if ($until !== null && $event->t > $until) continue;
+            if ($since !== null && $event->t < $since) {
+                continue;
+            }
+            if ($until !== null && $event->t > $until) {
+                continue;
+            }
             fwrite($stdout, $this->formatEvent($event) . "\n");
             $shown++;
         }

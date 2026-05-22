@@ -28,7 +28,8 @@ final readonly class Cell
         public ?Hyperlink $hyperlink = null,
         /** Non-empty string when one or more combining marks (U+0300–U+036F) follow the base grapheme in the same cell. */
         public string $combining = '',
-    ) {}
+    ) {
+    }
 
     public static function empty(): self
     {
@@ -79,10 +80,18 @@ final readonly class Cell
 
     public function equals(self $other): bool
     {
-        if ($this->grapheme !== $other->grapheme) return false;
-        if ($this->continuation !== $other->continuation) return false;
-        if ((string)($this->hyperlink?->id ?? '') !== (string)($other->hyperlink?->id ?? '')) return false;
-        if ($this->combining !== $other->combining) return false;
+        if ($this->grapheme !== $other->grapheme) {
+            return false;
+        }
+        if ($this->continuation !== $other->continuation) {
+            return false;
+        }
+        if ((string)($this->hyperlink?->id ?? '') !== (string)($other->hyperlink?->id ?? '')) {
+            return false;
+        }
+        if ($this->combining !== $other->combining) {
+            return false;
+        }
 
         $thisFg = $this->foreground();
         $otherFg = $other->foreground();

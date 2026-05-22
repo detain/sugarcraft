@@ -21,7 +21,9 @@ use SugarCraft\Core\Program;
 
 final class Counter implements Model
 {
-    public function __construct(public readonly int $count = 0) {}
+    public function __construct(public readonly int $count = 0)
+    {
+    }
 
     public function init(): ?\Closure
     {

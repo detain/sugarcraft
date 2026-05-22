@@ -39,6 +39,6 @@ final class CapabilityMsgTest extends TestCase
         // Same wire data, three different message types — models match by
         // class to route correctly.
         $this->assertNotInstanceOf(TerminalVersionMsg::class, $cap);
-        $this->assertNotInstanceOf(ModeReportMsg::class,      $cap);
+        $this->assertNotInstanceOf(ModeReportMsg::class, $cap);
     }
 }

@@ -107,7 +107,7 @@ final class Editor
                 self::envOrNull('VISUAL'),
                 self::envOrNull('EDITOR'),
                 DIRECTORY_SEPARATOR === '\\' ? 'notepad' : 'vi',
-                DIRECTORY_SEPARATOR === '\\' ? null      : 'nano',
+                DIRECTORY_SEPARATOR === '\\' ? null : 'nano',
             ];
 
         foreach ($candidates as $candidate) {

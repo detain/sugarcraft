@@ -21,7 +21,9 @@ final class StringModel implements Model
 {
     use \SugarCraft\Core\SubscriptionCapable;
 
-    public function __construct(private string $content) {}
+    public function __construct(private string $content)
+    {
+    }
 
     public function init(): ?\Closure
     {
@@ -46,7 +48,9 @@ final class CountingModel implements Model
 {
     use \SugarCraft\Core\SubscriptionCapable;
 
-    public function __construct(private int $count = 0) {}
+    public function __construct(private int $count = 0)
+    {
+    }
 
     public function init(): ?\Closure
     {
@@ -180,15 +184,22 @@ final class PanesTest extends TestCase
     {
         // Create a simple viewport-like model and wrap it in a Pane.
         $lines = ["line one", "line two", "line three"];
-        $model = new class($lines) implements Model
-        {
+        $model = new class ($lines) implements Model {
             use \SugarCraft\Core\SubscriptionCapable;
 
-            public function __construct(private array $lines) {}
+            public function __construct(private array $lines)
+            {
+            }
 
-            public function init(): ?\Closure { return null; }
+            public function init(): ?\Closure
+            {
+                return null;
+            }
 
-            public function update(Msg $msg): array { return [$this, null]; }
+            public function update(Msg $msg): array
+            {
+                return [$this, null];
+            }
 
             public function view(): string
             {

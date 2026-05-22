@@ -190,7 +190,7 @@ final class WindowsBackend implements Backend
 
             // Wrap the raw handles as PHP stream resources.
             // On Windows, fdopen() accepts an OS handle number.
-            $fin  = @fopen('php://fd/' . $conin,  'rb');
+            $fin  = @fopen('php://fd/' . $conin, 'rb');
             $fout = @fopen('php://fd/' . $conout, 'wb');
 
             if ($fin === false || $fout === false) {
@@ -268,7 +268,7 @@ final class WindowsBackend implements Backend
                 | Kernel32Interface::ENABLE_VIRTUAL_TERMINAL_PROCESSING
                 | Kernel32Interface::DISABLE_NEWLINE_AUTO_RETURN;
 
-            $this->kernel32->setConsoleMode($stdin,  $rawInput);
+            $this->kernel32->setConsoleMode($stdin, $rawInput);
             $this->kernel32->setConsoleMode($stdout, $rawOutput);
 
             // Switch console to UTF-8 so PHP multibyte strings map correctly
@@ -435,7 +435,7 @@ final class WindowsBackend implements Backend
             // Second+ call: actually restore.
             try {
                 $k = self::kernel32();
-                $k->setConsoleMode($k->stdIn(),  self::$lastInputMode);
+                $k->setConsoleMode($k->stdIn(), self::$lastInputMode);
                 $k->setConsoleMode($k->stdOut(), self::$lastOutputMode);
                 $k->setConsoleCP(self::$lastInputCp);
                 $k->setConsoleOutputCP(self::$lastOutputCp);
@@ -480,7 +480,7 @@ final class WindowsBackend implements Backend
             $stdin  = $this->kernel32->stdIn();
             $stdout = $this->kernel32->stdOut();
 
-            $this->kernel32->setConsoleMode($stdin,  (int) $this->savedInputMode);
+            $this->kernel32->setConsoleMode($stdin, (int) $this->savedInputMode);
             $this->kernel32->setConsoleMode($stdout, (int) $this->savedOutputMode);
             $this->kernel32->setConsoleCP((int) $this->savedInputCp);
             $this->kernel32->setConsoleOutputCP((int) $this->savedOutputCp);

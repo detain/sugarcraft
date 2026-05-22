@@ -540,7 +540,7 @@ final class Program
             // (e.g. tests that closed the streams). Mirrors upstream bubbletea
             // PR #1680 — avoid a panic when the program was started with a
             // null/closed input handle.
-            $childIn  = is_resource($this->input)  ? $this->input  : STDIN;
+            $childIn  = is_resource($this->input) ? $this->input : STDIN;
             $childOut = is_resource($this->output) ? $this->output : STDOUT;
             $descriptors = $req->captureOutput
                 ? [0 => $childIn, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']]
@@ -555,8 +555,12 @@ final class Program
             if ($req->captureOutput) {
                 $stdout = is_resource($pipes[1]) ? (string) stream_get_contents($pipes[1]) : '';
                 $stderr = is_resource($pipes[2]) ? (string) stream_get_contents($pipes[2]) : '';
-                if (is_resource($pipes[1])) fclose($pipes[1]);
-                if (is_resource($pipes[2])) fclose($pipes[2]);
+                if (is_resource($pipes[1])) {
+                    fclose($pipes[1]);
+                }
+                if (is_resource($pipes[2])) {
+                    fclose($pipes[2]);
+                }
             }
             $exit = proc_close($proc);
         } catch (\Throwable $t) {

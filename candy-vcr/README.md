@@ -445,6 +445,16 @@ $decoded  = $registry->decode($envelope);  // Msg|null
 
 Custom serializers slot in via `$registry->register(new MyOne())`.
 
+## Development
+
+```sh
+composer install
+vendor/bin/phpunit           # test suite
+vendor/bin/phpstan analyze   # static analysis (level: max)
+```
+
+Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php`. Run `PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes` from the repo root to auto-fix style violations.
+
 ## License
 
 MIT

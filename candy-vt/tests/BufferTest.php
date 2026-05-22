@@ -104,7 +104,7 @@ final class BufferTest extends TestCase
         }
 
         $this->assertCount(6, $found); // 2 cols × 3 rows
-        $xCell = array_values(array_filter($found, fn($i) => $i['cell']->grapheme === 'X'));
+        $xCell = array_values(array_filter($found, fn ($i) => $i['cell']->grapheme === 'X'));
         $this->assertCount(1, $xCell);
         $this->assertSame(1, $xCell[0]['row']);
         $this->assertSame(1, $xCell[0]['col']);

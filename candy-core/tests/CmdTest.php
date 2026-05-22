@@ -28,14 +28,14 @@ final class CmdTest extends TestCase
 
     public function testSendWrapsMsg(): void
     {
-        $msg = new class implements Msg {};
+        $msg = new class () implements Msg {};
         $this->assertSame($msg, Cmd::send($msg)());
     }
 
     public function testBatchReturnsBatchMsg(): void
     {
-        $a = static fn() => null;
-        $b = static fn() => null;
+        $a = static fn () => null;
+        $b = static fn () => null;
         $result = Cmd::batch($a, $b)();
         $this->assertInstanceOf(BatchMsg::class, $result);
         $this->assertCount(2, $result->cmds);
@@ -43,7 +43,7 @@ final class CmdTest extends TestCase
 
     public function testBatchFiltersFalsy(): void
     {
-        $a = static fn() => null;
+        $a = static fn () => null;
         $result = Cmd::batch($a, null, $a)();
         $this->assertInstanceOf(BatchMsg::class, $result);
         $this->assertCount(2, $result->cmds);
@@ -51,8 +51,8 @@ final class CmdTest extends TestCase
 
     public function testTickReturnsTickRequest(): void
     {
-        $msg = new class implements Msg {};
-        $cmd = Cmd::tick(0.5, static fn() => $msg);
+        $msg = new class () implements Msg {};
+        $cmd = Cmd::tick(0.5, static fn () => $msg);
         $req = $cmd();
         $this->assertInstanceOf(\SugarCraft\Core\TickRequest::class, $req);
         $this->assertSame(0.5, $req->seconds);
@@ -188,7 +188,7 @@ final class CmdTest extends TestCase
         $msgHigh = (Cmd::setProgressBar(ProgressBarState::Normal, 999))();
         $msgLow  = (Cmd::setProgressBar(ProgressBarState::Normal, -5))();
         $this->assertSame("\x1b]9;4;1;100\x07", $msgHigh->bytes);
-        $this->assertSame("\x1b]9;4;1;0\x07",   $msgLow->bytes);
+        $this->assertSame("\x1b]9;4;1;0\x07", $msgLow->bytes);
     }
 
     public function testSetProgressBarIndeterminate(): void
@@ -234,8 +234,8 @@ final class CmdTest extends TestCase
 
     public function testSequenceReturnsSequenceMsg(): void
     {
-        $a = static fn() => null;
-        $b = static fn() => null;
+        $a = static fn () => null;
+        $b = static fn () => null;
         $msg = (Cmd::sequence($a, $b, null))();
         $this->assertInstanceOf(SequenceMsg::class, $msg);
         $this->assertCount(2, $msg->cmds);
@@ -243,7 +243,7 @@ final class CmdTest extends TestCase
 
     public function testEveryReturnsTickRequest(): void
     {
-        $msg = (Cmd::every(1.0, static fn() => null))();
+        $msg = (Cmd::every(1.0, static fn () => null))();
         $this->assertInstanceOf(TickRequest::class, $msg);
         // delay should be <= 1 second (alignment to wall-clock).
         $this->assertLessThanOrEqual(1.0, $msg->seconds);
