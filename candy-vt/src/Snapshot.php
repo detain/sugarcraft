@@ -25,4 +25,21 @@ final readonly class Snapshot
     {
         return new self($t->grid(), $t->cursor(), $time);
     }
+
+    public function equals(self $other): bool
+    {
+        return $this->cursor->equals($other->cursor)
+            && $this->grid->equals($other->grid);
+    }
+
+    /**
+     * Compare snapshots including time.
+     * Used when exact frame reproducibility at specific timestamps matters.
+     */
+    public function equalsWithTime(self $other): bool
+    {
+        return $this->time === $other->time
+            && $this->cursor->equals($other->cursor)
+            && $this->grid->equals($other->grid);
+    }
 }

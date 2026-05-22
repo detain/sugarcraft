@@ -27,6 +27,8 @@ final readonly class CassetteHeader
      *   `RecordCommand::SECRET_KEY_REGEX` strips any key matching the
      *   conservative secret regex (`/(SECRET|TOKEN|KEY|PASSWORD|API)/i`)
      *   before the env reaches the cassette.
+     * @param float|null $typingSpeed Milliseconds between keystrokes for Type directives.
+     *   Defaults to null (not set) for backward compatibility with older cassettes.
      */
     public function __construct(
         public int $version,
@@ -36,6 +38,7 @@ final readonly class CassetteHeader
         public string $runtime,
         public string $timestampMode = self::TIMESTAMP_MODE_ABSOLUTE,
         public array $env = [],
+        public ?float $typingSpeed = null,
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");
