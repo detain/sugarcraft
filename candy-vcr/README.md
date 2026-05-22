@@ -189,12 +189,14 @@ The CLI lands in PR7.
 ## CLI
 
 ```sh
-vendor/bin/candy-vcr record   --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
-vendor/bin/candy-vcr inspect  session.cas                                # list events
-vendor/bin/candy-vcr replay   session.cas --speed=realtime               # stream output to stdout
-vendor/bin/candy-vcr replay   session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
-vendor/bin/candy-vcr diff     a.cas b.cas                                # structural diff
-vendor/bin/candy-vcr stats    session.cas                                # show cassette statistics
+vendor/bin/candy-vcr record       --output session.cas -- bash -c 'echo hi'  # capture a real PTY session
+vendor/bin/candy-vcr inspect      session.cas                                # list events
+vendor/bin/candy-vcr replay       session.cas --speed=realtime               # stream output to stdout
+vendor/bin/candy-vcr replay       session.cas --idle-trim=1.0                # clamp long gaps to 1s during replay
+vendor/bin/candy-vcr diff         a.cas b.cas                                # structural diff
+vendor/bin/candy-vcr stats        session.cas                                # show cassette statistics
+vendor/bin/candy-vcr render-tape demo.tape                                 # render .tape to .gif
+vendor/bin/candy-vcr render-batch demos/                                     # render all .tape files in directory
 ```
 
 `record` (PR P6.5.1) spawns the given command under a fresh master/slave PTY, drops the host stdin into raw mode, runs the candy-pty byte pump with a `Recorder` tee'd onto every stdin/master-output chunk, and writes a `session-<timestamp>.cas` cassette (override with `--output PATH`). The recorded child gets a controlling terminal by default so Ctrl+C reaches it (use `--no-ctty` to disable); the host termios is restored on every exit path including thrown exceptions. The cassette can then be replayed via `vendor/bin/candy-vcr replay …` or loaded by tests through `Player::play()`.
@@ -308,6 +310,73 @@ $recorder->withHook(new MetadataHook([
 - `SanitizingHook` — removes keys or replaces patterns via regex
 - `MetadataHook` — injects metadata into the first output event
 - Custom hooks implement `SugarCraft\Vcr\Hook\Hook`
+
+### Rendering `.tape` files to GIF (PR12)
+
+The `render-tape` and `render-batch` commands convert `.tape` files to animated GIFs. They use the `TapeToGif` pipeline: Lexer → Parser → Compiler → Player → Terminal → Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder.
+
+```sh
+# Render a single .tape file
+vendor/bin/candy-vcr render-tape demo.tape
+
+# Custom output path
+vendor/bin/candy-vcr render-tape demo.tape -o output.gif
+
+# Specify theme and fps
+vendor/bin/candy-vcr render-tape demo.tape --theme Dracula --fps 20
+
+# Use imagick backend instead of gd
+vendor/bin/candy-vcr render-tape demo.tape --backend imagick
+
+# Use pure-PHP encoder (fallback when ffmpeg unavailable)
+vendor/bin/candy-vcr render-tape demo.tape --encoder php
+
+# Strict mode — fail on unknown directives
+vendor/bin/candy-vcr render-tape demo.tape --strict
+
+# Batch render all .tape files in a directory
+vendor/bin/candy-vcr render-batch demos/
+
+# Batch render recursively
+vendor/bin/candy-vcr render-batch demos/ --recursive
+
+# Custom output directory for batch
+vendor/bin/candy-vcr render-batch demos/ -o output-gifs/
+```
+
+#### `render-tape` options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--output` | `-o` | Output .gif path (default: same as input with .gif extension) |
+| `--font` | `-f` | TTF font family name (default: JetBrainsMono) |
+| `--theme` | `-t` | Theme name (default: TokyoNight). Options: TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark |
+| `--fps` | | Frames per second (default: 30) |
+| `--backend` | `-b` | Rasterizer backend: `gd` (default) or `imagick` |
+| `--encoder` | `-e` | GIF encoder: `ffmpeg` (default) or `php` |
+| `--strict` | | Error on unknown directives instead of skipping |
+
+#### `render-batch` options
+
+Same as `render-tape` plus:
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--output-dir` | `-o` | Output directory for .gif files (default: same as source dir) |
+| `--recursive` | `-r` | Search recursively for .tape files |
+
+#### GIF encoding pipeline
+
+The `TapeToGif` class wires together the full render pipeline:
+
+1. **Parsing** — Lexer tokenizes the `.tape` source, Parser produces an AST
+2. **Compilation** — Compiler converts the AST into a Cassette with timed events
+3. **Rendering** — Player drives the cassette events into a Terminal, Renderer produces frames via FrameStream
+4. **Deduplication** — FrameDedup collapses visually identical adjacent frames
+5. **Rasterization** — Rasterizer converts each Snapshot to a PNG using glyph tiles
+6. **Encoding** — FfmpegGifEncoder produces the final GIF (or PhpGifEncoder as fallback)
+
+Frame hold durations are tracked through the dedup stage and passed to the encoder for accurate VFR (variable frame rate) timing.
 
 ### Cassette migration
 

@@ -5,14 +5,13 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Encode;
 
 use SugarCraft\Vcr\Cassette;
-use SugarCraft\Vcr\CassetteHeader;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
 use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vcr\Render\Renderer;
-use SugarCraft\Vcr\Raster\Rasterizer;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
+use SugarCraft\Vcr\Raster\Rasterizer;
 use SugarCraft\Vcr\Tape\Compiler;
 use SugarCraft\Vcr\Tape\Lexer;
 use SugarCraft\Vcr\Tape\Parser;
@@ -27,8 +26,8 @@ use SugarCraft\Vt\Themes;
  * Wires together Lexer → Parser → Compiler → Player → Terminal →
  * Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder.
  *
- * Tracks per-frame hold durations (seconds) from FrameDedup output
- * to pass accurate VFR timing to the encoder.
+ * Per-frame hold durations (seconds) are tracked from FrameDedup output
+ * and passed to the encoder for VFR timing.
  */
 final class TapeToGif
 {
@@ -81,39 +80,41 @@ final class TapeToGif
         $player = new Player($cassette);
 
         $frameStream = $this->renderer->render($player, $terminal, $fps);
-        $frameInterval = 1.0 / $fps;
 
-        $framesWithHolds = $this->buildFramesWithHolds($frameStream, $frameInterval);
+        $framesWithHolds = $this->buildFramesWithHolds($frameStream, 1.0 / $fps);
 
-        $frames = [];
+        $tempDir = sys_get_temp_dir() . '/candy-vcr-t2g-' . getmypid();
+        if (!mkdir($tempDir) && !is_dir($tempDir)) {
+            throw new \RuntimeException("Failed to create temp dir: {$tempDir}");
+        }
+
+        $pngPaths = [];
         $frameHolds = [];
+
         foreach ($framesWithHolds as ['snapshot' => $snapshot, 'hold' => $hold]) {
             $image = $this->rasterizer->rasterize($snapshot, 8, $fontSize * 2, null);
             \assert($image instanceof \GdImage);
-            $frames[] = $image;
-            $frameHolds[] = $hold;
-        }
 
-        $output = $outputPath ?? preg_replace('/\.tape$/', '.gif', $tapePath);
-        if ($output === null || $output === '') {
-            $output = $tapePath . '.gif';
-        }
-
-        $framesIter = new \ArrayIterator($frames);
-        $this->encoder->encode($framesIter, $cols, $rows, $frameHolds, $output);
-
-        foreach ($frames as $image) {
+            $framePath = $tempDir . '/frame_' . count($pngPaths) . '.png';
+            if (!imagepng($image, $framePath)) {
+                throw new \RuntimeException("Failed to write PNG frame: {$framePath}");
+            }
             imagedestroy($image);
+
+            $pngPaths[] = $framePath;
+            $frameHolds[] = (int) round($hold * 1000);
+        }
+
+        $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+
+        try {
+            $this->encoder->encode($pngPaths, $output, (int) $fps, $frameHolds);
+        } finally {
+            $this->cleanupDir($tempDir);
         }
     }
 
     /**
-     * Walk FrameDedup output and attach per-frame hold durations.
-     *
-     * FrameStream yields snapshots at 1/fps intervals. FrameDedup collapses
-     * identical adjacent snapshots. For each emitted snapshot, the hold is
-     * (number of original frames collapsed + 1) * frameInterval.
-     *
      * @param \Traversable<int, Snapshot> $stream
      * @return \Generator<int, array{snapshot:Snapshot, hold:float}>
      */
@@ -121,8 +122,6 @@ final class TapeToGif
     {
         $prevTime = 0.0;
         $dedupIterator = FrameDedup::dedup($stream);
-
-        $heldFrames = [];
 
         foreach ($dedupIterator as $index => $snapshot) {
             $frameTime = $snapshot->time;
@@ -143,9 +142,6 @@ final class TapeToGif
         }
     }
 
-    /**
-     * Resolve a theme name to a Theme instance.
-     */
     private function resolveTheme(string $name): Theme
     {
         return match ($name) {
@@ -156,6 +152,15 @@ final class TapeToGif
             'SolarizedDark' => Theme::solarizedDark(),
             default => Theme::tokyoNight(),
         };
+    }
+
+    private function cleanupDir(string $dir): void
+    {
+        $files = glob($dir . '/*') ?: [];
+        foreach ($files as $file) {
+            @unlink($file);
+        }
+        @rmdir($dir);
     }
 
     /**
