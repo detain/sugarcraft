@@ -21,6 +21,7 @@ equality via [candy-vt](../candy-vt/), with byte-equality fallback).
 | PR6 | YamlFormat |
 | PR7 | `bin/candy-vcr` CLI + examples + tracking |
 | PR8 | Tape lexer/parser/compiler (`.tape` → Cassette) |
+| PR9 | Renderer + FrameStream + FrameDedup (Phase 3 of vhs-replacement) |
 
 ## Use cases
 
@@ -380,6 +381,61 @@ inter-event timing is preserved for the Player.
 
 **Corpus coverage:** All 841+ `.tape` files in the monorepo parse without
 error and compile to valid Cassettes (verified by `TapeCorpusTest`).
+
+## Frame renderer (PR9)
+
+candy-vcr ships a `SugarCraft\Vcr\Render` layer that converts a compiled
+`Cassette` into a stream of terminal `Snapshot` frames at configurable fps,
+with optional deduplication of identical adjacent frames:
+
+```php
+use SugarCraft\Vcr\Player;
+use SugarCraft\Vcr\Render\Renderer;
+use SugarCraft\Vcr\Render\FrameDedup;
+use SugarCraft\Vt\Terminal;
+
+// Open a cassette (from tape compiler or direct record)
+$player = Player::open('demo.cas');
+
+// Create terminal emulator and renderer
+$terminal = Terminal::new(80, 24);
+$renderer = new Renderer($player, $terminal, fps: 30.0);
+
+// Get frame stream and optionally dedup identical frames
+$stream = $renderer->render($player, $terminal, 30.0);
+$deduped = FrameDedup::dedup($stream);
+
+foreach ($deduped as $index => $snapshot) {
+    // $snapshot is a SugarCraft\Vt\Snapshot with grid + cursor + time
+    printf("Frame %d at t=%.3f\n", $index, $snapshot->time);
+}
+```
+
+**Key classes:**
+
+| Class | Role |
+|---|---|
+| `Renderer` | Orchestrates Player + Terminal; produces `FrameStream` |
+| `FrameStream` | `\IteratorAggregate` yielding `Snapshot` at fps cadence |
+| `FrameDedup` | Static filter collapsing identical adjacent frames |
+
+**Frame dedup:** Typical terminal recordings have 80–95% identical frames
+(e.g., cursor blink, idle time between keystrokes). `FrameDedup::dedup()`
+collapses consecutive identical frames into a single frame, reducing
+downstream GIF encoder work significantly. The `holdMax` parameter (default
+300) caps how many identical frames can be collapsed to prevent pathological
+cases.
+
+**Snapshot equality:** Two `Snapshot` objects are equal when their `grid`
+and `cursor` state match, regardless of capture time. This enables frame
+dedup across different virtual timestamps. The `equalsWithTime()` method
+compares all three fields (grid, cursor, time) for exact reproducibility
+checks.
+
+**Performance note:** Cell equality comparison is O(cols × rows) per frame —
+for a typical 80×24 terminal that's 1920 cell comparisons. At 30fps with dedup
+disabled, that's ~57,600 cell comparisons per second. This is acceptable
+for now (Phase 3) but is a known bottleneck for optimization in Phase 4.
 
 ## Examples
 

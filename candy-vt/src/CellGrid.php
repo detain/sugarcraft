@@ -107,4 +107,19 @@ final class CellGrid
 
         return $clone;
     }
+
+    public function equals(self $other): bool
+    {
+        if ($this->cols !== $other->cols || $this->rows !== $other->rows) {
+            return false;
+        }
+        for ($r = 0; $r < $this->rows; $r++) {
+            for ($c = 0; $c < $this->cols; $c++) {
+                if (!$this->grid[$r][$c]->equals($other->grid[$r][$c])) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
 }
