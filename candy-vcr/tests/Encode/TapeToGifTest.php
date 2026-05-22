@@ -115,7 +115,7 @@ final class TapeToGifTest extends TestCase
         }
     }
 
-    public function testRenderWithPhpEncoderThrows(): void
+    public function testRenderWithPhpEncoderProducesValidGif(): void
     {
         if (!file_exists($this->smokeTape)) {
             $this->markTestSkipped('smoke.tape not found');
@@ -126,10 +126,13 @@ final class TapeToGifTest extends TestCase
         $outputPath = $this->tempDir . '/smoke_php_' . uniqid() . '.gif';
 
         try {
-            $this->expectException(\RuntimeException::class);
-            $this->expectExceptionMessage('Pure-PHP GIF encoder not yet implemented');
-
             $tapeToGif->render($this->smokeTape, $outputPath);
+
+            $this->assertFileExists($outputPath);
+            $this->assertGreaterThan(0, filesize($outputPath));
+
+            $header = file_get_contents($outputPath, false, null, 0, 6);
+            $this->assertSame('GIF89a', $header);
         } finally {
             @unlink($outputPath);
         }
