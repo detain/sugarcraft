@@ -40,7 +40,7 @@ final class WorkerCmd
      *                              PHP's serialize() for cross-process transport.
      *                              Note: PHP closures cannot be serialized; use
      *                              named functions or static method arrays.
-     * @return Cmd A closure that, when executed, returns an AsyncCmd whose
+     * @return \Closure A closure that, when executed, returns an AsyncCmd whose
      *             promise resolves to WorkerResultMsg
      */
     public static function run(WorkerPool $pool, callable|string $task): \Closure

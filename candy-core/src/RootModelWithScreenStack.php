@@ -43,7 +43,13 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
     {
         if ($msg instanceof Msg\ScreenStackPushedMsg) {
             $next = clone $this;
-            $next->pushedIds[] = $msg->screen->model->id;
+            $model = $msg->screen->model;
+            // Track id only when the screen's model carries an id property
+            // (e.g. a Component). Plain Models without an id are fine — they
+            // just aren't traceable from the pushed/popped lists.
+            if (property_exists($model, 'id')) {
+                $next->pushedIds[] = (string) $model->id;
+            }
             $msg->screen->onEnter?->__invoke();
             $next->screens = $next->screens->push($msg->screen);
             $next->currentModel = $msg->screen->model;
@@ -55,7 +61,10 @@ final class RootModelWithScreenStack implements Model, ScreenStackCapable
             if (!$next->screens->isEmpty()) {
                 $popped = $next->screens->current();
                 $popped->onExit?->__invoke();
-                $next->poppedIds[] = $popped->model->id;
+                $poppedModel = $popped->model;
+                if (property_exists($poppedModel, 'id')) {
+                    $next->poppedIds[] = (string) $poppedModel->id;
+                }
                 $next->screens = $next->screens->pop();
                 $next->currentModel = $next->screens->isEmpty()
                     ? null
