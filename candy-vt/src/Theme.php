@@ -68,7 +68,14 @@ final class Theme
         if ($index < 0 || $index > 255) {
             return 0;
         }
-        return $this->palette[$index] ?? 0;
+        if (isset($this->palette[$index])) {
+            return $this->palette[$index];
+        }
+        // Palette only carries 0..15 + 6x6x6 cube (16..231). For the
+        // grayscale ramp (232..255) — and any unset slot — fall back
+        // to the standard xterm 256 mapping computed by self::rgb().
+        [$r, $g, $b] = self::rgb($index);
+        return ($r << 16) | ($g << 8) | $b;
     }
 
     public static function tokyoNight(): self
