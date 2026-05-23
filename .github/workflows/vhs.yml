@@ -211,6 +211,11 @@ jobs:
       packages: read
     strategy:
       fail-fast: false
+      # Cap concurrent cells so 45 render jobs don't all hammer
+      # GITHUB_TOKEN's checkout auth at workflow start — secondary
+      # rate limiting was causing "could not read Username" failures
+      # on random cells.
+      max-parallel: 10
       matrix:
         # Single-key matrix — the lib name is the only axis. Tool versions
         # are pinned by the container image tag rather than per-job inputs.
