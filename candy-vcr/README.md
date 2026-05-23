@@ -61,19 +61,35 @@ composer require sugarcraft/candy-vcr
   `quit`) with kind-specific payload fields.
 - `t` is seconds since cassette start (ms precision).
 
-### Formats
+### Cassette formats
 
-| Format | File extension | Description |
-|--------|---------------|-------------|
-| `JsonlFormat` | `.cas` | Absolute timestamps (`t`). Default. |
-| `RelativeFormat` | `.cas` | Relative/delta timestamps (`dt`). Deterministic replay. |
-| `AsciinemaFormat` | `.cast` | Import asciinema v3 cast files. |
-| `YamlFormat` | `.yaml` | Human-readable YAML (test fixtures). |
-| `CompressedJsonlFormat` | `.cas.gz` | Gzip-compressed JSONL (5–10× smaller). |
+candy-vcr ships five cassette serializers, each tuned for a different
+trade-off between human-readability, file size, and toolchain interop.
+All five share the same `Cassette` value-object model and are
+interchangeable via the `Format` interface.
 
-All formats share the same `Cassette` value-object model and are
-interchangeable via the `Format` interface. `Player::open()` auto-detects
-`RelativeFormat` vs `JsonlFormat` from the first event line.
+| Format | File extension | When to pick it | Trade-offs |
+|--------|----------------|-----------------|-----------|
+| **`JsonlFormat`** (default) | `.cas`, `.jsonl`, `.cassette` | Tests, version control, day-to-day recording. | One JSON document per line, absolute timestamps (`t`). Human-readable, diff-friendly, no compression. |
+| **`CompressedJsonlFormat`** | `.cas.gz` | Long recordings, CI artifact storage. | Gzipped JSONL. 5–10× smaller on disk; still streams (per-line flush). Loses git-diff friendliness. |
+| **`RelativeFormat`** | `.cas` (with `dt` field) | Deterministic replay; cassettes meant to be edited by hand. | Delta timestamps (interval since previous event). Easier to reason about edits — no need to re-shift downstream `t` values. |
+| **`YamlFormat`** | `.yaml`, `.yml` | Test fixtures where the cassette is hand-authored. | Human-editable, indented. Largest on disk; slowest to parse. Lowest priority for production recordings. |
+| **`AsciinemaFormat`** | `.cast` | Importing existing asciinema v3 recordings. | Read-only interop with `asciinema cat`/`asciinema play`. Stdin events become raw-byte inputs (no Msg envelope round-trip). |
+
+**Auto-detection.** `Player::loadAny()` and the CLI commands
+(`inspect`, `replay`, `diff`, `stats`) accept either a cassette or a
+`.tape` source and pick the right loader via
+`SugarCraft\Vcr\Format\CassetteLoader`: extension first, then content
+sniff (first non-blank non-comment line — `{` is JSON, a known tape
+directive keyword is a tape source). `.cas`/`.jsonl` files dispatch to
+`JsonlFormat` or `RelativeFormat` depending on whether the first event
+carries `t` or `dt`. Anything else throws `\InvalidArgumentException`.
+
+**Tape vs cassette.** A `.tape` file (the VHS DSL) is compiled
+**through** the Lexer → Parser → Compiler pipeline before it becomes a
+Cassette — the on-disk format is source code, not serialized events.
+`CassetteLoader::isTape()` exposes the sniff in case the caller needs to
+short-circuit (e.g. `render-tape --dry-run` only runs the compile pass).
 
 ### Timestamp modes
 
@@ -355,6 +371,40 @@ vendor/bin/candy-vcr render-batch demos/ -o output-gifs/
 | `--backend` | `-b` | Rasterizer backend: `gd` (default) or `imagick` |
 | `--encoder` | `-e` | GIF encoder: `ffmpeg` (default) or `php` |
 | `--strict` | | Error on unknown directives instead of skipping |
+| `--dry-run` | | Print the compiled event stream as JSONL to stdout; no GIF is written |
+
+`--dry-run` runs Lexer → Parser → Compiler but skips the Renderer →
+Rasterizer → Encoder. The first stdout line is the compiled header
+tagged with `"_header"`; subsequent lines are one event per line as
+`{"t":…, "kind":…, "payload":…}`. Useful for diffing two tape files'
+event streams or inspecting what `Type "..."` compiles into without
+spending the GIF render cost. The `-o` flag (if also passed) is ignored
+in dry-run mode.
+
+```sh
+candy-vcr render-tape demo.tape --dry-run | head -5
+```
+
+#### `inspect --frames`
+
+`inspect <cassette|.tape> --frames` walks the cassette through a Renderer
+and Terminal at the configured fps (default 30), printing one line per
+snapshot:
+
+```
+time<TAB>cursor_row,cursor_col<TAB>grid_sha1
+```
+
+`grid_sha1` is a deterministic digest of every `(row, col, char, fg,
+bg, attrs)` cell tuple plus the cursor state. Two snapshots that would
+rasterize to identical pixels share the same hash. The footer reports
+total frame count, frames before dedup, and unique frames after
+`FrameDedup` — handy for sizing the GIF-encoding job before committing
+to a full render.
+
+```sh
+candy-vcr inspect demo.tape --frames --fps 60
+```
 
 #### `render-batch` options
 

@@ -98,10 +98,10 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §12 enumerated improvements alongside the renderer.
 
-- [ ] `candy-vcr render-tape --dry-run`: print compiled event stream as JSON (no render).
-- [ ] `candy-vcr inspect --frames <cassette>`: list snapshot timeline (time / cursor / cell-grid hash) for a cassette.
-- [ ] Tape-format auto-detection: `Player::load(<path>)` detects `.tape` vs cassette by extension + header sniff (first non-blank line starts with a known tape directive vs JSON `{`).
-- [ ] Document cassette format trade-offs (Jsonl vs CompressedJsonl vs Relative vs Yaml vs Asciinema) in `candy-vcr/README.md`.
+- [x] `candy-vcr render-tape --dry-run`: print compiled event stream as JSON (no render). (`RenderTapeCommand::dryRun()`; first line is `{"_header":…}` carrying cols/rows/runtime/theme/typingSpeed/eventCount/duration, each subsequent line is `{"t":…, "kind":…, "payload":…}`. `-o` is ignored — no GIF is written, even when passed. Tested via `tests/Cli/RenderTapeDryRunTest.php`.)
+- [x] `candy-vcr inspect --frames <cassette>`: list snapshot timeline (time / cursor / cell-grid hash) for a cassette. (`InspectCommand::renderFrames()` walks the cassette through `Renderer + Terminal` at `--fps` (default 30), prints `time<TAB>row,col<TAB>sha1` per snapshot, then a `frames: N unique: M deduped: K` footer. Grid hash digests `(row, col, char, fg, bg, attrs)` cells row-major plus cursor state — deterministic. Tested via `tests/Cli/InspectFramesTest.php`, including a zero-event cassette case.)
+- [x] Tape-format auto-detection: `Player::load(<path>)` detects `.tape` vs cassette by extension + header sniff (first non-blank line starts with a known tape directive vs JSON `{`). (Added `SugarCraft\Vcr\Format\CassetteLoader` + `Player::loadAny()`. Extension sniff first (`.tape` → Lexer/Parser/Compiler; `.cas`/`.jsonl`/`.cassette` → JsonlFormat or RelativeFormat depending on `t` vs `dt`; `.cast` → AsciinemaFormat; `.yaml`/`.yml` → YamlFormat; `.gz` → CompressedJsonlFormat). Content fallback skips leading `#` comment lines, then sniffs first token against known tape-directive heads. Inspect/Replay/Diff/Stats now all route through CassetteLoader so they accept either format. Tested via `tests/Format/CassetteLoaderTest.php`.)
+- [x] Document cassette format trade-offs (Jsonl vs CompressedJsonl vs Relative vs Yaml vs Asciinema) in `candy-vcr/README.md`. (New `### Cassette formats` section with a 5-row trade-off table + auto-detect explainer + tape-vs-cassette note. Also documents the new `--dry-run` and `--frames` flags inline with `render-tape` / `inspect`.)
 
 ## Section J — Symfony `#[AsCommand]` modernization
 
