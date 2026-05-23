@@ -163,28 +163,18 @@ final class TapeToGif
         };
     }
 
-    private function themedRasterizer(Theme $theme): Rasterizer
-    {
-        if ($this->rasterizer instanceof GdRasterizer) {
-            return $this->rasterizer->withTheme($theme);
-        }
-        if ($this->rasterizer instanceof ImagickRasterizer) {
-            return $this->rasterizer->withTheme($theme);
-        }
-        return $this->rasterizer;
-    }
-
     /**
-     * Create a themed rasterizer, reusing the existing instance but
-     * applying the theme. This preserves any font settings.
+     * Create a themed rasterizer, applying both font and theme settings.
+     * The chained withFont()->withTheme() approach forces a cache rebuild
+     * for the new font, which is correct behavior.
      */
     private function themedRasterizerWithFonts(Theme $theme, string $fontFamily): Rasterizer
     {
         if ($this->rasterizer instanceof GdRasterizer) {
-            return $this->rasterizer->withTheme($theme);
+            return $this->rasterizer->withFont($fontFamily)->withTheme($theme);
         }
         if ($this->rasterizer instanceof ImagickRasterizer) {
-            return $this->rasterizer->withTheme($theme);
+            return $this->rasterizer->withFont($fontFamily)->withTheme($theme);
         }
         return $this->rasterizer;
     }

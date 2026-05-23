@@ -59,6 +59,17 @@ final class GdRasterizer implements Rasterizer
         return $clone;
     }
 
+    public function withFont(string $fontFamily, ?int $fontSize = null): self
+    {
+        $clone = new self(
+            $fontSize ?? $this->fontSize,
+            $fontFamily,
+            $this->theme,
+        );
+        $clone->cacheDisabled = $this->cacheDisabled;
+        return $clone;
+    }
+
     /**
      * Toggle the persistent Glyphs cache for benchmarking.
      * Not part of the public Rasterizer contract — callers use this to

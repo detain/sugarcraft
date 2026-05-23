@@ -157,6 +157,39 @@ final class GdRasterizerTest extends TestCase
         imagedestroy($image);
     }
 
+    public function testWithFontReturnsDifferentInstance(): void
+    {
+        $rasterizer = new GdRasterizer(14, 'JetBrainsMono');
+        $changed = $rasterizer->withFont('DejaVuSansMono', 16);
+
+        $this->assertNotSame($rasterizer, $changed);
+    }
+
+    public function testWithFontChangesFamilyAndSize(): void
+    {
+        $rasterizer = new GdRasterizer(14, 'JetBrainsMono');
+        $changed = $rasterizer->withFont('DejaVuSansMono', 16);
+
+        $reflector = new \ReflectionClass(GdRasterizer::class);
+        $propFamily = $reflector->getProperty('fontFamily');
+        $propFamily->setAccessible(true);
+        $this->assertSame('DejaVuSansMono', $propFamily->getValue($changed));
+        $propSize = $reflector->getProperty('fontSize');
+        $propSize->setAccessible(true);
+        $this->assertSame(16, $propSize->getValue($changed));
+    }
+
+    public function testWithFontPreservesExistingFontSize(): void
+    {
+        $rasterizer = new GdRasterizer(14, 'JetBrainsMono');
+        $changed = $rasterizer->withFont('DejaVuSansMono');
+
+        $reflector = new \ReflectionClass(GdRasterizer::class);
+        $propSize = $reflector->getProperty('fontSize');
+        $propSize->setAccessible(true);
+        $this->assertSame(14, $propSize->getValue($changed));
+    }
+
     public function testRasterizeImageHasNonZeroPixels(): void
     {
         $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');

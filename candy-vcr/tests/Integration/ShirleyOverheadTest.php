@@ -42,9 +42,6 @@ final class ShirleyOverheadTest extends TestCase
     /** Plan's stated acceptance target — reported separately. */
     private const PLAN_TARGET_OVERHEAD = 0.02;
 
-    /** Runs per scenario (≥ 5 per plan guidance). */
-    private const RUNS = 7;
-
     /** Number of full round-trips (without, with) to reduce ordering bias. */
     private const ROUNDS = 3;
 
