@@ -34,19 +34,19 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Twenty-one bugs were fixed in the first audit pass with **no** targeted regression tests. They could silently regress.
 
-- [ ] Theme propagation: tape with `Set Theme "TokyoNight"` renders a known fg cell using TokyoNight's RGB (not VGA `0x00ff00`). Assert pixel color at known cell.
-- [ ] UTF-8 in `Type`: tape `Type "café"` produces Input events whose payload contains the UTF-8 bytes `c3 a9`.
-- [ ] `CassetteHeader::$theme` round-trips through `JsonlFormat` (write + read).
-- [ ] `PhpGifEncoder`: encode 3 frames with explicit `durations` `[100, 500, 100]` ms; parse the resulting GIF's Graphic Control Extension block; assert the delays are 10cs / 50cs / 10cs.
-- [ ] `PhpGifEncoder`: first frame has LCT flag set (byte 9 of image descriptor packed field = `0x87`).
-- [ ] `FfmpegGifEncoder`: encode with VFR durations → resulting GIF has variable per-frame delays (read back, assert non-uniform).
-- [ ] `RenderBatchCommand --recursive`: place tape files at `dir/a.tape` and `dir/sub/b.tape`; assert both are rendered.
-- [ ] `RenderBatchCommand`: batch reuses one `TapeToGif` instance — assert `TapeToGif::create()` is called exactly once across N tapes (via mock / spy).
-- [ ] `TapeToGif` temp dir: parallel test ensuring two `TapeToGif::render()` calls in same process use different temp dirs.
-- [ ] `FrameStream` Resize preserves theme: feed a Resize event mid-stream; assert the post-resize Terminal carries the original theme.
-- [ ] `ImagickRasterizer::indexToHex` grayscale: index 232 (rgb 8,8,8) returns `#080808`, not `#888888`.
-- [ ] `Application::runSymfonyCommand`: invoke `render-tape /tmp/foo.tape -o /tmp/foo.gif` via `Application::run()` (not directly), assert the tape arg reaches the command.
-- [ ] `pty-shim.php` autoload discovery: simulate being installed at `vendor/sugarcraft/candy-pty/bin/pty-shim.php` — assert it still finds an autoload.
+- [x] Theme propagation: tape with `Set Theme "TokyoNight"` renders a known fg cell using TokyoNight's RGB (not VGA `0x00ff00`). Assert pixel color at known cell. (`tests/Encode/TapeToGifThemeTest.php`)
+- [x] UTF-8 in `Type`: tape `Type "café"` produces Input events whose payload contains the UTF-8 bytes `c3 a9`. (`tests/Tape/CompilerUtf8Test.php`; covers `é` plus 3-byte `日`)
+- [x] `CassetteHeader::$theme` round-trips through `JsonlFormat` (write + read). (`tests/Format/CassetteHeaderThemeRoundTripTest.php`; required adding `theme` + `typingSpeed` to `JsonlFormat::encodeHeader`/`decodeHeader` so the field actually persists)
+- [x] `PhpGifEncoder`: encode 3 frames with explicit `durations` `[100, 500, 100]` ms; parse the resulting GIF's Graphic Control Extension block; assert the delays are 10cs / 50cs / 10cs. (`tests/Encode/PhpGifEncoderDelayTest.php`)
+- [x] `PhpGifEncoder`: first frame has LCT flag set (byte 9 of image descriptor packed field = `0x87`). (`tests/Encode/PhpGifEncoderLctTest.php`; checks every frame, not just the first)
+- [x] `FfmpegGifEncoder`: encode with VFR durations → resulting GIF has variable per-frame delays (read back, assert non-uniform). (`tests/Encode/FfmpegGifEncoderVfrTest.php`, ffmpeg-gated)
+- [x] `RenderBatchCommand --recursive`: place tape files at `dir/a.tape` and `dir/sub/b.tape`; assert both are rendered. (`tests/Cli/RenderBatchRecursiveTest.php`)
+- [x] `RenderBatchCommand`: batch reuses one `TapeToGif` instance — assert `TapeToGif::create()` is called exactly once across N tapes (via mock / spy). (`tests/Cli/RenderBatchReuseTest.php`; `PhpToken` walk confirms one `TapeToGif::create()` call hoisted above the per-tape `foreach`, plus reflection confirms the rasterizer instance survives across `render()` calls)
+- [x] `TapeToGif` temp dir: parallel test ensuring two `TapeToGif::render()` calls in same process use different temp dirs. (`tests/Encode/TapeToGifTempDirTest.php`; reflection drives `createTempDir()` twice)
+- [x] `FrameStream` Resize preserves theme: feed a Resize event mid-stream; assert the post-resize Terminal carries the original theme. (`tests/Render/FrameStreamThemeResizeTest.php`; bg pixel must stay TokyoNight `0x15161e` after the Resize, via the rasterizer)
+- [x] `ImagickRasterizer::indexToHex` grayscale: index 232 (rgb 8,8,8) returns `#080808`, not `#888888`. (`tests/Raster/ImagickRasterizerGrayscaleTest.php`; required fixing `Theme::color()` in candy-vt to fall back to `Theme::rgb()` for indices 216..255 not in the cube palette — the old `?? 0` returned black for grayscale)
+- [x] `Application::runSymfonyCommand`: invoke `render-tape /tmp/foo.tape -o /tmp/foo.gif` via `Application::run()` (not directly), assert the tape arg reaches the command. (`tests/Cli/ApplicationRoutingTest.php`)
+- [x] `pty-shim.php` autoload discovery: simulate being installed at `vendor/sugarcraft/candy-pty/bin/pty-shim.php` — assert it still finds an autoload. (`tests/Cli/PtyShimAutoloadTest.php`)
 
 ## Section D — PHPStan: clear baseline + 87 new errors
 
