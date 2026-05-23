@@ -193,4 +193,74 @@ final class TapeToGifTest extends TestCase
         $process->run();
         return $process->isSuccessful();
     }
+
+    public function testScreenshotCapturesFrame(): void
+    {
+        if (!file_exists($this->smokeTape)) {
+            $this->markTestSkipped('smoke.tape not found');
+        }
+
+        $tmpDir = sys_get_temp_dir() . '/vcr-screenshot-test-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($tmpDir, 0755, true);
+
+        $tapePath = $tmpDir . '/test.tape';
+        $screenshotPath = $tmpDir . '/shot.png';
+
+        // Create a minimal tape that outputs something then takes a screenshot
+        $tapeContent = "Set Theme TokyoNight\nSet Width 80\nSet Height 24\nType \"X\"\nScreenshot {$screenshotPath}\n";
+        file_put_contents($tapePath, $tapeContent);
+
+        try {
+            $t2g = TapeToGif::create(['encoder' => 'php', 'backend' => 'gd']);
+            $outputPath = $tmpDir . '/out.gif';
+            $t2g->render($tapePath, $outputPath);
+
+            $this->assertFileExists($screenshotPath, 'Screenshot should have been written');
+            // Verify it's a valid PNG
+            $img = @imagecreatefrompng($screenshotPath);
+            $this->assertNotFalse($img, 'Screenshot should be a valid PNG');
+            imagedestroy($img);
+        } finally {
+            @unlink($tapePath);
+            @unlink($screenshotPath);
+            @unlink($tmpDir . '/out.gif');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testScreenshotWithFfmpegEncoder(): void
+    {
+        if (!$this->isFfmpegAvailable()) {
+            $this->markTestSkipped('ffmpeg not available');
+        }
+
+        if (!file_exists($this->smokeTape)) {
+            $this->markTestSkipped('smoke.tape not found');
+        }
+
+        $tmpDir = sys_get_temp_dir() . '/vcr-screenshot-test-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        mkdir($tmpDir, 0755, true);
+
+        $tapePath = $tmpDir . '/test.tape';
+        $screenshotPath = $tmpDir . '/shot.png';
+
+        $tapeContent = "Set Theme TokyoNight\nSet Width 80\nSet Height 24\nType \"X\"\nScreenshot {$screenshotPath}\n";
+        file_put_contents($tapePath, $tapeContent);
+
+        try {
+            $t2g = TapeToGif::create(['encoder' => 'ffmpeg', 'backend' => 'gd']);
+            $outputPath = $tmpDir . '/out.gif';
+            $t2g->render($tapePath, $outputPath);
+
+            $this->assertFileExists($screenshotPath, 'Screenshot should have been written with ffmpeg encoder');
+            $img = @imagecreatefrompng($screenshotPath);
+            $this->assertNotFalse($img, 'Screenshot should be a valid PNG');
+            imagedestroy($img);
+        } finally {
+            @unlink($tapePath);
+            @unlink($screenshotPath);
+            @unlink($tmpDir . '/out.gif');
+            @rmdir($tmpDir);
+        }
+    }
 }

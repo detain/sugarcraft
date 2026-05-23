@@ -18,6 +18,8 @@ final readonly class CassetteHeader
     public const TIMESTAMP_MODE_ABSOLUTE = 'absolute';
     public const TIMESTAMP_MODE_RELATIVE = 'relative';
 
+    public const PLAYBACK_SPEED_DEFAULT = 1.0;
+
     /**
      * @param 'absolute'|'relative'   $timestampMode
      * @param array<string, string>   $env
@@ -33,6 +35,8 @@ final readonly class CassetteHeader
      *   `Set Theme "TokyoNight"` directive). null when the cassette was produced by the
      *   PTY recorder (which has no theme concept). Renderers should treat null as their
      *   default theme.
+     * @param float|null $playbackSpeed Speed multiplier (e.g. 2.0 = 2x speed, 0.5 = half speed).
+     *   Defaults to null (not set) for backward compatibility with older cassettes.
      */
     public function __construct(
         public int $version,
@@ -44,6 +48,7 @@ final readonly class CassetteHeader
         public array $env = [],
         public ?float $typingSpeed = null,
         public ?string $theme = null,
+        public ?float $playbackSpeed = null,
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");

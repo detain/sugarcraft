@@ -13,4 +13,7 @@ enum EventKind: string
     case Input = 'input';
     case Output = 'output';
     case Quit = 'quit';
+    case Snapshot = 'snapshot';
+    case Hide = 'hide';
+    case Show = 'show';
 }

@@ -16,5 +16,5 @@ interface Rasterizer
      *
      * @return \GdImage|\Imagick
      */
-    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \GdImage|\Imagick;
+    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \GdImage|\Imagick;
 }

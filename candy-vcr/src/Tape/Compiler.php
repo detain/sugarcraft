@@ -18,9 +18,11 @@ use SugarCraft\Vcr\Tape\Ast\EscapeDirective;
 use SugarCraft\Vcr\Tape\Ast\HideDirective;
 use SugarCraft\Vcr\Tape\Ast\OutputDirective;
 use SugarCraft\Vcr\Tape\Ast\ParseError;
+use SugarCraft\Vcr\Tape\Ast\ScreenshotDirective;
 use SugarCraft\Vcr\Tape\Ast\SetDirective;
 use SugarCraft\Vcr\Tape\Ast\ShowDirective;
 use SugarCraft\Vcr\Tape\Ast\SleepDirective;
+use SugarCraft\Vcr\Tape\Ast\SourceDirective;
 use SugarCraft\Vcr\Tape\Ast\SpaceDirective;
 use SugarCraft\Vcr\Tape\Ast\TabDirective;
 use SugarCraft\Vcr\Tape\Ast\TypeDirective;
@@ -37,11 +39,14 @@ final class Compiler
     private string $theme = 'TokyoNight';
     /** @var array<string, string> */
     private array $env = [];
+    private ?float $playbackSpeed = null;
 
     private float $currentTime = 0.0;
 
     /** @var list<Event> */
     private array $events = [];
+
+    private string $currentSourcePath = '';
 
     /**
      * @param list<Directive|ParseError> $ast
@@ -49,6 +54,7 @@ final class Compiler
     public function compile(array $ast, string $sourcePath): Cassette
     {
         $this->reset();
+        $this->currentSourcePath = $sourcePath;
 
         foreach ($ast as $node) {
             if ($node instanceof ParseError) {
@@ -67,6 +73,7 @@ final class Compiler
             env: $this->env,
             typingSpeed: $this->typingSpeed,
             theme: $this->theme,
+            playbackSpeed: $this->playbackSpeed,
         );
 
         return new Cassette($header, $this->events);
@@ -104,8 +111,10 @@ final class Compiler
         $this->rows = 24;
         $this->theme = 'TokyoNight';
         $this->env = [];
+        $this->playbackSpeed = null;
         $this->currentTime = 0.0;
         $this->events = [];
+        $this->currentSourcePath = '';
     }
 
     private function compileNode(Directive $node): void
@@ -124,7 +133,10 @@ final class Compiler
             $node instanceof EscapeDirective => $this->emitInputBytes("\x1b"),
             $node instanceof SleepDirective => $this->currentTime += $node->seconds,
             $node instanceof WaitDirective => $this->currentTime += $node->seconds,
-            $node instanceof HideDirective, $node instanceof ShowDirective => null,
+            $node instanceof HideDirective => $this->emitEvent(EventKind::Hide, []),
+            $node instanceof ShowDirective => $this->emitEvent(EventKind::Show, []),
+            $node instanceof SourceDirective => $this->compileSource($node),
+            $node instanceof ScreenshotDirective => $this->compileScreenshot($node),
             default => null,
         };
     }
@@ -136,6 +148,7 @@ final class Compiler
             'Height' => $this->rows = (int) $node->value,
             'Theme' => $this->theme = trim($node->value, '"\' '),
             'TypingSpeed' => $this->typingSpeed = $this->parseTypingSpeed($node->value),
+            'PlaybackSpeed' => $this->playbackSpeed = $node->value !== '' ? (float) $node->value : null,
             default => null,
         };
     }
@@ -244,12 +257,55 @@ final class Compiler
         $this->emitInputBytes(chr($ctrlCode));
     }
 
+    private function compileSource(SourceDirective $node): void
+    {
+        $baseDir = dirname($this->currentSourcePath ?: '');
+        $fullPath = $baseDir !== '' && $baseDir !== '.'
+            ? $baseDir . '/' . $node->path
+            : $node->path;
+
+        if (!is_file($fullPath)) {
+            $fullPath = $node->path;
+        }
+
+        $source = @file_get_contents($fullPath);
+        if ($source === false) {
+            return;
+        }
+
+        $this->currentSourcePath = $fullPath;
+        $subResult = Compiler::parseSource($source);
+        foreach ($subResult['ast'] as $subNode) {
+            if (!$subNode instanceof ParseError) {
+                $this->compileNode($subNode);
+            }
+        }
+    }
+
     private function emitInputBytes(string $bytes): void
     {
         $this->events[] = new Event(
             $this->currentTime,
             EventKind::Input,
             ['b' => $bytes],
+        );
+    }
+
+    private function compileScreenshot(ScreenshotDirective $node): void
+    {
+        $this->events[] = new Event(
+            $this->currentTime,
+            EventKind::Snapshot,
+            ['path' => $node->path],
+        );
+    }
+
+    private function emitEvent(EventKind $kind, array $payload): void
+    {
+        $this->events[] = new Event(
+            $this->currentTime,
+            $kind,
+            $payload,
         );
     }
 

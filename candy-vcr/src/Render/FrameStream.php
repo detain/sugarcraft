@@ -23,6 +23,9 @@ use SugarCraft\Vt\Terminal;
  */
 final class FrameStream implements \IteratorAggregate
 {
+    public ?string $pendingScreenshotPath = null;
+    public bool $captureCursor = true;
+
     public function __construct(
         private Player $player,
         private Terminal $terminal,
@@ -36,6 +39,7 @@ final class FrameStream implements \IteratorAggregate
         $cassette = $this->player->cassette;
         $terminal = $this->terminal;
         $fps = $this->fps;
+        $playbackSpeed = $cassette->header->playbackSpeed;
 
         $frameInterval = 1.0 / $fps;
 
@@ -50,11 +54,20 @@ final class FrameStream implements \IteratorAggregate
         $nextSnapshotTime = 0.0;
         $frameIndex = 0;
         $lastSnapshotTime = -1.0;
+        $previousEventTime = 0.0;
 
         for ($i = 0; $i < $eventCount; $i++) {
             $event = $events[$i];
 
-            $virtualTime = $event->t;
+            // Apply playback speed scaling to inter-event delta
+            if ($playbackSpeed !== null && $playbackSpeed > 0.0) {
+                $scaledDelta = ($event->t - $previousEventTime) / $playbackSpeed;
+                $virtualTime += $scaledDelta;
+                $previousEventTime = $event->t;
+            } else {
+                $virtualTime = $event->t;
+                $previousEventTime = $event->t;
+            }
 
             $terminal = $this->processEvent($event, $terminal);
 
@@ -82,7 +95,28 @@ final class FrameStream implements \IteratorAggregate
             EventKind::Output => $this->processOutput($event, $terminal),
             EventKind::Resize => $this->processResize($event, $terminal),
             EventKind::Quit => $terminal,
+            EventKind::Snapshot => $this->processSnapshot($event),
+            EventKind::Hide => $this->processHide(),
+            EventKind::Show => $this->processShow(),
         };
+    }
+
+    private function processSnapshot(Event $event): Terminal
+    {
+        $this->pendingScreenshotPath = $event->payload['path'] ?? null;
+        return $this->terminal;
+    }
+
+    private function processHide(): Terminal
+    {
+        $this->captureCursor = false;
+        return $this->terminal;
+    }
+
+    private function processShow(): Terminal
+    {
+        $this->captureCursor = true;
+        return $this->terminal;
     }
 
     private function processInput(Event $event, Terminal $terminal): Terminal

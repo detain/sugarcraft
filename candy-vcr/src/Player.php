@@ -385,6 +385,15 @@ final class Player
                     $programQuitCleanly = true;
                     $program->quit();
                     break;
+
+                case EventKind::Snapshot:
+                    // Screenshots are render-side only — nothing to send to the program
+                    break;
+
+                case EventKind::Hide:
+                case EventKind::Show:
+                    // Hide/Show control cursor rasterization in GIF output — nothing to send to the program
+                    break;
             }
         };
     }

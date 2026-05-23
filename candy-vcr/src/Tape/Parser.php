@@ -18,6 +18,7 @@ use SugarCraft\Vcr\Tape\Ast\ScreenshotDirective;
 use SugarCraft\Vcr\Tape\Ast\SetDirective;
 use SugarCraft\Vcr\Tape\Ast\ShowDirective;
 use SugarCraft\Vcr\Tape\Ast\SleepDirective;
+use SugarCraft\Vcr\Tape\Ast\SourceDirective;
 use SugarCraft\Vcr\Tape\Ast\SpaceDirective;
 use SugarCraft\Vcr\Tape\Ast\TabDirective;
 use SugarCraft\Vcr\Tape\Ast\TypeDirective;
@@ -103,6 +104,8 @@ final readonly class Parser
             Lexer::TOKEN_SCREEN => null,
 
             Lexer::TOKEN_SCREENSHOT => new ScreenshotDirective($token->value),
+
+            Lexer::TOKEN_SOURCE => new SourceDirective($token->value),
 
             Lexer::TOKEN_UNKNOWN => null,
 

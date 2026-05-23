@@ -157,6 +157,38 @@ final class GdRasterizerTest extends TestCase
         imagedestroy($image);
     }
 
+    public function testRasterizeSkipsCursorWhenRenderCursorFalse(): void
+    {
+        $rasterizer = new GdRasterizer(14, 'DejaVuSansMono');
+        $snapshot = $this->makeSnapshotWithCursor('ABC', 3, 1, 0, 1, true);
+
+        // Render WITH cursor
+        $imageWithCursor = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts, true);
+
+        // Render WITHOUT cursor
+        $imageWithoutCursor = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts, false);
+
+        // The cursor is at col=1, row=0. Check a pixel in the cursor area
+        // (block cursor renders the cell content in reverse video)
+        $cursorX = 1 * 8; // col 1 * cellW
+        $cursorY = 0 * 16; // row 0 * cellH
+
+        $pixelWithCursor = imagecolorat($imageWithCursor, $cursorX + 4, $cursorY + 8);
+        $pixelWithoutCursor = imagecolorat($imageWithoutCursor, $cursorX + 4, $cursorY + 8);
+
+        // When cursor is rendered (renderCursor=true), the pixel is the inverse color
+        // When cursor is NOT rendered (renderCursor=false), the pixel is the cell's normal fg color
+        // These should be different because cursor rendering inverts the cell colors
+        $this->assertNotEquals(
+            $pixelWithCursor,
+            $pixelWithoutCursor,
+            'Pixel at cursor position should differ when cursor is skipped vs rendered',
+        );
+
+        imagedestroy($imageWithCursor);
+        imagedestroy($imageWithoutCursor);
+    }
+
     public function testWithFontReturnsDifferentInstance(): void
     {
         $rasterizer = new GdRasterizer(14, 'JetBrainsMono');

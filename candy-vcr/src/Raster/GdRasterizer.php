@@ -92,7 +92,7 @@ final class GdRasterizer implements Rasterizer
         return $this->glyphs?->cacheStats() ?? ['hits' => 0, 'misses' => 0];
     }
 
-    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \GdImage
+    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \GdImage
     {
         $fonts ??= new FontLoader();
         $grid = $snapshot->grid;
@@ -148,7 +148,7 @@ final class GdRasterizer implements Rasterizer
             }
         }
 
-        if ($cursor->visible) {
+        if ($renderCursor && $cursor->visible) {
             $this->renderCursor($canvas, $cursor, $grid, $cellW, $cellH, $glyphs);
         }
 

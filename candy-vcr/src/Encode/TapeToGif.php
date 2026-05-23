@@ -6,6 +6,7 @@ namespace SugarCraft\Vcr\Encode;
 
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
+use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
@@ -93,7 +94,8 @@ final class TapeToGif
 
         try {
             foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
-                $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH);
+                $renderCursor = $frameStream->captureCursor;
+                $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
 
                 $framePath = $tempDir . '/frame_' . sprintf('%05d', $index) . '.png';
                 try {
@@ -113,6 +115,26 @@ final class TapeToGif
 
                 $pngPaths[] = $framePath;
                 $frameHoldsMs[] = (int) round($frameInfo['hold'] * 1000);
+
+                // Handle screenshot capture
+                if (($frameInfo['screenshotPath'] ?? false) !== false) {
+                    $screenshotPath = $frameInfo['screenshotPath'];
+                    $screenshotImage = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
+                    try {
+                        $written = $screenshotImage instanceof \Imagick
+                            ? $screenshotImage->writeImage($screenshotPath)
+                            : imagepng($screenshotImage, $screenshotPath);
+                        if ($written === false) {
+                            throw new \RuntimeException("Failed to write screenshot: {$screenshotPath}");
+                        }
+                    } finally {
+                        if ($screenshotImage instanceof \Imagick) {
+                            $screenshotImage->clear();
+                        } else {
+                            imagedestroy($screenshotImage);
+                        }
+                    }
+                }
             }
 
             if ($pngPaths === []) {
@@ -127,27 +149,50 @@ final class TapeToGif
     }
 
     /**
-     * @param \Traversable<int, Snapshot> $stream
      * @return \Generator<int, array{snapshot:Snapshot, hold:float}>
      */
-    private function buildFramesWithHolds(\Traversable $stream, float $frameInterval): \Generator
+    private function buildFramesWithHolds(FrameStream $frameStream, float $frameInterval): \Generator
     {
         $prevTime = 0.0;
-        $dedupIterator = FrameDedup::dedup($stream);
+        $dedupIterator = FrameDedup::dedup($frameStream);
 
         $emittedIndex = 0;
+        $lastSnapshot = null;
         foreach ($dedupIterator as $snapshot) {
+            $lastSnapshot = $snapshot;
             $frameTime = $snapshot->time;
             $hold = $emittedIndex === 0
                 ? $frameInterval
                 : max($frameInterval, $frameTime - $prevTime);
 
             $prevTime = $frameTime;
+
+            // Capture any pending screenshot BEFORE clearing it — this
+            // associates the screenshot with exactly the frame that was
+            // current when the Snapshot event fired.
+            $screenshotPath = $frameStream->pendingScreenshotPath;
+            if ($screenshotPath !== null) {
+                $frameStream->pendingScreenshotPath = null;
+            }
+
             yield $emittedIndex => [
                 'snapshot' => $snapshot,
                 'hold' => $hold,
+                'screenshotPath' => $screenshotPath,
             ];
             $emittedIndex++;
+        }
+
+        // If a Snapshot event was processed after the last yielded frame
+        // (e.g., because subsequent frames were deduped away), capture it
+        // using the last yielded snapshot.
+        if ($frameStream->pendingScreenshotPath !== null && $lastSnapshot !== null) {
+            yield $emittedIndex => [
+                'snapshot' => $lastSnapshot,
+                'hold' => 0.0,
+                'screenshotPath' => $frameStream->pendingScreenshotPath,
+            ];
+            $frameStream->pendingScreenshotPath = null;
         }
     }
 
