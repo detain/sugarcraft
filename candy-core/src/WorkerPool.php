@@ -267,7 +267,7 @@ final class WorkerPool
         $env = ['HOME' => getenv('HOME') ?: '/tmp'];
 
         $process = proc_open(
-            ['/usr/bin/php', $scriptPath],
+            [PHP_BINARY, $scriptPath],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
