@@ -399,11 +399,16 @@ Available themes:
 Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield construction:
 `Theme::ATTR_BOLD`, `Theme::ATTR_ITALIC`, `Theme::ATTR_UNDERLINE`, `Theme::ATTR_INVERSE`, `Theme::ATTR_STRIKETHROUGH`.
 
-## Test
+## Development
 
 ```sh
-cd candy-vt && composer install && vendor/bin/phpunit
+cd candy-vt && composer install
+vendor/bin/phpunit                                              # test suite
+vendor/bin/phpstan analyze                                      # static analysis (level: max)
+vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fix style
 ```
+
+Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (PSR-12 + `declare_strict_types` + `strict_param` + short array syntax). Append `--dry-run --diff` to preview without writing.
 
 ## Related
 

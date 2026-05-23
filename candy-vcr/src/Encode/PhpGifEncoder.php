@@ -176,7 +176,7 @@ final class PhpGifEncoder implements GifEncoder
 
         $output = '';
 
-        $state = new class($codeSize) {
+        $state = new class ($codeSize) {
             public int $bitBuffer = 0;
             public int $bitCount = 0;
             public int $codeSize;
