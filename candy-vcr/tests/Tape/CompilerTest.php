@@ -328,4 +328,58 @@ TAPE;
             $this->assertGreaterThanOrEqual($times[$i - 1], $times[$i]);
         }
     }
+
+    public function testCompilePlaybackSpeed(): void
+    {
+        $result = Compiler::parseSource('Set PlaybackSpeed 2.0');
+        $this->assertEmpty($result['errors']);
+        $cassette = (new Compiler())->compile($result['ast'], 'test.tape');
+        $this->assertSame(2.0, $cassette->header->playbackSpeed);
+    }
+
+    public function testCompilePlaybackSpeedDefault(): void
+    {
+        $result = Compiler::parseSource('Type "hello"');
+        $cassette = (new Compiler())->compile($result['ast'], 'test.tape');
+        // Default when not set — should be null
+        $this->assertNull($cassette->header->playbackSpeed);
+    }
+
+    public function testCompileSourceInlinesTarget(): void
+    {
+        $tmpDir = sys_get_temp_dir() . '/vcr-source-test-' . getmypid();
+        mkdir($tmpDir, 0755, true);
+
+        file_put_contents($tmpDir . '/sub.tape', "Type \"B\"\n");
+        file_put_contents($tmpDir . '/main.tape', "Type \"A\"\nSource sub.tape\nType \"C\"\n");
+
+        try {
+            $result = Compiler::parseSource(file_get_contents($tmpDir . '/main.tape'));
+            $this->assertEmpty($result['errors']);
+            $cassette = (new Compiler())->compile($result['ast'], $tmpDir . '/main.tape');
+
+            $inputEvents = array_filter(
+                $cassette->events,
+                fn($e) => $e->kind === EventKind::Input,
+            );
+            $this->assertCount(3, $inputEvents);
+        } finally {
+            @unlink($tmpDir . '/main.tape');
+            @unlink($tmpDir . '/sub.tape');
+            @rmdir($tmpDir);
+        }
+    }
+
+    public function testCompileSourceMissingFileSkipped(): void
+    {
+        $result = Compiler::parseSource("Type \"A\"\nSource missing.tape\nType \"C\"");
+        $this->assertEmpty($result['errors']);
+        $cassette = (new Compiler())->compile($result['ast'], '/nonexistent/main.tape');
+
+        $inputEvents = array_filter(
+            $cassette->events,
+            fn($e) => $e->kind === EventKind::Input,
+        );
+        $this->assertCount(2, $inputEvents);
+    }
 }

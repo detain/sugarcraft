@@ -11,7 +11,7 @@ use SugarCraft\Vcr\Tape\Ast\ParseError;
  *
  * Each non-empty line that doesn't start with # is a directive.
  * Token types: TYPE, ENTER, TAB, BACKSPACE, SLEEP, SET, ENV, OUTPUT,
- * ARROW, CTRL, SPACE, ESCAPE, HIDE, SHOW, WAIT, SCREEN, SCREENSHOT, UNKNOWN.
+ * ARROW, CTRL, SPACE, ESCAPE, HIDE, SHOW, WAIT, SCREEN, SCREENSHOT, SOURCE, UNKNOWN.
  * Comments are preserved for round-trip.
  */
 final readonly class Lexer
@@ -33,6 +33,7 @@ final readonly class Lexer
     public const TOKEN_WAIT = 'WAIT';
     public const TOKEN_SCREEN = 'SCREEN';
     public const TOKEN_SCREENSHOT = 'SCREENSHOT';
+    public const TOKEN_SOURCE = 'SOURCE';
     public const TOKEN_UNKNOWN = 'UNKNOWN';
     public const TOKEN_COMMENT = 'COMMENT';
 
@@ -151,6 +152,10 @@ final readonly class Lexer
 
         if (preg_match('/^Screenshot\s+(.+)$/i', $line, $m)) {
             return new Token(self::TOKEN_SCREENSHOT, $m[1], $lineNum);
+        }
+
+        if (preg_match('/^Source\s+(.+)$/i', $line, $m)) {
+            return new Token(self::TOKEN_SOURCE, trim($m[1]), $lineNum);
         }
 
         return new Token(self::TOKEN_UNKNOWN, $line, $lineNum);

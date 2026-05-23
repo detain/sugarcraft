@@ -553,9 +553,10 @@ $cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
 | `Set <key> <value>` | ✅ | Key allowlist below. |
 | `Env KEY "value"` | ✅ | Adds to cassette header env map. |
 | `Output <path>` | ✅ | Accepted (stored on the OutputDirective AST node for the render step; not encoded as a Cassette event). |
-| `Hide`, `Show` | ⚠️ | Parsed, currently a no-op (frame capture toggle — deferred to v2). |
+| `Hide`, `Show` | ✅ | Suppresses/resumes cursor rendering in output GIF from this point. |
 | `Wait <duration>` | ⚠️ | Parsed, no-op (deferred to v2). |
-| `Screenshot <path>` | ⚠️ | Parsed, no-op (deferred to v2). |
+| `Screenshot <path>` | ✅ | Captures current frame to PNG path during render. |
+| `Source <path>` | ✅ | Inlines and compiles another .tape file at this point. |
 
 The `Set` directive's `key` parameter is validated against an
 allowlist; unknown keys raise a `ParseError`:
@@ -568,7 +569,7 @@ allowlist; unknown keys raise a `ParseError`:
 | `TypingSpeed` | Inter-character delay for `Type` runs. Accepts `<n>ms` / `<n>s` / `<n>m`. |
 | `FontFamily` | TTF family name (resolved by `FontLoader`). |
 | `Padding` / `Margin` | Reserved for the rasterizer; accepted but not yet enforced. |
-| `PlaybackSpeed` | Multiplier for cassette playback (1.0 = realtime). |
+| `PlaybackSpeed` | Speed multiplier (e.g. 2.0 = 2x speed, 0.5 = half speed). Applied in FrameStream during rendering. |
 
 ```php
 // AST nodes (under SugarCraft\Vcr\Tape\Ast):
@@ -620,8 +621,10 @@ file_put_contents('demo-roundtripped.tape', $source);
 
 **Limitations:**
 
-- `Hide`, `Show`, `Wait`, `Screenshot`, and `Output` directives leave no
-  trace in the compiled Cassette, so they don't survive the round-trip.
+- `Hide` and `Show` directives emit events into the Cassette but the
+  Decompiler does not yet reconstruct them on round-trip (v2).
+- `Wait` is parsed but emits no events (deferred to v2).
+- `Screenshot` and `Output` are render-side only and leave no Cassette trace.
 - Non-printable single bytes that don't map to a known directive become
   `# unprintable byte 0x.. dropped` comments — they can't be expressed in
   tape source.

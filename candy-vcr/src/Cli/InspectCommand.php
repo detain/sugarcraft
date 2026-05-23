@@ -214,6 +214,9 @@ final class InspectCommand implements Command
                 ? '@' . ($event->payload['msg']['@type'] ?? '?')
                 : $this->summarizeBytes((string) ($event->payload['b'] ?? '')),
             EventKind::Quit => '',
+            EventKind::Snapshot => 'screenshot: ' . ($event->payload['path'] ?? '?'),
+            EventKind::Hide => '',
+            EventKind::Show => '',
         };
     }
 

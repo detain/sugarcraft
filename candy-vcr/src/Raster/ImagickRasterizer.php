@@ -100,7 +100,7 @@ final class ImagickRasterizer implements Rasterizer
         return ['hits' => $this->hits, 'misses' => $this->misses];
     }
 
-    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \Imagick
+    public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null, bool $renderCursor = true): \Imagick
     {
         $fonts ??= new FontLoader();
         $grid = $snapshot->grid;
@@ -136,7 +136,7 @@ final class ImagickRasterizer implements Rasterizer
             }
         }
 
-        if ($cursor->visible) {
+        if ($renderCursor && $cursor->visible) {
             $this->renderCursor($imagick, $cursor, $grid, $cellW, $cellH);
         }
 
