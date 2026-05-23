@@ -740,6 +740,10 @@ vendor/bin/phpstan analyze   # static analysis (level: max)
 
 Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php`. Run `PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes` from the repo root to auto-fix style violations.
 
+### Fonts
+
+`candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. `Glyphs::DEFAULT_FONT_FAMILY` resolves to `JetBrainsMono`, with `DejaVuSansMono` (also bundled) retained as a fallback when JetBrainsMono is unavailable. To use a different family pass it to the `Glyphs` constructor (or set `font_family` on the rasterizer); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
+
 ## License
 
 MIT
