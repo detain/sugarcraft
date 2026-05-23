@@ -490,8 +490,12 @@ final class ParserTest extends TestCase
         $csiEntries = $h->filter('csi');
         $this->assertCount(2, $csiEntries);
         // First CSI had params [1, 2], second has empty params (reset started fresh sequence)
-        $this->assertSame([1, 2], $csiEntries[0]['detail']['params']);
-        $this->assertSame([], $csiEntries[1]['detail']['params']);
+        $detail0 = $csiEntries[0]['detail'];
+        $detail1 = $csiEntries[1]['detail'];
+        $this->assertIsArray($detail0);
+        $this->assertIsArray($detail1);
+        $this->assertSame([1, 2], $detail0['params']);
+        $this->assertSame([], $detail1['params']);
     }
 
     // ─── Volume / sanity ───────────────────────────────────────────────────

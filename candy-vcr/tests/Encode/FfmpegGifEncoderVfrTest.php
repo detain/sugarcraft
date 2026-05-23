@@ -56,6 +56,7 @@ final class FfmpegGifEncoderVfrTest extends TestCase
             $this->assertIsString($gif);
             $delays = $this->extractGceDelays($gif);
             $this->assertGreaterThanOrEqual(2, count($delays), 'Should have multiple GCEs (one per frame)');
+            $this->assertNotEmpty($delays);
 
             $spread = max($delays) - min($delays);
             $this->assertGreaterThan(

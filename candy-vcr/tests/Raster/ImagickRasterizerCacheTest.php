@@ -85,6 +85,8 @@ final class ImagickRasterizerCacheTest extends TestCase
 
     public function testDestructorClearsCache(): void
     {
+        $this->expectNotToPerformAssertions();
+
         $rasterizer = new ImagickRasterizer(14, 'DejaVuSansMono');
         $frame = $this->snapshotWithChars(['A', 'B']);
 
@@ -93,7 +95,6 @@ final class ImagickRasterizerCacheTest extends TestCase
 
         // Triggering destruct shouldn't throw even with Imagick resources to free.
         unset($rasterizer);
-        $this->assertTrue(true, 'Destructor completed without error');
     }
 
     /**

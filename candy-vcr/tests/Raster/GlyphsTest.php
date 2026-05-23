@@ -108,7 +108,6 @@ final class GlyphsTest extends TestCase
 
         $tile = $glyphs->tile(' ', 7, 0, false, false, false);
 
-        $this->assertNotFalse($tile);
         $this->assertEquals(8, imagesx($tile));
         $this->assertEquals(16, imagesy($tile));
     }

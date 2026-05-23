@@ -102,6 +102,7 @@ final readonly class Lexer
                 's' => $duration,
                 'ms' => $duration / 1000.0,
                 'm' => $duration * 60.0,
+                default => $duration,
             };
             return new Token(self::TOKEN_SLEEP, (string) $seconds, $lineNum);
         }
@@ -139,6 +140,7 @@ final readonly class Lexer
                 's', '' => $duration,
                 'ms' => $duration / 1000.0,
                 'm' => $duration * 60.0,
+                default => $duration,
             };
             return new Token(self::TOKEN_WAIT, (string) $seconds, $lineNum);
         }
