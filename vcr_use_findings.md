@@ -88,11 +88,11 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §7 wanted a parallel `vhs-candy-vcr` job on a seed lib, then expansion, then soak, then upstream replacement. Today only the runner image + smoke test exists.
 
-- [ ] Add a new job `vhs-candy-vcr` in `.github/workflows/vhs.yml` that runs in parallel with the existing `vhs` job on **candy-core** (seed lib).
-- [ ] Job uses the `vhs-runner-php` image and invokes `php candy-vcr/bin/candy-vcr render-batch candy-core/.vhs/`.
-- [ ] Job uploads its GIFs as a workflow artifact for visual comparison.
-- [ ] Job is non-blocking initially (`continue-on-error: true`) so existing vhs CI stays green during the soak.
-- [ ] Document the migration plan + rollback in `candy-vcr/README.md` under "CI integration".
+- [x] Add a new job `vhs-candy-vcr` in `.github/workflows/vhs.yml` that runs in parallel with the existing `vhs` job on **candy-core** (seed lib). (Single-key matrix `lib: [candy-core]` so the matrix can expand without restructuring; runs alongside the legacy `render` job in the same workflow.)
+- [x] Job uses the `vhs-runner-php` image and invokes `php candy-vcr/bin/candy-vcr render-batch candy-core/.vhs/`. (`container.image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest`; renders the two tapes `counter.tape` + `timer.tape` with `--encoder ffmpeg` since the image bakes ffmpeg in.)
+- [x] Job uploads its GIFs as a workflow artifact for visual comparison. (Artifact name `vhs-candy-vcr-${{ matrix.lib }}`, `retention-days: 7`, `include-hidden-files: true` so the dot-prefixed `.vhs/` dir's GIFs ship.)
+- [x] Job is non-blocking initially (`continue-on-error: true`) so existing vhs CI stays green during the soak. (Set at the job level. Separate from the per-step smoke check, which exits non-zero on missing/empty/invalid GIFs but only marks this job failed — does not gate `render`.)
+- [x] Document the migration plan + rollback in `candy-vcr/README.md` under "CI integration". (New section between Development and License; covers the dual-renderer soak table, the three-step cutover plan, and the one-line `git revert` rollback.)
 
 ## Section I — §12 polish
 

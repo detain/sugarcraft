@@ -792,6 +792,42 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 
 `candy-vcr/fonts/` ships [JetBrainsMono](https://github.com/JetBrains/JetBrainsMono) (Regular, Bold, Italic, BoldItalic) as the default rasterizer font family. JetBrainsMono is distributed under the [SIL Open Font License, version 1.1](fonts/LICENSE) — the full license text is bundled alongside the TTFs. `Glyphs::DEFAULT_FONT_FAMILY` resolves to `JetBrainsMono`, with `DejaVuSansMono` (also bundled) retained as a fallback when JetBrainsMono is unavailable. To use a different family pass it to the `Glyphs` constructor (or set `font_family` on the rasterizer); `FontLoader` searches the bundled `fonts/` dir first, then `/usr/share/fonts/{truetype,opentype}`, `~/.fonts/`, and `~/.local/share/fonts/`.
 
+## CI integration
+
+candy-vcr is replacing the upstream `charmbracelet/vhs` binary for `.vhs/*.tape` rendering across the SugarCraft monorepo. The migration is gated on a soak period where both renderers run side-by-side on a narrow seed lib.
+
+### Current state — soak (Phase 7)
+
+Both renderers run in parallel inside `.github/workflows/vhs.yml`:
+
+| Job | Container | Scope | Blocking? |
+|-----|-----------|-------|-----------|
+| `render` (legacy) | `ghcr.io/detain/vhs-runner:latest` | All libs listed in the hand-maintained `all=(...)` array | Yes — fails CI on render error |
+| `vhs-candy-vcr` (new) | `ghcr.io/detain/sugarcraft-vhs-runner-php:latest` | Narrow seed lib (`candy-core`) | **No** — `continue-on-error: true` during soak |
+
+The candy-vcr job invokes `php candy-vcr/bin/candy-vcr render-batch <lib>/.vhs/ --encoder ffmpeg`, performs an in-job smoke check that every produced file is a non-empty GIF, and uploads the result as a `vhs-candy-vcr-<lib>` workflow artifact with 7-day retention so reviewers can pull both renderers' artifacts and diff them visually.
+
+The `vhs-runner-php` image bakes in PHP 8.3 + `ext-gd`, `ext-curl`, `ext-ssh2`, `ffmpeg`, and the bundled JetBrainsMono fonts. The Dockerfile lives at `scripts/Dockerfile.vhs-runner` and is rebuilt by `.github/workflows/vhs-runner-php-image.yml` whenever the Dockerfile or workflow changes.
+
+### Cutover (separate PR, after soak)
+
+When the soak shows consistent parity on the seed lib:
+
+1. Expand `vhs-candy-vcr`'s matrix to cover more libs (one PR per batch).
+2. Once every lib in the legacy `all=(...)` array renders cleanly through candy-vcr, flip `continue-on-error: true` to `false` so candy-vcr blocks CI.
+3. Delete the legacy `render` + `render-sugar-dash` + `changed` jobs and rename `vhs-candy-vcr` → `vhs`. The hand-maintained `all=(...)` matrix moves into the candy-vcr job.
+4. Drop the `vhs-runner` (Go binary) image build workflow once nothing references it.
+
+### Rollback
+
+The `vhs-candy-vcr` job is a single self-contained stanza in `.github/workflows/vhs.yml`. To disable it during the soak (e.g. if it floods the artifact bucket or produces noisy logs):
+
+```sh
+git revert <sha-of-section-h-pr>     # one-line revert of the workflow file
+```
+
+The legacy `render` job is untouched by the soak, so reverting only removes the parallel candy-vcr job — existing CI keeps working.
+
 ## License
 
 MIT
