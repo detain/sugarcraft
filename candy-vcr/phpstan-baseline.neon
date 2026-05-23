@@ -25,18 +25,6 @@ parameters:
 			path: src/Assert/RegexAssertion.php
 
 		-
-			message: '#^Method SugarCraft\\Vcr\\Cli\\Application\:\:__construct\(\) has parameter \$commands with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: src/Cli/Application.php
-
-		-
-			message: '#^Property SugarCraft\\Vcr\\Cli\\Application\:\:\$commands \(array\<string, SugarCraft\\Vcr\\Cli\\Command\>\) does not accept array\.$#'
-			identifier: assign.propertyType
-			count: 1
-			path: src/Cli/Application.php
-
-		-
 			message: '#^Cannot access property \$kind on SugarCraft\\Vcr\\Event\|null\.$#'
 			identifier: property.nonObject
 			count: 1

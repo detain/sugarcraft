@@ -48,7 +48,7 @@ final class PtyShimAutoloadTest extends TestCase
             $process = new Process(['php', $shimDst]);
             $process->setTimeout(10);
             $process->run();
-            $exit = $process->getExitCode();
+            $exit = (int) $process->getExitCode();
             $stderr = $process->getErrorOutput();
 
             $this->assertNotSame(
@@ -56,20 +56,14 @@ final class PtyShimAutoloadTest extends TestCase
                 $exit,
                 "Shim exited 3 (autoload-not-found); discovery loop regressed. stderr: {$stderr}",
             );
-            // The shim should run autoload (require empty stub OK), then
-            // hit the "usage" branch since no command arg was supplied,
-            // exiting 2. On systems lacking pcntl/ffi it may exit 2 (no
-            // pcntl) or 3 (no ffi). Treat anything except 3-with-autoload
-            // missing as acceptable — the load-loop succeeded if exit is
-            // NOT 3, OR if exit is 3 with the "ext-ffi" message rather
-            // than the autoload-missing message.
-            if ($exit === 3) {
-                $this->assertStringNotContainsString(
-                    'vendor/autoload.php not found',
-                    $stderr,
-                    'Autoload discovery loop failed to walk to the parent vendor layout',
-                );
-            }
+            // Even if exit happens to be a non-3 value that still surfaces
+            // the autoload-missing message (defensive belt-and-braces),
+            // refuse to pass — the discovery loop is the contract.
+            $this->assertStringNotContainsString(
+                'vendor/autoload.php not found',
+                $stderr,
+                'Autoload discovery loop failed to walk to the parent vendor layout',
+            );
         } finally {
             @unlink($shimDst);
             @unlink($autoloadDst);

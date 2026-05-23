@@ -178,11 +178,21 @@ final class ThemeTest extends TestCase
 
     public function testAttributeConstants(): void
     {
-        $this->assertSame(1, Theme::ATTR_BOLD);
-        $this->assertSame(2, Theme::ATTR_ITALIC);
-        $this->assertSame(4, Theme::ATTR_UNDERLINE);
-        $this->assertSame(8, Theme::ATTR_INVERSE);
-        $this->assertSame(16, Theme::ATTR_STRIKETHROUGH);
+        // Bit flags must remain distinct, contiguous, and stable. Use
+        // reflection so phpstan can't narrow the constants to literals
+        // (which would make assertSame tautological).
+        $rc = new \ReflectionClass(Theme::class);
+        $constants = [
+            'ATTR_BOLD' => 1,
+            'ATTR_ITALIC' => 2,
+            'ATTR_UNDERLINE' => 4,
+            'ATTR_INVERSE' => 8,
+            'ATTR_STRIKETHROUGH' => 16,
+        ];
+        foreach ($constants as $name => $expected) {
+            $this->assertTrue($rc->hasConstant($name), "missing constant {$name}");
+            $this->assertSame($expected, $rc->getConstant($name), "constant {$name} should equal {$expected}");
+        }
     }
 
     public function testDefaultPaletteIsUsedWhenNoCustomPalette(): void

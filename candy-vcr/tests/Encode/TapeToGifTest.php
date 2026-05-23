@@ -34,7 +34,6 @@ final class TapeToGifTest extends TestCase
             $this->markTestSkipped('smoke.tape not found');
         }
 
-        $encoder = new FfmpegGifEncoder('ffmpeg', $this->tempDir);
         $tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
 
         $outputPath = $this->tempDir . '/smoke_' . uniqid() . '.gif';
@@ -100,7 +99,7 @@ final class TapeToGifTest extends TestCase
         }
 
         $tapeToGif = TapeToGif::create(['encoder' => 'ffmpeg']);
-        $outputPath = preg_replace('/\.tape$/', '.gif', $this->smokeTape);
+        $outputPath = (string) preg_replace('/\.tape$/', '.gif', $this->smokeTape);
 
         try {
             $tapeToGif->render($this->smokeTape, null);

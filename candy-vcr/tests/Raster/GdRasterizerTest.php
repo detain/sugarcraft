@@ -31,7 +31,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -58,7 +58,6 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
         $this->assertEquals(640, imagesx($image));
         $this->assertEquals(384, imagesy($image));
         imagedestroy($image);
@@ -71,7 +70,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -87,7 +86,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -103,7 +102,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -119,7 +118,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -130,7 +129,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -142,7 +141,7 @@ final class GdRasterizerTest extends TestCase
             $snapshot = $this->makeSnapshotWithCursor('X', 1, 1, 0, 0, true, $shape);
             $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
 
-            $this->assertInstanceOf(\GdImage::class, $image, "Shape {$shape} should produce valid image");
+            $this->assertGreaterThan(0, imagesx($image), "Shape {$shape} should produce valid image");
             imagedestroy($image);
         }
     }
@@ -154,7 +153,7 @@ final class GdRasterizerTest extends TestCase
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, null);
 
-        $this->assertInstanceOf(\GdImage::class, $image);
+        $this->assertGreaterThan(0, imagesx($image));
         imagedestroy($image);
     }
 
@@ -164,8 +163,6 @@ final class GdRasterizerTest extends TestCase
         $snapshot = $this->makeSnapshot('A', 1, 1);
 
         $image = $rasterizer->rasterize($snapshot, 8, 16, $this->fonts);
-
-        $this->assertInstanceOf(\GdImage::class, $image);
 
         $nonBgPixels = 0;
         for ($x = 0; $x < 8; $x++) {

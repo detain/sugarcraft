@@ -58,6 +58,7 @@ final class TapeToGifThemeTest extends TestCase
             $sampleY = (int) ($h * 0.5);
 
             $rgb = imagecolorat($image, $sampleX, $sampleY);
+            $this->assertNotFalse($rgb);
             $rgba = imagecolorsforindex($image, $rgb);
             imagedestroy($image);
 

@@ -53,6 +53,8 @@ final class ImagickRasterizerGrayscaleTest extends TestCase
     {
         $m = new \ReflectionMethod($rasterizer, 'indexToHex');
         $m->setAccessible(true);
-        return (string) $m->invoke($rasterizer, $index);
+        $result = $m->invoke($rasterizer, $index);
+        $this->assertIsString($result);
+        return $result;
     }
 }

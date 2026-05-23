@@ -32,7 +32,7 @@ final class RendererTest extends TestCase
         $player = new Player($cassette);
         $terminal = Terminal::new(80, 24);
 
-        $renderer = new Renderer($player, $terminal, 30.0);
+        $renderer = new Renderer();
         $stream = $renderer->render($player, $terminal, 30.0);
 
         $frames = iterator_to_array($stream->getIterator());
