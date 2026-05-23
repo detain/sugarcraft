@@ -51,11 +51,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     timeout-minutes: 20
-    container:
-      image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest
     permissions:
       contents: read
-      packages: read
     defaults:
       run:
         shell: bash
@@ -67,6 +64,20 @@ jobs:
         lib: [candy-core]
     steps:
       - uses: actions/checkout@v5
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, intl, json, pcntl, gd, curl, ssh2, ffi
+          tools: composer:v2
+
+      - name: Install ffmpeg + file
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg file
+          ffmpeg -version | head -1
 
       - name: Install candy-vcr deps
         working-directory: ${{ github.workspace }}/candy-vcr
@@ -128,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           all=(
-            candy-core candy-sprinkles candy-pty candy-vcr honey-bounce
+            candy-core candy-sprinkles candy-pty honey-bounce
             sugar-bits sugar-charts sugar-prompt
             candy-shell candy-shine candy-kit candy-freeze
             sugar-glow sugar-spark sugar-wishlist
