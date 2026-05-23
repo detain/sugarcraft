@@ -453,6 +453,52 @@ inter-event timing is preserved for the Player.
 **Corpus coverage:** All 841+ `.tape` files in the monorepo parse without
 error and compile to valid Cassettes (verified by `TapeCorpusTest`).
 
+### Decompiler — Cassette → tape source
+
+`SugarCraft\Vcr\Tape\Decompiler` is the reverse of the Compiler: it walks a
+`Cassette`'s events back into tape source text. The plan called this out
+as the round-trip safety net for the Tape compiler (`parse → compile →
+decompile → re-parse should be stable for canonical inputs`).
+
+```php
+use SugarCraft\Vcr\Tape\Compiler;
+use SugarCraft\Vcr\Tape\Decompiler;
+
+$result = Compiler::parseSource(file_get_contents('demo.tape'));
+$cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
+
+$source = (new Decompiler())->decompile($cassette);
+file_put_contents('demo-roundtripped.tape', $source);
+```
+
+**Heuristics:**
+
+- **Sleep threshold** — gaps over `100ms` between adjacent Input events emit
+  an explicit `Sleep <n>ms` directive. Smaller gaps are absorbed as the
+  implicit `TypingSpeed` cadence between `Type` chars.
+- **Space heuristic** — a lone space byte sandwiched between printable bytes
+  folds into the current `Type "..."` group; a solitary space gets its own
+  `Space` line.
+- **Type grouping** — runs of printable input bytes merge into one
+  `Type "..."` line and break on any control byte, non-input event, or
+  Sleep-worthy gap.
+
+**Limitations:**
+
+- `Hide`, `Show`, `Wait`, `Screenshot`, and `Output` directives leave no
+  trace in the compiled Cassette, so they don't survive the round-trip.
+- Non-printable single bytes that don't map to a known directive become
+  `# unprintable byte 0x.. dropped` comments — they can't be expressed in
+  tape source.
+- `Ctrl+letter` is reconstructed from raw control bytes 1..26, normalised
+  to upper-case (so `Ctrl+c` in source round-trips as `Ctrl+C`).
+
+`tests/Tape/RoundTripTest.php` covers `Type "hello"`, `Enter`, `Sleep`,
+`Set Theme`, `Ctrl+C`, all four arrows, `Backspace`, `Tab`, `Escape`,
+`Env`, plus a combined multi-directive tape. For each: `Lexer → Parser →
+Compiler → Cassette → Decompiler → Lexer → Parser → Compiler → Cassette2`
+and asserts the two event streams match timestamp-for-timestamp.
+
 ## Frame renderer (PR9)
 
 candy-vcr ships a `SugarCraft\Vcr\Render` layer that converts a compiled

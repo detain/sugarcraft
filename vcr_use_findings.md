@@ -71,9 +71,9 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §2 explicitly listed "Round-trip test: parse → compile → decompile → re-parse should be stable for canonical inputs." Decompile path doesn't exist.
 
-- [ ] Add `SugarCraft\Vcr\Tape\Decompiler` that turns a `Cassette` produced by `Compiler::compile()` back into a tape source string. Only needs to handle the directive subset the Compiler emits.
-- [ ] Add `tests/Tape/RoundTripTest.php` covering: `Type "hello"`, `Enter`, `Sleep 1s`, `Set Theme "TokyoNight"`, `Ctrl+C`, `Up`/`Down`/`Left`/`Right`, `Backspace`, `Tab`, `Env KEY "value"`. For each, parse → compile → decompile → re-parse → assert identical event stream.
-- [ ] Document the Decompiler in `candy-vcr/README.md`.
+- [x] Add `SugarCraft\Vcr\Tape\Decompiler` that turns a `Cassette` produced by `Compiler::compile()` back into a tape source string. Only needs to handle the directive subset the Compiler emits. (`candy-vcr/src/Tape/Decompiler.php`; Sleep threshold=100ms, Space folds into Type when sandwiched between printables, Ctrl byte 1..26 → upper-case letter. Hide/Show/Wait/Screenshot/Output documented as not round-trippable.)
+- [x] Add `tests/Tape/RoundTripTest.php` covering: `Type "hello"`, `Enter`, `Sleep 1s`, `Set Theme "TokyoNight"`, `Ctrl+C`, `Up`/`Down`/`Left`/`Right`, `Backspace`, `Tab`, `Env KEY "value"`. For each, parse → compile → decompile → re-parse → assert identical event stream. (16 tests, 599 total in candy-vcr now passing.)
+- [x] Document the Decompiler in `candy-vcr/README.md`. (New `### Decompiler — Cassette → tape source` subsection under `## Tape compiler (PR8)`.)
 
 ## Section G — Visual regression goldens
 
