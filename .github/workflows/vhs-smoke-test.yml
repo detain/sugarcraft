@@ -23,6 +23,13 @@ jobs:
           extensions: mbstring, intl, json, pcntl, gd, curl, ssh2, ffi
           tools: composer:v2
 
+      - name: Install ffmpeg + file
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ffmpeg file
+          ffmpeg -version | head -1
+
       - name: Install composer deps
         run: composer install --quiet
 
@@ -40,9 +47,19 @@ jobs:
           echo "ERROR: no smoke tape found in expected locations" >&2
           exit 1
 
-      - name: Run smoke tape (timeout 90s)
+      - name: Run smoke tape (timeout 90s, ffmpeg encoder)
+        id: render_ffmpeg
+        continue-on-error: true
         timeout-minutes: 2
-        run: timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif
+        run: timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif --encoder ffmpeg
+
+      - name: Run smoke tape (php encoder fallback)
+        if: steps.render_ffmpeg.outcome == 'failure'
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          echo "ffmpeg path failed; falling back to pure-PHP encoder"
+          timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif --encoder php
 
       - name: Verify output
         run: |
