@@ -165,7 +165,11 @@ trait ChildPollTrait
 
         \proc_close($this->process);
         $this->process = null;
-        return $this->exitCode;
+        // Darwin SIGINT-via-PTY can reap the zombie before tryWaitpid runs;
+        // proc_get_status then reports running=false with exitcode=-1 and
+        // $this->exitCode stays null. Match PHP's convention: -1 means
+        // "process is gone but the exit code could not be captured".
+        return $this->exitCode ?? -1;
     }
 
     /**

@@ -139,6 +139,11 @@ jobs:
       cancel-in-progress: true
     strategy:
       fail-fast: false
+      # Cap concurrent cells so 45+ matrix jobs don't all hammer
+      # GITHUB_TOKEN's checkout auth at workflow start — secondary
+      # rate limiting was causing "could not read Username" failures
+      # on random cells (see flakes on candy-wish, honey-bounce).
+      max-parallel: 10
       matrix: ${{ fromJSON(needs.build-matrix.outputs.test_matrix) }}
 
     steps:
@@ -340,6 +345,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       fail-fast: false
+      max-parallel: 10
       matrix:
         lib: ${{ fromJSON(needs.build-matrix.outputs.coverage_libs) }}
     steps:
@@ -451,6 +457,7 @@ jobs:
       cancel-in-progress: true
     strategy:
       fail-fast: false
+      max-parallel: 10
       matrix: ${{ fromJSON(needs.build-matrix.outputs.phpstan_matrix) }}
     steps:
       - uses: actions/checkout@v5
