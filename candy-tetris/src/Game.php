@@ -520,4 +520,9 @@ final class Game implements Model
         $piece = self::spawn($first);
         return new self(new Board(), $piece, $bag, new Score(), preLockRotation: $piece->rotation);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

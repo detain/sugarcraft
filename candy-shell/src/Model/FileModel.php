@@ -80,4 +80,9 @@ final class FileModel implements Model
     public function selected(): ?string { return $this->picker->selected(); }
     public function isAborted(): bool   { return $this->aborted; }
     public function isSubmitted(): bool { return !$this->aborted && $this->picker->selected() !== null; }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

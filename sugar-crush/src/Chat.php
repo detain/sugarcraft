@@ -340,4 +340,9 @@ final class Chat implements Model
         }
         return substr($s, 0, $i);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

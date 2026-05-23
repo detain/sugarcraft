@@ -169,4 +169,9 @@ final class Timer implements Model
             ? sprintf('%d:%02d:%02d', $h, $m, $s)
             : sprintf('%d:%02d', $m, $s);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

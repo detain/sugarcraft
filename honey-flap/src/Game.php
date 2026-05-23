@@ -257,4 +257,9 @@ final class Game implements Model
         }
         return $g;
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

@@ -93,4 +93,9 @@ final class SpinModel implements Model
     {
         return new self($s, $p, $title, true, $exit, $align);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
