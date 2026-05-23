@@ -125,9 +125,16 @@ final class ExternalModule implements LegacyModule
     {
         $cmd = array_merge([$this->command], $this->args);
 
-        // Suppress PHP warning when the binary does not exist; we surface
-        // the failure via the RuntimeException below for explicit handling.
-        $this->process = @proc_open(
+        // Validate the binary up-front. proc_open() emits a PHP warning
+        // before returning false when the command can't be found, which
+        // trips PHPUnit's failOnWarning="true" even though we re-throw
+        // a RuntimeException immediately after. Resolving the binary
+        // here keeps proc_open() warning-free.
+        if (self::resolveExecutable($this->command) === null) {
+            throw new \RuntimeException("Failed to start process: {$this->command}");
+        }
+
+        $this->process = proc_open(
             $cmd,
             [
                 0 => ['pipe', 'r'],
@@ -218,5 +225,37 @@ final class ExternalModule implements LegacyModule
             fclose($this->stderr);
             $this->stderr = null;
         }
+    }
+
+    /**
+     * Locate an executable by PATH search (or accept an absolute / relative
+     * path as-is). Returns the resolved absolute path, or null if the
+     * command isn't found. Used to pre-validate before proc_open() so a
+     * missing binary throws a clean RuntimeException without emitting a
+     * PHP warning.
+     */
+    private static function resolveExecutable(string $command): ?string
+    {
+        if ($command === '') {
+            return null;
+        }
+        if (str_contains($command, DIRECTORY_SEPARATOR) || str_contains($command, '/')) {
+            return (is_file($command) && is_executable($command)) ? $command : null;
+        }
+        $pathEnv = getenv('PATH');
+        if (!is_string($pathEnv) || $pathEnv === '') {
+            return null;
+        }
+        $sep = DIRECTORY_SEPARATOR === '\\' ? ';' : ':';
+        foreach (explode($sep, $pathEnv) as $dir) {
+            if ($dir === '') {
+                continue;
+            }
+            $candidate = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $command;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
     }
 }
