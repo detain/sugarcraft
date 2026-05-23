@@ -12,6 +12,7 @@ permissions:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
@@ -25,11 +26,27 @@ jobs:
       - name: Install composer deps
         run: composer install --quiet
 
-      - name: Run smoke tape
-        run: php vendor/bin/candy-vcr render-tape candy-vcr/.vhs/smoke.tape --output /tmp/smoke.gif
+      - name: Locate smoke tape
+        id: tape
+        run: |
+          set -euo pipefail
+          for c in candy-vcr/.vhs/smoke.tape candy-vcr/tests/golden/tapes/03-plain-typing.tape; do
+            if [ -f "$c" ]; then
+              echo "path=$c" >> "$GITHUB_OUTPUT"
+              echo "Using tape: $c"
+              exit 0
+            fi
+          done
+          echo "ERROR: no smoke tape found in expected locations" >&2
+          exit 1
+
+      - name: Run smoke tape (timeout 90s)
+        timeout-minutes: 2
+        run: timeout 90 php vendor/bin/candy-vcr render-tape "${{ steps.tape.outputs.path }}" --output /tmp/smoke.gif
 
       - name: Verify output
         run: |
+          set -euo pipefail
           if [ ! -s /tmp/smoke.gif ]; then
             echo "ERROR: /tmp/smoke.gif is empty or missing"
             exit 1
@@ -41,4 +58,3 @@ jobs:
             exit 1
           fi
           echo "Smoke test passed"
-
