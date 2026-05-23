@@ -532,6 +532,56 @@
             "time": "2019-01-08T18:20:26+00:00"
         },
         {
+            "name": "psr/log",
+            "version": "3.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/php-fig/log.git",
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/php-fig/log/zipball/f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+                "reference": "f16e1d5863e37f8d8c2a01719f5b34baa2b714d3",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "3.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Psr\\Log\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "PHP-FIG",
+                    "homepage": "https://www.php-fig.org/"
+                }
+            ],
+            "description": "Common interface for logging libraries",
+            "homepage": "https://github.com/php-fig/log",
+            "keywords": [
+                "log",
+                "psr",
+                "psr-3"
+            ],
+            "support": {
+                "source": "https://github.com/php-fig/log/tree/3.0.2"
+            },
+            "time": "2024-09-11T13:17:53+00:00"
+        },
+        {
             "name": "react/event-loop",
             "version": "v1.6.0",
             "source": {
@@ -677,6 +727,85 @@
             "time": "2025-08-19T18:57:03+00:00"
         },
         {
+            "name": "react/promise-timer",
+            "version": "v1.11.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/promise-timer.git",
+                "reference": "4f70306ed66b8b44768941ca7f142092600fafc1"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/promise-timer/zipball/4f70306ed66b8b44768941ca7f142092600fafc1",
+                "reference": "4f70306ed66b8b44768941ca7f142092600fafc1",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3",
+                "react/event-loop": "^1.2",
+                "react/promise": "^3.2 || ^2.7.0 || ^1.2.1"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.6 || ^5.7 || ^4.8.36"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/functions_include.php"
+                ],
+                "psr-4": {
+                    "React\\Promise\\Timer\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "A trivial implementation of timeouts for Promises, built on top of ReactPHP.",
+            "homepage": "https://github.com/reactphp/promise-timer",
+            "keywords": [
+                "async",
+                "event-loop",
+                "promise",
+                "reactphp",
+                "timeout",
+                "timer"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/promise-timer/issues",
+                "source": "https://github.com/reactphp/promise-timer/tree/v1.11.0"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2024-06-04T14:27:45+00:00"
+        },
+        {
             "name": "sugarcraft/candy-core",
             "version": "dev-master",
             "dist": {
@@ -752,12 +881,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flip",
-                "reference": "e6ce24ffaa8c48f304cfd2925672ddbee3f310ad"
+                "reference": "5b6300db15040bf92780e43514dd5c51344234dd"
             },
             "require": {
                 "ext-gd": "*",
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
@@ -879,10 +1009,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-hermit",
-                "reference": "6afe393473ef6c352a834834e906ab65034ab507"
+                "reference": "54b142e8e0342ee13b6c29b168f0b7c2197f26e7"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-pty": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -1047,11 +1179,13 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "231bfd46c7256bf41c31063157c311aa0c365958"
+                "reference": "1de57f038493a6be1d058a30d7ea3e146d544da9"
             },
             "require": {
                 "php": "^8.3",
+                "psr/log": "^3.0",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-palette": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
@@ -1739,7 +1873,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-sprinkles",
-                "reference": "29c0903f2822b38e8b9fffb938356e56d8a132db"
+                "reference": "ccbc898a7e28f72b5a32bc8e2e89fbf08070645a"
             },
             "require": {
                 "php": "^8.3",
@@ -1861,14 +1995,19 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "c93086a3be8d27b2aea1ae7948e952bd7cc330b7"
+                "reference": "9de2599a56892ca78df8fc1cf8accb5a8eb0a21d"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-pty": "dev-master"
+                "sugarcraft/candy-pty": "dev-master",
+                "symfony/console": "^6.4 || ^7.0",
+                "symfony/process": "^6.4 || ^7.0"
             },
             "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.65",
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5",
                 "sugarcraft/candy-vt": "dev-master",
                 "symfony/yaml": "^6.4 || ^7.0"
@@ -1929,7 +2068,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "7be709307e90bb5c51662b6026c5cda288bbcf15"
+                "reference": "fad35acbc2295e4a6b6ad4b4d3c2b7025f72fc47"
             },
             "require": {
                 "php": "^8.3",
@@ -1937,6 +2076,9 @@
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.65",
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
                 "phpunit/phpunit": "^10.5"
             },
             "type": "library",
@@ -1986,10 +2128,12 @@
             "dist": {
                 "type": "path",
                 "url": "candy-wish",
-                "reference": "afd3d0795184e90a2cbb24ae99d1abf292080ad1"
+                "reference": "9c11942c5aef66eb4522a2ee0b10e855efd36933"
             },
             "require": {
                 "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise-timer": "^1.9",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
@@ -2108,11 +2252,12 @@
             "dist": {
                 "type": "path",
                 "url": "honey-bounce",
-                "reference": "e18dd81b65bbd3bd2cd896fc53764af5fd11d233"
+                "reference": "0c4c242fb3309a758e11bc9783945bea36bb7840"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-palette": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2297,11 +2442,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-boxer",
-                "reference": "5a922c079099c012bab3b1ad38521644865316b1"
+                "reference": "6616b0e8e744a62d76cab93d5f47a5c114c1daa4"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "@dev"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2353,10 +2499,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-calendar",
-                "reference": "588b4ae98e78805b1e0f5b353c5a692fb28bff43"
+                "reference": "edbfd66cd444760daf2a1772c71eeca260c06d65"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2407,12 +2554,13 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "8f6b1628309e279e8ccef45504bd8f8912514a97"
+                "reference": "20cccf316935f62813a756daaeb3dbc624e34d7e"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/sugar-dash": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2472,11 +2620,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crumbs",
-                "reference": "7535323950de9573ddbd1a6b04d174c07f193e4d"
+                "reference": "e306d6e1eec5ae90ec88f75605101c303b9b8c1b"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-zone": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -2595,15 +2744,17 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dash",
-                "reference": "8748ef5b3e41022833b47e90f9e7d0aee157e30c"
+                "reference": "db00190663ed437de1faff4bb705153338e20ca9"
             },
             "require": {
                 "php": "^8.3",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-pty": "@dev",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-vcr": "@dev"
             },
             "type": "library",
             "autoload": {
@@ -3082,10 +3233,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-stickers",
-                "reference": "bc666ccb1f36823d845e31e9d89bb12e0bce1534"
+                "reference": "1e738ccc19a576887d050f8e3d42927166dfc470"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/sugar-bits": "@dev"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3138,10 +3291,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-table",
-                "reference": "d6f2bc8ee53605e515c39235db0a1f610099002c"
+                "reference": "033e34807132e1c76c11f3bbd1e81ba53720d056"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3193,7 +3348,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-tick",
-                "reference": "e9401f4ef5e8912489b0146b0215a9f9e4b054c0"
+                "reference": "2a1e95e9804e88a6f2c04f56affcc6ee765be5cc"
             },
             "require": {
                 "php": ">=8.3",
@@ -3255,10 +3410,11 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-toast",
-                "reference": "d9fc07805bc1c16f950aa98dbdf7a7fb91a307a7"
+                "reference": "de5d37ea05919a227903eabb95a051d6b12d7cbb"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3309,11 +3465,14 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-veil",
-                "reference": "3cfe789bdf036158694802e043987a489be8c55f"
+                "reference": "894f4ebd9e28ece525f010d8361458f90d87ad15"
             },
             "require": {
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/candy-zone": "dev-master",
+                "sugarcraft/honey-bounce": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -3427,11 +3586,13 @@
             "dist": {
                 "type": "path",
                 "url": "super-candy",
-                "reference": "99d264fa2c28e94fea07d4e4d065f22e79c68ba4"
+                "reference": "195fb3151b53f466e9725a11d6c7190e982f0e8e"
             },
             "require": {
                 "php": ">=8.3",
+                "react/promise": "^3.3",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-mosaic": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
@@ -4069,6 +4230,71 @@
                 }
             ],
             "time": "2026-04-10T16:19:22+00:00"
+        },
+        {
+            "name": "symfony/process",
+            "version": "v7.4.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/symfony/process.git",
+                "reference": "d9593c9efa40499eb078b81144de42cbc28a31f0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/symfony/process/zipball/d9593c9efa40499eb078b81144de42cbc28a31f0",
+                "reference": "d9593c9efa40499eb078b81144de42cbc28a31f0",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.2"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Symfony\\Component\\Process\\": ""
+                },
+                "exclude-from-classmap": [
+                    "/Tests/"
+                ]
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Fabien Potencier",
+                    "email": "fabien@symfony.com"
+                },
+                {
+                    "name": "Symfony Community",
+                    "homepage": "https://symfony.com/contributors"
+                }
+            ],
+            "description": "Executes commands in sub-processes",
+            "homepage": "https://symfony.com",
+            "support": {
+                "source": "https://github.com/symfony/process/tree/v7.4.11"
+            },
+            "funding": [
+                {
+                    "url": "https://symfony.com/sponsor",
+                    "type": "custom"
+                },
+                {
+                    "url": "https://github.com/fabpot",
+                    "type": "github"
+                },
+                {
+                    "url": "https://github.com/nicolas-grekas",
+                    "type": "github"
+                },
+                {
+                    "url": "https://tidelift.com/funding/github/packagist/symfony/symfony",
+                    "type": "tidelift"
+                }
+            ],
+            "time": "2026-05-11T16:55:21+00:00"
         },
         {
             "name": "symfony/service-contracts",

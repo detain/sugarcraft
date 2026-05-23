@@ -3,21 +3,54 @@
 
 declare(strict_types=1);
 
-// Resolve the autoloader. Works when run from the lib's own
-// vendor/ (development) or from a parent project's vendor/bin/
-// (composer-installed bin shim).
+// Resolve the autoloader. Works when run from:
+//   - the lib's own vendor/ (development): ../vendor/autoload.php
+//   - a parent project's vendor/bin shim (path-repo or copy):
+//       Composer 2.5+ sets $GLOBALS['_composer_autoload_path'].
+//   - a parent project that installed candy-vcr from Packagist:
+//       __DIR__ . '/../../../autoload.php' resolves to the parent vendor.
+//   - via `php vendor/bin/candy-vcr` where vendor/bin is a Composer
+//     proxy script that already required the autoload before delegating.
 $autoload = null;
-foreach ([
-    __DIR__ . '/../vendor/autoload.php',
-    __DIR__ . '/../../../autoload.php',
-] as $candidate) {
-    if (file_exists($candidate)) {
-        $autoload = $candidate;
-        break;
+
+if (isset($GLOBALS['_composer_autoload_path']) && \is_string($GLOBALS['_composer_autoload_path'])) {
+    if (\file_exists($GLOBALS['_composer_autoload_path'])) {
+        $autoload = $GLOBALS['_composer_autoload_path'];
     }
 }
+
 if ($autoload === null) {
-    fwrite(STDERR, "candy-vcr: cannot locate vendor/autoload.php\n");
+    $candidates = [
+        __DIR__ . '/../vendor/autoload.php',                  // candy-vcr standalone
+        __DIR__ . '/../../../autoload.php',                   // installed under <root>/vendor/sugarcraft/candy-vcr/bin/
+        __DIR__ . '/../../../../vendor/autoload.php',         // path-repo symlink one extra level deep
+        \dirname(__DIR__, 2) . '/vendor/autoload.php',        // parent dir alongside candy-vcr
+        \dirname(__DIR__, 3) . '/vendor/autoload.php',        // grandparent dir (monorepo root)
+    ];
+    foreach ($candidates as $candidate) {
+        if (\file_exists($candidate)) {
+            $autoload = $candidate;
+            break;
+        }
+    }
+}
+
+if ($autoload === null) {
+    $scanned = [];
+    if (isset($GLOBALS['_composer_autoload_path'])) {
+        $scanned[] = (string) $GLOBALS['_composer_autoload_path'] . ' (from $GLOBALS)';
+    }
+    foreach ([
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../../autoload.php',
+        __DIR__ . '/../../../../vendor/autoload.php',
+        \dirname(__DIR__, 2) . '/vendor/autoload.php',
+        \dirname(__DIR__, 3) . '/vendor/autoload.php',
+    ] as $c) {
+        $scanned[] = $c;
+    }
+    \fwrite(\STDERR, "candy-vcr: cannot locate vendor/autoload.php\n");
+    \fwrite(\STDERR, "candy-vcr: tried: \n  - " . \implode("\n  - ", $scanned) . "\n");
     exit(1);
 }
 require $autoload;
