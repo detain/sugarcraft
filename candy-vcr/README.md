@@ -543,10 +543,11 @@ imagedestroy($png);
 | `GdRasterizer` | Default ext-gd backend; blits tiles + renders cursor |
 | `ImagickRasterizer` | ext-imagick alternative; better anti-aliasing |
 
-**Bundled fonts:** `fonts/DejaVuSansMono-Regular.ttf` and `DejaVuSansMono-Bold.ttf`
-(vendored fallback; JetBrainsMono pending OFL download). FontLoader tries the
-`fonts/` dir first, then system font directories
-(`/usr/share/fonts/`, `~/.fonts/`, etc.).
+**Bundled fonts:** `fonts/JetBrainsMono-{Regular,Bold,Italic,BoldItalic}.ttf`
+(default family) plus `DejaVuSansMono.ttf` and `DejaVuSansMono-Bold.ttf` as a
+fallback. FontLoader tries the `fonts/` dir first, then system font directories
+(`/usr/share/fonts/`, `~/.fonts/`, etc.). See the [Fonts](#fonts) section under
+Development for licensing and override details.
 
 **Glyphs cache:** Typical terminal frames have thousands of cells but only ~50
 unique (char, attrs) combinations. The tile cache makes rasterization O(unique
