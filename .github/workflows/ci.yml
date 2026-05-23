@@ -394,18 +394,15 @@ jobs:
           restore-keys: |
             vendor-cov-v4-${{ matrix.lib }}-
 
-      # Cache key version bump — increment when intra-monorepo @dev
-      # deps shift in a lib's composer.json so stale cache entries
-      # don't shadow updated deps. v4 (drop-consumer-locks step):
-      # switched from caching composer.lock to composer.json since
-      # consumer libs no longer carry lock files.
-      - name: Cache composer.json
-        uses: actions/cache@v5
-        with:
-          path: ${{ matrix.lib }}/composer.json
-          key: lock-cov-v4-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
-          restore-keys: |
-            lock-cov-v4-${{ matrix.lib }}-
+      # NB: previous revisions of this workflow cached
+      # `${{ matrix.lib }}/composer.json` itself with a loose restore-key,
+      # which corrupted the checkout — when a prior cache hit on the
+      # restore-key (prefix-only match) the older composer.json overwrote
+      # the freshly-checked-out file and composer install resolved against
+      # stale deps. That bug surfaced as 32 "Class Symfony\Component\..."
+      # not-found errors on `Coverage · candy-vcr` (see #857/#858).
+      # `composer install` already keys all per-lib reads off the
+      # actions/checkout content; we don't need a separate cache for it.
 
       - name: Install dependencies
         run: |
