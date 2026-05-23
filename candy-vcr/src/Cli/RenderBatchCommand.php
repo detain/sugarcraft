@@ -32,15 +32,25 @@ final class RenderBatchCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $dir = (string) $input->getArgument('dir');
+        $dirArg = $input->getArgument('dir');
+        $dir = is_string($dirArg) ? $dirArg : '';
         $outputDir = $input->getOption('output-dir');
         $outputDir = is_string($outputDir) ? $outputDir : null;
         $recursive = (bool) $input->getOption('recursive');
-        $fps = (float) $input->getOption('fps');
-        $backend = (string) ($input->getOption('backend') ?? 'gd');
-        $encoderType = (string) ($input->getOption('encoder') ?? 'ffmpeg');
+
+        $fpsOpt = $input->getOption('fps');
+        $fps = is_numeric($fpsOpt) ? (float) $fpsOpt : 30.0;
+
+        $backendOpt = $input->getOption('backend');
+        $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';
+
+        $encoderOpt = $input->getOption('encoder');
+        $encoderType = ($encoderOpt === 'ffmpeg' || $encoderOpt === 'php') ? $encoderOpt : 'ffmpeg';
+
         $strict = (bool) $input->getOption('strict');
-        $themeName = (string) ($input->getOption('theme') ?? 'TokyoNight');
+
+        $themeOpt = $input->getOption('theme');
+        $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
         if (!is_dir($dir)) {
             $output->writeln("<error>Not a directory: {$dir}</error>");

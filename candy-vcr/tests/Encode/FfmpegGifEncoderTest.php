@@ -160,15 +160,25 @@ final class FfmpegGifEncoderTest extends TestCase
 
     public function testImplementsGifEncoderInterface(): void
     {
-        $encoder = new FfmpegGifEncoder();
-        $this->assertInstanceOf(GifEncoder::class, $encoder);
+        // Compile-time guarantee — `FfmpegGifEncoder implements GifEncoder`
+        // is enforced by the type system. Use a reflection check so the
+        // test still has runtime value if someone re-shuffles interfaces.
+        $impls = class_implements(FfmpegGifEncoder::class);
+        $this->assertIsArray($impls);
+        $this->assertArrayHasKey(GifEncoder::class, $impls);
     }
 
+    /**
+     * @return non-empty-string
+     */
     private function createPngFrame(string $char): string
     {
         $img = imagecreatetruecolor(8, 16);
+        $this->assertNotFalse($img);
         $bg = imagecolorallocate($img, 0, 0, 0);
         $fg = imagecolorallocate($img, 255, 255, 255);
+        $this->assertNotFalse($bg);
+        $this->assertNotFalse($fg);
         imagefilledrectangle($img, 0, 0, 7, 15, $bg);
         imagettftext($img, 14, 0, 0, 13, $fg, $this->getFontPath(), $char);
 

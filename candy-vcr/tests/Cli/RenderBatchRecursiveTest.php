@@ -37,6 +37,8 @@ final class RenderBatchRecursiveTest extends TestCase
         try {
             $stdout = fopen('php://memory', 'w+');
             $stderr = fopen('php://memory', 'w+');
+            $this->assertNotFalse($stdout);
+            $this->assertNotFalse($stderr);
 
             $app = new Application();
             $exit = $app->run(

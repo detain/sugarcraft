@@ -89,12 +89,16 @@ final class RenderBatchReuseTest extends TestCase
 
             $rasterizerProp = new \ReflectionProperty($renderer, 'rasterizer');
             $rasterizerProp->setAccessible(true);
-            $idBefore = spl_object_id($rasterizerProp->getValue($renderer));
+            $rasterizerBefore = $rasterizerProp->getValue($renderer);
+            $this->assertIsObject($rasterizerBefore);
+            $idBefore = spl_object_id($rasterizerBefore);
 
             $renderer->render($tape, $tempDir . '/x.gif', ['encoder' => 'php', 'backend' => 'gd']);
             $renderer->render($tape, $tempDir . '/x2.gif', ['encoder' => 'php', 'backend' => 'gd']);
 
-            $idAfter = spl_object_id($rasterizerProp->getValue($renderer));
+            $rasterizerAfter = $rasterizerProp->getValue($renderer);
+            $this->assertIsObject($rasterizerAfter);
+            $idAfter = spl_object_id($rasterizerAfter);
             $this->assertSame(
                 $idBefore,
                 $idAfter,

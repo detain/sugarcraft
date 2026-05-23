@@ -152,7 +152,7 @@ final class FrameDedupTest extends TestCase
  * Test double for FrameStream that yields frames from a provided array.
  * Allows controlled testing of FrameDedup without crafting real cassettes.
  *
- * @implements IteratorAggregate<int, Snapshot>
+ * @implements \IteratorAggregate<int, Snapshot>
  */
 final class ArrayFrameStream implements \IteratorAggregate
 {
