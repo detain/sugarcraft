@@ -68,6 +68,7 @@ final class GoldenSnapshotTest extends TestCase
         'loadingText'            => 'non-deterministic: animated loading text',
         'log'                   => 'non-deterministic: timestamp-based log',
         'bubble'                => 'non-deterministic: may include time-dependent content',
+        'calendar'              => 'non-deterministic: Calendar::now() highlights today (date("j")); drifts daily',
         'run-all'                => 'meta: example runner',
         'generate-all'           => 'meta: example generator',
     ];

@@ -71,6 +71,7 @@ $nonDeterministicExamples = [
     'bubble'     => 'speech bubble may include time-dependent content',
     'wttr-in'    => 'network call to wttr.in, output varies by weather',
     'weather'    => 'network call to wttr.in, output varies by weather',
+    'calendar'   => 'Calendar::now() highlights today (date("j")); drifts daily',
 ];
 
 /// ------------------------------------------------------------

@@ -46,8 +46,10 @@ final class McpClient
         $args = $this->args;
 
         //spaws process with stdio transport - Claude Code MCP uses stdin/stdout
+        // Suppress proc_open's PHP warning when the binary is missing; the
+        // RuntimeException below surfaces the failure to callers explicitly.
         /** @var array{0: resource, 1: resource, 2: resource} */
-        $processHandles = proc_open(
+        $processHandles = @proc_open(
             array_merge([$command], $args),
             [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
             $pipes,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Middleware;
 
 use SugarCraft\Metrics\Registry;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Session;
 
@@ -38,7 +39,7 @@ final class SessionMetrics implements Middleware
         $this->extraTags = $extraTags;
     }
 
-    public function handle(Session $session, callable $next): void
+    public function handle(Context $ctx, Session $session, callable $next)
     {
         $tags = ['user' => $session->user, 'term' => $session->term];
         if ($this->extraTags !== null) {
@@ -48,7 +49,7 @@ final class SessionMetrics implements Middleware
         $stop = $this->registry->time('wish.session.duration', $tags);
 
         try {
-            $next($session);
+            $next($ctx, $session);
         } catch (\Throwable $e) {
             $this->registry->counter('wish.session.error', 1.0, $tags + ['exception' => $e::class]);
             throw $e;
