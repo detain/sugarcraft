@@ -79,10 +79,10 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §8 wanted ~10 curated golden GIFs in the repo with byte-hash or SSIM diff against re-renders.
 
-- [ ] Pick 10 tape files spanning: TokyoNight, Dracula, plain types-and-enter, Sleep-heavy, Ctrl-sequence, arrow-keys, wide-CJK type, Set Width/Height, multi-frame animation, idle-rich. Use existing `.vhs/*.tape` where possible.
-- [ ] Render each to `candy-vcr/tests/golden/<name>.gif` and commit.
-- [ ] `tests/Encode/VisualRegressionTest.php`: re-render each tape, compare against golden by file hash for byte-deterministic encoders (PhpGifEncoder), SSIM threshold ≥0.95 for FfmpegGifEncoder (use ffmpeg's `compare`).
-- [ ] Document refresh procedure in `candy-vcr/CALIBER_LEARNINGS.md`: how to regenerate goldens intentionally.
+- [x] Pick 10 tape files spanning: TokyoNight, Dracula, plain types-and-enter, Sleep-heavy, Ctrl-sequence, arrow-keys, wide-CJK type, Set Width/Height, multi-frame animation, idle-rich. (Authored fresh under `candy-vcr/tests/golden/tapes/01-*..10-*.tape` rather than reusing `<slug>/.vhs/*.tape` — those tapes assume `examples/<demo>.php` files outside `candy-vcr/`. Manifest in `candy-vcr/tests/golden/MANIFEST.md`.)
+- [x] Render each to `candy-vcr/tests/golden/<name>.gif` and commit. (20 GIFs committed: `<name>.php.gif` + `<name>.ffmpeg.gif` for all ten tapes; total ~400 KB.)
+- [x] `tests/Encode/VisualRegressionTest.php`: re-render each tape, compare against golden by file hash for byte-deterministic encoders (PhpGifEncoder), SSIM threshold ≥0.95 for FfmpegGifEncoder (use ffmpeg's `compare`). (`#[DataProvider]`-driven; PHP encoder asserted by SHA-256, ffmpeg encoder asserted via `[0:v][1:v]ssim` filter parse with pixel-diff fallback, ffmpeg tests auto-skip when `command -v ffmpeg` returns nothing. 40 assertions across 20 cases all green.)
+- [x] Document refresh procedure in `candy-vcr/CALIBER_LEARNINGS.md`: how to regenerate goldens intentionally. (New `## Visual goldens (Section G — 2026-05-22)` section; pairs with `candy-vcr/scripts/refresh-goldens.php` which warns + exits 2 if >3 goldens would change in one run unless `--force`.)
 
 ## Section H — Phase 7 CI migration (seed lib)
 

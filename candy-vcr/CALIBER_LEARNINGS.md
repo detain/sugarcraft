@@ -264,3 +264,46 @@ Added `symfony/console` to `require` (was only `symfony/process` before). The ex
 - **`--font` option accepted but not used:** The `--font/-f` option is defined in both commands (accepting a TTF font family name) but is not currently passed to `TapeToGif::create()` or `render()` since the pipeline doesn't yet support custom font families. The option is accepted for future compatibility.
 - **ProgressBar phase labels:** Four phases: "Parsing tape...", "Compiling events...", "Rendering frames...", "Encoding GIF...". Progress is advanced after each phase to show the user's position in the pipeline.
 
+## Visual goldens (Section G — 2026-05-22)
+
+`tests/golden/` carries ten curated tapes that exercise each pipeline
+dimension (themes, plain typing, sleep-heavy timing, Ctrl-sequences,
+arrow keys, CJK type, custom dims, multi-frame animation, idle-rich
+gaps). Each tape renders two committed goldens:
+
+- `<name>.php.gif` — PhpGifEncoder output. Byte-deterministic; the test
+  compares by SHA-256.
+- `<name>.ffmpeg.gif` — FfmpegGifEncoder output. The test computes SSIM
+  via `ffmpeg -filter_complex "[0:v][1:v]ssim"` and asserts `>= 0.95`;
+  falls back to a 1%-pixel-diff threshold if SSIM parsing fails. Test
+  auto-skips when ffmpeg is missing.
+
+### When to refresh
+
+Refresh only when an INTENTIONAL change to the rasterizer / encoder /
+font / theme palette shifts the rendered output. Drift in the test
+runner's ffmpeg version can move the `.ffmpeg.gif` hash but should
+still pass the SSIM floor — investigate before refreshing.
+
+### Refresh procedure
+
+```sh
+cd candy-vcr
+php scripts/refresh-goldens.php --dry-run     # inspect diffs first
+php scripts/refresh-goldens.php               # safe — bails if >3 change
+php scripts/refresh-goldens.php --force       # confirm a mass-overwrite
+vendor/bin/phpunit --filter VisualRegression  # verify the refreshed set
+```
+
+The `--force` guard exists to catch accidental mass-overwrites: if a
+ten-tape run shows more than three goldens changing, the script exits
+non-zero so you have to consciously acknowledge the scope.
+
+### Determinism caveats
+
+Both PhpGifEncoder and FfmpegGifEncoder produce byte-stable output on
+the same ffmpeg binary version, so SSIM is only a safety net. If you
+hit hash drift between runs on a single machine, that's a real
+non-determinism bug — chase down the source (palette ordering, frame
+timing rounding) before relaxing the test.
+
