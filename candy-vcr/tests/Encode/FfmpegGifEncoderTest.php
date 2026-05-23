@@ -61,6 +61,9 @@ final class FfmpegGifEncoderTest extends TestCase
     public function testEncodeRequiresFrames(): void
     {
         $encoder = new FfmpegGifEncoder();
+        if (!$encoder->isAvailable()) {
+            $this->markTestSkipped('FfmpegGifEncoder requires ffmpeg binary');
+        }
         $outputPath = $this->tmpDir . '/out.gif';
 
         $this->expectException(\RuntimeException::class);
