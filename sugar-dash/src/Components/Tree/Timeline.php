@@ -117,8 +117,8 @@ final class Timeline implements \SugarCraft\Dash\Foundation\Sizer
             $type = $event['type'] ?? self::TypeDefault;
             $color = $event['color'] ?? ($defaultColors[$type] ?? $defaultColors[self::TypeDefault]);
 
-            $time = $event['time'];
-            $title = $event['title'];
+            $time = $event['time'] ?? '';
+            $title = $event['title'] ?? '';
             $description = $event['description'] ?? '';
 
             // Render time on the left

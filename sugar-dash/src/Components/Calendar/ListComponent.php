@@ -94,7 +94,8 @@ final class ListComponent implements \SugarCraft\Dash\Foundation\Sizer
         foreach ($visibleItems as $index => $item) {
             $globalIndex = $scrollTop + $index;
             $prefix = $this->getPrefix($globalIndex, $selected, count($filteredItems));
-            $line = $prefix . ' ' . $item;
+            $itemStr = is_array($item) ? ($item['label'] ?? array_values($item)[0] ?? '') : (string) $item;
+            $line = $prefix . ' ' . $itemStr;
 
             // Apply item alignment within the given width
             $lineWidth = Width::string($line);
@@ -164,7 +165,8 @@ final class ListComponent implements \SugarCraft\Dash\Foundation\Sizer
         $maxWidth = 0;
         foreach ($items as $index => $item) {
             $prefix = $this->getStaticPrefix($index);
-            $lineWidth = Width::string($prefix . ' ' . $item);
+            $itemStr = is_array($item) ? ($item['label'] ?? array_values($item)[0] ?? '') : (string) $item;
+            $lineWidth = Width::string($prefix . ' ' . $itemStr);
             if ($lineWidth > $maxWidth) {
                 $maxWidth = $lineWidth;
             }

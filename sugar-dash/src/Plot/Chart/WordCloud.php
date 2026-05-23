@@ -43,9 +43,13 @@ final class WordCloud implements \SugarCraft\Dash\Foundation\Sizer
      */
     public static function new(array $words): self
     {
+        // Ensure input is a list of arrays with word/weight keys
+        if (!array_is_list($words) || (isset($words[0]) && !is_array($words[0]))) {
+            $words = [];
+        }
         $normalized = array_map(function (array $item): array {
             return [
-                'word' => $item['word'],
+                'word' => $item['word'] ?? '',
                 'weight' => max(0.1, floatval($item['weight'] ?? 1.0)),
             ];
         }, $words);
