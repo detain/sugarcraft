@@ -594,4 +594,9 @@ final class Tabs implements Model
         }
         return $count - 1;
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

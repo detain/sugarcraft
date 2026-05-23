@@ -164,4 +164,9 @@ final class Cursor implements Model
         $id = $this->id;
         return Cmd::tick($this->blinkSpeed, static fn(): Msg => new BlinkMsg($id));
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

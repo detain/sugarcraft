@@ -557,4 +557,9 @@ final class ItemList implements Model
             keepFilter:             $keepFilter             ?? $this->keepFilter,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

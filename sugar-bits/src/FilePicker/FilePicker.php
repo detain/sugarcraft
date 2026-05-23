@@ -391,4 +391,9 @@ final class FilePicker implements Model
             error:             $errorSet ? $error : $this->error,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

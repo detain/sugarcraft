@@ -95,4 +95,9 @@ final class ConfirmModel implements Model
         [$out, ] = $f->focus();
         return $out;
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

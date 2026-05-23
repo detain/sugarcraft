@@ -133,4 +133,9 @@ final class Stopwatch implements Model
         $id = $this->id;
         return Cmd::tick($this->interval, static fn(): Msg => new TickMsg($id));
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
