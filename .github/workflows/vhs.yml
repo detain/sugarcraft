@@ -195,6 +195,9 @@ jobs:
     # cache miss) and the apt-get ffmpeg install.
     container:
       image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     # Container jobs default to `sh -e {0}` because GitHub Actions
     # can't assume bash exists. Ubuntu's /bin/sh is dash, which
     # rejects `set -o pipefail` — every step using it errored
@@ -300,6 +303,9 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/${{ github.repository_owner }}/vhs-runner:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     defaults:
       run:
         shell: bash
