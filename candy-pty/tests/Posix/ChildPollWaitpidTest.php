@@ -154,10 +154,15 @@ final class ChildPollWaitpidTest extends TestCase
         $waitpidMs = $waitpidElapsedNs / 1_000_000;
         $pgsMs = $pgsElapsedNs / 1_000_000;
 
-        // waitpid should be faster than proc_get_status polling.
+        // waitpid should be comparable to or faster than proc_get_status
+        // polling. The tolerance is on the pgs side: waitpid is allowed to
+        // be up to 1 ms slower than pgs to absorb measurement noise. The
+        // assertion is meaningful because pgs's first iteration always
+        // includes at least one usleep(1_000), so a regressed waitpid
+        // would clearly exceed pgs by several ms.
         $this->assertLessThan(
-            $pgsMs,
-            $waitpidMs + 1.0, // +1ms tolerance
+            $pgsMs + 1.0,
+            $waitpidMs,
             "waitpid ({$waitpidMs}ms) should be comparable to or faster than proc_get_status ({$pgsMs}ms)"
         );
 
