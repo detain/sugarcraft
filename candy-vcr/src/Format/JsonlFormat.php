@@ -149,6 +149,12 @@ final class JsonlFormat implements Format
         if ($h->env !== []) {
             $data['env'] = $h->env;
         }
+        if ($h->typingSpeed !== null) {
+            $data['typingSpeed'] = $h->typingSpeed;
+        }
+        if ($h->theme !== null) {
+            $data['theme'] = $h->theme;
+        }
         return $this->jsonEncode($data);
     }
 
@@ -181,6 +187,15 @@ final class JsonlFormat implements Format
                 }
             }
         }
+        $typingSpeed = null;
+        if (isset($data['typingSpeed']) && (is_int($data['typingSpeed']) || is_float($data['typingSpeed']))) {
+            $typingSpeed = (float) $data['typingSpeed'];
+        }
+        $theme = null;
+        if (isset($data['theme']) && \is_string($data['theme']) && $data['theme'] !== '') {
+            $theme = $data['theme'];
+        }
+
         return new CassetteHeader(
             version: (int) $data['v'],
             createdAt: (string) $data['created'],
@@ -189,6 +204,8 @@ final class JsonlFormat implements Format
             runtime: (string) $data['runtime'],
             timestampMode: isset($data['timestampMode']) ? (string) $data['timestampMode'] : CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
             env: $env,
+            typingSpeed: $typingSpeed,
+            theme: $theme,
         );
     }
 
