@@ -36,23 +36,81 @@ jobs:
   # .vhs/*.tape didn't change in this push. workflow_dispatch
   # (manual trigger) and the first commit on a branch render
   # everything.
+  # Parallel candy-vcr render job (Phase 7 — seed lib soak).
+  #
+  # This runs in parallel with the legacy `vhs` job below on a narrow seed
+  # lib (candy-core) so we can compare candy-vcr's pure-PHP renderer output
+  # against the upstream charmbracelet/vhs binary. The job is non-blocking
+  # (`continue-on-error: true`) — failures or visual drift do NOT fail the
+  # existing CI during the soak. The actual cutover (removing the upstream
+  # `vhs` job in favour of this one) is a separate PR after the soak.
+  #
+  # Rollback: revert this job stanza (single block in this file).
+  # See candy-vcr/README.md → "CI integration" for the full migration plan.
   vhs-candy-vcr:
-    container: ghcr.io/detain/sugarcraft-vhs-runner-php:latest
     runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest
+    permissions:
+      contents: read
+      packages: read
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        # Narrow seed list — expand to more libs in a follow-up PR after
+        # the soak window passes without visual drift.
+        lib: [candy-core]
     steps:
       - uses: actions/checkout@v5
-      - name: Install composer deps
-        run: composer install --quiet --no-dev
-      - name: Render tapes with candy-vcr
+
+      - name: Install candy-vcr deps
+        working-directory: ${{ github.workspace }}/candy-vcr
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Render tapes via candy-vcr (encoder=ffmpeg)
+        if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
+        working-directory: ${{ github.workspace }}
         run: |
-          for lib in candy-core; do
-            php vendor/bin/candy-vcr render-batch "$lib/.vhs/" || true
+          set -euo pipefail
+          php candy-vcr/bin/candy-vcr render-batch \
+            "${{ matrix.lib }}/.vhs/" \
+            --encoder ffmpeg
+
+      - name: Smoke check rendered GIFs are non-empty
+        if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          gifs=( "${{ matrix.lib }}"/.vhs/*.gif )
+          if [ "${#gifs[@]}" -eq 0 ]; then
+            echo "ERROR: no GIFs produced for ${{ matrix.lib }}"
+            exit 1
+          fi
+          for g in "${gifs[@]}"; do
+            if [ ! -s "$g" ]; then
+              echo "ERROR: $g is empty"
+              exit 1
+            fi
+            file_out=$(file "$g")
+            echo "$file_out"
+            echo "$file_out" | grep -q "GIF image" \
+              || { echo "ERROR: $g is not a valid GIF"; exit 1; }
           done
-      - name: Upload rendered GIFs
+          echo "Smoke check passed: ${#gifs[@]} GIF(s) rendered for ${{ matrix.lib }}"
+
+      - name: Upload rendered GIFs as artifact
+        if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
         uses: actions/upload-artifact@v5
         with:
-          name: gifs-candy-vcr
-          path: "**/*.gif"
+          name: vhs-candy-vcr-${{ matrix.lib }}
+          path: ${{ matrix.lib }}/.vhs/*.gif
+          if-no-files-found: warn
+          include-hidden-files: true
           retention-days: 7
 
   changed:
