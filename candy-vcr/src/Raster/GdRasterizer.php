@@ -18,6 +18,13 @@ use SugarCraft\Vt\Theme;
  * indices in {@see Cell}) are resolved through the configured {@see Theme}
  * so user-selected themes like TokyoNight or Dracula reach the GIF.
  *
+ * The {@see Glyphs} cache lives on the rasterizer instance so it persists
+ * across snapshot calls — a typical tape rasterizes hundreds of snapshots
+ * sharing the same ~50 unique (char, attrs) tuples, so per-frame caches
+ * waste ~99% of the cache's value. The cache fingerprint is keyed on
+ * (cellW, cellH, theme spl_object_id, fontFamily, fontSize); the
+ * fingerprint changes invalidate and rebuild the cache.
+ *
  * Mirrors charmbracelet/x/vhs GdRasterizer.
  */
 final class GdRasterizer implements Rasterizer
@@ -26,6 +33,16 @@ final class GdRasterizer implements Rasterizer
     private const DEFAULT_FONT_FAMILY = 'JetBrainsMono';
 
     private Theme $theme;
+
+    private ?Glyphs $glyphs = null;
+
+    private ?string $glyphsFingerprint = null;
+
+    /**
+     * When true, the cache is rebuilt on every {@see rasterize()} call.
+     * Used by the benchmark harness to measure the cache's value.
+     */
+    private bool $cacheDisabled = false;
 
     public function __construct(
         private int $fontSize = self::DEFAULT_FONT_SIZE,
@@ -37,7 +54,31 @@ final class GdRasterizer implements Rasterizer
 
     public function withTheme(Theme $theme): self
     {
-        return new self($this->fontSize, $this->fontFamily, $theme);
+        $clone = new self($this->fontSize, $this->fontFamily, $theme);
+        $clone->cacheDisabled = $this->cacheDisabled;
+        return $clone;
+    }
+
+    /**
+     * Toggle the persistent Glyphs cache for benchmarking.
+     * Not part of the public Rasterizer contract — callers use this to
+     * measure the cache's impact via {@see scripts/bench-glyph-cache.php}.
+     */
+    public function setCacheDisabled(bool $disabled): void
+    {
+        $this->cacheDisabled = $disabled;
+        if ($disabled) {
+            $this->glyphs = null;
+            $this->glyphsFingerprint = null;
+        }
+    }
+
+    /**
+     * @return array{hits:int, misses:int}
+     */
+    public function cacheStats(): array
+    {
+        return $this->glyphs?->cacheStats() ?? ['hits' => 0, 'misses' => 0];
     }
 
     public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \GdImage
@@ -63,7 +104,7 @@ final class GdRasterizer implements Rasterizer
         $defaultBgColor = $this->allocateColor($canvas, $this->theme->defaultBg);
         imagefilledrectangle($canvas, 0, 0, $width - 1, $height - 1, $defaultBgColor);
 
-        $glyphs = new Glyphs($cellW, $cellH, $fonts, $this->fontFamily, $this->fontSize, $this->theme);
+        $glyphs = $this->getGlyphs($cellW, $cellH, $fonts);
 
         for ($row = 0; $row < $rows; $row++) {
             $col = 0;
@@ -101,6 +142,31 @@ final class GdRasterizer implements Rasterizer
         }
 
         return $canvas;
+    }
+
+    /**
+     * Resolve a persistent Glyphs instance for the current fingerprint.
+     *
+     * Theme identity uses spl_object_id — themes are immutable value
+     * objects with no mutating API, so two distinct instances with
+     * identical palettes still rebuild the cache. The benchmark
+     * confirms this is fine: a single tape run reuses one Theme.
+     */
+    private function getGlyphs(int $cellW, int $cellH, FontLoader $fonts): Glyphs
+    {
+        $fingerprint = $this->fingerprint($cellW, $cellH);
+
+        if ($this->cacheDisabled || $this->glyphs === null || $this->glyphsFingerprint !== $fingerprint) {
+            $this->glyphs = new Glyphs($cellW, $cellH, $fonts, $this->fontFamily, $this->fontSize, $this->theme);
+            $this->glyphsFingerprint = $fingerprint;
+        }
+
+        return $this->glyphs;
+    }
+
+    private function fingerprint(int $cellW, int $cellH): string
+    {
+        return $cellW . 'x' . $cellH . '|' . spl_object_id($this->theme) . '|' . $this->fontFamily . '|' . $this->fontSize;
     }
 
     /**
