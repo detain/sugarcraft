@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Raster;
 
+use SugarCraft\Vt\Theme;
+
 /**
  * Pre-rendered character tile cache.
  *
  * The single biggest performance lever: a typical terminal frame has
  * thousands of cells but only ~50 unique (char, attrs) combinations.
  * Caching tiles converts rasterization cost from O(cells) to O(unique tiles).
+ *
+ * Colors are resolved through the configured {@see Theme} so user-selected
+ * themes reach the rendered GIF.
  *
  * Mirrors charmbracelet/x/vhs Glyphs cache.
  */
@@ -20,6 +25,8 @@ final class Glyphs
 
     private int $fontSize;
 
+    private Theme $theme;
+
     /** @var array<string, string> */
     private array $fontPathCache = [];
 
@@ -29,8 +36,10 @@ final class Glyphs
         private FontLoader $fonts,
         private string $fontFamily = 'JetBrainsMono',
         int $fontSize = 14,
+        ?Theme $theme = null,
     ) {
         $this->fontSize = $fontSize;
+        $this->theme = $theme ?? new Theme();
     }
 
     /**
@@ -175,65 +184,11 @@ final class Glyphs
 
     private function allocateColor(\GdImage $image, int $paletteIndex): int
     {
-        $rgb = $this->indexToRgb($paletteIndex);
-        $r = max(0, min(255, $rgb[0]));
-        $g = max(0, min(255, $rgb[1]));
-        $b = max(0, min(255, $rgb[2]));
+        $rgb = $this->theme->color($paletteIndex);
+        $r = ($rgb >> 16) & 0xff;
+        $g = ($rgb >> 8) & 0xff;
+        $b = $rgb & 0xff;
         $color = imagecolorallocate($image, $r, $g, $b);
         return $color !== false ? $color : 0;
-    }
-
-    /**
-     * @return array{0:int, 1:int, 2:int}
-     */
-    private function indexToRgb(int $index): array
-    {
-        if ($index < 0 || $index > 255) {
-            return [0, 0, 0];
-        }
-
-        if ($index < 16) {
-            return ($this->defaultPalette()[$index] ?? [0, 0, 0]);
-        }
-
-        if ($index < 232) {
-            $adjusted = $index - 16;
-            $r = (int) floor($adjusted / 36);
-            $g = (int) floor(($adjusted % 36) / 6);
-            $b = $adjusted % 6;
-            return [
-                $r ? $r * 40 + 55 : 0,
-                $g ? $g * 40 + 55 : 0,
-                $b ? $b * 40 + 55 : 0,
-            ];
-        }
-
-        $gray = (int) floor(($index - 232) * 10 + 8);
-        return [$gray, $gray, $gray];
-    }
-
-    /**
-     * @return array<int, array{0:int, 1:int, 2:int}>
-     */
-    private function defaultPalette(): array
-    {
-        return [
-            [0x00, 0x00, 0x00],
-            [0x80, 0x00, 0x00],
-            [0x00, 0x80, 0x00],
-            [0x80, 0x80, 0x00],
-            [0x00, 0x00, 0x80],
-            [0x80, 0x00, 0x80],
-            [0x00, 0x80, 0x80],
-            [0xc0, 0xc0, 0xc0],
-            [0x80, 0x80, 0x80],
-            [0xff, 0x00, 0x00],
-            [0x00, 0xff, 0x00],
-            [0xff, 0xff, 0x00],
-            [0x00, 0x00, 0xff],
-            [0xff, 0x00, 0xff],
-            [0x00, 0xff, 0xff],
-            [0xff, 0xff, 0xff],
-        ];
     }
 }

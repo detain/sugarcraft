@@ -40,7 +40,7 @@ final class PosixTermios implements Termios
     {
         $this->fd = $fd;
         $this->libc = Libc::lib();
-        $this->buf = \FFI::new('char[' . self::BUFSIZE . ']');
+        $this->buf = $this->libc->new('char[' . self::BUFSIZE . ']');
     }
 
     /**
@@ -121,7 +121,7 @@ final class PosixTermios implements Termios
     private function withCData(\FFI\CData $newBuf): self
     {
         $clone = clone $this;
-        $clone->buf = \FFI::new('char[' . self::BUFSIZE . ']');
+        $clone->buf = $this->libc->new('char[' . self::BUFSIZE . ']');
         \FFI::memcpy(\FFI::addr($clone->buf), \FFI::addr($newBuf), self::BUFSIZE);
         return $clone;
     }

@@ -110,7 +110,7 @@ final class FontLoader
      */
     private function buildCandidates(string $family, string $style): array
     {
-        $base = rtrim(str_replace(['-Regular', '-Regular'], '', $family), '-');
+        $base = rtrim(str_replace(['-Regular', '-Bold', '-Italic', '-BoldItalic'], '', $family), '-');
 
         return match ($style) {
             'bold' => [
@@ -147,7 +147,8 @@ final class FontLoader
      */
     public static function systemDirs(): array
     {
-        $home = is_string($_SERVER['HOME']) ? $_SERVER['HOME'] : '/root';
+        $envHome = $_SERVER['HOME'] ?? null;
+        $home = is_string($envHome) && $envHome !== '' ? $envHome : '/root';
         return [
             '/usr/share/fonts/truetype/',
             '/usr/share/fonts/opentype/',

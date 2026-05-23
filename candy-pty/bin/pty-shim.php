@@ -30,9 +30,24 @@ declare(strict_types=1);
  */
 
 // Resolve vendor autoload so we can use ControllingTerminal / Libc.
-$autoload = \dirname(__DIR__) . '/vendor/autoload.php';
-if (!\is_file($autoload)) {
-    \fwrite(\STDERR, "pty-shim: vendor/autoload.php not found\n");
+// The shim ships inside candy-pty/bin/ but may run from:
+//   - candy-pty itself (top-level): ../vendor/autoload.php
+//   - inside a parent vendor (vendor/sugarcraft/candy-pty/bin/): ../../../autoload.php
+//   - via Composer's vendor-bin install: ../../../../autoload.php
+// Walk a few candidates so the shim works in any layout.
+$autoload = null;
+foreach ([
+    \dirname(__DIR__) . '/vendor/autoload.php',
+    \dirname(__DIR__, 3) . '/autoload.php',
+    \dirname(__DIR__, 4) . '/autoload.php',
+] as $candidate) {
+    if (\is_file($candidate)) {
+        $autoload = $candidate;
+        break;
+    }
+}
+if ($autoload === null) {
+    \fwrite(\STDERR, "pty-shim: vendor/autoload.php not found near " . __DIR__ . "\n");
     exit(3);
 }
 require $autoload;

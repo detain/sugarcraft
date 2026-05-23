@@ -109,7 +109,7 @@ final class FrameStream implements \IteratorAggregate
             $colsInt = (int) $cols;
             $rowsInt = (int) $rows;
             if ($colsInt > 0 && $rowsInt > 0) {
-                return Terminal::new($colsInt, $rowsInt);
+                return Terminal::new($colsInt, $rowsInt, $terminal->theme());
             }
         }
         return $terminal;

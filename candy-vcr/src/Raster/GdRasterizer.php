@@ -8,12 +8,15 @@ use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\CellGrid;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vt\Theme;
 
 /**
  * Default rasterizer using ext-gd.
  *
  * Creates a pixel image from a terminal Snapshot by blitting
- * pre-rendered glyph tiles onto a canvas.
+ * pre-rendered glyph tiles onto a canvas. The cell colors (0-255 palette
+ * indices in {@see Cell}) are resolved through the configured {@see Theme}
+ * so user-selected themes like TokyoNight or Dracula reach the GIF.
  *
  * Mirrors charmbracelet/x/vhs GdRasterizer.
  */
@@ -22,10 +25,19 @@ final class GdRasterizer implements Rasterizer
     private const DEFAULT_FONT_SIZE = 14;
     private const DEFAULT_FONT_FAMILY = 'JetBrainsMono';
 
+    private Theme $theme;
+
     public function __construct(
         private int $fontSize = self::DEFAULT_FONT_SIZE,
         private string $fontFamily = self::DEFAULT_FONT_FAMILY,
+        ?Theme $theme = null,
     ) {
+        $this->theme = $theme ?? new Theme();
+    }
+
+    public function withTheme(Theme $theme): self
+    {
+        return new self($this->fontSize, $this->fontFamily, $theme);
     }
 
     public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \GdImage
@@ -40,7 +52,7 @@ final class GdRasterizer implements Rasterizer
         $height = $rows * $cellH;
 
         \assert($width >= 1 && $height >= 1);
-        $canvas = imagecreatetruecolor((int) $width, (int) $height);
+        $canvas = imagecreatetruecolor($width, $height);
         if ($canvas === false) {
             throw new \RuntimeException('Failed to create canvas image');
         }
@@ -48,10 +60,10 @@ final class GdRasterizer implements Rasterizer
         imagesavealpha($canvas, true);
         imagealphablending($canvas, false);
 
-        $defaultBgColor = $this->allocateColor($canvas, 0);
+        $defaultBgColor = $this->allocateColor($canvas, $this->theme->defaultBg);
         imagefilledrectangle($canvas, 0, 0, $width - 1, $height - 1, $defaultBgColor);
 
-        $glyphs = new Glyphs($cellW, $cellH, $fonts, $this->fontFamily, $this->fontSize);
+        $glyphs = new Glyphs($cellW, $cellH, $fonts, $this->fontFamily, $this->fontSize, $this->theme);
 
         for ($row = 0; $row < $rows; $row++) {
             $col = 0;
@@ -66,11 +78,14 @@ final class GdRasterizer implements Rasterizer
                 }
 
                 $style = $this->styleFromAttrs($cell->attrs);
+                $inverse = ($cell->attrs & Cell::ATTR_INVERSE) !== 0;
+                $fg = $inverse ? $cell->bg : $cell->fg;
+                $bg = $inverse ? $cell->fg : $cell->bg;
 
                 if ($isWide) {
-                    $tile = $glyphs->tileWide($cell->char, $cell->fg, $cell->bg, $style['bold'], $style['italic'], $style['underline']);
+                    $tile = $glyphs->tileWide($cell->char, $fg, $bg, $style['bold'], $style['italic'], $style['underline']);
                 } else {
-                    $tile = $glyphs->tile($cell->char, $cell->fg, $cell->bg, $style['bold'], $style['italic'], $style['underline']);
+                    $tile = $glyphs->tile($cell->char, $fg, $bg, $style['bold'], $style['italic'], $style['underline']);
                 }
 
                 $dx = $col * $cellW;
@@ -82,7 +97,7 @@ final class GdRasterizer implements Rasterizer
         }
 
         if ($cursor->visible) {
-            $this->renderCursor($canvas, $cursor, $grid, $cellW, $cellH, $glyphs, $fonts);
+            $this->renderCursor($canvas, $cursor, $grid, $cellW, $cellH, $glyphs);
         }
 
         return $canvas;
@@ -107,7 +122,6 @@ final class GdRasterizer implements Rasterizer
         int $cellW,
         int $cellH,
         Glyphs $glyphs,
-        FontLoader $fonts,
     ): void {
         $row = $cursor->row;
         $col = $cursor->col;
@@ -150,8 +164,7 @@ final class GdRasterizer implements Rasterizer
         int $cellH,
         Cell $cell,
     ): void {
-        $cursorColor = $this->cursorColor($cell);
-        $color = $this->allocateColor($canvas, $cursorColor);
+        $color = $this->allocateColor($canvas, $this->cursorColor($cell));
         $uy = $y + (int) floor($cellH * 0.75);
         imagefilledrectangle($canvas, $x, $uy - 2, $x + $cellW - 1, $uy + 1, $color);
     }
@@ -164,8 +177,7 @@ final class GdRasterizer implements Rasterizer
         int $cellH,
         Cell $cell,
     ): void {
-        $cursorColor = $this->cursorColor($cell);
-        $color = $this->allocateColor($canvas, $cursorColor);
+        $color = $this->allocateColor($canvas, $this->cursorColor($cell));
         $bw = max(2, (int) floor($cellW * 0.15));
         imagefilledrectangle($canvas, $x, $y, $x + $bw - 1, $y + $cellH - 1, $color);
     }
@@ -175,7 +187,7 @@ final class GdRasterizer implements Rasterizer
         if (($cell->attrs & Cell::ATTR_INVERSE) !== 0) {
             return $cell->fg;
         }
-        return $cell->fg === 0 ? 15 : $cell->fg;
+        return $cell->fg === 0 ? $this->theme->defaultFg : $cell->fg;
     }
 
     private function isWideChar(string $char): bool
@@ -185,65 +197,11 @@ final class GdRasterizer implements Rasterizer
 
     private function allocateColor(\GdImage $image, int $paletteIndex): int
     {
-        $rgb = $this->indexToRgb($paletteIndex);
-        $r = max(0, min(255, $rgb[0]));
-        $g = max(0, min(255, $rgb[1]));
-        $b = max(0, min(255, $rgb[2]));
+        $rgb = $this->theme->color($paletteIndex);
+        $r = ($rgb >> 16) & 0xff;
+        $g = ($rgb >> 8) & 0xff;
+        $b = $rgb & 0xff;
         $color = imagecolorallocate($image, $r, $g, $b);
         return $color !== false ? $color : 0;
-    }
-
-    /**
-     * @return array{0:int, 1:int, 2:int}
-     */
-    private function indexToRgb(int $index): array
-    {
-        if ($index < 0 || $index > 255) {
-            return [0, 0, 0];
-        }
-
-        if ($index < 16) {
-            return $this->defaultPalette()[$index] ?? [0, 0, 0];
-        }
-
-        if ($index < 232) {
-            $adjusted = $index - 16;
-            $r = (int) floor($adjusted / 36);
-            $g = (int) floor(($adjusted % 36) / 6);
-            $b = $adjusted % 6;
-            return [
-                $r ? $r * 40 + 55 : 0,
-                $g ? $g * 40 + 55 : 0,
-                $b ? $b * 40 + 55 : 0,
-            ];
-        }
-
-        $gray = (int) floor(($index - 232) * 10 + 8);
-        return [$gray, $gray, $gray];
-    }
-
-    /**
-     * @return array<int, array{0:int, 1:int, 2:int}>
-     */
-    private function defaultPalette(): array
-    {
-        return [
-            [0x00, 0x00, 0x00],
-            [0x80, 0x00, 0x00],
-            [0x00, 0x80, 0x00],
-            [0x80, 0x80, 0x00],
-            [0x00, 0x00, 0x80],
-            [0x80, 0x00, 0x80],
-            [0x00, 0x80, 0x80],
-            [0xc0, 0xc0, 0xc0],
-            [0x80, 0x80, 0x80],
-            [0xff, 0x00, 0x00],
-            [0x00, 0xff, 0x00],
-            [0xff, 0xff, 0x00],
-            [0x00, 0x00, 0xff],
-            [0xff, 0x00, 0xff],
-            [0x00, 0xff, 0xff],
-            [0xff, 0xff, 0xff],
-        ];
     }
 }

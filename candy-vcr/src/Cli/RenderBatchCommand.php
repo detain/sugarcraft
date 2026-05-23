@@ -4,28 +4,21 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Cli;
 
+use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\ProgressBar;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Helper\ProgressBar;
 use SugarCraft\Vcr\Encode\TapeToGif;
 
+#[AsCommand(name: 'render-batch', description: 'Render all .tape files in a directory')]
 final class RenderBatchCommand extends Command
 {
-    protected static $defaultName = 'render-batch';
-    protected static $defaultDescription = 'Render all .tape files in a directory';
-
-    public function __construct()
-    {
-        parent::__construct('render-batch');
-    }
-
     protected function configure(): void
     {
         $this
-            ->setDescription('Render all .tape files in a directory')
             ->addArgument('dir', InputArgument::REQUIRED, 'Directory containing .tape files')
             ->addOption('output-dir', 'o', InputOption::VALUE_OPTIONAL, 'Output directory for .gif files (default: same as source dir)')
             ->addOption('font', 'f', InputOption::VALUE_OPTIONAL, 'TTF font family name (default: JetBrainsMono)')
@@ -39,31 +32,22 @@ final class RenderBatchCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $dir = $input->getArgument('dir');
+        $dir = (string) $input->getArgument('dir');
         $outputDir = $input->getOption('output-dir');
-        $recursive = $input->getOption('recursive');
+        $outputDir = is_string($outputDir) ? $outputDir : null;
+        $recursive = (bool) $input->getOption('recursive');
         $fps = (float) $input->getOption('fps');
-        $backend = $input->getOption('backend') ?? 'gd';
-        $encoderType = $input->getOption('encoder') ?? 'ffmpeg';
-        $strict = $input->getOption('strict');
-        $themeName = $input->getOption('theme') ?? 'TokyoNight';
+        $backend = (string) ($input->getOption('backend') ?? 'gd');
+        $encoderType = (string) ($input->getOption('encoder') ?? 'ffmpeg');
+        $strict = (bool) $input->getOption('strict');
+        $themeName = (string) ($input->getOption('theme') ?? 'TokyoNight');
 
         if (!is_dir($dir)) {
             $output->writeln("<error>Not a directory: {$dir}</error>");
             return 1;
         }
 
-        $flags = \FilesystemIterator::KEY_AS_FILENAME | \FilesystemIterator::CURRENT_AS_FILEINFO;
-        $iterator = $recursive
-            ? new \GlobIterator($dir . DIRECTORY_SEPARATOR . '**' . DIRECTORY_SEPARATOR . '*.tape', $flags)
-            : new \GlobIterator($dir . DIRECTORY_SEPARATOR . '*.tape', $flags);
-
-        $tapeFiles = [];
-        foreach ($iterator as $fileInfo) {
-            if ($fileInfo->isFile()) {
-                $tapeFiles[] = $fileInfo->getPathname();
-            }
-        }
+        $tapeFiles = $this->collectTapeFiles($dir, $recursive);
 
         if ($tapeFiles === []) {
             $output->writeln("<comment>No .tape files found in {$dir}</comment>");
@@ -83,6 +67,20 @@ final class RenderBatchCommand extends Command
         $progressBar->setMessage('');
         $progressBar->start();
 
+        $renderer = TapeToGif::create([
+            'fps' => $fps,
+            'backend' => $backend,
+            'encoder' => $encoderType,
+        ]);
+
+        $renderOptions = [
+            'fps' => $fps,
+            'backend' => $backend,
+            'encoder' => $encoderType,
+            'theme' => $themeName,
+            'strict' => $strict,
+        ];
+
         $successCount = 0;
         $failCount = 0;
         $startTime = microtime(true);
@@ -100,17 +98,7 @@ final class RenderBatchCommand extends Command
             $fileStart = microtime(true);
 
             try {
-                TapeToGif::create([
-                    'fps' => $fps,
-                    'backend' => $backend,
-                    'encoder' => $encoderType,
-                ])->render($tapeFile, $outputGif, [
-                    'fps' => $fps,
-                    'backend' => $backend,
-                    'encoder' => $encoderType,
-                    'theme' => $themeName,
-                    'strict' => $strict,
-                ]);
+                $renderer->render($tapeFile, $outputGif, $renderOptions);
 
                 $elapsed = microtime(true) - $fileStart;
                 $results[$basename] = ['status' => 'OK', 'time' => $elapsed];
@@ -131,12 +119,7 @@ final class RenderBatchCommand extends Command
 
         $totalTime = microtime(true) - $startTime;
 
-        $output->writeln(sprintf(
-            ' %-40s %-10s %s',
-            'filename',
-            'status',
-            'time'
-        ));
+        $output->writeln(sprintf(' %-40s %-10s %s', 'filename', 'status', 'time'));
         $output->writeln(str_repeat('-', 65));
 
         foreach ($tapeFiles as $tapeFile) {
@@ -147,18 +130,14 @@ final class RenderBatchCommand extends Command
 
             if (str_starts_with($statusStr, 'FAIL')) {
                 $output->writeln(sprintf(
-                    ' <comment>%-40s</comment> <error>%-10s</error> %s',
+                    ' <comment>%-40s</comment> <error>%-10s</error> %s — %s',
                     $basename,
                     'FAIL',
-                    $timeStr
+                    $timeStr,
+                    substr($statusStr, 6)
                 ));
             } else {
-                $output->writeln(sprintf(
-                    ' %-40s %-10s %s',
-                    $basename,
-                    'OK',
-                    $timeStr
-                ));
+                $output->writeln(sprintf(' %-40s %-10s %s', $basename, 'OK', $timeStr));
             }
         }
 
@@ -172,5 +151,40 @@ final class RenderBatchCommand extends Command
         ));
 
         return $failCount > 0 ? 1 : 0;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectTapeFiles(string $dir, bool $recursive): array
+    {
+        $files = [];
+
+        if (!$recursive) {
+            $entries = glob(rtrim($dir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '*.tape') ?: [];
+            foreach ($entries as $entry) {
+                if (is_file($entry)) {
+                    $files[] = $entry;
+                }
+            }
+            return $files;
+        }
+
+        $iter = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS),
+        );
+        foreach ($iter as $fileInfo) {
+            if (!$fileInfo instanceof \SplFileInfo) {
+                continue;
+            }
+            if (!$fileInfo->isFile()) {
+                continue;
+            }
+            if (strtolower((string) $fileInfo->getExtension()) !== 'tape') {
+                continue;
+            }
+            $files[] = $fileInfo->getPathname();
+        }
+        return $files;
     }
 }
