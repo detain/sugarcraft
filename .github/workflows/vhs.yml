@@ -81,6 +81,8 @@ jobs:
 
       - name: Install candy-vcr deps
         working-directory: ${{ github.workspace }}/candy-vcr
+        env:
+          COMPOSER_AUTH: '{"github-oauth":{"github.com":"${{ secrets.GITHUB_TOKEN }}"}}'
         run: composer install --prefer-dist --no-progress --no-interaction
 
       - name: Render tapes via candy-vcr (encoder=ffmpeg)
