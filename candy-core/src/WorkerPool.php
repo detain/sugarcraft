@@ -32,7 +32,7 @@ final class WorkerPool
     /** @var array<int, WorkerState> */
     private array $workers = [];
 
-    /** @var array<callable> */
+    /** @var list<array{0: string, 1: callable|string}> */
     private array $queue = [];
 
     private int $concurrency;
@@ -260,7 +260,7 @@ final class WorkerPool
 
         $scriptPath = $this->createWorkerScript();
         if ($scriptPath === false) {
-            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null), 'Failed to create worker script', $currentJobId);
+            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null, null), 'Failed to create worker script', $currentJobId);
             return;
         }
 
@@ -281,7 +281,7 @@ final class WorkerPool
 
         if (!is_resource($process)) {
             @unlink($scriptPath);
-            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null), 'Failed to start worker process', $currentJobId);
+            $this->handleWorkerDeath(new WorkerState($workerId, null, null, null, null), 'Failed to start worker process', $currentJobId);
             return;
         }
 
@@ -302,7 +302,7 @@ final class WorkerPool
             stderr: $stderr,
         );
 
-        $this->loop->addReadStream($stderr, function ($stream) use ($worker): void {
+        $this->loop->addReadStream($stderr, function ($stream): void {
             $chunk = fread($stream, 4096);
             if (feof($stream)) {
                 $this->loop->removeReadStream($stream);
