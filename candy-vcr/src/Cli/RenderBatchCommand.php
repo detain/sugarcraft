@@ -52,6 +52,9 @@ final class RenderBatchCommand extends Command
         $themeOpt = $input->getOption('theme');
         $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
+        $fontOpt = $input->getOption('font');
+        $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
+
         if (!is_dir($dir)) {
             $output->writeln("<error>Not a directory: {$dir}</error>");
             return 1;
@@ -81,6 +84,7 @@ final class RenderBatchCommand extends Command
             'fps' => $fps,
             'backend' => $backend,
             'encoder' => $encoderType,
+            'fontFamily' => $fontFamily,
         ]);
 
         $renderOptions = [
@@ -88,6 +92,7 @@ final class RenderBatchCommand extends Command
             'backend' => $backend,
             'encoder' => $encoderType,
             'theme' => $themeName,
+            'fontFamily' => $fontFamily,
             'strict' => $strict,
         ];
 

@@ -772,7 +772,20 @@ $tapeToGif->render('demo.tape', 'demo.gif');
 | Encoder | Description |
 |--------|-------------|
 | `FfmpegGifEncoder` | Default; uses ffmpeg with two-pass palette generation. CFR via `-framerate`; VFR via concat demuxer with process substitution. |
-| `PhpGifEncoder` | Pure-PHP fallback; stub that throws `RuntimeException`. LZW encoding in pure PHP is 5-10× slower than ffmpeg. |
+| `PhpGifEncoder` | Pure-PHP fallback using native GD LZW encoding. Slower than ffmpeg (~5-10×) but requires no external binaries. |
+
+**TapeToGif options:**
+
+```php
+$tapeToGif->render($tapePath, $outputPath, [
+    'fps'       => 30.0,        // frames per second
+    'theme'    => 'TokyoNight', // theme name
+    'fontSize'  => 14,           // terminal font size in pixels
+    'fontFamily' => 'JetBrainsMono', // TTF font family name
+    'backend'  => 'gd',        // 'gd' (default) or 'imagick'
+    'encoder'  => 'ffmpeg',   // 'ffmpeg' (default) or 'php'
+]);
+```
 
 **VFR (Variable Frame Rate):** When `frameHolds` differ between frames, FfmpegGifEncoder writes a concat demuxer file and pipes it to ffmpeg's stdin:
 
@@ -790,18 +803,6 @@ file 'frame00004.png'
 The last frame is listed twice to give it a display duration (the entry before it carries the duration). This produces accurate per-frame timing without re-encoding artifacts.
 
 **Two-pass palette:** `palettegen=stats_mode=diff` computes an optimal 256-color palette by analyzing frame-to-frame pixel differences. `paletteuse=dither=bayer:bayer_scale=5` applies the palette with ordered dithering. This produces significantly better quality than single-pass GIF encoding.
-
-**TapeToGif options:**
-
-```php
-$tapeToGif->render($tapePath, $outputPath, [
-    'fps'      => 30.0,        // frames per second
-    'theme'    => 'TokyoNight', // theme name
-    'fontSize' => 14,           // terminal font size
-    'backend'  => 'gd',        // 'gd' (default) or 'imagick'
-    'encoder'  => 'ffmpeg',   // 'ffmpeg' (default) or 'php'
-]);
-```
 
 **Requirements:** `ffmpeg` must be in `$PATH` for `FfmpegGifEncoder`. The `symfony/process` package is required as a runtime dependency.
 

@@ -65,16 +65,21 @@ final class RenderTapeCommand extends Command
             return $this->dryRun($tapePath, $output);
         }
 
+        $fontOpt = $input->getOption('font');
+        $fontFamily = is_string($fontOpt) ? $fontOpt : 'JetBrainsMono';
+
         try {
             TapeToGif::create([
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,
+                'fontFamily' => $fontFamily,
             ])->render($tapePath, $outputPath, [
                 'fps' => $fps,
                 'backend' => $backend,
                 'encoder' => $encoderType,
                 'theme' => $themeName,
+                'fontFamily' => $fontFamily,
                 'strict' => $strict,
             ]);
         } catch (\Throwable $e) {
