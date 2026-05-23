@@ -22,6 +22,7 @@ final class Terminal
     private Parser $parser;
     private CsiHandlerImpl $csi;
     private OscHandlerImpl $osc;
+    private Theme $theme;
 
     public function __construct(
         public readonly int $cols,
@@ -31,12 +32,14 @@ final class Terminal
         Parser $parser,
         CsiHandlerImpl $csi,
         OscHandlerImpl $osc,
+        ?Theme $theme = null,
     ) {
         $this->grid = $grid;
         $this->cursor = $cursor;
         $this->parser = $parser;
         $this->csi = $csi;
         $this->osc = $osc;
+        $this->theme = $theme ?? new Theme();
     }
 
     public static function new(int $cols = 80, int $rows = 24, ?Theme $theme = null): self
@@ -51,7 +54,12 @@ final class Terminal
         $handler = new HandlerAdapter($csi, $osc);
         $parser = new Parser($handler);
 
-        return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc);
+        return new self($cols, $rows, $grid, $cursor, $parser, $csi, $osc, $theme);
+    }
+
+    public function theme(): Theme
+    {
+        return $this->theme;
     }
 
     public function feed(string $bytes): self

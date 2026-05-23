@@ -8,20 +8,33 @@ use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\CellGrid;
 use SugarCraft\Vt\Cursor;
 use SugarCraft\Vt\Snapshot;
+use SugarCraft\Vt\Theme;
 
 /**
  * Alternative rasterizer using ext-imagick.
  *
- * Provides better anti-aliasing than gd for text rendering.
+ * Provides better anti-aliasing than gd for text rendering. Colors are
+ * resolved through the configured {@see Theme} so user-selected themes
+ * (TokyoNight, Dracula, etc.) reach the GIF instead of the default VGA
+ * palette.
  *
  * Mirrors charmbracelet/x/vhs ImagickRasterizer.
  */
 final class ImagickRasterizer implements Rasterizer
 {
+    private Theme $theme;
+
     public function __construct(
         private int $fontSize = 14,
         private string $fontFamily = 'JetBrainsMono',
+        ?Theme $theme = null,
     ) {
+        $this->theme = $theme ?? new Theme();
+    }
+
+    public function withTheme(Theme $theme): self
+    {
+        return new self($this->fontSize, $this->fontFamily, $theme);
     }
 
     public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \Imagick
@@ -36,13 +49,8 @@ final class ImagickRasterizer implements Rasterizer
         $height = $rows * $cellH;
 
         $imagick = new \Imagick();
-        $imagick->newImage($width, $height, new \ImagickPixel('transparent'));
+        $imagick->newImage($width, $height, new \ImagickPixel($this->indexToHex($this->theme->defaultBg)));
         $imagick->setImageFormat('png');
-        $imagick->setImageBackgroundColor(new \ImagickPixel('transparent'));
-
-        $tileImagick = new \Imagick();
-        $tileImagick->newImage($cellW, $cellH, new \ImagickPixel('transparent'));
-        $tileImagick->setImageFormat('png');
 
         for ($row = 0; $row < $rows; $row++) {
             $col = 0;
@@ -58,12 +66,9 @@ final class ImagickRasterizer implements Rasterizer
 
                 $tile = $this->renderCellTile($cell, $cellW, $cellH, $fonts, $isWide ? $cellW * 2 : $cellW);
                 $imagick->compositeImage($tile, \Imagick::COMPOSITE_OVER, $col * $cellW, $row * $cellH);
+                $tile->clear();
 
-                if ($isWide) {
-                    $col += 2;
-                } else {
-                    $col++;
-                }
+                $col += $isWide ? 2 : 1;
             }
         }
 
@@ -76,12 +81,16 @@ final class ImagickRasterizer implements Rasterizer
 
     private function renderCellTile(Cell $cell, int $cellW, int $cellH, FontLoader $fonts, int $tileW): \Imagick
     {
+        $inverse = ($cell->attrs & Cell::ATTR_INVERSE) !== 0;
+        $fgIdx = $inverse ? $cell->bg : $cell->fg;
+        $bgIdx = $inverse ? $cell->fg : $cell->bg;
+
         $tile = new \Imagick();
-        $tile->newImage($tileW, $cellH, new \ImagickPixel($this->indexToHex($cell->bg)));
+        $tile->newImage($tileW, $cellH, new \ImagickPixel($this->indexToHex($bgIdx)));
         $tile->setImageFormat('png');
 
         $draw = new \ImagickDraw();
-        $draw->setFillColor(new \ImagickPixel($this->indexToHex($cell->fg)));
+        $draw->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));
 
         if (($cell->attrs & Cell::ATTR_BOLD) !== 0) {
             $draw->setFontWeight(700);
@@ -113,7 +122,7 @@ final class ImagickRasterizer implements Rasterizer
         if (($cell->attrs & Cell::ATTR_UNDERLINE) !== 0) {
             $underlineY = (int) floor($cellH * 0.75);
             $draw2 = new \ImagickDraw();
-            $draw2->setFillColor(new \ImagickPixel($this->indexToHex($cell->fg)));
+            $draw2->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));
             $draw2->line(0, $underlineY, $tileW - 1, $underlineY);
             $tile->drawImage($draw2);
         }
@@ -141,12 +150,12 @@ final class ImagickRasterizer implements Rasterizer
         $x = $col * $cellW;
         $y = $row * $cellH;
 
-        $cursorColor = ($cell->attrs & Cell::ATTR_INVERSE) !== 0
-            ? $this->indexToHex($cell->fg)
-            : $this->indexToHex($cell->fg);
+        $cursorIdx = (($cell->attrs & Cell::ATTR_INVERSE) !== 0)
+            ? $cell->bg
+            : ($cell->fg === 0 ? $this->theme->defaultFg : $cell->fg);
 
         $draw = new \ImagickDraw();
-        $draw->setFillColor(new \ImagickPixel($cursorColor));
+        $draw->setFillColor(new \ImagickPixel($this->indexToHex($cursorIdx)));
 
         match ($cursor->shape) {
             1 => $this->drawBlockCursor($draw, $x, $y, $cellW, $cellH),
@@ -182,52 +191,7 @@ final class ImagickRasterizer implements Rasterizer
 
     private function indexToHex(int $index): string
     {
-        if ($index < 0 || $index > 255) {
-            return '#000000';
-        }
-
-        if ($index < 16) {
-            return $this->defaultPalette()[$index] ?? '#000000';
-        }
-
-        if ($index < 232) {
-            $adjusted = $index - 16;
-            $r = (int) floor($adjusted / 36);
-            $g = (int) floor(($adjusted % 36) / 6);
-            $b = $adjusted % 6;
-            $rs = dechex($r ? $r * 40 + 55 : 0);
-            $gs = dechex($g ? $g * 40 + 55 : 0);
-            $bs = dechex($b ? $b * 40 + 55 : 0);
-            return '#' . str_pad($rs, 2, '0', STR_PAD_LEFT) . str_pad($gs, 2, '0', STR_PAD_LEFT) . str_pad($bs, 2, '0', STR_PAD_LEFT);
-        }
-
-        $gray = (int) floor(($index - 232) * 10 + 8);
-        $gs = dechex($gray);
-        return '#' . str_repeat($gs, 6);
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    private function defaultPalette(): array
-    {
-        return [
-            '#000000',
-            '#800000',
-            '#008000',
-            '#808000',
-            '#000080',
-            '#800080',
-            '#008080',
-            '#c0c0c0',
-            '#808080',
-            '#ff0000',
-            '#00ff00',
-            '#ffff00',
-            '#0000ff',
-            '#ff00ff',
-            '#00ffff',
-            '#ffffff',
-        ];
+        $rgb = $this->theme->color($index);
+        return sprintf('#%06x', $rgb & 0xffffff);
     }
 }

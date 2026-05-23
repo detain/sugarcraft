@@ -29,6 +29,10 @@ final readonly class CassetteHeader
      *   before the env reaches the cassette.
      * @param float|null $typingSpeed Milliseconds between keystrokes for Type directives.
      *   Defaults to null (not set) for backward compatibility with older cassettes.
+     * @param string|null $theme Theme name resolved at compile time (e.g. from a `.tape`
+     *   `Set Theme "TokyoNight"` directive). null when the cassette was produced by the
+     *   PTY recorder (which has no theme concept). Renderers should treat null as their
+     *   default theme.
      */
     public function __construct(
         public int $version,
@@ -39,6 +43,7 @@ final readonly class CassetteHeader
         public string $timestampMode = self::TIMESTAMP_MODE_ABSOLUTE,
         public array $env = [],
         public ?float $typingSpeed = null,
+        public ?string $theme = null,
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");

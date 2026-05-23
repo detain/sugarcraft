@@ -41,25 +41,18 @@ final class PhpGifEncoder implements GifEncoder
         $this->writeHeader($gif, $width, $height);
         $this->writeNetscapeExt($gif);
 
-        $previousImage = null;
         for ($i = 0; $i < $frameCount; $i++) {
             $image = $this->loadPng($pngPaths[$i]);
             if ($image === false) {
                 throw new \RuntimeException('Failed to load frame ' . $i . ': ' . $pngPaths[$i]);
             }
 
-            $delay = (int) (($delayCentiseconds[$i] + 5) / 10);
-            $this->writeGraphicCtrlExt($gif, $delay);
-            $this->writeImageBlock($gif, $image, $width, $height, $i === 0);
-
-            if ($previousImage !== null) {
-                imagedestroy($previousImage);
+            try {
+                $this->writeGraphicCtrlExt($gif, $delayCentiseconds[$i]);
+                $this->writeImageBlock($gif, $image, $width, $height);
+            } finally {
+                imagedestroy($image);
             }
-            $previousImage = $image;
-        }
-
-        if ($previousImage !== null) {
-            imagedestroy($previousImage);
         }
 
         $gif->fwrite("\x3b");
@@ -130,7 +123,7 @@ final class PhpGifEncoder implements GifEncoder
         $gif->fwrite("\x00");
     }
 
-    private function writeImageBlock(\SplFileObject $gif, \GdImage $image, int $width, int $height, bool $first): void
+    private function writeImageBlock(\SplFileObject $gif, \GdImage $image, int $width, int $height): void
     {
         \assert($width >= 1 && $height >= 1);
         $gif->fwrite("\x2c");
@@ -139,185 +132,33 @@ final class PhpGifEncoder implements GifEncoder
         $gif->fwrite(pack('v', $width));
         $gif->fwrite(pack('v', $height));
 
-        if ($first) {
-            $gif->fwrite("\x00");
-        } else {
-            $gif->fwrite("\x87");
-        }
+        // Local color table flag (0x80) + size 256 = 0x87 ((1<<3)+7 bits → 256 entries).
+        // Every frame writes its own LCT because we don't share a GCT.
+        $gif->fwrite("\x87");
 
-        $palette = $this->extractPalette($image, $width, $height);
-        foreach (array_slice($palette, 0, 256) as $rgb) {
-            $gif->fwrite(pack('ccc', $rgb[0], $rgb[1], $rgb[2]));
-        }
-
-        while (count($palette) < 256) {
-            $gif->fwrite("\x00\x00\x00");
-            $palette[] = [0, 0, 0];
-        }
-
-        $indexed = imagecreatetruecolor($width, $height);
         imagetruecolortopalette($image, false, 256);
-        imagecopy($indexed, $image, 0, 0, 0, 0, $width, $height);
+        $paletteSize = imagecolorstotal($image);
+
+        for ($idx = 0; $idx < 256; $idx++) {
+            if ($idx < $paletteSize) {
+                $rgba = imagecolorsforindex($image, $idx);
+                $gif->fwrite(chr($rgba['red'] & 0xff) . chr($rgba['green'] & 0xff) . chr($rgba['blue'] & 0xff));
+            } else {
+                $gif->fwrite("\x00\x00\x00");
+            }
+        }
 
         $pixels = '';
         for ($y = 0; $y < $height; $y++) {
-            $pixels .= "\x00";
             for ($x = 0; $x < $width; $x++) {
-                $idx = imagecolorat($indexed, $x, $y);
+                $idx = imagecolorat($image, $x, $y);
                 $pixels .= chr($idx & 0xff);
             }
         }
 
-        imagedestroy($indexed);
-
         $lzw = $this->lzwEncode($pixels, 8);
         $gif->fwrite(pack('C', 8));
         $gif->fwrite($lzw);
-    }
-
-    /**
-     * Extract a 256-color palette from the image using a median-cut algorithm.
-     *
-     * @return array<array{0:int, 1:int, 2:int}>
-     */
-    private function extractPalette(\GdImage $image, int $width, int $height): array
-    {
-        $colors = [];
-
-        for ($y = 0; $y < $height; $y++) {
-            for ($x = 0; $x < $width; $x++) {
-                $idx = imagecolorat($image, $x, $y);
-                if ($idx === false) {
-                    continue;
-                }
-                if (imageistruecolor($image)) {
-                    $a = ($idx >> 24) & 0x7F;
-                    if ($a > 80) {
-                        continue;
-                    }
-                    $colors[] = [
-                        ($idx >> 16) & 0xFF,
-                        ($idx >> 8) & 0xFF,
-                        $idx & 0xFF,
-                    ];
-                } else {
-                    $rgba = imagecolorsforindex($image, $idx);
-                    $alpha = $rgba['alpha'];
-                    if ($alpha > 80) {
-                        continue;
-                    }
-                    $colors[] = [$rgba['red'], $rgba['green'], $rgba['blue']];
-                }
-            }
-        }
-
-        if ($colors === []) {
-            return [[0, 0, 0], [255, 255, 255]];
-        }
-
-        $palette = $this->medianCut($colors, 256);
-
-        while (count($palette) < 2) {
-            $palette[] = [0, 0, 0];
-        }
-
-        return $palette;
-    }
-
-    /**
-     * @param list<array{0:int, 1:int, 2:int}> $colors
-     * @return array<array{0:int, 1:int, 2:int}>
-     */
-    private function medianCut(array $colors, int $maxColors): array
-    {
-        if (count($colors) <= $maxColors) {
-            return $colors;
-        }
-
-        $buckets = [$colors];
-        while (count($buckets) < $maxColors) {
-            $largest = 0;
-            $largestSize = 0;
-            foreach ($buckets as $idx => $bucket) {
-                if (count($bucket) > $largestSize) {
-                    $largestSize = count($bucket);
-                    $largest = $idx;
-                }
-            }
-
-            if ($largestSize <= 1) {
-                break;
-            }
-
-            $bucket = $buckets[$largest];
-            unset($buckets[$largest]);
-            $buckets = array_values($buckets);
-
-            $split = $this->findSplit($bucket);
-            $buckets[] = array_slice($bucket, 0, $split);
-            $buckets[] = array_slice($bucket, $split);
-        }
-
-        $palette = [];
-        foreach ($buckets as $bucket) {
-            $avg = $this->averageColor($bucket);
-            $palette[] = $avg;
-        }
-
-        return $palette;
-    }
-
-    /**
-     * @param list<array{0:int, 1:int, 2:int}> $colors
-     */
-    private function findSplit(array $colors): int
-    {
-        $rMin = 255; $rMax = 0;
-        $gMin = 255; $gMax = 0;
-        $bMin = 255; $bMax = 0;
-
-        foreach ($colors as $c) {
-            if ($c[0] < $rMin) $rMin = $c[0];
-            if ($c[0] > $rMax) $rMax = $c[0];
-            if ($c[1] < $gMin) $gMin = $c[1];
-            if ($c[1] > $gMax) $gMax = $c[1];
-            if ($c[2] < $bMin) $bMin = $c[2];
-            if ($c[2] > $bMax) $bMax = $c[2];
-        }
-
-        $rRange = $rMax - $rMin;
-        $gRange = $gMax - $gMin;
-        $bRange = $bMax - $bMin;
-
-        if ($rRange >= $gRange && $rRange >= $bRange) {
-            usort($colors, fn($a, $b) => $a[0] <=> $b[0]);
-        } elseif ($gRange >= $bRange) {
-            usort($colors, fn($a, $b) => $a[1] <=> $b[1]);
-        } else {
-            usort($colors, fn($a, $b) => $a[2] <=> $b[2]);
-        }
-
-        return (int) floor(count($colors) / 2);
-    }
-
-    /**
-     * @param list<array{0:int, 1:int, 2:int}> $colors
-     * @return array{0:int, 1:int, 2:int}
-     */
-    private function averageColor(array $colors): array
-    {
-        $count = count($colors);
-        $sumR = 0; $sumG = 0; $sumB = 0;
-        foreach ($colors as $c) {
-            $sumR += $c[0];
-            $sumG += $c[1];
-            $sumB += $c[2];
-        }
-        return [
-            (int) round($sumR / $count),
-            (int) round($sumG / $count),
-            (int) round($sumB / $count),
-        ];
     }
 
     private function lzwEncode(string $data, int $minCodeSize): string

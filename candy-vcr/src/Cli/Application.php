@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use Symfony\Component\Console\Application as SymfonyApp;
-use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Command\Command as SymfonyCommand;
+use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Output\StreamOutput;
 
 /**
  * Subcommand router for `bin/candy-vcr`. Dispatches to one of the
@@ -14,7 +16,7 @@ use Symfony\Component\Console\Input\ArrayInput;
  */
 final class Application
 {
-    /** @var array<string, Command|Symfony\Component\Console\Command\Command> */
+    /** @var array<string, Command|SymfonyCommand> */
     private array $commands;
 
     public function __construct(?array $commands = null)
@@ -54,7 +56,7 @@ final class Application
 
         $command = $this->commands[$name];
 
-        if ($command instanceof \Symfony\Component\Console\Command\Command) {
+        if ($command instanceof SymfonyCommand) {
             return $this->runSymfonyCommand($command, $rest, $stdout, $stderr);
         }
 
@@ -67,7 +69,7 @@ final class Application
      * @param resource $stderr
      */
     private function runSymfonyCommand(
-        \Symfony\Component\Console\Command\Command $command,
+        SymfonyCommand $command,
         array $argv,
         $stdout,
         $stderr,
@@ -76,14 +78,27 @@ final class Application
         $symfonyApp->setAutoExit(false);
         $symfonyApp->add($command);
 
-        $input = new ArrayInput(array_merge(['command' => $command->getName()], $argv));
+        $name = $command->getName() ?? '';
+        $argString = $name;
+        foreach ($argv as $arg) {
+            $argString .= ' ' . self::escapeArg($arg);
+        }
+        $input = new StringInput($argString);
 
-        $output = new \Symfony\Component\Console\Output\StreamOutput($stdout);
-        $errOutput = new \Symfony\Component\Console\Output\StreamOutput($stderr);
+        $output = new StreamOutput($stdout);
 
-        $exitCode = $symfonyApp->run($input, $output);
+        return $symfonyApp->run($input, $output);
+    }
 
-        return is_int($exitCode) ? $exitCode : ($exitCode === null ? 0 : 1);
+    private static function escapeArg(string $arg): string
+    {
+        if ($arg === '') {
+            return "''";
+        }
+        if (preg_match('/^[A-Za-z0-9_\-\.\/=@:]+$/', $arg) === 1) {
+            return $arg;
+        }
+        return "'" . str_replace("'", "'\\''", $arg) . "'";
     }
 
     /**
@@ -94,8 +109,8 @@ final class Application
         fwrite($out, "usage: candy-vcr <subcommand> [options...]\n\n");
         fwrite($out, "subcommands:\n");
         foreach ($this->commands as $name => $cmd) {
-            if ($cmd instanceof \Symfony\Component\Console\Command\Command) {
-                fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->getDescription() ?? ''));
+            if ($cmd instanceof SymfonyCommand) {
+                fwrite($out, sprintf("  %-14s %s\n", $name, $cmd->getDescription()));
             } else {
                 fwrite($out, sprintf("  %-10s %s\n", $name, $cmd->summary()));
             }
