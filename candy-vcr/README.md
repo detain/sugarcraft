@@ -735,11 +735,12 @@ Custom serializers slot in via `$registry->register(new MyOne())`.
 
 ```sh
 composer install
-vendor/bin/phpunit           # test suite
-vendor/bin/phpstan analyze   # static analysis (level: max)
+vendor/bin/phpunit                                          # test suite
+vendor/bin/phpstan analyze                                  # static analysis (level: max)
+vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fix style
 ```
 
-Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php`. Run `PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes` from the repo root to auto-fix style violations.
+Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (PSR-12 + `declare_strict_types` + `strict_param` + short array syntax). Append `--dry-run --diff` to preview without writing.
 
 ### Fonts
 

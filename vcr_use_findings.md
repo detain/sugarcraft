@@ -62,10 +62,10 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §0 said add it so subsequent phases have a lint gate. Root `.php-cs-fixer.dist.php` exists but no `vendor/bin/php-cs-fixer` is installed anywhere.
 
-- [ ] Add `friendsofphp/php-cs-fixer: ^3.65` to `candy-vcr/composer.json` `require-dev`.
-- [ ] Same for `candy-vt/composer.json`.
-- [ ] Run `vendor/bin/php-cs-fixer fix --dry-run --diff` in both libs; commit fixes (separate commit from the dep install so the diff is readable).
-- [ ] Add a one-line "lint" snippet to each lib's README under Development.
+- [x] Add `friendsofphp/php-cs-fixer: ^3.65` to `candy-vcr/composer.json` `require-dev`. (Installed as v3.95.2; no conflicts.)
+- [x] Same for `candy-vt/composer.json`. (Installed as v3.95.2; no conflicts.)
+- [x] Run `vendor/bin/php-cs-fixer fix --dry-run --diff` in both libs; commit fixes (separate commit from the dep install so the diff is readable). (candy-vcr: 2 files touched — `src/Encode/PhpGifEncoder.php` (`new class()` → `new class ()`) and `tests/Tape/CompilerTest.php` (`fn(...)` → `fn (...)`). candy-vt: 0 files touched.)
+- [x] Add a one-line "lint" snippet to each lib's README under Development. (`vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php`; both libs have a Development section now.)
 
 ## Section F — Tape compiler round-trip + decompile
 
