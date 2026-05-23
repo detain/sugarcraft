@@ -107,10 +107,10 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** `$defaultName`/`$defaultDescription` static-property pattern is deprecated. Two commands (`RenderTapeCommand`, `RenderBatchCommand`) already moved to `#[AsCommand]` during the audit; others still use the old pattern.
 
-- [ ] Audit every `final class … extends Command` in `candy-vcr/src/Cli/` and `candy-vcr/src/Cli/*`.
-- [ ] Convert each that still uses `protected static $defaultName` to `#[AsCommand(name: …, description: …)]`.
-- [ ] Drop the now-unused `parent::__construct('<name>')` calls.
-- [ ] Verify each subcommand still routes through `bin/candy-vcr <name>` after the change.
+- [x] Audit every `final class … extends Command` in `candy-vcr/src/Cli/` and `candy-vcr/src/Cli/*`. (Only `RenderTapeCommand` and `RenderBatchCommand` extend `Symfony\Component\Console\Command\Command`; the other six — `RecordCommand`, `InspectCommand`, `ReplayCommand`, `DiffCommand`, `StatsCommand`, `MigrateCommand` — implement the local `SugarCraft\Vcr\Cli\Command` interface and never inherited the deprecated static-property pattern.)
+- [x] Convert each that still uses `protected static $defaultName` to `#[AsCommand(name: …, description: …)]`. (Zero conversions needed: both Symfony-based commands already carry `#[AsCommand(name: 'render-tape', …)]` and `#[AsCommand(name: 'render-batch', …)]` from the audit pass; `grep -rn "defaultName\|defaultDescription" candy-vcr/src/Cli/` returns no matches.)
+- [x] Drop the now-unused `parent::__construct('<name>')` calls. (None present — `grep -rn "parent::__construct" candy-vcr/src/Cli/` returns no matches; both Symfony commands omit the constructor entirely and rely on attribute-driven name resolution.)
+- [x] Verify each subcommand still routes through `bin/candy-vcr <name>` after the change. (Smoke loop ran `php candy-vcr/bin/candy-vcr <sc> --help` for `record inspect replay diff stats migrate render-tape render-batch`; all eight respond. The Symfony commands print the framework's "Description:" block; the local-interface commands print their own `usage: …` or the `unknown option --help` diagnostic — confirming the router still dispatches to the correct class.)
 
 ---
 
