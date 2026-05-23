@@ -53,5 +53,14 @@
     "prefer-stable": true,
     "scripts": {
         "serve": "php bin/soft-serve serve"
-    }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }
