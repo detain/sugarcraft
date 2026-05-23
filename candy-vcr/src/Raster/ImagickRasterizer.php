@@ -59,6 +59,25 @@ final class ImagickRasterizer implements Rasterizer
     {
         $clone = new self($this->fontSize, $this->fontFamily, $theme);
         $clone->cacheDisabled = $this->cacheDisabled;
+        $clone->tileCache = $this->tileCache;
+        $clone->tileCacheFingerprint = $this->tileCacheFingerprint;
+        $clone->hits = $this->hits;
+        $clone->misses = $this->misses;
+        return $clone;
+    }
+
+    public function withFont(string $fontFamily, ?int $fontSize = null): self
+    {
+        $clone = new self(
+            $fontSize ?? $this->fontSize,
+            $fontFamily,
+            $this->theme,
+        );
+        $clone->cacheDisabled = $this->cacheDisabled;
+        $clone->tileCache = $this->tileCache;
+        $clone->tileCacheFingerprint = $this->tileCacheFingerprint;
+        $clone->hits = $this->hits;
+        $clone->misses = $this->misses;
         return $clone;
     }
 
