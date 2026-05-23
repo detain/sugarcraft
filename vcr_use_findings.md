@@ -23,12 +23,12 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §0 decision log committed to JetBrainsMono (OFL, monospace, broad glyph coverage). Only DejaVuSansMono is bundled today.
 
-- [ ] Vendor `JetBrainsMono-Regular.ttf` + `JetBrainsMono-Bold.ttf` into `candy-vcr/fonts/`.
-- [ ] Add `JetBrainsMono-Italic.ttf` + `JetBrainsMono-BoldItalic.ttf` so italic / bold-italic don't synthesize via slant.
-- [ ] License notice in `candy-vcr/fonts/LICENSE` (JetBrainsMono is SIL OFL 1.1 — include the full license text).
-- [ ] Update `candy-vcr/README.md` "fonts" section.
-- [ ] Update `Glyphs::DEFAULT` font family already says JetBrainsMono — verify `FontLoader` resolves it.
-- [ ] Keep DejaVu as fallback in `Glyphs::resolveFontPath()` (already done).
+- [x] Vendor `JetBrainsMono-Regular.ttf` + `JetBrainsMono-Bold.ttf` into `candy-vcr/fonts/`. (v2.304, static TTF, 273900 + 277828 bytes)
+- [x] Add `JetBrainsMono-Italic.ttf` + `JetBrainsMono-BoldItalic.ttf` so italic / bold-italic don't synthesize via slant. (276840 + 279832 bytes)
+- [x] License notice in `candy-vcr/fonts/LICENSE` (JetBrainsMono is SIL OFL 1.1 — include the full license text). Copied verbatim from upstream `OFL.txt`.
+- [x] Update `candy-vcr/README.md` "fonts" section. Added under `## Development` → `### Fonts`.
+- [x] Update `Glyphs::DEFAULT` font family already says JetBrainsMono — verify `FontLoader` resolves it. `FontLoader::resolve("JetBrainsMono", $style)` returns the bundled path for all four styles; `Glyphs::resolveFontPath` confirmed to populate `fontPathCache` with the JetBrainsMono TTFs.
+- [x] Keep DejaVu as fallback in `Glyphs::resolveFontPath()` (already done). Untouched — DejaVuSansMono(-Bold).ttf still ship and the catch-block fallback ladder remains.
 
 ## Section C — Regression tests for fixed bugs
 
