@@ -257,7 +257,7 @@ TAPE;
 
         $inputEvents = array_filter(
             $cassette->events,
-            fn($e) => $e->kind === EventKind::Input,
+            fn ($e) => $e->kind === EventKind::Input,
         );
         $this->assertSame(2, count($inputEvents));
     }
