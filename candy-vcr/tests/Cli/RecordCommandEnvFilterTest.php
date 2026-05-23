@@ -7,6 +7,7 @@ namespace SugarCraft\Vcr\Tests\Cli;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 
 /**
  * P6.5.2 — `--env` flag with secret-name regex filter. The plan's
@@ -20,24 +21,7 @@ use SugarCraft\Vcr\Format\JsonlFormat;
  */
 final class RecordCommandEnvFilterTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true spawns.');
-        }
-        if (!\is_executable('/bin/echo')) {
-            $this->markTestSkipped('/bin/echo is not executable on this host.');
-        }
-    }
+    use RequiresWorkingPty;
 
     /**
      * @return iterable<string, array{0: string, 1: bool}>
