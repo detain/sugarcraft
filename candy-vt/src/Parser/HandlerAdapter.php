@@ -39,7 +39,9 @@ final class HandlerAdapter implements Handler
     public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
     {
         $finalChar = chr($final);
-        $count = ($params[0] ?? -1) === -1 ? 1 : max(1, $params[0]);
+        $p0 = (int) ($params[0] ?? -1);
+        $p1 = (int) ($params[1] ?? -1);
+        $count = $p0 === -1 ? 1 : max(1, $p0);
 
         match ($finalChar) {
             'A' => $this->csi->cuu($count),
@@ -47,19 +49,19 @@ final class HandlerAdapter implements Handler
             'C' => $this->csi->cuf($count),
             'D' => $this->csi->cub($count),
             'H', 'f' => $this->csi->cup(
-                ($params[0] ?? -1) === -1 ? 1 : ($params[0] ?? 1),
-                ($params[1] ?? $params[0] ?? -1) === -1 ? 1 : ($params[1] ?? 1),
+                $p0 === -1 ? 1 : $p0,
+                $p1 === -1 ? 1 : $p1,
             ),
             'm' => $this->csi->sgr($params),
-            'J' => $this->csi->ed($params[0] ?? 0),
-            'K' => $this->csi->el($params[0] ?? 0),
+            'J' => $this->csi->ed($p0 === -1 ? 0 : $p0),
+            'K' => $this->csi->el($p0 === -1 ? 0 : $p0),
             'r' => $this->csi->decstbm(
-                ($params[0] ?? -1) === -1 ? 1 : $params[0],
-                ($params[1] ?? -1) === -1 ? $this->csi->gridRows() : $params[1],
+                $p0 === -1 ? 1 : $p0,
+                $p1 === -1 ? $this->csi->gridRows() : $p1,
             ),
-            'h' => $this->csi->decset($params[0] ?? 0, $prefix),
-            'l' => $this->csi->decrst($params[0] ?? 0, $prefix),
-            'g' => $this->csi->tbc($params[0] ?? 0),
+            'h' => $this->csi->decset($p0 === -1 ? 0 : $p0, $prefix),
+            'l' => $this->csi->decrst($p0 === -1 ? 0 : $p0, $prefix),
+            'g' => $this->csi->tbc($p0 === -1 ? 0 : $p0),
             'Z' => $this->csi->cbt($count),
             'I' => $this->csi->cht($count),
             default => null,

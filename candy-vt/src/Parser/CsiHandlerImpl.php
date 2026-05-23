@@ -135,17 +135,18 @@ final class CsiHandlerImpl implements CsiHandler
 
         $i = 0;
         while ($i < count($params)) {
-            $p = $params[$i];
+            $p = (int) $params[$i];
             if ($p === -1) {
                 $p = 0;
             }
 
-            [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam($p, $params, $i);
+            [$this->fg, $this->bg, $this->attrs, $i] = $this->applySgrParam($p, array_values(array_map('intval', $params)), $i);
         }
     }
 
     /**
-     * @return array{fg: int, bg: int, attrs: int, nextIndex: int}
+     * @param list<int> $params
+     * @return array{0: int, 1: int, 2: int, 3: int}
      */
     private function applySgrParam(int $p, array $params, int $i): array
     {

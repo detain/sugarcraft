@@ -34,6 +34,9 @@ final class Theme
     /** @var array<int, int> Maps ANSI slot 0-15 → 256-color index (background). */
     private static array $bgIndexMap = [];
 
+    /**
+     * @param array<int, int>|null $palette
+     */
     public function __construct(
         public readonly int $defaultFg = 7,
         public readonly int $defaultBg = 0,
@@ -42,6 +45,9 @@ final class Theme
         $this->palette = $palette ?? self::defaultPalette();
     }
 
+    /**
+     * @return array<int, int>
+     */
     public static function defaultPalette(): array
     {
         return [
@@ -50,6 +56,9 @@ final class Theme
         ] + self::cubePalette();
     }
 
+    /**
+     * @return array<int, int>
+     */
     private static function cubePalette(): array
     {
         $cube = [];
