@@ -842,4 +842,9 @@ final class TextArea implements Model
             editorExtension:       $editorExtension      ?? $this->editorExtension,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

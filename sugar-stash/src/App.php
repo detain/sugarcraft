@@ -1193,4 +1193,9 @@ final class App implements Model
         if ($ir === null) return $this;
         return $this->withInteractiveRebase($ir->withCursor($dir));
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

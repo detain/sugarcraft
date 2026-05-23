@@ -356,4 +356,9 @@ final class Tree implements Model
             $this->leafGlyph,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

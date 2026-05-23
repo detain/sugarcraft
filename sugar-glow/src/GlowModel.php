@@ -60,4 +60,9 @@ final class GlowModel implements Model
     }
 
     public function isExited(): bool { return $this->exited; }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

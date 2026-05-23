@@ -187,4 +187,9 @@ final class AnimatedProgress implements Model
             animating:        $animating        ?? $this->animating,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
