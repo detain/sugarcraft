@@ -270,6 +270,11 @@ final class DashboardModelForTest implements Model
 
         return implode("\n", $lines);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
 
 /**

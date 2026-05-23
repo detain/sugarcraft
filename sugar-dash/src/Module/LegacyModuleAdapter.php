@@ -71,4 +71,9 @@ final class LegacyModuleAdapter implements Module
     {
         return $this->legacy->minSize();
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
