@@ -228,4 +228,9 @@ final class ChooseModel implements Model
             ordered:   $this->ordered,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

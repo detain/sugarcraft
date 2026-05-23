@@ -106,4 +106,9 @@ final class Player implements Model
     {
         return Cmd::tick($this->interval, static fn(): Msg => new TickMsg());
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

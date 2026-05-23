@@ -712,4 +712,9 @@ final class Table implements Model
             offset: $this->currentPage * $this->pageSize,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

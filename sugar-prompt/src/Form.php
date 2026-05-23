@@ -854,4 +854,9 @@ final class Form implements Model
             keyMap:         $keyMapSet      ? $keyMap : $this->keyMap,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

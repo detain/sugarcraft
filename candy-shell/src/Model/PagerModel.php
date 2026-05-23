@@ -102,4 +102,9 @@ final class PagerModel implements Model
 
     public function view(): string  { return $this->viewport->view(); }
     public function isExited(): bool { return $this->exited; }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

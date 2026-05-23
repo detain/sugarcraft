@@ -205,4 +205,9 @@ final class FilterModel implements Model
             reverse:   $this->reverse,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

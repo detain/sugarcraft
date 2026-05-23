@@ -217,4 +217,9 @@ final class Paginator implements Model
             arabicFormat: $arabicFormat ?? $this->arabicFormat,
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

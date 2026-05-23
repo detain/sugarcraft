@@ -154,4 +154,9 @@ final class VsGame implements Model
     {
         return VsRenderer::render($this);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

@@ -979,4 +979,9 @@ final class TextInput implements Model
             null,
         ];
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
