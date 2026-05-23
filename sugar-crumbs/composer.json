@@ -26,7 +26,16 @@
         {
             "type": "path",
             "url": "../candy-zone",
-            "options": { "symlink": true }
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "require": {
