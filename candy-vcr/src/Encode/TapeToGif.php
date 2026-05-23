@@ -53,6 +53,7 @@ final class TapeToGif
      *   fps?: float,
      *   theme?: string,
      *   fontSize?: int,
+     *   fontFamily?: string,
      *   backend?: 'gd'|'imagick',
      *   encoder?: 'ffmpeg'|'php',
      *   strict?: bool,
@@ -62,6 +63,7 @@ final class TapeToGif
     {
         $fps = (float) ($options['fps'] ?? 30.0);
         $fontSize = (int) ($options['fontSize'] ?? 14);
+        $fontFamily = $options['fontFamily'] ?? 'JetBrainsMono';
         $cliTheme = $options['theme'] ?? null;
 
         $source = @file_get_contents($tapePath);
@@ -75,7 +77,7 @@ final class TapeToGif
 
         $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
         $theme = $this->resolveTheme($themeName);
-        $rasterizer = $this->themedRasterizer($theme);
+        $rasterizer = $this->themedRasterizerWithFonts($theme, $fontFamily);
 
         $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows, $theme);
         $player = new Player($cassette);
@@ -172,6 +174,21 @@ final class TapeToGif
         return $this->rasterizer;
     }
 
+    /**
+     * Create a themed rasterizer, reusing the existing instance but
+     * applying the theme. This preserves any font settings.
+     */
+    private function themedRasterizerWithFonts(Theme $theme, string $fontFamily): Rasterizer
+    {
+        if ($this->rasterizer instanceof GdRasterizer) {
+            return $this->rasterizer->withTheme($theme);
+        }
+        if ($this->rasterizer instanceof ImagickRasterizer) {
+            return $this->rasterizer->withTheme($theme);
+        }
+        return $this->rasterizer;
+    }
+
     private function createTempDir(): string
     {
         $base = sys_get_temp_dir() . '/candy-vcr-t2g-' . getmypid() . '-' . bin2hex(random_bytes(4));
@@ -197,6 +214,7 @@ final class TapeToGif
      *   fps?: float,
      *   theme?: string,
      *   fontSize?: int,
+     *   fontFamily?: string,
      *   backend?: 'gd'|'imagick',
      *   encoder?: 'ffmpeg'|'php',
      * } $options
@@ -205,6 +223,8 @@ final class TapeToGif
     {
         $backend = $options['backend'] ?? 'gd';
         $encoderType = $options['encoder'] ?? 'ffmpeg';
+        $fontSize = (int) ($options['fontSize'] ?? 14);
+        $fontFamily = $options['fontFamily'] ?? 'JetBrainsMono';
 
         $encoder = match ($encoderType) {
             'php' => new PhpGifEncoder(),
@@ -212,8 +232,8 @@ final class TapeToGif
         };
 
         $rasterizer = match ($backend) {
-            'imagick' => new ImagickRasterizer(),
-            default => new GdRasterizer(),
+            'imagick' => new ImagickRasterizer($fontSize, $fontFamily),
+            default => new GdRasterizer($fontSize, $fontFamily),
         };
 
         return new self(

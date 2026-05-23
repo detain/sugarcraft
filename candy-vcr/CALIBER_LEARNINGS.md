@@ -261,7 +261,7 @@ Added `symfony/console` to `require` (was only `symfony/process` before). The ex
 ### Decision log
 
 - **`$strict` option:** The `--strict` flag triggers pre-render validation of the parsed AST for `ParseError` nodes (unknown directives). `TapeToGif::render()` itself doesn't use a `strict` option — validation happens in the command layer before calling `render()`.
-- **`--font` option accepted but not used:** The `--font/-f` option is defined in both commands (accepting a TTF font family name) but is not currently passed to `TapeToGif::create()` or `render()` since the pipeline doesn't yet support custom font families. The option is accepted for future compatibility.
+- **`--font` option now wired through:** The `--font/-f` option is passed to `TapeToGif::create()` as `fontFamily` and forwarded to the rasterizer constructor. Both `GdRasterizer` and `ImagickRasterizer` accept `$fontFamily` in their constructor and use it via `Glyphs`.
 - **ProgressBar phase labels:** Four phases: "Parsing tape...", "Compiling events...", "Rendering frames...", "Encoding GIF...". Progress is advanced after each phase to show the user's position in the pipeline.
 
 ## Visual goldens (Section G — 2026-05-22)
