@@ -251,6 +251,8 @@ final class ExpectRecorderIntegrationTest extends TestCase
  */
 final class EchoModel implements \SugarCraft\Core\Model
 {
+    use \SugarCraft\Core\SubscriptionCapable;
+
     private string $pendingOutput = '';
 
     public function init(): ?\Closure { return null; }
