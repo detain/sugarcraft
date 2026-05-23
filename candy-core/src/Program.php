@@ -11,6 +11,8 @@ use SugarCraft\Core\Msg\ExecMsg;
 use SugarCraft\Core\Msg\InterruptMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\ResumeMsg;
+use SugarCraft\Core\Msg\ScreenStackPoppedMsg;
+use SugarCraft\Core\Msg\ScreenStackPushedMsg;
 use SugarCraft\Core\Msg\SubscriptionsMsg;
 use SugarCraft\Core\Msg\SuspendMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
@@ -913,7 +915,7 @@ final class Program
     /**
      * Start a subscription and return its timer handle.
      *
-     * @return \React\EventLoop\TimerInterface|\React\EventLoop\Timer\TimerInterface
+     * @return \React\EventLoop\TimerInterface
      */
     private function startSubscription(Subscription $sub): mixed
     {
@@ -952,12 +954,12 @@ final class Program
     /**
      * Install a signal handler for the given subscription.
      *
-     * @return \React\EventLoop\TimerInterface|\React\EventLoop\Timer\TimerInterface
+     * @return \React\EventLoop\TimerInterface
      */
     private function installSignalSubscription(Subscription $sub): mixed
     {
         $signo = $sub->params['signo'] ?? 0;
-        $handler = static function (int $signo) use ($sub): void {
+        $handler = function (int $signo) use ($sub): void {
             $msg = ($sub->produce)();
             if ($msg !== null) {
                 $this->dispatch($msg);
@@ -990,6 +992,9 @@ final class Program
      */
     private function drainCompositePendingCmds(): void
     {
+        if (!$this->model instanceof Composite) {
+            return;
+        }
         $cmds = $this->model->pendingCmds();
         if ($cmds === []) {
             return;

@@ -58,6 +58,13 @@ final class Composite implements Model
         if ($childId !== null && isset($this->children[$childId])) {
             [$child, $cmd] = $this->children[$childId]->update($msg);
             if ($child !== $this->children[$childId]) {
+                // update() returns Model; child slots must be Component.
+                // Practically children always return their own type, but guard
+                // for robustness: if the new model isn't a Component, retain
+                // the old child instance.
+                if (!$child instanceof Component) {
+                    return [$this, $cmd];
+                }
                 $children = $this->children;
                 $children[$childId] = $child;
                 return [new self($children), $cmd];
@@ -189,7 +196,7 @@ final class AddComponentMsg implements ComponentAddressedMsg
     ) {
     }
 
-    public function componentId(): ?string
+    public function componentId(): string
     {
         return $this->id;
     }
@@ -204,7 +211,7 @@ final class RemoveComponentMsg implements ComponentAddressedMsg
     {
     }
 
-    public function componentId(): ?string
+    public function componentId(): string
     {
         return $this->id;
     }
