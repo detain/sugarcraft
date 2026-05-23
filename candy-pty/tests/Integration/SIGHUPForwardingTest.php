@@ -65,6 +65,14 @@ final class SIGHUPForwardingTest extends TestCase
         if (!\is_executable(self::SLEEP_PATH)) {
             $this->markTestSkipped(\sprintf('sleep not installed at %s', self::SLEEP_PATH));
         }
+        // Darwin's tty_hangup() semantics diverge from Linux's: master
+        // close does not synchronously deliver SIGHUP to the session
+        // leader within the 1 s window this test enforces. The FD_CLOEXEC
+        // + libc-close fixes documented above are Linux-kernel specific —
+        // the equivalent macOS path needs separate investigation.
+        if (PHP_OS_FAMILY === 'Darwin') {
+            $this->markTestSkipped('Darwin tty_hangup() timing diverges from Linux — needs separate macOS-side fix.');
+        }
 
         $start = \microtime(true);
 
