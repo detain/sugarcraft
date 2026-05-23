@@ -13,11 +13,11 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** `vcr_use.md` §6 lists this as "the single biggest performance lever." Today the cache is per-frame, so the win is lost.
 
-- [ ] Move `Glyphs` instance out of `GdRasterizer::rasterize()` into a private property on `GdRasterizer`.
-- [ ] Invalidate `Glyphs` when `(cellW, cellH, theme, fontFamily, fontSize)` changes — keep a fingerprint, rebuild on mismatch.
-- [ ] Same treatment for `ImagickRasterizer` (no `Glyphs` today — it builds an `Imagick` tile per cell; add an equivalent tile cache keyed on `(char, fg, bg, bold, italic, underline)`).
-- [ ] Add a test that proves cache reuse: render two consecutive snapshots with overlapping `(char, fg, bg, attrs)` tuples, instrument the cache to count rebuilds, assert ≥80% hit rate on the second frame.
-- [ ] Measure: render `candy-vcr/.vhs/smoke.tape` before/after, capture wall-time delta in `candy-vcr/CALIBER_LEARNINGS.md`.
+- [x] Move `Glyphs` instance out of `GdRasterizer::rasterize()` into a private property on `GdRasterizer`.
+- [x] Invalidate `Glyphs` when `(cellW, cellH, theme, fontFamily, fontSize)` changes — keep a fingerprint, rebuild on mismatch.
+- [x] Same treatment for `ImagickRasterizer` (no `Glyphs` today — it builds an `Imagick` tile per cell; add an equivalent tile cache keyed on `(char, fg, bg, bold, italic, underline)`).
+- [x] Add a test that proves cache reuse: render two consecutive snapshots with overlapping `(char, fg, bg, attrs)` tuples, instrument the cache to count rebuilds, assert ≥80% hit rate on the second frame.
+- [x] Measure: render `candy-vcr/.vhs/smoke.tape` before/after, capture wall-time delta in `candy-vcr/CALIBER_LEARNINGS.md`.
 
 ## Section B — Bundle JetBrainsMono
 

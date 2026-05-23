@@ -30,6 +30,10 @@ final class Glyphs
     /** @var array<string, string> */
     private array $fontPathCache = [];
 
+    private int $hits = 0;
+
+    private int $misses = 0;
+
     public function __construct(
         private int $cellW,
         private int $cellH,
@@ -40,6 +44,39 @@ final class Glyphs
     ) {
         $this->fontSize = $fontSize;
         $this->theme = $theme ?? new Theme();
+    }
+
+    /**
+     * @return array{hits:int, misses:int}
+     */
+    public function cacheStats(): array
+    {
+        return ['hits' => $this->hits, 'misses' => $this->misses];
+    }
+
+    public function cellWidth(): int
+    {
+        return $this->cellW;
+    }
+
+    public function cellHeight(): int
+    {
+        return $this->cellH;
+    }
+
+    public function fontFamily(): string
+    {
+        return $this->fontFamily;
+    }
+
+    public function fontSize(): int
+    {
+        return $this->fontSize;
+    }
+
+    public function theme(): Theme
+    {
+        return $this->theme;
     }
 
     /**
@@ -58,9 +95,11 @@ final class Glyphs
         $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline);
 
         if (isset($this->cache[$key])) {
+            $this->hits++;
             return $this->cache[$key];
         }
 
+        $this->misses++;
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $this->cellW);
         $this->cache[$key] = $tile;
 
@@ -83,9 +122,11 @@ final class Glyphs
         $key = $this->cacheKey($char, $fg, $bg, $bold, $italic, $underline) . ':wide';
 
         if (isset($this->cache[$key])) {
+            $this->hits++;
             return $this->cache[$key];
         }
 
+        $this->misses++;
         $wideW = $this->cellW * 2;
         $tile = $this->renderTile($char, $fg, $bg, $bold, $italic, $underline, $wideW);
         $this->cache[$key] = $tile;
