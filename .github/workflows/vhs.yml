@@ -50,6 +50,7 @@ jobs:
   vhs-candy-vcr:
     runs-on: ubuntu-latest
     continue-on-error: true
+    timeout-minutes: 20
     container:
       image: ghcr.io/detain/sugarcraft-vhs-runner-php:latest
     permissions:
@@ -74,9 +75,10 @@ jobs:
       - name: Render tapes via candy-vcr (encoder=ffmpeg)
         if: ${{ hashFiles(format('{0}/.vhs/*.tape', matrix.lib)) != '' }}
         working-directory: ${{ github.workspace }}
+        timeout-minutes: 15
         run: |
           set -euo pipefail
-          php candy-vcr/bin/candy-vcr render-batch \
+          timeout 600 php candy-vcr/bin/candy-vcr render-batch \
             "${{ matrix.lib }}/.vhs/" \
             --encoder ffmpeg
 
