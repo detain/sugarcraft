@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\Cassette;
-use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Format\CassetteLoader;
 
 /**
  * `candy-vcr diff <a.cas> <b.cas>`
@@ -28,8 +28,9 @@ final class DiffCommand implements Command
             return 2;
         }
         try {
-            $a = (new JsonlFormat())->read($paths[0]);
-            $b = (new JsonlFormat())->read($paths[1]);
+            $loader = new CassetteLoader();
+            $a = $loader->load($paths[0]);
+            $b = $loader->load($paths[1]);
         } catch (\Throwable $e) {
             fwrite($stderr, "candy-vcr diff: {$e->getMessage()}\n");
             return 1;

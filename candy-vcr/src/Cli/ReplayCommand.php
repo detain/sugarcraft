@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Vcr\Cli;
 
 use SugarCraft\Vcr\EventKind;
-use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Format\CassetteLoader;
 
 /**
  * `candy-vcr replay <cassette> [--speed=instant|realtime] [--idle-trim=N]`
@@ -77,7 +77,7 @@ final class ReplayCommand implements Command
         }
 
         try {
-            $cassette = (new JsonlFormat())->read($path);
+            $cassette = (new CassetteLoader())->load($path);
         } catch (\Throwable $e) {
             fwrite($stderr, "candy-vcr replay: {$e->getMessage()}\n");
             return 1;

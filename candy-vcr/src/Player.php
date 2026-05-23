@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Program;
 use SugarCraft\Vcr\Assert\Assertion;
 use SugarCraft\Vcr\Assert\ByteAssertion;
+use SugarCraft\Vcr\Format\CassetteLoader;
 use SugarCraft\Vcr\Format\Format;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Format\RelativeFormat;
@@ -73,6 +74,20 @@ final class Player
     public static function open(string $path): self
     {
         return new self(self::detectFormat($path)->read($path));
+    }
+
+    /**
+     * Like {@see open()} but auto-detects the file kind in addition to the
+     * cassette serializer: a `.tape` file (VHS DSL) is compiled to a
+     * Cassette via Lexer → Parser → Compiler; a `.cas`/`.jsonl`/`.cast`/
+     * `.yaml`/`.yml` file is read through the matching {@see Format}.
+     *
+     * Throws {@see \InvalidArgumentException} when neither sniff succeeds —
+     * the CLI maps this to exit code 1.
+     */
+    public static function loadAny(string $path): self
+    {
+        return new self((new CassetteLoader())->load($path));
     }
 
     /**
