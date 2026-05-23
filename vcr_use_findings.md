@@ -114,7 +114,16 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 ---
 
-## Final verification pass (after Sections A–J ship)
+## Section K — README documentation completeness
+
+**Why it matters:** User asked that everything candy-vcr and candy-vt can do be fully documented in their README files at the end of this work.
+
+- [ ] `candy-vcr/README.md` documents every public-facing capability: CLI subcommands (record, replay, inspect, diff, stats, migrate, render-tape, render-batch) with each flag, the `Cassette` / `Recorder` / `Player` PHP APIs, all five cassette formats (Jsonl, Relative, Yaml, Asciinema, CompressedJsonl), the Tape DSL (Lexer/Parser/Compiler/Decompiler) with full directive table, the rasterizer + encoder backends (GdRasterizer, ImagickRasterizer, FfmpegGifEncoder, PhpGifEncoder), the Renderer + FrameStream + FrameDedup pipeline, the Theme system, FontLoader + Glyphs cache.
+- [ ] `candy-vt/README.md` documents Terminal (constructor, `feed`, `snapshot`, `theme`, `cursor`, `grid`, `windowTitle`), Cell/CellGrid/Cursor/Snapshot value-object surfaces, Parser state machine + handler interfaces, every theme factory (TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark), CSI/OSC handler coverage table.
+- [ ] Both READMEs have a "Development" section with phpunit + phpstan + php-cs-fixer commands.
+- [ ] Both READMEs cross-link to the other lib (candy-vt → candy-vcr's renderer, candy-vcr → candy-vt's Terminal).
+
+## Final verification pass (after Sections A–K ship)
 
 Spawn one last review agent to:
 
@@ -124,4 +133,5 @@ Spawn one last review agent to:
 - [ ] Run `vendor/bin/phpstan analyze` in `candy-vcr` and `candy-vt` — report error counts.
 - [ ] Render `candy-vcr/.vhs/smoke.tape` end-to-end with both `--encoder ffmpeg` and `--encoder php`; report GIF dimensions + sizes.
 - [ ] Compare against the upstream-vhs runner job's output for the seed lib; report any visual drift.
+- [ ] Cross-check candy-vcr/README.md + candy-vt/README.md against the actual public API — flag undocumented surface.
 - [ ] Write the final verdict ("Plan complete" or list of residuals) into this file at the bottom.
