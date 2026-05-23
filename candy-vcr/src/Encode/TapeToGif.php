@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Encode;
 
-use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\Player;
 use SugarCraft\Vcr\Render\FrameDedup;
-use SugarCraft\Vcr\Render\FrameStream;
 use SugarCraft\Vcr\Render\Renderer;
 use SugarCraft\Vcr\Raster\GdRasterizer;
 use SugarCraft\Vcr\Raster\ImagickRasterizer;
@@ -18,7 +16,6 @@ use SugarCraft\Vcr\Tape\Parser;
 use SugarCraft\Vt\Snapshot;
 use SugarCraft\Vt\Terminal;
 use SugarCraft\Vt\Theme;
-use SugarCraft\Vt\Themes;
 
 /**
  * Canonical pipeline: .tape file → .gif file.
@@ -26,8 +23,16 @@ use SugarCraft\Vt\Themes;
  * Wires together Lexer → Parser → Compiler → Player → Terminal →
  * Renderer → FrameStream → FrameDedup → Rasterizer → GifEncoder.
  *
- * Per-frame hold durations (seconds) are tracked from FrameDedup output
- * and passed to the encoder for VFR timing.
+ * Per-frame hold durations (milliseconds) are tracked from FrameDedup output
+ * and passed to the encoder for VFR timing — so a `Sleep 2s` in the tape
+ * produces an actual 2-second pause in the GIF instead of repeating
+ * identical frames.
+ *
+ * Designed to be reused across many tape renders (batch mode): the
+ * stateless components (Lexer/Parser/Compiler/Renderer) are created once
+ * and the rasterizer/encoder are reused so glyph caches inside the
+ * rasterizer survive across frames within a tape (Glyphs is still
+ * rebuilt per-tape since cell dimensions can change between tapes).
  */
 final class TapeToGif
 {
@@ -44,8 +49,6 @@ final class TapeToGif
     /**
      * Render a .tape file to a .gif file.
      *
-     * @param string $tapePath
-     * @param string|null $outputPath null = same dir with .gif extension
      * @param array{
      *   fps?: float,
      *   theme?: string,
@@ -57,10 +60,9 @@ final class TapeToGif
      */
     public function render(string $tapePath, ?string $outputPath = null, array $options = []): void
     {
-        $fps = $options['fps'] ?? 30.0;
-        $fontSize = $options['fontSize'] ?? 14;
-        $themeName = $options['theme'] ?? 'TokyoNight';
-        $backend = $options['backend'] ?? 'gd';
+        $fps = (float) ($options['fps'] ?? 30.0);
+        $fontSize = (int) ($options['fontSize'] ?? 14);
+        $cliTheme = $options['theme'] ?? null;
 
         $source = @file_get_contents($tapePath);
         if ($source === false) {
@@ -71,44 +73,52 @@ final class TapeToGif
         $ast = $this->parser->parse($tokens);
         $cassette = $this->compiler->compile($ast, $tapePath);
 
-        $cols = $cassette->header->cols;
-        $rows = $cassette->header->rows;
-
+        $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
         $theme = $this->resolveTheme($themeName);
+        $rasterizer = $this->themedRasterizer($theme);
 
-        $terminal = Terminal::new($cols, $rows, $theme);
+        $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows, $theme);
         $player = new Player($cassette);
 
         $frameStream = $this->renderer->render($player, $terminal, $fps);
 
-        $framesWithHolds = $this->buildFramesWithHolds($frameStream, 1.0 / $fps);
+        $cellW = max(1, (int) floor($fontSize * 0.6));
+        $cellH = max(1, $fontSize * 2);
 
-        $tempDir = sys_get_temp_dir() . '/candy-vcr-t2g-' . getmypid();
-        if (!mkdir($tempDir) && !is_dir($tempDir)) {
-            throw new \RuntimeException("Failed to create temp dir: {$tempDir}");
-        }
-
+        $tempDir = $this->createTempDir();
         $pngPaths = [];
-        $frameHolds = [];
-
-        foreach ($framesWithHolds as ['snapshot' => $snapshot, 'hold' => $hold]) {
-            $image = $this->rasterizer->rasterize($snapshot, 8, $fontSize * 2, null);
-            \assert($image instanceof \GdImage);
-
-            $framePath = $tempDir . '/frame_' . count($pngPaths) . '.png';
-            if (!imagepng($image, $framePath)) {
-                throw new \RuntimeException("Failed to write PNG frame: {$framePath}");
-            }
-            imagedestroy($image);
-
-            $pngPaths[] = $framePath;
-            $frameHolds[] = (int) round($hold * 1000);
-        }
-
-        $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+        $frameHoldsMs = [];
 
         try {
-            $this->encoder->encode($pngPaths, $output, (int) $fps, $frameHolds);
+            foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
+                $image = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH);
+
+                $framePath = $tempDir . '/frame_' . sprintf('%05d', $index) . '.png';
+                try {
+                    $written = $image instanceof \Imagick
+                        ? $image->writeImage($framePath)
+                        : imagepng($image, $framePath);
+                    if ($written === false) {
+                        throw new \RuntimeException("Failed to write PNG frame: {$framePath}");
+                    }
+                } finally {
+                    if ($image instanceof \Imagick) {
+                        $image->clear();
+                    } else {
+                        imagedestroy($image);
+                    }
+                }
+
+                $pngPaths[] = $framePath;
+                $frameHoldsMs[] = (int) round($frameInfo['hold'] * 1000);
+            }
+
+            if ($pngPaths === []) {
+                throw new \RuntimeException("Tape produced no frames: {$tapePath}");
+            }
+
+            $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+            $this->encoder->encode($pngPaths, $output, (int) round($fps), $frameHoldsMs);
         } finally {
             $this->cleanupDir($tempDir);
         }
@@ -123,22 +133,19 @@ final class TapeToGif
         $prevTime = 0.0;
         $dedupIterator = FrameDedup::dedup($stream);
 
-        foreach ($dedupIterator as $index => $snapshot) {
+        $emittedIndex = 0;
+        foreach ($dedupIterator as $snapshot) {
             $frameTime = $snapshot->time;
-
-            if ($index > 0) {
-                $elapsed = $frameTime - $prevTime;
-                $hold = $elapsed > 0 ? $elapsed : $frameInterval;
-            } else {
-                $hold = $frameInterval;
-            }
+            $hold = $emittedIndex === 0
+                ? $frameInterval
+                : max($frameInterval, $frameTime - $prevTime);
 
             $prevTime = $frameTime;
-
-            yield $index => [
+            yield $emittedIndex => [
                 'snapshot' => $snapshot,
                 'hold' => $hold,
             ];
+            $emittedIndex++;
         }
     }
 
@@ -152,6 +159,26 @@ final class TapeToGif
             'SolarizedDark' => Theme::solarizedDark(),
             default => Theme::tokyoNight(),
         };
+    }
+
+    private function themedRasterizer(Theme $theme): Rasterizer
+    {
+        if ($this->rasterizer instanceof GdRasterizer) {
+            return $this->rasterizer->withTheme($theme);
+        }
+        if ($this->rasterizer instanceof ImagickRasterizer) {
+            return $this->rasterizer->withTheme($theme);
+        }
+        return $this->rasterizer;
+    }
+
+    private function createTempDir(): string
+    {
+        $base = sys_get_temp_dir() . '/candy-vcr-t2g-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        if (!mkdir($base, 0700, true) && !is_dir($base)) {
+            throw new \RuntimeException("Failed to create temp dir: {$base}");
+        }
+        return $base;
     }
 
     private function cleanupDir(string $dir): void
@@ -176,7 +203,6 @@ final class TapeToGif
      */
     public static function create(array $options = []): self
     {
-        $fps = $options['fps'] ?? 30.0;
         $backend = $options['backend'] ?? 'gd';
         $encoderType = $options['encoder'] ?? 'ffmpeg';
 

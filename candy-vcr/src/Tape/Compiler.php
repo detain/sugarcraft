@@ -66,6 +66,7 @@ final class Compiler
             timestampMode: CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
             env: $this->env,
             typingSpeed: $this->typingSpeed,
+            theme: $this->theme,
         );
 
         return new Cassette($header, $this->events);
@@ -165,11 +166,15 @@ final class Compiler
 
     /**
      * Convert a character to its raw byte representation matching InputReader.decodeChar().
-     * Returns null for characters that don't emit bytes (e.g., multi-byte chars beyond ASCII).
+     * Returns the UTF-8 byte sequence for printable characters above the ASCII range
+     * so non-ASCII Type strings (accents, CJK, box-drawing) reach the terminal.
      */
     private function charToByte(string $char): ?string
     {
         $code = mb_ord($char, 'UTF-8');
+        if ($code === false) {
+            return null;
+        }
 
         if ($code === 0x09) {
             return "\t";
@@ -191,6 +196,9 @@ final class Compiler
         }
         if ($code >= 0x20 && $code < 0x7f) {
             return chr($code);
+        }
+        if ($code >= 0xa0) {
+            return $char;
         }
 
         return null;
