@@ -195,9 +195,14 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
+          # restore-keys deliberately scoped to the same v3 version + lib +
+          # PHP combo. Older fallback `vendor-${matrix.php}-${matrix.lib}-`
+          # was too loose — it would match any prior cache namespace and
+          # return a stale vendor/ even when composer.json's closure had
+          # grown new deps. Coverage hit this exact bug (#857).
           key: vendor-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            vendor-${{ matrix.php }}-${{ matrix.lib }}-
+            vendor-v3-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
@@ -243,7 +248,7 @@ jobs:
           path: ${{ matrix.lib }}/vendor
           key: vendor-win-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            vendor-win-${{ matrix.php }}-${{ matrix.lib }}-
+            vendor-win-v3-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n --ignore-platform-req=ext-pcntl --ignore-platform-req=ext-shmop
@@ -299,7 +304,7 @@ jobs:
           path: ${{ matrix.lib }}/vendor
           key: vendor-mac-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            vendor-mac-${{ matrix.php }}-${{ matrix.lib }}-
+            vendor-mac-v3-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
@@ -374,13 +379,20 @@ jobs:
           restore-keys: |
             composer-cov-
 
+      # v4 — bump after the path-repo closure PR (#856). Old v3 caches were
+      # made before symfony/console + symfony/process became required closure
+      # for several libs (via path-repo'd sibling deps); the loose
+      # `vendor-cov-<lib>-` restore-key matched any prior cache regardless of
+      # composer.json hash, returning a vendor/ tree missing those classes
+      # and producing 32 "Class Symfony\\Component\\Process\\Process not
+      # found" errors on Coverage · candy-vcr.
       - name: Cache vendor/
         uses: actions/cache@v5
         with:
           path: ${{ matrix.lib }}/vendor
-          key: vendor-cov-v3-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
+          key: vendor-cov-v4-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            vendor-cov-${{ matrix.lib }}-
+            vendor-cov-v4-${{ matrix.lib }}-
 
       # Cache key version bump — increment when intra-monorepo @dev
       # deps shift in a lib's composer.json so stale cache entries
@@ -484,8 +496,7 @@ jobs:
           path: ${{ matrix.lib }}/vendor
           key: vendor-stan-v3-${{ matrix.php }}-${{ matrix.lib }}-${{ hashFiles(format('{0}/composer.json', matrix.lib)) }}
           restore-keys: |
-            vendor-stan-${{ matrix.php }}-${{ matrix.lib }}-
-            vendor-stan-${{ matrix.lib }}-
+            vendor-stan-v3-${{ matrix.php }}-${{ matrix.lib }}-
 
       - name: Install dependencies
         run: cd ${{ matrix.lib }} && composer install --prefer-dist --no-progress -n
