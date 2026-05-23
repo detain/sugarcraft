@@ -125,7 +125,9 @@ final class ExternalModule implements LegacyModule
     {
         $cmd = array_merge([$this->command], $this->args);
 
-        $this->process = proc_open(
+        // Suppress PHP warning when the binary does not exist; we surface
+        // the failure via the RuntimeException below for explicit handling.
+        $this->process = @proc_open(
             $cmd,
             [
                 0 => ['pipe', 'r'],

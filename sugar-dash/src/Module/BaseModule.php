@@ -58,6 +58,11 @@ abstract class BaseModule implements Module
         return [30, 4];
     }
 
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
+
     /**
      * Get current module state.
      *

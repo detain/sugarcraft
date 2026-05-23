@@ -339,4 +339,9 @@ final class ZoneRoutingModel implements \SugarCraft\Core\Model
     }
 
     public function view(): string { return ''; }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

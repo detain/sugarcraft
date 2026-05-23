@@ -7,6 +7,7 @@ namespace SugarCraft\Metrics\Tests\Middleware;
 use SugarCraft\Metrics\Backend\InMemoryBackend;
 use SugarCraft\Metrics\Middleware\SessionMetrics;
 use SugarCraft\Metrics\Registry;
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Session;
 use PHPUnit\Framework\TestCase;
 
@@ -26,7 +27,7 @@ final class SessionMetricsTest extends TestCase
         $b = new InMemoryBackend();
         $r = new Registry($b);
         $mw = new SessionMetrics($r);
-        $mw->handle($this->session(), function (): void { usleep(1000); });
+        $mw->handle(Context::background(), $this->session(), function (): void { usleep(1000); });
 
         $this->assertSame(
             1.0,
@@ -43,7 +44,7 @@ final class SessionMetricsTest extends TestCase
         $r = new Registry($b);
         $mw = new SessionMetrics($r);
         try {
-            $mw->handle($this->session(), function (): void {
+            $mw->handle(Context::background(), $this->session(), function (): void {
                 throw new \RuntimeException('boom');
             });
             $this->fail('expected exception to propagate');
@@ -63,7 +64,7 @@ final class SessionMetricsTest extends TestCase
         $b = new InMemoryBackend();
         $r = new Registry($b);
         $mw = new SessionMetrics($r, fn(Session $s) => ['client_subnet' => '127.0.0.0/24']);
-        $mw->handle($this->session(), fn() => null);
+        $mw->handle(Context::background(), $this->session(), fn() => null);
 
         $this->assertSame(
             1.0,
