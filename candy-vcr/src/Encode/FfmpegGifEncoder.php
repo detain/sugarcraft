@@ -12,6 +12,11 @@ use Symfony\Component\Process\Process;
  * Writes frames as PNGs to a temp directory and invokes ffmpeg with
  * two-pass palette generation for quality GIF output at acceptable file size.
  *
+ * When per-frame `$durations` are supplied (milliseconds), a concat
+ * demuxer list is built so each frame holds for its own duration —
+ * this is what makes `Sleep 2s` in a tape produce a real 2-second
+ * pause in the GIF instead of being flattened by frame dedup.
+ *
  * Mirrors charmbracelet/x/vhs FfmpegGifEncoder.
  */
 final class FfmpegGifEncoder implements GifEncoder
@@ -46,37 +51,44 @@ final class FfmpegGifEncoder implements GifEncoder
             throw new \RuntimeException('No frames provided to encode');
         }
 
-        $frameCount = count($pngPaths);
-        $framerate = (float) $fps;
+        $useVfr = $durations !== null && count($durations) === count($pngPaths);
 
-        $tempDir = sys_get_temp_dir() . '/candy-vcr-gif-' . getmypid();
-        if (!mkdir($tempDir) && !is_dir($tempDir)) {
-            throw new \RuntimeException("Failed to create temp dir: {$tempDir}");
-        }
-
+        $tempDir = $this->createTempDir();
         try {
-            foreach ($pngPaths as $index => $srcPath) {
-                $dst = $tempDir . '/' . sprintf('frame%05d.png', $index);
-                if (!copy($srcPath, $dst)) {
-                    throw new \RuntimeException("Failed to copy frame {$index}: {$srcPath}");
+            $filter = $this->buildFilterComplex();
+
+            if ($useVfr) {
+                $concatList = $this->buildConcatList($pngPaths, $durations, $tempDir);
+                $args = [
+                    $this->ffmpegBin,
+                    '-y',
+                    '-f', 'concat',
+                    '-safe', '0',
+                    '-i', $concatList,
+                    '-vf', $filter,
+                    '-loop', '0',
+                    $outputPath,
+                ];
+            } else {
+                foreach ($pngPaths as $index => $srcPath) {
+                    $dst = $tempDir . '/frame' . sprintf('%05d', $index) . '.png';
+                    if (!copy($srcPath, $dst)) {
+                        throw new \RuntimeException("Failed to copy frame {$index}: {$srcPath}");
+                    }
                 }
+                $args = [
+                    $this->ffmpegBin,
+                    '-y',
+                    '-framerate', (string) $fps,
+                    '-i', $tempDir . '/frame%05d.png',
+                    '-vf', $filter,
+                    '-loop', '0',
+                    $outputPath,
+                ];
             }
 
-            $inputPattern = $tempDir . '/frame%05d.png';
-            $filterComplex = $this->buildFilterComplex($fps, $durations);
-
-            $args = [
-                '-framerate', (string) $framerate,
-                '-i', $inputPattern,
-                '-vf', $filterComplex,
-                '-loop', '0',
-            ];
-
-            $args[] = $outputPath;
-
-            $process = new Process([$this->ffmpegBin, ...$args]);
+            $process = new Process($args);
             $process->setTimeout(300);
-
             $exitCode = $process->run();
 
             if ($exitCode !== 0) {
@@ -101,15 +113,46 @@ final class FfmpegGifEncoder implements GifEncoder
         return 'ffmpeg';
     }
 
-    /**
-     * @param list<int>|null $durations
-     */
-    private function buildFilterComplex(int $fps, ?array $durations): string
+    private function buildFilterComplex(): string
     {
         $palettegen = 'palettegen=' . self::DEFAULT_PALETTEGEN_FLAGS;
         $paletteuse = 'paletteuse=' . self::DEFAULT_PALETTEUSE_FLAGS;
-
         return "split[s0][s1];[s0]{$palettegen}[p];[s1][p]{$paletteuse}";
+    }
+
+    /**
+     * Build a concat demuxer list with one `file` + `duration` pair per
+     * frame. Each duration is in seconds. The final frame is repeated
+     * (concat demuxer quirk — the last entry's duration is otherwise
+     * ignored).
+     *
+     * @param list<string> $pngPaths
+     * @param list<int>    $durationsMs
+     */
+    private function buildConcatList(array $pngPaths, array $durationsMs, string $tempDir): string
+    {
+        $listPath = $tempDir . '/concat.txt';
+        $lines = [];
+        $count = count($pngPaths);
+        for ($i = 0; $i < $count; $i++) {
+            $absPath = realpath($pngPaths[$i]);
+            if ($absPath === false) {
+                throw new \RuntimeException("Frame file vanished before encode: {$pngPaths[$i]}");
+            }
+            $escapedPath = "'" . str_replace("'", "'\\''", $absPath) . "'";
+            $durationSec = max($durationsMs[$i] / 1000.0, 0.02);
+            $lines[] = 'file ' . $escapedPath;
+            $lines[] = 'duration ' . sprintf('%.4f', $durationSec);
+        }
+        $lastPath = realpath($pngPaths[$count - 1]);
+        if ($lastPath !== false) {
+            $lines[] = 'file ' . "'" . str_replace("'", "'\\''", $lastPath) . "'";
+        }
+
+        if (file_put_contents($listPath, implode("\n", $lines) . "\n") === false) {
+            throw new \RuntimeException("Failed to write concat list: {$listPath}");
+        }
+        return $listPath;
     }
 
     private function detectAvailability(): bool
@@ -123,6 +166,15 @@ final class FfmpegGifEncoder implements GifEncoder
         } catch (\Exception) {
             return false;
         }
+    }
+
+    private function createTempDir(): string
+    {
+        $dir = sys_get_temp_dir() . '/candy-vcr-gif-' . getmypid() . '-' . bin2hex(random_bytes(4));
+        if (!mkdir($dir, 0700, true) && !is_dir($dir)) {
+            throw new \RuntimeException("Failed to create temp dir: {$dir}");
+        }
+        return $dir;
     }
 
     private function cleanup(string $tempDir): void
