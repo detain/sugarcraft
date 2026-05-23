@@ -45,11 +45,19 @@ final class McpClient
         $command = $this->command ?? 'claude';
         $args = $this->args;
 
-        //spaws process with stdio transport - Claude Code MCP uses stdin/stdout
-        // Suppress proc_open's PHP warning when the binary is missing; the
-        // RuntimeException below surfaces the failure to callers explicitly.
+        // Validate the binary up-front. Calling proc_open() with a missing
+        // command emits a PHP warning before returning false; under
+        // PHPUnit's failOnWarning="true" the test would fail even though
+        // we throw a RuntimeException right after. Resolving the binary
+        // ourselves means proc_open() only runs against a real executable
+        // and never has reason to warn.
+        if (self::resolveExecutable($command) === null) {
+            throw new RuntimeException("Failed to spawn MCP process: {$command}");
+        }
+
+        // stdio transport — Claude Code MCP speaks JSON-RPC over stdin/stdout.
         /** @var array{0: resource, 1: resource, 2: resource} */
-        $processHandles = @proc_open(
+        $processHandles = proc_open(
             array_merge([$command], $args),
             [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
             $pipes,
@@ -254,6 +262,38 @@ final class McpClient
         }
         /** @var array<int, resource> */
         return $this->pipes;
+    }
+
+    /**
+     * Locate an executable by PATH search (or accept an absolute / relative
+     * path as-is). Returns the resolved absolute path, or null if the
+     * command can't be found. Used to pre-validate before proc_open() so
+     * that a missing binary throws a clean RuntimeException without
+     * emitting a PHP warning that would trip PHPUnit's failOnWarning gate.
+     */
+    private static function resolveExecutable(string $command): ?string
+    {
+        if ($command === '') {
+            return null;
+        }
+        if (str_contains($command, DIRECTORY_SEPARATOR) || str_contains($command, '/')) {
+            return (is_file($command) && is_executable($command)) ? $command : null;
+        }
+        $pathEnv = getenv('PATH');
+        if (!is_string($pathEnv) || $pathEnv === '') {
+            return null;
+        }
+        $sep = DIRECTORY_SEPARATOR === '\\' ? ';' : ':';
+        foreach (explode($sep, $pathEnv) as $dir) {
+            if ($dir === '') {
+                continue;
+            }
+            $candidate = rtrim($dir, '/\\') . DIRECTORY_SEPARATOR . $command;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
     }
 
     /**
