@@ -1,11 +1,32 @@
 # CandyVcr
 
-PHP port of [`charmbracelet/x/vcr`](https://github.com/charmbracelet/x/tree/main/vcr).
+PHP port of [`charmbracelet/x/vcr`](https://github.com/charmbracelet/x/tree/main/vcr)
+**and** a drop-in PHP replacement for
+[`charmbracelet/vhs`](https://github.com/charmbracelet/vhs) (`.tape` →
+`.gif` renderer). Pairs with [candy-vt](../candy-vt/) — every frame
+fed to the GIF encoder is a `SugarCraft\Vt\Snapshot` taken off
+candy-vt's `Terminal`.
 
 Records every Msg fed into a candy-core `Program` and every frame emitted by
 `view()`, with timing, into a cassette file. Replays cassettes by feeding the
 recorded Msgs back at recorded cadence and asserting frames match (cell-grid
 equality via [candy-vt](../candy-vt/), with byte-equality fallback).
+
+## Contents
+
+- [Status](#status) · [Use cases](#use-cases) · [Install](#install)
+- [Cassette formats](#cassette-formats) — Jsonl / CompressedJsonl / Relative / Yaml / Asciinema
+- [PHP API](#php-api) — `Cassette`, `Recorder`, `Player`, `Player::loadAny()`
+- [Assertion classes](#assertion-classes) — Byte / Screen / Contains / Regex
+- [Matcher classes](#matcher-classes) — Passthrough / Content / TimingTolerant
+- [Hook system](#hook-system-l4) · [Migration system](#cassette-migration)
+- [CLI commands](#cli) — `record` · `inspect` · `replay` · `diff` · `stats` · `migrate` · `render-tape` · `render-batch`
+- [Tape DSL](#tape-compiler-pr8) — Lexer / Parser / Compiler / Decompiler / full directive table
+- [Renderer pipeline](#frame-renderer-pr9) — Renderer / FrameStream / FrameDedup
+- [Rasterizer](#frame-rasterizer-phase-4) — GdRasterizer / ImagickRasterizer / Glyphs / FontLoader
+- [GIF encoder](#gif-encoder-phase-5) — FfmpegGifEncoder / PhpGifEncoder / TapeToGif
+- [Visual regression goldens](#visual-regression-goldens)
+- [Development](#development) · [CI integration](#ci-integration)
 
 ## Status
 
@@ -175,7 +196,23 @@ $cassette = $format->read('/tmp/session.cas.gz');
  events to output events, `i` (stdin) events to input events, and `x` (exit)
  events to quit events.
 
- ## Quickstart
+ ## PHP API
+
+The core types in `SugarCraft\Vcr\`:
+
+| Class | Role |
+|-------|------|
+| `Cassette` | Immutable container: `header: CassetteHeader`, `events: list<Event>`. Accessors `eventCount()`, `header()`, `duration()`. |
+| `CassetteHeader` | Schema metadata — `$version`, `$cols`, `$rows`, `$runtime`, `$theme`, `$typingSpeed`, `$env`, `$timestampMode`, `$created`. Constants `CURRENT_VERSION`, `TIMESTAMP_MODE_ABSOLUTE`, `TIMESTAMP_MODE_RELATIVE`. |
+| `Event` | One recorded line. Fields: `t: float`, `kind: EventKind`, payload `array`. |
+| `EventKind` | Enum: `Resize`, `Input`, `Output`, `Quit`. |
+| `Recorder` | Record-side. Construct via `Recorder::open($path)`. Methods: `withFormat(Format)`, `withHook(Hook)`, `withIdleTrim($threshold, $compressedMax=0.5)`, `recordResize($cols, $rows)`, `recordInputBytes($bytes)`, `recordOutput($bytes)`, `recordQuit()`, `close()`. Helpers `defaultHeader($cols, $rows, $runtime)`, `filteredHostEnv($regex)`, `hooks(): HookRegistry`. |
+| `Player` | Replay-side. Factories: `Player::open($path)` (extension-only), `Player::loadAny($path)` (extension + content sniff via `CassetteLoader`, accepts `.tape` sources). Methods: `withIdleTrim(?float)`, `play(programFactory, ?assertion, ?speed, ?idleThresholdSeconds, ?useRawTimestamps)`. Constants `SPEED_INSTANT`, `SPEED_REALTIME`, `INSTANT_YIELD_SECONDS`. |
+| `Format\Format` (interface) | `write(Cassette, $path)`, `read($path): Cassette`, `encode(Cassette): string`, `decode(string): Cassette`. Implementations: `JsonlFormat` (default), `CompressedJsonlFormat`, `RelativeFormat`, `YamlFormat`, `AsciinemaFormat` (read-only). |
+| `Format\CassetteLoader` | `load($path): Cassette` — auto-detects cassette vs tape source. `isTape($path): bool` — exposes the sniff. |
+| `ReplayResult` | DTO returned by `Player::play()`. `$ok: bool`, `diffSummary(): string`, `$expectedBytes`, `$actualBytes`. |
+
+## Quickstart
 
 Record a session:
 
@@ -325,7 +362,33 @@ $recorder->withHook(new MetadataHook([
 **Available hooks:**
 - `SanitizingHook` — removes keys or replaces patterns via regex
 - `MetadataHook` — injects metadata into the first output event
-- Custom hooks implement `SugarCraft\Vcr\Hook\Hook`
+- Custom hooks implement `SugarCraft\Vcr\Hook\Hook` (`beforeSave($event): ?Event` + `afterCapture($event): void`)
+
+Hooks are managed by `Hook\HookRegistry`
+(`addHook`, `beforeSave`, `afterCapture`, `count`, `clear`).
+`Recorder::withHook()` appends to its private registry; returning
+`null` from `beforeSave()` drops the event entirely.
+
+### Matcher classes (L3 — replay-side flexibility)
+
+`SugarCraft\Vcr\Matcher\EventMatcher` controls when a replayed event
+"matches" the recorded one. Use cases: timing-tolerant replays (CI
+that drifts a few ms), content-only diffs (ignore wall-clock drift
+entirely).
+
+| Class | Semantics |
+|-------|-----------|
+| `PassthroughMatcher` | Default — every event matches; pairs with `ByteAssertion` for the actual diff. |
+| `ContentMatcher` | Matches on `(kind, payload)`; ignores `t`. Useful when replay timing isn't deterministic. |
+| `TimingTolerantMatcher` | Matches when `\|t_actual - t_recorded\| ≤ $tolerance`. Construct with `$tolerance: float` (seconds). |
+
+```php
+use SugarCraft\Vcr\Matcher\TimingTolerantMatcher;
+$matcher = new TimingTolerantMatcher(tolerance: 0.05);  // ±50 ms
+$matcher->matches($recordedEvent, $actualEvent);  // bool
+```
+
+Custom matchers implement `EventMatcher::matches(Event $recorded, Event $actual): bool`.
 
 ### Rendering `.tape` files to GIF (PR12)
 
@@ -478,21 +541,43 @@ $cassette = (new Compiler())->compile($result['ast'], 'demo.tape');
 
 | Directive | Supported | Notes |
 |---|---|---|
-| `Type "..."` | ✅ | Each char emits a KeyMsg at TypingSpeed cadence |
-| `Enter`, `Tab`, `Backspace` | ✅ | Raw bytes: `\r`, `\t`, `\x7f` |
-| `Space`, `Escape` | ✅ | Raw bytes: ` `, `\x1b` |
-| `Up`, `Down`, `Left`, `Right` | ✅ | CSI sequences: `\x1b[A` etc. |
-| `Ctrl+<letter>` | ✅ | Control character (char & 0x1F) |
-| `Sleep <duration>` | ✅ | Advances virtual clock only |
-| `Set Width/Height` | ✅ | Sets cassette header cols/rows |
-| `Set Theme` | ✅ | Sets theme name in header |
-| `Set TypingSpeed` | ✅ | Typing cadence (ms per keystroke) |
-| `Env KEY "value"` | ✅ | Adds to cassette header env |
-| `Output <path>` | ✅ | Accepted (stored for render step) |
-| `Hide`, `Show` | ⚠️ | Parsed, no-op (deferred to v2) |
-| `Wait <duration>` | ⚠️ | Parsed, no-op (deferred to v2) |
-| `Screenshot <path>` | ⚠️ | Parsed, no-op (deferred to v2) |
-| `Screen /regex/` | ⚠️ | Parsed, ignored (deferred to v2) |
+| `Type "..."` | ✅ | Each char emits an Input event at `TypingSpeed` cadence. UTF-8 string literals preserved byte-for-byte. |
+| `Enter` | ✅ | Raw byte `\r`. |
+| `Tab` | ✅ | Raw byte `\t`. |
+| `Backspace` | ✅ | Raw byte `\x7f`. |
+| `Space` | ✅ | Raw byte `' '`. |
+| `Escape` | ✅ | Raw byte `\x1b`. |
+| `Up` / `Down` / `Left` / `Right` | ✅ | CSI cursor: `\x1b[A` / `[B` / `[D` / `[C`. |
+| `Ctrl+<letter>` | ✅ | Control character via `ord($letter) & 0x1F`; round-trips as upper-case `Ctrl+C`. |
+| `Sleep <duration>` | ✅ | Advances virtual clock only; suffixes `ms`/`s`/`m` accepted. |
+| `Set <key> <value>` | ✅ | Key allowlist below. |
+| `Env KEY "value"` | ✅ | Adds to cassette header env map. |
+| `Output <path>` | ✅ | Accepted (stored on the OutputDirective AST node for the render step; not encoded as a Cassette event). |
+| `Hide`, `Show` | ⚠️ | Parsed, currently a no-op (frame capture toggle — deferred to v2). |
+| `Wait <duration>` | ⚠️ | Parsed, no-op (deferred to v2). |
+| `Screenshot <path>` | ⚠️ | Parsed, no-op (deferred to v2). |
+
+The `Set` directive's `key` parameter is validated against an
+allowlist; unknown keys raise a `ParseError`:
+
+| Set key | Effect |
+|---------|--------|
+| `Theme` | Theme name (`TokyoNight`, `TokyoNightLight`, `TokyoNightStorm`, `Dracula`, `SolarizedDark`). Stored on `CassetteHeader::$theme`. |
+| `FontSize` | Default rasterizer font size in pixels (`Renderer` default 14). |
+| `Width` / `Height` | Initial terminal cols / rows (stored on the header). |
+| `TypingSpeed` | Inter-character delay for `Type` runs. Accepts `<n>ms` / `<n>s` / `<n>m`. |
+| `FontFamily` | TTF family name (resolved by `FontLoader`). |
+| `Padding` / `Margin` | Reserved for the rasterizer; accepted but not yet enforced. |
+| `PlaybackSpeed` | Multiplier for cassette playback (1.0 = realtime). |
+
+```php
+// AST nodes (under SugarCraft\Vcr\Tape\Ast):
+// TypeDirective · EnterDirective · TabDirective · BackspaceDirective ·
+// SpaceDirective · EscapeDirective · ArrowDirective · CtrlDirective ·
+// SleepDirective · SetDirective · EnvDirective · OutputDirective ·
+// HideDirective · ShowDirective · WaitDirective · ScreenshotDirective ·
+// ParseError
+```
 
 The `Compiler::compile()` method produces a `Cassette` with a `CassetteHeader`
 carrying the configured cols/rows/theme/env and a list of `Event` objects
@@ -657,6 +742,16 @@ advances 2 columns after blitting. Checked via `mb_strwidth($char) > 1`.
 - Underline (shape=2): filled rect at y = cellH × 0.75
 - Bar (shape=3): narrow filled rect at left edge
 
+**FontLoader API.** `new FontLoader($fontDirs = [])` resolves TTF
+paths. `load($family, $size, $style = 'regular')` returns the resolved
+path (throws if missing); `resolve($family, $style)` returns
+`?string`; `lastResolvedPath()` returns the most recent hit. Search
+order: bundled `candy-vcr/fonts/` → `$fontDirs` overrides →
+`/usr/share/fonts/{truetype,opentype}` → `~/.fonts/` →
+`~/.local/share/fonts/`.
+
+**Glyphs API.** `new Glyphs($cellW, $cellH, $theme, $fontFamily = Glyphs::DEFAULT_FONT_FAMILY, $fontSize = 14)` builds a per-(char, fg, bg, attrs) tile cache. Accessors: `cellWidth()`, `cellHeight()`, `fontFamily()`, `fontSize()`, `theme()`, `cacheStats(): array{hits: int, misses: int}`, `tile($char, $fg, $bg, $bold, $italic, $underline): GdImage`, `tileWide(...)` (2× width for CJK / fullwidth), `measure($char): array{cellW, cellH}`. The instance is hoisted onto the rasterizer as a property (Section A) so the cache survives across every snapshot in one tape render — a `(cellW, cellH, theme, fontFamily, fontSize)` fingerprint invalidates and rebuilds when any of those change.
+
 ## GIF encoder (Phase 5)
 
 The `SugarCraft\Vcr\Encode` namespace converts a stream of rasterized PNG frames
@@ -804,6 +899,35 @@ in the output (e.g. a status message, prompt, or error keyword) without
 requiring exact formatting. The comparison is case-sensitive; empty
 substring always matches.
 
+`RegexAssertion` accepts a PCRE pattern (with delimiters) and supports
+multiline / case-insensitive / dot-all flags on the constructor:
+
+```php
+use SugarCraft\Vcr\Assert\RegexAssertion;
+
+$result = $player->play(
+    programFactory: $factory,
+    assertion: new RegexAssertion(
+        pattern: '/Ready in \\d+ms\\./',
+        multiline: true,
+        caseInsensitive: false,
+        dotAll: false,
+    ),
+);
+```
+
+Invalid PCRE patterns throw `\InvalidArgumentException` at construction.
+
+**Assertion class summary:**
+
+| Class | Use when |
+|-------|----------|
+| `ByteAssertion` | Strict byte-equality; the safest baseline. |
+| `ScreenAssertion` | Cell-grid equality through candy-vt; collapses ANSI re-orderings. Default for round-trip tests. |
+| `ContainsAssertion` | Substring check; expected must appear anywhere in actual. |
+| `RegexAssertion` | PCRE regex match; supports `multiline` / `caseInsensitive` / `dotAll`. |
+| `Assertion` (interface) | `compare(string $expected, string $actual): array{0: bool, 1: string}` — implement for custom assertions. |
+
 ### Msg serializers (PR3)
 
 `SugarCraft\Vcr\Msg\Registry::default()` is preloaded with:
@@ -826,6 +950,32 @@ $decoded  = $registry->decode($envelope);  // Msg|null
 ```
 
 Custom serializers slot in via `$registry->register(new MyOne())`.
+
+## Visual regression goldens
+
+`candy-vcr/tests/golden/` holds 10 curated `.tape` files (TokyoNight,
+Dracula, plain `Type+Enter`, sleep-heavy, Ctrl-sequence, arrow keys,
+wide CJK, `Set Width/Height`, multi-frame animation, idle-rich) and
+their committed `.gif` baselines under both encoders
+(`<name>.php.gif` + `<name>.ffmpeg.gif`, 20 GIFs, ~400 KB total).
+
+`tests/Encode/VisualRegressionTest.php` re-renders each tape and
+compares to the golden via:
+
+- **SHA-256 byte hash** for `PhpGifEncoder` (deterministic encoder).
+- **SSIM ≥ 0.95** via `ffmpeg`'s `compare` filter for
+  `FfmpegGifEncoder` (auto-skipped when `command -v ffmpeg` is empty);
+  pixel-diff fallback when SSIM filter is unavailable.
+
+To regenerate goldens intentionally (after an encoder change or a
+theme palette tweak):
+
+```sh
+php candy-vcr/scripts/refresh-goldens.php           # safe — warns + exits 2 if >3 tapes drift
+php candy-vcr/scripts/refresh-goldens.php --force   # commit the new baseline
+```
+
+The manifest lives at `candy-vcr/tests/golden/MANIFEST.md`.
 
 ## Development
 
