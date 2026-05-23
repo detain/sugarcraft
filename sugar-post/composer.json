@@ -44,5 +44,14 @@
     "prefer-stable": true,
     "bin": [
         "bin/pop"
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
     ]
 }
