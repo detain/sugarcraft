@@ -18,11 +18,29 @@ use SugarCraft\Vt\Theme;
  * (TokyoNight, Dracula, etc.) reach the GIF instead of the default VGA
  * palette.
  *
+ * Tile cache lives on the rasterizer instance so per-cell `\Imagick`
+ * allocations are amortised across a tape's many snapshots — keyed on
+ * the same shape as {@see Glyphs} but with the source `Imagick` cloned
+ * before each `compositeImage()` call. Cache fingerprint matches the
+ * GD rasterizer: (cellW, cellH, theme spl_object_id, fontFamily,
+ * fontSize). `__destruct` releases the cached `Imagick` resources.
+ *
  * Mirrors charmbracelet/x/vhs ImagickRasterizer.
  */
 final class ImagickRasterizer implements Rasterizer
 {
     private Theme $theme;
+
+    /** @var array<string, \Imagick> */
+    private array $tileCache = [];
+
+    private ?string $tileCacheFingerprint = null;
+
+    private int $hits = 0;
+
+    private int $misses = 0;
+
+    private bool $cacheDisabled = false;
 
     public function __construct(
         private int $fontSize = 14,
@@ -32,9 +50,35 @@ final class ImagickRasterizer implements Rasterizer
         $this->theme = $theme ?? new Theme();
     }
 
+    public function __destruct()
+    {
+        $this->clearTileCache();
+    }
+
     public function withTheme(Theme $theme): self
     {
-        return new self($this->fontSize, $this->fontFamily, $theme);
+        $clone = new self($this->fontSize, $this->fontFamily, $theme);
+        $clone->cacheDisabled = $this->cacheDisabled;
+        return $clone;
+    }
+
+    /**
+     * Toggle the persistent tile cache for benchmarking.
+     */
+    public function setCacheDisabled(bool $disabled): void
+    {
+        $this->cacheDisabled = $disabled;
+        if ($disabled) {
+            $this->clearTileCache();
+        }
+    }
+
+    /**
+     * @return array{hits:int, misses:int}
+     */
+    public function cacheStats(): array
+    {
+        return ['hits' => $this->hits, 'misses' => $this->misses];
     }
 
     public function rasterize(Snapshot $snapshot, int $cellW, int $cellH, ?FontLoader $fonts = null): \Imagick
@@ -47,6 +91,8 @@ final class ImagickRasterizer implements Rasterizer
 
         $width = $cols * $cellW;
         $height = $rows * $cellH;
+
+        $this->maybeInvalidateCache($cellW, $cellH);
 
         $imagick = new \Imagick();
         $imagick->newImage($width, $height, new \ImagickPixel($this->indexToHex($this->theme->defaultBg)));
@@ -64,9 +110,8 @@ final class ImagickRasterizer implements Rasterizer
                     continue;
                 }
 
-                $tile = $this->renderCellTile($cell, $cellW, $cellH, $fonts, $isWide ? $cellW * 2 : $cellW);
+                $tile = $this->getTile($cell, $cellW, $cellH, $fonts, $isWide ? $cellW * 2 : $cellW, $isWide);
                 $imagick->compositeImage($tile, \Imagick::COMPOSITE_OVER, $col * $cellW, $row * $cellH);
-                $tile->clear();
 
                 $col += $isWide ? 2 : 1;
             }
@@ -79,12 +124,71 @@ final class ImagickRasterizer implements Rasterizer
         return $imagick;
     }
 
-    private function renderCellTile(Cell $cell, int $cellW, int $cellH, FontLoader $fonts, int $tileW): \Imagick
+    private function maybeInvalidateCache(int $cellW, int $cellH): void
+    {
+        $fingerprint = $cellW . 'x' . $cellH . '|' . spl_object_id($this->theme) . '|' . $this->fontFamily . '|' . $this->fontSize;
+        if ($this->tileCacheFingerprint !== $fingerprint) {
+            $this->clearTileCache();
+            $this->tileCacheFingerprint = $fingerprint;
+        }
+    }
+
+    private function clearTileCache(): void
+    {
+        foreach ($this->tileCache as $tile) {
+            try {
+                $tile->clear();
+            } catch (\ImagickException) {
+                // already destroyed — ignore
+            }
+        }
+        $this->tileCache = [];
+    }
+
+    private function getTile(Cell $cell, int $cellW, int $cellH, FontLoader $fonts, int $tileW, bool $isWide): \Imagick
     {
         $inverse = ($cell->attrs & Cell::ATTR_INVERSE) !== 0;
         $fgIdx = $inverse ? $cell->bg : $cell->fg;
         $bgIdx = $inverse ? $cell->fg : $cell->bg;
+        $bold = ($cell->attrs & Cell::ATTR_BOLD) !== 0;
+        $italic = ($cell->attrs & Cell::ATTR_ITALIC) !== 0;
+        $underline = ($cell->attrs & Cell::ATTR_UNDERLINE) !== 0;
 
+        $key = $this->cacheKey($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $isWide);
+
+        if (!$this->cacheDisabled && isset($this->tileCache[$key])) {
+            $this->hits++;
+            return clone $this->tileCache[$key];
+        }
+
+        $this->misses++;
+        $tile = $this->renderCellTile($cell->char, $fgIdx, $bgIdx, $bold, $italic, $underline, $cellW, $cellH, $fonts, $tileW);
+
+        if (!$this->cacheDisabled) {
+            $this->tileCache[$key] = $tile;
+            return clone $tile;
+        }
+
+        return $tile;
+    }
+
+    private function cacheKey(string $char, int $fg, int $bg, bool $bold, bool $italic, bool $underline, bool $wide): string
+    {
+        return $char . '|' . $fg . '|' . $bg . '|' . ($bold ? '1' : '0') . '|' . ($italic ? '1' : '0') . '|' . ($underline ? '1' : '0') . '|' . ($wide ? 'w' : 'n');
+    }
+
+    private function renderCellTile(
+        string $char,
+        int $fgIdx,
+        int $bgIdx,
+        bool $bold,
+        bool $italic,
+        bool $underline,
+        int $cellW,
+        int $cellH,
+        FontLoader $fonts,
+        int $tileW,
+    ): \Imagick {
         $tile = new \Imagick();
         $tile->newImage($tileW, $cellH, new \ImagickPixel($this->indexToHex($bgIdx)));
         $tile->setImageFormat('png');
@@ -92,13 +196,13 @@ final class ImagickRasterizer implements Rasterizer
         $draw = new \ImagickDraw();
         $draw->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));
 
-        if (($cell->attrs & Cell::ATTR_BOLD) !== 0) {
+        if ($bold) {
             $draw->setFontWeight(700);
         } else {
             $draw->setFontWeight(400);
         }
 
-        if (($cell->attrs & Cell::ATTR_ITALIC) !== 0) {
+        if ($italic) {
             $draw->setFontStyle(\Imagick::STYLE_ITALIC);
         } else {
             $draw->setFontStyle(\Imagick::STYLE_NORMAL);
@@ -117,9 +221,9 @@ final class ImagickRasterizer implements Rasterizer
             $xOffset = (int) floor(($tileW - $cellW) / 2) + 1;
         }
 
-        $draw->annotation($xOffset, (int) floor($cellH * 0.85), $cell->char);
+        $draw->annotation($xOffset, (int) floor($cellH * 0.85), $char);
 
-        if (($cell->attrs & Cell::ATTR_UNDERLINE) !== 0) {
+        if ($underline) {
             $underlineY = (int) floor($cellH * 0.75);
             $draw2 = new \ImagickDraw();
             $draw2->setFillColor(new \ImagickPixel($this->indexToHex($fgIdx)));

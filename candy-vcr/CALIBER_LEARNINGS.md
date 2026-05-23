@@ -225,6 +225,23 @@ Bar cursor (shape=3): narrow filled rectangle at left edge.
 - `tests/Raster/GlyphsTest.php` — 9 tests: cache hits (same instance), cache misses (different instance), wide char double-width, measure() dimensions, space character tile.
 - `tests/Raster/GdRasterizerTest.php` — 11 tests: returns GdImage, correct dimensions, empty grid, cursor visible, bold/underline/inverse attrs, hidden cursor, different cursor shapes, auto FontLoader, non-zero pixels.
 
+## Glyph cache benchmark (2026-05-22)
+
+**vcr_use.md Section A** hoists the `Glyphs` cache out of `GdRasterizer::rasterize()` onto the rasterizer instance, with the same treatment for `ImagickRasterizer`'s tile cache. Fingerprint: `(cellW, cellH, spl_object_id(theme), fontFamily, fontSize)`.
+
+Benchmark over `candy-vcr/.vhs/smoke.tape` (5 iters, 5 dedup'd snapshots at 80x24):
+
+```
+Rasterize-only:    enabled 0.0563s   disabled 0.0606s   speedup 1.08x (~7%)
+End-to-end:        enabled 1.2832s   disabled 1.2889s   speedup 1.00x
+Cache stats:       hits=9599  misses=6  hit-rate=99.9%
+```
+
+- The end-to-end wall-clock for smoke.tape is dominated by the PHP GIF encoder; the cache win shows up in the **rasterize-only slice** (~7-8% faster).
+- The hit rate (99.9%) reflects the cache's real value: a 80x24 grid has 1920 cells but only ~6 unique `(char, fg, bg, attrs)` tuples — exactly the ratio `vcr_use.md` §6 calls out.
+- The cache is invalidated automatically when cell dimensions, theme, font family, or font size change. `setCacheDisabled(true)` is a private toggle used only by the bench harness — production rendering always has the cache on.
+- For longer tapes (hundreds of frames), the cache disabled config rebuilds Glyphs per snapshot (6 misses × N frames), so the absolute savings scale linearly — the smoke tape understates the win.
+
 ## Phase 6 CLI integration (2026-05-22)
 
 **Scope:** `render-tape` and `render-batch` Symfony Console commands.
