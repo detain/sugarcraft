@@ -69,9 +69,13 @@ final class UptimeModule extends BaseModule
 
     private function formatUptime(float $seconds): string
     {
-        $days = intval($seconds / 86400);
-        $hours = intval(($seconds % 86400) / 3600);
-        $minutes = intval(($seconds % 3600) / 60);
+        // Cast once: uptime granularity is whole seconds, and PHP 8.3+
+        // deprecates the implicit float->int conversion the `%` operator
+        // does. intdiv() makes the integer math explicit.
+        $secs = (int) $seconds;
+        $days = intdiv($secs, 86400);
+        $hours = intdiv($secs % 86400, 3600);
+        $minutes = intdiv($secs % 3600, 60);
 
         if ($days > 0) {
             return "{$days}d {$hours}h {$minutes}m";
