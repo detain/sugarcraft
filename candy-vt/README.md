@@ -14,6 +14,26 @@ In-memory virtual terminal emulator — parses an ANSI byte stream into a
 cell grid with cursor, mode, SGR style, and hyperlink state.
 
 Mirrors [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt).
+Used as the terminal emulator behind
+[candy-vcr](../candy-vcr/)'s `render-tape` pipeline — every frame produced
+for a GIF is a `Snapshot::of($terminal, $time)` after the renderer feeds
+output bytes into a `Terminal` instance.
+
+## Contents
+
+- [Install](#install)
+- [Quickstart](#quickstart)
+- [Architecture](#architecture)
+- [Two Terminal classes](#two-terminal-classes)
+- [Renderer value objects (vcr path)](#renderer-value-objects-vcr-path)
+- [Parser state machine](#parser-state-machine)
+- [CSI coverage table](#csi-coverage-table)
+- [OSC coverage](#osc-coverage)
+- [SGR attributes](#sgr-attributes)
+- [Theme catalog](#theme-catalog)
+- [Subsystems](#subsystems)
+- [Development](#development)
+- [Related](#related)
 
 ## Install
 
@@ -62,6 +82,30 @@ echo "cursor at {$cursor->row},{$cursor->col}\n";
 | Theme | `Theme` | 256-color palette + default fg/bg + factory methods for named themes |
 | Catalog | `Themes` | Bundled theme catalog: `all()` and `v1()` accessors |
 
+## Two Terminal classes
+
+candy-vt ships **two** Terminal entry-points for distinct use cases:
+
+| Class | Use case | Methods |
+|-------|----------|---------|
+| `SugarCraft\Vt\Terminal\Terminal` | Full VT500 emulator — parses CSI/OSC/DCS, maintains Sgr/Mode/Hyperlink/Scrollback. | `create(cols, rows, ?scrollbackSize)`, `feed(bytes)`, `flush()`, `screen()`, `cursor()`, `mode()`, `windowTitle()`, `palette()`, `clipboardEvents()`, `resize(cols, rows)`, `enableAltScreen()`/`disableAltScreen()`/`isAltScreen()`, plus `with*()` builders for Buffer/Cursor/Mode/WindowTitle/TabStops/ScrollbackSize. |
+| `SugarCraft\Vt\Terminal` (root) | Lightweight emulator used by candy-vcr's renderer — produces `Snapshot` value objects directly. | `new(cols, rows, ?Theme)`, `theme()`, `feed(bytes): self`, `snapshot(?time): Snapshot`, `cursor(): Cursor`, `grid(): CellGrid`, `windowTitle(): string`. |
+
+```php
+use SugarCraft\Vt\Terminal;       // root — renderer path
+use SugarCraft\Vt\Theme;
+
+$vt = Terminal::new(cols: 80, rows: 24, theme: Theme::tokyoNight());
+$vt = $vt->feed("\x1b[1;1H\x1b[31mhello\x1b[0m");
+$snapshot = $vt->snapshot(time: 1.234);
+```
+
+The root `Terminal` returns a NEW instance from `feed()` (immutable
+fluent style) and uses the `HandlerAdapter` + `CsiHandlerImpl` +
+`OscHandlerImpl` triple internally. The full `Terminal\Terminal`
+mutates in place (`feed(): void`) — it's optimised for byte-stream
+ingest rather than per-frame snapshots.
+
 ### Renderer value objects (vcr path)
 
 The `SugarCraft\Vt` root namespace provides simplified value objects for the
@@ -107,6 +151,142 @@ Each handler translates parser actions into handler state mutations:
 - `TabHandler` — TBC, HTS
 - `OscHandler` — OSC window title, hyperlink, colour palette
 - `ScreenHandler` — orchestrates all of the above; owns the Buffer
+
+### Snapshot
+
+`SugarCraft\Vt\Snapshot` is an immutable point-in-time grid + cursor:
+
+```php
+use SugarCraft\Vt\Snapshot;
+
+$snap = Snapshot::of($terminal, time: 1.234);  // captures grid + cursor
+$snap->grid;     // CellGrid
+$snap->cursor;   // Cursor
+$snap->time;     // float — virtual playback time
+
+$snap->equals($other);          // grid + cursor only (used by FrameDedup)
+$snap->equalsWithTime($other);  // grid + cursor + time (strict reproducibility)
+```
+
+`Snapshot::equals()` is the dedup signal used by candy-vcr's
+`FrameDedup` to collapse visually identical adjacent frames before GIF
+encoding.
+
+## Parser state machine
+
+`Parser\Parser` is a Paul Williams VT500 state machine
+([reference](https://vt100.net/emu/dec_ansi_parser)) that drives a
+`Parser\Handler` interface with parsed actions.
+
+| Component | Role |
+|-----------|------|
+| `Parser\State` | Enum of parser states: `Ground`, `Escape`, `CsiEntry`, `CsiParam`, `CsiIntermediate`, `CsiIgnore`, `DcsEntry`, `OscString`, etc. |
+| `Parser\Action` | Enum of dispatch actions: `Print`, `Execute`, `CsiDispatch`, `EscDispatch`, `OscDispatch`, `DcsDispatch`, `Hook`, `Put`, `Unhook`. |
+| `Parser\Transitions` | Static transition table — `(state, byte) → (action, next_state)`. |
+| `Parser\Handler` | The contract the parser drives — implementations: `HandlerAdapter` (wraps CSI + OSC sub-handlers), `DebugHandler` (dumps every action). |
+| `Parser\CsiHandler` | CSI dispatch contract — `printable`, `cuu`/`cud`/`cuf`/`cub`, `cup`, `sgr`, `ed`/`el`, `decset`/`decrst`, `decstbm`, `tbc`, `cht`/`cbt`, `gridRows`. |
+| `Parser\OscHandler` | OSC dispatch contract — `title`, `hyperlink`. |
+| `Parser\CsiHandlerImpl` | Default CSI handler used by the root `Terminal` renderer path. |
+| `Parser\OscHandlerImpl` | Default OSC handler — tracks last window title. |
+| `Parser\HandlerAdapter` | Glue that wires `CsiHandler` + `OscHandler` into a single `Handler` for the parser. |
+
+Partial input is supported — feed any byte boundary and the parser
+state persists across `feed()` calls. Subparameter colons
+(`CSI 4:2 m` → double underline) are parsed natively.
+
+## CSI coverage table
+
+The default `CsiHandlerImpl` (used by `SugarCraft\Vt\Terminal`) implements
+the renderer-relevant subset of CSI dispatches. The full
+`Handler\ScreenHandler` (used by `SugarCraft\Vt\Terminal\Terminal`)
+implements the superset.
+
+| Final byte | Name | Method | Behavior |
+|------------|------|--------|----------|
+| `@` | ICH | (Handler) | Insert N blank characters at cursor. |
+| `A` | CUU | `cuu($n=1)` | Cursor up N, clamped to scroll region top. |
+| `B` | CUD | `cud($n=1)` | Cursor down N, clamped to scroll region bottom. |
+| `C` | CUF | `cuf($n=1)` | Cursor right N, clamped to right margin. |
+| `D` | CUB | `cub($n=1)` | Cursor left N, clamped to column 0. |
+| `E` | CNL | (Handler) | Cursor down N + column 0. |
+| `F` | CPL | (Handler) | Cursor up N + column 0. |
+| `G` | CHA | (Handler) | Cursor to column N. |
+| `H` | CUP | `cup($row, $col)` | Move cursor to (row, col) 1-indexed. |
+| `I` | CHT | `cht($n=1)` | Cursor forward N tab stops. |
+| `J` | ED | `ed($mode=0)` | Erase display: 0=cursor→end, 1=begin→cursor, 2=all, 3=all+scrollback. |
+| `K` | EL | `el($mode=0)` | Erase line: 0=cursor→eol, 1=bol→cursor, 2=full line. |
+| `L` | IL | (Handler) | Insert N blank lines at cursor. |
+| `M` | DL | (Handler) | Delete N lines at cursor. |
+| `P` | DCH | (Handler) | Delete N characters at cursor. |
+| `S` | SU | (Handler) | Scroll up N lines. |
+| `T` | SD | (Handler) | Scroll down N lines. |
+| `X` | ECH | (Handler) | Erase N characters from cursor (preserves BCE bg). |
+| `Z` | CBT | `cbt($n=1)` | Cursor backward N tab stops. |
+| `d` | VPA | (Handler) | Cursor to row N. |
+| `f` | HVP | `hvp($row, $col)` | Same as CUP — move cursor to (row, col). |
+| `g` | TBC | `tbc($mode=0)` | Tab clear: 0=column, 3=all. |
+| `h` | SM/DECSET | `decset($mode, $prefix)` | Set mode. `?` prefix → private. `?7 h` enables DECAWM, `?12 h` BCE, `?25 h` cursor visible, `?47/?1047/?1049 h` alt screen, `?1004 h` focus events, `?2026 h` sync-update, `?6 h` DECOM. |
+| `l` | RM/DECRST | `decrst($mode, $prefix)` | Reset mode (mirror of `h`). |
+| `m` | SGR | `sgr($params)` | Set graphic rendition. Subparam colons (`4:1`..`4:5`) parsed. |
+| `r` | DECSTBM | `decstbm($top, $bottom)` | Set scroll region rows (1-indexed). |
+| `s` | DECSC | (Handler) | Save cursor + Sgr + origin mode. |
+| `u` | DECRC | (Handler) | Restore cursor + Sgr + origin mode. |
+| `<n> SP q` | DECSCUSR | (Handler) | Cursor shape 0–6 (block/underline/bar × blink). |
+| `<n> I/O` | Focus | (Handler) | Focus-in / focus-out report (under `?1004 h`). |
+
+`(Handler)` rows live in the full `Handler/ScreenHandler` dispatcher
+used by `SugarCraft\Vt\Terminal\Terminal`. The renderer path
+(`SugarCraft\Vt\Terminal`) implements the rows with an explicit
+`Method` column — the rest of the CSI sequences are ignored when the
+renderer encounters them (they're already simplified-away by upstream
+applications writing rendered output).
+
+The `printable` and `execute` paths also route through the same
+adapter — printable bytes call `CsiHandlerImpl::printable()` (writes
+the cell + advances cursor + auto-wraps), and C0 controls (`\b \t \n
+\r`) call the corresponding cursor handler.
+
+## OSC coverage
+
+The default `OscHandlerImpl` (renderer path) implements:
+
+| Sequence | Method | Behavior |
+|----------|--------|----------|
+| `OSC 0;<title> BEL/ST` | `title($title)` | Set window title (and icon name). |
+| `OSC 2;<title> BEL/ST` | `title($title)` | Set window title only. |
+| `OSC 8;<id>;<uri> BEL/ST` | `hyperlink($uri, $id)` | Begin/end hyperlink (OSC 8). Empty URI ends the link. |
+| `lastTitle()` | accessor | Most recent title set during the stream. |
+
+The full `Handler\OscHandler` (used by `SugarCraft\Vt\Terminal\Terminal`)
+adds palette query/set (`OSC 4`, `OSC 10`, `OSC 11`), clipboard get/set
+(`OSC 52`), and forwards focus / mode-query events to
+`ScreenHandler::$clipboardEvents` / `$focusEvents`.
+
+## SGR attributes
+
+`Sgr\Sgr` tracks the current pen state. Supported attributes:
+
+| SGR param | Effect |
+|-----------|--------|
+| `0` | Reset all attributes. |
+| `1` | Bold. |
+| `2` | Faint. |
+| `3` | Italic. |
+| `4` (or `4:1`) | Single underline. |
+| `4:2` / `4:3` / `4:4` / `4:5` | Double / Curly / Dotted / Dashed underline. |
+| `7` | Inverse (swap fg/bg). |
+| `9` | Strikethrough. |
+| `21` / `22` | Reset bold + faint. |
+| `23` / `24` / `27` / `29` | Reset italic / underline / inverse / strikethrough. |
+| `30..37` / `90..97` | Set 8 + 8 bright ANSI foreground. |
+| `38;5;<n>` / `38;2;<r>;<g>;<b>` | 256-color / truecolor foreground. |
+| `40..47` / `100..107` | Set 8 + 8 bright ANSI background. |
+| `48;5;<n>` / `48;2;<r>;<g>;<b>` | 256-color / truecolor background. |
+| `39` / `49` | Reset fg / bg to default. |
+
+Attribute bitfield mirrored on `Cell::ATTR_*` constants:
+`ATTR_BOLD`, `ATTR_ITALIC`, `ATTR_UNDERLINE`, `ATTR_INVERSE`,
+`ATTR_STRIKETHROUGH`.
 
 ## Background Color Erase (BCE)
 
@@ -399,6 +579,36 @@ Available themes:
 Attribute constants on `Theme` match `Cell::ATTR_*` for SGR bitfield construction:
 `Theme::ATTR_BOLD`, `Theme::ATTR_ITALIC`, `Theme::ATTR_UNDERLINE`, `Theme::ATTR_INVERSE`, `Theme::ATTR_STRIKETHROUGH`.
 
+### Theme accessors
+
+| Method | Returns |
+|--------|---------|
+| `Theme::color($index)` | `int` — packed 24-bit RGB for palette slot 0..255. Falls back through `Theme::rgb()` for grayscale (232..255) when a slot is absent. |
+| `Theme::rgb($index)` | `array{int,int,int}` — `[R,G,B]` resolution for any 256-color index, including the 6x6x6 color cube (16..231) and the 24-step grayscale ramp (232..255). |
+| `Theme::fgIndex($slot)` | `int` — Map an ANSI 0..15 slot to its 256-color index (currently a no-op identity, kept for spec parity). |
+| `Theme::bgIndex($slot)` | `int` — Same for background slot. |
+| `Theme::defaultPalette()` | `array<int,int>` — Bootstrap palette (xterm defaults) used by `Themes::ansi()`. |
+| `Theme::ANSI_OFFSET` / `Theme::CUBE_OFFSET` / `Theme::GRAYSCALE_OFFSET` | int constants 0 / 16 / 232 — palette region boundaries. |
+
+## Subsystems
+
+Each subdirectory of `src/` owns a small piece of VT state:
+
+| Namespace | Purpose | Public surface |
+|-----------|---------|----------------|
+| `Buffer\Buffer` | Cell grid storage (`rows × cols` array of `Cell`). | `cell($row, $col)`, `put($row, $col, $cell)`, `each(): Generator`, `copy(): array`, `resize($cols, $rows): self`. |
+| `Screen\Screen` | Immutable snapshot of Buffer + Scrollback; cell-level diff API. | `fromBuffer($buf, ?$scrollback)`, `lines()`, `cell($row, $col)`, `scrollback()`, `diff($other)`. |
+| `Screen\Scrollback` | Ring buffer (default 1000 rows) for rows scrolled off the top. | `count()`, `maxSize()`, `at($n)`, `all()`. |
+| `Cell\Cell` | Cell-grid cell — grapheme + Sgr + Hyperlink + combining marks. Used by the full Terminal facade. | `empty()`, `continuation($prev)`, `withCombining($s)`, `sgr()`, `foreground()`, `background()`, `equals()`. |
+| `Cursor\Cursor` | Position + visibility + shape + saved-state. | `withRow($r)`, `withCol($c)`, `withVisible($v)`, `withShape($s)`, `save()`, `restore()`, `equals()`. |
+| `Sgr\Sgr` | Pen state (fg, bg, attrs bitfield, underline style). | `empty()`, `withBold/Italic/Underline/Strikethrough/Blink/Reverse/Dim/Hidden($v)`, `withUnderlineStyle($style)`, `withForeground(?$color)`, `withBackground(?$color)`, `equals()`. |
+| `Sgr\UnderlineStyle` | Enum: `None`/`Single`/`Double`/`Curly`/`Dotted`/`Dashed`. | `fromInt()`, `value`. |
+| `Mode\Mode` | DEC private modes. | `withAltScreen/AltScreenVariant/CursorVisible/MouseSgr/MouseHighlights/MouseAny/MouseCellMotion/MouseExtended/BracketedPaste/SyncUpdate/AutoWrap/OriginMode/CursorShape/ReportFocusEvents`, `isAltScreen()`, `equals()`. |
+| `Hyperlink\Hyperlink` | OSC 8 URI + id state. | `fromRaw($id, $uri)`, `equals()`. |
+| `Msg\FocusInMsg` / `FocusOutMsg` | Focus event records — accumulated on `ScreenHandler::$focusEvents` when DEC mode `1004` is set. | Plain DTOs. |
+| `Color\Color` | Color value object — palette index or truecolor RGB. | `default()`, `indexed16($i)`, `indexed256($i)`, `truecolor($r,$g,$b)`, `fromInt($kind,$v)`, `red()`, `green()`, `blue()`, `equals()`. |
+| `CursorShape` (root enum) | `BlinkingBlock` (0/1) / `SteadyBlock` (2) / `BlinkingUnderline` (3) / `SteadyUnderline` (4) / `BlinkingBar` (5) / `SteadyBar` (6). | `fromInt()`, `toInt()`. |
+
 ## Development
 
 ```sh
@@ -412,5 +622,8 @@ Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (
 
 ## Related
 
+- **[candy-vcr](../candy-vcr/)** — VHS-compatible cassette recorder /
+  GIF renderer. Uses this lib's root `Terminal` + `Snapshot` to drive
+  every rendered frame.
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)
 - Upstream: [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt)
