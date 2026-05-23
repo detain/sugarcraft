@@ -10,6 +10,7 @@ use SugarCraft\Vcr\Cli\ReplayCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
 use SugarCraft\Vcr\Recorder;
+use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 
 /**
  * P6.5.3 — `--idle-trim` records both `t` (compressed) and `tRaw`
@@ -18,21 +19,7 @@ use SugarCraft\Vcr\Recorder;
  */
 final class RecordCommandIdleTrimTest extends TestCase
 {
-    private function requirePtySyscalls(): void
-    {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required to exercise the libc PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true spawns.');
-        }
-    }
+    use RequiresWorkingPty;
 
     // ----- argv parsing ---------------------------------------------
 

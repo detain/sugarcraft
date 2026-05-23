@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Vcr\Cli\RecordCommand;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Format\JsonlFormat;
+use SugarCraft\Vcr\Tests\Support\RequiresWorkingPty;
 use SugarCraft\Vt\Terminal\Terminal;
 
 /**
@@ -22,20 +23,11 @@ use SugarCraft\Vt\Terminal\Terminal;
  */
 final class ShirleyVimTest extends TestCase
 {
+    use RequiresWorkingPty;
+
     private function requireVim(): string
     {
-        if (PHP_OS_FAMILY === 'Windows') {
-            $this->markTestSkipped('candy-pty is POSIX-only; Windows ConPTY is a separate port.');
-        }
-        if (!\extension_loaded('ffi')) {
-            $this->markTestSkipped('ext-ffi is required for PTY syscalls.');
-        }
-        if (!\is_readable('/dev/ptmx') || !\is_writable('/dev/ptmx')) {
-            $this->markTestSkipped('/dev/ptmx is unreadable/unwritable on this host.');
-        }
-        if (!\extension_loaded('pcntl')) {
-            $this->markTestSkipped('ext-pcntl is required for controllingTerminal:true spawns.');
-        }
+        $this->requirePtySyscalls();
         if (!\class_exists(Terminal::class)) {
             $this->markTestSkipped('sugarcraft/candy-vt is not autoloadable.');
         }
