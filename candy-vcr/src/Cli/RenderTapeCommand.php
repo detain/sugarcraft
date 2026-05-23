@@ -30,17 +30,26 @@ final class RenderTapeCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $tapePath = (string) $input->getArgument('tape');
+        $tapeArg = $input->getArgument('tape');
+        $tapePath = is_string($tapeArg) ? $tapeArg : '';
         $outputOpt = $input->getOption('output');
         $outputPath = is_string($outputOpt)
             ? $outputOpt
             : (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
 
-        $fps = (float) $input->getOption('fps');
-        $backend = (string) ($input->getOption('backend') ?? 'gd');
-        $encoderType = (string) ($input->getOption('encoder') ?? 'ffmpeg');
+        $fpsOpt = $input->getOption('fps');
+        $fps = is_numeric($fpsOpt) ? (float) $fpsOpt : 30.0;
+
+        $backendOpt = $input->getOption('backend');
+        $backend = ($backendOpt === 'gd' || $backendOpt === 'imagick') ? $backendOpt : 'gd';
+
+        $encoderOpt = $input->getOption('encoder');
+        $encoderType = ($encoderOpt === 'ffmpeg' || $encoderOpt === 'php') ? $encoderOpt : 'ffmpeg';
+
         $strict = (bool) $input->getOption('strict');
-        $themeName = (string) ($input->getOption('theme') ?? 'TokyoNight');
+
+        $themeOpt = $input->getOption('theme');
+        $themeName = is_string($themeOpt) ? $themeOpt : 'TokyoNight';
 
         if (!is_file($tapePath)) {
             $output->writeln("<error>Failed: tape file not found: {$tapePath}</error>");

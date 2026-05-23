@@ -14,6 +14,7 @@ use RecursiveIteratorIterator;
  */
 final class TapeCorpusTest extends TestCase
 {
+    /** @var list<string>|null */
     private static ?array $tapeFiles = null;
 
     public static function setUpBeforeClass(): void
@@ -26,6 +27,9 @@ final class TapeCorpusTest extends TestCase
         );
 
         foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo) {
+                continue;
+            }
             if ($file->isFile() && $file->getExtension() === 'tape') {
                 $files[] = $file->getPathname();
             }
@@ -39,6 +43,7 @@ final class TapeCorpusTest extends TestCase
         $this->assertNotNull(self::$tapeFiles);
         $this->assertGreaterThan(800, count(self::$tapeFiles));
 
+        /** @var array<string, list<string>> $failures */
         $failures = [];
         foreach (self::$tapeFiles as $path) {
             $source = @file_get_contents($path);
@@ -70,6 +75,7 @@ final class TapeCorpusTest extends TestCase
     {
         $this->assertNotNull(self::$tapeFiles);
 
+        /** @var array<string, list<string>> $failures */
         $failures = [];
         $compiler = new Compiler();
 

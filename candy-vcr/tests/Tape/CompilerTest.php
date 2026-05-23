@@ -9,7 +9,6 @@ use SugarCraft\Vcr\Cassette;
 use SugarCraft\Vcr\Event;
 use SugarCraft\Vcr\EventKind;
 use SugarCraft\Vcr\Tape\Compiler;
-use SugarCraft\Vcr\Tape\Ast\ParseError;
 
 final class CompilerTest extends TestCase
 {
@@ -245,7 +244,7 @@ TAPE;
         $result = Compiler::parseSource($source);
 
         $this->assertCount(1, $result['errors']);
-        $this->assertInstanceOf(ParseError::class, $result['errors'][0]);
+        $this->assertNotEmpty($result['errors'][0]->message);
 
         $cassette = $this->compiler->compile($result['ast'], '/test.tape');
         $this->assertSame(2, $cassette->eventCount());

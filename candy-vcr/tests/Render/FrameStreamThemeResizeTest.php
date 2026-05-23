@@ -61,7 +61,7 @@ final class FrameStreamThemeResizeTest extends TestCase
         $tokyoNight = Theme::tokyoNight();
         $terminal = Terminal::new(80, 24, $tokyoNight);
 
-        $renderer = new Renderer($player, $terminal, 30.0);
+        $renderer = new Renderer();
         $stream = $renderer->render($player, $terminal, 30.0);
 
         $snapshots = [];
@@ -71,7 +71,9 @@ final class FrameStreamThemeResizeTest extends TestCase
         $this->assertGreaterThanOrEqual(2, count($snapshots), 'Should emit pre- and post-resize snapshots');
 
         $first = $snapshots[0];
-        $last = $snapshots[array_key_last($snapshots)];
+        $lastKey = array_key_last($snapshots);
+        $this->assertNotNull($lastKey);
+        $last = $snapshots[$lastKey];
 
         // Confirm the resize actually applied (dimensions shrank).
         $this->assertSame(80, $first->grid->cols, 'pre-resize cols');
@@ -111,6 +113,9 @@ final class FrameStreamThemeResizeTest extends TestCase
         $x = $w - 1;
         $y = $h - 1;
         $rgb = imagecolorat($image, $x, $y);
+        if ($rgb === false) {
+            throw new \RuntimeException('imagecolorat returned false');
+        }
         $rgba = imagecolorsforindex($image, $rgb);
         imagedestroy($image);
         return ($rgba['red'] << 16) | ($rgba['green'] << 8) | $rgba['blue'];

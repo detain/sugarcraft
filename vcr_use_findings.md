@@ -52,11 +52,11 @@ Items are split into sections so each can ship as one PR. **Do not remove items 
 
 **Why it matters:** Plan §0 explicitly said "aim for `level: max` from day one — easier than back-fitting later." Today there are 1513 baseline lines + ~87 unbaselined errors in Phase 1–6 code.
 
-- [ ] Run `vendor/bin/phpstan analyze` in `candy-vcr`; list every error not in the baseline.
-- [ ] Fix the ~87 unbaselined errors in `Cli/Application.php`, `Cli/RenderBatchCommand.php`, `Cli/RenderTapeCommand.php`, `Tape/Lexer.php`, `Tape/Compiler.php`, tests in `tests/Encode/`, `tests/Raster/`, `tests/Render/`, `tests/Tape/`. **Do not** add new baseline entries — fix at the source.
-- [ ] Audit the existing 1513-line baseline: any entry that the post-audit code no longer triggers (because we fixed the underlying issue) must be removed.
-- [ ] candy-vt: regenerate or audit `phpstan-baseline.neon` similarly.
-- [ ] Both libs end with `vendor/bin/phpstan analyze` clean (or with a justifiably smaller baseline).
+- [x] Run `vendor/bin/phpstan analyze` in `candy-vcr`; list every error not in the baseline. (92 unbaselined errors found at start.)
+- [x] Fix the ~87 unbaselined errors in `Cli/Application.php`, `Cli/RenderBatchCommand.php`, `Cli/RenderTapeCommand.php`, `Tape/Lexer.php`, `Tape/Compiler.php`, tests in `tests/Encode/`, `tests/Raster/`, `tests/Render/`, `tests/Tape/`. **Do not** add new baseline entries — fix at the source. (All 92 fixed at source: union typing for InputInterface options, removing redundant `assertInstanceOf` calls where types are already certain, narrowing nullable mixed → string casts via `is_string` guards, default arms on `match` expressions, redundant unused `new FfmpegGifEncoder('ffmpeg', $this->tempDir)` 2-arg-constructor call removed in TapeToGifTest.php — that was a real arity bug.)
+- [x] Audit the existing 1513-line baseline: any entry that the post-audit code no longer triggers (because we fixed the underlying issue) must be removed. (Baseline regenerated: 1513 → 1501 lines, 439 errors baselined.)
+- [x] candy-vt: regenerate or audit `phpstan-baseline.neon` similarly. (Found 35 unbaselined errors including REAL bugs: HandlerAdapter calling 3 methods missing from `CsiHandler` interface — `cht()`, `cbt()`, `gridRows()` — fixed by adding them to the interface. Baseline 433 → 397 lines, 119 errors baselined.)
+- [x] Both libs end with `vendor/bin/phpstan analyze` clean (or with a justifiably smaller baseline). (Both exit 0.)
 
 ## Section E — php-cs-fixer install + lint pass
 

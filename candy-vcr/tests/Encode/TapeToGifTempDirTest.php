@@ -31,8 +31,12 @@ final class TapeToGifTempDirTest extends TestCase
 
         $created = [];
         try {
-            $a = (string) $method->invoke($renderer);
-            $b = (string) $method->invoke($renderer);
+            $aRaw = $method->invoke($renderer);
+            $bRaw = $method->invoke($renderer);
+            $this->assertIsString($aRaw);
+            $this->assertIsString($bRaw);
+            $a = $aRaw;
+            $b = $bRaw;
             $created[] = $a;
             $created[] = $b;
 
