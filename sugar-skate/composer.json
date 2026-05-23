@@ -45,5 +45,14 @@
     "prefer-stable": true,
     "bin": [
         "bin/skate"
+    ],
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
     ]
 }

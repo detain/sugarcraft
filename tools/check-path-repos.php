@@ -19,10 +19,16 @@ declare(strict_types=1);
  * With --fix: auto-inserts missing path-repo entries and exits 0 if every
  * issue was fixable. With --help: print usage and exit 0.
  *
- * Constraints other than `@dev` (e.g. `dev-master`, `^1.0`) are skipped
- * — those resolve via the VCS remote and don't need a path-repo. The
- * tool deliberately stays conservative: it complains only about the
- * one combination the maintainer is known to typo.
+ * Recognized dev-constraint forms (all require path-repo closure since
+ * they pin a moving HEAD inside the monorepo):
+ *
+ *   - `@dev`              — bare alias for `dev-{default-branch}`
+ *   - `dev-master`        — explicit branch alias (most common in this repo)
+ *   - `dev-main`, `dev-*` — any branch alias
+ *   - `^1.0@dev` / `*@dev` — version constraint pinned to dev stability
+ *
+ * Stable Packagist constraints (`^1.0`, `~2.3`, etc.) are skipped — those
+ * resolve via VCS/Packagist and don't need a path-repo.
  *
  * @see plans/sugarcraft-is-a-mono-logical-twilight.md (P4.5)
  */
@@ -60,7 +66,8 @@ Usage: php tools/check-path-repos.php [options]
 
 Checks path-repo closure for the SugarCraft monorepo.
 
-For every lib that declares a `sugarcraft/<dep>: @dev` requirement in its
+For every lib that declares a `sugarcraft/<dep>` requirement with a dev
+constraint (`@dev`, `dev-master`, `dev-main`, `dev-*`, or `^x@dev`) in its
 composer.json, verify a corresponding path-repo entry exists in repositories[]:
 
     { "type": "path", "url": "../<dep>", "options": { "symlink": true } }
@@ -121,7 +128,15 @@ foreach ($libs as $manifestPath) {
         if (!\str_starts_with($name, 'sugarcraft/')) {
             continue;
         }
-        if (\trim($constraint) !== '@dev') {
+        $trimmed = \trim($constraint);
+        // Recognize any dev-stability constraint that pins a moving
+        // HEAD inside the monorepo: bare `@dev`, branch aliases
+        // (`dev-master`, `dev-main`, `dev-foo`), or version-constrained
+        // dev (`^1.0@dev`). All require a path-repo for symlink resolution.
+        $isDevConstraint = $trimmed === '@dev'
+            || \str_starts_with($trimmed, 'dev-')
+            || \str_ends_with($trimmed, '@dev');
+        if (!$isDevConstraint) {
             continue;
         }
         $atDevDeps[$name] = $constraint;
@@ -168,12 +183,12 @@ foreach ($libs as $manifestPath) {
     }
 
     $missingRepos = [];
-    foreach ($atDevDeps as $name => $_constraint) {
+    foreach ($atDevDeps as $name => $constraint) {
         $depSlug = \substr($name, \strlen('sugarcraft/'));
         if (!isset($pathRepoTargets[$depSlug])) {
             $missingRepos[] = $depSlug;
             if (!$fix) {
-                $issues[] = "{$slug}: require[\"{$name}\"]=@dev but no path-repo entry for ../{$depSlug}";
+                $issues[] = "{$slug}: require[\"{$name}\"]={$constraint} but no path-repo entry for ../{$depSlug}";
             }
         }
     }

@@ -54,5 +54,14 @@
         }
     },
     "minimum-stability": "dev",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }
