@@ -64,4 +64,9 @@ final class Counter implements Model
             ->padding(1, 2)
             ->render($body);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

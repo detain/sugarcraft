@@ -106,4 +106,9 @@ final class Spinner implements Model
     {
         return new self($style, 0, $this->id);
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

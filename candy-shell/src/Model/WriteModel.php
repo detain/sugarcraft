@@ -84,4 +84,9 @@ final class WriteModel implements Model
     public function value(): string { return $this->area->value(); }
     public function isSubmitted(): bool { return $this->submitted; }
     public function isAborted(): bool   { return $this->aborted; }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }

@@ -197,4 +197,9 @@ final class Game implements Model
             stats: $this->stats()->withGame($difficulty, $won, $elapsed !== null ? (int) $elapsed : null),
         );
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 }
