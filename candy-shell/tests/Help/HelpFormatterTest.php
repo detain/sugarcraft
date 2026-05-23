@@ -41,8 +41,7 @@ final class HelpFormatterTest extends TestCase
         $command = new DemoCommand();
         $output = $this->formatter->format($command);
 
-        $this->assertSame(
-            <<<'EXPECTED'
+        $expected = <<<'EXPECTED'
 <comment>demo</comment>
 A demo command with examples and aliases.
 
@@ -52,8 +51,11 @@ A demo command with examples and aliases.
   demo --verbose  — Run with verbose output.
   demo --quiet  — Run quietly.
 
-EXPECTED,
-            $output
-        );
+EXPECTED;
+
+        // Normalize line endings — git on Windows may convert LF→CRLF on checkout.
+        $normalize = static fn (string $s): string => str_replace(["\r\n", "\r"], "\n", $s);
+
+        $this->assertSame($normalize($expected), $normalize($output));
     }
 }
