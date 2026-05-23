@@ -46,8 +46,12 @@ final class PhpGifEncoderTest extends TestCase
 
     public function testImplementsGifEncoderInterface(): void
     {
-        $encoder = new PhpGifEncoder();
-        $this->assertInstanceOf(GifEncoder::class, $encoder);
+        // Compile-time guarantee — `PhpGifEncoder implements GifEncoder`
+        // is enforced by the type system. Use a reflection check so the
+        // test still has runtime value if someone re-shuffles interfaces.
+        $impls = class_implements(PhpGifEncoder::class);
+        $this->assertIsArray($impls);
+        $this->assertArrayHasKey(GifEncoder::class, $impls);
     }
 
     public function testEncodeRequiresFrames(): void
@@ -149,6 +153,7 @@ final class PhpGifEncoderTest extends TestCase
 
         $this->assertFileExists($outputPath);
         $bytes = file_get_contents($outputPath);
+        $this->assertIsString($bytes);
 
         $this->assertStringStartsWith('GIF89a', $bytes);
         $this->assertStringContainsString("\x21\xf9", $bytes);
@@ -156,11 +161,17 @@ final class PhpGifEncoderTest extends TestCase
         $this->assertStringEndsWith("\x3b", $bytes);
     }
 
+    /**
+     * @return non-empty-string
+     */
     private function createPngFrame(string $char): string
     {
         $img = imagecreatetruecolor(8, 16);
+        $this->assertNotFalse($img);
         $bg = imagecolorallocate($img, 0, 0, 0);
         $fg = imagecolorallocate($img, 255, 255, 255);
+        $this->assertNotFalse($bg);
+        $this->assertNotFalse($fg);
         imagefilledrectangle($img, 0, 0, 7, 15, $bg);
 
         $fontPath = $this->getFontPath();

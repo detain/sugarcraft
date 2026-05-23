@@ -19,6 +19,9 @@ final class Application
     /** @var array<string, Command|SymfonyCommand> */
     private array $commands;
 
+    /**
+     * @param array<string, Command|SymfonyCommand>|null $commands
+     */
     public function __construct(?array $commands = null)
     {
         $this->commands = $commands ?? [

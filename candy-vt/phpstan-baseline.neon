@@ -395,39 +395,3 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: tests/SgrUnderlineStylesTest.php
-
-		-
-			message: '#^Cannot access property \$bold on SugarCraft\\Vt\\Sgr\\Sgr\|null\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: tests/SnapshotTest.php
-
-		-
-			message: '#^Cannot access property \$kind on SugarCraft\\Vt\\Color\\Color\|null\.$#'
-			identifier: property.nonObject
-			count: 1
-			path: tests/SnapshotTest.php
-
-		-
-			message: '#^Cannot access property \$value on SugarCraft\\Vt\\Color\\Color\|null\.$#'
-			identifier: property.nonObject
-			count: 4
-			path: tests/SnapshotTest.php
-
-		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertInstanceOf\(\) with ''SugarCraft\\\\Vt\\\\Cursor\\\\Cursor'' and SugarCraft\\Vt\\Cursor\\Cursor will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 1
-			path: tests/TerminalTest.php
-
-		-
-			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertInstanceOf\(\) with ''SugarCraft\\\\Vt\\\\Mode\\\\Mode'' and SugarCraft\\Vt\\Mode\\Mode will always evaluate to true\.$#'
-			identifier: method.alreadyNarrowedType
-			count: 1
-			path: tests/TerminalTest.php
-
-		-
-			message: '#^Offset ''payload'' might not exist on array\{kind\: ''write'', selection\: string, payload\?\: string\}\.$#'
-			identifier: offsetAccess.notFound
-			count: 1
-			path: tests/TerminalTest.php

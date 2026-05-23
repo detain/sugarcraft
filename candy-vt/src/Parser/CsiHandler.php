@@ -94,4 +94,19 @@ interface CsiHandler
      * @param int $mode  0=clear at cursor, 3=clear all
      */
     public function tbc(int $mode): void;
+
+    /**
+     * CHT — Cursor Horizontal Tab. Moves the cursor forward $count tab stops.
+     */
+    public function cht(int $count = 1): void;
+
+    /**
+     * CBT — Cursor Backward Tab. Moves the cursor back $count tab stops.
+     */
+    public function cbt(int $count = 1): void;
+
+    /**
+     * Number of rows in the cell grid (used as bottom-margin default).
+     */
+    public function gridRows(): int;
 }

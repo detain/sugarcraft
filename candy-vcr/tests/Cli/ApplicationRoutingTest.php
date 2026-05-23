@@ -27,6 +27,8 @@ final class ApplicationRoutingTest extends TestCase
     {
         $stdout = fopen('php://memory', 'w+');
         $stderr = fopen('php://memory', 'w+');
+        $this->assertNotFalse($stdout);
+        $this->assertNotFalse($stderr);
 
         $tape = '/tmp/candy-vcr-routing-' . bin2hex(random_bytes(4)) . '.tape';
         $gif = '/tmp/candy-vcr-routing-' . bin2hex(random_bytes(4)) . '.gif';
