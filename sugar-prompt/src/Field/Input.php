@@ -108,6 +108,10 @@ final class Input implements Field
     public function fuzzy(array $candidates): self { return $this->withFuzzySuggestions($candidates); }
     public function validator(\Closure $fn): self { return $this->withValidator($fn); }
     public function validation(callable $predicate, string $errorMessage): self { return $this->withValidation($predicate, $errorMessage); }
+    public function required(): self { return $this->withValidator(new \SugarCraft\Prompt\Validator\Required()); }
+    public function email(): self { return $this->withValidator(new \SugarCraft\Prompt\Validator\Email()); }
+    public function minlength(int $n): self { return $this->withValidator(new \SugarCraft\Prompt\Validator\MinLength($n)); }
+    public function maxlength(int $n): self { return $this->withValidator(new \SugarCraft\Prompt\Validator\MaxLength($n)); }
 
     /**
      * Mask the rendered value with a fixed echo character. Mirrors huh's
