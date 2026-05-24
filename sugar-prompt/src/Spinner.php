@@ -6,6 +6,7 @@ namespace SugarCraft\Prompt;
 
 use SugarCraft\Bits\Spinner\Spinner as BitsSpinner;
 use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
+use SugarCraft\Core\Util\TtyDetect;
 
 /**
  * Blocking "loading" prompt with a spinner. Mirrors huh's
@@ -102,7 +103,7 @@ final class Spinner
         $titlePrefix = $this->title === '' ? '' : ' ' . $this->title;
         $interval = $this->style->interval();
         $usleepInterval = (int) round($interval * 1_000_000);
-        $isTty = function_exists('stream_isatty') && stream_isatty(STDERR);
+        $isTty = TtyDetect::isAtty(STDERR);
         while (true) {
             $glyph = $this->style->frames[$frame % count($this->style->frames)];
             if ($isTty) {
