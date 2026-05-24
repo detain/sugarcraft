@@ -10,3 +10,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:sugar-charts]** Aggregation classes (`BucketByTime`, `MovingAverage`, `Resample`) live in `SugarCraft\Charts\Aggregation` and are immutable + fluent — `add()`/`addMany()` return `$this` clones, `compute()`/`computeSimple()`/`ema()` are static factories. All three classes follow the same pattern: private constructor, public static factories, private state via `readonly` constructor params, clone-mutate on builders. No shared base class — each is `final` and self-contained.
 
 - **[pattern:sugar-charts]** `MovingAverage::ema()` docblock was accidentally duplicated during authoring (two stacked `/** Compute exponential… */` blocks). Only the second (full) docblock with `@param float|null $alpha` is relevant — the first was dead code and has been removed.
+
+- **[pattern:sugar-charts]** `Ansi::fg16()` only accepts codes 30–37 and 90–97 (standard + bright foreground). Code 39 (default foreground) and 38 are rejected by validation even though they are valid ANSI SGR codes. Use `Ansi::sgr(39)` directly for default foreground color to preserve all other attributes.
