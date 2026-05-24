@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Charts\Legend;
 
 use SugarCraft\Charts\Chart\Position;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * Renders a chart legend with colored indicators and series labels.
@@ -154,18 +155,18 @@ final class Legend
      */
     private function coloredIndicator(string $color): string
     {
-        $colorMap = [
-            'red'    => "\x1b[31m",
-            'green'  => "\x1b[32m",
-            'yellow' => "\x1b[33m",
-            'blue'   => "\x1b[34m",
-            'magenta'=> "\x1b[35m",
-            'cyan'   => "\x1b[36m",
-            'white'  => "\x1b[37m",
-            'default'=> "\x1b[39m",
+        static $colorMap = [
+            'red'    => Ansi::fg16(31),   // red foreground
+            'green'  => Ansi::fg16(32),   // green foreground
+            'yellow' => Ansi::fg16(33),   // yellow foreground
+            'blue'   => Ansi::fg16(34),   // blue foreground
+            'magenta'=> Ansi::fg16(35),   // magenta foreground
+            'cyan'   => Ansi::fg16(36),   // cyan foreground
+            'white'  => Ansi::fg16(37),   // white foreground
+            'default'=> Ansi::sgr(39),    // default foreground
         ];
 
-        $code = $colorMap[$color] ?? "\x1b[39m";
-        return $code . $this->indicatorChar . "\x1b[39m";
+        $code = $colorMap[$color] ?? Ansi::sgr(39);
+        return $code . $this->indicatorChar . Ansi::sgr(39);
     }
 }
