@@ -25,9 +25,13 @@ enum PromptStyle: string
     public function prompt(string $cwd = '~'): string
     {
         return match ($this) {
-            self::Bash => "\033[1;32muser\033[0m@\033[1;34mmachine\033[0m:\033[1;34m{$cwd}\033[0m$ ",
-            self::Pwsh => "\033[1;32mPS \033[0m\033[1;34m{$cwd}\033[0m> ",
-            self::PS => "\033[1;32muser\033[0m[\033[1;34m{$cwd}\033[0m]: ",
+            self::Bash => Ansi::sgr(Ansi::BOLD, 32) . 'user' . Ansi::reset() . '@'
+                       . Ansi::sgr(Ansi::BOLD, 34) . 'machine' . Ansi::reset() . ':'
+                       . Ansi::sgr(Ansi::BOLD, 34) . $cwd . Ansi::reset() . '$ ',
+            self::Pwsh => Ansi::sgr(Ansi::BOLD, 32) . 'PS ' . Ansi::reset()
+                       . Ansi::sgr(Ansi::BOLD, 34) . $cwd . Ansi::reset() . '> ',
+            self::PS => Ansi::sgr(Ansi::BOLD, 32) . 'user' . Ansi::reset() . '['
+                       . Ansi::sgr(Ansi::BOLD, 34) . $cwd . Ansi::reset() . ']: ',
             self::Simple => '$ ',
         };
     }
@@ -197,7 +201,7 @@ final class Terminal implements \SugarCraft\Dash\Foundation\Sizer
 
         $lines = explode("\n", $text);
         foreach ($lines as $line) {
-            $prefix = $isError ? "\033[31m[ERROR]\033[0m " : '';
+            $prefix = $isError ? Ansi::fg16(31) . '[ERROR]' . Ansi::reset() . ' ' : '';
             $clone->output[] = $prefix . $line;
         }
 
@@ -454,7 +458,7 @@ final class Terminal implements \SugarCraft\Dash\Foundation\Sizer
     private function calculateDisplayWidth(string $str): int
     {
         // Strip ANSI codes for width calculation
-        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $str);
+        $stripped = Ansi::strip($str);
         if ($stripped === null) {
             return mb_strlen($str, 'UTF-8');
         }

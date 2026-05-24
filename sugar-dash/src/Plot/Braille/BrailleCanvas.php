@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plot\Braille;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Core\Util\ColorProfile;
 
@@ -178,7 +179,7 @@ final class BrailleCanvas implements Sizer
                     $rune = BrailleMatrix::rune($bits);
                     $color = $this->colors[$cellY][$cellX];
                     if ($color !== null) {
-                        $line .= $color->toFg($profile) . $rune . "\x1b[0m";
+                        $line .= $color->toFg($profile) . $rune . Ansi::reset();
                     } else {
                         $line .= $rune . ' ';
                     }
