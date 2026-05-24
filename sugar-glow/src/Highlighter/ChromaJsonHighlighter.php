@@ -7,6 +7,7 @@ namespace SugarCraft\Glow\Highlighter;
 use function preg_match_all, file_get_contents, json_decode;
 
 use const null;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * Chroma-inspired JSON theme highlighter.
@@ -99,7 +100,7 @@ final class ChromaJsonHighlighter implements HighlighterInterface
                     }
                     $color = $theme[$type] ?? null;
                     if ($color !== null) {
-                        return "\x1b[" . $color . 'm' . $value . "\x1b[0m";
+                        return Ansi::CSI . $color . 'm' . $value . Ansi::reset();
                     }
                     // No color defined for this token type
                     return $value;
