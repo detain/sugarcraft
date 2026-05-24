@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Foundation;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
@@ -43,12 +44,12 @@ final readonly class Style
         if ($this->background !== null) {
             $codes[] = $this->background->toBg($profile);
         }
-        if ($this->bold)         { $codes[] = "\x1b[1m"; }
-        if ($this->dim)          { $codes[] = "\x1b[2m"; }
-        if ($this->italic)       { $codes[] = "\x1b[3m"; }
-        if ($this->underline)    { $codes[] = "\x1b[4m"; }
-        if ($this->reverse)      { $codes[] = "\x1b[7m"; }
-        if ($this->strike)       { $codes[] = "\x1b[9m"; }
+        if ($this->bold)         { $codes[] = Ansi::sgr(Ansi::BOLD); }
+        if ($this->dim)          { $codes[] = Ansi::sgr(Ansi::FAINT); }
+        if ($this->italic)       { $codes[] = Ansi::sgr(Ansi::ITALIC); }
+        if ($this->underline)    { $codes[] = Ansi::sgr(Ansi::UNDERLINE); }
+        if ($this->reverse)      { $codes[] = Ansi::sgr(Ansi::REVERSE); }
+        if ($this->strike)       { $codes[] = Ansi::sgr(Ansi::STRIKE); }
 
         return implode('', $codes);
     }
