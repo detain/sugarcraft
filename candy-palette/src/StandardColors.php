@@ -78,6 +78,16 @@ final class StandardColors
         }
         return $all[$index];
     }
+
+    /**
+     * Returns a list of all available standard color names.
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return ['black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan', 'white', 'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite'];
+    }
 }
 
 // Static initialization (PHP < 8.3 lazy enum support)

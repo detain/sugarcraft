@@ -65,6 +65,16 @@ final class Style
         return new self(['','.','..','...'], 3.0);
     }
 
+    /**
+     * Returns a list of all available spinner style names.
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return ['line', 'dot', 'miniDot', 'points', 'pulse', 'globe', 'meter', 'jump', 'moon', 'monkey', 'hamburger', 'ellipsis'];
+    }
+
     public function interval(): float
     {
         return 1.0 / $this->fps;

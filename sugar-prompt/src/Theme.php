@@ -175,4 +175,14 @@ final class Theme
             prompt:         Style::new()->bold(),
         );
     }
+
+    /**
+     * Returns a list of all available theme names.
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return ['ansi', 'plain', 'charm', 'dracula', 'catppuccin', 'base16', 'base'];
+    }
 }
