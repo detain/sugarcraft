@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Foundation;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * Sugar-dash immutable ANSI renderer Buffer (Sizer/Drawable pattern).
  * Intentionally distinct from \SugarCraft\Vt\Buffer\Buffer, which is
@@ -224,7 +226,7 @@ final class Buffer implements Drawable, Sizer
 
                 // Close style if it changed
                 if ($inStyle && $style != $currentStyle) {
-                    $output .= "\x1b[0m";
+                    $output .= Ansi::reset();
                     $inStyle = false;
                 }
 
@@ -242,7 +244,7 @@ final class Buffer implements Drawable, Sizer
 
             // Close any open style at end of line
             if ($inStyle) {
-                $output .= "\x1b[0m";
+                $output .= Ansi::reset();
             }
 
             if ($y < $this->height - 1) {
