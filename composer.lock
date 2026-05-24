@@ -811,7 +811,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-core",
-                "reference": "1bd150d5fbbb643339e24497a29da792617beb8b"
+                "reference": "a738b974de64cb5e70249bdae5f11248755bfbd6"
             },
             "require": {
                 "php": "^8.3",
@@ -881,7 +881,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-flip",
-                "reference": "5b6300db15040bf92780e43514dd5c51344234dd"
+                "reference": "111d364edcbdc0bf6ff62500a3dd7941498cfec3"
             },
             "require": {
                 "ext-gd": "*",
@@ -944,7 +944,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-freeze",
-                "reference": "52b77e741e5567f50ff8fd8e71a4e3270d4cd95f"
+                "reference": "b29c05054da70e729e492b086e52076610ddfa65"
             },
             "require": {
                 "php": "^8.3",
@@ -1065,7 +1065,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-kit",
-                "reference": "cbf804bf92fe69c574c649b5de691ed026d1fd36"
+                "reference": "a2b406b8f1453bc1477da11631f360993224f51a"
             },
             "require": {
                 "php": "^8.3",
@@ -1124,7 +1124,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-lister",
-                "reference": "97b10826a98a707286dbcafec499cc0f48ef61a5"
+                "reference": "9bc4392c26213c4aa1f551615e85d957d2e65adb"
             },
             "require": {
                 "php": "^8.3",
@@ -1179,7 +1179,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-log",
-                "reference": "1de57f038493a6be1d058a30d7ea3e146d544da9"
+                "reference": "f07ff307b1a2af9a0471daa862f8eecaba2c14e4"
             },
             "require": {
                 "php": "^8.3",
@@ -1238,7 +1238,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-metrics",
-                "reference": "e07487f2a58cb6c1bc2ceedbdc2949543bdb63a2"
+                "reference": "b5634ed11d358a8f047763a32e26f5bcc88e606a"
             },
             "require": {
                 "php": ">=8.3",
@@ -1302,7 +1302,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mines",
-                "reference": "243f2c8529908ad982e695f4d397ffe312b1f8cb"
+                "reference": "b88bf02863ce6dd377aaaa01c229d452fce3d827"
             },
             "require": {
                 "php": ">=8.3",
@@ -1361,7 +1361,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mold",
-                "reference": "d4089260ccaa0c637e40e1f44e0cacb9f4c5d2bb"
+                "reference": "5de5cf44e455419f893949bdd0073621957b758f"
             },
             "require": {
                 "php": ">=8.3",
@@ -1423,7 +1423,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "3d6d98bf69e4248fc6ead98d74472f70fc22ffd8"
+                "reference": "4d68a51619305187184293fe08ffc1f04bc7a1ee"
             },
             "require": {
                 "ext-gd": "*",
@@ -1486,7 +1486,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-palette",
-                "reference": "99fc6cfcef8adc7c0d8631d9f9efd911a6ceacf6"
+                "reference": "3fd1c7b8421b12b0c780a9d42fe0d1214e874f3d"
             },
             "require": {
                 "php": "^8.3",
@@ -1543,7 +1543,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-pty",
-                "reference": "b4c30656af3687fd9056fd6ff68725babadeebb1"
+                "reference": "fc59f4d67f41043fe9d95b8b60d67f8809108307"
             },
             "require": {
                 "ext-ffi": "*",
@@ -1610,7 +1610,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-query",
-                "reference": "e92f5a8b6d11f2dee3e78e777f84dac82090ecb8"
+                "reference": "7c12cce42999bfd4aba15fa2291ef09c10d46d52"
             },
             "require": {
                 "ext-pdo_sqlite": "*",
@@ -1672,7 +1672,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-serve",
-                "reference": "cef5ad17e6ecf6cd384c04b5bd704c1046138c2a"
+                "reference": "9caf75f32355f7459a23697d07940cff8b520e56"
             },
             "require": {
                 "ext-json": "*",
@@ -1741,7 +1741,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-shell",
-                "reference": "d4bd2f7b58d2afaa97c779f3e52efd4197b5a88c"
+                "reference": "07fe0f6e402d00eb4044f08c25cd8c8ee3be6644"
             },
             "require": {
                 "php": "^8.3",
@@ -1812,7 +1812,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-shine",
-                "reference": "58b1edc3693ca0ca975c5cd6b089c52e5738f1c2"
+                "reference": "f0920734d8a648bc780aecb617245de6110e59bb"
             },
             "require": {
                 "league/commonmark": "^2.4",
@@ -1935,7 +1935,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-tetris",
-                "reference": "b1b294e0a86fa9d8c904f285597ab1ffa75d80aa"
+                "reference": "38fd4fbca19d179244ce8a018e6f76068c2856c8"
             },
             "require": {
                 "php": ">=8.3",
@@ -1995,7 +1995,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vcr",
-                "reference": "9de2599a56892ca78df8fc1cf8accb5a8eb0a21d"
+                "reference": "c8365fddad4eeb8b796a218fbc56661434556bd1"
             },
             "require": {
                 "php": "^8.3",
@@ -2068,7 +2068,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-vt",
-                "reference": "fad35acbc2295e4a6b6ad4b4d3c2b7025f72fc47"
+                "reference": "1fa61cf1381f280381ebfb523e25bffc1c74741d"
             },
             "require": {
                 "php": "^8.3",
@@ -2128,7 +2128,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-wish",
-                "reference": "9c11942c5aef66eb4522a2ee0b10e855efd36933"
+                "reference": "8e73571285c3cae85c22d5c1a73ae76d3162521c"
             },
             "require": {
                 "php": "^8.3",
@@ -2193,7 +2193,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-zone",
-                "reference": "7aa4612d2ded3f7bca984f5fb30c7871b7a5cd6d"
+                "reference": "53df6dccb5dccb4a9901a8481a5d644e8ac701fb"
             },
             "require": {
                 "php": "^8.3",
@@ -2252,7 +2252,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-bounce",
-                "reference": "0c4c242fb3309a758e11bc9783945bea36bb7840"
+                "reference": "203ffaa8bfe8b395cb8a4be2e6425b0bf0ac78a7"
             },
             "require": {
                 "php": "^8.3",
@@ -2312,7 +2312,7 @@
             "dist": {
                 "type": "path",
                 "url": "honey-flap",
-                "reference": "d2e128edc599b2fe0b02c805c78adb6d01f121b2"
+                "reference": "6afaf67b8786f34a87481fdaab746451f82dadf2"
             },
             "require": {
                 "php": ">=8.3",
@@ -2374,7 +2374,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-bits",
-                "reference": "a308e23f1818b465496a89726d19ede086acdd39"
+                "reference": "c5ce8f5a821e033b858e12e7af36bcc243eb1db3"
             },
             "require": {
                 "php": "^8.3",
@@ -2442,7 +2442,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-boxer",
-                "reference": "6616b0e8e744a62d76cab93d5f47a5c114c1daa4"
+                "reference": "7f5c5d0563a692645bbefc38e7db89264e3a6499"
             },
             "require": {
                 "php": "^8.3",
@@ -2499,7 +2499,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-calendar",
-                "reference": "edbfd66cd444760daf2a1772c71eeca260c06d65"
+                "reference": "2d35df2cf9f4175a72bd51cb7c400acb96a36777"
             },
             "require": {
                 "php": "^8.3",
@@ -2554,7 +2554,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-charts",
-                "reference": "20cccf316935f62813a756daaeb3dbc624e34d7e"
+                "reference": "a5a4c854a256d255f36ef7269595d1981678684f"
             },
             "require": {
                 "php": "^8.3",
@@ -2620,7 +2620,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crumbs",
-                "reference": "e306d6e1eec5ae90ec88f75605101c303b9b8c1b"
+                "reference": "7fc383360e18cdeca7bd7b00a25271773309c5e8"
             },
             "require": {
                 "php": "^8.3",
@@ -2675,7 +2675,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "a1ef38a38a472c70d6d315273a2fd093c3532ac7"
+                "reference": "24ac5a204cc7bf2d8f561fa3995d4ca251b71eb8"
             },
             "require": {
                 "php": ">=8.3",
@@ -2744,7 +2744,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-dash",
-                "reference": "db00190663ed437de1faff4bb705153338e20ca9"
+                "reference": "4b34a929fc6dd8d5fce7ccd79d5d96b330a769a7"
             },
             "require": {
                 "php": "^8.3",
@@ -2812,7 +2812,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-glow",
-                "reference": "1da35d206e226fc8dc96adfc8ba5ae1eebdcdcde"
+                "reference": "aa75df0ab750b72dbae255a0b42059eed763f75a"
             },
             "require": {
                 "php": "^8.3",
@@ -2876,7 +2876,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-post",
-                "reference": "0ec86e24f354bf1bea20ae376440126f1a4f7ebc"
+                "reference": "71daffdebf4e1d8018ec34e3cc34e1c81ec3ea04"
             },
             "require": {
                 "php": "^8.3",
@@ -2934,7 +2934,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-prompt",
-                "reference": "aa1d8b99aa5a5d91d4f20f5867475d4ea76683c6"
+                "reference": "e657df35620dda4f2f188ba25d6685fa58493563"
             },
             "require": {
                 "php": "^8.3",
@@ -3053,7 +3053,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-skate",
-                "reference": "4644d78658ec4c48882c4a4c76808d45422e0ed7"
+                "reference": "40fb5fbdf696a987c5ce7e6fcb2df88771c8f645"
             },
             "require": {
                 "ext-sqlite3": "*",
@@ -3112,7 +3112,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-spark",
-                "reference": "92749a0fee771a9a622a4a460fbb74db579cd62c"
+                "reference": "603cfa99b1109982dc603e9aa79936b83beaf810"
             },
             "require": {
                 "php": "^8.3",
@@ -3173,7 +3173,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-stash",
-                "reference": "4af764daffb223fd70f03a0cb125e4ea46849914"
+                "reference": "7fb79fcf6a444e0c15bbcb9c73a9fde2f4fc13a3"
             },
             "require": {
                 "php": ">=8.3",
@@ -3465,7 +3465,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-veil",
-                "reference": "894f4ebd9e28ece525f010d8361458f90d87ad15"
+                "reference": "1be88b715d2b63f0d6dc5f23d4f838c8aaaa7421"
             },
             "require": {
                 "php": "^8.3",
@@ -3523,7 +3523,7 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-wishlist",
-                "reference": "2413eaa874dff2c80b97c3ccab0ab84e02e9a364"
+                "reference": "6e99bcedf196e17ce439430ed8c957cd662337e8"
             },
             "require": {
                 "ext-pcntl": "*",
@@ -3586,7 +3586,7 @@
             "dist": {
                 "type": "path",
                 "url": "super-candy",
-                "reference": "195fb3151b53f466e9725a11d6c7190e982f0e8e"
+                "reference": "dbdf78bcfe1b90585a4d48565c609b403a828020"
             },
             "require": {
                 "php": ">=8.3",

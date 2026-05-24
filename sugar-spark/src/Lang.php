@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Spark;
 
-use SugarCraft\Core\I18n\T;
+use SugarCraft\Core\I18n\Lang as BaseLang;
 
 /**
  * Per-library translation facade for sugar-spark.
@@ -13,19 +13,10 @@ use SugarCraft\Core\I18n\T;
  * `'spark'` namespace baked in. Translated strings live in
  * {@see ../lang/en.php}.
  *
- * @see \SugarCraft\Core\Lang for the same pattern in candy-core.
+ * @extends BaseLang
  */
-final class Lang
+final class Lang extends BaseLang
 {
-    private const NAMESPACE = 'spark';
-    private const DIR       = __DIR__ . '/../lang';
-
-    /**
-     * @param array<string, string|int|float> $params Placeholder values.
-     */
-    public static function t(string $key, array $params = []): string
-    {
-        T::register(self::NAMESPACE, self::DIR);
-        return T::translate(self::NAMESPACE . '.' . $key, $params);
-    }
+    protected const NAMESPACE = 'spark';
+    protected const DIR = __DIR__ . '/../lang';
 }

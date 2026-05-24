@@ -13,3 +13,5 @@ Accumulated patterns and gotchas from building this library.
 [pattern:springchain-sequential] — `SpringChain` sequences springs so each stage activates only when the previous settles (within 0.001 position and 0.001 velocity). One `tick()` = one step of the active stage; settled stages are "locked" and no longer updated. `isComplete()` returns true when `activeIndex >= count(stages)`.
 
 [pattern:reduced-motion-instant-snap] — `Spring::update()` checks `Probe::reducedMotion()` at call time and returns `[$target, 0.0]` instantly when reduced motion is signalled. This is a pure conditional in `update()` — no separate factory or configuration step needed. Callers that already pass `Spring::update($pos, $vel, $target)` get reduced-motion support automatically when the env var is set.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

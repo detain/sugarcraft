@@ -4,29 +4,19 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use SugarCraft\Core\I18n\Lang as BaseLang;
+
 /**
- * i18n facade for candy-mosaic.
+ * Per-library translation facade for candy-mosaic.
  *
- * Mirrors the pattern used in other SugarCraft libs: thin wrapper over
- * {@see \SugarCraft\Core\I18n\T} with the namespace baked in. Callers
- * use `Lang::t('key', ['param' => $value])`.
+ * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
+ * `'mosaic'` namespace baked in. Translated strings live in
+ * {@see ../lang/en.php}.
+ *
+ * @extends BaseLang
  */
-final class Lang
+final class Lang extends BaseLang
 {
-    private static ?object $t = null;
-
-    /**
-     * Translate a message key with optional parameter substitution.
-     *
-     * @param string $key     Message key in dot-notation (e.g. 'image_source.file_not_found')
-     * @param array  $params  Substitution parameters
-     */
-    public static function t(string $key, array $params = []): string
-    {
-        if (self::$t === null) {
-            self::$t = new \SugarCraft\Core\I18n\T('SugarCraft\\Mosaic\\Lang');
-        }
-
-        return self::$t->translate($key, $params);
-    }
+    protected const NAMESPACE = 'mosaic';
+    protected const DIR = __DIR__ . '/../lang';
 }

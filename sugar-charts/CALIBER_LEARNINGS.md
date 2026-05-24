@@ -12,3 +12,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:sugar-charts]** `MovingAverage::ema()` docblock was accidentally duplicated during authoring (two stacked `/** Compute exponential… */` blocks). Only the second (full) docblock with `@param float|null $alpha` is relevant — the first was dead code and has been removed.
 
 - **[pattern:sugar-charts]** `Ansi::fg16()` only accepts codes 30–37 and 90–97 (standard + bright foreground). Code 39 (default foreground) and 38 are rejected by validation even though they are valid ANSI SGR codes. Use `Ansi::sgr(39)` directly for default foreground color to preserve all other attributes.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

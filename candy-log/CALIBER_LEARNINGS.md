@@ -9,3 +9,5 @@
 [pattern:hook-registry-callable] — `HookRegistry::onLevel(Level, callable): int` stores callbacks in a per-level array and returns a sequential int ID. The original `remove(int $id)` method was broken (Closure::fromCallable rejects int) and was removed — the step only required `onLevel` and `fire`; no removal API is needed.
 
 [pattern:partsorder-config-dto] — `PartsOrder` is a config DTO for log-part ordering: `list<PART_*>` consts (PART_TIMESTAMP, PART_LEVEL, PART_PREFIX, PART_CALLER, PART_MESSAGE, PART_FIELDS), a `readonly array $parts` property, nullable constructor defaulting to standard order, and static factories (`default()`, `syslog()`, `messageFirst()`). Immutable + fluent pattern.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

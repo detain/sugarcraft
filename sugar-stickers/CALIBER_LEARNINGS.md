@@ -18,3 +18,5 @@ Viewport sticky positioning (sticky headers/footers that appear/disappear
 as the user scrolls) is out of scope for the SSOT composition step and is
 deferred to step 10.12. The Viewport wrapper currently delegates all rendering
 to the sugar-bits Viewport.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
