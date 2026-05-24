@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Wishlist;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\TtyDetect;
 
 /**
  * Tiny terminal picker — renders a numbered list of {@see Endpoint}s,
@@ -179,10 +180,14 @@ class Picker
      * Toggle the controlling tty into raw mode so the picker sees
      * keys one byte at a time. Falls back silently if `stty` is
      * unavailable (e.g. non-tty stream in tests).
+     *
+     * Note: TtyDetect only covers TTY detection, not raw-mode toggling.
+     * The stty calls below are direct and should be moved to TtyDetect
+     * if/when raw-mode support is added there (follow-up issue).
      */
     protected function setRawMode(bool $on): void
     {
-        if (!stream_isatty($this->in)) {
+        if (!TtyDetect::isAtty($this->in)) {
             return;
         }
         if ($on) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Glow;
 
+use SugarCraft\Core\Util\TtyDetect;
 use SugarCraft\Glow\Lang;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
@@ -102,7 +103,7 @@ final class RenderCommand extends Command
             $contents = @file_get_contents($file);
             return is_string($contents) ? $contents : null;
         }
-        if (!defined('STDIN') || !is_resource(STDIN) || @stream_isatty(STDIN)) {
+        if (!defined('STDIN') || !is_resource(STDIN) || TtyDetect::isAtty(STDIN)) {
             return null;
         }
         $raw = stream_get_contents(STDIN);
