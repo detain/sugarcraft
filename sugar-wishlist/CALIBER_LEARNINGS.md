@@ -52,3 +52,5 @@ When snapshot-testing `SshConfigParser::parse()`, include real OpenSSH config sn
 ### Coercion tests
 
 Test edge cases: missing `HostName` (pattern becomes host), missing `Port` (defaults to 22), `IdentityFile` with `~` prefix (expands), empty config (returns empty array), and `Host *` only (no endpoints emitted).
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

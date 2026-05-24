@@ -50,3 +50,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   all cell lines to build the full row height. When `false` (the default), cells
   are clamped to `maxLines = 1` preserving backward compatibility. See
   `Table.php` lines 241–246.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

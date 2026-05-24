@@ -27,3 +27,5 @@ Accumulated patterns and gotchas discovered during porting and auditing.
 - `bin/skate set`: when no positional value argument is given, reads one line from STDIN and `trim()`s it.
 - `bin/skate import`: path `-` or `/dev/stdin` reads all of `php://stdin` content.
 - Import always wraps in atomic transaction by default; pass `--no-atomic` to disable.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

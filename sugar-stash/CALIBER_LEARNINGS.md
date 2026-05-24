@@ -219,3 +219,5 @@ Interactive rebase shows a todo list of commits, each with an assignable action
 8. **Display** — `RebaseCommit::displayLine()` returns `"<action> <sha> <subject>"`.
 9. **Immutability** — every state-changing method returns a new instance;
    `App::withInteractiveRebase()` bypasses `withAll()` for null-explicitness.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

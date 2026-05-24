@@ -61,3 +61,5 @@ carry margin as a first-class concept.**
 
 Margin is implemented directly on Node rather than delegated to Style,
 preserving the Boundary between the layout engine and the styling system.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

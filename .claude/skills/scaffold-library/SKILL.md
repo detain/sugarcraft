@@ -132,6 +132,47 @@ Class rules:
 - Doc-comment: `/** Mirrors upstream <Method>. */`.
 - No comments restating WHAT — only WHY (constraints, invariants, upstream issue links).
 
+### Step 5bis — Create the lib's `src/Lang.php`
+
+Every SugarCraft lib ships a minimal `Lang` class that extends `SugarCraft\Core\I18n\Lang`. The base class provides the `t()` method via late static binding; subclasses only define their `NAMESPACE` and `DIR` constants:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\<Sub>;
+
+use SugarCraft\Core\I18n\Lang as BaseLang;
+
+/**
+ * Per-library translation facade for <slug>.
+ *
+ * Wraps the shared {@see \SugarCraft\Core\I18n\T} registry with the
+ * '<namespace>' namespace baked in. Translated strings live in
+ * {@see ../lang/en.php}.
+ *
+ * @extends BaseLang
+ */
+final class Lang extends BaseLang
+{
+    private const NAMESPACE = '<namespace>';
+    private const DIR = __DIR__ . '/../lang';
+}
+```
+
+Also create the `lang/en.php` stub:
+
+```php
+<?php
+
+declare(strict_types=1);
+
+return [
+    // 'key' => 'Translated message with {placeholder}',
+];
+```
+
 ### Step 6 — Create the lib's `README.md` and `CALIBER_LEARNINGS.md`
 
 `README.md`: composer-require snippet, one-paragraph role summary, quickstart example, link to the upstream, Codecov per-flag badge (URL form: `?flag=<slug-placeholder>`).

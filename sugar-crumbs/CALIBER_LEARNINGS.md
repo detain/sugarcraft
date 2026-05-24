@@ -23,3 +23,5 @@ The pattern: renderer holds an optional `?Manager` reference, calls
 caller is responsible for `scan()` / mouse dispatch on the output string.
 
 See: `Breadcrumb::withZoneManager()`, `Breadcrumb::wrapAllCrumbs()`.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

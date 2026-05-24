@@ -77,3 +77,5 @@ Accumulated patterns and gotchas specific to this library.
   The `f=1`传输 field signals zlib decompression to the terminal. Worthwhile
   for large images on slow links; adds modest CPU overhead on both sides.
   Compression level 1 (fastest) is the Kitty spec minimum and sufficient.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

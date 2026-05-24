@@ -133,3 +133,5 @@ instance on every `dismiss()` call — prior instances remain valid for inspecti
 or undo stacks. The `Toast` instance itself is also immutable (clone+mutate),
 so `getHistory()` on a given `Toast` always reflects only the dismissals that
 occurred on that instance's lineage.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

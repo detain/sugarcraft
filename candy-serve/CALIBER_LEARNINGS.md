@@ -22,3 +22,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:git-daemon-signal-handling]** Daemon mode registers `pcntl_signal()` handlers for SIGTERM/SIGINT/SIGHUP with `pcntl_async_signals(true)`. On signal, sets shutdown flag; main loop checks flag and calls `cleanup()` which closes sockets and removes PID file.
 
 - **[pattern:git-daemon-pid-file]** PID file is written as plain text (just the PID) to the specified path. Created with `mkdir` on the directory first if needed. Removed in `cleanup()` via `unlink`. Default location is `<data_path>/git-daemon.pid`.
+
+- Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
