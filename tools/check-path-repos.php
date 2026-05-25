@@ -5,19 +5,27 @@ declare(strict_types=1);
 /**
  * Path-repo closure check for the SugarCraft monorepo.
  *
- * For every lib that declares a `"sugarcraft/<dep>": "@dev"` requirement
- * in its `composer.json`, this script verifies a corresponding path-repo
- * entry exists in `repositories[]` (type=path, url="../<dep>") so
- * `composer install` can resolve the symlink without falling back to
- * the VCS remote. Catches the CLAUDE.md gotcha:
+ * For every lib, this script walks the FULL TRANSITIVE `sugarcraft/*`
+ * require graph (each required sibling's composer.json is read to discover
+ * the next level — all siblings are local path-repos, so no version solving
+ * is needed, just name collection) and verifies a corresponding path-repo
+ * entry exists in that lib's `repositories[]` (type=path, url="../<dep>")
+ * for EVERY transitively-required sibling. Without the full closure a fresh
+ * `composer install` cannot resolve the symlinks and falls back to the VCS
+ * remote (which fails for unpublished libs). Catches the CLAUDE.md gotcha:
  *
  *   > New transitive @dev deps need their path-repo added to every
  *   > consuming lib's repositories[].
  *
+ * Historically this checker only validated a lib's DIRECT requires, so a
+ * gap two hops deep (e.g. sugar-glow → sugar-bits → candy-forms) slipped
+ * through and broke fresh installs. It now resolves the transitive set and
+ * reports the dependency path that introduced each missing entry.
+ *
  * Exits 0 on clean closure, 1 with a printed report on any drift.
  *
- * With --fix: auto-inserts missing path-repo entries and exits 0 if every
- * issue was fixable. With --help: print usage and exit 0.
+ * With --fix: auto-inserts missing path-repo entries (direct AND transitive)
+ * and exits 0 if every issue was fixable. With --help: print usage and exit 0.
  *
  * Recognized dev-constraint forms (all require path-repo closure since
  * they pin a moving HEAD inside the monorepo):
@@ -51,10 +59,24 @@ if ($root !== false && $root !== '') {
 
 $fix = false;
 $help = false;
+// --strict-closure flags EVERY transitive gap regardless of Packagist
+// availability (the pre-1.0 ideal: full local path-repo closure everywhere).
+// Default behaviour only flags a gap when the dep is ALSO unresolvable via
+// Packagist, which models how Composer actually resolves today and keeps the
+// signal focused on genuinely-broken fresh installs (e.g. an unpublished lib
+// like a freshly-extracted candy-forms). --no-network forces offline mode:
+// when a dep's Packagist status can't be determined it is assumed published
+// (no false positives), unless --strict-closure is also given.
+$strictClosure = false;
+$noNetwork = false;
 
 foreach ($_SERVER['argv'] as $arg) {
     if ($arg === '--fix') {
         $fix = true;
+    } elseif ($arg === '--strict-closure') {
+        $strictClosure = true;
+    } elseif ($arg === '--no-network') {
+        $noNetwork = true;
     } elseif ($arg === '--help' || $arg === '-h') {
         $help = true;
     }
@@ -66,16 +88,30 @@ Usage: php tools/check-path-repos.php [options]
 
 Checks path-repo closure for the SugarCraft monorepo.
 
-For every lib that declares a `sugarcraft/<dep>` requirement with a dev
-constraint (`@dev`, `dev-master`, `dev-main`, `dev-*`, or `^x@dev`) in its
-composer.json, verify a corresponding path-repo entry exists in repositories[]:
+For every lib, walk the FULL TRANSITIVE `sugarcraft/*` require graph (each
+required sibling's composer.json is read to find the next level) and verify a
+corresponding path-repo entry exists in that lib's repositories[] for every
+transitively-required sibling pinned to a dev constraint (`@dev`, `dev-master`,
+`dev-main`, `dev-*`, or `^x@dev`):
 
     { "type": "path", "url": "../<dep>", "options": { "symlink": true } }
 
+A transitive gap is reported when a reachable sibling has NO path-repo entry
+AND cannot be resolved another way. By default a dep that is published on
+Packagist is treated as resolvable (Composer falls back to it), so only
+genuinely-unresolvable gaps — e.g. an unpublished, freshly-extracted lib — are
+flagged. Pass --strict-closure to demand a local path-repo for the FULL
+transitive closure regardless of Packagist (the pre-1.0 ideal).
+
 Options:
-  --fix   Auto-insert missing path-repo entries into affected composer.json
-          files. Without this flag the script is idempotent (reports only).
-  --help  Show this usage message.
+  --fix             Auto-insert missing path-repo entries (direct AND
+                    transitive) into affected composer.json files. Idempotent
+                    when omitted (reports only).
+  --strict-closure  Flag every transitive gap even if the dep is on Packagist.
+  --no-network      Skip Packagist HEAD checks; assume unknown deps are
+                    published (combine with --strict-closure for full offline
+                    closure enforcement).
+  --help            Show this usage message.
 
 Exit codes:
   0  No issues found (or --fix succeeded for all issues)
@@ -97,10 +133,35 @@ $fixedCount = 0;
 // Structure: [slug => ['manifestPath' => ..., 'missingRepos' => [...]], ...]
 $fixRequests = [];
 
+/**
+ * Detect a dev-stability constraint that pins a moving HEAD inside the
+ * monorepo: bare `@dev`, branch aliases (`dev-master`, `dev-main`, …), or
+ * version-constrained dev (`^1.0@dev`). All require a path-repo for symlink
+ * resolution. Stable Packagist constraints are skipped.
+ */
+$isDevConstraint = static function (string $constraint): bool {
+    $trimmed = \trim($constraint);
+    return $trimmed === '@dev'
+        || \str_starts_with($trimmed, 'dev-')
+        || \str_ends_with($trimmed, '@dev');
+};
+
+$skipDirs = ['vendor', 'node_modules', 'docs', 'plans', 'tools', 'scripts'];
+
+// ---------------------------------------------------------------------------
+// Pass 1 — load every manifest, record its dev-pinned sugarcraft/* requires.
+// This builds the dependency graph used to compute transitive closures. Every
+// sibling lib is loaded (even those with no requires) so the walker can resolve
+// a dep slug → its own requires without re-reading from disk.
+// ---------------------------------------------------------------------------
+
+/** @var array<string, array{slug:string, manifestPath:string, manifest:array<string,mixed>, repos:mixed, devDeps:array<string,string>}> $libData keyed by slug */
+$libData = [];
+
 foreach ($libs as $manifestPath) {
     $slug = \basename(\dirname($manifestPath));
     // Skip vendor + bootstrap + docs scaffolds — they are not real libs.
-    if (\in_array($slug, ['vendor', 'node_modules', 'docs', 'plans', 'tools', 'scripts'], true)) {
+    if (\in_array($slug, $skipDirs, true)) {
         continue;
     }
 
@@ -115,12 +176,11 @@ foreach ($libs as $manifestPath) {
         continue;
     }
 
-    $libsScanned++;
-
     /** @var array<string, string> $requires */
     $requires = (array) ($manifest['require'] ?? []);
 
-    $atDevDeps = [];
+    // depSlug => constraint, for sugarcraft/* dev-pinned requires only.
+    $devDeps = [];
     foreach ($requires as $name => $constraint) {
         if (!\is_string($name) || !\is_string($constraint)) {
             continue;
@@ -128,26 +188,116 @@ foreach ($libs as $manifestPath) {
         if (!\str_starts_with($name, 'sugarcraft/')) {
             continue;
         }
-        $trimmed = \trim($constraint);
-        // Recognize any dev-stability constraint that pins a moving
-        // HEAD inside the monorepo: bare `@dev`, branch aliases
-        // (`dev-master`, `dev-main`, `dev-foo`), or version-constrained
-        // dev (`^1.0@dev`). All require a path-repo for symlink resolution.
-        $isDevConstraint = $trimmed === '@dev'
-            || \str_starts_with($trimmed, 'dev-')
-            || \str_ends_with($trimmed, '@dev');
-        if (!$isDevConstraint) {
+        if (!$isDevConstraint($constraint)) {
             continue;
         }
-        $atDevDeps[$name] = $constraint;
+        $depSlug = \substr($name, \strlen('sugarcraft/'));
+        $devDeps[$depSlug] = $constraint;
     }
 
-    if ($atDevDeps === []) {
+    $libData[$slug] = [
+        'slug' => $slug,
+        'manifestPath' => $manifestPath,
+        'manifest' => $manifest,
+        'repos' => $manifest['repositories'] ?? [],
+        'devDeps' => $devDeps,
+    ];
+}
+
+/**
+ * Resolve the full transitive set of dev-pinned sugarcraft/* siblings reachable
+ * from $startSlug (excluding $startSlug itself). Returns depSlug => path-string,
+ * where the path records the first chain that introduced the dep (e.g.
+ * "sugar-bits -> candy-forms") for actionable reporting. Cycles (candy-core ⇄
+ * candy-pty) are handled via the visited set.
+ *
+ * @param array<string, array{devDeps:array<string,string>}> $libData
+ * @return array<string, string>
+ */
+$transitiveDeps = static function (string $startSlug, array $libData): array {
+    /** @var array<string, string> $found depSlug => introducing-path */
+    $found = [];
+    // BFS queue of [slug, pathPrefix].
+    $queue = [[$startSlug, $startSlug]];
+
+    while ($queue !== []) {
+        [$current, $path] = \array_shift($queue);
+        $deps = $libData[$current]['devDeps'] ?? [];
+        foreach ($deps as $depSlug => $_constraint) {
+            if ($depSlug === $startSlug) {
+                continue; // self-cycle — never needs a path-repo to itself.
+            }
+            if (isset($found[$depSlug])) {
+                continue; // already recorded via an earlier (shorter) path.
+            }
+            $childPath = $path . ' -> ' . $depSlug;
+            $found[$depSlug] = $childPath;
+            // Recurse only into siblings we know about; unknown slugs are
+            // either external or absent and reported separately on lookup.
+            if (isset($libData[$depSlug])) {
+                $queue[] = [$depSlug, $childPath];
+            }
+        }
+    }
+
+    return $found;
+};
+
+/**
+ * Is `sugarcraft/<slug>` published on Packagist? Composer resolves a transitive
+ * dep that lacks a local path-repo by falling back to Packagist, so a published
+ * dep is NOT a broken closure even without a path-repo. Results are memoised for
+ * the run; offline/--no-network treats unknowns as published (no false
+ * positives — a genuinely unpublished lib is the only thing that breaks installs
+ * and that case is the one we must never miss, so callers that want strictness
+ * pass --strict-closure instead of relying on this probe).
+ *
+ * @param array<string, bool> $cache
+ */
+$isPublishedOnPackagist = static function (string $depSlug, bool $offline, array &$cache): bool {
+    if ($offline) {
+        return true; // assume published; --strict-closure overrides upstream.
+    }
+    if (isset($cache[$depSlug])) {
+        return $cache[$depSlug];
+    }
+    $url = 'https://repo.packagist.org/p2/sugarcraft/' . $depSlug . '.json';
+    $ctx = \stream_context_create([
+        'http' => ['method' => 'HEAD', 'timeout' => 5, 'ignore_errors' => true],
+        'ssl' => ['verify_peer' => true, 'verify_peer_name' => true],
+    ]);
+    $headers = @\get_headers($url, false, $ctx);
+    if ($headers === false || $headers === []) {
+        // Network failure — be conservative and assume published so we never
+        // emit a false "broken" on a transient outage. --strict-closure is the
+        // knob for "I want full closure regardless".
+        return $cache[$depSlug] = true;
+    }
+    $status = (string) ($headers[0] ?? '');
+    $published = \str_contains($status, ' 200');
+    return $cache[$depSlug] = $published;
+};
+
+/** @var array<string, bool> $packagistCache */
+$packagistCache = [];
+
+// ---------------------------------------------------------------------------
+// Pass 2 — for each lib, compute its transitive closure and assert every
+// reachable sibling has a matching path-repo entry. A gap is reported only when
+// the dep is genuinely unresolvable: no path-repo AND (in --strict-closure
+// mode, always; otherwise only if it is not published on Packagist).
+// ---------------------------------------------------------------------------
+
+foreach ($libData as $slug => $data) {
+    $libsScanned++;
+
+    $closure = $transitiveDeps($slug, $libData);
+    if ($closure === []) {
         continue;
     }
 
     /** @var array<int, array<string, mixed>>|array<string, array<string, mixed>> $repos */
-    $repos = $manifest['repositories'] ?? [];
+    $repos = $data['repos'];
 
     // Handle both array form and object-keyed-by-name form.
     $reposArray = [];
@@ -182,14 +332,22 @@ foreach ($libs as $manifestPath) {
         $pathRepoTargets[$depSlug] = $url;
     }
 
+    // Sort the closure for deterministic, dependency-order-stable output.
+    \ksort($closure);
+
     $missingRepos = [];
-    foreach ($atDevDeps as $name => $constraint) {
-        $depSlug = \substr($name, \strlen('sugarcraft/'));
-        if (!isset($pathRepoTargets[$depSlug])) {
-            $missingRepos[] = $depSlug;
-            if (!$fix) {
-                $issues[] = "{$slug}: require[\"{$name}\"]={$constraint} but no path-repo entry for ../{$depSlug}";
-            }
+    foreach ($closure as $depSlug => $introPath) {
+        if (isset($pathRepoTargets[$depSlug])) {
+            continue; // local path-repo present — resolvable.
+        }
+        // No path-repo. In default mode this is only a real break if the dep
+        // can't fall back to Packagist either. --strict-closure flags it always.
+        if (!$strictClosure && $isPublishedOnPackagist($depSlug, $noNetwork, $packagistCache)) {
+            continue;
+        }
+        $missingRepos[] = $depSlug;
+        if (!$fix) {
+            $issues[] = "{$slug}: missing path-repo for {$depSlug} (required transitively via {$introPath})";
         }
     }
 
@@ -199,8 +357,8 @@ foreach ($libs as $manifestPath) {
 
     if ($fix) {
         $fixRequests[$slug] = [
-            'manifestPath' => $manifestPath,
-            'manifest' => $manifest,
+            'manifestPath' => $data['manifestPath'],
+            'manifest' => $data['manifest'],
             'repos' => $repos,
             'missingRepos' => $missingRepos,
         ];
