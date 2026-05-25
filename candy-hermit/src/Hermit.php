@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Hermit;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -530,7 +531,7 @@ final class Hermit
                 for ($j = 0; $j < $matchLen; $j++) {
                     $result .= $text[$i + $j];
                 }
-                $result .= "\x1b[0m";
+                $result .= Ansi::reset();
                 $i += $matchLen;
                 $matched = true;
             }
