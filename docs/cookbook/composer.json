@@ -1,0 +1,28 @@
+{
+    "name": "sugarcraft/cookbook",
+    "description": "Runnable cross-library composability examples for SugarCraft.",
+    "type": "project",
+    "license": "MIT",
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "@dev",
+        "sugarcraft/candy-forms": "@dev",
+        "sugarcraft/sugar-table": "@dev",
+        "sugarcraft/sugar-charts": "@dev",
+        "sugarcraft/sugar-toast": "@dev"
+    },
+    "repositories": [
+        { "type": "path", "url": "../../candy-core",      "options": { "symlink": true } },
+        { "type": "path", "url": "../../candy-sprinkles",  "options": { "symlink": true } },
+        { "type": "path", "url": "../../candy-forms",      "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-table",      "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-charts",     "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-toast",      "options": { "symlink": true } },
+        { "type": "path", "url": "../../sugar-dash",       "options": { "symlink": true } },
+        { "type": "path", "url": "../../candy-pty",        "options": { "symlink": true } },
+        { "type": "path", "url": "../../candy-vcr",        "options": { "symlink": true } },
+        { "type": "path", "url": "../../candy-vt",         "options": { "symlink": true } }
+    ]
+}
