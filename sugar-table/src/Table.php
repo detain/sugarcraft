@@ -15,6 +15,7 @@ namespace SugarCraft\Table;
  *
  * @see https://github.com/Evertras/bubble-table
  */
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Table\Lang;
 
@@ -851,6 +852,6 @@ final class Table
     private function ansi(string $text, string $codes): string
     {
         if ($codes === '') return $text;
-        return "\x1b[{$codes}m{$text}\x1b[0m";
+        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }

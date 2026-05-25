@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Flex;
 
+use SugarCraft\Core\Util\Ansi;
+
 /** {@see FlexBox} main-axis direction — equivalent to CSS `flex-direction`. */
 enum Direction {
     case Row;     // horizontal
@@ -323,6 +325,6 @@ final class FlexBox
     private function applyStyle(string $s, string $style): string
     {
         if ($style === '') return $s;
-        return "\x1b[{$style}m{$s}\x1b[0m";
+        return Ansi::CSI . $style . 'm' . $s . Ansi::reset();
     }
 }
