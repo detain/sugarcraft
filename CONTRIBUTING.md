@@ -31,8 +31,12 @@ immediately in `candy-shine`'s test run with no rebuild step.
 
 If your change introduces a new `sugarcraft/* @dev` dep, run
 `php tools/check-path-repos.php --fix` to auto-insert the missing path-repo
-entry before committing. The bare script (`--fix` omitted) is read-only —
-use it to verify closure without making changes.
+entry before committing. The checker walks the FULL transitive `sugarcraft/*`
+require graph (not just direct requires), so a gap introduced several hops away
+is caught and reported with the dependency path that needs it. The bare script
+(`--fix` omitted) is read-only — use it to verify closure without making
+changes; add `--strict-closure` to require a local path-repo for every
+transitive dep even when it is already published on Packagist.
 
 ## Style guide
 
