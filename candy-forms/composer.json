@@ -1,0 +1,62 @@
+{
+    "name": "sugarcraft/candy-forms",
+    "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits and sugar-prompt.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "forms",
+        "input",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-forms",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-forms/issues",
+        "source": "https://github.com/sugarcraft/candy-forms",
+        "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-sprinkles": "dev-master"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Forms\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Forms\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
