@@ -45,6 +45,7 @@ Each lib carries its own PHPUnit XML config. `bootstrap="vendor/autoload.php"`, 
 - Public classes `final` unless extension is part of contract.
 - **Immutable + fluent**: every `with*()` returns new instance via private `mutate()` helper. Public `readonly` properties for state.
 - Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`.
+- **Factory naming**: `::new()` is the zero-arg/default root instance. Bare-named factories for variants — `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`, `Spring::fps(60)`. Do NOT introduce `::create()`, `::make()`, or `::default()` — those are the drift to avoid.
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
 - Don't comment what code does — only why (constraints, invariants, links to upstream issues).
 

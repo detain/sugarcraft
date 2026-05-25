@@ -152,7 +152,7 @@ echo Tree::new()
 
 ## Public API
 
-- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `primary`/`secondary` are aliased as `accent`/`muted`. Every `with*($color)` setter returns a new `Theme`. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
+- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `primary`/`secondary` are aliased as `accent`/`muted`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
 - **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
@@ -161,7 +161,9 @@ echo Tree::new()
   `copy()` (shallow clone), `inherit($parent)` (unset-only merge), and
   `patch($other)` (incremental merge — only props set in $other are applied).
 - **`Border`** — `normal()`, `rounded()`, `thick()`, `double()`, `block()`,
-  `hidden()`. Per-side toggles via `Style::border*`.
+  `ascii()`, `hidden()`, `markdownBorder()`. `Border::catalog()` enumerates the
+  factory names as a `list<string>` for programmatic discovery. Per-side toggles
+  via `Style::border*`.
 - **`BorderGradientBlend`** — `fromColors(Color ...$colors)` accepts 1–5
   colors and returns a blend whose `sides(): list<Color>` (top / right / bottom /
   left) are interpolated around the perimeter. Use with `Style::borderColor()`.
@@ -326,6 +328,9 @@ $dracula = Theme::dracula();
 
 // Auto-detect from $COLORFGBG (falls back to dark)
 $theme = Theme::adaptive();
+
+// Enumerate every built-in theme name programmatically
+$names = Theme::catalog(); // ['dark', 'light', 'dracula', …, 'adaptive']
 
 // Override one or more colours (all with*() return new Theme)
 $custom = $dark->withPrimary(Color::hex('#ff5f87'))

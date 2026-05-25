@@ -145,7 +145,7 @@ echo $profile->label(); // "TrueColor"
 
 ```
 SugarCraft\Palette\
-├── Color          — RGBA color value object with conversion methods
+├── Color          — RGBA color value object with conversion methods (Color::namedColors() lists standard names)
 ├── Palette        — instance-based detection + degradation + ProfileWriter
 ├── Profile         — legacy detection enum (richest→simplest order)
 ├── ColorProfile    — new SSOT detection enum (simplest→richest order, Probe-driven)

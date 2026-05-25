@@ -6,6 +6,7 @@ namespace SugarCraft\Palette\Tests;
 
 use SugarCraft\Palette\Color;
 use SugarCraft\Palette\Profile;
+use SugarCraft\Palette\StandardColors;
 use PHPUnit\Framework\TestCase;
 
 final class ColorTest extends TestCase
@@ -129,5 +130,35 @@ final class ColorTest extends TestCase
         $c = new Color(255, 80, 80);
         $ansi = $c->convert(Profile::ANSI);
         $this->assertContains($ansi->r, [0xcd, 0xff, 0x00, 0x7f]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Named colors discovery
+    // -------------------------------------------------------------------------
+
+    public function testNamedColorsIsNonEmptyListOfStrings(): void
+    {
+        $names = Color::namedColors();
+        $this->assertNotEmpty($names);
+        $this->assertSame(array_values($names), $names, 'namedColors must be a list');
+        foreach ($names as $name) {
+            $this->assertIsString($name);
+        }
+    }
+
+    public function testNamedColorsDelegatesToStandardColorsCatalog(): void
+    {
+        $this->assertSame(StandardColors::catalog(), Color::namedColors());
+    }
+
+    public function testEveryNamedColorResolvesToARealColor(): void
+    {
+        foreach (Color::namedColors() as $name) {
+            $this->assertTrue(
+                isset(StandardColors::${$name}),
+                "named color '{$name}' must resolve to a StandardColors property",
+            );
+            $this->assertInstanceOf(Color::class, StandardColors::${$name});
+        }
     }
 }

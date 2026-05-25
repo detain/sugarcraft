@@ -274,6 +274,21 @@ final class Color
         return $closest;
     }
 
+    /**
+     * Enumerate the names of the standard named colors.
+     *
+     * Each entry resolves to a {@see Color} via the matching static property
+     * on {@see StandardColors} (e.g. `'brightRed'` → `StandardColors::$brightRed`).
+     * Delegates to {@see StandardColors::catalog()} so the list never drifts.
+     * Enables programmatic discovery (e.g. a `--list-colors` command).
+     *
+     * @return list<string>
+     */
+    public static function namedColors(): array
+    {
+        return StandardColors::catalog();
+    }
+
     public function equals(Color $other): bool
     {
         return $this->r === $other->r
