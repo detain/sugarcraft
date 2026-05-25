@@ -7,6 +7,7 @@ namespace SugarCraft\Bits\TextArea;
 use SugarCraft\Bits\Cursor\BlinkMsg;
 use SugarCraft\Bits\Cursor\Cursor;
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -29,6 +30,7 @@ use SugarCraft\Core\Util\Editor;
  */
 final class TextArea implements Model
 {
+    use Mutable;
     /**
      * @param list<string>             $lines
      * @param ?\Closure(string): ?string $validate
