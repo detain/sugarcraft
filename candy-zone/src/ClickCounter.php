@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Zone;
 
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Zone\Msg\DoubleClickMsg;
@@ -26,6 +27,7 @@ use SugarCraft\Zone\Msg\TripleClickMsg;
  */
 final class ClickCounter
 {
+    use Mutable;
     /** How many consecutive clicks have occurred in the current streak. */
     private int $clickCount = 0;
 
@@ -77,7 +79,7 @@ final class ClickCounter
 
         // Click outside any zone — no streak possible.
         if ($hit === null) {
-            return [$this->mutate(0, 0.0, null), null];
+            return [$this->mutate(['clickCount' => 0, 'lastClickTime' => 0.0, 'lastClickZoneId' => null]), null];
         }
 
         $now = microtime(true);
@@ -87,7 +89,7 @@ final class ClickCounter
             $this->clickCount = 1;
             $this->lastClickTime = $now;
             $this->lastClickZoneId = $hit->id;
-            return [$this->mutate(1, $now, $hit->id), null];
+            return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
         }
 
         // Same zone — check if within interval.
@@ -98,7 +100,7 @@ final class ClickCounter
             $this->clickCount = 1;
             $this->lastClickTime = $now;
             $this->lastClickZoneId = $hit->id;
-            return [$this->mutate(1, $now, $hit->id), null];
+            return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
         }
 
         // Within interval — advance streak.
@@ -108,16 +110,16 @@ final class ClickCounter
 
         if ($newCount === 3) {
             // Triple click.
-            return [$this->mutate(3, $now, $hit->id), new TripleClickMsg($hit)];
+            return [$this->mutate(['clickCount' => 3, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), new TripleClickMsg($hit)];
         }
 
         if ($newCount === 2) {
             // Double click.
-            return [$this->mutate(2, $now, $hit->id), new DoubleClickMsg($hit)];
+            return [$this->mutate(['clickCount' => 2, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), new DoubleClickMsg($hit)];
         }
 
         // More than triple — just keep counting but only emit once per threshold.
-        return [$this->mutate($newCount, $now, $hit->id), null];
+        return [$this->mutate(['clickCount' => $newCount, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
     }
 
     /**
@@ -129,14 +131,22 @@ final class ClickCounter
     }
 
     /**
-     * Clone with optional overrides.
+     * Clone with optional overrides via array-merge pattern.
+     *
+     * Note: ClickCounter's private mutable fields (clickCount, lastClickTime,
+     * lastClickZoneId) are not constructor parameters — they are assigned
+     * directly on the new instance after construction.  Public readonly
+     * constructor properties (manager, clickIntervalMs) come from get_object_vars().
      */
-    private function mutate(int $clickCount, float $lastClickTime, ?string $lastClickZoneId): self
+    private function mutate(array $changes): static
     {
-        $new = new self($this->manager, $this->clickIntervalMs);
-        $new->clickCount = $clickCount;
-        $new->lastClickTime = $lastClickTime;
-        $new->lastClickZoneId = $lastClickZoneId;
+        $new = new self(
+            manager: $this->manager,
+            clickIntervalMs: $this->clickIntervalMs,
+        );
+        foreach ($changes as $k => $v) {
+            $new->$k = $v;
+        }
         return $new;
     }
 }
