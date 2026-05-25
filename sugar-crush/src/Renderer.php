@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Shine\Renderer as Markdown;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -57,9 +58,9 @@ final class Renderer
         $blocks = [];
         foreach ($history as $msg) {
             $blocks[] = match ($msg->role) {
-                Role::User      => "\x1b[1;36muser>\x1b[0m " . $msg->content,
-                Role::Assistant => "\x1b[1;35massistant\x1b[0m\n" . trim($md->render($msg->content)),
-                Role::System    => "\x1b[2msystem: " . $msg->content . "\x1b[0m",
+                Role::User      => Ansi::sgr(1, 36) . "user>" . Ansi::reset() . " " . $msg->content,
+                Role::Assistant => Ansi::sgr(1, 35) . "assistant" . Ansi::reset() . "\n" . trim($md->render($msg->content)),
+                Role::System    => Ansi::sgr(Ansi::FAINT) . "system: " . $msg->content . Ansi::reset(),
             };
         }
         return implode("\n\n", $blocks);

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tetris;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Style;
@@ -156,11 +157,11 @@ final class Renderer
 
     private static function block(Tetromino $kind): string
     {
-        return "\x1b[48;5;{$kind->color()}m  \x1b[0m";
+        return Ansi::bg256($kind->color()) . '  ' . Ansi::reset();
     }
 
     private static function ghost(Tetromino $kind): string
     {
-        return "\x1b[38;5;{$kind->color()};2m▒▒\x1b[0m";
+        return Ansi::sgr(38, 5, $kind->color(), 2) . '▒▒' . Ansi::reset();
     }
 }
