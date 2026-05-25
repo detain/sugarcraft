@@ -250,6 +250,8 @@ Enables programmatic enumeration (e.g., for a `gum style --list-themes` style co
 
 ### 5.2 Composability cookbook
 
+✅ Resolved (PR #876): `docs/cookbook/` with 3 runnable cross-lib examples — `spinner-in-table.php` (candy-forms Spinner embedded in a sugar-table StyledCell), `sparkline-in-table.php` (sugar-charts Sparkline + sugar-table + candy-forms Spinner panel), `program-within-program.php` (candy-core Model nesting a candy-forms Spinner sub-program). Each builds the model(s), feeds scripted messages, renders one frame, and exits 0 (verified via `php docs/cookbook/<name>.php`). `docs/cookbook/composer.json` path-requires the libs; `docs/cookbook/README.md` indexes them; `docs/index.html` links the cookbook. The Toast+form candidate was dropped: sugar-toast's `View()` overlay truncates its own box borders (reproduces in `sugar-toast/examples/basic.php` too), so it would have shipped visibly broken — tracked as a separate sugar-toast rendering fix.
+
 `docs/cookbook/` with 3–5 worked examples:
 - Embedding a `sugar-prompt` Form inside a `sugar-table` cell
 - Spinner overlay on top of a `sugar-charts` plot
