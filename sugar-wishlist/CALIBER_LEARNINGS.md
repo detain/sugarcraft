@@ -54,3 +54,5 @@ When snapshot-testing `SshConfigParser::parse()`, include real OpenSSH config sn
 Test edge cases: missing `HostName` (pattern becomes host), missing `Port` (defaults to 22), `IdentityFile` with `~` prefix (expands), empty config (returns empty array), and `Host *` only (no endpoints emitted).
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+- **[pattern:raw-mode]** `Picker::setRawMode()` no longer shells out to `stty` directly — it delegates to `SugarCraft\Core\Util\RawMode::enable()` / `RawMode::disable()` (candy-core, already a required dep). RawMode is the portable controlling-terminal toggle and is a safe no-op on non-tty streams, so PickerTest can drive in-memory streams without overriding `setRawMode()` (the override is now belt-and-suspenders).
