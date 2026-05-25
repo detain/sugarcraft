@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Sprinkles\Style;
 
 /**
- * Text-cursor primitive used inside {@see \SugarCraft\Bits\TextInput\TextInput}
+ * Text-cursor primitive used inside {@see \SugarCraft\Forms\TextInput\TextInput}
  * (and similar). Renders the cell under it either highlighted (reverse
  * video) or plain depending on {@see $mode} and the current blink state.
  *
