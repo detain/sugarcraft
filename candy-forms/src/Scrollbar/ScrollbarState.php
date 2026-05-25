@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Scrollbar;
 
-use SugarCraft\Bits\Lang;
+use SugarCraft\Forms\Lang;
 
 /**
  * Immutable scrollbar state carrying total content lines, the current
