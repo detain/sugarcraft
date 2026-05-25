@@ -175,7 +175,7 @@ Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `
 
 ✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-shell, candy-tetris (including candy-tetris/VsRenderer.php bg256/ghost builders and sugar-crush Renderer.php composite opening codes \x1b[1;36m/\x1b[1;35m/\x1b[2m → Ansi::sgr(...)). candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
 
-✅ Also fixed (this PR): sugar-wishlist Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
+✅ Also fixed (PR #878): sugar-wishlist Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
 ### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
