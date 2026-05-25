@@ -173,12 +173,18 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 
 Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
 
-### 3.4 Two incompatible Boxer implementations
+### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
-`sugar-boxer/src/SugarBoxer.php` is the bubbleboxer port — the canonical owner of the "box layout engine" concept.
-`sugar-dash/src/Layout/Boxer/` (Boxer.php + Node.php) is a parallel, incompatible implementation.
+**Original claim (incorrect):** that `sugar-boxer/src/SugarBoxer.php` and `sugar-dash/src/Layout/Boxer/` are two ports of the same "box layout engine" and the latter should be dropped in favor of the former.
 
-Recommend: `sugar-dash` adds `sugarcraft/sugar-boxer` to its requires and drops its own `Layout/Boxer/` tree. If the APIs are too different, add a thin adapter inside sugar-dash that re-exports the bits sugar-dash callers need. Avoid Option B (promote a `candy-boxer` foundation lib) — the concept is leaf-level by nature.
+**Finding after reading both implementations:** they are legitimately different things that happen to share the word "Boxer", and consolidating them would be net-harmful. Evidence:
+
+- **Different upstreams.** `sugar-boxer` doc-comments cite `treilik/bubbleboxer`; `sugar-dash/src/Layout/Boxer` cites `charmbracelet/boxer`. Two distinct upstream projects, not a duplicate port.
+- **Opposite rendering models, zero shared algorithm.** `SugarBoxer` paints onto a mutable 2D cell grid — it draws box-drawing borders around leaf text it word-wraps itself, distributing space by minWidth/minHeight weights. `sugar-dash`'s `Node::renderTree` is a line-list compositor — it calls each leaf model's own `render()`, validates the returned lines against the allocated size (returns `SizeError` on overflow), and `implode()`s panels with single-char separators. One paints a grid; the other concatenates pre-rendered strings.
+- **sugar-dash's Boxer is deeply wired into sugar-dash's own systems** that `sugar-boxer` has no concept of: `implements Item, Sizer`, dotted-address navigation, an address→`Item` model map (renders live component output, not static strings), interactive `editLeaf`, `persistState`/`restoreState` via `Persistence`, and `withTheme` fan-out. `sugar-boxer` takes one static string per leaf.
+- A "thin adapter" would not be thin — it would amount to reimplementing `sugar-dash`'s ~825-line Boxer/Node (36-test suite in `sugar-dash/tests/Layout/BoxerTest.php`) on top of an API that lacks model maps, addresses, Sizer propagation, persistence, and themes.
+
+**Resolution:** keep both. `sugar-boxer` = static bordered-box painter (treilik/bubbleboxer). `sugar-dash`'s `Layout\Boxer` = stateful address-tree panel compositor (charmbracelet/boxer). The namespaces (`SugarCraft\Boxer` vs `SugarCraft\Dash\Layout\Boxer`) already disambiguate them. A future rename of the sugar-dash class (e.g. `PanelTree`) to reduce the name clash is optional and would go through the repo's separate rename flow — not pursued here.
 
 ### 3.5 33 cloned Lang.php files
 
