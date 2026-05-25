@@ -5,15 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Prompt\Validator;
 
 /**
- * Validates that input is not empty.
+ * @deprecated Use SugarCraft\Forms\Validator\Required instead. This re-export exists for backward compatibility.
  */
-final class Required implements Validator
-{
-    public function validate(string $input): true|string
-    {
-        if ($input === '') {
-            return 'Value is required';
-        }
-        return true;
-    }
-}
+class_alias(\SugarCraft\Forms\Validator\Required::class, Required::class);

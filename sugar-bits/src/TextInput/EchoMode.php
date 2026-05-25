@@ -4,16 +4,5 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bits\TextInput;
 
-/**
- * How a {@see TextInput} renders its value.
- *
- * - {@see Normal}   — show the actual characters.
- * - {@see Password} — replace each character with `$echoChar`.
- * - {@see None}     — render an empty string regardless of value.
- */
-enum EchoMode: string
-{
-    case Normal   = 'normal';
-    case Password = 'password';
-    case None     = 'none';
-}
+// @deprecated Use SugarCraft\Forms\TextInput\EchoMode
+class_alias('SugarCraft\Forms\TextInput\EchoMode', 'SugarCraft\Bits\TextInput\EchoMode');

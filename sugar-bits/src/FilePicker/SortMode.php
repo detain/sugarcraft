@@ -4,14 +4,5 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bits\FilePicker;
 
-/**
- * Sort criterion for {@see FilePicker::withSortMode()}. Directories
- * always group first regardless of mode, matching Bubbles' default
- * behaviour; the mode controls the secondary sort within each group.
- */
-enum SortMode: string
-{
-    case Name  = 'name';
-    case Size  = 'size';
-    case MTime = 'mtime';
-}
+// @deprecated Use SugarCraft\Forms\FilePicker\SortMode
+class_alias('SugarCraft\Forms\FilePicker\SortMode', 'SugarCraft\Bits\FilePicker\SortMode');
