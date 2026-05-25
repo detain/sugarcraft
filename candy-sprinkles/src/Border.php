@@ -111,6 +111,20 @@ final class Border
     }
 
     /**
+     * Enumerate the names of all built-in border factories.
+     *
+     * Each entry maps to a same-named zero-arg static factory on this class
+     * (e.g. `'rounded'` → {@see Border::rounded()}). Listed in declaration
+     * order. Enables programmatic discovery (e.g. a `--list-borders` command).
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return ['normal', 'rounded', 'thick', 'double', 'block', 'ascii', 'hidden', 'markdownBorder'];
+    }
+
+    /**
      * Attach a title to the border.
      *
      * Multiple titles may be attached to the same anchor; they are

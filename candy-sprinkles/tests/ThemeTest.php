@@ -404,4 +404,29 @@ final class ThemeTest extends TestCase
         $this->assertSame('#eeeeee', $t->background->toHex());
         $this->assertSame('#333333', $t->primary->toHex());
     }
+
+    // ─── Catalog ───────────────────────────────────────────────────────────
+
+    public function testCatalogIsNonEmptyListOfStrings(): void
+    {
+        $catalog = Theme::catalog();
+        $this->assertNotEmpty($catalog);
+        $this->assertSame(array_values($catalog), $catalog, 'catalog must be a list');
+        foreach ($catalog as $name) {
+            $this->assertIsString($name);
+        }
+    }
+
+    public function testEveryCatalogEntryIsARealThemeFactory(): void
+    {
+        foreach (Theme::catalog() as $name) {
+            $this->assertTrue(
+                method_exists(Theme::class, $name),
+                "catalog entry '{$name}' must be a static factory on Theme",
+            );
+            $theme = Theme::{$name}();
+            $this->assertInstanceOf(Theme::class, $theme, "Theme::{$name}() must return a Theme");
+            $this->assertInstanceOf(Color::class, $theme->foreground);
+        }
+    }
 }

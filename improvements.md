@@ -238,6 +238,8 @@ Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `ne
 
 ### 5.1 Add catalog() discovery methods
 
+✅ Resolved (PR #875): added `candy-sprinkles\Border::catalog()`, `candy-sprinkles\Theme::catalog()`, and `candy-palette\Color::namedColors()` (delegates to `StandardColors::catalog()`). `Forms\Theme::catalog()`, `candy-palette StandardColors::catalog()`, and sugar-bits Spinner `Style::catalog()` already existed.
+
 Themes, spinners, borders, named colors are discoverable today only via README / IDE autocomplete / `grep src/`. Add:
 - `Theme::catalog(): list<string>`
 - `Spinner::catalog(): list<string>`
@@ -257,6 +259,8 @@ Enables programmatic enumeration (e.g., for a `gum style --list-themes` style co
 Each example is a small runnable PHP script. Composability is asserted in the project but rarely demonstrated end-to-end.
 
 ### 5.3 Formalize factory-naming convention in CLAUDE.md
+
+✅ Resolved (PR #875): added an explicit "Factory naming" rule to both `AGENTS.md` and `CLAUDE.md` Code-conventions sections — `::new()` is the zero-arg root, bare-named factories for variants, no `::create()`/`::make()`/`::default()`.
 
 Current pattern (consistent enough already): `::new()` for the zero-arg/default root instance, bare-named factories for variants (`Theme::ansi()`, `Spinner::line()`). Document the rule explicitly so future libs don't drift to `::create()` / `::make()` / `::default()`.
 
