@@ -63,8 +63,8 @@ final class PagerModel implements Model
         if ($needle === '') {
             return $content;
         }
-        $sgr = "\x1b[7m";
-        $rst = "\x1b[0m";
+        $sgr = Ansi::sgr(Ansi::REVERSE);
+        $rst = Ansi::reset();
         // Case-insensitive substring replace using preg_replace; quote
         // the needle so regex metachars aren't treated as syntax.
         $pattern = '/' . preg_quote($needle, '/') . '/i';

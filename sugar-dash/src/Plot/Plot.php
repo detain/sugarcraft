@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plot;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dash\Foundation\Buffer;
 use SugarCraft\Dash\Foundation\Rect;
@@ -390,7 +391,7 @@ final class Plot implements Sizer, Drawable
 
         // If color was applied, ensure reset code at the very end
         if ($this->color !== null) {
-            $output .= "\x1b[0m";
+            $output .= Ansi::reset();
         }
 
         return $output;

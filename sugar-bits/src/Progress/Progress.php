@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Bits\Progress;
 
 use SugarCraft\Bits\Lang;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Width;
@@ -215,10 +216,10 @@ final class Progress
             $full = str_repeat("\xe2\x94\x81", $filledCells); // ━ U+2501
             $empty = str_repeat("\xe2\x94\x80", $emptyCells); // ─ U+2500
             if ($this->fillColor !== null) {
-                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+                $full = $this->fillColor->toFg($this->profile) . $full . Ansi::reset();
             }
             if ($this->emptyColor !== null) {
-                $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
+                $empty = $this->emptyColor->toFg($this->profile) . $empty . Ansi::reset();
             }
             return $full . $empty;
         }
@@ -238,10 +239,10 @@ final class Progress
             $full = str_repeat("\xe2\x96\x8c", $filledCells); // ▌ U+258C
             $empty = str_repeat("\xe2\x96\x92", $emptyCells); // ▒ U+2592
             if ($this->fillColor !== null) {
-                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+                $full = $this->fillColor->toFg($this->profile) . $full . Ansi::reset();
             }
             if ($this->emptyColor !== null) {
-                $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
+                $empty = $this->emptyColor->toFg($this->profile) . $empty . Ansi::reset();
             }
 
             $bar = $full . $empty;
@@ -301,13 +302,13 @@ final class Progress
         } else {
             $full = str_repeat($this->fullChar, $filledCells);
             if ($this->fillColor !== null) {
-                $full = $this->fillColor->toFg($this->profile) . $full . "\x1b[0m";
+                $full = $this->fillColor->toFg($this->profile) . $full . Ansi::reset();
             }
         }
 
         $empty = str_repeat($this->emptyChar, $emptyCells);
         if ($this->emptyColor !== null) {
-            $empty = $this->emptyColor->toFg($this->profile) . $empty . "\x1b[0m";
+            $empty = $this->emptyColor->toFg($this->profile) . $empty . Ansi::reset();
         }
 
         $bar = $full . $empty;
@@ -330,7 +331,7 @@ final class Progress
         for ($i = 0; $i < $cells; $i++) {
             $t = $cells === 1 ? 0.0 : $i / ($cells - 1);
             $c = $this->gradientStart->blend($this->gradientEnd, $t);
-            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+            $out .= $c->toFg($this->profile) . $this->fullChar . Ansi::reset();
         }
         return $out;
     }
@@ -358,7 +359,7 @@ final class Progress
             }
             $localT = $segPos - $segIdx;
             $c = $stops[$segIdx]->blend($stops[$segIdx + 1], $localT);
-            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+            $out .= $c->toFg($this->profile) . $this->fullChar . Ansi::reset();
         }
         return $out;
     }
@@ -377,7 +378,7 @@ final class Progress
         for ($i = 0; $i < $cells; $i++) {
             /** @var Color $c */
             $c = ($this->colorFunc)($i, $cells, $this->percent);
-            $out .= $c->toFg($this->profile) . $this->fullChar . "\x1b[0m";
+            $out .= $c->toFg($this->profile) . $this->fullChar . Ansi::reset();
         }
         return $out;
     }
