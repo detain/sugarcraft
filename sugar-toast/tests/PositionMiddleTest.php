@@ -76,8 +76,11 @@ final class PositionMiddleTest extends TestCase
         $this->assertSame(0, Position::TopLeft->yOffset(3, 24, 0));
         $this->assertSame(21, Position::BottomLeft->yOffset(3, 24, 0));
 
-        // With stacking
-        $this->assertSame(0, Position::TopLeft->yOffset(3, 24, 3));
+        // With stacking, Top positions stack DOWNWARD (y increases by the
+        // cumulative height of earlier alerts) so stacked toasts don't
+        // overlap. Overlapping previously left stale SGR fragments leaking
+        // past the box border.
+        $this->assertSame(3, Position::TopLeft->yOffset(3, 24, 3));
         $this->assertSame(18, Position::BottomLeft->yOffset(3, 24, 3));
     }
 }

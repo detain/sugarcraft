@@ -44,7 +44,7 @@ enum Position
     {
         return match ($this) {
             self::TopLeft, self::TopCenter, self::TopRight
-                => 0,
+                => $totalAlertLines,
             self::BottomLeft, self::BottomCenter, self::BottomRight
                 => $viewportHeight - $alertHeight - $totalAlertLines,
             self::MiddleLeft, self::MiddleCenter, self::MiddleRight
