@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\TextInput;
 
-use SugarCraft\Bits\Cursor\BlinkMsg;
-use SugarCraft\Bits\Cursor\Cursor;
+use SugarCraft\Forms\Cursor\BlinkMsg;
+use SugarCraft\Forms\Cursor\Cursor;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
