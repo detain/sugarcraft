@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bits\Tests\FilePicker;
 
-use SugarCraft\Bits\FilePicker\Entry;
-use SugarCraft\Bits\FilePicker\FilePicker;
+use SugarCraft\Forms\FilePicker\Entry;
+use SugarCraft\Forms\FilePicker\FilePicker;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use PHPUnit\Framework\TestCase;
