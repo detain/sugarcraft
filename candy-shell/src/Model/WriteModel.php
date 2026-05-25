@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Model;
 
-use SugarCraft\Bits\TextArea\TextArea;
+use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

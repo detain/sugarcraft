@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Command;
 
-use SugarCraft\Bits\Spinner\Style as SpinStyle;
+use SugarCraft\Forms\Spinner\Style as SpinStyle;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Shell\Lang;

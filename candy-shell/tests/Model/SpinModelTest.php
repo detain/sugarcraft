@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Tests\Model;
 
-use SugarCraft\Bits\Spinner\TickMsg;
+use SugarCraft\Forms\Spinner\TickMsg;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Shell\Model\SpinModel;
