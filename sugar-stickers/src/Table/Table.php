@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Table;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * Sortable, filterable data table renderer.
  *
@@ -298,6 +300,6 @@ final class Table
     private function applyStyle(string $s, string $style): string
     {
         if ($style === '') return $s;
-        return "\x1b[{$style}m{$s}\x1b[0m";
+        return Ansi::CSI . $style . 'm' . $s . Ansi::reset();
     }
 }
