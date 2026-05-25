@@ -210,7 +210,7 @@ The project standard is "every `with*()` returns a new instance via private `mut
 
 Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `new static(...array_merge(get_object_vars($this), $changes))` for libs whose properties are all nullable-or-required-but-set; for libs with sentinel-bool needs (Style), document the exception. Optionally formalize via a `SugarCraft\Core\Concerns\Mutable` trait, but this is judgment-call territory because typed-property constructors can disagree with trait spreads.
 
-### Path-repo closure gaps (found this session) — ✅ Resolved (this PR)
+### 3.7 Path-repo closure gaps (found this session) — ✅ Resolved (PR #880)
 
 The `candy-forms` extraction (form primitives pulled out of `sugar-bits`/`sugar-prompt`) added a new transitive `sugarcraft/candy-forms` dependency to `sugar-bits`. Three downstream libs that consume `sugar-bits` — `sugar-glow`, `sugar-stickers`, `sugar-wishlist` — never had the new transitive path-repos added to their `repositories[]`, so a fresh `composer install` could not resolve `candy-forms` (the one monorepo lib not yet published on Packagist) and failed; `sugar-stickers` surfaced this as 27 `Bits\Viewport not found` test errors. Fixed by completing each lib's full transitive `sugarcraft/*` path-repo closure (`candy-forms` plus the rest of the closure: `candy-pty`, `candy-sprinkles`, `candy-zone`, `honey-bounce`, `candy-palette`, and for `sugar-glow` everything under `candy-shine`). Also hardened `tools/check-path-repos.php`: it now walks the FULL transitive require graph (not just direct requires) and reports the introducing dependency path, so a gap two hops deep — exactly this class of bug — is caught instead of passing as "closure clean."
 
