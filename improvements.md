@@ -210,6 +210,8 @@ Pre-1.0 is the time to standardize. Recommend the named-param `mutate()` via `ne
 
 ### 4.1 Terminal raw-mode lives in the wrong places
 
+✅ Resolved (this PR): sugar-wishlist raw-mode now routed through SugarCraft\Core\Util\RawMode; shell_exec('stty') removed from the leaf lib.
+
 - `sugar-wishlist/src/Picker.php` calls `shell_exec('stty -icanon -echo min 1 time 0')` and `shell_exec('stty sane')`.
 - `sugar-prompt/src/Spinner.php` calls `stream_isatty(STDERR)` directly.
 - `sugar-glow/src/RenderCommand.php` calls `stream_isatty(STDIN)` directly.
