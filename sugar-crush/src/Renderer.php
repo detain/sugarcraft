@@ -58,9 +58,9 @@ final class Renderer
         $blocks = [];
         foreach ($history as $msg) {
             $blocks[] = match ($msg->role) {
-                Role::User      => "\x1b[1;36muser>" . Ansi::reset() . " " . $msg->content,
-                Role::Assistant => "\x1b[1;35massistant" . Ansi::reset() . "\n" . trim($md->render($msg->content)),
-                Role::System    => "\x1b[2msystem: " . $msg->content . Ansi::reset(),
+                Role::User      => Ansi::sgr(1, 36) . "user>" . Ansi::reset() . " " . $msg->content,
+                Role::Assistant => Ansi::sgr(1, 35) . "assistant" . Ansi::reset() . "\n" . trim($md->render($msg->content)),
+                Role::System    => Ansi::sgr(Ansi::FAINT) . "system: " . $msg->content . Ansi::reset(),
             };
         }
         return implode("\n\n", $blocks);
