@@ -4,14 +4,5 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bits\Spinner;
 
-use SugarCraft\Core\Msg;
-
-/**
- * Animation tick for a specific spinner instance, identified by {@see $id}.
- * Each Spinner ignores ticks for other ids so multiple spinners can share
- * an event loop without cross-talk.
- */
-final class TickMsg implements Msg
-{
-    public function __construct(public readonly int $id) {}
-}
+// @deprecated Use SugarCraft\Forms\Spinner\TickMsg
+class_alias('SugarCraft\Forms\Spinner\TickMsg', 'SugarCraft\Bits\Spinner\TickMsg');
