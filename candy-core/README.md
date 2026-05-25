@@ -64,7 +64,7 @@ final class Counter implements Model
 - **`Program`** — orchestrator. Sets up TTY, runs the ReactPHP event loop, dispatches Msgs, drives renders at the configured framerate.
 - **`InputReader`** — stateful byte-stream parser; handles split escape sequences across reads.
 - **`Renderer`** — minimal cursor-home + erase + write. Diff-based renderer is a follow-up.
-- **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `Open` foundation utilities, shared with CandySprinkles.
+- **`Util/`** — `Ansi`, `Color`, `ColorProfile`, `Width`, `Tty`, `TtyDetect`, `RawMode`, `Open` foundation utilities, shared with CandySprinkles. `RawMode::enable($stream)` / `RawMode::disable($stream)` is the portable `stty`-based raw-mode toggle for the controlling terminal — a safe no-op on non-tty streams.
 - **`Subscription`** — value object: id, Kind, params, produce closure.
 - **`Subscriptions`** — immutable collection with `withTick()`, `withKey()`, `withSignal()`, `withCustom()`, `all()`, `has()`.
 - **`Kind`** — backed enum: Tick / Key / Signal / Custom.
