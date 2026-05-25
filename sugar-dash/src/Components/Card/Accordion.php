@@ -7,6 +7,7 @@ namespace SugarCraft\Dash\Components\Card;
 use SugarCraft\Dash\Foundation\Item;
 use SugarCraft\Dash\Foundation\Sizer;
 use SugarCraft\Dash\Layout\HAlign;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
 
@@ -202,7 +203,7 @@ final class Accordion implements Sizer, Item
             }
 
             if ($this->headerColor !== null) {
-                $headerContent = $this->headerColor->toFg(ColorProfile::TrueColor) . $headerContent . "\x1b[0m";
+                $headerContent = $this->headerColor->toFg(ColorProfile::TrueColor) . $headerContent . Ansi::reset();
             }
 
             $lines[] = $headerContent;
@@ -232,7 +233,7 @@ final class Accordion implements Sizer, Item
 
         // Ensure color reset at the very end of output
         if ($this->headerColor !== null) {
-            $output .= "\x1b[0m";
+            $output .= Ansi::reset();
         }
 
         return $output;

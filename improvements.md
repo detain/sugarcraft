@@ -173,6 +173,8 @@ Inline `"\x1b[31m"` / `"\x1b[1m"` / `"\x1b[0m"` strings appear in:
 
 Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `\SugarCraft\Palette\Color::toFg(ColorProfile::...)`. The candy-core `Ansi` class is the canonical home for SGR constants and builders.
 
+✅ Residuals cleaned (this PR): bare \x1b[0m/\x1b[2m/\x1b[7m and candy-tetris 256-color builders routed through Ansi helpers across sugar-bits, sugar-crush, sugar-dash, sugar-veil, candy-hermit, candy-shell, candy-tetris. candy-mosaic/Detect.php left as-is (terminal queries, not SGR).
+
 ### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
 **Original claim (incorrect):** that `sugar-boxer/src/SugarBoxer.php` and `sugar-dash/src/Layout/Boxer/` are two ports of the same "box layout engine" and the latter should be dropped in favor of the former.
