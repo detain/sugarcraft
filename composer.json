@@ -43,6 +43,7 @@
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-flip": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
         "sugarcraft/candy-freeze": "dev-master",
         "sugarcraft/candy-hermit": "dev-master",
         "sugarcraft/candy-kit": "dev-master",
@@ -99,6 +100,13 @@
         {
             "type": "path",
             "url": "candy-flip",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-forms",
             "options": {
                 "symlink": true
             }
