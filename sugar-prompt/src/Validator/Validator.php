@@ -5,14 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Prompt\Validator;
 
 /**
- * Input validator for Field\Input.
- *
- * Returns true on valid input, an error string on invalid input.
+ * @deprecated Use SugarCraft\Forms\Validator\Validator instead. This re-export exists for backward compatibility.
  */
-interface Validator
-{
-    /**
-     * @return true|string True if $input is valid, error message string otherwise
-     */
-    public function validate(string $input): true|string;
-}
+class_alias(\SugarCraft\Forms\Validator\Validator::class, Validator::class);

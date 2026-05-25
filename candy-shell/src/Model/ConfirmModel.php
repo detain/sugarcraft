@@ -10,7 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
-use SugarCraft\Prompt\Field\Confirm;
+use SugarCraft\Forms\Field\Confirm;
 
 /**
  * Yes/no prompt used by {@see \SugarCraft\Shell\Command\ConfirmCommand}.
