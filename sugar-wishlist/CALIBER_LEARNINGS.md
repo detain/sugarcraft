@@ -56,3 +56,5 @@ Test edge cases: missing `HostName` (pattern becomes host), missing `Port` (defa
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
 - **[pattern:raw-mode]** `Picker::setRawMode()` no longer shells out to `stty` directly — it delegates to `SugarCraft\Core\Util\RawMode::enable()` / `RawMode::disable()` (candy-core, already a required dep). RawMode is the portable controlling-terminal toggle and is a safe no-op on non-tty streams, so PickerTest can drive in-memory streams without overriding `setRawMode()` (the override is now belt-and-suspenders).
+
+- **[anti-pattern:single-quoted-escape]** Single-quoted PHP strings do NOT interpret `\x1b` — `'\x1b[2m'` is literal text, not an ESC sequence. Use `Ansi::sgr(...)`/`Ansi::reset()` (or double-quoted `"\x1b..."`) for terminal escapes. Picker.php:135 once shipped the single-quoted form and printed the literal `\x1b[2m…` instead of dimming the description.
