@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vcr\Diff;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * Writes annotated diff output in unified diff format to a file.
  *
@@ -83,35 +85,35 @@ final class DiffWriter
         $sep = str_repeat('─', $maxWidth + 2);
 
         fwrite($output, "\n");
-        fwrite($output, "\033[1;33m┌{$sep}┐\033[0m\n"); // Yellow border, expected header
-        fwrite($output, "\033[1;33m│ EXPECTED". str_repeat(' ', $maxWidth - 8) . "│\033[0m\n");
-        fwrite($output, "\033[1;33m└{$sep}┘\033[0m\n");
+        fwrite($output, Ansi::sgr(1, 33) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Yellow border, expected header
+        fwrite($output, Ansi::sgr(1, 33) . "│ EXPECTED" . str_repeat(' ', $maxWidth - 8) . "│" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 33) . "└{$sep}┘" . Ansi::reset() . "\n");
 
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
             $isSame = $expLine === $actLine;
-            $color = $isSame ? "\033[32m" : "\033[31m"; // Green for same, Red for diff
+            $color = $isSame ? Ansi::sgr(32) : Ansi::sgr(31); // Green for same, Red for diff
             $prefix = $isSame ? ' ' : '!';
             fwrite($output, sprintf(
-                "%s│ %-{$maxWidth}s │\033[0m\n",
+                "%s│ %-{$maxWidth}s │" . Ansi::reset() . "\n",
                 $color,
                 $expLine,
             ));
         }
 
         fwrite($output, "\n");
-        fwrite($output, "\033[1;36m┌{$sep}┐\033[0m\n"); // Cyan border, actual header
-        fwrite($output, "\033[1;36m│ ACTUAL  ". str_repeat(' ', $maxWidth - 8) . "│\033[0m\n");
-        fwrite($output, "\033[1;36m└{$sep}┘\033[0m\n");
+        fwrite($output, Ansi::sgr(1, 36) . "┌{$sep}┐" . Ansi::reset() . "\n"); // Cyan border, actual header
+        fwrite($output, Ansi::sgr(1, 36) . "│ ACTUAL  " . str_repeat(' ', $maxWidth - 8) . "│" . Ansi::reset() . "\n");
+        fwrite($output, Ansi::sgr(1, 36) . "└{$sep}┘" . Ansi::reset() . "\n");
 
         for ($i = 0; $i < $maxLines; $i++) {
             $expLine = $expectedLines[$i] ?? '';
             $actLine = $actualLines[$i] ?? '';
             $isSame = $expLine === $actLine;
-            $color = $isSame ? "\033[32m" : "\033[31m";
+            $color = $isSame ? Ansi::sgr(32) : Ansi::sgr(31);
             fwrite($output, sprintf(
-                "%s│ %-{$maxWidth}s │\033[0m\n",
+                "%s│ %-{$maxWidth}s │" . Ansi::reset() . "\n",
                 $color,
                 $actLine,
             ));
