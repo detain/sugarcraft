@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flip;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Pty\SizeIoctl;
 
 /**
@@ -118,7 +119,7 @@ final class Renderer
                     $line .= $this->cell($r, $g, $b, $preset);
                 }
             }
-            $rows[] = $line . "\033[0m";
+            $rows[] = $line . Ansi::reset();
         }
         return implode("\n", $rows);
     }
@@ -130,10 +131,10 @@ final class Renderer
             $lum = (int) (0.299 * $r + 0.587 * $g + 0.114 * $b);
             $idx = (int) round($lum / 255 * (strlen(self::RAMP) - 1));
             $glyph = self::RAMP[$idx] ?? ' ';
-            return sprintf("\033[38;2;%d;%d;%dm%s", $r, $g, $b, $glyph);
+            return sprintf(Ansi::CSI . "38;2;%d;%d;%dm%s", $r, $g, $b, $glyph);
         }
         // Solid block — full-cell colour fill via 24-bit truecolor escape.
-        return sprintf("\033[48;2;%d;%d;%dm ", $r, $g, $b);
+        return sprintf(Ansi::CSI . "48;2;%d;%d;%dm ", $r, $g, $b);
     }
 
     /**
@@ -142,6 +143,6 @@ final class Renderer
      */
     private function transparent(): string
     {
-        return "\033[49m "; // Reset to default background.
+        return Ansi::sgr(49) . ' '; // Reset to default background.
     }
 }
