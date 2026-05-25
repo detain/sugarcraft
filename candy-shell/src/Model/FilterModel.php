@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Model;
 
-use SugarCraft\Bits\ItemList\ItemList;
-use SugarCraft\Bits\ItemList\StringItem;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
