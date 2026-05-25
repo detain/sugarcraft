@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\Viewport;
 
-use SugarCraft\Bits\Lang;
-use SugarCraft\Bits\Scrollbar\Scrollbar;
-use SugarCraft\Bits\Scrollbar\ScrollbarState;
+use SugarCraft\Forms\Lang;
+use SugarCraft\Forms\Scrollbar\Scrollbar;
+use SugarCraft\Forms\Scrollbar\ScrollbarState;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
