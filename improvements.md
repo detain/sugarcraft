@@ -179,7 +179,7 @@ Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `
 
 ✅ Also cleaned (PR #879): SGR wrap-helpers in sugar-table (StyledCell/Column/Table), sugar-stickers (Table/FlexBox), sugar-calendar (DatePicker), candy-lister (Model) routed through Ansi::CSI/Ansi::reset().
 
-✅ Batch B cleaned (this PR): candy-vcr (DiffWriter), candy-flip (Renderer), super-candy (Renderer) SGR routed through Ansi. sugar-readline left as-is — its SGR is a single deliberate self-contained Ansi helper, not scattered inline, and the lib intentionally avoids a candy-core dependency.
+✅ Batch B cleaned (PR #881): candy-vcr (DiffWriter), candy-flip (Renderer), super-candy (Renderer) SGR routed through Ansi. sugar-readline left as-is — its SGR is a single deliberate self-contained Ansi helper, not scattered inline, and the lib intentionally avoids a candy-core dependency.
 
 ### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
