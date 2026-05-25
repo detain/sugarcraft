@@ -177,6 +177,8 @@ Replace with `\SugarCraft\Core\Util\Ansi::sgr(Ansi::BOLD)` / `Ansi::reset()` / `
 
 ✅ Also fixed (PR #878): sugar-wishlist Picker had a single-quoted '\x1b[2m' (literal text, not escape) — real rendering bug, now via Ansi; and routed Picker's remaining inline SGR through Ansi.
 
+✅ Also cleaned (PR #879): SGR wrap-helpers in sugar-table (StyledCell/Column/Table), sugar-stickers (Table/FlexBox), sugar-calendar (DatePicker), candy-lister (Model) routed through Ansi::CSI/Ansi::reset().
+
 ### 3.4 Two Boxer implementations — ⏭️ NOT a duplication; keep both (evaluated, won't consolidate)
 
 **Original claim (incorrect):** that `sugar-boxer/src/SugarBoxer.php` and `sugar-dash/src/Layout/Boxer/` are two ports of the same "box layout engine" and the latter should be dropped in favor of the former.
