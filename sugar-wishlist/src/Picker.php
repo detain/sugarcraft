@@ -124,15 +124,15 @@ class Picker
     {
         fwrite($this->out, Ansi::cursorTo(1, 1) . Ansi::eraseToEnd());
         fwrite($this->out, "── wishlist ──\r\n");
-        fwrite($this->out, "filter: \x1b[36m{$this->filter}\x1b[0m\r\n");
+        fwrite($this->out, 'filter: ' . Ansi::sgr(36) . $this->filter . Ansi::reset() . "\r\n");
         if ($matches === []) {
             fwrite($this->out, "  (no matches)\r\n");
         }
         foreach ($matches as $i => $e) {
-            $marker = $i === $this->cursor ? "\x1b[1;36m▸\x1b[0m " : '  ';
+            $marker = $i === $this->cursor ? Ansi::sgr(1, 36) . '▸' . Ansi::reset() . ' ' : '  ';
             $line   = $e->displayLine();
             if ($e->description !== null && $e->description !== '') {
-                $line .= '  \x1b[2m' . $e->description . '\x1b[0m';
+                $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $e->description . Ansi::reset();
             }
             fwrite($this->out, "{$marker}{$line}\r\n");
         }
