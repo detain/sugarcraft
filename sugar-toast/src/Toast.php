@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast;
 
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
+
 /**
  * Floating alert notification renderer.
  *
@@ -373,35 +376,47 @@ final class Toast
 
     private function renderAlert(Alert $alert): string
     {
-        $width = $this->resolveWidth(\strlen($alert->message));
+        $width = $this->resolveWidth(Width::string($alert->message));
         $icon  = $alert->type->icon($this->symbols);
         $color = $alert->type->color();
 
-        $prefix = "\x1b[{$color}m{$icon}\x1b[0m ";
-        $header = $prefix . $alert->message;
+        // Inner content width (between the two vertical borders).
+        $inner = \max(1, $width - 2);
 
-        // Top border
-        $top    = '╭' . \str_repeat('─', $width - 2) . '╮';
-        $bottom = '╰' . \str_repeat('─', $width - 2) . '╯';
+        // SGR prefix routed through candy-core Ansi so the icon's colour
+        // is emitted byte-identically to a hand-built CSI sequence.
+        $prefix = Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' ';
 
-        // Word-wrap middle if needed
-        $wrapped = $this->wordWrap($alert->message, $width - \strlen($icon) - 4);
-        $middleLines = [\substr($prefix, 0, $width - 2)];
-        foreach ($wrapped as $wl) {
-            $middleLines[] = '│' . \str_pad(' ' . $wl, $width - 2) . '│';
+        // Top / bottom borders: '─' is a 3-byte UTF-8 grapheme but one
+        // display cell, so repeat it $inner times for $inner cells.
+        $top    = '╭' . \str_repeat('─', $inner) . '╮';
+        $bottom = '╰' . \str_repeat('─', $inner) . '╯';
+
+        $middleLines = [];
+
+        // Header line: coloured icon + first slice of the message, padded
+        // to the inner cell width (Width::* are ANSI- and multibyte-aware).
+        $iconCells = Width::string($prefix);
+        $headerWrap = $this->wordWrap($alert->message, \max(1, $inner - $iconCells));
+        $firstWord  = \array_shift($headerWrap) ?? '';
+        $headerBody = $prefix . $firstWord;
+        $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($headerBody, $inner), $inner) . '│';
+
+        // Remaining wrapped message lines, indented one cell.
+        foreach ($headerWrap as $wl) {
+            $body = ' ' . $wl;
+            $middleLines[] = '│' . Width::padRight(Width::truncateAnsi($body, $inner), $inner) . '│';
         }
 
         // Render progress bar if set
-        $progressBar = null;
         if ($alert->progress !== null) {
-            $progressBar = $this->renderProgressBar($alert->progress, $width - 2);
-            $middleLines[] = $progressBar;
+            $middleLines[] = $this->renderProgressBar($alert->progress, $inner);
         }
 
         // Render action buttons if any
         foreach ($alert->actions as $action) {
             $label = '[' . $action->label . ']';
-            $middleLines[] = '│' . \str_pad($label, $width - 2, ' ', \STR_PAD_RIGHT) . '│';
+            $middleLines[] = '│' . Width::padRight(Width::truncate($label, $inner), $inner) . '│';
         }
 
         $lines = [$top, ...$middleLines, $bottom];
@@ -416,12 +431,17 @@ final class Toast
      */
     private function renderProgressBar(float $progress, int $width): string
     {
+        // $width is the inner cell width (between the vertical borders).
         $width = \max(4, $width);
+        $progress = \max(0.0, \min(1.0, $progress));
         $filled = (int) \round($progress * $width);
+        $filled = \max(0, \min($width, $filled));
         $empty = $width - $filled;
 
-        $bar = '▰' . \str_repeat('█', $filled) . \str_repeat('░', $empty);
-        return '│' . \str_pad($bar, $width, ' ', \STR_PAD_BOTH) . '│';
+        // Each block glyph (█ / ░) is one display cell; build exactly
+        // $width cells so the bar aligns flush with the borders.
+        $bar = \str_repeat('█', $filled) . \str_repeat('░', $empty);
+        return '│' . $bar . '│';
     }
 
     private function resolveWidth(int $messageLen): int
@@ -443,15 +463,25 @@ final class Toast
             $current = '';
             foreach ($words as $word) {
                 $test = $current === '' ? $word : $current . ' ' . $word;
-                if (\strlen($test) <= $width) {
+                // Measure by display cells, not bytes, so multibyte words
+                // wrap at the visible column rather than a byte boundary.
+                if (Width::string($test) <= $width) {
                     $current = $test;
                 } else {
                     if ($current !== '') $result[] = $current;
-                    if (\strlen($word) > $width) {
-                        // Split oversized word
-                        for ($i = 0; $i < \strlen($word); $i += $width) {
-                            $result[] = \substr($word, $i, $width);
+                    if (Width::string($word) > $width) {
+                        // Split oversized word at cell boundaries (never
+                        // mid-grapheme).
+                        $remaining = $word;
+                        while (Width::string($remaining) > $width) {
+                            $chunk = Width::truncate($remaining, $width);
+                            if ($chunk === '') {
+                                break;
+                            }
+                            $result[] = $chunk;
+                            $remaining = \substr($remaining, \strlen($chunk));
                         }
+                        $current = $remaining;
                     } else {
                         $current = $word;
                     }
@@ -471,6 +501,7 @@ final class Toast
 
     private function compositeLines(array $bg, array $fg, int $x, int $y, int $w): array
     {
+        $x = \max(0, $x);
         for ($i = 0; $i < \count($fg); $i++) {
             $destY = $y + $i;
             if ($destY < 0 || $destY >= \count($bg)) continue;
@@ -478,11 +509,19 @@ final class Toast
             $fgLine = $fg[$i];
             $bgLine = $bg[$destY];
 
-            // Ensure bg line is long enough
-            $bgLine = \str_pad($bgLine, $x + $w, ' ');
-            $pre  = \substr($bgLine, 0, $x);
-            $post = \substr($bgLine, $x + $w);
-            $bg[$destY] = $pre . \substr($fgLine, 0, $w) . $post;
+            // Slice the background by DISPLAY CELLS, not bytes — multibyte
+            // content and inline ANSI must not be cut mid-grapheme.
+            $bgLine = Width::padRight($bgLine, $x + $w, ' ');
+            $pre  = Width::truncateAnsi($bgLine, $x);
+            $post = Width::dropAnsi($bgLine, $x + $w);
+
+            // The foreground (the toast box) is already exactly $w cells per
+            // line, but truncate defensively so a too-wide line can't bleed
+            // past the box column. truncateAnsi keeps multibyte box-drawing
+            // graphemes whole, fixing the border-truncation bug.
+            $fgSlice = Width::truncateAnsi($fgLine, $w);
+
+            $bg[$destY] = $pre . $fgSlice . $post;
         }
         return $bg;
     }

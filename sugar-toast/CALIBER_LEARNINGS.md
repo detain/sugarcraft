@@ -135,3 +135,44 @@ so `getHistory()` on a given `Toast` always reflects only the dismissals that
 occurred on that instance's lineage.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+---
+
+## [antipattern:byte-slice-overlay] Never slice rendered rows with strlen/substr — slice by DISPLAY WIDTH
+
+`Toast::View()` composites a toast box over a background by slicing each row
+at the toast's column position. The original `compositeLines()` /
+`renderAlert()` used `strlen()`/`substr()`/`str_pad()`/`STR_PAD_BOTH`, which
+count BYTES, not display cells. A box border is `'╭' . str_repeat('─', 48) .
+'╮'` — 50 display cells but **150 UTF-8 bytes** (each box-drawing glyph is a
+3-byte grapheme). `substr($fgLine, 0, 50)` cut the 16th `─` mid-grapheme,
+emitting a dangling continuation byte (`╭───…─<broken>`). Inline SGR escapes
+(`\x1b[31m…\x1b[0m`) also threw the byte math off.
+
+**Fix:** route every measure/slice through candy-core `SugarCraft\Core\Util\Width`:
+- `Width::string($s)` — cell width (ANSI-stripped, grapheme-aware).
+- `Width::truncate()` / `Width::truncateAnsi()` — cut to N cells without
+  splitting a grapheme; the `*Ansi` variant preserves inline escapes.
+- `Width::dropAnsi($s, $n)` — drop the first N cells (the tail/`$post` slice).
+- `Width::padRight()` — pad to N cells (replaces `str_pad`).
+
+Rule of thumb: any string that may contain multibyte glyphs or ANSI must be
+measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.
+
+## [antipattern:hand-built-sgr] Route SGR through candy-core Ansi, not string literals
+
+`renderAlert()` hand-built `"\x1b[{$color}m{$icon}\x1b[0m "`. Replaced with
+`Ansi::CSI . $color . 'm' . $icon . Ansi::reset() . ' '` (byte-identical:
+`Ansi::CSI === "\x1b["`, `Ansi::reset() === "\x1b[0m"`). Use the typed `Ansi`
+helpers (`Ansi::sgr()`, `Ansi::fg16()`, `Ansi::reset()`) so SGR construction is
+centralized and consistent.
+
+## [gotcha:top-stacking-overlap] Top-positioned toasts must stack DOWNWARD
+
+`Position::yOffset()` returned `0` for all Top positions, ignoring the
+`$totalAlertLines` accumulator — so stacked Top toasts all composited at y=0,
+overlapping. Each overlap left the previous toast's trailing zero-width SGR
+reset sitting at the box-edge column; `Width::dropAnsi()` then harvested it
+into the row tail, leaking `\x1b[…m` fragments past the right border. Fix:
+Top positions add `$totalAlertLines` (stack downward), matching the existing
+Bottom/Middle stacking contract.
