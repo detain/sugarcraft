@@ -55,4 +55,26 @@ final class BorderTest extends TestCase
         $this->assertSame('1', $b->top);
         $this->assertSame('8', $b->bottomRight);
     }
+
+    public function testCatalogIsNonEmptyListOfStrings(): void
+    {
+        $catalog = Border::catalog();
+        $this->assertNotEmpty($catalog);
+        $this->assertSame(array_values($catalog), $catalog, 'catalog must be a list');
+        foreach ($catalog as $name) {
+            $this->assertIsString($name);
+        }
+    }
+
+    public function testEveryCatalogEntryIsARealBorderFactory(): void
+    {
+        foreach (Border::catalog() as $name) {
+            $this->assertTrue(
+                method_exists(Border::class, $name),
+                "catalog entry '{$name}' must be a static factory on Border",
+            );
+            $border = Border::{$name}();
+            $this->assertInstanceOf(Border::class, $border, "Border::{$name}() must return a Border");
+        }
+    }
 }

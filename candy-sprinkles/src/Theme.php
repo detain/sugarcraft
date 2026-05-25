@@ -263,6 +263,22 @@ final class Theme
         return $bg >= 8 ? self::light() : self::dark();
     }
 
+    /**
+     * Enumerate the names of all built-in theme factories.
+     *
+     * Each entry maps to a same-named zero-arg static factory on this class
+     * (e.g. `'dracula'` → {@see Theme::dracula()}). The trailing `'adaptive'`
+     * is environment-derived (resolves to `dark`/`light` via `COLORFGBG`)
+     * rather than a fixed palette. Listed in declaration order. Enables
+     * programmatic discovery (e.g. a `--list-themes` command).
+     *
+     * @return list<string>
+     */
+    public static function catalog(): array
+    {
+        return ['dark', 'light', 'dracula', 'tokyoNight', 'oneDark', 'githubDark', 'solarizedDark', 'solarizedLight', 'ansi', 'adaptive'];
+    }
+
     // ─── Fluent withers ──────────────────────────────────────────────────
 
     /**

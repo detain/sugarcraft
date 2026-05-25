@@ -41,6 +41,7 @@ cd candy-core && composer validate && vendor/bin/phpunit --coverage-clover=cover
 - Public classes `final` unless extension is part of contract.
 - **Immutable + fluent** — every `with*()` returns new instance via private `mutate()` helper; public `readonly` properties for state. Canonical: `candy-sprinkles/src/Style.php`.
 - Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`.
+- **Factory naming**: `::new()` is the zero-arg/default root instance. Bare-named factories for variants — `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`, `Spring::fps(60)`. Do NOT introduce `::create()`, `::make()`, or `::default()` — those are the drift to avoid.
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
 - Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
 
