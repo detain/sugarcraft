@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Veil;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -399,8 +400,8 @@ final class Veil
             return $lines;
         }
 
-        $dimCode = "\x1b[2m";
-        $resetCode = "\x1b[0m";
+        $dimCode = Ansi::sgr(Ansi::FAINT);
+        $resetCode = Ansi::reset();
 
         // Wrap each line with dim codes
         $dimmed = [];
