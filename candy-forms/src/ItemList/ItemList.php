@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Forms\ItemList;
 
-use SugarCraft\Bits\Lang;
+use SugarCraft\Forms\Lang;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;

@@ -4,10 +4,5 @@ declare(strict_types=1);
 
 namespace SugarCraft\Bits\Cursor;
 
-use SugarCraft\Core\Msg;
-
-/** Cursor blink pulse for the cursor with id {@see $id}. */
-final class BlinkMsg implements Msg
-{
-    public function __construct(public readonly int $id) {}
-}
+// @deprecated Use SugarCraft\Forms\Cursor\BlinkMsg
+class_alias(\SugarCraft\Forms\Cursor\BlinkMsg::class, BlinkMsg::class);
