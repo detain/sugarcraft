@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\SuperCandy;
 
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Style;
@@ -89,7 +90,7 @@ final class Renderer
             return '';
         }
         $lines = [];
-        $lines[] = "\x1b[1mSearch: {$m->searchQuery}\x1b[0m";
+        $lines[] = Ansi::sgr(Ansi::BOLD) . "Search: {$m->searchQuery}" . Ansi::reset();
         $lines[] = '';
         $total = count($m->searchResults);
         foreach ($m->searchResults as $i => $entry) {
