@@ -52,6 +52,22 @@ final class PickerDescriptionTest extends TestCase
         $this->assertStringContainsString("\x1b[0m", $output); // reset
     }
 
+    public function testDescriptionWrappedInRealDimEscapeBytes(): void
+    {
+        // Regression: Picker once built this with a single-quoted string,
+        // so '\x1b[2m' emitted the literal characters backslash-x-1-b
+        // instead of the dim SGR escape. Assert the REAL ESC byte (0x1b)
+        // wraps the description, and that no literal backslash-x leaks.
+        $description = 'Primary production server';
+        [, $out, $p] = $this->makePicker("\r");
+        $endpoints = $this->endpointsWithDescriptions();
+        $p->pick([$endpoints[0]]);
+        rewind($out);
+        $output = stream_get_contents($out);
+        $this->assertStringContainsString("\x1b[2m" . $description . "\x1b[0m", $output);
+        $this->assertStringNotContainsString('\x1b', $output);
+    }
+
     public function testDescriptionNotRenderedWhenNull(): void
     {
         [, $out, $p] = $this->makePicker("\r");
