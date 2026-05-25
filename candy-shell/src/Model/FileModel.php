@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Model;
 
-use SugarCraft\Bits\FilePicker\FilePicker;
+use SugarCraft\Forms\FilePicker\FilePicker;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

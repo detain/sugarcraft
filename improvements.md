@@ -129,6 +129,8 @@ Never queue two phases concurrently against the same lib, and never start a new 
 
 ### 2.1 candy-shell depends on sugar-bits + sugar-prompt (inverted dependency)
 
+✅ Resolved (PR #871): candy-shell now requires candy-forms; sugar-bits/sugar-prompt deps dropped. Spinner moved into candy-forms in PR #870.
+
 **Evidence:** `candy-shell/composer.json` lists `sugarcraft/sugar-bits` and `sugarcraft/sugar-prompt` in `require`. Eight files under `candy-shell/src/Model/` (`ChooseModel.php`, `ConfirmModel.php`, `FileModel.php`, `FilterModel.php`, `InputModel.php`, `PagerModel.php`, `SpinModel.php`, `WriteModel.php`) `use` classes from `SugarCraft\Bits\*` / `SugarCraft\Prompt\*`. `candy-shell/src/Command/SpinCommand.php` does the same.
 
 **Why this matters:** Per the project's prefix conventions (CLAUDE.md, AGENTS.md), `Candy-` is foundation; `Sugar-` is leaf. A foundation lib cannot depend on a leaf lib without inverting the dependency graph, which kills the ability to publish `candy-shell` standalone post-1.0 and creates implicit cycles once sugar-bits or sugar-prompt grows a back-reference.
