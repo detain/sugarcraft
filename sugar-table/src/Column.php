@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * A table column with key, title, width, and optional style.
  *
@@ -259,6 +261,6 @@ final class Column
     private function ansi(string $text, string $codes): string
     {
         if ($codes === '') return $text;
-        return "\x1b[{$codes}m{$text}\x1b[0m";
+        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }

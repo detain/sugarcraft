@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Lister;
 
 use SugarCraft\Lister\Lang;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
 /**
@@ -520,7 +521,7 @@ final class Model
             return $s;
         }
         $codes = \trim($style, "\e\x1b[]m");
-        return "\x1b[{$codes}m{$s}\x1b[0m";
+        return Ansi::CSI . $codes . 'm' . $s . Ansi::reset();
     }
 
     /** Compute printable (non-ANSI) cell width. */

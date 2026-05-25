@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Calendar;
 
 use SugarCraft\Calendar\Lang;
+use SugarCraft\Core\Util\Ansi;
 
 /**
  * Interactive date picker component.
@@ -566,6 +567,6 @@ final class DatePicker
     private function ansi(string $text, string $codes): string
     {
         if ($codes === '') return $text;
-        return "\x1b[{$codes}m{$text}\x1b[0m";
+        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table;
 
+use SugarCraft\Core\Util\Ansi;
+
 /**
  * A cell with explicit ANSI style, overriding column/row styles.
  */
@@ -35,7 +37,7 @@ final class StyledCell
             : (\is_scalar($this->value) ? (string) $this->value : '');
 
         if ($this->style !== '') {
-            return "\x1b[{$this->style}m{$str}\x1b[0m";
+            return Ansi::CSI . $this->style . 'm' . $str . Ansi::reset();
         }
         return $str;
     }
