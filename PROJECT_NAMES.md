@@ -109,6 +109,7 @@ single-purpose lib.
 | **CandyVt**     | candy + vt = virtual terminal emulator. mirrors charmbracelet/x/vt exactly; vt is the established upstream name. |
 | **CandyVcr**    | candy + vcr = record + replay terminal sessions. mirrors charmbracelet/x/vcr; "vcr" carries the cassette / playback metaphor for free. |
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. mirrors charmbracelet/x/xpty (we drop the `x` prefix — it's a Charm package-namespace artefact, not part of the role name). foundation lib for spawning child processes wired to a controlled PTY. |
+| **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits and sugar-prompt. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = SQLite browser. clear. |
 

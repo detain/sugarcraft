@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "fde11714d2bcf1b8aae809e683a351de",
+    "content-hash": "b8cba29c71014c377dee16ffcea529c7",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -932,6 +932,62 @@
                 "issues": "https://github.com/sugarcraft/candy-flip/issues",
                 "source": "https://github.com/sugarcraft/candy-flip",
                 "docs": "https://sugarcraft.github.io/lib/candy-flip.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-forms",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-forms",
+                "reference": "3b0dc47532c13266286e358e7d829c7b40061eb9"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits and sugar-prompt.",
+            "homepage": "https://github.com/sugarcraft/candy-forms",
+            "keywords": [
+                "forms",
+                "input",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-forms/issues",
+                "source": "https://github.com/sugarcraft/candy-forms",
+                "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
             },
             "transport-options": {
                 "symlink": true,
@@ -4591,6 +4647,7 @@
     "stability-flags": {
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-flip": 20,
+        "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-hermit": 20,
         "sugarcraft/candy-kit": 20,

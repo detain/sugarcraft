@@ -27,7 +27,7 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Forty-five libraries grouped by layer:
+Forty-six libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
@@ -39,6 +39,7 @@ Forty-five libraries grouped by layer:
 | <img src="media/icons/candy-vt.png" width="48" alt=""> | **[CandyVt](candy-vt/)** | Virtual terminal emulator — ANSI byte stream → cell grid + cursor + mode state. Port of [charmbracelet/x/vt](https://github.com/charmbracelet/x/tree/main/vt). |
 | <img src="media/icons/candy-vcr.png" width="48" alt=""> | **[CandyVcr](candy-vcr/)** | Record + replay candy-core sessions — JSONL/YAML cassettes, `Program::withRecorder()`, `Player` with byte + cell-grid assertions, CLI. Port of [charmbracelet/x/vcr](https://github.com/charmbracelet/x/tree/main/vcr). |
 | <img src="media/icons/candy-pty.png" width="48" alt=""> | **[CandyPty](candy-pty/)** | Pseudo-terminal primitive — `Pty::open()` master/slave round-trip via FFI to libc; spawn/resize/non-blocking I/O land in PR2-PR5. Linux + macOS only. Port of [charmbracelet/x/xpty](https://github.com/charmbracelet/x/tree/main/xpty). |
+| <img src="media/icons/candy-forms.png" width="48" alt=""> | **[CandyForms](candy-forms/)** | Foundation lib for form primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form (extracted from sugar-bits + sugar-prompt). |
 | <img src="media/icons/sugar-charts.png" width="48" alt=""> | **[SugarCharts](sugar-charts/)** | Canvas + Sparkline, Bar, Line, Heatmap, Scatter, TimeSeries, Streamline, Waveline, OHLC, Picture (Sixel/Kitty/iTerm2). Port of [ntcharts](https://github.com/NimbleMarkets/ntcharts). |
 | <img src="media/icons/sugar-prompt.png" width="48" alt=""> | **[SugarPrompt](sugar-prompt/)** | Form library — Note, Input, Confirm, Select, MultiSelect, Text, FilePicker; multi-page Groups; 6 themes. Port of [huh](https://github.com/charmbracelet/huh). |
 | <img src="media/icons/candy-shine.png" width="48" alt=""> | **[CandyShine](candy-shine/)** | Markdown → ANSI renderer with word-wrap, OSC 8 hyperlinks, 8 themes. Port of [glamour](https://github.com/charmbracelet/glamour). |
@@ -152,8 +153,8 @@ The umbrella package is a metapackage; each library has its own
 `composer.json` + `vendor/`. To test everything:
 
 ```sh
-for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
-         sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
+for d in candy-core candy-sprinkles honey-bounce candy-zone candy-forms \
+         sugar-bits sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
          candy-mold candy-tetris super-candy sugar-crush \
