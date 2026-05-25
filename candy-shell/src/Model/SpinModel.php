@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Model;
 
-use SugarCraft\Bits\Spinner\Spinner;
-use SugarCraft\Bits\Spinner\Style as SpinStyle;
-use SugarCraft\Bits\Spinner\TickMsg;
+use SugarCraft\Forms\Spinner\Spinner;
+use SugarCraft\Forms\Spinner\Style as SpinStyle;
+use SugarCraft\Forms\Spinner\TickMsg;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

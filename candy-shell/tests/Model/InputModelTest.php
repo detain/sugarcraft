@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Tests\Model;
 
-use SugarCraft\Bits\TextInput\EchoMode;
+use SugarCraft\Forms\TextInput\EchoMode;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Shell\Model\InputModel;

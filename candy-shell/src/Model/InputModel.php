@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shell\Model;
 
-use SugarCraft\Bits\TextInput\EchoMode;
-use SugarCraft\Bits\TextInput\TextInput;
+use SugarCraft\Forms\TextInput\EchoMode;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;

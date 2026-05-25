@@ -40,8 +40,6 @@
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/sugar-bits": "dev-master",
-        "sugarcraft/sugar-prompt": "dev-master",
         "symfony/console": "^6.4 || ^7.0"
     },
     "require-dev": {
@@ -91,20 +89,6 @@
         {
             "type": "path",
             "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../sugar-bits",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../sugar-prompt",
             "options": {
                 "symlink": true
             }
