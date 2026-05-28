@@ -42,6 +42,9 @@ flag_management:
     - name: candy-buffer
       paths: ["candy-buffer/src/**"]
       carryforward: true
+    - name: candy-async
+      paths: ["candy-async/src/**"]
+      carryforward: true
     - name: candy-layout
       paths: ["candy-layout/src/**"]
       carryforward: true
@@ -215,6 +218,12 @@ component_management:
         - "candy-buffer/src/**"
       flag_regexes:
         - "^candy-buffer$"
+    - component_id: candy-async
+      name: candy-async
+      paths:
+        - "candy-async/src/**"
+      flag_regexes:
+        - "^candy-async$"
     - component_id: candy-layout
       name: candy-layout
       paths:

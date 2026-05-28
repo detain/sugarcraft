@@ -27,13 +27,14 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Forty-seven libraries grouped by layer:
+Forty-eight libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
 | <img src="media/icons/candy-core.png" width="48" alt=""> | **[SugarCraft](candy-core/)** | Elm-architecture TUI runtime — `Model` / `Msg` / `Cmd` / `Program` (incl. cursed cell-diff renderer). Port of [bubbletea](https://github.com/charmbracelet/bubbletea). |
 | <img src="media/icons/candy-ansi.png" width="48" alt=""> | **[CandyAnsi](candy-ansi/)** | ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Extraction from candy-vt. |
 | <img src="media/icons/candy-buffer.png" width="48" alt=""> | **[CandyBuffer](candy-buffer/)** | Cell-grid value objects — immutable Buffer (2-D cell grid) and Cell (rune/style/link/width). Shared foundation for all rendering; Buffer::diff() ships in step-26. |
+| <img src="media/icons/candy-async.png" width="48" alt=""> | **[CandyAsync](candy-async/)** | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Pioneering — no upstream parallel. |
 | <img src="media/icons/candy-sprinkles.png" width="48" alt=""> | **[CandySprinkles](candy-sprinkles/)** | Declarative styling + layout — `Style`, `Border`, `Table`, `List`, `Tree`, `Layout::join`, `Place`, `Canvas` (multi-layer compositor). Port of [lipgloss](https://github.com/charmbracelet/lipgloss). |
 | <img src="media/icons/candy-testing.png" width="48" alt=""> | **[CandyTesting](candy-testing/)** | Test harness for TEA programs — ProgramSimulator, golden-file assertions, snapshot helpers. Pioneering what bubble-tea issue #1654 never shipped. |
 | <img src="media/icons/honey-bounce.png" width="48" alt=""> | **[HoneyBounce](honey-bounce/)** | Damped spring physics + Newtonian projectile sim. Port of [harmonica](https://github.com/charmbracelet/harmonica). |

@@ -25,6 +25,7 @@ Status legend:
 
 | Upstream | SugarCraft port | Subdir | Composer pkg | Namespace | Status | Role |
 |---|---|---|---|---|:---:|---|
+| — (pioneering) | **CandyAsync** | `candy-async/` | `sugarcraft/candy-async` | `SugarCraft\Async` | 🟡 | Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps (withTimeout, retry, debounce, throttle). No upstream parallel — shared foundation for ReactPHP usage across the monorepo. |
 | [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | **SugarCraft** | `candy-core/` | `sugarcraft/candy-core` | `SugarCraft\Core` | 🟢 | Elm-architecture TUI runtime |
 | [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | **CandySprinkles** | `candy-sprinkles/` | `sugarcraft/candy-sprinkles` | `SugarCraft\Sprinkles` | 🟢 | Declarative styling + layout |
 | [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) | **HoneyBounce** | `honey-bounce/` | `sugarcraft/honey-bounce` | `SugarCraft\Bounce` | 🟢 | Spring physics + Newtonian projectile sim |
