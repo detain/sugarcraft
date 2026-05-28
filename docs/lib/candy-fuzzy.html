@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyFuzzy</title>
+<meta name="description" content="CandyFuzzy: Fuzzy string matching with scored matched indices — Smith-Waterman + Sahilm algorithms. Extracted from candy-forms; unblocks filter-highlighting UI across the ecosystem.">
+<meta property="og:title" content="SugarCraft — CandyFuzzy">
+<meta property="og:description" content="Fuzzy string matcher that returns which characters matched and their score. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style). Enables filter-highlighting UIs impossible with score-only matchers.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-fuzzy.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-fuzzy.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-fuzzy.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-fuzzy.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-fuzzy.png" alt="CandyFuzzy" onerror="this.style.display='none'">
+      <div>
+        <h2>CandyFuzzy</h2>
+        <p class="detail-sub">Fuzzy string matching with scored matched indices</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">foundation-package</span>
+          <span class="tag-chip">fuzzy</span>
+          <span class="tag-chip">filter</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Fuzzy string matching that returns <strong>which characters matched and their score</strong>. Two algorithms: Smith-Waterman (local alignment) and Sahilm (gum-style scoring with separator/camel-case bonuses). The matched indices enable filter-highlighting UIs that were impossible with score-only matchers. Extracted from candy-forms; back-compat shims left in candy-forms and candy-lister for migration.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-fuzzy:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Fuzzy\FuzzyMatcher;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\Highlighter;
+
+$matcher = new SmithWatermanMatcher();
+
+// Single match — returns null when no match
+$result = $matcher->match('foo', 'foobar');
+// $result->score     === 3
+// $result->indices    === [0, 1, 2]  (0-based character positions)
+// $result->candidate === 'foobar'
+
+// Match all candidates, sorted by score desc then candidate asc
+$results = $matcher->matchAll('ab', ['apple', 'banana', 'cabbage', 'cabbage']);
+// Results sorted: cabbage (score 2) before banana (score 1) before apple (score 0)
+
+// Use Highlighter to mark matched runs with ANSI codes
+$highlighter = new Highlighter();
+echo $highlighter->highlight($result, fn($s) => "\e[1;31m{$s}\e[0m");
+// Output: 'foober' with positions [0,1,2] highlighted in bold red</code></pre>
+
+    <h3 style="margin-top: 32px;">FuzzyMatcher interface</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>match(string $query, string $candidate): ?MatchResult</strong><span>Returns null when no match, MatchResult with score + indices otherwise.</span></div>
+      <div class="feature"><strong>matchAll(string $query, iterable $candidates): list&lt;MatchResult&gt;</strong><span>Returns all matches sorted by score desc, then candidate asc as tiebreak.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">MatchResult</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>score(): int</strong><span>Match quality score — higher is better; 0 means no match.</span></div>
+      <div class="feature"><strong>indices(): list&lt;int&gt;</strong><span>0-based character offsets of matched characters (UTF-8 safe — indices are at character boundaries, not bytes).</span></div>
+      <div class="feature"><strong>candidate(): string</strong><span>The candidate string that was matched.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Algorithms</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>SmithWatermanMatcher</strong><span>Local sequence alignment — optimal for finding best subsequence match within a candidate. Bit-equivalent in score and ranking to the original candy-forms FuzzyMatcher.</span></div>
+      <div class="feature"><strong>SahilmMatcher</strong><span>Ports the sahilm/fuzzy Go algorithm — separator bonus (/, _, -, space, .), camel-case bonus, exact-prefix bonus. Good for file/path matching.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Highlighter</h3>
+    <p>Takes a <code>MatchResult</code> and a styler <code>callable(string): string</code>, returns the candidate string with matched runs passed through the styler. Non-matched runs are returned unchanged.</p>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Filter-as-you-type with highlighted matches</strong> — know exactly which characters triggered the match for underline/bold/color highlighting.</li>
+      <li><strong>Ranked autocomplete</strong> — matchAll sorts results by relevance score, not alphabetical order.</li>
+      <li><strong>File/path fuzzy finding</strong> — SahilmMatcher bonus for separators and camelCase makes it ideal for IDE-style file openers.</li>
+      <li><strong>Foundation for candy-hermit</strong> — the fuzzy finder overlay uses matched indices to highlight the current selection.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-fuzzy">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-fuzzy/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-fuzzy/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>FuzzyMatcher</td><td>match(string $query, string $candidate): ?MatchResult</td><td>Single match or null</td></tr>
+<tr><td>FuzzyMatcher</td><td>matchAll(string $query, iterable $candidates): list&lt;MatchResult&gt;</td><td>All matches sorted by score desc</td></tr>
+<tr><td>MatchResult</td><td>score(): int</td><td>Match quality score (higher = better)</td></tr>
+<tr><td>MatchResult</td><td>indices(): list&lt;int&gt;</td><td>0-based matched character offsets</td></tr>
+<tr><td>MatchResult</td><td>candidate(): string</td><td>The matched candidate string</td></tr>
+<tr><td>SmithWatermanMatcher</td><td>implements FuzzyMatcher</td><td>Local sequence alignment algorithm</td></tr>
+<tr><td>SahilmMatcher</td><td>implements FuzzyMatcher</td><td>Separator/camelCase bonus algorithm</td></tr>
+<tr><td>Highlighter</td><td>highlight(MatchResult, callable(string): string): string</td><td>Apply styler to matched runs</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-fuzzy">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-fuzzy/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
