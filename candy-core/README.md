@@ -477,6 +477,118 @@ when that's more convenient.
 
 `examples/mouse.php` is a runnable demonstrator.
 
+## ProgramOptions Builder
+
+`ProgramOptions` has a 16-parameter constructor — use the fluent builder to avoid long argument lists:
+
+```php
+use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Core\ProgramOptions\ProgramOptionsBuilder;
+
+$opts = (new ProgramOptionsBuilder())
+    ->withModel(new Counter())
+    ->withInitialModelFromCmd(fn () => new Counter(42))
+    ->withThrowOnQuit(false)
+    ->withCatchSignals(false)
+    ->withSignificantKeyEventsOnly(true)
+    ->build();
+
+(new Program($opts))->run();
+```
+
+`build()` validates required fields and throws `\InvalidArgumentException` on missing required. The existing 16-arg `new ProgramOptions(...)` ctor is preserved for full back-compatibility.
+
+## Program helpers
+
+### withLogger
+
+Inject a PSR-3 logger to receive runtime events. Default is `Psr\Log\NullLogger`:
+
+```php
+use Psr\Log\NullLogger;
+use SugarCraft\Core\Program;
+
+$program = (new Program(new Counter()))
+    ->withLogger(new NullLogger());   // immutable — returns new instance
+```
+
+### withExceptionHandler
+
+Register a callable that fires when an uncaught exception escapes `update()` or `view()`. Default re-throws:
+
+```php
+use SugarCraft\Core\Program;
+
+$program = (new Program(new Counter()))
+    ->withExceptionHandler(fn (\Throwable $t) => error_log($t->getMessage()));
+```
+
+### lastFrameDuration
+
+Seconds elapsed for the most recent render cycle — useful for adaptive framerate:
+
+```php
+use SugarCraft\Core\Program;
+
+$program = new Program(new Counter());
+$program->run();
+echo $program->lastFrameDuration();  // 0.0 before first render, >0 after
+```
+
+## ProgressReporter
+
+The `ProgressReporter` interface reports ongoing operation progress — consumed by `sugar-post` and `candy-forms` in later steps:
+
+```php
+use SugarCraft\Core\ProgressReporter;
+use SugarCraft\Core\Progress\CallbackProgressReporter;
+
+interface ProgressReporter
+{
+    /** @param int $current 0-based current step @param int $total Total steps @param string|null $label Optional label */
+    public function report(int $current, int $total, ?string $label = null): void;
+}
+```
+
+Default implementations:
+
+```php
+use SugarCraft\Core\Progress\CallbackProgressReporter;
+use SugarCraft\Core\Progress\SilentProgressReporter;
+
+// Callback — fires a closure with ($current, $total, $label)
+$reporter = CallbackProgressReporter::new(
+    fn (int $current, int $total, ?string $label) => printf("%d/%d %s\n", $current, $total, $label ?? '')
+);
+$reporter->report(3, 10, 'downloading');
+
+// Silent — no-op (assertable via spy in tests)
+$reporter = new SilentProgressReporter();
+```
+
+## UndoActionType
+
+Typed enum replacing ad-hoc string-prefix detection for undo routing (`str_starts_with($desc, 'delete ')` patterns in super-candy / candy-mines / candy-tetris):
+
+```php
+use SugarCraft\Core\Undo\UndoActionType;
+use SugarCraft\Core\Undo\UndoAction;
+
+enum UndoActionType: string
+{
+    case Delete = 'delete';
+    case Move   = 'move';
+    case Rename = 'rename';
+    case Copy   = 'copy';
+    case Custom = 'custom';
+}
+
+// Readonly value object pairing a type with its payload + display label
+$action = UndoAction::new(UndoActionType::Delete, ['path' => '/tmp/foo'], 'delete foo');
+echo $action->type->value;   // 'delete'
+echo $action->label;          // 'delete foo'
+```
+
 ## Test
 
 ```sh
