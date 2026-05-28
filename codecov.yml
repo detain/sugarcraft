@@ -93,6 +93,9 @@ flag_management:
     - name: candy-mold
       paths: ["candy-mold/src/**"]
       carryforward: true
+    - name: candy-mouse
+      paths: ["candy-mouse/src/**"]
+      carryforward: true
     - name: candy-tetris
       paths: ["candy-tetris/src/**"]
       carryforward: true
@@ -308,6 +311,12 @@ component_management:
         - "candy-mold/src/**"
       flag_regexes:
         - "^candy-mold$"
+    - component_id: candy-mouse
+      name: candy-mouse
+      paths:
+        - "candy-mouse/src/**"
+      flag_regexes:
+        - "^candy-mouse$"
     - component_id: candy-tetris
       name: candy-tetris
       paths:
