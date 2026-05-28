@@ -129,6 +129,9 @@ flag_management:
     - name: candy-hermit
       paths: ["candy-hermit/src/**"]
       carryforward: true
+    - name: candy-input
+      paths: ["candy-input/src/**"]
+      carryforward: true
     - name: candy-lister
       paths: ["candy-lister/src/**"]
       carryforward: true
@@ -383,6 +386,12 @@ component_management:
         - "candy-hermit/src/**"
       flag_regexes:
         - "^candy-hermit$"
+    - component_id: candy-input
+      name: candy-input
+      paths:
+        - "candy-input/src/**"
+      flag_regexes:
+        - "^candy-input$"
     - component_id: candy-lister
       name: candy-lister
       paths:
