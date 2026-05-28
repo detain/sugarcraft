@@ -59,6 +59,7 @@
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-query": "dev-master",
         "sugarcraft/candy-serve": "dev-master",
+        "sugarcraft/candy-testing": "@dev",
         "sugarcraft/candy-shell": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
@@ -214,6 +215,13 @@
         {
             "type": "path",
             "url": "candy-serve",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-testing",
             "options": {
                 "symlink": true
             }
