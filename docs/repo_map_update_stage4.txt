@@ -1,0 +1,118 @@
+# SugarCraft Stage 4 Repo Map Update
+
+## 1. Top 3 Critical Gaps
+
+### 1.1 Buffer Diffing / Dirty-Region Tracking
+**Affects:** sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister
+All do full re-render every frame. External repos (ultraviolet, ratatui, php-tui) track touched lines and emit only delta ANSI sequences via ECH/REP/ICH/DCH escape sequences. Critical for SSH connections and live dashboards.
+
+**Why critical:** Without diffing, every render sends the full viewport — wastefully for unchanged regions, causes flicker on some terminals, and prevents smooth animations.
+
+### 1.2 Input Driver / TTY Integration
+**Affects:** sugar-readline, sugar-crush, candy-lister
+sugar-readline cannot read actual terminal keypresses — only processes pre-decoded symbolic key names. No mechanism to decode terminal escape sequences (Kitty keyboard protocol, SGR mouse). This is the single blocker for real-world interactive usage.
+
+**Why critical:** Libraries without input drivers are demo-only; cannot be used in production CLI tools without significant additional wiring.
+
+### 1.3 Constraint-Based Layout (Cassowary Solver)
+**Affects:** sugar-boxer, sugar-dash, sugar-stash, sugar-stickers
+Tree-based weighted distribution cannot express constraints like "column A = 30% but never less than 10". External repos (ratatui, php-tui) use Cassowary constraint solver with Min/Max/Percent/Ratio/Fill constraints.
+
+**Why critical:** Complex responsive dashboards need constraint solving — sidebar at 20% width with min 20 / max 40 cells, main content filling remaining space.
+
+---
+
+## 2. Top 2 Shared Architectural Weaknesses
+
+### 2.1 No StatefulWidget / Event-Driven Separation
+Components across sugar-dash, sugar-crush, sugar-readline, candy-lister mix state and rendering. External repos (ratatui, textual) separate `Widget` (render-only) from `StatefulWidget` + separate state objects (`TableState`, `ListState`). This enables testability, multiple views of same data, and cleaner update cycles.
+
+**Pattern needed:** `ListState` / `TableState` / `TabsState` as external state objects passed to constructors, rather than internal mutable state.
+
+### 2.2 No Consistent Mouse Hit-Testing Infrastructure
+Mouse support is missing or incomplete across most packages. When implemented, it relies on external candy-zone Manager wiring (sugar-veil, sugar-crumbs) rather than self-contained Mark/Scan/Get pattern (bubblezone's zero-width ANSI markers). No consistent coordinate translation or zone tracking across the ecosystem.
+
+**Pattern needed:** bubblezone-style Mark/Scan/Get for self-contained hit-testing without external dependencies.
+
+---
+
+## 3. Top 3 Cited Repos and Why
+
+### 3.1 ratatui/ratatui (cited 7+ times)
+**Purpose:** Full TUI framework reference for constraint-based layout, buffer diffing, StatefulWidget pattern, and immediate-mode rendering.
+**Why cited:** Cassowary constraint solver (sugar-boxer, sugar-dash), buffer diffing algorithm (sugar-crush, sugar-veil), Widget/StatefulWidget traits (sugar-dash, sugar-stash).
+**Key citation:** "The layout system uses the Cassowary constraint solver algorithm to resolve conflicting layout constraints"
+
+### 3.2 charmbracelet/bubbletea (cited 6+ times)
+**Purpose:** Elm architecture pattern, input handling, mouse events, synchronized output (ANSI 2026), Cmd/Batch command pattern.
+**Why cited:** TEA model pattern for MVU architecture (sugar-crush, sugar-stash), mouse event handling (sugar-readline, sugar-veil), key decoding (sugar-readline).
+**Key citation:** "Elm architecture: Model/Update/View — every update returns new model + optional command"
+
+### 3.3 charmbracelet/lipgloss (cited 5+ times)
+**Purpose:** Pure-value Style type, CSS-like API, CIELAB color blending, borders, layer compositing, Canvas cell buffer.
+**Why cited:** Style system overhaul (sugar-readline), style inheritance chain (sugar-stickers, sugar-veil), border system (sugar-stash), width measurement (candy-lister).
+**Key citation:** "Style system with bitmask properties, per-side borders, CIELAB color blending, layer compositing"
+
+---
+
+## 4. Top 2 Immediate-Win Roadmap Items
+
+### 4.1 Wide-Character Overflow Handling (sugar-boxer)
+**Complexity:** Low — fix `setChar()` to fill adjacent cells when writing wide chars (CJK/emoji)
+**Impact:** High for international users; correctness bug causing visual artifacts
+**Citation:** "Wide Character Handling — When overwriting part of a wide character, fills remaining width with blank cells to avoid rendering artifacts"
+
+### 4.2 ContentGenerator Pattern (sugar-stickers)
+**Complexity:** Low — add `Node::withContentGenerator(Closure(int $maxX, int $maxY): string)`
+**Impact:** Enables per-cell adaptive text truncation/wrapping without pre-measuring; upstream stickers feature not yet ported
+**Citation:** "Cells can hold either static content or dynamic content via SetContentGenerator(func(maxX, maxY) string) for per-cell adaptive text wrapping/display"
+
+---
+
+## 5. Packages Already Superior to Upstream
+
+### 5.1 sugar-boxer > treilik/bubbleboxer
+- Immutable Node pattern vs upstream's mutable tea.Model wrapper
+- 9 border styles via candy-sprinkles vs upstream's single border style
+- Pure string renderer decoupled from tea runtime vs upstream's Bubbletea dependency
+- PHP-native implementation vs Go interop complexity
+
+### 5.2 sugar-veil > rmhubbert/bubbletea-overlay
+- 9-position anchor system (vs upstream's 5)
+- Multi-overlay z-index stacking with VeilStack
+- Animation infrastructure (Slide/Fade/Scale via CubicBezier)
+- Backdrop dimming (0-100 opacity mapping)
+- Auto-size computation
+- Click-outside dismissal
+- UTF-8 column tracking for multibyte chars
+
+### 5.3 sugar-crumbs > KevM/bubbleo
+- Type-ahead filtering with case-insensitive substring matching on both title AND data
+- Path parsing via `Shell::pushDirectory()` mapping filesystem paths
+- Truncation with ellipsis at configurable max width
+- HTML rendering with ARIA semantics (`aria-current="page"`)
+- Comprehensive 678-line test suite
+- i18n via Lang facade
+
+### 5.4 sugar-readline > erikgeiser/promptkit (partial)
+- True immutability via clone-on-mutation (upstream uses mutable TEA models)
+- Pure PHP, zero external dependencies
+- Vi/Emacs mode abstraction via ModeInterface
+- Parallel undo/redo stacks
+- Confirmation decoupled from submit (y/n changes selection, Enter commits)
+- FIFO rollover for MultiSelect
+- 708-line comprehensive test suite
+- Note: Upstream has proper input handling; sugar-readline is input-driver-less
+
+### 5.5 candy-lister > treilik/bubblelister (partial)
+- Smith-Waterman fuzzy matching with O(c) memory (upstream lacks fuzzy)
+- Immutable filter state machine with explicit FilterState transitions
+- Box-drawing defaults matching upstream
+- Full 16-language i18n (upstream has 3)
+- Note: Upstream has concurrent search (goroutines), tea.Model compliance, and proper word-wrap indent — candy-lister is missing these
+
+---
+
+## Summary
+
+The SugarCraft ecosystem shares three critical gaps across multiple packages: buffer diffing (full re-render everywhere), input driver infrastructure (sugar-readline blocking real usage), and constraint-based layout (Cassowary solver needed). Two architectural weaknesses permeate the codebase: mixed state/rendering instead of StatefulWidget separation, and inconsistent mouse hit-testing. The most-cited external repos are ratatui (constraint layout/diffing), bubbletea (TEA pattern/input), and lipgloss (styling). Two immediate wins stand out: fixing wide-char overflow in sugar-boxer and adding ContentGenerator to sugar-stickers. Several packages already exceed their upstreams in functionality, but the ecosystem as a whole needs foundational investments in input handling, buffer diffing, and constraint solving to close the gap with the leading Go/Rust TUI ecosystems.

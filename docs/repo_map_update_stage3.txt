@@ -1,0 +1,142 @@
+# SugarCraft Stage 3 Update Analysis
+
+Cross-cutting analysis of 9 update documents covering sugar-spark, candy-freeze,
+sugar-calendar, candy-metrics, sugar-toast, sugar-skate, candy-serve, sugar-wishlist,
+candy-hermit.
+
+---
+
+## 1. Top 3 Critical Gaps
+
+### A. No Persistent Storage Backend (candy-serve, candy-metrics)
+candy-serve has zero persistence — user/repo data exists only in-memory during server run.
+Upstream soft-serve uses SQLite/PostgreSQL. candy-metrics has no HTTP scrape endpoint,
+requiring external components for metric collection. The Go promwish exposes `/metrics` directly.
+
+**Pattern:** Multiple packages need storage/server backends that are absent.
+
+### B. TUI Implementation Missing or Incomplete (candy-serve, sugar-wishlist)
+candy-serve has zero TUI — the defining feature that made soft-serve special. SSH-server
+mode is the #1 requested feature in sugar-wishlist. These are architectural voids, not
+incremental gaps.
+
+**Pattern:** Ported packages deliver CLI/library features but defer the interactive TUI
+layer that defines the upstream experience.
+
+### C. UTF-8 Grapheme / ANSI Width Blindness (candy-hermit, sugar-spark, candy-freeze)
+candy-hermit's `highlightMatches()` uses byte-level indexing — breaks on emoji, CJK,
+combining characters. candy-freeze's 0.6 font aspect ratio approximation works for ASCII
+but fails for multi-byte content. sugar-spark's manual parsing has C1 limitation due to
+PHP's UTF-8 handling.
+
+**Pattern:** Byte-level string operations throughout the ecosystem will corrupt rendering
+on non-ASCII content.
+
+---
+
+## 2. Top 2 Shared Architectural Weaknesses
+
+### A. Manual Byte-Loop Parsing vs. State Machine Architecture
+sugar-spark uses a manual byte-by-byte parsing loop (551-line Inspector.php). candy-hermit
+uses `strlen()`/`strpos()` at byte level. candy-vt (referenced as upstream source) already
+has the VT500 state machine from `charmbracelet/x/ansi`. The ecosystem is re-implementing
+manual parsing instead of sharing the state machine.
+
+**Shared risk:** Extending byte-loop parsers is error-prone; adding new sequence types
+requires modifying core loops rather than registering handlers.
+
+### B. No Golden File / Snapshot Testing Infrastructure
+sugar-spark has 116 unit tests but zero golden file regression tests. sugar-calendar
+has 57 tests but no snapshot tests for `View()` output. candy-freeze's WindowStyleTest
+tests SVG structure but could use full render comparison. Only sugar-skate and
+candy-hermit have what could be called structured test coverage.
+
+**Shared risk:** Refactoring any rendering code can silently corrupt output format
+without detection.
+
+---
+
+## 3. Top 3 Cited Repos and Why
+
+### 1. charmbracelet/bubbletea (cited in 8 of 9 documents)
+The canonical TUI framework reference. Every package either:
+- Uses it as a direct port target (candy-serve TUI)
+- References its component patterns (List, TextArea, Spinner)
+- Copies its Elm architecture (Model/Update/View, Cmd pattern)
+- Learns from its issues (textarea performance, mouse race conditions)
+
+**Why:** It is the dominant Go TUI framework and the upstream source for half the
+SugarCraft ecosystem's component designs.
+
+### 2. charmbracelet/x/ansi (cited in sugar-spark, candy-hermit, candy-freeze)
+Provides the ECMA-48 state machine parser (`ansi.Parser`), ANSI width calculation via
+`clipperhouse/displaywidth`, and C0/C1 control code tables. This is the foundational
+parsing layer for the entire ANSI-inspection and terminal emulation stack.
+
+**Why:** It's the upstream source for both sugar-spark's parser AND candy-vt's VT500
+implementation. Sharing it would eliminate duplicate state-machine ports.
+
+### 3. charmbracelet/lipgloss (cited in sugar-spark, sugar-toast, sugar-wishlist, candy-hermit)
+Style composition, adaptive color (light/dark theme detection via `HasDarkBackground`),
+`StyleRunes()` for matched/unmatched highlighting, and `Width()` for ANSI/Unicode-aware
+measurement. Referenced more than any other styling library.
+
+**Why:** Provides the styling primitives (colors, borders, layout) that SugarCraft's
+candy-shine partially covers but doesn't fully replicate.
+
+---
+
+## 4. Top 2 Immediate-Win Roadmap Items
+
+### A. Fix sugar-wishlist `toSshArgv()` to Emit ALL Identity Files
+sugar-wishlist's `Endpoint` model stores `list<string> $identityFiles`, but
+`toSshArgv()` only emits `$identityFiles[0]`. SSH natively supports multiple `-i` flags.
+This is a single-method change with real workflow impact. Upstream has this feature.
+
+**Complexity:** Low — one method change + test
+**Impact:** Full SSH feature parity for users with per-environment keys
+
+### B. Wire PNG Renderer to candy-freeze CLI (`--format png`)
+candy-freeze's `PngRenderer` exists (373 lines) but the CLI only exposes SVG output.
+Adding `--format png` to the CLI is trivial wiring. This closes the CLI/API parity gap.
+
+**Complexity:** Low — expose existing renderer via flag
+**Impact:** Enables PNG output without PHP library usage
+
+---
+
+## 5. Packages Already Superior to Upstream
+
+### sugar-calendar > EthanEFung/bubble-datepicker
+- Immutable + fluent architecture (upstream is mutable)
+- Date range selection (NOT in upstream Go)
+- 16-locale i18n with completeness testing
+- Pure ANSI renderer (no TUI dependency)
+- Event store architecture for extensibility
+
+### sugar-toast > daltonsw/bubbleup
+- Queue-based multi-alert system (upstream is single-alert)
+- 9 screen positions (upstream has 6)
+- Progress bar support (not in upstream)
+- Action buttons with callbacks
+- History log (not in upstream)
+- Display-cell aware slicing (fixes UTF-8 multibyte bugs in Go)
+
+### sugar-skate > charmbracelet/skate
+- Import/export system (Go skate has neither)
+- 17-locale i18n (Go skate has none)
+- Schema migration for legacy databases
+- Glob pattern matching translated to SQL LIKE
+- Multi-database via suffix syntax (`key@dbname`)
+
+### candy-freeze > charmbracelet/freeze
+- 5 window decoration styles (upstream is macOS-only)
+- TTF font embedding via base64 `@font-face` in SVG
+- Line highlighting via `withHighlight()`
+- Language detection from shebang/extension
+- Pure PHP SVG path (no WASM/FFI instability)
+- Immutable fluent builders
+
+---
+
+*Generated from docs/repo_map/update_sugarcraft_*.md cross-cut analysis*
