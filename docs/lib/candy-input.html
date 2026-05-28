@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyInput</title>
+<meta name="description" content="CandyInput: Terminal escape sequence decoder — keys, Kitty keyboard protocol, SGR 1006 mouse, focus, bracketed paste. The missing input layer for PHP TUI.">
+<meta property="og:title" content="SugarCraft — CandyInput">
+<meta property="og:description" content="EscapeDecoder consumes raw TTY bytes and emits typed Events. Supports legacy keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Pioneering for PHP TUI.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-input.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-input.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-input.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-input.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-input.png" alt="CandyInput" onerror="this.style.display='none'">
+      <div>
+        <h2>🍬 CandyInput</h2>
+        <p class="detail-sub">Terminal escape sequence decoder</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip">input</span>
+          <span class="tag-chip">foundation-package</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">The missing input layer for PHP TUI. <code>EscapeDecoder</code> consumes raw TTY bytes and emits typed <code>Event</code> objects — plain keys, Kitty keyboard protocol, SGR 1006 mouse, focus events, and bracketed paste. Reentrant and fuzz-friendly. Unblocks sugar-readline migration to real-TTY input (step-21).</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-input:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Input\EscapeDecoder;
+use SugarCraft\Input\Driver\StreamInputDriver;
+use SugarCraft\Input\Event\KeyEvent;
+use SugarCraft\Input\Event\MouseEvent;
+
+$decoder = new EscapeDecoder();
+$driver  = new StreamInputDriver(STDIN);
+
+while (true) {
+    $event = $driver->read();
+    if ($event === null) continue; // non-blocking empty or EOF
+
+    match (true) {
+        $event instanceof KeyEvent  => handleKey($event),
+        $event instanceof MouseEvent => handleMouse($event),
+        default                      => handleOther($event),
+    };
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">EscapeDecoder</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>decode(string $bytes): list&lt;Event&gt;</strong><span>Decode a byte buffer — emits 0+ Events; buffers partial sequences.</span></div>
+      <div class="feature"><strong>remainder(): string</strong><span>Get unconsumed bytes that couldn't yet form a complete sequence.</span></div>
+      <div class="feature"><strong>reset(): void</strong><span>Clear the partial-sequence buffer.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">InputDriver</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>read(): ?Event</strong><span>Return the next Event, or null on EOF / non-blocking empty.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Event types</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>KeyEvent</strong><span>key, modifiers, raw — plain keys, F1-F12, arrows, Home/End/PgUp/PgDn, Insert, Delete, Backspace, Tab, Enter, Escape, Ctrl+letter</span></div>
+      <div class="feature"><strong>MouseEvent</strong><span>x, y, button, action, modifiers — SGR 1006: press, release, drag, scroll</span></div>
+      <div class="feature"><strong>FocusEvent</strong><span>gained — terminal window focus gained/lost (DECSET 1004)</span></div>
+      <div class="feature"><strong>PasteEvent</strong><span>content — bracketed paste (CSI 200~ … CSI 201~), capped at 1 MiB</span></div>
+      <div class="feature"><strong>ResizeEvent</strong><span>cols, rows — terminal resize</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">KeyModifier</h3>
+    <p>Bitmask flags: <code>Shift</code>, <code>Ctrl</code>, <code>Alt</code>, <code>Meta</code>, <code>Super</code>, <code>Hyper</code>, <code>CapsLock</code>, <code>NumLock</code>. Combine with bitwise OR.</p>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Real-TTY input for sugar-readline</strong> — decode raw bytes instead of symbolic key names.</li>
+      <li><strong>Interactive TUI programs</strong> — keyboard and mouse input without depending on a specific runtime.</li>
+      <li><strong>Kitty keyboard protocol</strong> — disambiguation flags via CSI <code>?u</code>, including key release events.</li>
+      <li><strong>Safe paste handling</strong> — bracketed paste with 1 MiB cap prevents OOM from hostile input.</li>
+      <li><strong>Foundation for any input-consuming lib</strong> — EscapeDecoder is leaf (no sugarcraft deps).</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-input">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-input/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-input/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>EscapeDecoder</td><td>decode(string $bytes): list&lt;Event&gt;</td><td>Decode byte buffer, buffer partials</td></tr>
+<tr><td>EscapeDecoder</td><td>remainder(): string</td><td>Get unconsumed bytes</td></tr>
+<tr><td>EscapeDecoder</td><td>reset(): void</td><td>Clear partial buffer</td></tr>
+<tr><td>StreamInputDriver</td><td>read(): ?Event</td><td>Next event from stream, or null</td></tr>
+<tr><td>KeyEvent</td><td>key: string</td><td>Symbolic key name</td></tr>
+<tr><td>KeyEvent</td><td>modifiers: KeyModifier</td><td>Modifier bitmask</td></tr>
+<tr><td>KeyEvent</td><td>raw: string</td><td>Raw bytes that produced this event</td></tr>
+<tr><td>MouseEvent</td><td>x, y: int</td><td>Column and row (1-based)</td></tr>
+<tr><td>MouseEvent</td><td>button: int</td><td>Button index (0=left, 1=middle, 2=right)</td></tr>
+<tr><td>MouseEvent</td><td>action: string</td><td>press | release | drag | scroll</td></tr>
+<tr><td>FocusEvent</td><td>gained: bool</td><td>True if focus gained, false if lost</td></tr>
+<tr><td>PasteEvent</td><td>content: string</td><td>Pasted content (max 1 MiB)</td></tr>
+<tr><td>ResizeEvent</td><td>cols, rows: int</td><td>New terminal dimensions</td></tr>
+<tr><td>KeyModifier</td><td>none(): self</td><td>No modifiers</td></tr>
+<tr><td>KeyModifier</td><td>shift(): self</td><td>Shift modifier</td></tr>
+<tr><td>KeyModifier</td><td>ctrl(): self</td><td>Ctrl modifier</td></tr>
+<tr><td>KeyModifier</td><td>alt(): self</td><td>Alt modifier</td></tr>
+<tr><td>KeyModifier</td><td>includes(int $flag): bool</td><td>Check if flag is set</td></tr>
+<tr><td>KeyModifier</td><td>value(): int</td><td>Raw bitmask value</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-input">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-input/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+{
+    "name": "sugarcraft/candy-input",
+    "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "input",
+        "keyboard",
+        "mouse",
+        "escape-sequences",
+        "kitty",
+        "sgr",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-input",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-input/issues",
+        "source": "https://github.com/sugarcraft/candy-input",
+        "docs": "https://sugarcraft.github.io/lib/candy-input.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Input\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Input\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
