@@ -1,0 +1,124 @@
+# Stage 5 Ecosystem Synthesis — repo_map_update_stage5
+
+Sourced from 11 update docs: candy-kit, candy-flip, sugar-post, candy-query,
+candy-mines, candy-tetris, candy-mold, honey-flap, super-candy, sugar-tick.
+
+---
+
+## 1. Top 3 Critical Gaps
+
+### A. Testing Infrastructure Universally Absent
+Every package independently identifies the same hole: no `Simulator` class,
+no `Program::withInput()/withOutput()`, no snapshot testing utilities. This is
+not a per-package gap — it is an ecosystem gap. bubble-tea issue #1654 (6+
+years old) confirms the Go world never solved this. SugarCraft can lead here.
+Affected: candy-mold (critical), candy-query, candy-mines, candy-tetris,
+super-candy, sugar-tick.
+
+### B. Concurrent Write Safety — Data Corruption Risk
+sugar-tick's JSONL append is unsafe across multiple editors. candy-flip's
+DISPOSAL_PREVIOUS mode can race in the same way. Any package doing file
+append without flock() is one `Ctrl+C` away from corrupt data.
+Affected: sugar-tick (critical, P0), candy-flip (DISPOSAL_PREVIOUS canvas race).
+
+### C. Progress Feedback Missing From Async Operations
+super-candy's AsyncOps fires copy/move without any progress callback — the
+user sees nothing until completion. yazi and ranger set the modern standard
+with per-file, per-byte progress bars. sugar-post similarly lacks progress
+feedback for large attachment sends.
+Affected: super-candy (critical), sugar-post (large attachment send).
+
+---
+
+## 2. Top 2 Shared Architectural Weaknesses
+
+### A. God Classes with 10-15 Constructor Parameters
+super-candy's `Manager` at 915 lines has 15 constructor params.
+candy-query's `App` has 12 args. This pattern repeats across apps built on
+candy-core TEA. The fix is well-understood: extract value objects
+(SearchState, TabManager, PaneState, ManagerState) and use a Builder pattern.
+No package has addressed this proactively.
+
+### B. String-Based Action Detection for Undo/Redo
+super-candy uses `str_starts_with($desc, 'delete ')` to route undo actions.
+candy-mines architecture would face the same if undo were implemented.
+This is fragile — translation changes or string refactoring silently break undo.
+The canonical fix (add `UndoActionType` enum property) is documented in
+super-candy's own roadmap but not yet applied.
+
+---
+
+## 3. Top 3 Cited Repos and Why
+
+### A. charmbracelet/bubbletea — 9 citations across all 11 docs
+Primary TEA framework upstream. Every package either ports from it or
+references its patterns (Cmd/Tick, Elm architecture, Subscriptions,
+declarative View). The PR analysis (`pr_charmbracelet_bubbletea.md`) is
+cited for signal leaks, data races, nested model routing bugs, and the
+famous issue #1654 (testing framework) that has been open 6+ years.
+This is the most-analyzed repo in the ecosystem.
+
+### B. charmbracelet/lipgloss → candy-sprinkles — 5 citations
+Styling foundation for all visual packages. Its CSS shorthand resolution,
+adaptive color system, and BorderTitle pattern are the reference
+implementations. The `Width::string()` for Unicode width is the canonical
+fix for the HelpText alignment bug in candy-kit.
+
+### C. textualize/textual — 4 citations
+Sister TUI framework providing reactive state patterns, CSS layout, widget
+composition, command palette, and web rendering (textual-web). Its GC
+stuttering issues (#6381) and weakref DOM are cautionary tales for
+candy-sprinkles-style object reference management.
+
+---
+
+## 4. Top 2 Immediate-Win Roadmap Items
+
+### A. File locking on append — 1 line, P0
+Add `flock()` to `Store::append()` in sugar-tick. Same pattern applies to
+any JSONL/append-write package. Eliminates the critical concurrent-write
+corruption risk. Complexity: Low. Impact: Critical (data safety).
+
+### B. Extract DatabaseInterface now in candy-query — 1 interface, unlocks MySQL
+The README explicitly says "promoting to an interface is a one-class job
+once the second driver lands." The interface contract is already stable from
+7 public methods. Waiting costs nothing except forces a later refactor
+of `App::start()`. Complexity: Low. Impact: Critical (unblocks MySQL/Postgres).
+
+---
+
+## 5. Packages Already Superior to Upstream
+
+### A. candy-tetris ≫ tetrigo (Go)
+Already surpasses upstream with T-Spin/B2B/Combo/PerfectClear scoring,
+DAS/ARR input (professional-grade), VS Computer mode with garbage passing,
+and 82+ tests. tetrigo has none of these. The gap is not narrowing — it
+has already diverged. candy-tetris should be positioned as a reference
+implementation, not a port.
+
+### B. candy-mines ≫ go-sweep (Go)
+Already superior: O(1) win detection vs go-sweep's O(n) grid scan,
+first-click safety fully implemented (go-sweep has it as TODO),
+deterministic injectable RNG for testing, iterative flood-fill (no stack
+overflow on Expert boards). go-sweep has been dormant; candy-mines
+has clear headroom to add undo/redo, achievements, and replay.
+
+### C. candy-kit: only framework-agnostic PHP CLI presenter
+No comparable pure-presentation PHP library exists. pterm is Go-only.
+c9s/CLIFramework is a full CLI framework, not presentation-only.
+candy-kit occupies an empty niche: styled CLI output without Symfony
+Console dependency. This positioning is defensible and uncontested.
+
+---
+
+## Summary
+
+The ecosystem is mature but has three structural gaps: testing
+infrastructure (universally absent), concurrent write safety (corruption
+risk), and progress feedback for async ops (UX gap vs modern tools).
+Architecturally, god classes and string-based undo detection are
+recurring weaknesses. bubble-tea is the most-cited reference; lipgloss
+and textual are secondary references. The immediate wins are file
+locking and DatabaseInterface extraction — both low complexity, high
+impact. Three packages (candy-tetris, candy-mines, candy-kit) have already
+surpassed their upstreams and should be marketed as such.

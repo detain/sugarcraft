@@ -183,13 +183,13 @@ No spawned agent should receive abbreviated instructions.
 
 Each group worker agent receives:
 
--   a subset of Sugarcraft package/app dirs
+* a subset of Sugarcraft package/app dirs
 
 Example:
 
--   Group 1 gets 12 packages
--   Group 2 gets 11 packages
--   etc.
+* Group 1 gets 12 packages
+* Group 2 gets 11 packages
+* etc.
 
 These 8 group worker agents execute SIMULTANEOUSLY.
 
@@ -198,47 +198,184 @@ However:
 WITHIN EACH GROUP:
 processing MUST be STRICTLY SEQUENTIAL.
 
-----------
+---
+
+# CRITICAL RULE — GROUP WORKERS ARE ORCHESTRATORS ONLY
+
+THIS IS A HARD REQUIREMENT.
+
+Group worker agents are NOT allowed to perform package analysis themselves.
+
+Group worker agents MUST NOT:
+
+* inspect repo internals in depth
+* analyze implementation details
+* compare third-party repos directly
+* evaluate PRs/issues/discussions themselves
+* generate final package reports themselves
+* flatten work into the group worker context
+* batch multiple packages into one analysis pass
+* read entire codebases for assigned packages
+* perform feature-gap analysis directly
+* perform architecture analysis directly
+* perform ecosystem comparison directly
+
+The ONLY responsibility of a group worker agent is orchestration and sequencing.
+
+A group worker agent acts purely as a dispatcher/coordinator.
+
+---
+
+# REQUIRED GROUP WORKER EXECUTION MODEL
+
+For EACH assigned package/app:
+
+The group worker agent MUST:
+
+1. Identify the NEXT package/app in sequence
+2. Spawn EXACTLY ONE dedicated package-analysis subagent
+3. Pass the FULL inherited worker prompt to that subagent
+4. Pass ONLY that SINGLE package/app as the assigned target
+5. Wait for the subagent to COMPLETE fully
+6. Collect/store the resulting output references
+7. Move to the NEXT package/app
+8. Repeat until all assigned packages/apps are complete
+
+The group worker itself MUST NOT perform the analysis work.
+
+The package-analysis subagent performs ALL actual investigation and analysis.
+
+---
+
+# STRICT "ONE PACKAGE = ONE SUBAGENT" RULE
+
+Every individual Sugarcraft package/app MUST receive its OWN dedicated package-analysis subagent.
+
+MANDATORY:
+
+* 1 package/app
+* 1 dedicated subagent
+* 1 isolated analysis context
+* 1 generated report
+
+FORBIDDEN:
+
+* one subagent handling multiple packages
+* one group worker directly analyzing multiple packages
+* merging package analyses into a single context
+* "lightweight" inline analysis by the group worker
+* partial analysis before spawning the subagent
+* skipping subagent creation for "simple" packages
+* directly reading/analyzing all repos from the group worker
+
+Even very small/simple packages MUST receive their OWN dedicated analysis subagent.
+
+---
+
+# REQUIRED GROUP WORKER BEHAVIOR EXAMPLE
+
+CORRECT:
+
+Group Worker 3:
+
+* spawn package-analysis agent for `sugarcraft_terminal-ui`
+* WAIT for completion
+* collect result
+* spawn package-analysis agent for `sugarcraft_renderer`
+* WAIT for completion
+* collect result
+* spawn package-analysis agent for `sugarcraft_cli`
+* WAIT for completion
+
+INCORRECT:
+
+Group Worker 3:
+
+* reads/analyzes all 15 assigned repos itself
+* performs direct comparisons itself
+* generates all reports itself
+* only spawns agents occasionally
+* batches multiple repos into one agent
+* performs "pre-analysis" before spawning agents
+
+The above behavior is STRICTLY FORBIDDEN.
+
+---
+
+# GROUP WORKER MEMORY / CONTEXT CONSTRAINT
+
+The reason for this architecture is to prevent:
+
+* context overload
+* cross-package contamination
+* reduced analysis quality
+* lost details
+* hallucinated comparisons
+* incomplete ecosystem analysis
+* degraded long-context performance
+
+Therefore:
+
+The group worker agent MUST keep minimal active context.
+
+It should maintain ONLY:
+
+* orchestration state
+* queue state
+* completed package list
+* generated output references
+
+ALL deep analysis context MUST exist ONLY inside the dedicated package-analysis subagent.
+
+---
 
 # REQUIRED SEQUENTIAL PROCESSING INSIDE EACH GROUP
 
 A group worker agent MUST:
 
-1.  Take the FIRST package/app in its assigned group
-2.  Spawn ONE dedicated package-analysis subagent
-3.  Wait until that subagent COMPLETES fully
-4.  Collect/store results
-5.  Move to the NEXT package/app
-6.  Spawn the next dedicated package-analysis subagent
-7.  Wait for completion
-8.  Repeat until all assigned packages/apps are finished
+1. Take the FIRST package/app in its assigned group
+2. Spawn ONE dedicated package-analysis subagent
+3. Wait until that subagent COMPLETES fully
+4. Collect/store results
+5. Move to the NEXT package/app
+6. Spawn the next dedicated package-analysis subagent
+7. Wait for completion
+8. Repeat until all assigned packages/apps are finished
 
 DO NOT process multiple packages/apps simultaneously inside a group.
 
 DO NOT spawn multiple package-analysis agents at once inside the same group worker.
 
+DO NOT directly analyze repositories inside the group worker itself.
+
 The execution model is:
 
--   8 parallel group workers globally
--   BUT sequential package processing locally within each group
+* 8 parallel group workers globally
+* BUT sequential package processing locally within each group
+* AND all actual analysis performed ONLY by dedicated package-analysis subagents
 
 Example:
 
 Group Worker 1:
 
--   spawn lib1 agent
--   wait
--   spawn lib2 agent
--   wait
--   spawn lib3 agent
--   wait
+* spawn lib1 agent
+* wait
+* collect result
+* spawn lib2 agent
+* wait
+* collect result
+* spawn lib3 agent
+* wait
+* collect result
 
 Group Worker 2:
 
--   spawn appA agent
--   wait
--   spawn appB agent
--   wait
+* spawn appA agent
+* wait
+* collect result
+* spawn appB agent
+* wait
+* collect result
 
 These groups run concurrently with each other, but each individual group remains synchronous/sequential internally.
 
