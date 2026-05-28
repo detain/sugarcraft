@@ -1,150 +1,80 @@
 ---
 name: path-repo-closure
-description: Walks every consuming lib's composer.json to insert a `{type: path, url: "../<dep>", options: {symlink: true}}` entry plus the matching `require["sugarcraft/<dep>"]: "@dev"` whenever a new transitive sugarcraft/* dependency is added. Mirrors the closure shape in sugar-charts/composer.json. Use when user says 'add dep on <slug>', 'wire up <slug>', 'new transitive dep', or edits a `require["sugarcraft/..."]` line. Do NOT use for non-sugarcraft Packagist deps — those need only a `require` bump, no path-repo.
+description: Propagates a new sugarcraft/<dep> dependency across every consuming composer.json — adds the require entry plus a {type:path, url:"../<dep>", options:{symlink:true}} repository for the FULL transitive closure (mirrors sugar-charts/composer.json), then verifies with tools/check-path-repos.php. Use when the user says 'add dep on <slug>', 'wire up <slug>', 'new transitive dep', or edits a require["sugarcraft/..."] line. Do NOT use for non-sugarcraft Packagist deps (those need only a require bump, no path-repo) or for scaffolding a whole new library (use scaffold-library / add-library-checklist).
 paths:
-  - '**/composer.json'
+  - **/composer.json
+  - tools/check-path-repos.php
 ---
-# path-repo-closure
+# Path-repo closure
 
-Add a `sugarcraft/<dep>` dependency to a SugarCraft lib AND propagate the full transitive closure so every consuming `composer.json` can resolve it via local symlinks.
+When a SugarCraft lib gains a `sugarcraft/<dep>` require, Composer resolves the sibling through a local **path repository** (symlinked from `../<dep>`), not Packagist. Pre-1.0 libs are unpublished, so a missing path-repo makes a fresh `composer install` fall back to a non-existent VCS remote and fail. The path-repo set must cover the **full transitive closure**, not just the direct require.
 
 ## Critical
 
-- **Every transitive `sugarcraft/*` dep needs BOTH a `require` entry AND a `repositories[]` path entry — in EVERY lib that pulls it in (directly OR transitively).** Skipping the closure is the #1 cause of `Your requirements could not be resolved to an installable set of packages` on a fresh clone.
-- **Drop `--strict`** when validating: `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED pre-1.0. Use plain `composer validate`.
-- **Path repos use `../<dep>` (parent-relative), NEVER absolute paths.** Repo lives at `<slug>/` siblings; resolve as `url: "../<dep>"`.
-- **`options.symlink: true`** is mandatory — without it Composer copies sources and changes to `<dep>/src/` won't appear in consumers.
-- Reference closure shape: `sugar-charts/composer.json` (largest transitive set in the repo — copy from there).
-- `minimum-stability: "dev"` MUST already be set on the consuming lib's `composer.json`. If missing, add it before the closure work or `@dev` constraints will not resolve.
-- The root `/composer.json` ALSO needs the same `require` + `repositories[]` pair if the new dep is reachable from the root require graph.
+- A sibling require has TWO halves that must BOTH be present in the consuming `composer.json`:
+  1. `require["sugarcraft/<dep>"]` pinned to a dev constraint (`"@dev"` or `"dev-master"` — both are recognized; existing libs like `sugar-charts` use `"dev-master"`).
+  2. A `repositories[]` entry: `{ "type": "path", "url": "../<dep>", "options": { "symlink": true } }`.
+- The closure is **transitive**. If you add `sugarcraft/sugar-bits` and `sugar-bits` itself requires `sugarcraft/candy-forms`, then the lib you edited ALSO needs path-repos for `candy-forms` (and anything `candy-forms` pulls in). Walk the chain until no new siblings appear.
+- This applies ONLY to `sugarcraft/*` deps. Real Packagist packages (`react/event-loop`, `phpunit/phpunit`, etc.) get a plain `require` bump and NO path-repo.
+- The canonical shape to mirror is `sugar-charts/composer.json` (`require` + `repositories[]`).
+- NEVER run `composer update`/`composer require` to add a sibling — it rewrites the lockfile against Packagist and breaks the symlink setup. Edit `composer.json` by hand, then let `tools/check-path-repos.php --fix` complete the closure.
 
 ## Instructions
 
-### Step 1 — Identify the dep being added and the direct consumer
+1. **Identify the consuming lib and the new dep.** From the user request ("add dep on <slug>" / "wire up <slug>"), determine the lib being edited (`<consumer>/composer.json`) and the new sibling slug `<dep>`. Verify `<dep>` is a real sibling: `ls -d ../<dep>` from the consumer dir, or confirm `<dep>/composer.json` exists at repo root. If `<dep>` is NOT a `sugarcraft/*` sibling, STOP — this skill does not apply; just bump `require`.
 
-From the user request, extract:
-- `DEP` — the new dep slug (kebab-case dir name, e.g. `candy-palette`).
-- `CONSUMER` — the lib whose `composer.json` the user is editing (e.g. `sugar-charts`).
-
-Verify both exist:
-
-```sh
-cd /home/sites/sugarcraft && ls -d <DEP> <CONSUMER>
-```
-
-Verify before proceeding: both directories print, each contains a `composer.json`. If `<DEP>` does not exist yet, stop — scaffold the new lib first (see `AGENTS.md` "Adding a lib" checklist).
-
-### Step 2 — Compute `<DEP>`'s own transitive closure
-
-Read `<DEP>/composer.json` and collect every key under `require` that starts with `"sugarcraft/"`. Recursively expand: for each, read its `composer.json` and union its sugarcraft requires. The final set `CLOSURE = {<DEP>} ∪ recursive sugarcraft requires of <DEP>`.
-
-```sh
-cd /home/sites/sugarcraft && grep -h '"sugarcraft/' <DEP>/composer.json
-```
-
-Verify before proceeding: you have a complete list. Cross-check against `sugar-charts/composer.json` `repositories[]` — if `<DEP>` is one of the libs sugar-charts already pulls in, the closure should be a subset of sugar-charts's repositories list.
-
-### Step 3 — Update `<CONSUMER>/composer.json`
-
-For every slug `S` in `CLOSURE`:
-
-1. Add to `require`:
-
+2. **Add the direct require.** In `<consumer>/composer.json`, add to the `require` block (after `"php": "^8.3"`, alphabetical-ish, matching neighbors):
    ```json
-   "sugarcraft/<S>": "@dev"
+   "sugarcraft/<dep>": "dev-master"
    ```
+   Match the constraint form already used by sibling requires in that file (most use `"dev-master"`). Verify the `require` block still parses as valid JSON before proceeding.
 
-   Keep entries alphabetized within the `require` block to match `sugar-charts` style.
-
-2. Add to `repositories` (which is a JSON array, not an object):
-
+3. **Add the direct path-repo.** In the same file's `repositories[]` array, append:
    ```json
-   {
-     "type": "path",
-     "url": "../<S>",
-     "options": {
-       "symlink": true
-     }
-   }
+   { "type": "path", "url": "../<dep>", "options": { "symlink": true } }
    ```
+   If `repositories` does not exist yet, create it as a top-level array. Verify the array is well-formed JSON.
 
-   Append to the existing array; skip if an entry with the same `url` is already present.
+4. **Resolve the transitive closure (do not hand-walk if avoidable).** Run the checker in fix mode from the repo root — it reads `<dep>/composer.json`, follows each sibling's own `require`, and inserts every missing path-repo into every affected lib:
+   ```sh
+   php tools/check-path-repos.php --fix
+   ```
+   Expected on success: `check-path-repos: all N issues fixed` (or `closure clean` if nothing was missing). This step depends on Steps 2–3 already being saved to disk.
 
-Verify before proceeding:
+5. **Verify closure is clean (read-only re-run).** Run without `--fix`:
+   ```sh
+   php tools/check-path-repos.php
+   ```
+   Must print `check-path-repos: closure clean` and exit 0. If it lists `missing path-repo for X (required transitively via A -> B -> X)`, the `--fix` pass missed something — re-run Step 4, then re-verify. Do not proceed until this is clean.
 
-```sh
-cd /home/sites/sugarcraft/<CONSUMER> && composer validate
-```
+6. **If the dep crosses into a NEW sibling not previously used anywhere, wire the root manifest too.** Add the `require` + `repositories[]` entry to the root `/composer.json` as well (per `.claude/rules/composer-conventions.md`). The checker only covers per-lib manifests, not the root.
 
-Must print `./composer.json is valid` (warnings about `@dev` constraints are EXPECTED — see Critical). If it fails with `does not match the expected JSON schema`, re-check trailing commas and that `repositories` is an array `[...]` not an object `{...}`.
-
-### Step 4 — Propagate the closure to every other lib that requires `<CONSUMER>`
-
-Find reverse dependents:
-
-```sh
-cd /home/sites/sugarcraft && grep -l '"sugarcraft/<CONSUMER>"' */composer.json
-```
-
-For each match `M/composer.json` (excluding `<CONSUMER>` itself):
-- Repeat Step 3 against `M` using the same `CLOSURE` set, MINUS any entries already present in `M`'s repositories list.
-- Each `M` must transitively be able to resolve every member of `CLOSURE`, so the path-repo block must be a superset of its current state.
-
-Also update the root `/composer.json` if it requires `<CONSUMER>` (it usually does — root pulls in every lib for the dev metapackage).
-
-Verify before proceeding: re-run `composer validate` in every touched lib AND in `/`:
-
-```sh
-cd /home/sites/sugarcraft && for d in <CONSUMER> <M1> <M2> .; do (cd "$d" && composer validate) || exit 1; done
-```
-
-### Step 5 — Refresh the lockfiles and run the test loop
-
-For every touched lib, blow away `vendor/` and `composer.lock` and reinstall so the new symlinks are wired in:
-
-```sh
-cd /home/sites/sugarcraft/<CONSUMER> && rm -rf vendor composer.lock && composer install --quiet && vendor/bin/phpunit
-```
-
-Verify before proceeding: `phpunit` exits 0 in every touched lib. If `Class "SugarCraft\<Sub>\X" not found`, the symlink is not in place — re-check that `repositories[]` contains the right `url` AND that `composer install` (not `composer update`) was run.
-
-### Step 6 — Commit per ship-as-you-go cadence
-
-Stage every touched `composer.json` (NOT `composer.lock` — those are gitignored at the lib level in this monorepo; check the lib's `.gitignore` first). Title commit: `<consumer>: wire transitive <dep> closure` or bundle with the feature commit that introduced the dep.
+7. **Validate the manifest and run tests.** From the consumer dir:
+   ```sh
+   composer validate            # drop --strict: @dev/dev-master always warns, EXPECTED
+   composer install --quiet && vendor/bin/phpunit
+   ```
+   `composer install` must create the `vendor/sugarcraft/<dep>` symlink without hitting the network. A green phpunit run confirms the symlinked source resolves. If install was already done, `composer update sugarcraft/<dep> --no-scripts` refreshes just the symlink.
 
 ## Examples
 
-### Example 1 — Adding `candy-palette` as a direct dep of `sugar-charts`
+**User says:** "wire up a dependency on sugar-dash in sugar-charts"
 
-User says: *"sugar-charts needs candy-palette for its color ramp"*
+**Actions taken:**
+1. Confirm `../sugar-dash/composer.json` exists.
+2. Add `"sugarcraft/sugar-dash": "dev-master"` to `sugar-charts/composer.json` `require`.
+3. Append `{ "type": "path", "url": "../sugar-dash", "options": { "symlink": true } }` to its `repositories[]`.
+4. Read `sugar-dash/composer.json` → it requires `candy-core` + `candy-sprinkles`. Run `php tools/check-path-repos.php --fix` → inserts path-repos for `candy-core` and `candy-sprinkles` into `sugar-charts` (the transitive closure).
+5. `php tools/check-path-repos.php` → `closure clean`.
+6. `cd sugar-charts && composer validate && composer install --quiet && vendor/bin/phpunit` → green.
 
-Actions:
-1. Confirmed `candy-palette/` exists and has its own `composer.json`.
-2. `candy-palette` itself requires `sugarcraft/candy-core` and `sugarcraft/candy-sprinkles` — so `CLOSURE = {candy-palette, candy-core, candy-sprinkles}`.
-3. `sugar-charts/composer.json` already has `candy-core` and `candy-sprinkles` in `require` + `repositories[]`; appended only the `candy-palette` pair.
-4. Reverse-deps of `sugar-charts`: `sugar-dash` and root `/composer.json`. Both already had `candy-core` and `candy-sprinkles`; appended `candy-palette` pair to each.
-5. `composer validate` clean in all three touched libs. `composer install && vendor/bin/phpunit` green.
-
-Result: 3 `composer.json` files touched (`sugar-charts`, `sugar-dash`, `/`), each gaining one `require` line and one `repositories[]` entry.
-
-### Example 2 — Adding `candy-vt` to `candy-vcr` (deep closure)
-
-User says: *"wire up candy-vt for vcr's replay rendering"*
-
-Actions:
-1. `candy-vt` requires `candy-core` and `candy-pty`; `candy-pty` requires `candy-core`. `CLOSURE = {candy-vt, candy-pty, candy-core}`.
-2. `candy-vcr/composer.json` already had `candy-core`; appended `candy-vt` and `candy-pty` pairs.
-3. Reverse-deps of `candy-vcr`: only `/composer.json`. Appended the same two pairs there.
-4. `cd candy-vcr && rm -rf vendor composer.lock && composer install --quiet && vendor/bin/phpunit` → green.
-
-Result: 2 files touched, closure complete, no missing-class errors.
+**Result:** `sugar-charts/composer.json` ends with three path-repos (`../sugar-dash`, `../candy-core`, `../candy-sprinkles`) — exactly the shape that already lives in that file.
 
 ## Common Issues
 
-- **`Your requirements could not be resolved to an installable set of packages` mentioning `sugarcraft/<X>`** → `<X>` is missing from the consuming lib's `repositories[]`. Add the `{type: path, url: "../<X>", options: {symlink: true}}` block. Composer cannot resolve `@dev` without a path repo telling it where the source lives.
-- **`Class "SugarCraft\<Sub>\Foo" not found` at test time despite `composer install` succeeding** → `options.symlink` is missing or `false`. Composer copied a snapshot into `vendor/` instead of symlinking; edits in `<dep>/src/` are invisible. Add `"options": {"symlink": true}` and re-run `rm -rf vendor composer.lock && composer install`.
-- **`./composer.json does not match the expected JSON schema` after editing** → `repositories` was written as an object `{...}` instead of an array `[...]`, OR a trailing comma sneaked in after the last array element. Re-format the block — `repositories` is ALWAYS a JSON array of repo objects in this project.
-- **`Root composer.json requires sugarcraft/<dep> @dev, found sugarcraft/<dep>[dev-master]` BUT INSTALL FAILS** → `minimum-stability` on the consuming lib is still `stable`. Set `"minimum-stability": "dev"` (and optionally `"prefer-stable": true`) at the top level of that lib's `composer.json`.
-- **`composer validate --strict` complains about every `"sugarcraft/*": "@dev"`** → EXPECTED. Drop `--strict`. Pre-1.0 path-repo deps cannot use exact-version constraints because nothing is tagged on Packagist yet. Plain `composer validate` is the project's convention.
-- **`gh pr create` warns about uncommitted changes after the closure edit** → Caliber's pre-commit refresh likely touched a `CALIBER_LEARNINGS.md`. Informational only — the PR still creates. Re-stage and amend if you want a clean tree, or proceed.
-- **`composer install` works on your machine but CI fails** → you forgot to propagate the closure to a reverse-dependent lib OR to root `/composer.json`. Re-run Step 4's `grep -l '"sugarcraft/<CONSUMER>"' */composer.json` and double-check every match plus the root file were updated.
+- **`Could not find package sugarcraft/<dep>` / falls back to https://repo.packagist.org during `composer install`:** the path-repo entry is missing or its `url` is wrong. Confirm `repositories[]` has `"url": "../<dep>"` (relative, `../` prefix, no trailing slash) and `"type": "path"`. Re-run `php tools/check-path-repos.php --fix`.
+- **`missing path-repo for X (required transitively via A -> B -> X)`:** a deeper sibling in the chain has no path-repo in this lib. This is the whole point of the closure — run `php tools/check-path-repos.php --fix`, then re-verify. Never resolve it by deleting the require.
+- **`composer validate` warns `sugarcraft/<dep> is invalid` / `unbound version constraint`:** EXPECTED for `@dev`/`dev-master` pre-1.0. Drop `--strict`; the bare `composer validate` warning is non-fatal and intentional.
+- **Symlink points at a stale copy / tests pick up old source:** delete `vendor/sugarcraft/<dep>` and re-run `composer install`. With `"symlink": true` the vendor entry is a live link to `../<dep>/src`, so edits there reflect immediately — a real directory copy instead of a symlink means the path-repo lost its `options`.
+- **Checker exits 2 `cannot resolve monorepo root`:** you ran it from outside the repo. Run from `/home/sites/sugarcraft` (repo root) or set `SUGARCRAFT_CHECK_PATH_REPOS_ROOT`.
+- **Cycle warnings (e.g. candy-core ⇄ candy-pty):** handled by the checker's visited-set BFS — a self/back edge never needs a path-repo to itself, so this is not an error.

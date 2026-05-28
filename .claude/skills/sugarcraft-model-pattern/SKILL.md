@@ -1,52 +1,34 @@
 ---
 name: sugarcraft-model-pattern
-description: Scaffolds a new SugarCraft TUI class following the immutable + fluent pattern: `final` class, `declare(strict_types=1)`, `readonly` properties, private `mutate()` helper, `with*()` setters, bare accessors, and (for TUI roots) the `Model::init/update/view` contract. Mirrors upstream via `Mirrors charmbracelet/<repo>.<Method>` doc-comments and pairs every public method with a PHPUnit 10 snapshot/behaviour/coercion test. Use when user says 'add a new Model', 'new TUI widget', 'port from charmbracelet/<x>', 'scaffold a SugarCraft class', or creates files under `<slug>/src/`. Do NOT use for editing existing Models (use direct Edit), for non-PHP files, for the lib skeleton itself (use scaffold-library), or for non-SugarCraft repos.
+description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters returning new instances, bare accessors, and (for TUI roots) the candy-core `Model::init/update/view/subscriptions` contract. Mirror `candy-sprinkles/src/Style.php` (value object) or `sugar-bits/src/Stopwatch/Stopwatch.php` (Model). Use when user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing existing classes (use direct Edit), tests-only changes (use write-phpunit-test), the lib skeleton itself (use scaffold-library), or non-SugarCraft repos.
 paths:
-  - '**/src/**/*.php'
-  - '**/tests/**/*.php'
+  - */src/**/*.php
 ---
-# SugarCraft Model / Widget Pattern
+# SugarCraft Model / value-object pattern
 
-Scaffold a new immutable, fluent SugarCraft class that matches the conventions used across every lib in this monorepo. Output must look identical in shape to `candy-sprinkles/src/Style.php`, `candy-core/src/Spinner.php`, and `sugar-bits/src/*`.
+Scaffold a new `final` immutable class under `<slug>/src/` that looks identical to existing SugarCraft code. Two shapes:
+- **Value object** — styled-text / config builders. Canonical: `candy-sprinkles/src/Style.php`.
+- **TUI Model** — implements `SugarCraft\Core\Model` (Elm architecture). Canonical: `sugar-bits/src/Stopwatch/Stopwatch.php`.
 
 ## Critical
 
-- **NEVER omit `declare(strict_types=1);`** — it is the first line after `<?php` in every file in the repo. CI does not enforce it but reviewers reject without it.
-- **NEVER use a `get` prefix** on accessors. The codebase uses bare-named accessors: `$style->foreground()`, not `$style->getForeground()`. Same applies to factory methods: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`.
-- **NEVER make a class non-`final`** unless the upstream Go type is genuinely intended as an extension point (rare — `final` is the default in this repo).
-- **NEVER mutate `$this`**. Every state change goes through a private `mutate()` helper that returns a `clone` with the field replaced. Public `with*()` methods return the new instance.
-- **NEVER return `null` for invalid input.** Throw `\InvalidArgumentException` or `\RuntimeException` per `CONTRIBUTING.md` style guide. Coercion (clamp, no-op) is fine when it mirrors upstream behaviour.
-- **NEVER comment what the code does.** Only document *why* — non-obvious constraints, hidden invariants, upstream issue links. Doc-comments on public methods MUST cite upstream: `Mirrors charmbracelet/<repo>.<Method>`.
-- **NEVER skip writing tests.** PHPUnit 10. Every public method needs ≥1 test before the PR is opened.
-- For TUI roots only (classes that participate in the runtime loop), implement the `init()` / `update(Msg): array{0: Model, 1: ?Cmd}` / `view(): string` triple defined in `candy-core/src/Model.php`. Plain value objects (Style, Theme, Spring) DO NOT implement Model — they are dependencies of Models.
+- `declare(strict_types=1);` is the FIRST statement after `<?php` in every file — no exceptions.
+- Class is `final` unless extension is an explicit part of the contract.
+- ALL state is `private readonly` promoted constructor params. The constructor itself is `private` — instances come from `::new()` or `with*()`, never `new Class(...)` from outside.
+- NEVER mutate `$this`. Every `with*()`/factory returns a NEW instance.
+- Factory naming: `::new()` is the zero-arg/default root. Use bare upstream-mirroring names for variants (`Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`). NEVER introduce `::create()`, `::make()`, or `::default()`.
+- Accessors are bare-named — `elapsed()`, `interval()`, `id()` — NEVER `getElapsed()`.
+- Bad input throws `\InvalidArgumentException` / `\RuntimeException` with a `Lang::t(...)` message — NEVER return `null` for "wasn't valid".
+- Namespace = slug-derived: `candy-shine/` → `SugarCraft\Shine\`; sub-namespaces follow the dir (`sugar-bits/src/Stopwatch/` → `SugarCraft\Bits\Stopwatch`). QUIRK: `candy-core/` → `SugarCraft\Core\`.
+- When porting a Go upstream, every ported method carries a doc-comment line: `Mirrors charmbracelet/<repo>.<Method>`.
 
 ## Instructions
 
-### Step 1 — Locate the target lib and confirm namespace
+### Step 1 — Place the file and set the namespace
 
-The class lives under `<slug>/src/<Class>.php`. Resolve the slug → namespace mapping using the rule from `CLAUDE.md`:
+File: `<slug>/src/<Class>.php` (or `<slug>/src/<Sub>/<Class>.php` for grouped widgets). Derive the namespace from the path, not the slug guess. Verify: `head -6 <slug>/src/<Class>.php` shows `declare(strict_types=1);` then `namespace SugarCraft\<Sub>...;`. Proceed only if the namespace matches an existing file in the same dir.
 
-- `candy-shine/` → `SugarCraft\Shine\` (most libs follow this — drop the `candy-`/`sugar-`/`honey-` prefix, PascalCase the rest).
-- `candy-core/` → `SugarCraft\Core\` (the one quirk — umbrella name).
-- `sugar-bits/` → `SugarCraft\Bits\`.
-
-If user said "port from charmbracelet/bubbles.spinner" → target lib is `candy-core` (spinner already lives there) or a new sibling if the user named one. Ask the user which lib if ambiguous before writing files.
-
-**Verify:** `Grep` for an existing file under `<slug>/src/` and read its `namespace` line. Match it exactly. Proceed only after confirming the namespace string.
-
-### Step 2 — Decide value object vs. Model
-
-- **Value object** (Style, Theme, Spring, KeyMap, Spinner factory): immutable state + `with*()` builders. No `init/update/view`.
-- **Model** (Field, List, Picker, Form, anything that takes input): implements the `init/update/view` triple. Look at `sugar-bits/src/TextInput.php` or `sugar-prompt/src/Confirm.php` for the canonical shape.
-
-Ask the user only if the upstream type is ambiguous. Otherwise mirror upstream: Go types with `Update(msg) (Model, Cmd)` are Models; everything else is a value object.
-
-**Verify:** State the decision in one sentence before writing code ("This is a value object — no Model contract") so the user can correct course before files are written.
-
-### Step 3 — Write the value-object skeleton
-
-Uses the decision from Step 2. The canonical reference is `candy-sprinkles/src/Style.php` — read it before writing. Skeleton:
-
+Skeleton header:
 ```php
 <?php
 
@@ -54,257 +36,132 @@ declare(strict_types=1);
 
 namespace SugarCraft\<Sub>;
 
-/**
- * Mirrors charmbracelet/<repo>.<UpstreamType>.
- */
-final class <Class>
-{
-    public function __construct(
-        public readonly <type> $<field> = <default>,
-        // ... one readonly property per piece of state
-    ) {
-    }
-
-    /** Mirrors charmbracelet/<repo>.<UpstreamType>.<UpstreamMethod>. */
-    public static function <factory>(): self
-    {
-        return new self(/* preset values */);
-    }
-
-    /** Mirrors charmbracelet/<repo>.<UpstreamType>.With<Field>. */
-    public function with<Field>(<type> $<field>): self
-    {
-        return $this->mutate('<field>', $<field>);
-    }
-
-    /** Mirrors charmbracelet/<repo>.<UpstreamType>.<Accessor>. */
-    public function <field>(): <type>
-    {
-        return $this-><field>;
-    }
-
-    private function mutate(string $property, mixed $value): self
-    {
-        $clone = clone $this;
-        $clone->{$property} = $value;
-
-        return $clone;
-    }
-}
+use SugarCraft\<Sub>\Lang;
 ```
 
-Notes:
-- `readonly` properties + `mutate()` requires PHP 8.3+ — confirmed by every lib's `composer.json` `"php": "^8.3"`.
-- Bare accessors only when the property is not already public-readable. Many libs skip the accessor entirely and let callers read `$style->foreground` directly. Mirror what the upstream Go type exposes.
-- Factory methods are `public static` and match the upstream constructor name in lowercase: `New() → ::new()`, `NewWithDefaults() → ::default()`, etc.
+### Step 2 — Decide shape: value object vs Model
 
-**Verify:** `php -l <slug>/src/<Class>.php` passes. Re-read the namespace line and confirm it matches Step 1.
+- If it has `init`/`update`/`view` lifecycle (a runnable TUI component) → **Model** (Step 4).
+- If it is an immutable config/style/data builder → **value object** (Step 3).
 
-### Step 4 — Write the Model skeleton (only if Step 2 said Model)
+### Step 3 — Value object (mirror `candy-sprinkles/src/Style.php`)
 
-Reference: `candy-core/src/Model.php` (the interface), `sugar-bits/src/TextInput.php` (canonical implementation). Skeleton:
-
+Private promoted-readonly constructor + `::new()`:
 ```php
-<?php
+final class <Class>
+{
+    private function __construct(
+        private readonly int $width = 0,
+        private readonly bool $bold = false,
+        private readonly ?Color $fg = null,
+    ) {}
 
-declare(strict_types=1);
+    public static function new(): self
+    {
+        return new self();
+    }
+```
 
-namespace SugarCraft\<Sub>;
+`with*()` setters via the `mutate()` helper. For a plain class, pull in the trait `use SugarCraft\Core\Concerns\Mutable;` which gives `protected function mutate(array $changes): static { return new static(...array_merge(get_object_vars($this), $changes)); }`:
+```php
+    public function withWidth(int $width): self  { return $this->mutate(['width' => $width]); }
+    public function bold(bool $on = true): self   { return $this->mutate(['bold' => $on]); }
+```
+Bare accessors:
+```php
+    public function width(): int { return $this->width; }
+```
+Verify: every `with*()` returns `self`/`static` and references no `$this->prop =` assignment. Grep for `$this->` followed by ` = ` in the file — there must be ZERO matches outside the constructor.
 
+### Step 3b — Nullable fields need a sentinel
+
+`array_merge(get_object_vars(...))` cannot tell "passed null" from "omitted". For a nullable prop that must be settable to `null`, add a paired `bool $XSet = false` constructor param and override `mutate()`/use a `with(...)` helper that honors the sentinel — mirror `candy-sprinkles/src/Style.php` `foreground()` (`$this->with(fg: $c, fgSet: true, propsAdded: ['fg'])`) and `sugar-bits/src/Help/Help.php` `withStyles()` + `$stylesSet`. Verify: setting the field to `null` via the setter actually clears it (covered by the immutability test in Step 6).
+
+### Step 4 — TUI Model (mirror `sugar-bits/src/Stopwatch/Stopwatch.php`)
+
+Implement the four `SugarCraft\Core\Model` methods exactly:
+```php
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
-use SugarCraft\Core\Msg\KeyMsg;
 
-/**
- * Mirrors charmbracelet/<repo>.<UpstreamType>.
- */
 final class <Class> implements Model
 {
-    public function __construct(
-        public readonly string $value = '',
-        // ... readonly state
-    ) {
-    }
+    private function __construct(
+        public readonly float $elapsed,
+        public readonly float $interval,
+        public readonly bool $running,
+    ) {}
 
-    public function init(): ?Cmd
+    public static function new(float $interval = 1.0): self
     {
-        return null; // or a Cmd that fires on mount
+        if ($interval <= 0.0) {
+            throw new \InvalidArgumentException(Lang::t('<class>.interval_positive'));
+        }
+        return new self(0.0, $interval, false);
     }
 
-    /** @return array{0: Model, 1: ?Cmd} */
+    public function init(): ?\Closure { return null; }
+
+    /** @return array{0:Model, 1:?\Closure} */
     public function update(Msg $msg): array
     {
-        if ($msg instanceof KeyMsg) {
-            // dispatch on $msg->key — return [$this->mutate(...), null]
+        if ($msg instanceof TickMsg && $msg->id === $this->id && $this->running) {
+            $next = new self($this->elapsed + $this->interval, $this->interval, true);
+            return [$next, $next->tick()];
         }
-
         return [$this, null];
     }
 
-    public function view(): string
-    {
-        return ''; // raw ANSI bytes — use candy-sprinkles Style to compose
-    }
+    public function view(): string { return /* render */ ''; }
 
-    public function with<Field>(<type> $<field>): self
-    {
-        return $this->mutate('<field>', $<field>);
-    }
-
-    private function mutate(string $property, mixed $value): self
-    {
-        $clone = clone $this;
-        $clone->{$property} = $value;
-
-        return $clone;
-    }
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions { return null; }
 }
 ```
+Rules for Models:
+- `update()` ALWAYS returns the `[Model, ?Cmd]` tuple — `return [$this, null];` for the no-op branch. NEVER return a bare model.
+- Side effects (timers, IO) live in a `Cmd` closure (`Cmd::tick(...)`), NEVER inside `view()`. `view()` is pure.
+- `view()` return type is `string|View` — use plain `string` unless you need per-frame cursor/title control.
+- Async-producing actions (`start()`, `toggle()`) return the `[self, ?\Closure]` tuple too; pure state changes (`stop()`, `reset()`) may return `self`.
+- Verify: grep the file — `update(` signature returns `array`, and no `echo`/`fwrite`/IO appears inside `view()`.
 
-Notes:
-- `update()` returns `[Model, ?Cmd]` — tuple, not an object. Tests rely on the array shape; do not change it.
-- `view()` returns the rendered ANSI string. Compose with `SugarCraft\Sprinkles\Style` rather than hand-rolling escape codes when possible.
-- If the upstream type accepts `tea.Msg` subtypes (`MouseMsg`, `WindowSizeMsg`), handle them with separate `instanceof` branches — see `sugar-bits/src/Viewport.php`.
+### Step 5 — Upstream doc-comments
 
-**Verify:** `php -l` passes AND `composer dump-autoload` resolves the new class. Run `cd <slug> && vendor/bin/phpunit --filter NonExistentTest` — autoload errors surface immediately even with no tests.
+If porting, add `Mirrors charmbracelet/<repo>.<Method>` to the class and each ported method's doc-block. Comment only the WHY (constraints/invariants/upstream-issue links) — never restate what the code does. See the `start()` idempotency note in `Stopwatch.php:63-69`.
 
-### Step 5 — Write the test file
+### Step 6 — Pair every public method with a test
 
-Tests live at `<slug>/tests/<Class>Test.php`, namespace `SugarCraft\<Sub>\Tests\`. Three patterns from `AGENTS.md`:
+Every public method needs ≥1 PHPUnit 10 test in `<slug>/tests/`. Hand off to the `write-phpunit-test` skill, or write directly:
+- **Snapshot** — call `view()`, assert the raw `\x1b[1m`-style SGR byte string. Don't abstract the escape codes.
+- **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`/`TickMsg`, assert the `[Model, ?Cmd]` tuple.
+- **Coercion** — feed negative/oversized/empty/null input, assert clamp / no-op / thrown `\InvalidArgumentException`.
+- **Immutability** — call a `with*()`, assert the original instance is unchanged (`assertNotSame`).
+Verify: `cd <slug> && composer install --quiet && vendor/bin/phpunit` is GREEN before claiming done.
 
-- **Snapshot** (Models with `view()`): call `view()`, assert the literal byte string including `\x1b[…m` SGR codes. Do not abstract — copy/paste the expected bytes. Canonical: `candy-core/tests/RendererTest.php`.
-- **Behaviour** (Models with `update()`): build a `KeyMsg`/`MouseMsg`, call `update($msg)`, destructure `[$model, $cmd] = $result`, assert on the new state and the optional `Cmd`.
-- **Coercion** (value objects): feed edge cases (negative width, oversized index, empty string, null where applicable), assert clamp or no-op matching upstream Go behaviour.
+### Step 7 — i18n any user-facing string
 
-Skeleton:
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace SugarCraft\<Sub>\Tests;
-
-use PHPUnit\Framework\TestCase;
-use SugarCraft\<Sub>\<Class>;
-
-final class <Class>Test extends TestCase
-{
-    public function test_with_<field>_returns_new_instance_with_value_set(): void
-    {
-        $a = new <Class>();
-        $b = $a->with<Field>(<value>);
-
-        self::assertNotSame($a, $b);
-        self::assertSame(<value>, $b-><field>());
-        self::assertSame(<default>, $a-><field>());
-    }
-
-    public function test_view_renders_expected_ansi(): void
-    {
-        $model = (new <Class>())->with<Field>(<value>);
-        self::assertSame("\x1b[1mexpected\x1b[0m", $model->view());
-    }
-}
-```
-
-Stream-write gotcha (from `AGENTS.md`): if a test writes to a stream multiple times, slice deltas with `ftell` / `fseek` / `stream_get_contents`. Never `ftruncate; rewind;` between writes — canonical fix in `candy-core/tests/RendererTest.php`.
-
-**Verify:** `cd <slug> && vendor/bin/phpunit --filter <Class>Test` — every public method on the new class must have ≥1 assertion.
-
-### Step 6 — Confirm composer + namespace wiring
-
-If this is the first class in a brand-new lib, the `scaffold-library` skill should have already written `composer.json` and `phpunit.xml`. For an existing lib:
-
-- Re-run `composer dump-autoload` from inside the lib directory (`cd <slug> && composer dump-autoload`).
-- Run `composer validate` (drop `--strict` — every `"sugarcraft/*": "@dev"` is flagged, expected per `AGENTS.md`).
-- Run `vendor/bin/phpunit` and confirm green.
-
-**Verify:** All three commands exit 0 before announcing completion.
-
-### Step 7 — Update the upstream mapping
-
-If this class corresponds to a new upstream type, add a row to `MATCHUPS.md` per the existing table format (status icon 🟡 if partial, 🟢 if complete pre-1.0). If it's a method on an already-mapped type, no `MATCHUPS.md` change is needed.
-
-**Verify:** `grep -n "<UpstreamType>" MATCHUPS.md` returns at least one row after the edit.
+No raw English in thrown messages or rendered chrome. Use `Lang::t('<class>.<key>', $params)` and add the key to `<slug>/lang/en.php`. Each lib has a thin `Lang::t()` wrapper around `SugarCraft\Core\I18n\T` (canonical: `sugar-wishlist/src/Lang.php`, `candy-pty/src/Lang.php`).
 
 ## Examples
 
-### Example 1 — Value object
+**User:** "Port charmbracelet/bubbles stopwatch into sugar-bits"
 
-User says: "add a Padding value object to candy-sprinkles mirroring charmbracelet/lipgloss.Style padding fields"
+Actions:
+1. Create `sugar-bits/src/Stopwatch/Stopwatch.php`, namespace `SugarCraft\Bits\Stopwatch`, `declare(strict_types=1)` first.
+2. Model shape: private promoted-readonly ctor (`elapsed`, `interval`, `running`), `::new(float $interval = 1.0)` throwing `\InvalidArgumentException(Lang::t('stopwatch.interval_positive'))` on `<= 0`.
+3. `init()` returns `null`; `update()` matches `TickMsg`, returns `[$next, $next->tick()]` else `[$this, null]`; `view()` formats elapsed; `subscriptions()` returns `null`.
+4. `start()`/`toggle()` return `[self, ?\Closure]`; `stop()`/`reset()` return `self`. Bare accessors `elapsed()`, `interval()`, `id()`. `withInterval()` rebuilds via `new self(...)`.
+5. Doc-comment `Mirrors charmbracelet/bubbles.Stopwatch`; add `stopwatch.interval_positive` to `sugar-bits/lang/en.php`.
+6. Write `sugar-bits/tests/StopwatchTest.php` (behaviour: tick advances elapsed; coercion: zero interval throws).
 
-Actions taken:
-1. Confirmed `candy-sprinkles` → `SugarCraft\Sprinkles\` namespace from existing `candy-sprinkles/src/Style.php`.
-2. Decided value object (no `update()` upstream).
-3. Wrote `candy-sprinkles/src/Padding.php`:
-
-```php
-<?php
-
-declare(strict_types=1);
-
-namespace SugarCraft\Sprinkles;
-
-/** Mirrors charmbracelet/lipgloss.Style padding block. */
-final class Padding
-{
-    public function __construct(
-        public readonly int $top = 0,
-        public readonly int $right = 0,
-        public readonly int $bottom = 0,
-        public readonly int $left = 0,
-    ) {
-    }
-
-    public static function uniform(int $n): self
-    {
-        return new self($n, $n, $n, $n);
-    }
-
-    public function withTop(int $n): self    { return $this->mutate('top', max(0, $n)); }
-    public function withRight(int $n): self  { return $this->mutate('right', max(0, $n)); }
-    public function withBottom(int $n): self { return $this->mutate('bottom', max(0, $n)); }
-    public function withLeft(int $n): self   { return $this->mutate('left', max(0, $n)); }
-
-    private function mutate(string $property, mixed $value): self
-    {
-        $clone = clone $this;
-        $clone->{$property} = $value;
-
-        return $clone;
-    }
-}
-```
-
-4. Wrote `candy-sprinkles/tests/PaddingTest.php` with: identity (`uniform(2)->top === 2`), immutability (`withTop` returns new instance), coercion (`withTop(-5)->top === 0` clamped per upstream lipgloss).
-5. `cd candy-sprinkles && composer dump-autoload && vendor/bin/phpunit --filter PaddingTest` → green.
-
-Result: One new source file, one new test file, no `MATCHUPS.md` change needed (Padding is part of the already-mapped `Style` type).
-
-### Example 2 — Model
-
-User says: "port charmbracelet/bubbles spinner.Model into candy-core"
-
-Actions taken:
-1. Confirmed `candy-core` → `SugarCraft\Core\` (the namespace quirk).
-2. Decided Model (upstream has `Update`).
-3. Wrote `candy-core/src/Spinner.php` implementing `SugarCraft\Core\Model`, with `init()` returning a tick `Cmd`, `update(TickMsg)` advancing the frame index, `view()` returning the current frame string.
-4. Added factory methods mirroring upstream: `Spinner::line()`, `Spinner::dot()`, `Spinner::points()`.
-5. Wrote `candy-core/tests/SpinnerTest.php` with snapshot (`view()` returns `"|"` at frame 0 of `line()`), behaviour (`update(new TickMsg())` increments frame), coercion (frame wraps modulo frame count).
-6. `cd candy-core && vendor/bin/phpunit` → green.
-7. Added `Spinner` row to `MATCHUPS.md` with 🟢 since all upstream methods are covered.
-
-Result: Model implements the `init/update/view` triple, factory methods mirror upstream verbatim, tests cover every public method.
+Result: `cd sugar-bits && vendor/bin/phpunit` green; file is byte-for-byte consistent with `Tabs.php`/`Timer.php` in the same lib.
 
 ## Common Issues
 
-- **`Cannot modify readonly property` at runtime**: you wrote `$this->foo = $value;` somewhere instead of routing through `mutate()`. Fix: replace direct assignment with `return $this->mutate('foo', $value);`. The `clone` inside `mutate()` is what makes the new instance writable during the single property assignment.
-- **`Class "SugarCraft\X\Y" not found` from PHPUnit**: composer autoload is stale. Fix: `cd <slug> && composer dump-autoload`. If that fails, `composer.json` has wrong PSR-4 mapping — open it and confirm `"SugarCraft\\<Sub>\\": "src/"` exists.
-- **`Declaration of <Class>::update(Msg $msg) must be compatible with Model::update`**: you changed the return type from `array` to an object, or annotated the array shape differently than the interface. Fix: copy the exact signature from `candy-core/src/Model.php` — `/** @return array{0: Model, 1: ?Cmd} */ public function update(Msg $msg): array`.
-- **Snapshot test fails with visually identical strings**: SGR byte mismatch. Use `var_export(bin2hex($actual))` to diff. Common cause: forgetting the trailing `\x1b[0m` reset, or `ConfigureTheme::ansi()` returning a different palette than expected. Fix: read `candy-sprinkles/src/Style.php` `render()` to see the exact byte order it produces.
-- **`composer validate` reports `"sugarcraft/x": "@dev"` is unstable**: expected per `AGENTS.md`. Drop `--strict` from the command. Path-repo siblings are pre-1.0 and always flagged.
-- **New transitive dep can't resolve**: every consuming lib needs the path-repo entry. Fix: copy the `repositories` array from `sugar-charts/composer.json` into the lib that just gained the new dep, then `composer update`.
-- **`init()` returns `?Cmd` but tests expect `array`**: `init()` returns a single optional `Cmd`; only `update()` returns the `[Model, Cmd]` tuple. Don't conflate the two contracts.
-- **`with*()` returns `self` but caller sees `static` analysis failure**: `self` is correct for `final` classes. If PHPStan/Psalm complains, the class isn't `final` — add the `final` keyword (default per repo conventions).
+- **PHPUnit warning `Cannot instantiate ... constructor is private`**: a test or caller used `new <Class>(...)`. Replace with `<Class>::new()` or the relevant factory. The private constructor is intentional.
+- **`with*()` setter returns the wrong/stale value when set to null**: `array_merge(get_object_vars(...))` dropped the null. Add a `bool $XSet` sentinel param + custom `mutate()`/`with()` (Step 3b), mirroring `Style::foreground()`.
+- **`Error: Call to undefined method mutate()`**: the class lacks the trait. Add `use SugarCraft\Core\Concerns\Mutable;` inside the class body (not just a `use` import at top), or define a private `mutate(array $changes): static`.
+- **`TypeError: update() must return array`**: a branch returned a bare `$model`. Every `update()` path must return the `[Model, ?Cmd]` tuple — use `[$this, null]` for no-ops.
+- **Tick/timer never fires or fires twice**: side effect was put in `view()` (pure) or `start()` wasn't idempotent. Move it into a `Cmd::tick(...)` closure returned from `update()`/`start()`; guard `start()` with `if ($this->running) return [$this, null];` (see `Stopwatch.php:70-77`).
+- **`composer install` shows missing `sugarcraft/*` path-repo**: a new sibling dep was added. Run `php tools/check-path-repos.php --fix` from the repo root to insert the path-repo entry, then re-run `composer install`.
+- **Local `vendor/bin/phpunit` red but CI green**: stale per-lib `vendor`/`composer.lock`. Run `composer update` in that lib before trusting the failure.

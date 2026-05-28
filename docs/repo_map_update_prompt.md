@@ -87,259 +87,231 @@ PR / issue research files:
 
 ---
 
-# REQUIRED EXECUTION MODEL
+# REQUIRED AGENT ORCHESTRATION MODEL (STRICT)
 
-You MUST follow this exact orchestration structure.
+You MUST follow this exact orchestration hierarchy and execution behavior.
 
-## LEVEL 1 — MASTER AGENT
+Failure to follow this hierarchy is considered incorrect execution.
 
-The master agent will:
+----------
 
-1. Read:
+# AGENT HIERARCHY
 
-   * `docs/repo_map.md`
+There are EXACTLY FOUR orchestration layers:
 
-2. Discover all Sugarcraft package/app directories by locating:
+1.  Master Agent
+2.  8 Parallel Group Worker Agents
+3.  Sequential Per-Package Analysis Agents
+4.  Final Aggregation Agent
 
-   * `docs/repo_map/sugarcraft_*.md`
+----------
 
-3. Extract the `<dir>` names.
+# LEVEL 1 — MASTER AGENT
 
-4. Divide all Sugarcraft dirs into:
+The master agent is responsible for orchestration only.
 
-   * EXACTLY 8 balanced groups
+The master agent MUST:
 
-Balance by:
+1.  Read:
+    -   `docs/repo_map.md`
+2.  Discover ALL Sugarcraft package/app mapping files:
+    -   `docs/repo_map/sugarcraft_*.md`
+3.  Extract the package/app names from those files.
+4.  Divide ALL Sugarcraft packages/apps into EXACTLY 8 balanced groups.
 
-* estimated repo complexity
-* size of docs
-* app/lib complexity
-* likely workload
+Balance groups by:
 
-5. Spawn EXACTLY 8 parallel worker agents simultaneously.
+-   estimated complexity
+-   documentation size
+-   likely analysis workload
+-   app/lib size
+-   architectural complexity
 
----
+5.  Spawn EXACTLY 8 GROUP WORKER AGENTS SIMULTANEOUSLY.
 
-# LEVEL 2 — GROUP WORKER AGENTS (8 PARALLEL)
+These 8 group worker agents MUST run in parallel.
+
+Example:
+
+-   Group Worker 1
+-   Group Worker 2
+-   Group Worker 3
+-   Group Worker 4
+-   Group Worker 5
+-   Group Worker 6
+-   Group Worker 7
+-   Group Worker 8
+
+ALL 8 are launched concurrently.
+
+----------
+
+# REQUIRED PROMPT INHERITANCE RULE
+
+The master agent MUST construct a COMPLETE worker prompt.
+
+That worker prompt MUST include:
+
+-   all global instructions
+-   all analysis requirements
+-   all formatting requirements
+-   all output requirements
+-   all comparison requirements
+-   all relevance filtering requirements
+-   all reporting requirements
+-   all source citation requirements
+-   all orchestration requirements relevant to lower-level agents
+
+Every agent spawned by the master agent MUST receive the full inherited worker prompt.
+
+Additionally:
+
+Every group worker agent MUST pass the same inherited instructions forward to every package-analysis subagent it spawns.
+
+This means ALL spawned agents operate with:
+
+-   identical analysis standards
+-   identical formatting standards
+-   identical output expectations
+-   identical evaluation criteria
+
+No spawned agent should receive abbreviated instructions.
+
+----------
+
+# LEVEL 2 — GROUP WORKER AGENTS (8 PARALLEL AGENTS)
 
 Each group worker agent receives:
 
-* a subset of Sugarcraft dirs
+-   a subset of Sugarcraft package/app dirs
 
-The worker processes its assigned Sugarcraft dirs SEQUENTIALLY.
+Example:
 
-For each Sugarcraft dir:
+-   Group 1 gets 12 packages
+-   Group 2 gets 11 packages
+-   etc.
 
-1. Spawn a dedicated analysis subagent
-2. Wait for completion
-3. Continue to next dir
+These 8 group worker agents execute SIMULTANEOUSLY.
 
-Do NOT process multiple Sugarcraft dirs simultaneously inside a group worker.
+However:
 
----
+WITHIN EACH GROUP:
+processing MUST be STRICTLY SEQUENTIAL.
 
-# LEVEL 3 — SUGARCRAFT ANALYSIS SUBAGENT
+----------
 
-For one Sugarcraft dir:
+# REQUIRED SEQUENTIAL PROCESSING INSIDE EACH GROUP
 
-Example target:
+A group worker agent MUST:
 
-* `candy-core`
+1.  Take the FIRST package/app in its assigned group
+2.  Spawn ONE dedicated package-analysis subagent
+3.  Wait until that subagent COMPLETES fully
+4.  Collect/store results
+5.  Move to the NEXT package/app
+6.  Spawn the next dedicated package-analysis subagent
+7.  Wait for completion
+8.  Repeat until all assigned packages/apps are finished
 
-The agent MUST:
+DO NOT process multiple packages/apps simultaneously inside a group.
 
----
+DO NOT spawn multiple package-analysis agents at once inside the same group worker.
 
-## Phase 1 — Understand Internal Repo
+The execution model is:
 
-Read and analyze:
+-   8 parallel group workers globally
+-   BUT sequential package processing locally within each group
 
-1. `docs/repo_map.md`
-2. `docs/repo_map/sugarcraft_<dir>.md`
-3. `<dir>/README.md`
-4. Any additional docs directly relevant to the package/app
+Example:
 
-Determine:
+Group Worker 1:
 
-* purpose
-* architecture
-* APIs
-* modules
-* rendering systems
-* plugin systems
-* extension systems
-* CLI/TUI structure
-* current features
-* current limitations
-* roadmap indicators
-* TODO/FIXME indicators
-* existing integrations
-* testing strategy
-* performance concerns
-* UX patterns
-* current examples/docs quality
+-   spawn lib1 agent
+-   wait
+-   spawn lib2 agent
+-   wait
+-   spawn lib3 agent
+-   wait
 
-Create an internal capability profile.
+Group Worker 2:
 
----
+-   spawn appA agent
+-   wait
+-   spawn appB agent
+-   wait
 
-## Phase 2 — Read All Third-Party Research Docs
+These groups run concurrently with each other, but each individual group remains synchronous/sequential internally.
 
-Read ALL non-Sugarcraft files under:
+----------
 
-* `docs/repo_map/`
+# LEVEL 3 — PACKAGE ANALYSIS SUBAGENTS
 
-Including:
+Each package-analysis subagent handles EXACTLY ONE Sugarcraft package/app.
 
-* repo research docs
-* issue summaries
-* PR analyses
-* benchmark docs
-* architecture notes
-* comparison docs
-* discussions
-* ecosystem notes
+The subagent MUST:
 
-This includes:
+-   perform all required repo analysis
+-   perform all third-party comparison analysis
+-   perform all PR/issue/discussion analysis
+-   generate:
+    -   `docs/repo_map/update_sugarcraft_<dir>.md`
 
-* `pr_*`
-* `issue_*`
-* `discussion_*`
-* ecosystem research files
+The subagent then terminates.
 
-Exclude:
+----------
 
-* `sugarcraft_*`
+# LEVEL 4 — FINAL AGGREGATION AGENT
 
----
+ONLY AFTER:
+ALL 8 group worker agents have fully completed:
 
-## Phase 3 — Relevance Filtering
+The master agent MUST spawn ONE final aggregation agent.
 
-For EACH third-party repo/research source:
+The aggregation agent MUST:
 
-Determine:
+1.  Read ALL:
+    -   `docs/repo_map/update_sugarcraft_*.md`
+2.  Generate:
+    -   `docs/repo_map_update.md`
+3.  Produce:
 
-* Is it relevant to this Sugarcraft package/app?
-* Does it solve similar problems?
-* Does it overlap architecturally?
-* Does it implement superior approaches?
-* Does it expose missing functionality?
-* Does it solve edge cases better?
-* Does it have better developer UX?
-* Does it have superior performance/scaling?
-* Does it have features users repeatedly request?
-* Does it have PRs/issues discussing major improvements?
-* Does it expose better abstractions?
-* Does it include standout examples/docs/cookbooks?
-* Does it contain useful algorithms/patterns/components?
+-   global findings
+-   repeated architectural gaps
+-   repeated feature gaps
+-   shared opportunities
+-   ecosystem-wide priorities
+-   organization-wide recommendations
+-   cross-project consolidation opportunities
 
-Ignore unrelated repos.
+----------
 
----
+# STRICT CONCURRENCY RULES
 
-## Phase 4 — Deep Comparative Analysis
+MANDATORY EXECUTION MODEL:
 
-For ALL relevant sources:
+-   1 master agent
+-   8 parallel group worker agents
+-   sequential package processing INSIDE each group
+-   1 dedicated analysis subagent per package/app
+-   1 final aggregation agent after everything completes
 
-Identify ALL opportunities, including:
+FORBIDDEN:
 
-### Feature Gaps
+-   flattening the hierarchy
+-   processing all packages in one agent
+-   spawning unlimited parallel package-analysis agents
+-   skipping the aggregation phase
+-   using abbreviated prompts for child agents
+-   processing packages concurrently within a single group
 
-* features they have but we lack
+The concurrency structure is intentionally designed to:
 
-### Architecture Improvements
-
-* cleaner abstractions
-* better layering
-* modularization
-* plugin systems
-* composition systems
-
-### Performance Improvements
-
-* faster algorithms
-* caching
-* batching
-* rendering optimizations
-* virtualization
-* memory reduction
-* async handling
-* concurrency
-
-### UX/TUI Improvements
-
-* keyboard navigation
-* layout systems
-* mouse support
-* accessibility
-* interaction patterns
-* discoverability
-
-### API Improvements
-
-* cleaner APIs
-* better ergonomics
-* composability
-* stronger typing
-* extensibility
-
-### DevEx Improvements
-
-* tooling
-* debugging
-* observability
-* profiling
-* test harnesses
-* fixtures
-* mocks
-* examples
-* starter templates
-
-### Documentation Improvements
-
-* tutorials
-* cookbooks
-* examples
-* migration guides
-* architecture docs
-* screenshots
-* demos
-
-### Ecosystem Improvements
-
-* integrations
-* plugin ecosystems
-* adapters
-* MCP support
-* AI integrations
-* editor integrations
-
-### Stability / Reliability
-
-* error handling
-* crash recovery
-* state consistency
-* lifecycle handling
-* cleanup systems
-
-### Community Demand Signals
-
-From:
-
-* issues
-* PRs
-* discussions
-* roadmap docs
-
-Identify:
-
-* commonly requested features
-* pain points
-* scalability issues
-* usability complaints
-* recurring implementation strategies
-
----
+-   maximize parallelism safely
+-   reduce context overload
+-   maintain deterministic execution order
+-   improve output consistency
+-   reduce agent context degradation
+-   improve orchestration reliability
 
 # REQUIRED OUTPUT FILE
 

@@ -1,62 +1,38 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 40+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (PHP 8.4+ for Windows FFI features), PHPUnit 10, ReactPHP. Windows 10 1809+ required for TTY raw mode support.
+PHP monorepo of 46 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/` wired via path repositories.
 
 ## Source-of-truth files
 
-- `MATCHUPS.md` — upstream → SugarCraft port mapping (status icons 🔴🟡🟢🚀)
-- `PROJECT_NAMES.md` — naming-decision history + prefix cheat sheet
-- `LOCALES.md` — i18n locale codes + recommended set
+- `MATCHUPS.md` — upstream → SugarCraft port mapping (🔴🟡🟢🚀)
+- `PROJECT_NAMES.md` — naming rulebook + prefix cheat sheet
+- `LOCALES.md` — i18n locale codes
 - `CALIBER_LEARNINGS.md` (root + per-lib) — accumulated patterns/gotchas
-- `docs/index.html` — public website homepage tile grid
-- `media/` — shared icons, profile.png, social-preview.png used by the homepage + social share metadata
-- `scripts/` — Dockerfile (CI image) + bootstrap-org-repos.sh (org provisioning)
-- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`
+- `docs/index.html` · `docs/lib/<slug>.html` — public site tiles
+- `scripts/affected-libs.php` — dynamic CI matrix · `tools/check-path-repos.php` — closure checker
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `codecov.yml`, `.php-cs-fixer.dist.php`
 
 ## Naming
 
-Pick prefix from `PROJECT_NAMES.md` cheat sheet:
-- `Candy-` foundation/system/framework (`candy-core`, `candy-shell`, `candy-shine`)
-- `Sugar-` components/data/forms/apps (`sugar-bits`, `sugar-prompt`, `sugar-charts`)
-- `Honey-` math/physics/motion (`honey-bounce`, `honey-flap`)
+`Candy-` foundation/system, `Sugar-` components/data/apps, `Honey-` math/physics. Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`). Foundation `candy-forms` is the form-primitives base that `sugar-bits` + `candy-shell` depend on.
 
-Slug → kebab-case dir → composer pkg → namespace: `CandyShine` → `candy-shine` dir → `sugarcraft/candy-shine` → `SugarCraft\Shine`. (`SugarCraft\Core` is the one quirk — runtime shares umbrella name.)
+## Lib skeleton & composer.json
 
-## Lib skeleton
+Reference `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `candy-pty/src/Lang.php` (i18n wrapper). composer.json: PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`, `prefer-stable: true`. Metadata block (after `license`): `keywords` (include `"sugarcraft"` + upstream Go name), `homepage`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. Sibling deps need `require` entry AND a `{type: path, url: "../<dep>", options:{symlink:true}}` repo for the FULL transitive closure.
 
-Reference the existing leaf lib `sugar-bits/` for the canonical layout. Each lib carries:
-
-- `composer.json` — package metadata
-- `README.md` — composer require + quickstart
-- `CALIBER_LEARNINGS.md` — accumulated patterns
-- `src/` — PSR-4 source
-
-### `composer.json`
-
-PHP `^8.3`, PHPUnit `^10.5`, `minimum-stability: dev`. Metadata block (after `license`, before `require`): `keywords` (lowercase kebab, include `"sugarcraft"` + upstream Go name like `"bubbletea"`), `homepage: "https://github.com/sugarcraft/<slug>"`, single author `Joe Huss <detain@interserver.net>` role `Maintainer`, `support.{issues,source,docs}`. PSR-4 `"<NS>\\<Sub>\\": "src/"` plus matching test namespace. Sibling deps: `"sugarcraft/<dep>": "@dev"` AND path-repo `{type: path, url: "../<dep>", options: {symlink: true}}` for the FULL transitive closure — copy from `sugar-charts/composer.json`.
-
-### PHPUnit config
-
-Each lib carries its own PHPUnit XML config. `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`. Source `<include><directory>src</directory></include>`. See `candy-core/phpunit.xml`.
+PHPUnit XML: `bootstrap="vendor/autoload.php"`, `colors="true"`, `failOnWarning="true"`, `cacheDirectory=".phpunit.cache"`, source `<include><directory>src</directory></include>`.
 
 ## Code conventions
 
-- `declare(strict_types=1);` top of every file. PSR-12 + PSR-4.
-- Public classes `final` unless extension is part of contract.
-- **Immutable + fluent**: every `with*()` returns new instance via private `mutate()` helper. Public `readonly` properties for state.
-- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`.
-- **Factory naming**: `::new()` is the zero-arg/default root instance. Bare-named factories for variants — `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`, `Spring::fps(60)`. Do NOT introduce `::create()`, `::make()`, or `::default()` — those are the drift to avoid.
-- Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
-- Don't comment what code does — only why (constraints, invariants, links to upstream issues).
+- `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
+- **Immutable + fluent**: every `with*()` returns a new instance via private `mutate()` (canonical `candy-sprinkles/src/Style.php`; trait `candy-core/src/Concerns/Mutable.php`). Nullable fields use a paired `bool $XSet` sentinel.
+- Bare accessors (no `get`). Factories mirror upstream — `::new()` default, `Theme::ansi()`, `Spinner::line()`; never `::create()`/`::make()`/`::default()`.
+- Doc-comment cites `Mirrors charmbracelet/<repo>.<Method>`. Comment WHY not WHAT.
+- i18n: `Lang::t($key,$params)` over `SugarCraft\Core\I18n\T`; lookup exact → base → `en` → raw.
 
 ## Tests
 
-PHPUnit 10. Every public method needs ≥1 test. Patterns (see `sugar-bits/tests/`, `candy-core/tests/`):
-- **Snapshot** — `view()`, assert raw `\x1b[1m`-style SGR bytes. Don't abstract.
-- **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]` tuple.
-- **Coercion** — feed edge cases (negative/oversized index, empty, null), assert clamp/no-op matching upstream.
-
-Stream-write gotcha: don't `ftruncate; rewind;` between writes — slice deltas with `ftell`/`fseek`/`stream_get_contents` (canonical in `candy-core/tests/RendererTest.php`).
+PHPUnit 10, every public method ≥1 test. Snapshot byte (`view()` → raw SGR), cell-grid (`SugarCraft\Vt\Terminal`), behaviour (`update()` → `[Model,?Cmd]`), coercion (clamp edge cases). Stream-write: slice deltas with `ftell`/`fseek`/`stream_get_contents`, never `ftruncate;rewind;` (canonical `candy-core/tests/RendererTest.php`). FFI tests gate on `requirePtySyscalls()`.
 
 ```sh
 cd candy-core && composer install && vendor/bin/phpunit
@@ -64,53 +40,29 @@ cd candy-core && composer install && vendor/bin/phpunit
 
 ## VHS demos
 
-Each non-trivial demo gets a `.tape` file under the lib's `.vhs/` dir. CI re-renders to `.gif` via `.github/workflows/vhs.yml` (hand-maintained matrix — silently skips libs not listed). Tape uses `Set Theme "TokyoNight"`, dimensions, `Type "php examples/<demo>.php"`, `Enter`, `Sleep 2s`. Rendered GIF: `https://raw.githubusercontent.com/detain/sugarcraft/master/<slug>/.vhs/<demo>.gif`.
-
-## i18n
-
-Lang files under each lib's `lang/` dir per `LOCALES.md`. Lookup: exact locale → base language → `en` → raw key. Each lib has thin `Lang::t($key, $params)` wrapping `SugarCraft\Core\I18n\T` with namespace baked in (see `sugar-wishlist/src/Lang.php`). App-level overrides via `T::overrideNamespace`.
+`.tape` under `<slug>/.vhs/`; `Set Theme "TokyoNight"`, quote ALL values, `Type "php examples/<demo>.php"`. CI re-renders via `.github/workflows/vhs.yml` (hand-maintained `all=(...)` array). Non-visual libs exempt. Don't commit GIFs.
 
 ## Adding a lib — checklist
 
-```
-[ ] <slug>/composer.json + README.md + CALIBER_LEARNINGS.md
-[ ] <slug>/src/<Class>.php
-[ ] composer.json (root)               — repositories + require entry
-[ ] .github/workflows/vhs.yml          — matrix lib: entry  (ci.yml auto-discovers via scripts/affected-libs.php)
-[ ] scripts/affected-libs.php          — only if lib needs Windows/macOS runners; add to WINDOWS_LIBS / MACOS_LIBS
-[ ] MATCHUPS.md                        — new row + status icon
-[ ] PROJECT_NAMES.md                   — naming entry
-[ ] README.md (root)                   — library count, table row, test-loop snippet
-[ ] docs/index.html                    — homepage tile
-[ ] media/ or docs/img/icons/          — 256-square candy-themed PNG
-```
+`<slug>/composer.json`+`phpunit.xml`+`README.md`+`CALIBER_LEARNINGS.md`+`src/<Class>.php` · root `composer.json` (require + repositories) · `MATCHUPS.md` · `PROJECT_NAMES.md` · root `README.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` · `codecov.yml`. `ci.yml` auto-discovers via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` for OS-specific runners.
 
 ## PR workflow
 
-- **Branches**: `ai/<slug>-<short>` (AI-driven), `feat/<slug>-<short>` (humans).
-- **Title**: `<lib>: <summary>` or `<lib>: <feature> (audit #N)`.
-- **Body** ends with `## Test plan` citing test count + suite name.
-- **Bundle 2–4 related items per PR** — one-feature-per-PR is too much churn.
-- **Multi-lib audit work**: split into one PR per lib/phase, sequenced by dependency order. Commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only` → next phase.
-- Author: `Joe Huss <detain@interserver.net>`. Don't skip pre-commit hooks.
+Branches `ai/<slug>-<short>` (AI) / `feat/<slug>-<short>` (human). Title `<lib>: <summary>`. Body ends with `## Test plan` citing test count. Bundle 2-4 items. Ship-as-you-go: commit → push → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Author `Joe Huss <detain@interserver.net>`.
 
 ## Audit-driven PRs
 
-When working through `AUDIT_*.md` files: mark items ✅ inline with one-line summary right where they live (don't move them — readers see history in place). Skip audit items for "credit upstream author" — out of scope pre-1.0.
-
-## Release / split-out
-
-At v1.0: tag monorepo `<slug>-v1.0.0`, `git filter-repo` into `github.com/sugarcraft/<slug>`, publish to Packagist as `sugarcraft/<slug>`, bump `MATCHUPS.md` row to 🚀, replace path-repo in root `composer.json` with Packagist constraint. All commits land in `detain/sugarcraft`; per-lib repos auto-distributed by `sync-sugarcraft.yml`.
+Mark `plans/AUDIT_*.md` items ✅ inline where they live; skip `credit upstream author`/UPGRADE_GUIDE (out of scope pre-1.0); one PR per lib in dependency order.
 
 ## Gotchas
 
-- `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED for path-repos pre-1.0. Drop `--strict`.
-- New transitive `@dev` deps need their path-repo added to every consuming lib's `composer.json` `repositories` array.
-- `.github/workflows/ci.yml` matrices are dynamic — computed by `scripts/affected-libs.php` from filesystem + reverse-dep graph in `composer.json`. Adding a lib needs only `composer.json` + `phpunit.xml`. `.github/workflows/vhs.yml` is still hand-maintained — its `all=(...)` array must be updated or the GIF never re-renders.
-- Run sub-agents ONE AT A TIME, never in parallel — burns extra-usage budget, concurrent writes to shared files like `MATCHUPS.md` collide.
-- Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — secrets don't exist in repo settings yet.
-- When wrapping external CLI tools, pass ALL flags every invocation using `escapeshellarg((string)($field ?? ''))` so `null`/`''` render as `''` rather than dropping the flag.
-- Bash tool's working directory persists across calls — anchor with absolute paths or `cd /home/sites/sugarcraft && ...` to avoid silent empty reads.
+- `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
+- New transitive `@dev` deps need their path-repo in EVERY consuming `repositories[]`.
+- `vhs.yml` `all=(...)` array hand-maintained; `ci.yml` dynamic via `scripts/affected-libs.php`.
+- Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
+- Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide.
+- Pass ALL external-CLI flags every invocation via `escapeshellarg((string)($field ?? ''))`.
+- Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.
 
 <!-- caliber:managed:pre-commit -->
 ## Before Committing
