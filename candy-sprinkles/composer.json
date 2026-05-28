@@ -32,7 +32,8 @@
     },
     "require": {
         "php": "^8.3",
-        "sugarcraft/candy-core": "dev-master"
+        "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-layout": "dev-master"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.5"
@@ -48,7 +49,8 @@
         }
     },
     "repositories": [
-        {"type": "path", "url": "../candy-core", "options": {"symlink": true}}
+        {"type": "path", "url": "../candy-core", "options": {"symlink": true}},
+        {"type": "path", "url": "../candy-layout", "options": {"symlink": true}}
     ],
     "minimum-stability": "dev",
     "prefer-stable": true
