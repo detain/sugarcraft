@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Buffer;
+
+/**
+ * A rectangular sub-region of a Buffer, identified by its top-left
+ * {@see Position} and dimensions.
+ *
+ * @readonly
+ */
+final class Region
+{
+    public function __construct(
+        public readonly Position $origin,
+        public readonly int $width,
+        public readonly int $height,
+    ) {}
+
+    public static function new(Position $origin, int $width, int $height): self
+    {
+        return new self($origin, $width, $height);
+    }
+
+    /** Top-left corner. */
+    public function origin(): Position { return $this->origin; }
+
+    /** Width in cells. */
+    public function width(): int { return $this->width; }
+
+    /** Height in cells. */
+    public function height(): int { return $this->height; }
+
+    /** Rightmost column (inclusive). */
+    public function right(): int
+    {
+        return $this->origin->col + $this->width - 1;
+    }
+
+    /** Bottommost row (inclusive). */
+    public function bottom(): int
+    {
+        return $this->origin->row + $this->height - 1;
+    }
+
+    /**
+     * Whether a cell at ($col, $row) falls within this region.
+     */
+    public function contains(int $col, int $row): bool
+    {
+        return $col >= $this->origin->col
+            && $col <= $this->right()
+            && $row >= $this->origin->row
+            && $row <= $this->bottom();
+    }
+}

@@ -42,6 +42,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-ansi": "@dev",
+        "sugarcraft/candy-buffer": "@dev",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-flip": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
@@ -94,6 +95,13 @@
         {
             "type": "path",
             "url": "candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-buffer",
             "options": {
                 "symlink": true
             }
