@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyTesting</title>
+<meta name="description" content="CandyTesting: Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.">
+<meta property="og:title" content="SugarCraft — CandyTesting">
+<meta property="og:description" content="ProgramSimulator drives a Program with scripted input; captures model/view/cmds. Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals. TapeRecorder emits VHS .tape files.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-testing.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-testing.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-testing.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-testing.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-testing.png" alt="CandyTesting" onerror="this.style.display='none'">
+      <div>
+        <h2>🍬 CandyTesting</h2>
+        <p class="detail-sub">Test harness for TEA programs</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip">testing</span>
+          <span class="tag-chip">tea</span>
+          <span class="tag-chip">foundation-package</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">The test harness SugarCraft pioneers that bubble-tea issue #1654 never shipped: <code>ProgramSimulator</code> for driving TEA programs with scripted input, <code>Assertions</code> for golden-file and cell-grid snapshots, and <code>TapeRecorder</code> for VHS demo capture.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-testing:@dev</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Testing\ProgramSimulator;
+use SugarCraft\Testing\Input\ScriptedInput;
+use SugarCraft\Testing\Snapshot\Assertions;
+use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\KeyType;
+
+$sim = ProgramSimulator::for($program)
+    ->send(new KeyMsg(KeyType::Character, '+'))
+    ->send(new KeyMsg(KeyType::Enter))
+    ->run();
+
+Assertions::assertGoldenAnsi(__DIR__ . '/fixtures/counter.golden', $sim->view);
+echo "Final count: " . $sim->model->count();</code></pre>
+
+    <h3 style="margin-top: 32px;">ProgramSimulator</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>for(Program)</strong><span>Factory: wrap a Program for deterministic testing.</span></div>
+      <div class="feature"><strong>send(Msg)</strong><span>Fluent message enqueue — chain multiple sends.</span></div>
+      <div class="feature"><strong>withFakeCmdRunner()</strong><span>Intercept commands instead of executing them.</span></div>
+      <div class="feature"><strong>run()</strong><span>Drain the queue, return TestResult with model/view/cmds/output.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Assertions</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>assertGoldenAnsi</strong><span>Snapshot test — auto-creates golden on UPDATE_GOLDENS=1.</span></div>
+      <div class="feature"><strong>assertCellGrid</strong><span>Cell-by-cell diff for Buffer-based renderers.</span></div>
+      <div class="feature"><strong>assertAnsiEquals</strong><span>Byte-exact ANSI comparison with readable ESC diff.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">TapeRecorder</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>to(path)</strong><span>Factory: create a tape recorder writing to the given path.</span></div>
+      <div class="feature"><strong>header()</strong><span>Write VHS header (theme, font size, width, height).</span></div>
+      <div class="feature"><strong>type() / enter() / sleep()</strong><span>Record keypresses and delays for demo playback.</span></div>
+      <div class="feature"><strong>save()</strong><span>Write the completed .tape file.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Deterministic TEA testing</strong> — ProgramSimulator drives Programs without real I/O.</li>
+      <li><strong>Snapshot regression testing</strong> — Golden files for ANSI output.</li>
+      <li><strong>Cell-grid assertions</strong> — assertCellGrid for Buffer-based renderers.</li>
+      <li><strong>Demo capture</strong> — TapeRecorder emits VHS-compatible .tape files.</li>
+      <li><strong>Foundation for candy-forms + sugar-prompt</strong> — unblocks step-15 and step-16.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-testing">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-testing/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-testing/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>ProgramSimulator</td><td>for(Program): self</td><td>Factory: wrap a Program</td></tr>
+<tr><td>ProgramSimulator</td><td>send(Msg): self</td><td>Fluent message enqueue</td></tr>
+<tr><td>ProgramSimulator</td><td>withFakeCmdRunner(callable): self</td><td>Intercept commands</td></tr>
+<tr><td>ProgramSimulator</td><td>run(): TestResult</td><td>Drain queue, return result</td></tr>
+<tr><td>TestResult</td><td>model: object</td><td>Final model after all messages</td></tr>
+<tr><td>TestResult</td><td>view: string</td><td>Last view() output</td></tr>
+<tr><td>TestResult</td><td>cmds: list&lt;Closure&gt;</td><td>Captured commands</td></tr>
+<tr><td>TestResult</td><td>output: string</td><td>Raw accumulated ANSI bytes</td></tr>
+<tr><td>Assertions</td><td>assertGoldenAnsi(string, string): void</td><td>Golden file snapshot assertion</td></tr>
+<tr><td>Assertions</td><td>assertCellGrid(array, Buffer): void</td><td>Cell-by-cell buffer comparison</td></tr>
+<tr><td>Assertions</td><td>assertAnsiEquals(string, string): void</td><td>Byte-exact ANSI diff</td></tr>
+<tr><td>GoldenFile</td><td>load(string): ?string</td><td>Load golden file contents</td></tr>
+<tr><td>GoldenFile</td><td>save(string, string): void</td><td>Save golden file</td></tr>
+<tr><td>TapeRecorder</td><td>to(string): self</td><td>Factory: create recorder</td></tr>
+<tr><td>TapeRecorder</td><td>header(...): self</td><td>Write VHS header</td></tr>
+<tr><td>TapeRecorder</td><td>type(string): self</td><td>Record keypress</td></tr>
+<tr><td>TapeRecorder</td><td>enter(): self</td><td>Record Enter key</td></tr>
+<tr><td>TapeRecorder</td><td>sleep(float): self</td><td>Record delay</td></tr>
+<tr><td>TapeRecorder</td><td>save(): void</td><td>Write .tape file</td></tr>
+<tr><td>ScriptedInput</td><td>new(): self</td><td>Factory: empty input builder</td></tr>
+<tr><td>ScriptedInput</td><td>key(string): self</td><td>Append character key</td></tr>
+<tr><td>ScriptedInput</td><td>enter(): self</td><td>Append Enter key</td></tr>
+<tr><td>ScriptedInput</td><td>arrow(string): self</td><td>Append arrow key</td></tr>
+<tr><td>ScriptedInput</td><td>build(): list&lt;Msg&gt;</td><td>Return message sequence</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-testing">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-testing/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
