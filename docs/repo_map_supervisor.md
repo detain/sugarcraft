@@ -77,7 +77,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
 - [x] [Step 05 — Create candy-mouse](repo_map_step_05.md) — branch: `ai/candy-mouse-new`
 - [x] [Step 06 — Create candy-input](repo_map_step_06.md) — branch: `ai/candy-input-new`
-- [ ] [Step 07 — Create candy-fuzzy](repo_map_step_07.md) — branch: `ai/candy-fuzzy-new`
+- [x] [Step 07 — Create candy-fuzzy](repo_map_step_07.md) — branch: `ai/candy-fuzzy-new`
 - [ ] [Step 08 — Create candy-async](repo_map_step_08.md) — branch: `ai/candy-async-new`
 
 ### Phase 2 — Enhance existing foundation packages (5)
