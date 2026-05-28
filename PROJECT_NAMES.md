@@ -99,6 +99,7 @@ single-purpose lib.
 | **SugarCalendar** | sugar + calendar = date picker. literal. |
 | **SugarToast** | toast = notification metaphor IS the function. delightful. |
 | **SugarCrumbs** | crumbs = breadcrumbs nav IS the function. delightful. |
+| **CandyAnsi** | candy + ansi = ECMA-48 state machine. mirrors charmbracelet/x/ansi parser exactly; "ansi" is the established upstream term. foundation layer extracted from candy-vt. |
 | **CandyShell** | candy + shell = CLI. `gum`-style one-shots. |
 | **CandyServe** | candy + serve = `soft-serve` Git server. perfect pun. |
 | **CandyFreeze** | candy + freeze = code → SVG screenshots. literal. |
