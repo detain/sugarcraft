@@ -138,6 +138,9 @@ flag_management:
     - name: candy-serve
       paths: ["candy-serve/src/**"]
       carryforward: true
+    - name: candy-testing
+      paths: ["candy-testing/src/**"]
+      carryforward: true
     - name: sugar-boxer
       paths: ["sugar-boxer/src/**"]
       carryforward: true
@@ -395,6 +398,12 @@ component_management:
         - "candy-serve/src/**"
       flag_regexes:
         - "^candy-serve$"
+    - component_id: candy-testing
+      name: candy-testing
+      paths:
+        - "candy-testing/src/**"
+      flag_regexes:
+        - "^candy-testing$"
     - component_id: sugar-boxer
       name: sugar-boxer
       paths:

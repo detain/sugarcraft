@@ -113,6 +113,7 @@ single-purpose lib.
 | **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits and sugar-prompt. |
 | **CandyBuffer** | candy + buffer = cell-grid value objects. mirrors charmbracelet/vte's Buffer/Cell as the shared foundation for terminal rendering across the ecosystem. |
 | **CandyLayout** | candy + layout = constraint-based layout solver. new investment — no direct upstream; inspired by ratatui's Cassowary constraint system and Badros & Borning 2001. Provides LayoutSolver interface with CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
+| **CandyTesting** | candy + testing = test harness for TEA programs. pioneering — no upstream parallel. ProgramSimulator drives Programs with scripted input; Assertions provides assertGoldenAnsi, assertCellGrid, assertAnsiEquals; TapeRecorder emits VHS .tape files. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = SQLite browser. clear. |
 

@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 47 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 49 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
@@ -11,7 +11,7 @@ Per-lib skeleton: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/READ
 
 Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `tools/check-path-repos.php` · `codecov.yml` · `.php-cs-fixer.dist.php`.
 
-**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-buffer` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
+**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-buffer` · `candy-layout` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-testing` · `candy-pty`.
 
 **Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash`. **Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
 
@@ -40,6 +40,7 @@ PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
 - Slug→namespace: `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
 - i18n: `Lang::t($key,$params)` wraps `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).
+- TEA test harness: `candy-testing` provides `ProgramSimulator`, `ScriptedInput`, `GoldenFile`/`Assertions`, `TapeRecorder` for `Model`/`Cmd` programs.
 
 ## PR workflow
 
@@ -49,7 +50,7 @@ Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr cre
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
 - New transitive `@dev` deps need a path-repo in every consuming `repositories[]` — copy `sugar-charts/composer.json`.
-- `.github/workflows/vhs.yml` `all=(...)` array hand-maintained; non-visual libs (`candy-pty`, FFI, codecs) exempt. `ci.yml` auto-discovers via `scripts/affected-libs.php`.
+- `.github/workflows/vhs.yml` `all=(...)` array hand-maintained; non-visual libs (`candy-pty`, `candy-testing`, FFI, codecs) exempt. `ci.yml` auto-discovers via `scripts/affected-libs.php`.
 - Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
 - Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide.
 - Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.
