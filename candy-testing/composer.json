@@ -1,0 +1,64 @@
+{
+    "name": "sugarcraft/candy-testing",
+    "description": "Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "testing",
+        "tea",
+        "elm-architecture",
+        "bubbletea",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-testing",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-testing/issues",
+        "source": "https://github.com/sugarcraft/candy-testing",
+        "docs": "https://sugarcraft.github.io/lib/candy-testing.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "@dev",
+        "sugarcraft/candy-buffer": "@dev"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Testing\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Testing\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
+}
