@@ -71,7 +71,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 00 — Bootstrap & smoke-check](repo_map_step_00.md) — branch: `ai/plan-bootstrap`
 
 ### Phase 1 — New shared foundation packages (8)
-- [ ] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
+- [x] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
 - [ ] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
 - [ ] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
 - [ ] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
