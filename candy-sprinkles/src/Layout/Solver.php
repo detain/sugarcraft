@@ -4,23 +4,26 @@ declare(strict_types=1);
 
 namespace SugarCraft\Sprinkles\Layout;
 
+use SugarCraft\Layout\Constraint as LayoutConstraint;
+use SugarCraft\Layout\Direction as LayoutDirection;
+use SugarCraft\Layout\LayoutSolver;
+use SugarCraft\Layout\Region;
+
 /**
- * Internal solver: maps a Rect + list of Constraints to a list of Rects.
+ * Facade that delegates constraint solving to a {@see LayoutSolver}.
  *
- * Algorithm (ratatui-inspired, simplified — no cassowary):
- *  1. Compute Percentage and Ratio against total area → absolute sizes.
- *  2. Sum fixed Length + computed Percentage/Ratio as reserved space.
- *  3. Min is a floor; Max is a ceiling (greedy — takes remaining space).
- *     If slack < sum-of-mins, all mins clamped proportionally.
- *  4. Remaining slack distributed across Fill() and Max() constraints
- *     proportionally (Max is greedy here; clamp pass reduces it).
- *  5. If no Fill/Max, slack goes to Min constraints proportionally.
- *  6. Apply Max clamp pass; reclaimed space redistributed to Fill > Min > others.
- *  7. If total reserved > area, truncate proportionally and warn.
+ * Converts {@see Rect} to {@see Region} and
+ * {@see SugarCraft\Sprinkles\Layout\Constraint*} to
+ * {@see SugarCraft\Layout\Constraint*} before delegation, then converts
+ * results back to {@see Rect[]}.
+ *
+ * Mirrors ratatui's layout solver (charmbracelet/bubbletea).
  */
 final class Solver
 {
     /**
+     * Solve constraints against an area in the given direction.
+     *
      * @param Constraint[] $constraints
      * @return Rect[]
      */
@@ -30,262 +33,52 @@ final class Solver
             return [];
         }
 
-        if ($dir === Direction::Horizontal) {
-            return self::solveHorizontal($area, $constraints);
-        }
-        return self::solveVertical($area, $constraints);
+        $solver = SolverFactory::default();
+        $region = new Region($area->x, $area->y, $area->width, $area->height);
+        $layoutConstraints = self::toLayoutConstraints($constraints);
+        $layoutDir = $dir === Direction::Horizontal
+            ? LayoutDirection::Horizontal
+            : LayoutDirection::Vertical;
+
+        $layoutRegions = $solver->solve($region, $layoutDir, $layoutConstraints);
+
+        return self::fromLayoutRegions($layoutRegions);
     }
 
     /**
-     * @param Constraint[] $constraints
-     * @return Rect[]
-     */
-    private static function solveHorizontal(Rect $area, array $constraints): array
-    {
-        $totalWidth = $area->width;
-        $height = $area->height;
-
-        // Step 1: gather constraint sizes and metadata
-        $rawSizes = [];
-        $reservedFixed = 0;
-        $reservedMinSum = 0;
-        $fillWeightSum = 0;
-        $maxWeightSum = 0;
-
-        foreach ($constraints as $c) {
-            if ($c instanceof Length) {
-                $rawSizes[] = $c->n;
-                $reservedFixed += $c->n;
-            } elseif ($c instanceof Percentage) {
-                $size = (int) floor($totalWidth * $c->n / 100);
-                $rawSizes[] = $size;
-                $reservedFixed += $size;
-            } elseif ($c instanceof Ratio) {
-                $size = (int) floor($totalWidth * $c->numerator / $c->denominator);
-                $rawSizes[] = $size;
-                $reservedFixed += $size;
-            } elseif ($c instanceof Min) {
-                $rawSizes[] = $c->n;
-                $reservedMinSum += $c->n;
-            } elseif ($c instanceof Fill) {
-                $rawSizes[] = 0;
-                $fillWeightSum += $c->weight;
-            } elseif ($c instanceof Max) {
-                $rawSizes[] = 0;
-                $maxWeightSum += $c->n;
-            } else {
-                throw new \InvalidArgumentException('Unsupported constraint type');
-            }
-        }
-
-        $totalCount = count($constraints);
-        $totalReserved = $reservedFixed + $reservedMinSum;
-
-        // Step 2: handle overflow — total exceeds area
-        if ($totalReserved > $totalWidth) {
-            // Truncate proportionally
-            $scale = $totalWidth / $totalReserved;
-            foreach ($rawSizes as $i => $size) {
-                $rawSizes[$i] = (int) floor($size * $scale);
-            }
-        } else {
-            // Step 3: distribute slack
-            $slack = $totalWidth - $reservedFixed - $reservedMinSum;
-            if ($slack < 0) {
-                // Not enough room for all mins — distribute shortage proportionally
-                $scale = $totalWidth / $reservedMinSum;
-                foreach ($rawSizes as $i => $size) {
-                    if ($constraints[$i] instanceof Min) {
-                        $rawSizes[$i] = (int) floor($size * $scale);
-                    }
-                }
-            } elseif ($slack > 0) {
-                $totalDistWeight = $fillWeightSum + $maxWeightSum;
-
-                if ($totalDistWeight > 0) {
-                    // Fill and Max consume slack proportionally; Max is greedy here
-                    foreach ($constraints as $i => $c) {
-                        if ($c instanceof Fill) {
-                            $rawSizes[$i] = (int) floor(($c->weight / $totalDistWeight) * $slack);
-                        } elseif ($c instanceof Max) {
-                            $rawSizes[$i] = (int) floor(($c->n / $totalDistWeight) * $slack);
-                        }
-                    }
-                } else {
-                    // No fills or maxes — distribute slack to mins proportionally
-                    foreach ($constraints as $i => $c) {
-                        if ($c instanceof Min) {
-                            $rawSizes[$i] = (int) floor(($c->n / $reservedMinSum) * $slack) + $c->n;
-                        }
-                    }
-                }
-
-                // Rounding error: distribute to first Fill or Max
-                if ($totalDistWeight > 0) {
-                    $usedWidth = 0;
-                    foreach ($rawSizes as $s) {
-                        $usedWidth += $s;
-                    }
-                    $diff = $totalWidth - $usedWidth;
-                    if ($diff !== 0) {
-                        for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
-                            if ($constraints[$i] instanceof Fill) {
-                                $rawSizes[$i] += $diff > 0 ? 1 : -1;
-                                $diff = 0;
-                                break;
-                            }
-                        }
-                        // If no Fill, try Max
-                        if ($diff !== 0) {
-                            for ($i = 0; $i < $totalCount && $diff !== 0; $i++) {
-                                if ($constraints[$i] instanceof Max) {
-                                    $rawSizes[$i] += $diff > 0 ? 1 : -1;
-                                    $diff = 0;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Step 4: apply Max clamp pass — clamp overages, redistribute reclaimed space
-        $rawSizes = self::applyMaxClamp($constraints, $rawSizes);
-
-        // Step 5: build output Rects
-        $x = $area->x;
-        $rects = [];
-        foreach ($rawSizes as $width) {
-            $rects[] = new Rect($x, $area->y, $width, $height);
-            $x += $width;
-        }
-        return $rects;
-    }
-
-    /**
-     * Clamp sizes that exceed their Max constraint, then redistribute reclaimed space.
+     * Convert Sprinkles constraints to Layout constraints.
      *
      * @param Constraint[] $constraints
-     * @param int[] $rawSizes
-     * @return int[]
+     * @return list<LayoutConstraint\Constraint>
      */
-    private static function applyMaxClamp(array $constraints, array $rawSizes): array
+    private static function toLayoutConstraints(array $constraints): array
     {
-        $hasMax = false;
+        $result = [];
         foreach ($constraints as $c) {
-            if ($c instanceof Max) {
-                $hasMax = true;
-                break;
-            }
+            $result[] = match (true) {
+                $c instanceof Length => new LayoutConstraint\Length($c->n),
+                $c instanceof Min => new LayoutConstraint\Min($c->n),
+                $c instanceof Fill => new LayoutConstraint\Fill($c->weight),
+                $c instanceof Percentage => new LayoutConstraint\Percentage($c->n),
+                $c instanceof Ratio => new LayoutConstraint\Ratio($c->numerator, $c->denominator),
+                $c instanceof Max => new LayoutConstraint\Max($c->n),
+                default => throw new \InvalidArgumentException('Unsupported constraint type'),
+            };
         }
-        if (!$hasMax) {
-            return $rawSizes;
-        }
-
-        // First pass: clamp any size exceeding its Max, reclaim the excess
-        $clamped = [];
-        $reclaimed = 0;
-        foreach ($constraints as $i => $c) {
-            if ($c instanceof Max && $rawSizes[$i] > $c->n) {
-                $reclaimed += $rawSizes[$i] - $c->n;
-                $clamped[$i] = $c->n;
-            } else {
-                $clamped[$i] = $rawSizes[$i];
-            }
-        }
-
-        if ($reclaimed === 0) {
-            return $rawSizes;
-        }
-
-        // Second pass: redistribute reclaimed space.
-        // Priority: Min > Fill > Length/Percentage/Ratio (if no Min/Fill).
-        // Min takes reclaimed space first. Fill takes it if no Min.
-        // If neither Min nor Fill, Length/Percentage/Ratio absorb it.
-        $minRecipients = [];
-        $minWeights = [];
-        $hasMin = false;
-
-        foreach ($constraints as $i => $c) {
-            if ($c instanceof Min) {
-                $minRecipients[] = $i;
-                $minWeights[] = $clamped[$i] > 0 ? $clamped[$i] : 1;
-                $hasMin = true;
-            }
-        }
-
-        $recipients = [];
-        $recipientWeights = [];
-
-        if ($hasMin) {
-            // Give reclaimed space to Min constraints
-            $recipients = $minRecipients;
-            $recipientWeights = $minWeights;
-        } else {
-            // Check for Fill
-            $fillRecipients = [];
-            foreach ($constraints as $i => $c) {
-                if ($c instanceof Fill) {
-                    $fillRecipients[] = $i;
-                }
-            }
-
-            if ($fillRecipients !== []) {
-                // Give reclaimed space to Fill constraints
-                foreach ($fillRecipients as $i) {
-                    $c = $constraints[$i];
-                    $recipients[] = $i;
-                    $recipientWeights[] = $c instanceof Fill ? $c->weight : 1;
-                }
-            } else {
-                // No Min, no Fill — give to Length/Percentage/Ratio
-                foreach ($constraints as $i => $c) {
-                    if ($c instanceof Length || $c instanceof Percentage || $c instanceof Ratio) {
-                        $recipients[] = $i;
-                        $recipientWeights[] = $clamped[$i] > 0 ? $clamped[$i] : 1;
-                    }
-                }
-                // If still no recipients, reclaimed space stays unused
-                if ($recipients === []) {
-                    return $clamped;
-                }
-            }
-        }
-
-        $totalWeight = array_sum($recipientWeights);
-        $remainder = $reclaimed;
-        foreach ($recipients as $idx => $i) {
-            $share = (int) floor(($recipientWeights[$idx] / $totalWeight) * $reclaimed);
-            $clamped[$i] += $share;
-            $remainder -= $share;
-        }
-
-        // Distribute rounding remainder to first recipient
-        if ($remainder > 0 && $recipients !== []) {
-            $clamped[$recipients[0]] += $remainder;
-        }
-
-        return $clamped;
+        return $result;
     }
 
     /**
-     * @param Constraint[] $constraints
+     * Convert Layout regions back to Sprinkles rects.
+     *
+     * @param Region[] $regions
      * @return Rect[]
      */
-    private static function solveVertical(Rect $area, array $constraints): array
+    private static function fromLayoutRegions(array $regions): array
     {
-        $totalHeight = $area->height;
-        $width = $area->width;
-
-        // Flip area to use horizontal solver on the "other" dimension
-        $fakeArea = new Rect($area->x, $area->y, $totalHeight, $width);
-        $hRects = self::solveHorizontal($fakeArea, $constraints);
-
-        // Flip x/y and width/height back to original orientation
         $rects = [];
-        foreach ($hRects as $r) {
-            $rects[] = new Rect($area->x + $r->y, $area->y + $r->x, $r->height, $r->width);
+        foreach ($regions as $r) {
+            $rects[] = new Rect($r->x, $r->y, $r->width, $r->height);
         }
         return $rects;
     }
