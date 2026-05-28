@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CandyMouse — SugarCraft</title>
+<meta name="description" content="CandyMouse: Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker.">
+<meta property="og:title" content="CandyMouse — SugarCraft">
+<meta property="og:description" content="Self-contained Mark/Scan/Get mouse hit-testing. No external Manager wiring needed.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-mouse.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-mouse.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-mouse.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-mouse.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-mouse.png" alt="CandyMouse">
+      <div>
+        <h2>🎯 CandyMouse</h2>
+        <p class="detail-sub">Self-contained Mark/Scan/Get mouse hit-testing</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/lrstanley/bubblezone" style="color: inherit;">bubblezone</a></span>
+          <span class="tag-chip">mouse</span>
+          <span class="tag-chip">hit-testing</span>
+          <span class="tag-chip">zone-click-track</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Own your own <code>Scanner</code> instance — no global Manager wiring required. Wrap rendered chunks with invisible Unicode-sentinel markers, scan to discover bounding boxes, then hit-test mouse events. <code>ZoneClickTracker</code> deduplicates Press/Release pairs so each logical click emits once.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-mouse</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\ZoneClickTracker;
+use SugarCraft\Mouse\MouseEvent;
+
+// 1. Wrap interactive content with invisible zone markers.
+$rendered = Mark::zone('btn-ok', '  OK  ')
+              . Mark::zone('btn-cancel', 'Cancel');
+
+// 2. Scan after rendering to populate the zone registry.
+$scanner = Scanner::new()->scan($rendered);
+
+// 3. Reverse-lookup on mouse events.
+$zone = $scanner->hit($mouseX, $mouseY); // ?Zone
+
+// 4. Deduplicate clicks so each press+release pair emits one click.
+$tracker = new ZoneClickTracker();
+$result = $tracker->track(new MouseEvent(5, 1, 0, MouseAction::Release));
+if ($result !== null) {
+    echo "Clicked zone: " . $result->zone->id;
+}</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Mark sentinel wrap</strong><span><code>Mark::zone($id, $content)</code> wraps content in invisible U+E000/U+E001 codepoints safe from ANSI SGR clobbering.</span></div>
+      <div class="feature"><strong>Scanner hit-testing</strong><span><code>Scanner::new()->scan($rendered)</code> parses sentinels; <code>hit(col, row)</code> reverse-lookup by coordinates; <code>get(id)</code> lookup by zone id.</span></div>
+      <div class="feature"><strong>Zone bounding box</strong><span><code>Zone</code> readonly value object with 1-based start/end col/row coordinates matching terminal cell space.</span></div>
+      <div class="feature"><strong>ZoneClickTracker dedup</strong><span><code>ZoneClickTracker</code> state machine per button — suppresses drag spurious presses and mismatched Press+Release on different zones.</span></div>
+      <div class="feature"><strong>No external Manager</strong><span>Scanner is owned by each consumer — no global Manager wiring, no shared state across components.</span></div>
+      <div class="feature"><strong>ANSI-safe sentinels</strong><span>Private-use Unicode codepoints U+E000/U+E001 never collide with CSI or OSC ANSI sequences.</span></div>
+      <div class="feature"><strong>CJK column accounting</strong><span>Scanning uses <code>Width::string()</code> from candy-core so wide East-Asian characters account for 2 cell columns each.</span></div>
+      <div class="feature"><strong>ZoneClickTracker improves on bubblezone issue #10</strong><span>Press+Release dedup per zone per button — bubblezone never shipped this fix.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-mouse">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mouse/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-mouse/tree/main/examples">Runnable examples</a></li>
+      <li>Inspired by <a href="https://github.com/lrstanley/bubblezone">bubblezone</a> (Go upstream)</li>
+      <li><a href="https://github.com/lrstanley/bubblezone/issues/10">bubblezone issue #10</a> — ZoneClickTracker addresses this gap</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Mark</td><td>::zone(id, content)</td><td>Wrap content with invisible sentinel markers</td></tr>
+<tr><td>Scanner</td><td>::new()</td><td>Create empty scanner</td></tr>
+<tr><td>Scanner</td><td>->scan(rendered)</td><td>Parse sentinels, build zone registry</td></tr>
+<tr><td>Scanner</td><td>->get(id)</td><td>Get Zone by id</td></tr>
+<tr><td>Scanner</td><td>->hit(col, row)</td><td>Reverse-lookup Zone at coordinates</td></tr>
+<tr><td>Zone</td><td>$id</td><td>Zone identifier</td></tr>
+<tr><td>Zone</td><td>$startCol / $startRow / $endCol / $endRow</td><td>1-based bounding box</td></tr>
+<tr><td>MouseEvent</td><td>::press(x, y, button)</td><td>Factory for press event</td></tr>
+<tr><td>MouseEvent</td><td>::release(x, y, button)</td><td>Factory for release event</td></tr>
+<tr><td>MouseAction</td><td>Press / Release / Drag / Scroll</td><td>Mouse action enum</td></tr>
+<tr><td>ZoneClickTracker</td><td>->track(MouseEvent)</td><td>Feed event, receive ClickResult or null</td></tr>
+<tr><td>ZoneClickTracker</td><td>->setPressZone(Zone)</td><td>Set zone for pending press (call after track(Press))</td></tr>
+<tr><td>ClickResult</td><td>$zone / $button</td><td>Completed click result</td></tr>
+</table>
+  </div>
+</section>
+
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-mouse/.vhs/buttons.gif" alt="Two clickable buttons">
+                <h3>Two clickable buttons</h3>
+                <span class="demo-caption">Mouse-zone bounding boxes around rendered buttons.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-mouse">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-mouse/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
