@@ -1,0 +1,47 @@
+{
+    "name": "sugarcraft/candy-ansi",
+    "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "ansi",
+        "vt500",
+        "ecma-48",
+        "tui",
+        "terminal",
+        "parser",
+        "charmbracelet"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-ansi",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-ansi/issues",
+        "source": "https://github.com/sugarcraft/candy-ansi",
+        "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Ansi\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Ansi\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
