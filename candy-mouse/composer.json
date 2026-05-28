@@ -1,0 +1,55 @@
+{
+    "name": "sugarcraft/candy-mouse",
+    "description": "Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus ZoneClickTracker for press/release deduplication. No external Manager wiring needed.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "bubblezone",
+        "mouse",
+        "hit-testing",
+        "tui",
+        "terminal"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-mouse",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-mouse/issues",
+        "source": "https://github.com/sugarcraft/candy-mouse",
+        "docs": "https://sugarcraft.github.io/lib/candy-mouse.html"
+    },
+    "require": {
+        "php": "^8.3",
+        "sugarcraft/candy-core": "dev-master"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Mouse\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Mouse\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
