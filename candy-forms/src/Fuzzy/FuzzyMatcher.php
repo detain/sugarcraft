@@ -6,8 +6,9 @@ namespace SugarCraft\Forms\Fuzzy;
 
 /**
  * Fuzzy substring matcher using Smith-Waterman-style local alignment scoring.
- * Scores character matches (higher for consecutive matches), penalizes
- * gaps and mismatches, and returns candidates sorted by score descending.
+ *
+ * @deprecated since 1.x, use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
+ * @see SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher
  */
 final class FuzzyMatcher
 {

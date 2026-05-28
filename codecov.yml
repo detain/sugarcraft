@@ -123,6 +123,9 @@ flag_management:
     - name: candy-forms
       paths: ["candy-forms/src/**"]
       carryforward: true
+    - name: candy-fuzzy
+      paths: ["candy-fuzzy/src/**"]
+      carryforward: true
     - name: honey-flap
       paths: ["honey-flap/src/**"]
       carryforward: true
@@ -374,6 +377,12 @@ component_management:
         - "candy-forms/src/**"
       flag_regexes:
         - "^candy-forms$"
+    - component_id: candy-fuzzy
+      name: candy-fuzzy
+      paths:
+        - "candy-fuzzy/src/**"
+      flag_regexes:
+        - "^candy-fuzzy$"
     - component_id: honey-flap
       name: honey-flap
       paths:
