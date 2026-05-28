@@ -11,7 +11,7 @@ Per-lib skeleton: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/READ
 
 Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `tools/check-path-repos.php` · `codecov.yml` · `.php-cs-fixer.dist.php`.
 
-**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
+**Foundation** (`Candy-`): `candy-core` · `candy-ansi` · `candy-buffer` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
 
 **Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash`. **Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
 

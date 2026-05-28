@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyBuffer</title>
+<meta name="description" content="CandyBuffer: Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.">
+<meta property="og:title" content="SugarCraft — CandyBuffer">
+<meta property="og:description" content="Buffer (2-D cell grid) and Cell value objects — the shared foundation for terminal rendering across the SugarCraft ecosystem.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-buffer.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-buffer.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-buffer.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-buffer.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-buffer.png" alt="CandyBuffer">
+      <div>
+        <h2>🍬 CandyBuffer</h2>
+        <p class="detail-sub">Cell-grid value objects for terminal rendering</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/charmbracelet/vte" style="color: inherit;">charmbracelet/vte</a></span>
+          <span class="tag-chip">buffer</span>
+          <span class="tag-chip">cell-grid</span>
+          <span class="tag-chip">leaf-package</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Immutable Buffer (2-D cell grid) and Cell (rune, style, link, width) value objects forming the shared data model for terminal rendering across the SugarCraft ecosystem. Wide-char (CJK/emoji) handled via width=2 with mandatory continuation cells.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-buffer</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
+
+// Create a 20x3 buffer filled with blank cells.
+$buf = Buffer::new(20, 3);
+
+// Set a cell at (col=5, row=1).
+$buf = $buf->withCellAt(5, 1, Cell::new('H'));
+
+// Blit a 2x2 sub-buffer at origin.
+$sub = Buffer::new(2, 2)->withCellAt(0, 0, Cell::new('A'));
+$buf = $buf->withRegion($sub, Buffer::new(2, 2));
+
+// Read a cell back.
+$cell = $buf->cellAt(5, 1);
+echo $cell->rune(); // 'H'
+
+// Access dimensions.
+echo $buf->width();  // 20
+echo $buf->height(); // 3</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Buffer</strong><span>Immutable 2-D cell grid with fluent with*() mutation. Bounds-checked cellAt() throws OutOfRangeException. Private mutate() pattern for with*() methods.</span></div>
+      <div class="feature"><strong>Cell</strong><span>Readonly value object: rune (string), style (?Style), link (?Hyperlink), width (int). Cell::continuation() for wide-char neighbour cells. No with*() — rebuild via new.</span></div>
+      <div class="feature"><strong>Position</strong><span>2-D coordinate (col, row) with bare accessors. Mirrors charmbracelet/vte Position.</span></div>
+      <div class="feature"><strong>Region</strong><span>Rectangular sub-region defined by Position origin + width/height. contains() helper for hit-testing.</span></div>
+      <div class="feature"><strong>Style (minimal)</strong><span>Stripped-down per-cell style: fg (0xRRGGBB), bg (0xRRGGBB), attrs (bitmask). Rich styling lives in candy-sprinkles/Style.</span></div>
+      <div class="feature"><strong>Hyperlink</strong><span>OSC 8 anchor — url and optional id grouping field.</span></div>
+      <div class="feature"><strong>Wide char handling</strong><span>width=2 cells (CJK, emoji) require a width=0 continuation cell at col+1. Callers are responsible for placing continuation cells correctly.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Shared cell-grid foundation</strong> — all rendering components (sugar-bits, candy-forms, sugar-prompt, sugar-charts, sugar-table) depend on this.</li>
+      <li><strong>Per-cell dirty tracking</strong> — Buffer::diff() (step-26) enables SGR-transition optimisation without re-rendering unchanged cells.</li>
+      <li><strong>Terminal rendering</strong> — the data model that drives the VT state machine output path.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-buffer">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-buffer/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-buffer/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/charmbracelet/vte">charmbracelet/vte</a> (Go upstream)</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">TODO: Buffer::diff()</h3>
+    <p>The Buffer::diff() method is declared but not yet implemented. Step-26 (step-14/15/16/17/18 consumer migration unblocked first) implements the delta-ANSI emitter supporting ECH/REP/ICH/DCH sequences for bandwidth-efficient SSH rendering.</p>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Buffer</td><td>new(int, int)</td><td>Factory: creates width×height grid of blank cells</td></tr>
+<tr><td>Buffer</td><td>cellAt(int, int)</td><td>Bounds-checked cell accessor; throws OutOfRangeException</td></tr>
+<tr><td>Buffer</td><td>withCellAt(int, int, Cell)</td><td>Immutable cell setter; returns new Buffer</td></tr>
+<tr><td>Buffer</td><td>withRegion(Region, Buffer)</td><td>Blit source Buffer into this Buffer's region; returns new Buffer</td></tr>
+<tr><td>Buffer</td><td>width(), height(), region()</td><td>Dimension accessors</td></tr>
+<tr><td>Buffer</td><td>diff(Buffer)</td><td>Stub — returns []; step-26 implements delta-ANSI emitter</td></tr>
+<tr><td>Cell</td><td>new(string, ?Style, ?Hyperlink, int)</td><td>Factory with rune, style, link, width (1 or 2)</td></tr>
+<tr><td>Cell</td><td>rune(), style(), link(), width()</td><td>Property accessors</td></tr>
+<tr><td>Cell</td><td>continuation()</td><td>Factory: empty rune, null style/link, width=0</td></tr>
+<tr><td>Position</td><td>new(int, int)</td><td>Factory: col, row</td></tr>
+<tr><td>Region</td><td>new(Position, int, int)</td><td>Factory: origin, width, height</td></tr>
+<tr><td>Region</td><td>contains(int, int)</td><td>Hit-test a cell coordinate</td></tr>
+<tr><td>Style</td><td>new(?int, ?int, int)</td><td>Factory: fg (0xRRGGBB), bg, attrs bitmask</td></tr>
+<tr><td>Hyperlink</td><td>new(string, string)</td><td>Factory: url, id</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-buffer">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-buffer/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

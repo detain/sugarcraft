@@ -1,0 +1,44 @@
+{
+    "name": "sugarcraft/candy-buffer",
+    "description": "Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "buffer",
+        "cell",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-buffer",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-buffer/issues",
+        "source": "https://github.com/sugarcraft/candy-buffer/tree/master",
+        "docs": "https://sugarcraft.github.io/lib/candy-buffer.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Buffer\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Buffer\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
