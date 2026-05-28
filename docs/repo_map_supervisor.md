@@ -81,7 +81,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 08 — Create candy-async](repo_map_step_08.md) — branch: `ai/candy-async-new`
 
 ### Phase 2 — Enhance existing foundation packages (5)
-- [ ] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
+- [x] [Step 09 — candy-core enhancements](repo_map_step_09.md) — branch: `ai/candy-core-foundations`
 - [ ] [Step 10 — candy-sprinkles uses candy-layout](repo_map_step_10.md) — branch: `ai/candy-sprinkles-layout`
 - [ ] [Step 11 — candy-shine StyleSheet + BlockStack](repo_map_step_11.md) — branch: `ai/candy-shine-blockstack`
 - [ ] [Step 12 — candy-vt delegates to candy-ansi](repo_map_step_12.md) — branch: `ai/candy-vt-uses-ansi`
