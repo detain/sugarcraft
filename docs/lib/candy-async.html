@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyAsync</title>
+<meta name="description" content="CandyAsync: Shared async vocabulary for ReactPHP — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle).">
+<meta property="og:title" content="SugarCraft — CandyAsync">
+<meta property="og:description" content="Shared async vocabulary — CancellationToken, Subscriptions, AsyncOps helpers (withTimeout, retry, debounce, throttle). Foundation for ReactPHP usage across the ecosystem.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-async.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-async.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-async.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-async.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-async.png" alt="CandyAsync">
+      <div>
+        <h2>🍬 CandyAsync</h2>
+        <p class="detail-sub">Shared async vocabulary for ReactPHP</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">pioneering (no upstream)</span>
+          <span class="tag-chip">async</span>
+          <span class="tag-chip">cancellation</span>
+          <span class="tag-chip">reactphp</span>
+          <span class="tag-chip">foundation</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Shared async vocabulary unifying ReactPHP usage across the SugarCraft monorepo. CancellationToken (owner/source pattern), Subscription interface, Subscriptions::compose() for atomic disposal, and AsyncOps static helpers for common async patterns.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-async</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Async\{AsyncOps, CancellationSource};
+
+$source = CancellationSource::new();
+
+// Attach a cancellation callback
+$source->token()->onCancel(fn() => echo "Cancelled!\n");
+
+$source->cancel(); // prints "Cancelled!"
+
+// Timeout wrapper
+$loop = \React\EventLoop\Loop::get();
+$promise = AsyncOps::withTimeout($loop, $somePromise, 5.0);
+
+// Retry with backoff
+$promise = AsyncOps::retry(
+    fn() => $httpClient->request('GET', 'https://example.com'),
+    attempts: 3,
+    baseBackoffSeconds: 0.5,
+);</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>CancellationToken</strong><span>Read-only view of a cancellation state. Consumers can observe isCancelled() and register onCancel() callbacks but cannot trigger cancellation.</span></div>
+      <div class="feature"><strong>CancellationSource</strong><span>Owns the mutable cancellation flag. Create via CancellationSource::new(). Call cancel() to flip the flag and fire all registered callbacks.</span></div>
+      <div class="feature"><strong>Cancellable interface</strong><span>Contract for components that can be cancelled. Implemented by CancellationSource. Callbacks fire exactly once, even on repeated cancel() calls.</span></div>
+      <div class="feature"><strong>Subscription interface</strong><span>Disposal handle returned by subscribe()-style APIs. unsubscribe() disposes the subscription; isActive() reports whether it is still live.</span></div>
+      <div class="feature"><strong>Subscriptions::compose()</strong><span>Combine multiple subscriptions into a single atomic handle. Calling unsubscribe() on the composite disposes all underlying subscriptions.</span></div>
+      <div class="feature"><strong>AsyncOps::withTimeout()</strong><span>Wrap a promise with a timeout. Rejects with TimeoutException if the timeout fires before the promise settles.</span></div>
+      <div class="feature"><strong>AsyncOps::retry()</strong><span>Retry a failed operation up to N times with exponential backoff. Respects CancellationToken — cancelling aborts remaining retries.</span></div>
+      <div class="feature"><strong>AsyncOps::debounce()</strong><span>Wrap a callable so only the last call within the window fires, after silence.</span></div>
+      <div class="feature"><strong>AsyncOps::throttle()</strong><span>Wrap a callable so it fires at most once per interval, ignoring excess calls.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Unified cancellation</strong> — replace ad-hoc cancellation scattered across candy-core, candy-forms, sugar-prompt with a shared pattern.</li>
+      <li><strong>TEA subscriptions lifecycle</strong> — Subscriptions::compose() lets the runtime dispose all subscriptions atomically.</li>
+      <li><strong>Async operation helpers</strong> — withTimeout, retry, debounce, throttle built on top of react/promise and react/event-loop.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-async">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-async/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-async/tree/main/examples">Runnable examples</a></li>
+      <li>Pioneering — no upstream parallel</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>CancellationSource</td><td>new(): self</td><td>Factory: create a new source with its own token</td></tr>
+<tr><td>CancellationSource</td><td>token(): CancellationToken</td><td>Returns the read-only token for this source</td></tr>
+<tr><td>CancellationSource</td><td>cancel(): void</td><td>Request cancellation. Idempotent.</td></tr>
+<tr><td>CancellationSource</td><td>isCancelled(): bool</td><td>Returns true if cancel() has been called</td></tr>
+<tr><td>CancellationToken</td><td>isCancelled(): bool</td><td>Returns true if the source has been cancelled</td></tr>
+<tr><td>CancellationToken</td><td>onCancel(callable): void</td><td>Register a callback; fires immediately if already cancelled</td></tr>
+<tr><td>Subscriptions</td><td>compose(Subscription ...): self</td><td>Combine multiple subscriptions into one atomic handle</td></tr>
+<tr><td>Subscriptions</td><td>unsubscribe(): void</td><td>Dispose all underlying subscriptions</td></tr>
+<tr><td>Subscriptions</td><td>isActive(): bool</td><td>Returns false after unsubscribe()</td></tr>
+<tr><td>AsyncOps</td><td>withTimeout(LoopInterface, PromiseInterface, float): PromiseInterface</td><td>Wrap a promise with a timeout; rejects with TimeoutException</td></tr>
+<tr><td>AsyncOps</td><td>retry(callable, int, float, ?CancellationToken): PromiseInterface</td><td>Retry with exponential backoff; respects cancellation</td></tr>
+<tr><td>AsyncOps</td><td>debounce(callable, float, ?LoopInterface): callable</td><td>Debounce wrapper; only last call fires after window</td></tr>
+<tr><td>AsyncOps</td><td>throttle(callable, float, ?LoopInterface): callable</td><td>Throttle wrapper; fires at most once per interval</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-async">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-async/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
