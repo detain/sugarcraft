@@ -142,4 +142,12 @@ final class ProgramOptions
         public readonly ?\Closure $subscriptions = null,
     ) {
     }
+
+    /**
+     * Start a fluent builder for {@see ProgramOptions}.
+     */
+    public static function builder(): ProgramOptions\ProgramOptionsBuilder
+    {
+        return new ProgramOptions\ProgramOptionsBuilder();
+    }
 }

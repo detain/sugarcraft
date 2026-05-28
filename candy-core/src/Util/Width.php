@@ -24,10 +24,45 @@ final class Width
         }
         $width = 0;
         $clusters = self::graphemes($clean);
-        foreach ($clusters as $g) {
+        $count = count($clusters);
+        $inZwjSequence = false;
+        for ($i = 0; $i < $count; $i++) {
+            $g = $clusters[$i];
+            $cp = self::firstCodepoint($g);
+            if ($cp === 0x200d) {
+                if ($i > 0 && !$inZwjSequence) {
+                    $prevCp = self::firstCodepoint($clusters[$i - 1]);
+                    if (self::isEmoji($prevCp)) {
+                        $width += 2;
+                    }
+                }
+                $inZwjSequence = true;
+                continue;
+            }
+            if ($inZwjSequence && self::isEmoji($cp)) {
+                continue;
+            }
+            $inZwjSequence = false;
+            if ($i + 1 < $count && self::firstCodepoint($clusters[$i + 1]) === 0x200d) {
+                continue;
+            }
             $width += self::graphemeWidth($g);
         }
         return $width;
+    }
+
+    /**
+     * Alias of {@see string()} for ergonomic API.
+     *
+     * Measures the display width of a string where:
+     * - ASCII characters = 1 cell
+     * - CJK characters = 2 cells
+     * - Zero-width and combining characters = 0 cells
+     * - Emoji and ZWJ sequences are measured per-cluster
+     */
+    public static function of(string $s): int
+    {
+        return self::string($s);
     }
 
     /**
@@ -623,5 +658,18 @@ final class Width
             || ($cp >= 0x1f900 && $cp <= 0x1f9ff)
             || ($cp >= 0x20000 && $cp <= 0x2fffd)
             || ($cp >= 0x30000 && $cp <= 0x3fffd);
+    }
+
+    private static function isEmoji(int $cp): bool
+    {
+        if ($cp < 0x1100) {
+            return false;
+        }
+        return ($cp >= 0x1f300 && $cp <= 0x1f64f)
+            || ($cp >= 0x1f680 && $cp <= 0x1f6ff)
+            || ($cp >= 0x1f900 && $cp <= 0x1f9ff)
+            || ($cp >= 0x1fa00 && $cp <= 0x1faff)
+            || ($cp >= 0x2600 && $cp <= 0x26ff)
+            || ($cp >= 0x2700 && $cp <= 0x27bf);
     }
 }

@@ -34,6 +34,11 @@ final class WidthTest extends TestCase
         $this->assertSame(2, Width::string('🎉'));
     }
 
+    public function testOfHandlesZwjFamilyEmoji(): void
+    {
+        $this->assertSame(2, Width::of("👨‍👩‍👧‍👦"));
+    }
+
     public function testZeroWidthJoinerInvisible(): void
     {
         $this->assertSame(0, Width::string("\u{200b}"));
