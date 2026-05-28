@@ -28,6 +28,7 @@ Status legend:
 | [charmbracelet/bubbletea](https://github.com/charmbracelet/bubbletea) | **SugarCraft** | `candy-core/` | `sugarcraft/candy-core` | `SugarCraft\Core` | 🟢 | Elm-architecture TUI runtime |
 | [charmbracelet/lipgloss](https://github.com/charmbracelet/lipgloss) | **CandySprinkles** | `candy-sprinkles/` | `sugarcraft/candy-sprinkles` | `SugarCraft\Sprinkles` | 🟢 | Declarative styling + layout |
 | [charmbracelet/harmonica](https://github.com/charmbracelet/harmonica) | **HoneyBounce** | `honey-bounce/` | `sugarcraft/honey-bounce` | `SugarCraft\Bounce` | 🟢 | Spring physics + Newtonian projectile sim |
+| [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) | **CandyMouse** | `candy-mouse/` | `sugarcraft/candy-mouse` | `SugarCraft\Mouse` | 🟡 | Self-contained Mark/Scan/Get mouse hit-testing + ZoneClickTracker (bubblezone issue #10 fix) |
 | [lrstanley/bubblezone](https://github.com/lrstanley/bubblezone) | **CandyZone** | `candy-zone/` | `sugarcraft/candy-zone` | `SugarCraft\Zone` | 🟢 | Mouse-zone tracker |
 | [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) | **SugarBits** | `sugar-bits/` | `sugarcraft/sugar-bits` | `SugarCraft\Bits` | 🟡 | 14 prebuilt components (TextInput, ItemList, Table, …) |
 | [NimbleMarkets/ntcharts](https://github.com/NimbleMarkets/ntcharts) | **SugarCharts** | `sugar-charts/` | `sugarcraft/sugar-charts` | `SugarCraft\Charts` | 🟡 | Sparkline / Bar / Line / Heatmap / Scatter / TimeSeries / OHLC / picture |

@@ -52,6 +52,7 @@
         "sugarcraft/candy-lister": "dev-master",
         "sugarcraft/candy-log": "dev-master",
         "sugarcraft/candy-metrics": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/candy-mines": "dev-master",
         "sugarcraft/candy-mold": "dev-master",
         "sugarcraft/candy-mosaic": "dev-master",
@@ -166,6 +167,13 @@
         {
             "type": "path",
             "url": "candy-metrics",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "candy-mouse",
             "options": {
                 "symlink": true
             }
