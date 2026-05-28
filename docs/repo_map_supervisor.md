@@ -72,7 +72,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 1 — New shared foundation packages (8)
 - [x] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
-- [ ] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
+- [x] [Step 02 — Create candy-buffer](repo_map_step_02.md) — branch: `ai/candy-buffer-new`
 - [ ] [Step 03 — Create candy-layout](repo_map_step_03.md) — branch: `ai/candy-layout-new`
 - [ ] [Step 04 — Create candy-testing](repo_map_step_04.md) — branch: `ai/candy-testing-new`
 - [ ] [Step 05 — Create candy-mouse](repo_map_step_05.md) — branch: `ai/candy-mouse-new`
