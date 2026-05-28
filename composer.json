@@ -41,6 +41,7 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-ansi": "@dev",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-flip": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
@@ -90,6 +91,13 @@
         "sugarcraft/super-candy": "dev-master"
     },
     "repositories": [
+        {
+            "type": "path",
+            "url": "candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "candy-core",
