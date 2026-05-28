@@ -68,7 +68,7 @@ If the listed subagent_type is unavailable in this environment, fall back to `ge
 Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 0 — Bootstrap
-- [ ] [Step 00 — Bootstrap & smoke-check](repo_map_step_00.md) — branch: `ai/plan-bootstrap`
+- [x] [Step 00 — Bootstrap & smoke-check](repo_map_step_00.md) — branch: `ai/plan-bootstrap`
 
 ### Phase 1 — New shared foundation packages (8)
 - [ ] [Step 01 — Create candy-ansi](repo_map_step_01.md) — branch: `ai/candy-ansi-new`
