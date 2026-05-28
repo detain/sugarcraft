@@ -15,6 +15,37 @@ Entry format:
 - [YYYY-MM-DD HH:MM | step-NN | role] Short title — one-paragraph description, file paths, links to PRs, anything the next agent needs to know.
 ```
 
+## Async Patterns Audit
+
+## [2026-05-28 09:30 | step-08 | coder] ReactPHP Usage Audit — Step 08
+
+Files using ReactPHP (excluding vendor/):
+- `candy-core/src/AsyncCmd.php`: `PromiseInterface` — **Would benefit from candy-async** (simple promise wrapper, could use CancellationToken for timeout)
+- `candy-core/src/Program.php`: `Loop`, `LoopInterface` — **candy-async should NOT interfere** (core runtime, owns the shared loop)
+- `candy-core/src/WorkerPool.php`: `LoopInterface`, `TimerInterface`, `Deferred`, `PromiseInterface` — **Would benefit from candy-async** (could use CancellationToken for worker cancellation)
+- `candy-core/src/ProgramOptions.php`: `LoopInterface` — **candy-async should NOT interfere** (just a config object)
+- `candy-forms/src/Field/Input.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (debounce via Loop::addTimer, could use AsyncOps::debounce)
+- `candy-forms/src/Field/Select.php`: `Loop`, `Deferred` — **Would benefit from candy-async** (same debounce pattern as Input)
+- `candy-mosaic/src/AsyncRenderer.php`: `PromiseInterface` — **Would benefit from candy-async** (just a strategy interface)
+- `candy-mosaic/src/SyncAsyncRenderer.php`: Not read yet — likely PromiseInterface
+- `candy-mosaic/src/AdaptiveImage.php`: Not read yet — likely Loop/Promise
+- `candy-wish/src/Middleware/AsyncMiddleware.php`: `Loop`, `Promise` — **Would benefit from candy-async** (uses sync await with 30s timeout, could use AsyncOps::withTimeout)
+- `sugar-crush/src/Chat.php`: Not read yet
+- `sugar-crush/src/Backend/CommandBackend.php`: Not read yet
+- `sugar-crush/src/Backend/EchoBackend.php`: Not read yet
+- `sugar-crush/src/Backend/StreamingCommandBackend.php`: Not read yet
+- `super-candy/src/AsyncOps.php`: Not read yet — may already have similar helpers
+
+Existing ReactPHP versions pinned:
+- `react/event-loop: ^1.6` (candy-core, candy-pty, candy-wish)
+- `react/promise: ^3.3` (candy-core, candy-mosaic, sugar-crush, super-candy)
+- `react/promise-timer: ^1.9` (candy-wish)
+
+Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async):
+- Replace `Loop::addTimer` debounce with `AsyncOps::debounce()` in Input.php, Select.php
+- Replace manual 30s timeout in AsyncMiddleware.php with `AsyncOps::withTimeout()`
+- WorkerPool.php cancellation via CancellationToken
+
 ## Active Items
 
 - [2026-05-28 08:00 | step-03 | coder] candy-layout: 56 tests, 152 assertions, OK. GreedySolver passes all golden tests (bit-for-bit parity with candy-sprinkles Solver). CassowarySolver is simplified prototype (~66% lines, hand-rolled per researcher findings). Coverage: 78.16% overall (below 95% target). Files created: candy-layout/{composer.json,phpunit.xml,README.md,CALIBER_LEARNINGS.md,src/{LayoutSolver,Region,Direction,Constraint,Constraint/{Length,Min,Max,Fill,Percentage,Ratio,Constraint},GreedySolver,CassowarySolver,Tableau}.php,lang/en.php,tests/{Constraint,GreedySolver,CassowarySolver}Test.php}. path-repo clean (50 libs). Research: hand-roll Cassowary (600-900 LoC for 1D); php-tui/cassowary lacks edit vars; kiwi-php archived.
