@@ -42,6 +42,9 @@ flag_management:
     - name: candy-buffer
       paths: ["candy-buffer/src/**"]
       carryforward: true
+    - name: candy-layout
+      paths: ["candy-layout/src/**"]
+      carryforward: true
     - name: candy-sprinkles
       paths: ["candy-sprinkles/src/**"]
       carryforward: true
@@ -200,6 +203,12 @@ component_management:
         - "candy-buffer/src/**"
       flag_regexes:
         - "^candy-buffer$"
+    - component_id: candy-layout
+      name: candy-layout
+      paths:
+        - "candy-layout/src/**"
+      flag_regexes:
+        - "^candy-layout$"
     - component_id: candy-sprinkles
       name: candy-sprinkles
       paths:

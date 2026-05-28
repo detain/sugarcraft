@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyLayout</title>
+<meta name="description" content="CandyLayout: Constraint-based layout solver — Cassowary simplex + greedy 5-phase fallback for terminal grid layouts.">
+<meta property="og:title" content="SugarCraft — CandyLayout">
+<meta property="og:description" content="Two solvers behind a LayoutSolver interface: CassowarySolver (simplex-based, optimal) and GreedySolver (deterministic 5-phase fallback). Swap without touching call-sites.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-layout.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-layout.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-layout.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-layout.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-layout.png" alt="CandyLayout">
+      <div>
+        <h2>🍬 CandyLayout</h2>
+        <p class="detail-sub">Constraint-based layout solver for terminal grids</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">inspired by <a href="https://github.com/ratatui/ratatui" style="color: inherit;">ratatui/ratatui</a></span>
+          <span class="tag-chip">layout</span>
+          <span class="tag-chip">constraint-solver</span>
+          <span class="tag-chip">foundation-package</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Two solvers behind a <code>LayoutSolver</code> interface: <code>CassowarySolver</code> (simplex-based, optimal, handles stay/edit constraints) and <code>GreedySolver</code> (deterministic 5-phase fallback ported from candy-sprinkles). Swap solvers without touching call-sites. Foundation for candy-sprinkles, sugar-bits, and candy-forms layout.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-layout</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Layout\{Constraint, Direction, GreedySolver, Region};
+
+$solver = GreedySolver::new();
+$region = Region::fromSize(100, 24);
+
+$rects = $solver->solve($region, Direction::Horizontal, [
+    Constraint::length(20),      // exactly 20 cells
+    Constraint::min(10),          // at least 10, takes more if available
+    Constraint::fill(1),         // fills remaining space (weight 1)
+    Constraint::percentage(30),     // 30% of total
+    Constraint::ratio(1, 3),     // 1/3 of remaining after fixed
+    Constraint::max(50),          // ceiling — greedy but clamped
+]);</code></pre>
+
+    <h3 style="margin-top: 32px;">Solvers</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>GreedySolver</strong><span>Deterministic 5-phase fallback. Bit-identical output to the existing candy-sprinkles Solver. No deps, no edit variables. Fast and predictable.</span></div>
+      <div class="feature"><strong>CassowarySolver</strong><span>Full simplex with Big-M method. Handles stay constraints and edit variables. Simplification of Badros & Borning 2001 for 1D integer outputs.</span></div>
+    </div>
+
+    <h3 style="margin-top: 32px;">Constraint types</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Length</strong><span>Fixed cell count — takes exactly n cells.</span></div>
+      <div class="feature"><strong>Min</strong><span>Floor — at least n cells, grows if slack available.</span></div>
+      <div class="feature"><strong>Max</strong><span>Ceiling — greedy, clamped to n cells.</span></div>
+      <div class="feature"><strong>Fill</strong><span>Proportional remainder — weight controls distribution across multiple Fill constraints.</span></div>
+      <div class="feature"><strong>Percentage</strong><span>Fraction of total — n% of the available dimension.</span></div>
+      <div class="feature"><strong>Ratio</strong><span>Fractional proportion — num/denom of remaining space after fixed constraints.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Foundation for candy-sprinkles</strong> — step-10 wires candy-sprinkles' existing Solver to consume candy-layout.</li>
+      <li><strong>Foundation for sugar-bits / candy-forms</strong> — step-14/15 layout extraction.</li>
+      <li><strong>Swap solver without breaking call-sites</strong> — LayoutSolver is the only public contract.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-layout">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-layout/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-layout/tree/main/examples">Runnable examples</a></li>
+      <li>Inspired by <a href="https://github.com/ratatui/ratatui">ratatui/ratatui</a> layout constraint system</li>
+      <li>Based on <a href="https://hci.stanford.edu/~abornoff/papers/cassowary.pdf">Badros & Borning 2001</a> "The Cassowary Linear Arithmetic Constraint Solving Algorithm"</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>LayoutSolver</td><td>solve(Region, Direction, list&lt;Constraint&gt;)</td><td>Solve constraints against a region in the given direction; returns list of sub-regions</td></tr>
+<tr><td>LayoutSolver</td><td>greedy(): self</td><td>Factory: create a GreedySolver</td></tr>
+<tr><td>LayoutSolver</td><td>cassowary(): self</td><td>Factory: create a CassowarySolver</td></tr>
+<tr><td>GreedySolver</td><td>new(): self</td><td>Default factory</td></tr>
+<tr><td>CassowarySolver</td><td>new(): self</td><td>Default factory</td></tr>
+<tr><td>Direction</td><td>Horizontal, Vertical</td><td>Enum: split direction</td></tr>
+<tr><td>Region</td><td>fromSize(int, int)</td><td>Factory: width, height</td></tr>
+<tr><td>Constraint</td><td>length(int)</td><td>Fixed cell count</td></tr>
+<tr><td>Constraint</td><td>min(int)</td><td>Floor — at least n cells</td></tr>
+<tr><td>Constraint</td><td>max(int)</td><td>Ceiling — at most n cells</td></tr>
+<tr><td>Constraint</td><td>fill(int $weight)</td><td>Proportional remainder with weight</td></tr>
+<tr><td>Constraint</td><td>percentage(int 0-100)</td><td>Percentage of total</td></tr>
+<tr><td>Constraint</td><td>ratio(int $num, int $denom)</td><td>Fractional proportion</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-layout">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-layout/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

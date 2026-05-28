@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/candy-layout",
+    "description": "Constraint-based layout solver (Cassowary simplex + greedy fallback)",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "terminal",
+        "layout",
+        "cassowary",
+        "constraint-solver",
+        "ratatui"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-layout",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-layout/issues",
+        "source": "https://github.com/sugarcraft/candy-layout/tree/master",
+        "docs": "https://github.com/sugarcraft/candy-layout/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Layout\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Layout\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
