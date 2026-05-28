@@ -1,6 +1,6 @@
 # SugarCraft
 
-PHP monorepo of 45+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
+PHP monorepo of 46 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+, PHPUnit 10, ReactPHP event loop.
 
 @./AGENTS.md
 @./CONTRIBUTING.md
@@ -9,15 +9,11 @@ PHP monorepo of 45+ TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+
 
 Per-lib skeleton: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/` (PSR-4 `SugarCraft\<Sub>\`) · `<slug>/tests/` · `<slug>/.vhs/`.
 
-Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `UPSTREAM_OPPORTUNITIES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `scripts/bootstrap-org-repos.sh` · `codecov.yml`.
+Cross-cuts: `MATCHUPS.md` · `PROJECT_NAMES.md` · `LOCALES.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `scripts/affected-libs.php` · `tools/check-path-repos.php` · `codecov.yml` · `.php-cs-fixer.dist.php`.
 
-Aux trees: `plans/AUDIT_*.md` (walk top-down, mark `✅`/`⏭️` in place) · `.codenomad/worktreeMap.json` (parallel-worktree ownership) · `.opencode/` (Codex mirror) · `.logs/subtask*.log` · `.sisyphus/`.
+**Foundation** (`Candy-`): `candy-core` · `candy-sprinkles` · `candy-forms` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
 
-**Foundation** (`Candy-`): `candy-core` · `candy-sprinkles` · `candy-shell` · `candy-shine` · `candy-kit` · `candy-freeze` · `candy-wish` · `candy-zone` · `candy-metrics` · `candy-mold` · `candy-tetris` · `candy-log` · `candy-palette` · `candy-lister` · `candy-hermit` · `candy-mines` · `candy-mosaic` · `candy-flip` · `candy-query` · `candy-serve` · `candy-vt` · `candy-vcr` · `candy-pty`.
-
-**Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash`.
-
-**Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
+**Components/apps** (`Sugar-`): `sugar-bits` · `sugar-charts` · `sugar-prompt` · `sugar-glow` · `sugar-spark` · `sugar-skate` · `sugar-stash` · `sugar-table` · `sugar-tick` · `sugar-toast` · `sugar-veil` · `sugar-crumbs` · `sugar-readline` · `sugar-stickers` · `sugar-calendar` · `sugar-boxer` · `sugar-post` · `sugar-wishlist` · `sugar-crush` · `sugar-dash`. **Physics** (`Honey-`): `honey-bounce` · `honey-flap`. **One-off**: `super-candy`.
 
 ## Commands
 
@@ -26,57 +22,38 @@ cd candy-core && composer install && vendor/bin/phpunit
 ```
 
 ```sh
-for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits sugar-charts sugar-prompt candy-shell candy-shine candy-kit candy-freeze; do
+for d in candy-core candy-sprinkles candy-forms honey-bounce candy-zone sugar-bits sugar-charts candy-shell candy-shine; do
   (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```
 
 ```sh
-cd candy-core && composer validate && vendor/bin/phpunit --coverage-clover=coverage.xml
+php tools/check-path-repos.php --fix
+PHP_CS_FIXER_IGNORE_ENV=1 php-cs-fixer fix --diff --allow-risky=yes
 ```
 
 ## Conventions
 
-- `declare(strict_types=1);` at top of every file. PSR-12 + PSR-4.
-- Public classes `final` unless extension is part of contract.
-- **Immutable + fluent** — every `with*()` returns new instance via private `mutate()` helper; public `readonly` properties for state. Canonical: `candy-sprinkles/src/Style.php`.
-- Bare-named accessors (no `get` prefix). Factory methods mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`.
-- **Factory naming**: `::new()` is the zero-arg/default root instance. Bare-named factories for variants — `Theme::ansi()`, `Theme::dracula()`, `Spinner::line()`, `Spring::fps(60)`. Do NOT introduce `::create()`, `::make()`, or `::default()` — those are the drift to avoid.
+- `declare(strict_types=1);` first line. PSR-12 + PSR-4. Public classes `final` unless extension is contract.
+- **Immutable + fluent**: every `with*()` returns a new instance via the `mutate()` helper; public `readonly` state. Canonical: `candy-sprinkles/src/Style.php`; trait in `candy-core/src/Concerns/Mutable.php`.
+- Bare accessors (no `get`). Factories mirror upstream: `Theme::ansi()`, `Spinner::line()`, `Spring::fps(60)`. `::new()` is the default root — never `::create()`/`::make()`/`::default()`.
 - Doc-comment cites upstream: `Mirrors charmbracelet/<repo>.<Method>`.
-- Slug → kebab dir → composer pkg → namespace: `CandyShine` → `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
-
-## Adding a library
-
-Reference shapes: `sugar-bits/` (components), `sugar-charts/composer.json` (path-repo closure), `candy-core/phpunit.xml` (test config), `sugar-wishlist/src/Lang.php` (i18n `Lang::t()` wrapper).
-
-Touched: `<slug>/composer.json` · `<slug>/phpunit.xml` · `<slug>/README.md` · `<slug>/CALIBER_LEARNINGS.md` · `<slug>/src/<Class>.php` · root `composer.json` (`require` + `repositories[]`) · `MATCHUPS.md` · `PROJECT_NAMES.md` · `README.md` · `docs/index.html` · `docs/lib/<slug>.html` · `media/icons/<slug>.png` · `.github/workflows/vhs.yml` matrix · `codecov.yml`. `.github/workflows/ci.yml` auto-picks via `scripts/affected-libs.php` — only edit `WINDOWS_LIBS`/`MACOS_LIBS` pools for OS-specific runners.
+- Slug→namespace: `candy-shine/` → `sugarcraft/candy-shine` → `SugarCraft\Shine\` (quirk: `candy-core` → `SugarCraft\Core\`).
+- i18n: `Lang::t($key,$params)` wraps `SugarCraft\Core\I18n\T` (`candy-pty/src/Lang.php`).
 
 ## PR workflow
 
-Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Bundle 2–4 related items. Branches: `ai/<slug>-<short>` or `feat/<slug>-<short>`. Author: `Joe Huss <detain@interserver.net>`.
+Ship-as-you-go: `git commit` → `git push` → `unset GITHUB_TOKEN && gh pr create` → `gh pr merge <n> --merge --delete-branch` → `git checkout master && git pull --ff-only`. Bundle 2-4 related items. Branches `ai/<slug>-<short>`. Author `Joe Huss <detain@interserver.net>`.
 
 ## Gotchas
 
 - `composer validate --strict` flags every `"sugarcraft/*": "@dev"` — EXPECTED; drop `--strict`.
-- New transitive `@dev` deps need their path-repo added to every consuming lib's `repositories[]` — copy from `sugar-charts/composer.json`.
-- `.github/workflows/vhs.yml` `all=(...)` array hand-maintained. Non-visual libs (`candy-pty`, FFI bindings, codecs) exempt.
-- Keep SVN credentials in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
-- Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide; check `.codenomad/worktreeMap.json`.
-- Pass ALL CLI tool flags every invocation via `escapeshellarg((string)($field ?? ''))`.
+- New transitive `@dev` deps need a path-repo in every consuming `repositories[]` — copy `sugar-charts/composer.json`.
+- `.github/workflows/vhs.yml` `all=(...)` array hand-maintained; non-visual libs (`candy-pty`, FFI, codecs) exempt. `ci.yml` auto-discovers via `scripts/affected-libs.php`.
+- Keep SVN creds in `.github/workflows/tests.yml` HARDCODED — repo secrets don't exist yet.
+- Run sub-agents ONE AT A TIME — concurrent writes to `MATCHUPS.md`/`README.md` collide.
 - Bash CWD does NOT persist across calls — anchor with absolute paths or chain `&&`.
-- After sub-agent failure check `.logs/subtask*.log` + `.sisyphus/` before retrying.
-
-## Session learnings
-
-Root `CALIBER_LEARNINGS.md` + per-lib variants: `candy-core/CALIBER_LEARNINGS.md` · `candy-wish/CALIBER_LEARNINGS.md` · `candy-shell/CALIBER_LEARNINGS.md` · `sugar-bits/CALIBER_LEARNINGS.md` · `candy-zone/CALIBER_LEARNINGS.md`.
-
-## Before committing
-
-Check: `grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || echo "no-hook"`. If hook-active, commit normally. Otherwise: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ AGENTS.md .agents/ .opencode/`. Run `/setup-caliber` if missing.
-
-## Model
-
-Default: `claude-sonnet-4-6` with high effort. Pin via `/model` or `CALIBER_MODEL`.
+- Per-lib `composer.lock`/`vendor/` go stale — `composer update` before trusting a local phpunit failure.
 
 <!-- caliber:managed:pre-commit -->
 ## Before Committing
@@ -91,7 +68,7 @@ grep -q "caliber" .git/hooks/pre-commit 2>/dev/null && echo "hook-active" || ech
 - If **hook-active**: the hook handles sync automatically — just commit normally. Tell the user: "Caliber will sync your agent configs automatically via the pre-commit hook."
 - If **no-hook**: run Caliber manually before committing:
   1. Tell the user: "Caliber: Syncing agent configs with your latest changes..."
-  2. Run: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ .cursor/ .cursorrules 2>/dev/null`
+  2. Run: `caliber refresh && git add CALIBER_LEARNINGS.md CLAUDE.md .claude/ .cursor/ .cursorrules AGENTS.md .agents/ .opencode/ 2>/dev/null`
   3. After it completes, briefly tell the user what Caliber updated. Then proceed with the commit.
 
 **Valid `caliber refresh` options:** `--quiet` (suppress output) and `--dry-run` (preview without writing). Do not pass any other flags — options like `--auto-approve`, `--debug`, or `--force` do not exist and will cause errors.

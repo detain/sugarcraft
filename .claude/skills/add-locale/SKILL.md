@@ -1,143 +1,102 @@
 ---
 name: add-locale
-description: Adds a translation file at <slug>/lang/<code>.php for an existing SugarCraft library by copying en.php and translating values while preserving keys and {placeholder} names. Codes follow LOCALES.md recommended set (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar). Use when user says 'add <language> translation', 'translate <lib> to <code>', 'add ar locale', 'add Polish locale to sugar-bits', 'add Japanese locale for all libs'. Do NOT use for first-time wiring of Lang::t() into a lib without a lang/ dir (use scaffold-library); do NOT edit en.php (the source of truth) — translate FROM it instead.
+description: Adds a translation file at <slug>/lang/<code>.php for an existing SugarCraft library by copying en.php and translating values while preserving keys and {placeholder} names. Codes follow LOCALES.md recommended set (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar). Use when user says 'add <language> translation', 'translate <lib> to <code>', 'add ar locale', 'add Polish locale to sugar-bits', 'add Japanese locale for all libs'. Do NOT edit en.php (the source of truth) — translate FROM it; do NOT use to first-time-wire Lang::t() into a lib that has no lang/ dir (that is scaffold work).
 paths:
-  - '*/lang/*.php'
-  - LOCALES.md
+  - **/lang/*.php
 ---
-# Add locale
+# Add a translation locale
 
-Add a translation file for an already-wired SugarCraft library. The English locale file is the canonical source of truth — translate **from** it, never edit it.
+Create `<slug>/lang/<code>.php` for a SugarCraft library that already has `lang/en.php`. Copy the English keys, translate the **values**, keep keys and `{placeholder}` names byte-identical. The registry (`SugarCraft\Core\I18n\T`) auto-discovers the new file — no code changes needed.
 
 ## Critical
 
-- **Never edit the English locale.** It is the source of truth. All other locale files mirror its keys.
-- **The lib must already have an English locale and a `Lang` facade in `src/`.** If the locale directory does not exist, stop and tell the user to use `scaffold-library` first.
-- **Preserve every key verbatim.** `'config.not_found'` stays `'config.not_found'` — only the right-hand value is translated.
-- **Preserve every `{placeholder}` name verbatim.** `'failed to exec {bin}'` → French `'échec de l\'exécution de {bin}'` — `{bin}` MUST remain literal `{bin}`. Do NOT translate placeholder identifiers, change their case, or reorder them out of the value.
-- **Locale code must be from `LOCALES.md` recommended set** unless the user explicitly asks for an exotic glibc code (then warn them it will fall back to `en` for users not on that exact code). Recommended set: `en`, `fr`, `de`, `es`, `pt`, `pt-br`, `zh-cn`, `zh-tw`, `ja`, `ru`, `it`, `ko`, `pl`, `nl`, `tr`, `cs`, `ar`.
-- **Prefer the bare base-language code.** The lookup chain `exact → base → en → raw` makes a single base-language file serve all regional variants. Only create regional variants (`pt-br`, `zh-cn`, `zh-tw`) when wording genuinely diverges from the base.
-- **Run the lib's PHPUnit suite after adding the file.** Any `LangTest` or coercion test that loads the registry will fail loudly on a syntax error in the new file.
+- **NEVER edit `<slug>/lang/en.php`** — it is the source of truth every key starts from. You only ever READ it and write a sibling `<code>.php`.
+- **Preserve every key verbatim.** A translation file's keys must be a subset of `en.php`'s keys. A typo'd or extra key silently never resolves.
+- **Preserve every `{placeholder}` name verbatim.** `'sort column not found: {column}'` → the `{column}` token stays `{column}` in every language. Renaming it breaks runtime interpolation (`T::interpolate()` does literal `{name}` substitution).
+- **Pick the code from `LOCALES.md`.** Always prefer the bare base-language code (`fr.php`, `de.php`) — a single `fr.php` already serves `fr-fr`/`fr-ca`/`fr-be`. Only add a regional file (`pt-br.php`, `zh-cn.php`, `zh-tw.php`) when wording genuinely diverges. Codes are lowercase, `-` separated: `pt-br` not `pt_BR`.
+- **Only target libs that already have `lang/en.php` AND a `src/Lang.php`.** If the lib has no `lang/` dir, it is not wired for i18n — STOP and tell the user this needs scaffolding first; do not invent a `Lang.php`.
+- **PR convention: one language across every lib, not one lib at a time.** A translation PR adds (e.g.) `de.php` to every lib that has `en.php`. Bundle them per the ship-as-you-go cadence.
 
 ## Instructions
 
-1. **Resolve the target lib slug and locale code.** Verify the lib's English locale exists. If it does not, stop — this skill is for libs already wired through `Lang::t()`. If the user asked for "all libs", list every lib whose directory contains a locale tree and loop over them in step 2.
+1. **Resolve the target lib(s) and locale code.** From the user request, identify the `<slug>` (e.g. `sugar-bits`) and the locale `<code>` from the `LOCALES.md` recommended set. If the user said "add French to all libs", enumerate every lib that has `en.php`:
+   ```sh
+   ls */lang/en.php
+   ```
+   Verify the chosen `<code>` appears in `LOCALES.md` before proceeding. If it is a regional variant (`pt-br`, `zh-cn`, `zh-tw`), confirm the wording actually diverges from the base — otherwise create the base file instead.
 
-2. **Read the English locale.** Capture the full file: the header doc-comment, the `declare(strict_types=1);` line, and the `return [...]` array.
+2. **Confirm the lib is i18n-wired.** Verify both files exist:
+   ```sh
+   ls <slug>/lang/en.php <slug>/src/Lang.php
+   ```
+   Read `<slug>/src/Lang.php` and note `protected const NAMESPACE = '<ns>';` — that is the lib's translation namespace (e.g. `sugar-bits` → `'bits'`). You need it for the verification step. If either file is missing, STOP: the lib is not wired for translation. Verify both exist before proceeding to Step 3.
 
-3. **Check whether the target locale already exists.** If it does, ask the user before overwriting — do not blindly clobber an existing translation. If it does not, proceed.
+3. **Read the full `en.php`.** Read `<slug>/lang/en.php` end to end so you have every key, its English value, and its `{placeholder}` tokens. This is the input to Step 4 — do not skip or sample it.
 
-4. **Write the new locale file** using this exact structure:
-
+4. **Write `<slug>/lang/<code>.php`** mirroring the EXACT file shape of `en.php`. The header docblock comes first, then `declare(strict_types=1);`, then the `return [...]`. Translate the docblock's first line to name the language; translate each value; leave keys and `{placeholder}` names untouched:
    ```php
    <?php
-
+   
    /**
-    * <LanguageName> translations for <slug>.
+    * French translations for <slug>.
     *
     * @return array<string, string>
     */
-
+   
    declare(strict_types=1);
-
+   
    return [
-       // every key from the English locale, in the same order, with translated value
+       'spinner.fps_positive' => 'le fps du spinner doit être > 0',
+       'table.sort_unknown_column' => 'colonne de tri introuvable : {column}',
+       // … one entry per en.php key …
    ];
    ```
+   Translate **all** keys present in `en.php` (any you omit fall back to English at runtime, which is allowed but leaves mixed-language output — translate everything). Use single-quoted strings and escape apostrophes with `\'` (e.g. `'l\'intervalle'`). For RTL languages (`ar`) the file format is identical — do not reorder or add direction markers.
 
-   - First line of doc-comment uses the English language name (e.g. `Brazilian Portuguese translations for sugar-wishlist.`, `Simplified Chinese translations for candy-core.`).
-   - Keep section comments from the English locale (e.g. `// bin/wishlist`) — translate them if natural, leave them in English if the comment names a file path.
-   - Preserve key order and column alignment of `=>` arrows where the English file aligned them.
-
-5. **Translate every value.** Rules:
-
-   - Keys: untouched.
-   - `{placeholder}` tokens: untouched, identifier and braces literal.
-   - Backslash-escapes inside single-quoted strings: keep `\'` for apostrophes, double `\\` for literal backslashes. Example:
-
-     ```php
-     'launcher.exec_failed' => 'échec de l\'exécution de {bin}',
-     ```
-
-   - For Arabic (`ar`), Hebrew (`he`), Persian (`fa`): write left-to-right in the PHP source (the runtime renders RTL when displayed); do not insert Unicode bidi marks unless the original had them.
-   - For CJK locales (`zh-cn`, `zh-tw`, `ja`, `ko`): use fullwidth colons `：` only inside the translated prose if natural; keep ASCII `:` inside placeholder syntax and PHP punctuation.
-
-6. **Verify the file parses.** Run:
-
+5. **Verify key parity** against `en.php` (no extra keys, optionally report missing). Run from repo root, substituting `<slug>` and `<code>`:
    ```sh
-   cd <slug> && php -l <new locale file>
+   php -r '$en=require "<slug>/lang/en.php"; $tr=require "<slug>/lang/<code>.php"; $extra=array_keys(array_diff_key($tr,$en)); $missing=array_keys(array_diff_key($en,$tr)); echo "EXTRA: ".implode(",",$extra)."\nMISSING: ".implode(",",$missing)."\n";'
    ```
+   `EXTRA` MUST be empty — any extra key is a typo and never resolves. `MISSING` should ideally be empty too (missing keys fall back to English). Fix EXTRA keys before proceeding.
 
-   Output must be `No syntax errors detected`. If it fails, fix the escape/quoting issue before continuing.
-
-7. **Verify keys match the English locale exactly.** Run:
-
+6. **Verify placeholder parity.** Every key whose English value has `{tokens}` must carry the same tokens in the translation:
    ```sh
-   cd <slug> && \
-     diff <(php -r 'print_r(array_keys(require "<english file>"));') \
-          <(php -r 'print_r(array_keys(require "<new file>"));')
+   php -r '$en=require "<slug>/lang/en.php"; $tr=require "<slug>/lang/<code>.php"; foreach($tr as $k=>$v){ preg_match_all("/\{(\w+)\}/",$en[$k]??"",$a); preg_match_all("/\{(\w+)\}/",$v,$b); sort($a[1]); sort($b[1]); if($a[1]!==$b[1]) echo "MISMATCH $k: en=[".implode(",",$a[1])."] tr=[".implode(",",$b[1])."]\n"; }'
    ```
+   Output MUST be empty. Any `MISMATCH` means a placeholder was renamed/dropped/added — fix it before proceeding.
 
-   Output must be empty. A diff means you added, dropped, renamed, or reordered a key — fix the new file, not the English one.
-
-8. **Run the lib's test suite.**
-
+7. **Verify runtime resolution** through the registry using the namespace from Step 2 and a real key from `en.php`:
    ```sh
-   cd <slug> && composer test
+   cd <slug> && composer install --quiet 2>/dev/null; php -r 'require "vendor/autoload.php"; use SugarCraft\Core\I18n\T; T::register("<ns>",__DIR__."/lang"); echo T::t("<ns>.<some.key>",[],"<code>")."\n";'
    ```
+   It must print your translated string (not the raw key, not the English). If it prints the raw key, the namespace or filename is wrong. Verify before reporting done.
 
-   Tests must pass. A failing `T::translate` lookup or registry-load test indicates a syntax issue or a missing key in the new file.
-
-9. **Do NOT edit `composer.json`, CI workflows, `MATCHUPS.md`, root `README.md`, `docs/index.html`, or any other index.** The registry picks up new lang files automatically once dropped in the directory; nothing else needs wiring. Do NOT add a `CHANGELOG.md` entry — out of scope before 1.0.
+8. **Run the lib test suite** to confirm nothing regressed (lang files are pure data, but the suite catches a fatal parse error):
+   ```sh
+   cd <slug> && vendor/bin/phpunit
+   ```
 
 ## Examples
 
-**User says:** `add Polish locale to sugar-wishlist`
+**User says:** "Add a German translation to sugar-bits"
 
-**Actions:**
+**Actions taken:**
+1. Code `de` is in `LOCALES.md` recommended set; base language, covers de-de/de-at/de-ch. Target lib `sugar-bits`.
+2. `ls sugar-bits/lang/en.php sugar-bits/src/Lang.php` → both exist. `Lang.php` has `NAMESPACE = 'bits'`.
+3. Read `sugar-bits/lang/en.php` — 22 keys, two carry `{column}`/no placeholders.
+4. Write `sugar-bits/lang/de.php`: docblock `German translations for sugar-bits.`, `declare(strict_types=1);`, return array with German values, keys + `{column}` intact, e.g. `'spinner.fps_positive' => 'spinner fps muss > 0 sein',`.
+5. Key-parity check → `EXTRA:` empty. ✔
+6. Placeholder check → empty. ✔
+7. `T::register('bits', …); T::t('bits.spinner.fps_positive', [], 'de')` prints the German string. ✔
+8. `vendor/bin/phpunit` green.
 
-1. Verify the English locale exists under `sugar-wishlist/`. ✓
-2. Read it — 13 keys including `launcher.no_pcntl`, `cli.usage`, etc.
-3. Confirm the Polish file does not exist.
-4. Write the new file with header `* Polish translations for sugar-wishlist.`, identical key order, every value translated, `{path}`/`{bin}`/`{arg}`/`{line}`/`{message}` preserved.
-5. `php -l` → `No syntax errors detected`.
-6. Key diff → empty.
-7. `cd sugar-wishlist && composer test` → green.
-
-**Result:** New locale file. Users with `LANG=pl_PL.UTF-8` now resolve via exact-locale match; users with `pl-pl` fall back to `pl` via base-language match. No other files touched.
-
----
-
-**User says:** `translate candy-core to Brazilian Portuguese`
-
-**Actions:**
-
-1. Verify the English locale exists under `candy-core/`. ✓
-2. Decide on code: `pt-br` (`LOCALES.md` flags `pt` vs `pt-br` as worth splitting).
-3. Read the English file.
-4. Write with header `* Brazilian Portuguese translations for candy-core.` and Brazilian-Portuguese values (e.g. `arquivo` over Iberian `ficheiro`, `tela` over `ecrã`).
-5. `php -l` + key diff + `composer test` in `candy-core/`.
-
-**Result:** Brazilian-Portuguese locale lands. If the user also wants European Portuguese, repeat for `pt` with the Iberian wording.
-
----
-
-**User says:** `add Japanese locale for all libs`
-
-**Actions:**
-
-1. List every lib whose directory contains a locale tree.
-2. For each, in sequence (never in parallel — concurrent writes to shared files collide per project gotcha): perform steps 2–8 of Instructions with `<code>=ja`.
-3. After each lib, run that lib's test suite before moving on.
-
-**Result:** A Japanese locale in every lib that ships translations, each translated against that lib's specific English file (the strings are lib-specific, do NOT reuse one translation across libs).
+**Result:** `sugar-bits/lang/de.php` added; `en.php` untouched; runtime serves `de`/`de-de`/`de-at` from one file.
 
 ## Common Issues
 
-- **`syntax error, unexpected '...'` from `php -l`**: Usually an unescaped apostrophe inside a single-quoted French/Italian/Spanish value. Fix: escape with `\'`, or switch that one line to double quotes.
-- **Diff shows a missing key**: You skipped a line when translating. Open the English locale, find the key, add it in the same position in your new file. Never delete keys from the English locale to make the diff pass.
-- **Diff shows an extra key in the new file**: A typo introduced a new key. Fix the typo — do NOT add the typo to the English locale.
-- **`{placeholder}` rendered literally in app output**: You translated the placeholder name. The `T::translate` interpolator only substitutes the original token names; revert.
-- **`Unknown locale code` user pushback**: They asked for something like `en-gb` or `fr-ca`. Tell them the base-language file already covers regional variants via the fallback chain; only create a regional file if wording genuinely diverges (see `LOCALES.md` "Regional variants worth keeping separate" table).
-- **Tests pass but `T::translate` returns the raw key at runtime**: The lib's `Lang::t()` wrapper has not been called yet in that code path, or the namespace passed to `T::register` does not match. This is NOT a translation file bug — it is a wiring issue; out of scope for this skill (use `scaffold-library` to verify wiring).
-- **PHP CS Fixer reformats your alignment**: Project follows PSR-12 but the English locale uses extra spaces to align `=>`. Match what the English locale does for that specific lib; if the lib's existing French/German file does not bother aligning, you do not need to either. Consistency within the lib wins.
+- **`T::t()` returns the raw key (e.g. `bits.spinner.fps_positive`) instead of a translation:** The `(namespace, filename)` pair didn't resolve. 1. Confirm the filename is exactly `<code>.php` lowercase with `-` (not `_`): `pt-br.php`, never `pt_BR.php`. 2. Confirm the namespace passed to `T::register()` matches `const NAMESPACE` in `src/Lang.php`. 3. Confirm the dir passed is `<slug>/lang`.
+- **Key-parity check prints `EXTRA: some.key`:** You introduced a key that isn't in `en.php` (usually a typo). Rename it to match `en.php` exactly — extra keys never resolve at any locale.
+- **Placeholder check prints `MISMATCH`:** A `{name}` token was translated, dropped, or added. Restore the exact English token name; only the surrounding prose gets translated. `T::interpolate()` does literal `{name}` substitution and leaves unmatched braces in the output.
+- **`PHP Parse error: syntax error, unexpected ...` when requiring the file:** Almost always an unescaped apostrophe in a single-quoted string (French/Italian). Escape as `\'` (e.g. `'l\'aide'`) or switch that one value to double quotes.
+- **Output shows mixed languages (some strings still English):** Those keys are missing from your file and fell back to `en.php` per the lookup chain (exact locale → base language → `en` → raw key). Add the missing keys (see the `MISSING:` list from Step 5).
+- **User asks to translate a lib with no `lang/` dir:** That lib is not i18n-wired. Do NOT create `lang/` + `src/Lang.php` here — that is library scaffolding. Tell the user the lib needs i18n wiring first (canonical wrapper: `sugar-wishlist/src/Lang.php`).
