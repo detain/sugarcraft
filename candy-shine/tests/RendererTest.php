@@ -6,6 +6,7 @@ namespace SugarCraft\Shine\Tests;
 
 use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
+use SugarCraft\Sprinkles\Style;
 use PHPUnit\Framework\TestCase;
 
 final class RendererTest extends TestCase
@@ -454,5 +455,321 @@ MD;
         // The continuation should be indented 6 spaces (overriding the
         // default bullet+space width of 2).
         $this->assertStringContainsString('      continuation', $out);
+    }
+
+    // ---- Golden fixture tests -----------------------------------------------
+
+    public function testNestedBlockquoteGolden(): void
+    {
+        $md = file_get_contents(__DIR__ . '/fixtures/nested_blockquote.md');
+        $goldenFile = __DIR__ . '/fixtures/nested_blockquote.golden';
+        $this->assertStringEqualsFile($goldenFile, $this->plain()->render($md));
+    }
+
+    public function testNestedListGolden(): void
+    {
+        $md = file_get_contents(__DIR__ . '/fixtures/nested_list.md');
+        $goldenFile = __DIR__ . '/fixtures/nested_list.golden';
+        $this->assertStringEqualsFile($goldenFile, $this->plain()->render($md));
+    }
+
+    public function testQuoteWithListGolden(): void
+    {
+        $md = file_get_contents(__DIR__ . '/fixtures/quote_with_list.md');
+        $goldenFile = __DIR__ . '/fixtures/quote_with_list.golden';
+        $this->assertStringEqualsFile($goldenFile, $this->plain()->render($md));
+    }
+
+    public function testInlineHtmlRenders(): void
+    {
+        $r = $this->plain();
+        $this->assertSame("<b>bold</b>", $r->render("<b>bold</b>"));
+    }
+
+    public function testInlineHtmlSpanWithEmphasis(): void
+    {
+        $r = $this->plain();
+        $this->assertSame("<em>italic</em>", $r->render("<em>italic</em>"));
+    }
+
+    public function testTextRenderingWithNullThemeText(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            text: null,
+        );
+        $r = new Renderer($custom);
+        // When theme->text is null, literal text passes through unchanged.
+        $this->assertSame("plain text", $r->render("plain text"));
+    }
+
+    public function testTextRenderingWithPlainThemeText(): void
+    {
+        // When theme->text renders 'x' unchanged (plain), literal passes through.
+        $r = $this->plain();
+        $this->assertSame("hello world", $r->render("hello world"));
+    }
+
+    public function testStrikeWithNullThemeStrike(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            strike: null,
+        );
+        $r = new Renderer($custom);
+        $out = $r->withHyperlinks(false)->render('a ~~b~~ c');
+        // When strike is null, Style::new()->strikethrough() is used as fallback.
+        $this->assertStringContainsString('b', $out);
+    }
+
+    public function testApplyCaseUpper(): void
+    {
+        $r = $this->plain();
+        $out = $r->render('# hello world');
+        // The heading uses upper case when theme headingCase is set.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingCase: 'upper',
+        );
+        $r2 = new Renderer($custom);
+        $out = $r2->render('# hello');
+        $this->assertStringContainsString('HELLO', $out);
+    }
+
+    public function testApplyCaseLower(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingCase: 'lower',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('# HELLO');
+        $this->assertStringContainsString('hello', $out);
+    }
+
+    public function testApplyCaseTitle(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingCase: 'title',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('# hello world');
+        $this->assertStringContainsString('Hello World', $out);
+    }
+
+    public function testResolveUrlFragmentOnly(): void
+    {
+        $out = $this->plain()
+            ->withBaseURL('https://example.com/')
+            ->withHyperlinks(false)
+            ->render('[jump](#section)');
+        // Fragment-only URLs should pass through unchanged (not prefixed).
+        $this->assertStringContainsString('(#section)', $out);
+        $this->assertStringNotContainsString('example.com', $out);
+    }
+
+    public function testFromEnvironment(): void
+    {
+        // Test that fromEnvironment creates a renderer without throwing.
+        $r = Renderer::fromEnvironment();
+        $this->assertInstanceOf(Renderer::class, $r);
+    }
+
+    public function testRenderMarkdownStatic(): void
+    {
+        $out = Renderer::renderMarkdown('# Hello');
+        $this->assertStringContainsString('Hello', $out);
+    }
+
+    public function testImageTextFallback(): void
+    {
+        // When theme->imageText is null but image is set, image style is used for alt text.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            image: $base->image,
+            imageText: null,
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('![alt text](http://x/y.png)');
+        $this->assertStringContainsString('alt text', $out);
+    }
+
+    public function testImageWithImageTextSet(): void
+    {
+        // When theme->imageText is set, it should be used instead of image style.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            image: Style::new()->dim(),
+            imageText: Style::new()->bold(),
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('![alt text](http://x/y.png)');
+        $this->assertStringContainsString('alt text', $out);
+    }
+
+    public function testExpandEmojiShortcodes(): void
+    {
+        $out = $this->plain()
+            ->withEmoji(true)
+            ->render(':smile: hello');
+        $this->assertStringContainsString('😄', $out);
+    }
+
+    public function testExpandEmojiUnknownShortcodePassesThrough(): void
+    {
+        $out = $this->plain()
+            ->withEmoji(true)
+            ->render(':unknown: hello');
+        $this->assertStringContainsString(':unknown:', $out);
+    }
+
+    public function testDocumentBlockPrefixAndSuffix(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            documentBlockPrefix: '[',
+            documentBlockSuffix: ']',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('hello');
+        $this->assertStringStartsWith('[', $out);
+        $this->assertStringEndsWith(']', $out);
+    }
+
+    public function testTableWithCellStyleNull(): void
+    {
+        // When theme cell style is null, cells render without extra styling.
+        $md = "| h |\n|---|\n| cell |\n";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('cell', $out);
+    }
+
+    public function testFencedCodeWithLanguageHint(): void
+    {
+        $md = "```php\necho 'hi';\n```";
+        $out = $this->plain()->render($md);
+        $this->assertStringContainsString('echo', $out);
+    }
+
+    public function testLinkWithTextSameAsUrl(): void
+    {
+        // When link text equals URL, just show URL styled.
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render('https://example.com');
+        $this->assertStringContainsString('https://example.com', $out);
+    }
+
+    public function testHeadingWithSuffix(): void
+    {
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingSuffix: ' ·',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('# Hello');
+        $this->assertStringContainsString('Hello', $out);
+    }
+
+    public function testHeadingPrefixGenerated(): void
+    {
+        // When headingPrefix is null, renderer generates it from '#' chars.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingPrefix: null,
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('## Hello');
+        $this->assertStringContainsString('Hello', $out);
+    }
+
+    public function testImageWithEmptyAltShowsPlaceholder(): void
+    {
+        // When alt text is empty, render "[image]" placeholder.
+        $out = $this->plain()->render('![](http://x/y.png)');
+        $this->assertStringContainsString('[image]', $out);
+    }
+
+    public function testTableHeaderStyleNull(): void
+    {
+        // When tableHeader style is null, cell content passes through.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            tableHeader: null,
+            tableCell: null,
+        );
+        $r = new Renderer($custom);
+        $md = "| Name |\n| --- |\n| Bob |\n";
+        $out = $r->render($md);
+        $this->assertStringContainsString('Name', $out);
+        $this->assertStringContainsString('Bob', $out);
+    }
+
+    public function testPreservedNewLinesWithExactlyThreeNewlines(): void
+    {
+        // Exactly 3 newlines = 2 blank lines, should be preserved.
+        $md = "first\n\n\nlast";
+        $out = $this->plain()
+            ->withPreservedNewLines(true)
+            ->render($md);
+        // The preserved runs should result in more than default output.
+        $this->assertStringContainsString('first', $out);
+        $this->assertStringContainsString('last', $out);
     }
 }

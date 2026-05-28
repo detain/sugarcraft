@@ -5,9 +5,15 @@ declare(strict_types=1);
 namespace SugarCraft\Shine;
 
 use SugarCraft\Shine\Lang;
+use SugarCraft\Shine\Render\BlockContext;
+use SugarCraft\Shine\Render\BlockKind;
+use SugarCraft\Shine\Render\BlockStack;
+use SugarCraft\Shine\Style\StyleCascade;
+use SugarCraft\Shine\Style\StyleSheet;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Sprinkles\Table\Table as SprinklesTable;
 use League\CommonMark\Environment\Environment;
 use League\CommonMark\Extension\Autolink\AutolinkExtension;
@@ -62,6 +68,12 @@ final class Renderer
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
     private bool $inTableCell = false;
+
+    /** Active block context stack for indent/width computation. */
+    private BlockStack $blockStack;
+
+    /** Cascading stylesheet for per-depth block styling. */
+    private StyleSheet $styleSheet;
 
     public function __construct(
         ?Theme $theme = null,
@@ -260,7 +272,20 @@ final class Renderer
         if ($this->expandEmoji) {
             $markdown = self::expandEmojiShortcodes($markdown);
         }
+
+        // Initialize block stack with root Document context.
+        $this->blockStack = new BlockStack();
+        $this->styleSheet = StyleSheet::base();
+
         $document = $this->parser->parse($markdown);
+        $this->blockStack->push(new BlockContext(
+            BlockKind::Document,
+            depth: 0,
+            availableWidth: $this->wrapWidth ?? 80,
+            accumulatedIndent: 0,
+            cascadedStyle: $this->theme->paragraph ?? Style::new(),
+        ));
+
         $rendered = $this->renderChildren($document);
         $rendered = rtrim($rendered, "\n");
         // Block prefix / suffix wrap the entire document body (mirrors
@@ -370,7 +395,7 @@ final class Renderer
             $node instanceof IndentedCode  => $this->theme->codeBlock->render(rtrim($node->getLiteral(), "\n")) . "\n\n",
             $node instanceof BlockQuote    => $this->renderBlockQuote($node),
             $node instanceof ListBlock     => $this->renderList($node),
-            $node instanceof ListItem      => $this->renderChildren($node),
+            $node instanceof ListItem      => $this->renderListItem($node),
             $node instanceof MdTable       => $this->renderTable($node),
             $node instanceof ThematicBreak => $this->theme->rule->render(
                 str_repeat($this->theme->horizontalRuleGlyph, max(1, $this->theme->horizontalRuleLength))
@@ -458,12 +483,33 @@ final class Renderer
 
     private function renderParagraph(Paragraph $node): string
     {
-        $body = $this->renderChildren($node);
-        if ($this->wrapWidth !== null) {
-            $body = Width::wrapAnsi($body, $this->wrapWidth);
+        // Push Paragraph context onto the stack.
+        $parentCtx = $this->blockStack->peek();
+        $depth = $this->blockStack->depth();
+        $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
+        $blockStyle = $this->styleSheet->for(BlockKind::Paragraph, $depth);
+        $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
+
+        $newCtx = new BlockContext(
+            BlockKind::Paragraph,
+            depth: $depth + 1,
+            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
+            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            cascadedStyle: $cascadedStyle,
+        );
+        $this->blockStack->push($newCtx);
+
+        try {
+            $body = $this->renderChildren($node);
+            if ($this->wrapWidth !== null) {
+                $avail = $this->blockStack->availableWidth($this->wrapWidth);
+                $body = Width::wrapAnsi($body, $avail);
+            }
+            $body = $this->theme->paragraphPrefix . $body . $this->theme->paragraphSuffix;
+            return $cascadedStyle->render($body) . "\n\n";
+        } finally {
+            $this->blockStack->pop();
         }
-        $body = $this->theme->paragraphPrefix . $body . $this->theme->paragraphSuffix;
-        return $this->theme->paragraph->render($body) . "\n\n";
     }
 
     private function renderChildren(Node $parent): string
@@ -490,19 +536,39 @@ final class Renderer
 
     private function renderHeading(Heading $h): string
     {
-        $style = match ($h->getLevel()) {
-            1       => $this->theme->heading1,
-            2       => $this->theme->heading2,
-            3       => $this->theme->heading3,
-            4       => $this->theme->heading4,
-            5       => $this->theme->heading5,
-            default => $this->theme->heading6,
-        };
-        $prefix = $this->theme->headingPrefix
-            ?? (str_repeat('#', $h->getLevel()) . ' ');
-        $suffix = (string) $this->theme->headingSuffix;
-        $body   = $this->applyCase($this->renderChildren($h), $this->theme->headingCase);
-        return $style->render($prefix . $body . $suffix) . "\n\n";
+        // Push Heading context onto the stack.
+        $parentCtx = $this->blockStack->peek();
+        $depth = $this->blockStack->depth();
+        $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
+        $blockStyle = $this->styleSheet->for(BlockKind::Heading, $depth);
+        $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
+
+        $newCtx = new BlockContext(
+            BlockKind::Heading,
+            depth: $depth + 1,
+            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
+            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            cascadedStyle: $cascadedStyle,
+        );
+        $this->blockStack->push($newCtx);
+
+        try {
+            $style = match ($h->getLevel()) {
+                1       => $this->theme->heading1,
+                2       => $this->theme->heading2,
+                3       => $this->theme->heading3,
+                4       => $this->theme->heading4,
+                5       => $this->theme->heading5,
+                default => $this->theme->heading6,
+            };
+            $prefix = $this->theme->headingPrefix
+                ?? (str_repeat('#', $h->getLevel()) . ' ');
+            $suffix = (string) $this->theme->headingSuffix;
+            $body   = $this->applyCase($this->renderChildren($h), $this->theme->headingCase);
+            return $style->render($prefix . $body . $suffix) . "\n\n";
+        } finally {
+            $this->blockStack->pop();
+        }
     }
 
     /**
@@ -524,62 +590,129 @@ final class Renderer
 
     private function renderBlockQuote(BlockQuote $q): string
     {
-        $inner = rtrim($this->renderChildren($q), "\n");
-        if ($this->wrapWidth !== null) {
-            // Subtract 2 cells for the '▎ ' prefix.
-            $inner = Width::wrapAnsi($inner, max(1, $this->wrapWidth - 2));
+        // Push BlockQuote context onto the stack.
+        $parentCtx = $this->blockStack->peek();
+        $depth = $this->blockStack->depth();
+        $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
+        $blockStyle = $this->styleSheet->for(BlockKind::BlockQuote, $depth);
+        $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
+
+        // Blockquote adds 2 cells of indent and 1 margin unit.
+        $parentIndent = $parentCtx?->accumulatedIndent ?? 0;
+        $newCtx = new BlockContext(
+            BlockKind::BlockQuote,
+            depth: $depth + 1,
+            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
+            accumulatedIndent: $parentIndent + 2,
+            cascadedStyle: $cascadedStyle,
+        );
+        $this->blockStack->push($newCtx);
+
+        try {
+            $inner = rtrim($this->renderChildren($q), "\n");
+            if ($this->wrapWidth !== null) {
+                $avail = $this->blockStack->availableWidth($this->wrapWidth);
+                $inner = Width::wrapAnsi($inner, max(1, $avail));
+            }
+            $lines = explode("\n", $inner);
+            $out   = [];
+            foreach ($lines as $line) {
+                $out[] = $cascadedStyle->render('▎ ' . $line);
+            }
+            return implode("\n", $out) . "\n\n";
+        } finally {
+            $this->blockStack->pop();
         }
-        $lines = explode("\n", $inner);
-        $out   = [];
-        foreach ($lines as $line) {
-            $out[] = $this->theme->blockquote->render('▎ ' . $line);
+    }
+
+    private function renderListItem(ListItem $item): string
+    {
+        // Push ListItem context onto the stack.
+        $parentCtx = $this->blockStack->peek();
+        $depth = $this->blockStack->depth();
+        $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
+        $blockStyle = $this->styleSheet->for(BlockKind::ListItem, $depth);
+        $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
+
+        $newCtx = new BlockContext(
+            BlockKind::ListItem,
+            depth: $depth + 1,
+            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
+            accumulatedIndent: ($parentCtx?->accumulatedIndent ?? 0),
+            cascadedStyle: $cascadedStyle,
+        );
+        $this->blockStack->push($newCtx);
+
+        try {
+            return $this->renderChildren($item);
+        } finally {
+            $this->blockStack->pop();
         }
-        return implode("\n", $out) . "\n\n";
     }
 
     private function renderList(ListBlock $list): string
     {
-        $data    = $list->getListData();
-        $ordered = $data->type === ListBlock::TYPE_ORDERED;
-        $start   = (int) ($data->start ?? 1);
-        // Distinct ordered / unordered marker styles when supplied;
-        // both fall through to the catch-all `listMarker`.
-        $marker  = $ordered
-            ? ($this->theme->orderedListMarker   ?? $this->theme->listMarker)
-            : ($this->theme->unorderedListMarker ?? $this->theme->listMarker);
-        $orderedFmt = $this->theme->orderedListMarkerFormat;
-        $unorderedGlyph = $this->theme->unorderedListMarkerGlyph;
-        $levelIndent = max(0, $this->theme->listLevelIndent);
+        // Push List context onto the stack.
+        $parentCtx = $this->blockStack->peek();
+        $depth = $this->blockStack->depth();
+        $parentStyle = $parentCtx?->cascadedStyle ?? ($this->theme->paragraph ?? Style::new());
+        $blockStyle = $this->styleSheet->for(BlockKind::List, $depth);
+        $cascadedStyle = StyleCascade::merge($parentStyle, $blockStyle);
 
-        $out = '';
-        $i   = $start;
-        foreach ($list->children() as $item) {
-            $bullet = $ordered ? sprintf($orderedFmt, $i) : $unorderedGlyph;
-            $body   = rtrim($this->renderChildren($item), "\n");
-            // Paragraphs inside list items emit a trailing blank line for
-            // top-level separation; collapse those runs so nested lists
-            // sit directly under their parent rather than after a gap.
-            $body = (string) preg_replace('/\n{2,}/', "\n", $body);
+        $newCtx = new BlockContext(
+            BlockKind::List,
+            depth: $depth + 1,
+            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
+            accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
+            cascadedStyle: $cascadedStyle,
+        );
+        $this->blockStack->push($newCtx);
 
-            $lines  = explode("\n", $body);
-            $first  = array_shift($lines) ?? '';
-            // Continuation indent: max of bullet width and configured
-            // listLevelIndent so nested lists indent uniformly per
-            // theme. Default levelIndent (4) matches glamour stock.
-            $indentN = max(mb_strlen($bullet, 'UTF-8') + 1, $levelIndent);
-            $indent  = str_repeat(' ', $indentN);
+        try {
+            $data    = $list->getListData();
+            $ordered = $data->type === ListBlock::TYPE_ORDERED;
+            $start   = (int) ($data->start ?? 1);
+            // Distinct ordered / unordered marker styles when supplied;
+            // both fall through to the catch-all `listMarker`.
+            $marker  = $ordered
+                ? ($this->theme->orderedListMarker   ?? $this->theme->listMarker)
+                : ($this->theme->unorderedListMarker ?? $this->theme->listMarker);
+            $orderedFmt = $this->theme->orderedListMarkerFormat;
+            $unorderedGlyph = $this->theme->unorderedListMarkerGlyph;
+            $levelIndent = max(0, $this->theme->listLevelIndent);
 
-            // CommonMark softbreaks leave trailing whitespace on the
-            // preceding Text node; rtrim every emitted line so item
-            // bodies don't accumulate stray spaces.
-            $out .= $marker->render($bullet) . ' ' . rtrim($first) . "\n";
-            foreach ($lines as $line) {
-                $line = rtrim($line);
-                $out .= ($line === '' ? '' : $indent . $line) . "\n";
+            $out = '';
+            $i   = $start;
+            foreach ($list->children() as $item) {
+                $bullet = $ordered ? sprintf($orderedFmt, $i) : $unorderedGlyph;
+                $body   = rtrim($this->renderChildren($item), "\n");
+                // Paragraphs inside list items emit a trailing blank line for
+                // top-level separation; collapse those runs so nested lists
+                // sit directly under their parent rather than after a gap.
+                $body = (string) preg_replace('/\n{2,}/', "\n", $body);
+
+                $lines  = explode("\n", $body);
+                $first  = array_shift($lines) ?? '';
+                // Continuation indent: max of bullet width and configured
+                // listLevelIndent so nested lists indent uniformly per
+                // theme. Default levelIndent (4) matches glamour stock.
+                $indentN = max(mb_strlen($bullet, 'UTF-8') + 1, $levelIndent);
+                $indent  = str_repeat(' ', $indentN);
+
+                // CommonMark softbreaks leave trailing whitespace on the
+                // preceding Text node; rtrim every emitted line so item
+                // bodies don't accumulate stray spaces.
+                $out .= $marker->render($bullet) . ' ' . rtrim($first) . "\n";
+                foreach ($lines as $line) {
+                    $line = rtrim($line);
+                    $out .= ($line === '' ? '' : $indent . $line) . "\n";
+                }
+                $i++;
             }
-            $i++;
+            return $out . "\n";
+        } finally {
+            $this->blockStack->pop();
         }
-        return $out . "\n";
     }
 
     private function renderLink(Link $l): string
