@@ -1,0 +1,47 @@
+{
+    "name": "sugarcraft/candy-async",
+    "description": "Shared async utilities for SugarCraft \u2014 cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "sugarcraft",
+        "async",
+        "cancellation",
+        "reactphp",
+        "promise",
+        "event-loop"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-async",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-async/issues",
+        "source": "https://github.com/sugarcraft/candy-async",
+        "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md"
+    },
+    "require": {
+        "php": "^8.3",
+        "react/event-loop": "^1.6",
+        "react/promise": "^3.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Async\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Async\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
