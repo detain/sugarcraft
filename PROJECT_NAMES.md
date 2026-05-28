@@ -112,6 +112,7 @@ single-purpose lib.
 | **CandyPty**    | candy + pty = pseudo-terminal primitive. mirrors charmbracelet/x/xpty (we drop the `x` prefix — it's a Charm package-namespace artefact, not part of the role name). foundation lib for spawning child processes wired to a controlled PTY. |
 | **CandyForms** | candy + forms = form primitives foundation. extraction target for TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form from sugar-bits and sugar-prompt. |
 | **CandyBuffer** | candy + buffer = cell-grid value objects. mirrors charmbracelet/vte's Buffer/Cell as the shared foundation for terminal rendering across the ecosystem. |
+| **CandyLayout** | candy + layout = constraint-based layout solver. new investment — no direct upstream; inspired by ratatui's Cassowary constraint system and Badros & Borning 2001. Provides LayoutSolver interface with CassowarySolver (simplex) + GreedySolver (5-phase fallback from candy-sprinkles). |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = SQLite browser. clear. |
 
