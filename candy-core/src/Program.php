@@ -19,6 +19,7 @@ use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\ColorProfile;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\Core\Util\NullLogger;
 use React\EventLoop\Loop;
 use React\EventLoop\LoopInterface;
 
@@ -63,6 +64,10 @@ final class Program
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
+    private NullLogger $logger;
+    /** @var \Closure(\Throwable): void */
+    private \Closure $exceptionHandler;
+    private float $lastFrameDuration = 0.0;
 
     /**
      * Wrap a {@see Model} with runtime options.
@@ -80,6 +85,8 @@ final class Program
         $this->loop  = $options->loop ?? Loop::get();
         $this->input  = $options->input  ?? STDIN;
         $this->output = $options->output ?? STDOUT;
+        $this->logger = new NullLogger();
+        $this->exceptionHandler = static fn(\Throwable $t) => throw $t;
         // openTty: if requested AND we'd otherwise be reading from a
         // piped stdin, open /dev/tty directly so the program can still
         // see keys. Caller-supplied resources always win — the flag
@@ -117,6 +124,39 @@ final class Program
         $this->recorder = $recorder;
         $this->renderer->setRecorder($recorder);
         return $this;
+    }
+
+    /**
+     * Attach a logger to receive program lifecycle events.
+     *
+     * @param object $logger Object with PSR-3 style log methods (info, error, warning, etc.)
+     */
+    public function withLogger(object $logger): self
+    {
+        $next = clone $this;
+        $next->logger = $logger;
+        return $next;
+    }
+
+    /**
+     * Override the exception handler that receives any uncaught throwable
+     * during the program loop. The default re-throws.
+     *
+     * @param \Closure(\Throwable): void $handler
+     */
+    public function withExceptionHandler(\Closure $handler): self
+    {
+        $next = clone $this;
+        $next->exceptionHandler = $handler;
+        return $next;
+    }
+
+    /**
+     * Return the duration in seconds of the last rendered frame.
+     */
+    public function lastFrameDuration(): float
+    {
+        return $this->lastFrameDuration;
     }
 
     /**
@@ -727,11 +767,14 @@ final class Program
      */
     private function renderFrame(): void
     {
+        $frameStart = microtime(true);
+
         if ($this->options->withoutRenderer) {
             // Headless mode: still call view() so the model's
             // computation runs (and any errors surface) but skip
             // emitting any output.
             $this->activeModel()->view();
+            $this->lastFrameDuration = microtime(true) - $frameStart;
             return;
         }
         $rendered = $this->activeModel()->view();
@@ -742,6 +785,8 @@ final class Program
             $body = $rendered;
         }
         $this->renderer->render($body);
+
+        $this->lastFrameDuration = microtime(true) - $frameStart;
     }
 
     private function applyViewSideEffects(View $view): void
