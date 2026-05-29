@@ -200,4 +200,40 @@ final class SmithWatermanMatcherTest extends TestCase
         // Same score, so sorted by candidate asc - 'app' comes first
         $this->assertSame('app', $results[0]->haystack);
     }
+
+    public function testAmbiguousQueryAbOrderingAndIndices(): void
+    {
+        $candidates = ['alpha', 'ablation', 'label'];
+
+        $results = $this->matcher->matchAll('ab', $candidates);
+
+        $this->assertCount(3, $results);
+
+        foreach ($results as $result) {
+            $this->assertNotEmpty($result->indices(), "Matched candidate '{$result->haystack}' must have non-empty indices");
+            $this->assertTrue($result->score > 0, "Score must be positive for matched candidate '{$result->haystack}'");
+        }
+
+        $scores = array_map(static fn(MatchResult $r) => $r->score, $results);
+        for ($i = 1; $i < count($scores); $i++) {
+            $this->assertGreaterThanOrEqual($scores[$i], $scores[$i - 1], 'Results must be sorted by score descending');
+        }
+    }
+
+    public function testAmbiguousQueryAbIndicesAreByteOffsets(): void
+    {
+        $candidates = ['alpha', 'ablation', 'label'];
+        $results = $this->matcher->matchAll('ab', $candidates);
+
+        $resultMap = [];
+        foreach ($results as $result) {
+            $resultMap[$result->haystack] = $result;
+        }
+
+        $this->assertContains(0, $resultMap['ablation']->indices());
+        $this->assertContains(1, $resultMap['ablation']->indices());
+
+        $this->assertNotEmpty($resultMap['alpha']->indices());
+        $this->assertNotEmpty($resultMap['label']->indices());
+    }
 }

@@ -62,6 +62,13 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }
