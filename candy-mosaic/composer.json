@@ -31,6 +31,7 @@
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/candy-palette": "dev-master",
         "ext-gd": "*",
         "ext-mbstring": "*",
         "react/promise": "^3.3"
@@ -61,6 +62,20 @@
         {
             "type": "path",
             "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-palette",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
             "options": {
                 "symlink": true
             }
