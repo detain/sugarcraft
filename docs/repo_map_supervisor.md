@@ -88,7 +88,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 13 — candy-mosaic + candy-palette TerminalProbe](repo_map_step_13.md) — branch: `ai/probe-consolidation`
 
 ### Phase 3 — Migrate UI components onto shared foundations (6)
-- [ ] [Step 14 — sugar-bits onto shared foundations](repo_map_step_14.md) — branch: `ai/sugar-bits-shared`
+- [x] [Step 14 — sugar-bits onto shared foundations](repo_map_step_14.md) — branch: `ai/sugar-bits-shared`
 - [ ] [Step 15 — candy-forms onto shared foundations](repo_map_step_15.md) — branch: `ai/candy-forms-shared`
 - [ ] [Step 16 — sugar-prompt onto shared foundations](repo_map_step_16.md) — branch: `ai/sugar-prompt-shared`
 - [ ] [Step 17 — sugar-charts onto candy-buffer](repo_map_step_17.md) — branch: `ai/sugar-charts-shared`
