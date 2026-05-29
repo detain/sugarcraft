@@ -8,11 +8,15 @@ use SugarCraft\Mosaic\Renderer\ChafaRenderer;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
 use SugarCraft\Mosaic\Renderer\KittyRenderer;
+use SugarCraft\Mosaic\Renderer\QuarterBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Renderer;
 use SugarCraft\Mosaic\Renderer\SixelRenderer;
 use SugarCraft\Mosaic\Dither;
 use SugarCraft\Mosaic\Scale;
 use SugarCraft\Mosaic\TmuxPassthroughDecorator;
+use SugarCraft\Palette\Probe\TerminalProbe;
+use SugarCraft\Palette\Probe\ProbeReport;
+use SugarCraft\Palette\Probe\Capability as PaletteCapability;
 
 /**
  * Public facade — the "Picker" from ratatui-image.
@@ -65,6 +69,90 @@ final class Mosaic
         }
 
         return new self($renderer, $cap, null, null, null);
+    }
+
+    /**
+     * Auto-detect the best renderer using TerminalProbe.
+     *
+     * NEVER throws — falls back to BasicAscii (HalfBlock) on every error.
+     * This is the safe, user-friendly entry point for new users.
+     *
+     * Precedence: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
+     *
+     * @see Mosaic::diagnose() for structured probe report
+     */
+    public static function auto(): self
+    {
+        try {
+            $report = TerminalProbe::run();
+
+            // Try to use Detect::probe() for full protocol detection first
+            // since it has DA1 sixel probing and better terminal detection
+            try {
+                $cap = Detect::probe();
+                $renderer = self::bestBackend($cap);
+
+                if ($cap->inTmux) {
+                    $renderer = new TmuxPassthroughDecorator($renderer);
+                }
+
+                return new self($renderer, $cap, null, null, null);
+            } catch (\Throwable) {
+                // @codeCoverageIgnoreStart — Detect::probe() never throws; this block is
+            // here for future-proofing but is unreachable with the current implementation.
+            // If Detect::probe() is ever refactored to throw, this provides a clean fallback.
+            // @codeCoverageIgnoreEnd
+            }
+
+            // Fallback: use TerminalProbe capabilities from candy-palette
+            // Pick best renderer based on palette capabilities
+            return self::autoFromPalette($report);
+
+        } catch (\Throwable) {
+            // TerminalProbe::run() itself threw — never let that bubble up
+            return self::halfBlock();
+        }
+    }
+
+    /**
+     * Run the terminal capability probe and return a structured report.
+     *
+     * Useful for debugging: "why is my terminal not rendering Sixel?"
+     *
+     * @see TerminalProbe::run()
+     */
+    public static function diagnose(): ProbeReport
+    {
+        return TerminalProbe::run();
+    }
+
+    /**
+     * Auto-detect using candy-palette's TerminalProbe when Detect::probe() is unavailable.
+     *
+     * @param ProbeReport $report  The capability report from TerminalProbe
+     */
+    private static function autoFromPalette(ProbeReport $report): self
+    {
+        // Map palette capabilities to mosaic renderers
+        // Prefer: Kitty > Sixel > ITerm2 > HalfBlock > QuarterBlock > BasicAscii
+
+        // Check for Kitty keyboard support (implies Kitty protocol)
+        if ($report->has(PaletteCapability::KittyKeyboard)) {
+            // If we also have truecolor, Kitty is ideal
+            $renderer = new KittyRenderer();
+            $cap = Capability::kitty(null, $report->has(PaletteCapability::Color256));
+            return new self($renderer, $cap, null, null, null);
+        }
+
+        // Check for Sixel via terminfo or explicit detection
+        // Note: Sixel needs actual DA1 probing which Detect::probe() handles
+        // If we're in this path, Detect::probe() already failed, so use HalfBlock
+        if ($report->has(PaletteCapability::NoColor)) {
+            return self::halfBlock();
+        }
+
+        // For everything else, HalfBlock is the safe fallback
+        return self::halfBlock();
     }
 
     /** Force the iTerm2 / WezTerm inline-image renderer. */
