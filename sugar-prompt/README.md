@@ -37,6 +37,16 @@ $form = Form::new(
 > upstream-mirroring long forms (`withTitle`, `withDescription`, …)
 > work identically — pick whichever reads better at the call site.
 
+## Shared foundations
+
+sugar-prompt is built on top of three shared foundation packages:
+
+| Package | Role |
+| ------- | ---- |
+| `sugarcraft/candy-buffer` | Ring-buffer output renderer — handles SGR sequence batching and viewport sync for the form viewport |
+| `sugarcraft/candy-fuzzy` | Smith-Waterman local-alignment fuzzy matcher — powers `withFuzzySuggestions()` on `Input` and `Select` fields |
+| `sugarcraft/candy-testing` | Test harness — provides `ProgramSimulator`, `ScriptedInput`, and golden-file tape helpers for TEA-program tests |
+
 ## Field types
 
 | Field         | Description                                                 | Notable knobs |
