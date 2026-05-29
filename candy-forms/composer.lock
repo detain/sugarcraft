@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "08387fa1550e30c3104e95725ff29122",
+    "content-hash": "e21888dd812e79b1eba9ea24fe164a3c",
     "packages": [
         {
             "name": "react/event-loop",
@@ -150,6 +150,60 @@
                 }
             ],
             "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-buffer",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-buffer",
+                "reference": "55a25d0d31b3ccfa249769178a0a848b9996fbc6"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Buffer\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Buffer\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
+            "homepage": "https://github.com/sugarcraft/candy-buffer",
+            "keywords": [
+                "buffer",
+                "cell",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-buffer/issues",
+                "source": "https://github.com/sugarcraft/candy-buffer/tree/master",
+                "docs": "https://sugarcraft.github.io/lib/candy-buffer.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "sugarcraft/candy-core",
@@ -2084,6 +2138,64 @@
             "time": "2023-02-07T11:34:05+00:00"
         },
         {
+            "name": "sugarcraft/candy-testing",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-testing",
+                "reference": "37fcf3545656766562adc37132774c882a19ec57"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-buffer": "@dev",
+                "sugarcraft/candy-core": "@dev"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Testing\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Testing\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+            "homepage": "https://github.com/sugarcraft/candy-testing",
+            "keywords": [
+                "bubbletea",
+                "elm-architecture",
+                "sugarcraft",
+                "tea",
+                "terminal",
+                "testing",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-testing/issues",
+                "source": "https://github.com/sugarcraft/candy-testing",
+                "docs": "https://sugarcraft.github.io/lib/candy-testing.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "theseer/tokenizer",
             "version": "1.3.1",
             "source": {
@@ -2137,9 +2249,12 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
+        "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-fuzzy": 20,
-        "sugarcraft/candy-sprinkles": 20
+        "sugarcraft/candy-layout": 20,
+        "sugarcraft/candy-sprinkles": 20,
+        "sugarcraft/candy-testing": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,

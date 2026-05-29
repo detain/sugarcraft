@@ -621,4 +621,23 @@ final class FormTest extends TestCase
         $form = Form::new(Input::new('a'))->errorSummary(true);
         $this->assertTrue($form->errorSummary);
     }
+
+    public function testWithConstraintsStoresConstraints(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $constraints = [new \SugarCraft\Layout\Constraint\Length(40)];
+        $form2 = $form->withConstraints($constraints);
+        $this->assertNotSame($form, $form2);
+        $this->assertNull($form->constraints);
+        $this->assertSame($constraints, $form2->constraints);
+    }
+
+    public function testWithConstraintsNullClearsConstraints(): void
+    {
+        $form = Form::new(Input::new('a'));
+        $constraints = [new \SugarCraft\Layout\Constraint\Length(40)];
+        $form2 = $form->withConstraints($constraints);
+        $form3 = $form2->withConstraints(null);
+        $this->assertNull($form3->constraints);
+    }
 }
