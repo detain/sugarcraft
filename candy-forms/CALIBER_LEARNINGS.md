@@ -5,6 +5,16 @@
 
 <!-- Add learnings below as they are discovered -->
 
+### 2026-05-29 — Golden-file snapshot convention (candy-testing)
+Pattern: Render output tests use `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($goldenPath, $actual)` — the actual ANSI bytes are compared against a fixture file at `$goldenPath`. Fixture files live in `tests/fixtures/` and carry a `.golden` extension. Set `UPDATE_GOLDENS=1` in the environment to auto-regenerate any missing fixture.
+Anti-pattern: Do NOT use string equality (`assertEquals`) for ANSI output — ESC sequences in a mismatch produce an unreadable diff. Always use `assertGoldenAnsi` or `assertAnsiEquals`.
+Source: step-15 ai/candy-forms-shared
+
+### 2026-05-29 — FuzzyMatcher back-compat shim (candy-fuzzy)
+Pattern: `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07) is now a deprecated alias for `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. There is zero behavioural divergence — the internal Select/MultiSelect filter uses `SmithWatermanMatcher` directly. The public `withFilter(callable)` API is preserved; callers injecting a custom filter are unaffected.
+Anti-pattern: None identified. Do not re-implement scoring logic in candy-forms when candy-fuzzy provides it.
+Source: step-15 ai/candy-forms-shared
+
 ## Spinner absorbed from sugar-bits
 
 `Spinner`, `Spinner\Style`, and `Spinner\TickMsg` were moved here from

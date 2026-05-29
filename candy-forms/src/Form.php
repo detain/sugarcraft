@@ -9,6 +9,10 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Layout\Direction;
+use SugarCraft\Layout\LayoutSolver;
+use SugarCraft\Layout\Region;
 
 /**
  * Top-level form container.
@@ -44,6 +48,7 @@ final class Form implements Model
         public readonly int $height = 0,
         public readonly int $timeoutMs = 0,
         public readonly ?KeyMap $keyMap = null,
+        public readonly ?array $constraints = null,
     ) {}
 
     /**
@@ -194,6 +199,21 @@ final class Form implements Model
     public function withKeyMap(?KeyMap $keyMap): self
     {
         return $this->mutate(keyMap: $keyMap, keyMapSet: true);
+    }
+
+    /**
+     * Apply an explicit constraint set from candy-layout to govern how
+     * the form's fields are sized and positioned. When set, the form's
+     * {@see view()} uses {@see LayoutSolver} to compute a region per
+     * field before rendering. Pass null (or leave unset) to keep the
+     * default greedy-vertical stacking.
+     *
+     * @param list<Constraint>|null $constraints
+     * @see LayoutSolver
+     */
+    public function withConstraints(?array $constraints): self
+    {
+        return $this->mutate(constraints: $constraints, constraintsSet: true);
     }
 
     /** Resolved keymap — the configured override if set, else the default. */
@@ -834,6 +854,7 @@ final class Form implements Model
         ?int $height = null,
         ?int $timeoutMs = null,
         ?KeyMap $keyMap = null, bool $keyMapSet = false,
+        ?array $constraints = null, bool $constraintsSet = false,
     ): self {
         return new self(
             groups:         $this->groups,
@@ -852,6 +873,7 @@ final class Form implements Model
             height:         $height         ?? $this->height,
             timeoutMs:      $timeoutMs      ?? $this->timeoutMs,
             keyMap:         $keyMapSet      ? $keyMap : $this->keyMap,
+            constraints:    $constraintsSet ? $constraints : $this->constraints,
         );
     }
 

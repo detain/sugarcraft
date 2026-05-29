@@ -14,7 +14,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Core\WorkerPool;
 use SugarCraft\Forms\Field;
-use SugarCraft\Forms\Fuzzy\FuzzyMatcher;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
 use SugarCraft\Forms\ItemList\ItemList;
@@ -209,11 +209,11 @@ final class Select implements \SugarCraft\Forms\Field
                 );
                 $l = $l->setItems($items);
             } else {
-                // Apply fuzzy ranking
-                $matcher = new FuzzyMatcher();
-                $scored = $matcher->match($filterText, $this->fuzzyCandidates);
-                if ($scored !== []) {
-                    $ranked = array_column($scored, 0);
+                // Apply fuzzy ranking via candy-fuzzy's SmithWatermanMatcher.
+                $matcher = new SmithWatermanMatcher();
+                $results = $matcher->matchAll($filterText, $this->fuzzyCandidates);
+                if ($results !== []) {
+                    $ranked = array_map(static fn($r) => $r->haystack, $results);
                     $items = array_map(static fn(string $o) => new StringItem($o), $ranked);
                     $l = $l->setItems($items);
                 }
@@ -316,14 +316,14 @@ final class Select implements \SugarCraft\Forms\Field
         return false;
     }
 
-    private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null): self
+    private function mutate(?ItemList $list = null, ?string $title = null, ?string $description = null, ?string $enumClass = null, ?array $fuzzyCandidates = null, bool $fuzzyCandidatesSet = false): self
     {
         return new self(
             key:                       $this->key,
             list:                      $list        ?? $this->list,
             title:                     $title       ?? $this->title,
             description:               $description ?? $this->description,
-            fuzzyCandidates:           $this->fuzzyCandidates,
+            fuzzyCandidates:           $fuzzyCandidatesSet ? $fuzzyCandidates : $this->fuzzyCandidates,
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
             pendingAsyncSeq:           $this->pendingAsyncSeq,

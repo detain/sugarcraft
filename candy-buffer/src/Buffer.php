@@ -137,6 +137,114 @@ final class Buffer
         return [];
     }
 
+    // ─── ANSI rendering ─────────────────────────────────────────────────
+
+    /**
+     * Render the buffer to an ANSI escape string.
+     *
+     * Walks the grid row by row, emitting SGR sequences only when
+     * a cell's style differs from the previous cell, and OSC 8 hyperlink
+     * sequences around linked cells.
+     *
+     * @return string Raw ANSI byte string suitable for terminal output
+     */
+    public function toAnsi(): string
+    {
+        $out = '';
+        $prevStyle = null;
+        $prevLink = null;
+
+        for ($row = 0; $row < $this->height; $row++) {
+            if ($row > 0) {
+                $out .= "\n";
+            }
+            for ($col = 0; $col < $this->width; $col++) {
+                $cell = $this->grid[$row * $this->width + $col];
+
+                // Continuation cells (wide-char padding) are skipped.
+                if ($cell->width === 0) {
+                    continue;
+                }
+
+                // Close hyperlink when link changes or before new style.
+                if ($prevLink !== null && $cell->link() !== $prevLink) {
+                    $out .= "\x1b]8;;\x1b\\";
+                }
+
+                // Emit SGR only when style changes.
+                if ($cell->style() !== $prevStyle) {
+                    $out .= $this->emitSgr($cell->style());
+                    $prevStyle = $cell->style();
+                }
+
+                // Open hyperlink when link appears.
+                if ($cell->link() !== null && $cell->link() !== $prevLink) {
+                    $url = $cell->link()->url();
+                    $id = $cell->link()->id();
+                    $idPart = $id !== '' ? (";" . $id) : "";
+                    $out .= "\x1b]8" . $idPart . ";" . $url . "\x1b\\";
+                    $prevLink = $cell->link();
+                } elseif ($cell->link() === null) {
+                    $prevLink = null;
+                }
+
+                $out .= $cell->rune();
+            }
+        }
+
+        // Close any open hyperlink and reset SGR.
+        if ($prevLink !== null) {
+            $out .= "\x1b]8;;\x1b\\";
+        }
+        if ($prevStyle !== null) {
+            $out .= "\x1b[0m";
+        }
+
+        return $out;
+    }
+
+    /**
+     * Emit the SGR sequence for a cell style (or reset if null).
+     */
+    private function emitSgr(?Style $style): string
+    {
+        if ($style === null) {
+            return "\x1b[0m";
+        }
+
+        $codes = ['0'];
+
+        if ($style->fg() !== null) {
+            $rgb = $style->fg();
+            $r = ($rgb >> 16) & 0xFF;
+            $g = ($rgb >> 8) & 0xFF;
+            $b = $rgb & 0xFF;
+            $codes[] = "38;2;{$r};{$g};{$b}";
+        }
+
+        if ($style->bg() !== null) {
+            $rgb = $style->bg();
+            $r = ($rgb >> 16) & 0xFF;
+            $g = ($rgb >> 8) & 0xFF;
+            $b = $rgb & 0xFF;
+            $codes[] = "48;2;{$r};{$g};{$b}";
+        }
+
+        $attrs = $style->attrs();
+        if ($attrs !== 0) {
+            if ($attrs & Style::ATTR_BOLD)       { $codes[] = '1'; }
+            if ($attrs & Style::ATTR_FAINT)     { $codes[] = '2'; }
+            if ($attrs & Style::ATTR_ITALIC)    { $codes[] = '3'; }
+            if ($attrs & Style::ATTR_UNDERLINE) { $codes[] = '4'; }
+            if ($attrs & Style::ATTR_BLINK)     { $codes[] = '5'; }
+            if ($attrs & Style::ATTR_REVERSE)  { $codes[] = '7'; }
+            if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
+            if ($attrs & Style::ATTR_OVERLINE) { $codes[] = '53'; }
+        }
+
+        return "\x1b[" . implode(';', $codes) . "m";
+    }
+
     // ─── Internals ─────────────────────────────────────────────────────
 
     /**
