@@ -73,6 +73,15 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 - [2026-05-29 | step-16 | tester] sugar-prompt test additions: +2 tests (alias resolution + golden render), 301 total (299 original + 2 new). Alias test: `(new \ReflectionClass(\SugarCraft\Prompt\Fuzzy\FuzzyMatcher::class))->getName()` correctly returns `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Golden test: `GoldenRenderTest::testConfirmAndTextFormRendersWithAnsi` uses `assertGoldenAnsi` against `tests/fixtures/confirm-text-form.golden`. Coverage: sugar-prompt shows 77.42% overall (misleading — many files are class_alias re-exports with no executable code: HasDynamicLabels.php, HasHideFunc.php, Theme.php, FuzzyMatcher.php; Field.php is an interface). Actual executable code coverage is near 100% for implemented classes (Confirm, Input, Select, Text, etc.). candy-fuzzy coverage: 96.69% lines (175/181) — above 95% target. 2 pre-existing FuzzyMatcherTest failures remain (scoring/sorting differences between old Forms FuzzyMatcher and new SmithWatermanMatcher — documented as BLOCKING above). path-repo check: clean (55 libs scanned).
 
+- [2026-05-29 | step-17 | coder] sugar-charts: adopted candy-buffer. composer.json: added `sugarcraft/candy-buffer` + path-repo. Path-repo closure propagated to sugar-tick (which transitively depends on sugar-charts). Files: `sugar-charts/composer.json` (modified), `sugar-charts/src/Buffer/BufferHelper.php` (new — Sprinkles→Buffer Style conversion + graphemeWidth), `sugar-charts/src/Sparkline/Sparkline.php` (refactored to build Buffer, call toAnsi()). 327 tests pass, path-repo clean. Note: BarChart, LineChart, Heatmap, Scatter use string/Canvas rendering and were NOT refactored — BarChart uses rtrim() (output would differ with Buffer::toAnsi trailing spaces); LineChart/Heatmap/Scatter use Canvas+Sprinkles\Style extensively (requires broader Graph helper conversion). Wide-char label awareness via BufferHelper::graphemeWidth() is implemented.
+
+- [2026-05-29 | step-17 | tester] sugar-charts test coverage per chart class:
+  - Overall: 87.49% lines (1756/2007) — below 95% target (infrastructure gap: OHLCChart 61.33%, Scatter 62.81%, BarChart 87.40%)
+  - Test count: 367 tests, 928 assertions (+1 test, +1 assertion from tester wide-char label test)
+  - Per-class coverage: BarChart 87.40%, BufferHelper 86.60%, Canvas 90.12%, Graph 93.41%, Heatmap 94.12%, Legend 91.04%, LineChart 90.87%, OHLCChart 61.33%, Picture 88.46%, Scatter 62.81%, Sparkline 91.18%, Streamline 96.43% (only one ≥95%)
+  - Added `BarChartTest::testWideCharLabelsRenderCorrectly` — pins output `"      █████\n█████ █████\n█████ █████\n値1  値2"` for CJK labels `['値1', 0.5], ['値2', 1.0]`
+  - Byte-snapshot: existing fixtures unchanged (all 367 tests green)
+
 ## Resolved Items
 
 - [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
