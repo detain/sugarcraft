@@ -5,6 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Prompt\Fuzzy;
 
 /**
- * @deprecated Use SugarCraft\Forms\Fuzzy\FuzzyMatcher instead. This re-export exists for backward compatibility.
+ * @deprecated Use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher instead. This re-export exists for backward compatibility.
  */
-class_alias(\SugarCraft\Forms\Fuzzy\FuzzyMatcher::class, FuzzyMatcher::class);
+class_alias(\SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher::class, FuzzyMatcher::class);
