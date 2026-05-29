@@ -35,8 +35,12 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/candy-layout": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-zone": "dev-master",
         "sugarcraft/honey-bounce": "dev-master"
@@ -59,6 +63,13 @@
     "repositories": [
         {
             "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "../candy-core",
             "options": {
                 "symlink": true
@@ -66,7 +77,28 @@
         },
         {
             "type": "path",
+            "url": "../candy-fuzzy",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "../candy-forms",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-mouse",
             "options": {
                 "symlink": true
             }

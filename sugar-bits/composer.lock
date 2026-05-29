@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "08387fa1550e30c3104e95725ff29122",
+    "content-hash": "3aea8620e77965368a66d2441f42ba9f",
     "packages": [
         {
             "name": "react/event-loop",
@@ -152,6 +152,60 @@
             "time": "2025-08-19T18:57:03+00:00"
         },
         {
+            "name": "sugarcraft/candy-buffer",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-buffer",
+                "reference": "55a25d0d31b3ccfa249769178a0a848b9996fbc6"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Buffer\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Buffer\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Cell-grid value objects for terminal rendering — Buffer and Cell as immutable, fluent data model.",
+            "homepage": "https://github.com/sugarcraft/candy-buffer",
+            "keywords": [
+                "buffer",
+                "cell",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-buffer/issues",
+                "source": "https://github.com/sugarcraft/candy-buffer/tree/master",
+                "docs": "https://sugarcraft.github.io/lib/candy-buffer.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-core",
             "version": "dev-master",
             "dist": {
@@ -215,6 +269,63 @@
                 "issues": "https://github.com/sugarcraft/candy-core/issues",
                 "source": "https://github.com/sugarcraft/candy-core",
                 "docs": "https://sugarcraft.github.io/lib/candy-core.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-forms",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-forms",
+                "reference": "7eeaccb1e029570d5b4a232b13c941400747aa28"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-fuzzy": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Forms\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Foundation lib for form primitives (TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form) extracted from sugar-bits and sugar-prompt.",
+            "homepage": "https://github.com/sugarcraft/candy-forms",
+            "keywords": [
+                "forms",
+                "input",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-forms/issues",
+                "source": "https://github.com/sugarcraft/candy-forms",
+                "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
             },
             "transport-options": {
                 "symlink": true,
@@ -331,6 +442,119 @@
                 "symlink": true,
                 "relative": true
             }
+        },
+        {
+            "name": "sugarcraft/candy-mouse",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-mouse",
+                "reference": "c401e7e9cebed9e3177cc504c79576bea39789dd"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Mouse\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Mouse\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) plus ZoneClickTracker for press/release deduplication. No external Manager wiring needed.",
+            "homepage": "https://github.com/sugarcraft/candy-mouse",
+            "keywords": [
+                "bubblezone",
+                "hit-testing",
+                "mouse",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-mouse/issues",
+                "source": "https://github.com/sugarcraft/candy-mouse",
+                "docs": "https://sugarcraft.github.io/lib/candy-mouse.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-palette",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-palette.git",
+                "reference": "22b5d0770d02222694bb7ebe931016d37353b995"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/22b5d0770d02222694bb7ebe931016d37353b995",
+                "reference": "22b5d0770d02222694bb7ebe931016d37353b995",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Palette\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/colorprofile — magical terminal color profile detection and color degradation (TrueColor → ANSI256 → ANSI → ASCII).",
+            "homepage": "https://github.com/sugarcraft/candy-palette",
+            "keywords": [
+                "ansi",
+                "color",
+                "colorprofile",
+                "sugarcraft",
+                "terminal",
+                "truecolor",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-palette/issues",
+                "source": "https://github.com/sugarcraft/candy-palette"
+            },
+            "time": "2026-05-29T02:10:20+00:00"
         },
         {
             "name": "sugarcraft/candy-pty",
@@ -456,6 +680,125 @@
                 "issues": "https://github.com/sugarcraft/candy-sprinkles/issues",
                 "source": "https://github.com/sugarcraft/candy-sprinkles",
                 "docs": "https://sugarcraft.github.io/lib/candy-sprinkles.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-zone",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-zone",
+                "reference": "53df6dccb5dccb4a9901a8481a5d644e8ac701fb"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Zone\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Zone\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of lrstanley/bubblezone — mouse zone tracker for TUI apps.",
+            "homepage": "https://github.com/sugarcraft/candy-zone",
+            "keywords": [
+                "bubblezone",
+                "cli",
+                "click",
+                "mouse",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "zones"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-zone/issues",
+                "source": "https://github.com/sugarcraft/candy-zone",
+                "docs": "https://sugarcraft.github.io/lib/candy-zone.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/honey-bounce",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../honey-bounce",
+                "reference": "203ffaa8bfe8b395cb8a4be2e6425b0bf0ac78a7"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-palette": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Bounce\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Bounce\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/harmonica — damped spring physics + Newtonian projectile simulation for terminal animation.",
+            "homepage": "https://github.com/sugarcraft/honey-bounce",
+            "keywords": [
+                "animation",
+                "harmonica",
+                "physics",
+                "projectile",
+                "ryan-juckett",
+                "spring",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/honey-bounce/issues",
+                "source": "https://github.com/sugarcraft/honey-bounce",
+                "docs": "https://sugarcraft.github.io/lib/honey-bounce.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -2137,9 +2480,15 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
+        "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
+        "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-fuzzy": 20,
-        "sugarcraft/candy-sprinkles": 20
+        "sugarcraft/candy-layout": 20,
+        "sugarcraft/candy-mouse": 20,
+        "sugarcraft/candy-sprinkles": 20,
+        "sugarcraft/candy-zone": 20,
+        "sugarcraft/honey-bounce": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
