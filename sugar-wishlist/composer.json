@@ -106,6 +106,34 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-fuzzy",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-mouse",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }

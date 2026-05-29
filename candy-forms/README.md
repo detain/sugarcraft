@@ -60,6 +60,27 @@ $spinner = Spinner::new(Style::dot());
 // in your model's view():    "loading {$spinner->view()}"
 ```
 
+## Shared foundations
+
+candy-forms is built on four shared packages:
+
+- **[candy-buffer](/sugarcraft/candy-buffer)** — Cell-grid model + `Buffer::toAnsi()` for
+  rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
+  path internally; their snapshot tests pin byte-for-byte output.
+- **[candy-layout](/sugarcraft/candy-layout)** — `LayoutSolver` + constraint types
+  (`Constraint::length`, `Constraint::fill`, etc.). `Form::withConstraints()` routes
+  through the solver when an explicit constraint set is provided.
+- **[candy-testing](/sugarcraft/candy-testing)** — `Assertions::assertGoldenAnsi` and
+  `Assertions::assertCellGrid` snapshot helpers. Render fixtures live in
+  `tests/fixtures/`; set `UPDATE_GOLDENS=1` to regenerate them.
+- **[candy-fuzzy](/sugarcraft/candy-fuzzy)** — `SmithWatermanMatcher` scores.
+  Select / MultiSelect filter delegates to it internally; the existing public
+  `withFilter(callable)` injection point is preserved for custom filters.
+
+The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
+remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`
+with no behavioural divergence.
+
 ## Dependencies
 
 - `sugarcraft/candy-core` — Elm-architecture TUI runtime
