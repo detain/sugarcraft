@@ -129,6 +129,11 @@ Available themes: `Theme::ansi()` / `Theme::dark()` / `Theme::light()` /
 `Theme::dracula()` / `Theme::tokyoNight()` / `Theme::oneDark()` /
 `Theme::githubDark()` / `Theme::solarizedDark()` / `Theme::solarizedLight()`.
 
+## Shared foundations
+
+All chart renderers build their output via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer).
+Do not re-implement string padding or cell-grid assembly — use the `Buffer` class directly.
+
 ## Graph primitives at a glance
 
 `Graph` is a static-method utility — every draw call takes a `Canvas`

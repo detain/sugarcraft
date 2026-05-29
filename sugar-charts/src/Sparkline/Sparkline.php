@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Charts\Sparkline;
 
+use SugarCraft\Charts\Buffer\BufferHelper;
 use SugarCraft\Charts\Lang;
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style as BufferStyle;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -166,15 +170,35 @@ final class Sparkline
         }
         $range = $max - $min;
 
-        $out  = '';
+        return $this->renderBuffer($w, $points, (float) $min, $range);
+    }
+
+    private function renderBuffer(int $w, array $points, float $min, float $range): string
+    {
+        $buffer = Buffer::new($w, 1);
+        $bufferStyle = $this->style !== null ? BufferHelper::toBufferStyle($this->style) : null;
         $missing = $w - count($points);
-        if ($missing > 0) {
-            $out .= str_repeat(self::GLYPHS[0], $missing);
+        $col = 0;
+
+        // Leading empty glyphs
+        for ($i = 0; $i < $missing; $i++) {
+            $buffer = $buffer->withCellAt($col, 0, new Cell(self::GLYPHS[0], $bufferStyle, null, 1));
+            $col++;
         }
+
+        // Data glyphs
         foreach ($points as $v) {
-            $out .= self::glyph((float) $v, (float) $min, $range);
+            $g = self::glyph((float) $v, $min, $range);
+            $gw = BufferHelper::graphemeWidth($g);
+            $buffer = $buffer->withCellAt($col, 0, new Cell($g, $bufferStyle, null, $gw));
+            // Wide char continuation cell
+            if ($gw === 2 && $col + 1 < $w) {
+                $buffer = $buffer->withCellAt($col + 1, 0, Cell::continuation());
+            }
+            $col++;
         }
-        return $this->styled($out);
+
+        return $buffer->toAnsi();
     }
 
     private function styled(string $rendered): string
