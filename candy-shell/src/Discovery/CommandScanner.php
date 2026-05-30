@@ -74,6 +74,9 @@ final class CommandScanner
         return $discovered;
     }
 
+    /** @var array<string, bool> */
+    private array $loadedLater = [];
+
     /**
      * @return iterable<class-string>
      */
@@ -82,23 +85,36 @@ final class CommandScanner
         $prefix = ltrim($namespace, '\\') . '\\';
         $len = strlen($prefix);
 
-        foreach ($this->getDeclaredClasses() as $class) {
-            if (strncmp($class, $prefix, $len) !== 0) {
-                continue;
+        $this->loadedLater = [];
+        $loader = function (string $class) use ($prefix, $len): void {
+            if (strncmp($class, $prefix, $len) === 0) {
+                $this->loadedLater[$class] = true;
             }
-            if (!class_exists($class)) {
-                continue;
-            }
-            yield $class;
-        }
-    }
+        };
+        spl_autoload_register($loader, true, true);
 
-    /**
-     * @return list<string>
-     */
-    private function getDeclaredClasses(): array
-    {
-        return get_declared_classes();
+        try {
+            $known = get_declared_classes();
+
+            foreach ($known as $class) {
+                if (strncmp($class, $prefix, $len) !== 0) {
+                    continue;
+                }
+                if (!class_exists($class)) {
+                    continue;
+                }
+                yield $class;
+            }
+
+            foreach (array_keys($this->loadedLater) as $class) {
+                if (!class_exists($class)) {
+                    continue;
+                }
+                yield $class;
+            }
+        } finally {
+            spl_autoload_unregister($loader);
+        }
     }
 
     /**
