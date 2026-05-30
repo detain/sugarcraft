@@ -6,19 +6,27 @@ namespace SugarCraft\Shell\Model;
 
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
+use SugarCraft\Forms\ItemList\Item;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+use SugarCraft\Fuzzy\MatchResult;
 
 /**
  * Variant of {@see ChooseModel} that opens directly in filter mode and
  * sends every keystroke to the inner {@see ItemList}'s filter buffer.
  * Enter on the highlighted result submits; Esc / Ctrl-C aborts.
+ *
+ * When $fuzzy is true, uses SmithWatermanMatcher for scored fuzzy matching
+ * with highlight indices instead of substring matching.
  */
 final class FilterModel implements Model
 {
+    private SmithWatermanMatcher $matcher;
+
     /**
      * @param list<string> $options
      * @param list<string> $preselected
@@ -34,6 +42,7 @@ final class FilterModel implements Model
         string $value = '',
         ?string $cursorPrefix = null,
         ?string $unselectedPrefix = null,
+        bool $fuzzy = false,
     ): self {
         $items = array_map(static fn(string $o) => new StringItem($o), $options);
         $list  = ItemList::new($items, 60, max(1, $height))->withShowDescription(false);
@@ -68,9 +77,26 @@ final class FilterModel implements Model
                 }
             }
         }
-        return new self($list, false, false, $multi, $cap, $checked, $reverse);
+        $self = new self(
+            list: $list,
+            submitted: false,
+            aborted: false,
+            multi: $multi,
+            limit: $cap,
+            checked: $checked,
+            reverse: $reverse,
+            fuzzy: $fuzzy,
+            allItems: $items,
+            fuzzyResults: [],
+        );
+        $self->matcher = new SmithWatermanMatcher();
+        if ($fuzzy && $value !== '') {
+            $self = $self->recomputeFuzzy($self, $list->filterValue());
+        }
+        return $self;
     }
 
+    /** @param list<Item> */
     private function __construct(
         public readonly ItemList $list,
         public readonly bool $submitted,
@@ -79,7 +105,12 @@ final class FilterModel implements Model
         public readonly int $limit     = 1,
         public readonly array $checked = [],
         public readonly bool $reverse  = false,
-    ) {}
+        public readonly bool $fuzzy    = false,
+        public readonly array $allItems = [],
+        public readonly array $fuzzyResults = [],
+    ) {
+        $this->matcher = new SmithWatermanMatcher();
+    }
 
     public function init(): ?\Closure
     {
@@ -99,7 +130,8 @@ final class FilterModel implements Model
                 return [$this->copy(aborted: true), Cmd::quit()];
             }
             if ($msg->type === KeyType::Enter) {
-                if ($this->list->visibleItems() === []) {
+                $visible = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->visibleItems();
+                if ($visible === []) {
                     return [$this, null];
                 }
                 return [$this->copy(submitted: true), Cmd::quit()];
@@ -111,7 +143,72 @@ final class FilterModel implements Model
             }
         }
         [$next, $cmd] = $this->list->update($msg);
-        return [$this->copy(list: $next), $cmd];
+
+        $filterText = $next->filterValue();
+        if ($this->fuzzy && $filterText !== '') {
+            $newResults = $this->computeFuzzyResults($filterText);
+            return [$this->copy(list: $next, fuzzyResults: $newResults), $cmd];
+        } elseif (!$this->fuzzy || $filterText === '') {
+            return [$this->copy(list: $next, fuzzyResults: []), $cmd];
+        }
+
+        return [$this->copy(list: $next, fuzzyResults: $this->fuzzyResults), $cmd];
+    }
+
+    /**
+     * @return array<int, MatchResult>
+     */
+    private function computeFuzzyResults(string $filterText): array
+    {
+        $candidates = array_map(static fn(Item $i) => $i->filterValue(), $this->allItems);
+        $matches = $this->matcher->matchAll($filterText, $candidates);
+
+        $indices = [];
+        foreach ($matches as $match) {
+            $haystack = $match->haystack;
+            foreach ($this->allItems as $idx => $item) {
+                if ($item->filterValue() === $haystack) {
+                    $indices[$idx] = $match;
+                    break;
+                }
+            }
+        }
+
+        return $indices;
+    }
+
+    private function recomputeFuzzy(self $self, string $filterText): self
+    {
+        $candidates = array_map(static fn(Item $i) => $i->filterValue(), $self->allItems);
+        $matches = $self->matcher->matchAll($filterText, $candidates);
+
+        $indices = [];
+        foreach ($matches as $match) {
+            $haystack = $match->haystack;
+            foreach ($self->allItems as $idx => $item) {
+                if ($item->filterValue() === $haystack) {
+                    $indices[$idx] = $match;
+                    break;
+                }
+            }
+        }
+
+        return $self->copy(fuzzyResults: $indices);
+    }
+
+    /** @return list<Item> */
+    public function fuzzyVisibleItems(): array
+    {
+        if ($this->fuzzyResults === []) {
+            return $this->allItems;
+        }
+        $result = [];
+        $originalIndices = array_keys($this->fuzzyResults);
+        sort($originalIndices, SORT_NUMERIC);
+        foreach ($originalIndices as $idx) {
+            $result[] = $this->allItems[$idx];
+        }
+        return $result;
     }
 
     public function view(): string
@@ -130,8 +227,18 @@ final class FilterModel implements Model
         if (!$this->submitted || $this->multi) {
             return null;
         }
-        $item = $this->list->selectedItem();
+        $item = $this->fuzzy ? $this->fuzzySelectedItem() : $this->list->selectedItem();
         return $item?->title();
+    }
+
+    private function fuzzySelectedItem(): ?Item
+    {
+        if ($this->fuzzyResults === []) {
+            return $this->allItems[0] ?? null;
+        }
+        $cursor = $this->list->index();
+        $visible = $this->fuzzyVisibleItems();
+        return $visible[$cursor] ?? null;
     }
 
     /** @return list<string> */
@@ -140,7 +247,7 @@ final class FilterModel implements Model
         if (!$this->submitted || !$this->multi) {
             return [];
         }
-        $items = $this->list->items;
+        $items = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->items;
         $out = [];
         ksort($this->checked, SORT_NUMERIC);
         foreach ($this->checked as $idx => $on) {
@@ -158,16 +265,39 @@ final class FilterModel implements Model
     public function isAborted(): bool   { return $this->aborted; }
     public function isMulti(): bool     { return $this->multi; }
 
+    /**
+     * Returns the highlight indices for the currently selected item.
+     * @return list<int>
+     */
+    public function highlightIndices(): array
+    {
+        if (!$this->fuzzy || $this->fuzzyResults === []) {
+            return [];
+        }
+        $cursor = $this->list->index();
+        $visible = $this->fuzzyVisibleItems();
+        if (!isset($visible[$cursor])) {
+            return [];
+        }
+        $selectedTitle = $visible[$cursor]->title();
+        foreach ($this->fuzzyResults as $idx => $match) {
+            if ($this->allItems[$idx]->title() === $selectedTitle) {
+                return $match->indices();
+            }
+        }
+        return [];
+    }
+
     private function toggle(): self
     {
-        $items = $this->list->visibleItems();
-        if ($items === []) {
+        $visible = $this->fuzzy ? $this->fuzzyVisibleItems() : $this->list->visibleItems();
+        if ($visible === []) {
             return $this;
         }
         $cursor = $this->list->index();
-        $title  = $items[$cursor]->title();
+        $title  = $visible[$cursor]->title();
         $idx = null;
-        foreach ($this->list->items as $i => $item) {
+        foreach ($this->allItems as $i => $item) {
             if ($item->title() === $title) {
                 $idx = $i;
                 break;
@@ -194,15 +324,19 @@ final class FilterModel implements Model
         ?bool $submitted = null,
         ?bool $aborted = null,
         ?array $checked = null,
+        ?array $fuzzyResults = null,
     ): self {
         return new self(
-            list:      $list      ?? $this->list,
-            submitted: $submitted ?? $this->submitted,
-            aborted:   $aborted   ?? $this->aborted,
-            multi:     $this->multi,
-            limit:     $this->limit,
-            checked:   $checked   ?? $this->checked,
-            reverse:   $this->reverse,
+            list:          $list          ?? $this->list,
+            submitted:     $submitted     ?? $this->submitted,
+            aborted:       $aborted       ?? $this->aborted,
+            multi:         $this->multi,
+            limit:         $this->limit,
+            checked:       $checked       ?? $this->checked,
+            reverse:       $this->reverse,
+            fuzzy:         $this->fuzzy,
+            allItems:      $this->allItems,
+            fuzzyResults:  $fuzzyResults  ?? $this->fuzzyResults,
         );
     }
 
