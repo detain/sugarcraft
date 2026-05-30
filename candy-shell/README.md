@@ -326,6 +326,13 @@ cd candy-shell && composer install && vendor/bin/phpunit
 
 ![write](.vhs/write.gif)
 
+## Shared foundations
+
+The `filter` command uses [candy-fuzzy](../candy-fuzzy/README.md) for
+fuzzy-matching via `FilterModel` → `SmithWatermanMatcher`. The shell-style
+flag parser (`SubStyleParser`) operates on style-flag strings in
+isolation and has no fuzzy logic.
+
 ## Related
 
 - [SugarCraft monorepo](https://github.com/detain/sugarcraft)

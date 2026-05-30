@@ -37,6 +37,7 @@
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
         "sugarcraft/candy-shine": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
