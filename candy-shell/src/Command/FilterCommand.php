@@ -41,7 +41,7 @@ final class FilterCommand extends Command
             ->addOption('indicator', null, InputOption::VALUE_REQUIRED, 'Alias for --cursor.', null)
             ->addOption('unselected-prefix', null, InputOption::VALUE_REQUIRED, 'Glyph rendered before non-cursor items.', null)
             ->addOption('strict', null, InputOption::VALUE_NONE, 'Substring-only match (the default — flag accepted for gum compat).')
-            ->addOption('fuzzy', null, InputOption::VALUE_NONE, 'Fuzzy match (currently a no-op alias for --strict — gum compat).')
+            ->addOption('fuzzy', null, InputOption::VALUE_NONE, 'Fuzzy match using Smith-Waterman scoring with highlight indices.')
             ->addOption('no-fuzzy', null, InputOption::VALUE_NONE, 'Disable fuzzy matching (default — gum compat).')
             ->addOption('width', null, InputOption::VALUE_REQUIRED, 'Cap rendered width in cells (0 = auto).', 0)
             ->addOption('show-help', null, InputOption::VALUE_NONE, 'Alias for --help (gum compat).')
@@ -78,6 +78,7 @@ final class FilterCommand extends Command
             value:            (string) $input->getOption('value'),
             cursorPrefix:     is_string($cursor) ? $cursor : null,
             unselectedPrefix: is_string($unselected) ? $unselected : null,
+            fuzzy:            (bool) $input->getOption('fuzzy'),
         );
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
