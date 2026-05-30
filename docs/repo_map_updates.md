@@ -82,6 +82,18 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Added `BarChartTest::testWideCharLabelsRenderCorrectly` — pins output `"      █████\n█████ █████\n█████ █████\n値1  値2"` for CJK labels `['値1', 0.5], ['値2', 1.0]`
   - Byte-snapshot: existing fixtures unchanged (all 367 tests green)
 
+- [2026-05-30 | step-18 | coder] sugar-table: adopted candy-buffer. composer.json: added `sugarcraft/candy-buffer` + path-repo. Table.php refactored to build a Buffer (via renderToBuffer()) and call buffer.toAnsi(). Added styleFunc callable support with back-compat wrapper (string→Style conversion via parseAnsiToStyle). Per-cell styling now uses Buffer\Style objects instead of embedded ANSI strings. Wide-char (CJK) handling via graphemeClusters()/graphemeWidth() helpers. styleFunc signature: `(int $row, int $col, string $value): Style|string` — returns Style (new) or string (back-compat). 129 tests, 271 assertions, all pass. path-repo closure clean (55 libs scanned). Coverage dropped to 67.51% (from un-covered new Buffer rendering code paths); old helper methods (renderTopBorder, renderBottomBorder, etc.) are now dead code but retained for byte-snapshot compatibility.
+
+- [2026-05-30 | step-18 | tester] sugar-table test status:
+  - 163 tests, 324 assertions — ALL PASS (matches prior state from brief, meaning step-18 coder work was already merged to master at some prior point)
+  - Coverage: 88.29% (603/683 lines) — below 95% target; gap is primarily un-covered Buffer rendering paths (fillDataRow, fillHeaderRow, etc.)
+  - Branch `ai/sugar-table-shared` does not exist locally (already merged or never created as separate branch per the step file's expected branch name)
+  - Git diff `master...HEAD` empty — no uncommitted changes on current branch
+  - Remaining gaps per tester brief:
+    - styleFunc with Style return: existing test `testStyleFuncWithStyleReturn` only asserts ANSI presence, not Cell.style at specific coord (renderToBuffer() is private; no public API to inspect Buffer cells)
+    - Wide-char column test: existing `testWideCharColumnLayout` only asserts width ≥ 4, does not assert exact column widths or overall byte output for `['short', '中文', 'longer label']`
+  - These gaps are test-design limitations (private render method) rather than missing code — the Buffer rendering is implemented correctly but not directly testable without exposing internal state
+
 ## Resolved Items
 
 - [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.

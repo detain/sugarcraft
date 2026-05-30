@@ -26,10 +26,18 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "../candy-core",
