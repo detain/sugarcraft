@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table\Tests;
 
+use SugarCraft\Buffer\Style;
 use SugarCraft\Table\{Column, Row, RowData, StyledCell, Table};
 use PHPUnit\Framework\TestCase;
 
@@ -253,5 +254,420 @@ final class TableTest extends TestCase
         $b = $a->SortBy('name', false);
         $this->assertNotSame($a, $b);
         $this->assertSame(3, $a->TotalRows());
+    }
+
+    public function testStyleFuncWithStringReturn(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([
+                Row::new(RowData::from(['id' => '1'])),
+                Row::new(RowData::from(['id' => '2'])),
+            ])
+            ->withStyleFunc(fn(int $row) => $row === 0 ? '1;31' : '');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString('1', $view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testStyleFuncWithStyleReturn(): void
+    {
+        $redStyle = Style::new(0xff0000);
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([
+                Row::new(RowData::from(['id' => 'X'])),
+            ])
+            ->withStyleFunc(fn(int $row) => $redStyle);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testWideCharColumnLayout(): void
+    {
+        $t = Table::withColumns([Column::new('val', 'Val', 12)])
+            ->withRows([
+                Row::new(RowData::from(['val' => 'short'])),
+                Row::new(RowData::from(['val' => '中文'])),
+                Row::new(RowData::from(['val' => 'longer label'])),
+            ]);
+
+        $widths = $t->computeColumnWidths(80);
+        $this->assertCount(1, $widths);
+        $this->assertGreaterThanOrEqual(4, $widths[0]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString('short', $view);
+        $this->assertStringContainsString('longer label', $view);
+    }
+
+    public function testHideHeader(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->withShowHeader(false);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringNotContainsString('ID', $view);
+    }
+
+    public function testHideFooter(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->withPageSize(10)
+            ->withShowFooter(false);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testViewportScrollBeyondRows(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->withViewportHeight(5)
+            ->withScrollY(10);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testViewportScrollWithinRows(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([
+                Row::new(RowData::from(['id' => '1'])),
+                Row::new(RowData::from(['id' => '2'])),
+                Row::new(RowData::from(['id' => '3'])),
+            ])
+            ->withViewportHeight(2)
+            ->withScrollY(1);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testEmptyTableReturnsEmptyString(): void
+    {
+        $t = Table::withColumns([]);
+        $this->assertSame('', $t->View());
+    }
+
+    public function testColor256Foreground(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('38;5;196');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testColor256Background(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('48;5;21');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testStyleFuncWithFgColor(): void
+    {
+        $redStyle = Style::new(0xff0000);
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([
+                Row::new(RowData::from(['id' => 'A'])),
+                Row::new(RowData::from(['id' => 'B'])),
+            ])
+            ->withStyleFunc(fn(int $row) => $row === 0 ? $redStyle : Style::new());
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testStyleFuncWithFgBgAndAttr(): void
+    {
+        $styled = Style::new(0x00ff00, 0x0000aa, Style::ATTR_BOLD | Style::ATTR_UNDERLINE);
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withStyleFunc(fn() => $styled);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testMultilineMode(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => "line1\nline2"]))])
+            ->withMultilineMode(true);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testBorderStyleWithRgbColor(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('38;2;255;128;0');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testBorderStyleWithBrightColor(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('1;91');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString("\x1b[", $view);
+    }
+
+    public function testTableBaseStyle(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBaseStyle('1;32');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testSelectableFalse(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withSelectable(false);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testSelectPage(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 30)
+                )
+            )
+            ->withPageSize(10)
+            ->SelectPage(2);
+
+        $this->assertSame(2, $t->CurrentPage());
+    }
+
+    public function testPreviousPage(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 30)
+                )
+            )
+            ->withPageSize(10)
+            ->SelectPage(2)
+            ->PreviousPage();
+
+        $this->assertSame(1, $t->CurrentPage());
+    }
+
+    public function testColumnWidthDynamicWithContent(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Dynamic)])
+            ->withRows([
+                Row::new(RowData::from(['id' => 'tiny'])),
+                Row::new(RowData::from(['id' => 'this is a longer value'])),
+            ]);
+
+        $widths = $t->computeColumnWidths(80);
+        $this->assertCount(1, $widths);
+        $this->assertGreaterThanOrEqual(5, $widths[0]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testColumnWidthContentType(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Content)])
+            ->withRows([
+                Row::new(RowData::from(['id' => 'short'])),
+            ]);
+
+        $widths = $t->computeColumnWidths(80);
+        $this->assertCount(1, $widths);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testColumnWidthPercent(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 20)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 25.0)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))]);
+
+        $widths = $t->computeColumnWidths(80);
+        $this->assertCount(1, $widths);
+        $this->assertGreaterThan(0, $widths[0]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testHeaderStyleCustom(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withHeaderStyle('1;4;34');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testFilterWithNoMatchingRows(): void
+    {
+        $t = Table::withColumns([Column::new('name', 'Name', 10)])
+            ->withRows([
+                Row::new(RowData::from(['name' => 'Alice'])),
+                Row::new(RowData::from(['name' => 'Bob'])),
+            ])
+            ->Filter('name', 'xyz');
+
+        $this->assertSame(0, $t->TotalRows());
+    }
+
+    public function testSortByNumeric(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows([
+                Row::new(RowData::from(['n' => '10'])),
+                Row::new(RowData::from(['n' => '2'])),
+                Row::new(RowData::from(['n' => '100'])),
+            ])
+            ->SortBy('n', true);
+
+        $rows = $t->filteredSortedRows();
+        $this->assertSame('2', $rows[0]->data->get('n'));
+    }
+
+    public function testSortByNumericDescending(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows([
+                Row::new(RowData::from(['n' => '10'])),
+                Row::new(RowData::from(['n' => '2'])),
+                Row::new(RowData::from(['n' => '100'])),
+            ])
+            ->SortBy('n', false);
+
+        $rows = $t->filteredSortedRows();
+        $this->assertSame('100', $rows[0]->data->get('n'));
+    }
+
+    public function testAddRows(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => '1']))])
+            ->addRows([
+                Row::new(RowData::from(['id' => '2'])),
+                Row::new(RowData::from(['id' => '3'])),
+            ]);
+
+        $this->assertSame(3, $t->TotalRows());
+    }
+
+    public function testBorderStyleWithBg256Grayscale(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('48;5;244');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testBorderStyleWithBrightBg(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([Row::new(RowData::from(['id' => 'X']))])
+            ->withBorderStyle('48;5;105');
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testColumnWithStyle(): void
+    {
+        $t = Table::withColumns([
+            Column::new('id', 'ID', 5)->withStyle('1;31'),
+        ])->withRows([
+            Row::new(RowData::from(['id' => 'X'])),
+        ]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testColumnWithAlignLeft(): void
+    {
+        $t = Table::withColumns([
+            Column::new('id', 'ID', 5)->withAlignLeft(),
+        ])->withRows([
+            Row::new(RowData::from(['id' => 'X'])),
+        ]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
+
+    public function testFilterCaseInsensitive(): void
+    {
+        $t = Table::withColumns([Column::new('name', 'Name', 10)])
+            ->withRows([
+                Row::new(RowData::from(['name' => 'Alice'])),
+                Row::new(RowData::from(['name' => 'Bob'])),
+            ])
+            ->Filter('name', 'ALI');
+
+        $this->assertSame(1, $t->TotalRows());
+    }
+
+    public function testZeroPageSizeMeansNoPagination(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 30)
+                )
+            )
+            ->withPageSize(0);
+
+        $this->assertSame(1, $t->TotalPages());
+    }
+
+    public function testTotalRowsWithNoRows(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+            ->withRows([]);
+
+        $this->assertSame(0, $t->TotalRows());
     }
 }

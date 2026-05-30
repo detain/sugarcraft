@@ -243,6 +243,27 @@ $t = Table::withColumns([...])
 
 When enabled, each row's height equals the maximum number of lines across all its cells after text wrapping. `renderRowLines()` iterates all cell lines to build the full row. When disabled (the default), cells are clamped to one line for backward compatibility.
 
+## Shared foundations
+
+sugar-table adopts `candy-buffer` for all buffer-based rendering. The table's internal
+`Buffer` instance is constructed once per `View()` call and passed through all
+layout methods.
+
+### styleFunc signature
+
+`Table::withStyleFunc()` accepts a callable with the signature:
+
+```php
+function(int $row, int $col, string $value): Style|string
+```
+
+- **Returns `Style`** — new preferred style (PHP 8.3+ typed return, immutable)
+- **Returns `string`** — legacy ANSI SGR string, automatically wrapped via
+  `Style::fromAnsiString()` for backward compatibility
+
+Implementations should return `Style` when possible; the wrapper path is identical
+to the old behavior but adds one allocation.
+
 ## License
 
 [MIT](LICENSE)

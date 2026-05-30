@@ -15,7 +15,8 @@ namespace SugarCraft\Table;
  *
  * @see https://github.com/Evertras/bubble-table
  */
-use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Buffer\{Buffer, Cell, Style};
+use SugarCraft\Core\Util\{Ansi, Width};
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Table\Lang;
 
@@ -76,6 +77,10 @@ final class Table
     private bool $zebraEnabled = false;
     private string $zebraStyleOdd  = '100';  // bright black (dim)
     private string $zebraStyleEven = '';
+
+    // Per-cell style callback: (int $row, int $col, string $value): Style|string
+    /** @var callable|null */
+    private $styleFunc = null;
 
     // Border chars
     private string $borderTopLeft  = '┌';
@@ -259,6 +264,25 @@ final class Table
     {
         $clone = clone $this;
         $clone->multilineMode = $multiline;
+        return $clone;
+    }
+
+    /**
+     * Set a per-cell style callback.
+     *
+     * The callback receives (int $row, int $col, string $value) and may return:
+     * - A Style object (new API)
+     * - An ANSI SGR string like "1;31" for back-compat
+     *
+     * When not set, existing baseStyle/column style/row style/cell style
+     * precedence is used as before.
+     *
+     * @param callable|null $fn (int $row, int $col, string $value): Style|string
+     */
+    public function withStyleFunc(?callable $fn): self
+    {
+        $clone = clone $this;
+        $clone->styleFunc = $fn;
         return $clone;
     }
 
@@ -596,48 +620,592 @@ final class Table
     {
         if ($this->columns === []) return '';
 
-        $lines   = [];
+        $buffer = $this->renderToBuffer();
+        return $buffer->toAnsi();
+    }
+
+    /**
+     * Render the entire table into a Buffer.
+     */
+    private function renderToBuffer(): Buffer
+    {
         $colCount = \count($this->columns);
         $totalWidth = $this->computeTotalWidth();
-        $rows     = $this->pagedRows();
+        $rows = $this->pagedRows();
 
         // Apply viewport virtualization — scrollY offset into the paged view
         if ($this->viewportHeight > 0) {
             if ($this->scrollY >= \count($rows)) {
-                $rows = [];  // No rows visible when scrollY exceeds row count
+                $rows = [];
             } else {
                 $rows = \array_slice($rows, $this->scrollY, $this->viewportHeight);
             }
         }
 
+        // Calculate buffer dimensions
+        // Height: top border + [header + header sep] + rows + [footer] + bottom border
+        $topBorderRows = 1;
+        $headerRows = $this->showHeader ? 2 : 0; // header + separator
+        $footerRows = ($this->showFooter && $this->pageSize > 0) ? 1 : 0;
+        $bottomBorderRows = 1;
+        $rowCount = \count($rows);
+
+        $bufferHeight = $topBorderRows + $headerRows + $rowCount + $footerRows + $bottomBorderRows;
+        $bufferWidth = $totalWidth + 2; // +2 for left/right border chars
+
+        $buffer = Buffer::new($bufferWidth, $bufferHeight);
+        $bufferRow = 0;
+
         // Top border
-        $lines[] = $this->renderTopBorder($totalWidth);
+        $buffer = $this->fillBorderRow($buffer, $bufferRow, $totalWidth, 'top');
+        $bufferRow++;
 
         // Header
         if ($this->showHeader) {
-            $lines[] = $this->renderHeader($totalWidth);
-            $lines[] = $this->renderHeaderSeparator($totalWidth);
+            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth);
+            $bufferRow++;
+            $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $totalWidth);
+            $bufferRow++;
         }
 
         // Data rows
         foreach ($rows as $ri => $row) {
-            // selectedIndex is relative to the full paged view; adjust for scroll offset
             $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
-            $rowLines = $this->renderRowLines($row, $ri, $totalWidth, $isSelected);
-            foreach ($rowLines as $rowLine) {
-                $lines[] = $rowLine;
-            }
+            $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected);
+            $bufferRow++;
         }
 
         // Footer
         if ($this->showFooter && $this->pageSize > 0) {
-            $lines[] = $this->renderFooter($totalWidth);
+            $buffer = $this->fillFooterRow($buffer, $bufferRow, $totalWidth);
+            $bufferRow++;
         }
 
         // Bottom border
-        $lines[] = $this->renderBottomBorder($totalWidth);
+        $buffer = $this->fillBorderRow($buffer, $bufferRow, $totalWidth, 'bottom');
 
-        return \implode("\n", $lines);
+        return $buffer;
+    }
+
+    private function fillBorderRow(Buffer $buffer, int $row, int $contentWidth, string $type): Buffer
+    {
+        $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $borderStyle = $type === 'top'
+            ? [$this->borderTopLeft(), $this->borderTop(), $this->borderTopRight()]
+            : [$this->borderBottomLeft(), $this->borderBottom(), $this->borderBottomRight()];
+
+        $cells = [];
+        $cells[] = new Cell($borderStyle[0], $style, null, 1);
+        $fillWidth = $contentWidth;
+        $cells[] = new Cell(\str_repeat($borderStyle[1], $fillWidth), $style, null, $fillWidth);
+        $cells[] = new Cell($borderStyle[2], $style, null, 1);
+
+        $col = 0;
+        foreach ($cells as $cell) {
+            $w = $cell->width();
+            for ($c = 0; $c < $w; $c++) {
+                $actualWidth = ($c === 0) ? $w : 0;
+                $rune = ($c === 0) ? $cell->rune() : '';
+                $cellToWrite = new Cell($rune, $cell->style(), $cell->link(), $actualWidth);
+                $buffer = $buffer->withCellAt($col, $row, $cellToWrite);
+                $col++;
+            }
+        }
+
+        return $buffer;
+    }
+
+    private function fillHeaderRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    {
+        $style = $this->parseAnsiToStyle($this->headerStyle);
+        $col = 0;
+
+        // Left border
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
+        $col++;
+
+        // Header cells
+        foreach ($this->columns as $ci => $column) {
+            $headerText = $column->renderHeader($column->width);
+            $colWidth = $column->width;
+            $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
+            $col += $colWidth;
+
+            // Column separator (if not last column)
+            if ($ci < \count($this->columns) - 1) {
+                $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+                $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                $col++;
+            }
+        }
+
+        // Right border
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $sepStyle, null, 1));
+
+        return $buffer;
+    }
+
+    private function fillHeaderSeparatorRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    {
+        $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $col = 0;
+
+        // Left border
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
+        $col++;
+
+        // Separator
+        $buffer = $this->fillCellContent($buffer, $row, $col, \str_repeat($this->borderCenterH(), $contentWidth), $contentWidth, $style);
+        $col += $contentWidth;
+
+        // Right border
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
+
+        return $buffer;
+    }
+
+    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected): Buffer
+    {
+        $col = 0;
+
+        // Determine row-level style
+        $rowStyle = '';
+        if ($rowData->style !== '') {
+            $rowStyle = $rowData->style;
+        }
+        if ($this->zebraEnabled) {
+            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
+            if ($zebra !== '') $rowStyle = $zebra;
+        }
+        if ($isSelected) $rowStyle = '7'; // reverse
+
+        // Left border
+        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
+        $col++;
+
+        // Data cells
+        foreach ($this->columns as $ci => $column) {
+            $val = $rowData->data->get($column->key);
+
+            if ($val === null) {
+                $val = $this->missingIndicator;
+            }
+
+            // Determine cell-level style precedence: base < column < row < cell < selection
+            $cellStyle = $this->baseStyle;
+            if ($column->style !== '') $cellStyle = $column->style;
+            if ($rowStyle !== '') $cellStyle = $rowStyle;
+            if ($val instanceof StyledCell && $val->style !== '') $cellStyle = $val->style;
+
+            // styleFunc callback
+            $cellStr = '';
+            if ($val instanceof StyledCell) {
+                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
+                    ? (string) $val->value
+                    : (\is_scalar($val->value) ? (string) $val->value : '');
+            } else {
+                $cellStr = \is_object($val) && method_exists($val, '__toString')
+                    ? (string) $val
+                    : (\is_scalar($val) ? (string) $val : '');
+            }
+
+            if ($this->styleFunc !== null) {
+                $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
+                $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+            }
+
+            $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
+
+            $colWidth = $column->width;
+            $displayText = $column->alignLeft
+                ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
+                : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
+
+            $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
+            $col += $colWidth;
+
+            // Column separator
+            if ($ci < \count($this->columns) - 1) {
+                $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+                $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                $col++;
+            }
+        }
+
+        // Right border
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $sepStyle, null, 1));
+
+        return $buffer;
+    }
+
+    private function fillFooterRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    {
+        $style = $this->parseAnsiToStyle($this->footerStyle);
+        $label = $this->PageFooter();
+        $padLeft = (int) \floor(($contentWidth - \strlen($label)) / 2);
+        $padRight = $contentWidth - $padLeft - \strlen($label);
+        $content = \str_repeat(' ', $padLeft) . $label . \str_repeat(' ', $padRight);
+
+        $col = 0;
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
+        $col++;
+        $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
+        $col += $contentWidth;
+        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
+
+        return $buffer;
+    }
+
+    /**
+     * Fill a region of the buffer with cell content, handling wide characters.
+     */
+    private function fillCellContent(Buffer $buffer, int $row, int $startCol, string $text, int $cellWidth, ?Style $style): Buffer
+    {
+        $clusters = $this->graphemeClusters($text);
+        $col = $startCol;
+
+        foreach ($clusters as $cluster) {
+            $gw = $this->graphemeWidth($cluster);
+            $gw = $gw === 0 ? 1 : $gw; // Minimum 1 cell
+
+            // Clamp to remaining width
+            $remaining = $cellWidth - ($col - $startCol);
+            if ($gw > $remaining) {
+                $gw = $remaining;
+            }
+            if ($gw <= 0) {
+                break;
+            }
+
+            $cell = new Cell($cluster, $style, null, $gw);
+            $buffer = $buffer->withCellAt($col, $row, $cell);
+            $col += $gw;
+
+            // Add continuation cell for wide chars
+            if ($gw === 2) {
+                $buffer = $buffer->withCellAt($col, $row, Cell::continuation());
+                $col++;
+            }
+        }
+
+        // Fill remaining width with spaces if needed
+        while (($col - $startCol) < $cellWidth) {
+            $buffer = $buffer->withCellAt($col, $row, new Cell(' ', $style, null, 1));
+            $col++;
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Normalize a styleFunc result to an ANSI SGR string.
+     * Returns Style object if already Style, or converts string to Style.
+     */
+    private function normalizeStyleResult(mixed $result, string $fallback): string
+    {
+        if ($result instanceof Style) {
+            return $this->styleToAnsi($result);
+        }
+        if (\is_string($result)) {
+            return $result;
+        }
+        return $fallback;
+    }
+
+    /**
+     * Convert a Buffer\Style back to an ANSI SGR string for backward compatibility.
+     */
+    private function styleToAnsi(Style $style): string
+    {
+        $codes = [];
+
+        if ($style->fg() !== null) {
+            $r = ($style->fg() >> 16) & 0xFF;
+            $g = ($style->fg() >> 8) & 0xFF;
+            $b = $style->fg() & 0xFF;
+            $codes[] = "38;2;{$r};{$g};{$b}";
+        }
+
+        if ($style->bg() !== null) {
+            $r = ($style->bg() >> 16) & 0xFF;
+            $g = ($style->bg() >> 8) & 0xFF;
+            $b = $style->bg() & 0xFF;
+            $codes[] = "48;2;{$r};{$g};{$b}";
+        }
+
+        $attrs = $style->attrs();
+        if ($attrs & Style::ATTR_BOLD)       { $codes[] = '1'; }
+        if ($attrs & Style::ATTR_FAINT)     { $codes[] = '2'; }
+        if ($attrs & Style::ATTR_ITALIC)    { $codes[] = '3'; }
+        if ($attrs & Style::ATTR_UNDERLINE) { $codes[] = '4'; }
+        if ($attrs & Style::ATTR_BLINK)     { $codes[] = '5'; }
+        if ($attrs & Style::ATTR_REVERSE)  { $codes[] = '7'; }
+        if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
+        if ($attrs & Style::ATTR_OVERLINE)  { $codes[] = '53'; }
+
+        return \implode(';', $codes);
+    }
+
+    /**
+     * Parse an ANSI SGR string (e.g. "1;31" or "38;2;255;0;0") into a Style object.
+     */
+    private function parseAnsiToStyle(string $codes): Style
+    {
+        if ($codes === '') {
+            return Style::new();
+        }
+
+        $fg = null;
+        $bg = null;
+        $attrs = 0;
+
+        $parts = \explode(';', $codes);
+        $i = 0;
+        $count = \count($parts);
+
+        while ($i < $count) {
+            $code = (int) ($parts[$i] ?? 0);
+            $i++;
+
+            switch ($code) {
+                case 0:
+                    // Reset - ignore, Style::new() is already empty
+                    break;
+                case 1:
+                    $attrs |= Style::ATTR_BOLD;
+                    break;
+                case 2:
+                    $attrs |= Style::ATTR_FAINT;
+                    break;
+                case 3:
+                    $attrs |= Style::ATTR_ITALIC;
+                    break;
+                case 4:
+                    $attrs |= Style::ATTR_UNDERLINE;
+                    break;
+                case 5:
+                    $attrs |= Style::ATTR_BLINK;
+                    break;
+                case 7:
+                    $attrs |= Style::ATTR_REVERSE;
+                    break;
+                case 9:
+                    $attrs |= Style::ATTR_STRIKE;
+                    break;
+                case 53:
+                    $attrs |= Style::ATTR_OVERLINE;
+                    break;
+                case 38:
+                    // Extended foreground color
+                    if ($i < $count) {
+                        $type = (int) $parts[$i];
+                        $i++;
+                        if ($type === 2 && $i + 2 < $count) {
+                            // 38;2;r;g;b
+                            $r = (int) $parts[$i];
+                            $g = (int) $parts[$i + 1];
+                            $b = (int) $parts[$i + 2];
+                            $fg = ($r << 16) | ($g << 8) | $b;
+                            $i += 3;
+                        } elseif ($type === 5 && $i < $count) {
+                            // 38;5;n (256-color)
+                            $idx = (int) $parts[$i];
+                            $fg = $this->color256ToRgb($idx, true);
+                            $i++;
+                        }
+                    }
+                    break;
+                case 48:
+                    // Extended background color
+                    if ($i < $count) {
+                        $type = (int) $parts[$i];
+                        $i++;
+                        if ($type === 2 && $i + 2 < $count) {
+                            // 48;2;r;g;b
+                            $r = (int) $parts[$i];
+                            $g = (int) $parts[$i + 1];
+                            $b = (int) $parts[$i + 2];
+                            $bg = ($r << 16) | ($g << 8) | $b;
+                            $i += 3;
+                        } elseif ($type === 5 && $i < $count) {
+                            // 48;5;n (256-color)
+                            $idx = (int) $parts[$i];
+                            $bg = $this->color256ToRgb($idx, false);
+                            $i++;
+                        }
+                    }
+                    break;
+                // Standard colors 30-37 (fg) and 40-47 (bg)
+                case 30: $fg = 0x000000; break;
+                case 31: $fg = 0xcc0000; break;
+                case 32: $fg = 0x00cc00; break;
+                case 33: $fg = 0xcccc00; break;
+                case 34: $fg = 0x0000cc; break;
+                case 35: $fg = 0xcc00cc; break;
+                case 36: $fg = 0x00cccc; break;
+                case 37: $fg = 0xcccccc; break;
+                case 40: $bg = 0x000000; break;
+                case 41: $bg = 0xcc0000; break;
+                case 42: $bg = 0x00cc00; break;
+                case 43: $bg = 0xcccc00; break;
+                case 44: $bg = 0x0000cc; break;
+                case 45: $bg = 0xcc00cc; break;
+                case 46: $bg = 0x00cccc; break;
+                case 47: $bg = 0xcccccc; break;
+                // Bright colors 90-97 (fg) and 100-107 (bg)
+                case 90: $fg = 0x808080; break;
+                case 91: $fg = 0xff0000; break;
+                case 92: $fg = 0x00ff00; break;
+                case 93: $fg = 0xffff00; break;
+                case 94: $fg = 0x0000ff; break;
+                case 95: $fg = 0xff00ff; break;
+                case 96: $fg = 0x00ffff; break;
+                case 97: $fg = 0xffffff; break;
+                case 100: $bg = 0x808080; break;
+                case 101: $bg = 0xff0000; break;
+                case 102: $bg = 0x00ff00; break;
+                case 103: $bg = 0xffff00; break;
+                case 104: $bg = 0x0000ff; break;
+                case 105: $bg = 0xff00ff; break;
+                case 106: $bg = 0x00ffff; break;
+                case 107: $bg = 0xffffff; break;
+            }
+        }
+
+        return Style::new($fg, $bg, $attrs);
+    }
+
+    /**
+     * Convert a 256-color index to RGB.
+     */
+    private function color256ToRgb(int $idx, bool $isFg): int
+    {
+        if ($idx < 16) {
+            // Standard colors (same as 30-37 / 40-47)
+            $colors = [
+                0x000000, 0xcc0000, 0x00cc00, 0xcccc00,
+                0x0000cc, 0xcc00cc, 0x00cccc, 0xcccccc,
+                0x808080, 0xff0000, 0x00ff00, 0xffff00,
+                0x0000ff, 0xff00ff, 0x00ffff, 0xffffff,
+            ];
+            return $colors[$idx] ?? 0x000000;
+        }
+        if ($idx < 232) {
+            // 216-color cube (6x6x6)
+            $idx -= 16;
+            $r = (int) ($idx / 36);
+            $g = (int) (($idx % 36) / 6);
+            $b = $idx % 6;
+            $r = $r * 51;
+            $g = $g * 51;
+            $b = $b * 51;
+            return ($r << 16) | ($g << 8) | $b;
+        }
+        // Grayscale
+        $gray = (int) (($idx - 232) * 10 + 8);
+        return ($gray << 16) | ($gray << 8) | $gray;
+    }
+
+    /**
+     * Split a string into grapheme clusters.
+     *
+     * @return list<string>
+     */
+    private function graphemeClusters(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+        if (\function_exists('grapheme_str_split')) {
+            $result = @grapheme_str_split($text);
+            if (\is_array($result)) {
+                return $result;
+            }
+        }
+        // Fallback: split by byte (will be wrong for multi-byte but won't crash)
+        $result = [];
+        $len = \strlen($text);
+        for ($i = 0; $i < $len; $i++) {
+            $result[] = $text[$i];
+        }
+        return $result;
+    }
+
+    /**
+     * Get the display width of a single grapheme cluster.
+     */
+    private function graphemeWidth(string $cluster): int
+    {
+        if ($cluster === '') {
+            return 0;
+        }
+        $cp = $this->firstCodepoint($cluster);
+        if ($cp === 0) {
+            return 0;
+        }
+        if ($this->isZeroWidth($cp)) {
+            return 0;
+        }
+        if ($this->isWide($cp)) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private function firstCodepoint(string $g): int
+    {
+        $b1 = \ord($g[0]);
+        if ($b1 < 0x80) {
+            return $b1;
+        }
+        if (($b1 & 0xe0) === 0xc0 && \strlen($g) >= 2) {
+            return (($b1 & 0x1f) << 6) | (\ord($g[1]) & 0x3f);
+        }
+        if (($b1 & 0xf0) === 0xe0 && \strlen($g) >= 3) {
+            return (($b1 & 0x0f) << 12) | ((\ord($g[1]) & 0x3f) << 6) | (\ord($g[2]) & 0x3f);
+        }
+        if (($b1 & 0xf8) === 0xf0 && \strlen($g) >= 4) {
+            return (($b1 & 0x07) << 18) | ((\ord($g[1]) & 0x3f) << 12)
+                | ((\ord($g[2]) & 0x3f) << 6) | (\ord($g[3]) & 0x3f);
+        }
+        return 0;
+    }
+
+    private function isZeroWidth(int $cp): bool
+    {
+        if ($cp < 0x20) return true;
+        if ($cp >= 0x7f && $cp < 0xa0) return true;
+        if ($cp === 0x200b || $cp === 0x200c || $cp === 0x200d || $cp === 0xfeff) return true;
+        if ($cp >= 0x0300 && $cp <= 0x036f) return true;
+        if ($cp >= 0x1dc0 && $cp <= 0x1dff) return true;
+        if ($cp >= 0x20d0 && $cp <= 0x20ff) return true;
+        if ($cp >= 0xfe00 && $cp <= 0xfe0f) return true;
+        if ($cp >= 0xfe20 && $cp <= 0xfe2f) return true;
+        return false;
+    }
+
+    private function isWide(int $cp): bool
+    {
+        if ($cp < 0x1100) return false;
+        return ($cp <= 0x115f)
+            || ($cp >= 0x2e80 && $cp <= 0x303e)
+            || ($cp >= 0x3041 && $cp <= 0x33ff)
+            || ($cp >= 0x3400 && $cp <= 0x4dbf)
+            || ($cp >= 0x4e00 && $cp <= 0x9fff)
+            || ($cp >= 0xa000 && $cp <= 0xa4cf)
+            || ($cp >= 0xac00 && $cp <= 0xd7a3)
+            || ($cp >= 0xf900 && $cp <= 0xfaff)
+            || ($cp >= 0xfe30 && $cp <= 0xfe4f)
+            || ($cp >= 0xff00 && $cp <= 0xff60)
+            || ($cp >= 0xffe0 && $cp <= 0xffe6)
+            || ($cp >= 0x1f300 && $cp <= 0x1f64f)
+            || ($cp >= 0x1f680 && $cp <= 0x1f6ff)
+            || ($cp >= 0x1f900 && $cp <= 0x1f9ff)
+            || ($cp >= 0x20000 && $cp <= 0x2fffd)
+            || ($cp >= 0x30000 && $cp <= 0x3fffd);
     }
 
     // -------------------------------------------------------------------------
@@ -715,143 +1283,4 @@ final class Table
         return $total;
     }
 
-    private function renderTopBorder(int $totalWidth): string
-    {
-        $s = $this->borderTopLeft()
-           . \str_repeat($this->borderTop(), $totalWidth)
-           . $this->borderTopRight();
-        return $this->applyBorderStyle($s);
-    }
-
-    private function renderBottomBorder(int $totalWidth): string
-    {
-        $s = $this->borderBottomLeft()
-           . \str_repeat($this->borderBottom(), $totalWidth)
-           . $this->borderBottomRight();
-        return $this->applyBorderStyle($s);
-    }
-
-    private function renderHeader(int $totalWidth): string
-    {
-        $cells = [];
-        foreach ($this->columns as $col) {
-            $cells[] = $col->renderHeader();
-        }
-
-        $line = $this->borderLeft()
-              . \implode($this->borderCenterV(), $cells)
-              . $this->borderRight();
-
-        return $this->ansi($line, $this->headerStyle);
-    }
-
-    private function renderHeaderSeparator(int $totalWidth): string
-    {
-        $sep = \str_repeat($this->borderCenterH(), $totalWidth);
-        $line = $this->borderLeft() . $sep . $this->borderRight();
-        return $this->applyBorderStyle($line);
-    }
-
-    private function renderFooter(int $totalWidth): string
-    {
-        $label = $this->PageFooter();
-        $padLeft  = (int) \floor(($totalWidth - \strlen($label)) / 2);
-        $padRight = $totalWidth - $padLeft - \strlen($label);
-        $content = \str_repeat(' ', $padLeft) . $label . \str_repeat(' ', $padRight);
-
-        $line = $this->borderLeft() . $content . $this->borderRight();
-        return $this->ansi($line, $this->footerStyle);
-    }
-
-    /**
-     * Render a row as one or more lines (for wrapped cells).
-     *
-     * @return list<string>
-     */
-    private function renderRowLines(Row $row, int $rowIndex, int $totalWidth, bool $isSelected): array
-    {
-        $columnLines = [];
-        $colWidths = [];
-
-        foreach ($this->columns as $colIndex => $col) {
-            $val = $row->data->get($col->key);
-
-            if ($val === null) {
-                $val = $this->missingIndicator;
-            }
-
-            // Determine style precedence: base < column < row < cell
-            $style = $this->baseStyle;
-            if ($col->style !== '') $style = $col->style;
-            if ($row->style !== '') $style = $row->style;
-            if ($val instanceof StyledCell && $val->style !== '') $style = $val->style;
-
-            // Zebra override
-            if ($this->zebraEnabled) {
-                $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
-                if ($zebra !== '') $style = $zebra;
-            }
-
-            // Cursor override
-            if ($isSelected) $style = '7';  // reverse
-
-            if ($val instanceof StyledCell) {
-                $val = $val->value;
-            }
-
-            $str = \is_object($val) && method_exists($val, '__toString')
-                ? (string) $val
-                : (\is_scalar($val) ? (string) $val : '');
-
-            $cellLines = $col->renderCell($str);
-            // Apply style to each line
-            $styledLines = [];
-            foreach ($cellLines as $cellLine) {
-                $styledLines[] = $this->ansi($cellLine, $style);
-            }
-            $columnLines[] = $styledLines;
-            $colWidths[] = $col->width;
-        }
-
-        // Find max number of lines across all columns
-        $maxLines = 0;
-        foreach ($columnLines as $colLines) {
-            if (\count($colLines) > $maxLines) {
-                $maxLines = \count($colLines);
-            }
-        }
-
-        // When multilineMode is false, only render the first line per cell
-        $maxLines = $this->multilineMode ? $maxLines : 1;
-
-        // Build output lines, one per row
-        $result = [];
-        for ($i = 0; $i < $maxLines; $i++) {
-            $cells = [];
-            foreach ($columnLines as $ci => $colLines) {
-                if (isset($colLines[$i])) {
-                    $cells[] = $colLines[$i];
-                } else {
-                    // Fill with spaces matching the column width
-                    $cells[] = \str_repeat(' ', $colWidths[$ci]);
-                }
-            }
-            $result[] = $this->borderLeft() . \implode($this->borderCenterV(), $cells) . $this->borderRight();
-        }
-
-        return $result;
-    }
-
-    private function applyBorderStyle(string $s): string
-    {
-        return $this->borderStyle !== ''
-            ? $this->ansi($s, $this->borderStyle)
-            : $s;
-    }
-
-    private function ansi(string $text, string $codes): string
-    {
-        if ($codes === '') return $text;
-        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
-    }
 }

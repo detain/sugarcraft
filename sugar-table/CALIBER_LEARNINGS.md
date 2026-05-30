@@ -52,3 +52,11 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `Table.php` lines 241–246.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+- **[pattern:stylefunc-signature-shift]** `Table::withStyleFunc()` now accepts
+  `(int $row, int $col, string $value): Style|string`. The new `Style`-return path
+  is the preferred style (PHP 8.3+ typed return, immutable). A back-compat
+  wrapper inside `Table::computeCellStyle()` normalizes plain ANSI SGR strings to
+  `Style::fromAnsiString()` so existing callers work without modification. The
+  wrapper is a single conditional — no interception layer — so the hot path is
+  zero-overhead for `Style` returns. See `Table.php` lines 580–600.
