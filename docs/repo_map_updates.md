@@ -48,6 +48,14 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-22 | coder] sugar-veil + sugar-crumbs + candy-lister: adopt candy-mouse:
+  - sugar-veil: replaced `?Manager` with self-contained `Scanner`; added `scan()`, `hit()`, `mark()` methods; `withManager()` kept as `@deprecated` back-compat
+  - sugar-crumbs: replaced `?Manager` with `Scanner`; use `Mark::wrap()` for zone markers; added `withScanner()`, `scan()`, `hit()`; `withZoneManager()` marked `@deprecated`
+  - candy-lister: added candy-mouse path-repo (no mouse tracking code; no Manager usage)
+  - Path-repo closure: clean (55 libs scanned)
+  - Tests: sugar-veil 97 pass (149 assertions), sugar-crumbs 75 pass (119 assertions), candy-lister 39 pass (83 assertions)
+  - Branch: `ai/mouse-consumers`
+
 - [2026-05-31 | step-21 | tester] sugar-readline coverage analysis + test additions:
   - Overall: 65.98% lines (741/1123), 54.69% methods (105/192), 20.00% classes (3/15) — 151 tests pass
   - Path-repo closure: clean (55 libs scanned)
