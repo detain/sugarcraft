@@ -12,6 +12,10 @@ namespace SugarCraft\Spark;
  * doesn't recognise still gets a Segment with a generic `"CSI"` /
  * `"OSC"` / `"SS3"` label so the output never silently swallows
  * sequences.
+ *
+ * Uses candy-ansi's {@see Parser} state machine for CSI sequences and
+ * simple ESC sequences, with a fast pre-scan for complex multi-byte
+ * sequences (OSC/DCS/APC) that need exact raw-byte preservation.
  */
 final class Inspector
 {
@@ -23,155 +27,7 @@ final class Inspector
      */
     public static function parse(string $input): array
     {
-        $out = [];
-        $len = strlen($input);
-        $i   = 0;
-        $textBuf = '';
-
-        $flushText = static function () use (&$textBuf, &$out): void {
-            if ($textBuf !== '') {
-                $out[]   = new TextSegment($textBuf);
-                $textBuf = '';
-            }
-        };
-
-        while ($i < $len) {
-            $b = $input[$i];
-            if ($b !== "\x1b") {
-                $byte = ord($b);
-                // C0 control codes 0x00-0x1F (except ESC which is handled separately).
-                if ($byte <= 0x1F) {
-                    $flushText();
-                    $out[] = new SequenceSegment($b, 'C0 ' . C0C1::c0Name($byte));
-                    $i++;
-                    continue;
-                }
-                $textBuf .= $b;
-                $i++;
-                continue;
-            }
-
-            // Bare ESC at end of input — flush as a "lone ESC" segment.
-            $next = $input[$i + 1] ?? null;
-            if ($next === null) {
-                $flushText();
-                $out[] = new SequenceSegment("\x1b", 'ESC');
-                $i++;
-                continue;
-            }
-
-            if ($next === '[') {
-                // CSI: ESC [ params final
-                $j = $i + 2;
-                while ($j < $len) {
-                    $c = ord($input[$j]);
-                    $j++;
-                    if ($c >= 0x40 && $c <= 0x7e) {
-                        break;
-                    }
-                }
-                $bytes  = substr($input, $i, $j - $i);
-                $params = substr($input, $i + 2, $j - $i - 3);
-                $final  = substr($bytes, -1);
-                $flushText();
-                $out[] = new SequenceSegment($bytes, self::describeCsi($params, $final));
-                $i = $j;
-                continue;
-            }
-
-            if ($next === ']') {
-                // OSC: ESC ] payload (BEL | ESC \)
-                $j = $i + 2;
-                while ($j < $len) {
-                    if ($input[$j] === "\x07") { $j++; break; }
-                    if ($input[$j] === "\x1b" && ($input[$j + 1] ?? '') === '\\') {
-                        $j += 2; break;
-                    }
-                    $j++;
-                }
-                $bytes   = substr($input, $i, $j - $i);
-                $payload = substr($bytes, 2, -1);
-                $payload = rtrim($payload, "\x1b");
-                $flushText();
-                $out[] = new SequenceSegment($bytes, self::describeOsc($payload));
-                $i = $j;
-                continue;
-            }
-
-            if ($next === 'O') {
-                // SS3: ESC O <byte>
-                if ($i + 2 < $len) {
-                    $bytes = substr($input, $i, 3);
-                    $flushText();
-                    $out[] = new SequenceSegment($bytes, self::describeSs3($input[$i + 2]));
-                    $i += 3;
-                    continue;
-                }
-            }
-
-            // DCS: ESC P payload (BEL | ESC \). Used by XTVERSION,
-            // DECRPM, DECRPSS, sixel, and other "device" replies.
-            if ($next === 'P') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    if ($input[$j] === "\x07") { $j++; break; }
-                    if ($input[$j] === "\x1b" && ($input[$j + 1] ?? '') === '\\') {
-                        $j += 2; break;
-                    }
-                    $j++;
-                }
-                $bytes   = substr($input, $i, $j - $i);
-                $payload = substr($bytes, 2, -2); // strip ESC P ... ESC \
-                $flushText();
-                $out[] = new SequenceSegment($bytes, self::describeDcs($payload));
-                $i = $j;
-                continue;
-            }
-
-            // APC: ESC _ payload ESC \ — CandyZone markers, kitty
-            // graphics, and other custom application program commands.
-            if ($next === '_') {
-                $j = $i + 2;
-                while ($j < $len) {
-                    if ($input[$j] === "\x07") { $j++; break; }
-                    if ($input[$j] === "\x1b" && ($input[$j + 1] ?? '') === '\\') {
-                        $j += 2; break;
-                    }
-                    $j++;
-                }
-                $bytes   = substr($input, $i, $j - $i);
-                $payload = substr($bytes, 2, -2);
-                $flushText();
-                $out[] = new SequenceSegment($bytes, self::describeApc($payload));
-                $i = $j;
-                continue;
-            }
-
-            // Two-byte ESC <c> (e.g. ESC 7 = save cursor).
-            // C1 control codes are 0x80-0x9F. In 7-bit form they are ESC + chr(0x40 + code).
-            // e.g. C1 0x98 (SOS) = ESC + chr(0x58) = "ESC X".
-            // NOTE: This is ambiguous with standard 7-bit escapes that use the same bytes
-            // (e.g. ESC D = both 7-bit index AND 7-bit representation of C1 0x84).
-            // We check for ord >= 0x80 to avoid colliding with standard escapes.
-            // For raw 8-bit C1 (when the terminal sends actual 8-bit bytes), the C0
-            // handler catches chr(0x80-0x9F) as control codes.
-            $afterEscByte = ord($input[$i + 1]);
-            if ($afterEscByte >= 0x80) {
-                // C1 in 8-bit form: byte after ESC is raw C1 code 0x80-0x9F.
-                $bytes = substr($input, $i, 2);
-                $flushText();
-                $out[] = new SequenceSegment($bytes, 'C1 ' . C0C1::c1Name($afterEscByte));
-                $i += 2;
-                continue;
-            }
-            $bytes = substr($input, $i, 2);
-            $flushText();
-            $out[] = new SequenceSegment($bytes, self::describeEsc($next));
-            $i += 2;
-        }
-
-        $flushText();
-        return $out;
+        return (new AnsiHandler())->parse($input);
     }
 
     /** Render parsed segments as a sequin-style report (one per line). */

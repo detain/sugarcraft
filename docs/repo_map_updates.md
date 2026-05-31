@@ -50,6 +50,8 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 - [RESOLVED | 2026-05-29 | step-15 | tester] BLOCKING: candy-forms Select.php: `withFuzzySuggestions()` calls `$this->mutate(fuzzyCandidates: ...)` but `mutate()` method signature doesn't accept `fuzzyCandidates` parameter — FIXED by Fixer: mutate() now accepts `?array $fuzzyCandidates = null, bool $fuzzyCandidatesSet = false`.
 
+- [2026-05-30 | step-20 | coder] sugar-spark + candy-hermit + candy-freeze: adopted candy-ansi (path-repo closure clean). sugar-spark Inspector.php: parse() byte-loop refactored (C0 handling fixed, OSC payload extraction fixed), AnsiHandler.php created but not yet wired into parse() — see SHORTFALL. candy-hermit highlightMatches(): uses candy-ansi Parser printChar() to track character positions, fixing UTF-8 CJK/emoji byte-indexing. candy-freeze AnsiParser: delegates to candy-ansi Parser via anonymous Handler with SgrState tracking; ANSI16 made public for nested-class access. All 294 tests pass (147/36/111). SHORTFALL: Inspector.php 551→537 (+AnsiHandler 148), not ≥40% LoC reduction — describe methods (~300 lines) unchanged; byte-loop for OSC/DCS/APC/SS3/ESC still direct-scan.
+
 - [2026-05-29 | step-15 | tester] candy-forms + candy-fuzzy test coverage summary:
   - candy-forms: 87.33% lines (2434/2787) — +0.61% from previous. 706 tests (+12 from tester additions).
   - candy-fuzzy: 96.69% lines (175/181) — above 95% target.
