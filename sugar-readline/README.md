@@ -29,54 +29,93 @@ composer require sugarcraft/sugar-readline
 
 ## Quick Start
 
+`Readline` reads real TTY keypresses via `candy-input`'s `InputDriver`. In production, `StreamInputDriver::fromStdin()` is the default — no configuration needed. For testing, inject a driver over a fixture stream.
+
 ### Text Prompt
 
 ```php
-use SugarCraft\Readline\{Key, TextPrompt};
+use SugarCraft\Readline\Readline;
+use SugarCraft\Readline\TextPrompt;
 
-$p = TextPrompt::new('Enter your name: ')
+$readline = Readline::fromStdin();
+
+$prompt = TextPrompt::new('Enter your name: ')
     ->withDefault('Anonymous')
     ->withCompletions(['Alice', 'Bob', 'Carol']);
 
-$p = $p->handleChar('A')->handleChar('l')->handleKey(Key::Tab)->submit();
-echo $p->value();  // 'Alice'
+$result = $readline->run($prompt);
+echo $result->value();  // 'Alice' (after typing + Tab + Enter)
 ```
 
 ### Selection Prompt
 
 ```php
+use SugarCraft\Readline\Readline;
 use SugarCraft\Readline\SelectionPrompt;
 
-$p = SelectionPrompt::new('Choose a fruit:', ['Apple', 'Banana', 'Cherry', 'Date'])
-    ->withFilter('an');                 // Banana matches
-echo $p->selectedValue();              // 'Banana'
+$result = Readline::fromStdin()->run(
+    SelectionPrompt::new('Choose a fruit:', ['Apple', 'Banana', 'Cherry', 'Date'])
+        ->withFilter('an')   // Banana matches
+);
+echo $result->selectedValue();  // 'Banana'
 ```
 
 ### Multi-Select Prompt
 
 ```php
-use SugarCraft\Readline\{Key, MultiSelectPrompt};
+use SugarCraft\Readline\Readline;
+use SugarCraft\Readline\MultiSelectPrompt;
 
-$p = MultiSelectPrompt::new('Pick:', ['A', 'B', 'C'])
-    ->withMinSelections(1)
-    ->handleKey(Key::Space)              // mark A
-    ->handleKey(Key::Down)
-    ->handleKey(Key::Space)              // mark B
-    ->handleKey(Key::Enter);             // submit (min satisfied)
-
-print_r($p->selectedValues());          // ['A', 'B']
+$result = Readline::fromStdin()->run(
+    MultiSelectPrompt::new('Pick:', ['A', 'B', 'C'])
+        ->withMinSelections(1)
+);
+print_r($result->selectedValues());  // ['A', 'B'] after navigation + Enter
 ```
 
 ### Confirmation Prompt
 
 ```php
-use SugarCraft\Readline\{ConfirmationPrompt, Key};
+use SugarCraft\Readline\Readline;
+use SugarCraft\Readline\ConfirmationPrompt;
 
-$p = ConfirmationPrompt::new('Delete file?')
-    ->handleKey('n')                     // selects No (does not auto-submit)
-    ->handleKey(Key::Left)               // changes mind back to Yes
-    ->submit();
-echo $p->result() ? 'yes' : 'no';       // 'yes'
+$result = Readline::fromStdin()->run(
+    ConfirmationPrompt::new('Delete file?')
+);
+echo $result->result() ? 'yes' : 'no';  // 'yes' or 'no'
+```
+
+### Custom Key Handlers
+
+```php
+use SugarCraft\Readline\Readline;
+use SugarCraft\Readline\TextPrompt;
+
+$result = Readline::fromStdin()
+    ->onKey('ctrl_c', fn($event) => print("aborted\n"))
+    ->onKey('ctrl_u', fn($event) => print("cleared\n"))
+    ->run(TextPrompt::new('> '));
+
+echo $result->value();
+```
+
+## Input Driver
+
+`Readline` accepts an optional `SugarCraft\Input\InputDriver` to control where input comes from. Production code uses the default `StreamInputDriver::fromStdin()` which needs no configuration. Tests inject a driver over a fixture stream for deterministic byte-fed test cases.
+
+```php
+// Production: reads real TTY keypresses (default)
+$readline = new Readline();                        // uses StreamInputDriver::fromStdin()
+$readline = Readline::fromStdin();                  // equivalent
+
+// Testing: inject a fake stream
+$fake = fopen('php://memory', 'r+');
+fwrite($fake, "hello\x0d");                          // \x0d = Enter
+rewind($fake);
+$driver = new StreamInputDriver($fake);
+$readline = new Readline($driver);
+$result = $readline->run(TextPrompt::new('> '));
+// $result->value() === 'hello'
 ```
 
 ## Key Bindings
