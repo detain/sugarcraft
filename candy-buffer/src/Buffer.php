@@ -91,8 +91,6 @@ final class Buffer
      *
      * Cells from $source are copied into the region defined by
      * $region->origin and $region->size, clipped to buffer edges.
-     *
-     * @todo step-26 — add dirty tracking for SGR-transition optimisation
      */
     public function withRegion(Region $region, Buffer $source): self
     {
@@ -129,12 +127,264 @@ final class Buffer
      * Compare this buffer against $previous and return the list of
      * operations needed to transform $previous into this buffer.
      *
-     * @todo step-26 — implement the delta-ANSI emitter (ECH/REP/ICH/DCH)
-     * @return list<DiffOp>
+     * Simple row-by-row cell walk: for each changed cell, emit a
+     * MoveCursorOp to its position (if needed), then a SetCellOp.
+     * Adjacent changed cells with the same style are grouped into one
+     * SetCellOp.  Horizontal runs of 2+ identical cells use RepeatRunOp.
+     * Large runs of blank cells use EraseRunOp.
+     *
+     * @param Buffer $previous The previous frame buffer (same dimensions)
+     * @return list<SugarCraft\Buffer\Diff\DiffOp> Ordered delta operations
+     * @throws \InvalidArgumentException if buffer dimensions differ
      */
     public function diff(Buffer $previous): array
     {
-        return [];
+        if ($previous->width !== $this->width || $previous->height !== $this->height) {
+            throw new \InvalidArgumentException(
+                "Buffer dimensions must match for diff: previous ({$previous->width}x{$previous->height}) vs current ({$this->width}x{$this->height})"
+            );
+        }
+
+        $ops = [];
+        $lastEmittedCol = -1;
+        $lastEmittedRow = -1;
+        $pendingStyle = null;
+        $pendingLinkUrl = null;
+
+        for ($row = 0; $row < $this->height; $row++) {
+            for ($col = 0; $col < $this->width; $col++) {
+                $prevCell = $previous->grid[$row * $this->width + $col];
+                $currCell = $this->grid[$row * $this->width + $col];
+
+                // Skip continuation cells (wide-char padding).
+                if ($currCell->width === 0) {
+                    continue;
+                }
+
+                if ($this->cellsEqual($prevCell, $currCell)) {
+                    continue;
+                }
+
+                // Cell differs. Emit MoveCursorOp if not at this position.
+                if ($col !== $lastEmittedCol || $row !== $lastEmittedRow) {
+                    $ops[] = new Diff\MoveCursorOp($col, $row);
+                    $lastEmittedCol = $col;
+                    $lastEmittedRow = $row;
+                }
+
+                // Emit style transition if needed.
+                if ($currCell->style() !== $pendingStyle) {
+                    $ops[] = new Diff\SetStyleOp($currCell->style());
+                    $pendingStyle = $currCell->style();
+                }
+
+                // Emit hyperlink open/close if needed.
+                $currLinkUrl = $currCell->link()?->url();
+                if ($currLinkUrl !== $pendingLinkUrl) {
+                    if ($pendingLinkUrl !== null) {
+                        $ops[] = new Diff\SetHyperlinkOp(null);
+                    }
+                    if ($currLinkUrl !== null) {
+                        $ops[] = new Diff\SetHyperlinkOp($currCell->link());
+                    }
+                    $pendingLinkUrl = $currLinkUrl;
+                }
+
+                // Collect a run of consecutive changed cells with same style
+                // for repeat detection.
+                $run = [$currCell];
+                $runStyle = $currCell->style();
+                $runLinkUrl = $currLinkUrl;
+                $runLen = 1;
+                $nextCol = $col + 1;
+
+                while ($nextCol < $this->width) {
+                    $nextCell = $this->grid[$row * $this->width + $nextCol];
+                    if ($nextCell->width === 0) {
+                        $nextCol++;
+                        continue;
+                    }
+                    $nextPrev = $previous->grid[$row * $this->width + $nextCol];
+                    // Collect if cell differs AND has same pending style/link.
+                    if (!$this->cellsEqual($nextPrev, $nextCell)
+                        && $nextCell->style() === $runStyle
+                        && $nextCell->link()?->url() === $runLinkUrl
+                    ) {
+                        // This cell also differs AND has same style.
+                        $run[] = $nextCell;
+                        $runLen++;
+                        $nextCol++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Check for blank default run eligible for EraseRunOp.
+                // EraseRunOp (ECH) erases cells without SGR transitions, ideal
+                // for large cleared regions of default-style cells.
+                if ($runLen >= 3 && $this->isBlankDefaultRun($run)) {
+                    $ops[] = new Diff\EraseRunOp($runLen);
+                } elseif ($runLen === 1) {
+                    $ops[] = new Diff\SetCellOp($run);
+                } else {
+                    // Check for repeat (2+ identical cells with same style).
+                    $first = $run[0];
+                    $repeatRune = $first->rune();
+                    $repeatWidth = $first->width() > 0 ? $first->width() : 1;
+                    $allSame = true;
+                    for ($i = 1; $i < $runLen; $i++) {
+                        if ($run[$i]->rune() !== $repeatRune
+                            || $run[$i]->style() !== $runStyle
+                            || $run[$i]->link()?->url() !== $runLinkUrl
+                        ) {
+                            $allSame = false;
+                            break;
+                        }
+                    }
+
+                    if ($allSame && $runLen >= 2 && $repeatWidth === 1) {
+                        // First cell + REP for remainder.
+                        $ops[] = new Diff\SetCellOp([$first]);
+                        $ops[] = new Diff\RepeatRunOp($repeatRune, $runLen - 1, 1);
+                    } else {
+                        // Emit as-is.
+                        $ops[] = new Diff\SetCellOp($run);
+                    }
+                }
+
+                // Advance cursor past the run.
+                $lastEmittedCol = $col + $runLen - 1;
+                $col += $runLen - 1; // -1 because for-loop increments
+            }
+        }
+
+        // Optimise.
+        $optimiser = new Diff\DiffOptimiser();
+        return $optimiser->optimise($ops);
+    }
+
+    /**
+     * Check whether two cells are equal in their rendered representation.
+     */
+    private function cellsEqual(Cell $a, Cell $b): bool
+    {
+        return $a->rune() === $b->rune()
+            && $a->style() === $b->style()
+            && $a->link()?->url() === $b->link()?->url()
+            && $a->width() === $b->width();
+    }
+
+    /**
+     * Check whether all cells in a run are blank default cells
+     * (rune=' ', null style, null link, width=1).
+     *
+     * Such cells are eligible for EraseRunOp (ECH) encoding.
+     *
+     * @param list<Cell> $run
+     */
+    private function isBlankDefaultRun(array $run): bool
+    {
+        foreach ($run as $cell) {
+            if ($cell->rune() !== ' '
+                || $cell->style() !== null
+                || $cell->link() !== null
+                || $cell->width() !== 1
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Apply a list of DiffOps to $source buffer and return the resulting
+     * buffer (round-trip inverse of diff).
+     *
+     * This is useful for testing:  current.diff(prev).apply(prev) === current.
+     *
+     * @param list<DiffOp> $ops
+     * @return self
+     */
+    public function applyDiff(array $ops): self
+    {
+        // Start from a copy of this buffer as the working grid.
+        $grid = $this->grid;
+        $cursorCol = 0;
+        $cursorRow = 0;
+        $pendingStyle = null;
+        $pendingLinkUrl = null;
+
+        foreach ($ops as $op) {
+            if ($op instanceof Diff\MoveCursorOp) {
+                $cursorCol = $op->col;
+                $cursorRow = $op->row;
+            } elseif ($op instanceof Diff\SetStyleOp) {
+                $pendingStyle = $op->style;
+            } elseif ($op instanceof Diff\SetHyperlinkOp) {
+                $pendingLinkUrl = $op->hyperlink?->url();
+            } elseif ($op instanceof Diff\SetCellOp) {
+                foreach ($op->cells as $cell) {
+                    if ($cursorCol >= $this->width || $cursorRow >= $this->height) {
+                        continue;
+                    }
+                    $width = $cell->width() > 0 ? $cell->width() : 1;
+                    // Build cell with pending style/link merged.
+                    $style = $cell->style() ?? $pendingStyle;
+                    $link = $cell->link();
+                    // Note: applyDiff is for round-trip testing only.
+                    // Hyperlinks can't be perfectly reconstructed from ops
+                    // since we only store the url string in SetHyperlinkOp.
+                    $grid[$cursorRow * $this->width + $cursorCol] = new Cell(
+                        $cell->rune(),
+                        $style,
+                        $link,
+                        $width,
+                    );
+                    // If wide char, fill the next cell as continuation.
+                    if ($width === 2) {
+                        $nextCol = $cursorCol + 1;
+                        if ($nextCol < $this->width) {
+                            $grid[$cursorRow * $this->width + $nextCol] = Cell::continuation();
+                        }
+                    }
+                    $cursorCol += $width;
+                }
+            } elseif ($op instanceof Diff\EraseRunOp) {
+                // ECH: replace $count cells at cursor with blank (style=null).
+                for ($i = 0; $i < $op->count; $i++) {
+                    $c = $cursorCol + $i;
+                    if ($c >= $this->width) {
+                        break;
+                    }
+                    $grid[$cursorRow * $this->width + $c] = Cell::new();
+                }
+                $cursorCol += $op->count;
+            } elseif ($op instanceof Diff\RepeatRunOp) {
+                // REP: repeat the rune $count times at current cursor.
+                if ($op->count > 0) {
+                    $rune = $op->rune;
+                    // Width=0 treated as 1.
+                    $width = $op->width > 0 ? $op->width : 1;
+                    for ($i = 0; $i < $op->count; $i++) {
+                        $c = $cursorCol + $i;
+                        if ($c >= $this->width) {
+                            break;
+                        }
+                        $grid[$cursorRow * $this->width + $c] = new Cell($rune, $pendingStyle, null, $width);
+                        if ($width === 2) {
+                            $nextCol = $c + 1;
+                            if ($nextCol < $this->width) {
+                                $grid[$cursorRow * $this->width + $nextCol] = Cell::continuation();
+                            }
+                        }
+                    }
+                    $cursorCol += $op->count;
+                }
+            }
+        }
+
+        return $this->mutate(['grid' => $grid]);
     }
 
     // ─── ANSI rendering ─────────────────────────────────────────────────

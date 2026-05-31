@@ -7,6 +7,15 @@ namespace SugarCraft\Buffer\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
+use SugarCraft\Buffer\Diff\DiffOptimiser;
+use SugarCraft\Buffer\Diff\EraseRunOp;
+use SugarCraft\Buffer\Diff\MoveCursorOp;
+use SugarCraft\Buffer\Diff\RepeatRunOp;
+use SugarCraft\Buffer\Diff\SetCellOp;
+use SugarCraft\Buffer\Diff\SetHyperlinkOp;
+use SugarCraft\Buffer\Diff\SetStyleOp;
+use SugarCraft\Buffer\Hyperlink;
 use SugarCraft\Buffer\Position;
 use SugarCraft\Buffer\Region;
 use SugarCraft\Buffer\Style;
@@ -278,5 +287,419 @@ final class BufferTest extends TestCase
         $this->assertSame(2, $buf->cellAt(0, 0)->width());
         $this->assertSame('', $buf->cellAt(1, 0)->rune());
         $this->assertSame(0, $buf->cellAt(1, 0)->width());
+    }
+
+    public function testDiffIdenticalBuffersReturnsEmpty(): void
+    {
+        $buf = Buffer::new(5, 2);
+
+        $diff = $buf->diff($buf);
+
+        $this->assertIsArray($diff);
+        $this->assertEmpty($diff);
+    }
+
+    public function testDiffSingleCellChange(): void
+    {
+        $prev = Buffer::new(5, 2);
+        $curr = $prev->withCellAt(2, 1, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+
+        $this->assertNotEmpty($diff);
+        $hasMove = false;
+        $hasSetCell = false;
+        foreach ($diff as $op) {
+            if ($op instanceof MoveCursorOp) {
+                $this->assertSame(2, $op->col);
+                $this->assertSame(1, $op->row);
+                $hasMove = true;
+            }
+            if ($op instanceof SetCellOp) {
+                $this->assertNotEmpty($op->cells);
+                $this->assertSame('X', $op->cells[0]->rune());
+                $hasSetCell = true;
+            }
+        }
+        $this->assertTrue($hasMove, 'Diff must contain MoveCursorOp');
+        $this->assertTrue($hasSetCell, 'Diff must contain SetCellOp');
+    }
+
+    public function testDiffMultipleAdjacentCellsSameStyleMerged(): void
+    {
+        $prev = Buffer::new(5, 2);
+        $curr = $prev
+            ->withCellAt(1, 0, Cell::new('A', Style::bold()))
+            ->withCellAt(2, 0, Cell::new('B', Style::bold()));
+
+        $diff = $curr->diff($prev);
+
+        $this->assertNotEmpty($diff);
+        $setCells = array_filter($diff, fn($op) => $op instanceof SetCellOp);
+        $this->assertNotEmpty($setCells);
+    }
+
+    public function testDiffHorizontalRepeatRunEmitsRepeatRunOp(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('X'))
+            ->withCellAt(1, 0, Cell::new('X'))
+            ->withCellAt(2, 0, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+
+        $repeats = array_filter($diff, fn($op) => $op instanceof RepeatRunOp);
+        $this->assertNotEmpty($repeats);
+        $repeatOp = end($repeats);
+        $this->assertSame('X', $repeatOp->rune);
+        $this->assertSame(2, $repeatOp->count);
+    }
+
+    public function testDiffStyleTransitionEmitsSetStyleOp(): void
+    {
+        $prev = Buffer::new(3, 1);
+        $curr = $prev->withCellAt(1, 0, Cell::new('B', Style::bold()));
+
+        $diff = $curr->diff($prev);
+
+        $styles = array_filter($diff, fn($op) => $op instanceof SetStyleOp);
+        $this->assertNotEmpty($styles);
+    }
+
+    public function testDiffHyperlinkEmitsSetHyperlinkOp(): void
+    {
+        $prev = Buffer::new(3, 1);
+        $link = Hyperlink::new('https://example.com');
+        $curr = $prev->withCellAt(1, 0, Cell::new('L', null, $link));
+
+        $diff = $curr->diff($prev);
+
+        $links = array_filter($diff, fn($op) => $op instanceof SetHyperlinkOp);
+        $this->assertNotEmpty($links);
+        $linkOp = end($links);
+        $this->assertSame('https://example.com', $linkOp->hyperlink->url());
+    }
+
+    public function testDiffWideCharSkipsContinuation(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $wide = Cell::new('中', null, null, 2);
+        $continuation = Cell::continuation();
+        $curr = $prev
+            ->withCellAt(0, 0, $wide)
+            ->withCellAt(1, 0, $continuation);
+
+        $diff = $curr->diff($prev);
+
+        $this->assertNotEmpty($diff);
+        foreach ($diff as $op) {
+            if ($op instanceof SetCellOp) {
+                $this->assertCount(1, $op->cells);
+                $this->assertSame('中', $op->cells[0]->rune());
+            }
+        }
+    }
+
+    public function testDiffMismatchedDimensionsThrows(): void
+    {
+        $prev = Buffer::new(5, 2);
+        $curr = Buffer::new(5, 3);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $curr->diff($prev);
+    }
+
+    public function testApplyDiffReturnsNewInstance(): void
+    {
+        $buf = Buffer::new(5, 2);
+        $other = Buffer::new(5, 2)->withCellAt(2, 1, Cell::new('Y'));
+
+        $result = $buf->applyDiff($other->diff($buf));
+
+        $this->assertNotSame($buf, $result);
+    }
+
+    public function testApplyDiffMoveCursor(): void
+    {
+        $prev = Buffer::new(5, 2);
+        $curr = $prev->withCellAt(3, 1, Cell::new('Z'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('Z', $result->cellAt(3, 1)->rune());
+    }
+
+    public function testApplyDiffSetStyle(): void
+    {
+        $prev = Buffer::new(3, 1);
+        $curr = $prev->withCellAt(1, 0, Cell::new('B', Style::bold()));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertTrue($result->cellAt(1, 0)->style()->hasBold());
+    }
+
+    public function testApplyDiffEraseRun(): void
+    {
+        $prev = Buffer::new(5, 1)->withCellAt(0, 0, Cell::new('A'))
+                                  ->withCellAt(1, 0, Cell::new('B'))
+                                  ->withCellAt(2, 0, Cell::new('C'))
+                                  ->withCellAt(3, 0, Cell::new('D'))
+                                  ->withCellAt(4, 0, Cell::new('E'));
+        $curr = Buffer::new(5, 1);
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame(' ', $result->cellAt(0, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(3, 0)->rune());
+    }
+
+    public function testApplyDiffRepeatRunOp(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('X'))
+            ->withCellAt(1, 0, Cell::new('X'))
+            ->withCellAt(2, 0, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('X', $result->cellAt(0, 0)->rune());
+        $this->assertSame('X', $result->cellAt(1, 0)->rune());
+        $this->assertSame('X', $result->cellAt(2, 0)->rune());
+    }
+
+    public function testApplyDiffWideChar(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $wide = Cell::new('日', null, null, 2);
+        $continuation = Cell::continuation();
+        $curr = $prev
+            ->withCellAt(0, 0, $wide)
+            ->withCellAt(1, 0, $continuation);
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('日', $result->cellAt(0, 0)->rune());
+        $this->assertSame(2, $result->cellAt(0, 0)->width());
+        $this->assertSame('', $result->cellAt(1, 0)->rune());
+        $this->assertSame(0, $result->cellAt(1, 0)->width());
+    }
+
+    public function testDiffWideCharSecondCellContinuationSkipped(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $wide = Cell::new('中', null, null, 2);
+        $continuation = Cell::continuation();
+        $curr = $prev
+            ->withCellAt(0, 0, $wide)
+            ->withCellAt(1, 0, $continuation);
+
+        $diff = $curr->diff($prev);
+
+        foreach ($diff as $op) {
+            if ($op instanceof SetCellOp) {
+                foreach ($op->cells as $cell) {
+                    $this->assertNotSame(0, $cell->width());
+                }
+            }
+        }
+    }
+
+    public function testDiffRepeatRunSameRuneAndStyle(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('X'))
+            ->withCellAt(1, 0, Cell::new('X'))
+            ->withCellAt(2, 0, Cell::new('X'))
+            ->withCellAt(3, 0, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+
+        $hasRepeat = false;
+        foreach ($diff as $op) {
+            if ($op instanceof RepeatRunOp) {
+                $hasRepeat = true;
+                $this->assertSame('X', $op->rune);
+                $this->assertSame(3, $op->count);
+            }
+        }
+        $this->assertTrue($hasRepeat, 'Diff should contain RepeatRunOp');
+    }
+
+    public function testDiffDifferentStylesNoRepeat(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('A', Style::bold()))
+            ->withCellAt(1, 0, Cell::new('B', Style::new(null, null, Style::ATTR_ITALIC)));
+
+        $diff = $curr->diff($prev);
+
+        $hasRepeat = false;
+        foreach ($diff as $op) {
+            if ($op instanceof RepeatRunOp) {
+                $hasRepeat = true;
+            }
+        }
+        $this->assertFalse($hasRepeat, 'Different styles should not use RepeatRunOp');
+    }
+
+    public function testApplyDiffAdvanceCursorCorrectly(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('A'))
+            ->withCellAt(2, 0, Cell::new('B'));
+
+        $diff = $curr->diff($prev);
+        $result = $prev->applyDiff($diff);
+
+        $this->assertSame('A', $result->cellAt(0, 0)->rune());
+        $this->assertSame('B', $result->cellAt(2, 0)->rune());
+        $this->assertSame(' ', $result->cellAt(1, 0)->rune());
+    }
+
+    public function testDiffEraseRunOpEmittedForLargeBlankRegion(): void
+    {
+        $prev = Buffer::new(5, 1)->withCellAt(0, 0, Cell::new('X'))
+                                  ->withCellAt(1, 0, Cell::new('X'))
+                                  ->withCellAt(2, 0, Cell::new('X'))
+                                  ->withCellAt(3, 0, Cell::new('X'))
+                                  ->withCellAt(4, 0, Cell::new('X'));
+        $curr = Buffer::new(5, 1);
+
+        $diff = $curr->diff($prev);
+
+        $hasErase = false;
+        foreach ($diff as $op) {
+            if ($op instanceof EraseRunOp) {
+                $hasErase = true;
+            }
+        }
+        $this->assertTrue($hasErase, 'EraseRunOp must be emitted for large blank region');
+    }
+
+    public function testRoundTripDiffApplyDiffIsIdentity(): void
+    {
+        $prev = Buffer::new(10, 3);
+        $curr = $prev
+            ->withCellAt(2, 0, Cell::new('H', Style::bold()))
+            ->withCellAt(3, 0, Cell::new('i'))
+            ->withCellAt(5, 1, Cell::new('X', Style::new(0xFF0000)))
+            ->withCellAt(7, 2, Cell::new('Y'));
+
+        $diff = $curr->diff($prev);
+        $restored = $prev->applyDiff($diff);
+
+        $this->assertSame($curr->cellAt(2, 0)->rune(), $restored->cellAt(2, 0)->rune());
+        $this->assertSame($curr->cellAt(3, 0)->rune(), $restored->cellAt(3, 0)->rune());
+        $this->assertSame($curr->cellAt(5, 1)->rune(), $restored->cellAt(5, 1)->rune());
+        $this->assertSame($curr->cellAt(7, 2)->rune(), $restored->cellAt(7, 2)->rune());
+    }
+
+    public function testRoundTripRandomPairsTwentyIterations(): void
+    {
+        for ($i = 0; $i < 20; $i++) {
+            $w = random_int(3, 10);
+            $h = random_int(2, 5);
+            $prev = Buffer::new($w, $h);
+            $curr = $prev;
+
+            $changeCount = random_int(0, 5);
+            for ($c = 0; $c < $changeCount; $c++) {
+                $col = random_int(0, $w - 1);
+                $row = random_int(0, $h - 1);
+                $rune = chr(random_int(65, 90));
+                $style = random_int(0, 2) === 0 ? Style::bold() : null;
+                $curr = $curr->withCellAt($col, $row, Cell::new($rune, $style));
+            }
+
+            $diff = $curr->diff($prev);
+            $restored = $prev->applyDiff($diff);
+
+            for ($r = 0; $r < $h; $r++) {
+                for ($c = 0; $c < $w; $c++) {
+                    $this->assertSame(
+                        $curr->cellAt($c, $r)->rune(),
+                        $restored->cellAt($c, $r)->rune(),
+                        "Round-trip mismatch at ($c, $r) iteration $i"
+                    );
+                    $this->assertSame(
+                        $curr->cellAt($c, $r)->width(),
+                        $restored->cellAt($c, $r)->width(),
+                        "Width mismatch at ($c, $r) iteration $i"
+                    );
+                }
+            }
+        }
+    }
+
+    public function testByteCountOneCharChangeIn80x24StaysUnder30(): void
+    {
+        $prev = Buffer::new(80, 24);
+        $curr = $prev->withCellAt(40, 12, Cell::new('X'));
+
+        $diff = $curr->diff($prev);
+        $encoder = new DiffEncoder();
+        $bytes = $encoder->encode($diff);
+
+        $this->assertLessThanOrEqual(30, strlen($bytes), sprintf(
+            '1-char change should emit ≤30 bytes, got %d: %s',
+            strlen($bytes),
+            bin2hex($bytes)
+        ));
+    }
+
+    public function testDiffEncoderByteCountMuchSmallerThanFullRepaint(): void
+    {
+        $prev = Buffer::new(80, 24);
+        $curr = $prev->withCellAt(5, 10, Cell::new('*'));
+
+        $diff = $curr->diff($prev);
+        $encoder = new DiffEncoder();
+        $deltaBytes = strlen($encoder->encode($diff));
+
+        $fullRepaint = $curr->toAnsi();
+        $this->assertLessThan(
+            strlen($fullRepaint) / 4,
+            $deltaBytes,
+            'Delta bytes should be much smaller than full repaint'
+        );
+    }
+
+    public function testDiffOptimiserCollapsesStyleOps(): void
+    {
+        $prev = Buffer::new(5, 2);
+        $curr = $prev
+            ->withCellAt(0, 0, Cell::new('A', Style::bold()))
+            ->withCellAt(1, 0, Cell::new('B', Style::new(null, null, Style::ATTR_ITALIC)));
+
+        $diff = $curr->diff($prev);
+
+        $styleOps = array_filter($diff, fn($op) => $op instanceof SetStyleOp);
+        $this->assertCount(2, $styleOps);
+    }
+
+    public function testDiffOptimiserPassThroughPreservesOps(): void
+    {
+        $prev = Buffer::new(5, 1);
+        $curr = $prev->withCellAt(2, 0, Cell::new('Q'));
+
+        $diff = $curr->diff($prev);
+        $optimiser = new DiffOptimiser();
+        $optimised = $optimiser->optimise($diff);
+
+        $this->assertNotEmpty($optimised);
+        foreach ($optimised as $op) {
+            $this->assertInstanceOf(\SugarCraft\Buffer\Diff\DiffOp::class, $op);
+        }
     }
 }
