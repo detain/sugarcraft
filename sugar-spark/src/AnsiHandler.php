@@ -196,7 +196,7 @@ final class AnsiHandler implements Handler
 
         $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
         $rawBytes = "\x1bP{$fullPayload}\x1b\\";
-        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeDcs($fullPayload));
+        $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeDcs($fullPayload, $final));
 
         $this->dcsInProgress = false;
     }
