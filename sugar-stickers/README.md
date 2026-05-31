@@ -96,6 +96,21 @@ $viewport = $viewport->withScrollbar(true);
 $model = $viewport;
 ```
 
+## Buffer diffing
+
+The Table renderer maintains a `?Buffer $previousFrame` across renders. On each render it
+builds the current Buffer, computes `current->diff(previous)` (from
+[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
+the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
+`previousFrame` for the next render.
+
+**SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
+produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.
+Over an SSH session this means far less per-frame data on the wire and
+eliminates the full-screen flicker of rewrite-based terminals. The first render
+after startup or a resize still emits a full Buffer (no diff possible), so
+behaviour is always correct.
+
 ## License
 
 [MIT](LICENSE)

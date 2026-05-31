@@ -70,3 +70,9 @@
 
 - Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
 - `withManager()` is kept as deprecated back-compat; internally delegates to own `Scanner`
+
+## Buffer diffing
+
+- `composite()` holds a `?Buffer $previousFrame`; on each call it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
+- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- **Source:** step-27 ai/buffer-diff-consumers

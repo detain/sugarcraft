@@ -260,4 +260,44 @@ final class SugarBoxerTest extends TestCase
         $n = Node::leaf('x')->withAlignV(VAlign::Bottom);
         $this->assertSame(VAlign::Bottom, $n->alignV);
     }
+
+    /**
+     * Benchmark: diff-based rendering emits fewer bytes than full re-render
+     * for small changes between consecutive frames.
+     *
+     * Frame 1: full output (~100 bytes for a small box)
+     * Frame 2: delta output (≤30 bytes for a 1-char change)
+     * Frame 3: delta output (≤30 bytes for another 1-char change)
+     * Total delta: ≤60 bytes for 2 delta frames (30×2)
+     */
+    public function testDiffEmissionByteBenchmark(): void
+    {
+        $boxer = SugarBoxer::new();
+
+        // Frame 1: full render
+        $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $out1 = $boxer->render($layout1, 20, 5);
+        $bytes1 = \strlen($out1);
+
+        // Frame 2: same layout but content changed by 1 char
+        $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $out2 = $boxer->render($layout2, 20, 5);
+        $bytes2 = \strlen($out2);
+
+        // Frame 3: another small change
+        $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $out3 = $boxer->render($layout3, 20, 5);
+        $bytes3 = \strlen($out3);
+
+        // First frame is full output (baseline)
+        $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
+
+        // Subsequent frames should be delta (≤30 bytes per frame for small changes)
+        $this->assertLessThanOrEqual(30, $bytes2, 'Frame 2 delta should be ≤30 bytes');
+        $this->assertLessThanOrEqual(30, $bytes3, 'Frame 3 delta should be ≤30 bytes');
+
+        // Total delta bytes for 2 frames should be ≤60 (30×2)
+        $totalDelta = $bytes2 + $bytes3;
+        $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+    }
 }

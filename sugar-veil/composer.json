@@ -25,6 +25,7 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
@@ -77,6 +78,13 @@
         {
             "type": "path",
             "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
             "options": {
                 "symlink": true
             }

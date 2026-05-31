@@ -336,4 +336,55 @@ final class StickersTest extends TestCase
         // New instance should use custom separator
         $this->assertStringContainsString(' | ', $t2->render());
     }
+
+    // ---- Diff-emission byte benchmark ------------------------------------
+
+    /**
+     * Benchmark: diff-based render() emits fewer bytes than full re-render
+     * for small changes between consecutive frames.
+     *
+     * Mirrors sugar-boxer, sugar-dash, sugar-crush, sugar-veil, candy-lister.
+     *
+     * Table diff works only when dimensions (width×height) stay constant.
+     * Adding/removing rows changes height and triggers full re-emit.
+     * We use style changes (cursorStyle, headerStyle) which are dimension-stable.
+     *
+     * Frame 1: full output (baseline)
+     * Frame 2: delta output (≤30 bytes for a style change)
+     * Frame 3: delta output (≤30 bytes for another style change)
+     * Total delta: ≤60 bytes for 2 delta frames (30×2)
+     */
+    public function testDiffEmissionByteBenchmark(): void
+    {
+        $t = (new Table())
+            ->addColumn(Column::make('Name', 10))
+            ->addRow(['Alice'])
+            ->addRow(['Bob'])
+            ->addRow(['Carol']);
+
+        // Frame 1: full render
+        $out1 = $t->render();
+        $bytes1 = \strlen($out1);
+
+        // Frame 2: add cursor style (dimension-stable change)
+        $t2 = $t->setCursor(1)->withCursorStyle('7');  // reverse video on row 1
+        $out2 = $t2->render();
+        $bytes2 = \strlen($out2);
+
+        // Frame 3: change header style (dimension-stable change)
+        $t3 = $t2->withHeaderStyle('1');  // bold header
+        $out3 = $t3->render();
+        $bytes3 = \strlen($out3);
+
+        // First frame is full output (baseline)
+        $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
+
+        // Subsequent frames should be delta (≤30 bytes per frame for small changes)
+        $this->assertLessThanOrEqual(30, $bytes2, 'Frame 2 delta should be ≤30 bytes');
+        $this->assertLessThanOrEqual(30, $bytes3, 'Frame 3 delta should be ≤30 bytes');
+
+        // Total delta bytes for 2 frames should be ≤60 (30×2)
+        $totalDelta = $bytes2 + $bytes3;
+        $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+    }
 }

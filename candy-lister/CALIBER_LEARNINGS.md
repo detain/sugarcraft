@@ -11,3 +11,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 ## Mouse hit-testing
 
 - Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
+
+## Buffer diffing
+
+- `Model::View()` holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
+- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- **Source:** step-27 ai/buffer-diff-consumers
