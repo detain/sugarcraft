@@ -272,7 +272,7 @@ final class Veil
     public function scan(string $rendered): self
     {
         $this->scanner->scan($rendered);
-        return $this->mutate(lastRendered: $rendered);
+        return $this->mutate(scanner: $this->scanner, lastRendered: $rendered);
     }
 
     /**
@@ -365,12 +365,6 @@ final class Veil
                 'horizontalOffset' => 0,
             ];
         }
-
-        return [
-            'foreground' => $foreground,
-            'verticalOffset' => 0,
-            'horizontalOffset' => 0,
-        ];
     }
 
     /**

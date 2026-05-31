@@ -97,7 +97,7 @@ final class VeilStack implements \Countable
         $sorted = $this->sorted();
         $result = $background;
         foreach ($sorted as $veil) {
-            $result = $veil->composite($result, Position::TOP, Position::LEFT);
+            $result = $veil->composite($result, $background, Position::TOP, Position::LEFT);
         }
         return $result;
     }

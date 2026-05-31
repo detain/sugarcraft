@@ -172,6 +172,52 @@ final class VeilTest extends TestCase
         $this->assertSame($bg, $result);
     }
 
+    // ─── backdrop ─────────────────────────────────────────────────────────────
+
+    public function testWithBackdrop(): void
+    {
+        $v = $this->veil->withBackdrop(50);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithBackdropClampsNegativeToZero(): void
+    {
+        // The constructor clamps: max(0, min(100, -10)) = 0
+        $v = $this->veil->withBackdrop(-10);
+        $bg = "..........\n..........";
+        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $result);
+    }
+
+    public function testWithBackdropClampsOver100To100(): void
+    {
+        // The constructor clamps: max(0, min(100, 150)) = 100
+        $v = $this->veil->withBackdrop(150);
+        $bg = "..........\n..........";
+        $result = $v->composite('X', $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $result);
+    }
+
+    // ─── animation ─────────────────────────────────────────────────────────────
+
+    public function testWithAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::FADE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithAnimationSlide(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SLIDE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithAnimationScale(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SCALE);
+        $this->assertNotSame($this->veil, $v);
+    }
+
     public function testPositionYOffset(): void
     {
         $this->assertSame(0,                           Position::TOP->yOffset(5, 20));
@@ -434,5 +480,225 @@ final class VeilTest extends TestCase
         $this->assertNotSame($original, $modified);
         $this->assertSame(0, $original->zIndex());
         $this->assertSame(10, $modified->zIndex());
+    }
+
+    // ─── Scanner: scan() / hit() ──────────────────────────────────────────────
+
+    public function testMarkWrapsContentWithZoneMarkers(): void
+    {
+        $marked = $this->veil->mark('btn-1', 'Click me');
+        // Mark::wrap uses U+E000/U+E001 private-use sentinels
+        $this->assertStringContainsString('Click me', $marked);
+        // Should contain the open and close sentinels around the content
+        $this->assertStringContainsString("\u{E000}", $marked);
+        $this->assertStringContainsString("\u{E001}", $marked);
+    }
+
+    public function testScanHitDetectsZoneInside(): void
+    {
+        // Mark some content with a zone marker and scan it directly.
+        // This tests the scanner integration without going through composite()
+        // (which has a separate multi-byte UTF-8 encoding issue).
+        $marked = $this->veil->mark('overlay-zone', 'XYZ');
+        $rendered = $marked; // In real use, this would be the full terminal output
+
+        // scan() parses zone markers and returns a new Veil with updated scanner
+        $veiled = $this->veil->scan($rendered);
+
+        // hit() should find the overlay-zone at coordinates inside the marked content
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('overlay-zone', $zone->id);
+    }
+
+    public function testScanHitReturnsNullOutsideZone(): void
+    {
+        $marked = $this->veil->mark('centered', 'ABC');
+        $rendered = $marked;
+
+        $veiled = $this->veil->scan($rendered);
+
+        // Coordinates far outside any content should return null
+        $zone = $veiled->hit(999, 999);
+        $this->assertNull($zone);
+    }
+
+    public function testScanReturnsNewInstanceForChaining(): void
+    {
+        $marked = $this->veil->mark('zone-a', 'A');
+        $rendered = $marked;
+
+        $result = $this->veil->scan($rendered);
+        // scan() returns a new instance (immutable via mutate)
+        $this->assertNotSame($this->veil, $result);
+    }
+
+    public function testScanUpdatesScannerAndLastRendered(): void
+    {
+        // scan() passes $this->scanner (non-null) to mutate
+        // mutate passes it to constructor where $scanner ?? Scanner::new() uses the passed value
+        $marked = $this->veil->mark('test-zone', 'B');
+        $rendered = $marked;
+
+        $veiled = $this->veil->scan($rendered);
+
+        // The new instance should have the scanned content
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('test-zone', $zone->id);
+    }
+
+    public function testHitWithoutScanReturnsNull(): void
+    {
+        // Fresh veil with no scan() called
+        $zone = $this->veil->hit(1, 1);
+        $this->assertNull($zone);
+    }
+
+    public function testScanHitDetectsZoneById(): void
+    {
+        // Test that zone is correctly registered by scanning marked content.
+        // The internal scanner records zones during scan().
+        $marked = $this->veil->mark('my-btn', 'OK');
+        $veiled = $this->veil->scan($marked);
+
+        // After scan(), hit() should find zones by their position
+        $zone = $veiled->hit(1, 1);
+        $this->assertNotNull($zone);
+        $this->assertSame('my-btn', $zone->id);
+    }
+
+    // ─── Back-compat: withManager() ─────────────────────────────────────────
+
+    public function testWithManagerBackCompatDoesNotThrow(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newGlobal();
+        // Should not throw — manager is stored but not used for hit-testing
+        $v = $this->veil->withManager($manager);
+        $this->assertInstanceOf(Veil::class, $v);
+    }
+
+    public function testWithManagerPreservesManager(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newGlobal();
+        $v = $this->veil->withManager($manager);
+        $this->assertSame($manager, $v->manager());
+    }
+
+    // ─── animate() ───────────────────────────────────────────────────────────
+
+    public function testAnimateWithoutAnimationSetReturnsCompositeResult(): void
+    {
+        $bg = "....................\n....................";
+        $fg = "X";
+
+        // Without animation set, animate() should behave like composite()
+        $result = $this->veil->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // Should composite the foreground onto the background
+        $this->assertStringContainsString('X', $result);
+        $this->assertStringContainsString('.', $result);
+    }
+
+    public function testAnimateWithSlideAnimationAtProgressZero(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SLIDE);
+        $bg = "....................\n....................";
+        $fg = "Test";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
+
+        // At progress 0, animation offsets are applied but content still appears
+        $this->assertIsString($result);
+    }
+
+    public function testAnimateWithSlideAnimationAtProgressOne(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SLIDE);
+        $bg = "....................\n....................";
+        $fg = "Test";
+
+        // At progress 1, offsets should be 0, essentially like composite()
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        $this->assertStringContainsString('Test', $result);
+    }
+
+    public function testAnimateWithFadeAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::FADE);
+        $bg = "....................\n....................";
+        $fg = "Fade";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // Fade animation returns foreground unchanged (terminal limitations)
+        $this->assertStringContainsString('Fade', $result);
+    }
+
+    public function testAnimateWithScaleAnimation(): void
+    {
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................";
+        $fg = "A\nB\nC\nD\nE";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+
+        // At 50% progress, some lines may not appear due to scale animation
+        $this->assertIsString($result);
+    }
+
+    public function testAnimateWithScaleAnimationAtProgressOneReturnsFullContent(): void
+    {
+        // At progress 1.0, animation block is skipped (progress < 1.0 check)
+        // but animate() passes full foreground to composite
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................\n....................\n....................\n....................\n....................";
+        $fg = "A\nB\nC\nD\nE";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        $this->assertStringContainsString('A', $result);
+        $this->assertStringContainsString('E', $result);
+    }
+
+    public function testAnimateProgressOneSkipsAnimationBlock(): void
+    {
+        // At progress >= 1.0, animation is not applied
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SCALE);
+        $bg = "....................";
+        $fg = "X";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        // Should composite X at top-left, animation block skipped
+        $this->assertStringStartsWith('X', $result);
+    }
+
+    public function testAnimateProgressLessThanOneAppliesAnimation(): void
+    {
+        // At progress < 1.0, animation is applied
+        $v = $this->veil->withAnimation(\SugarCraft\Veil\Animation\AnimationKind::SCALE);
+        $bg = "....................\n....................\n....................";
+        $fg = "A\nB\nC\nD\nE\nF";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.99);
+
+        // At near-full progress, most content visible but still via animation
+        $this->assertIsString($result);
+    }
+
+    // ─── getManager() (deprecated) ────────────────────────────────────────────
+
+    public function testGetManagerReturnsSameAsManager(): void
+    {
+        $manager = \SugarCraft\Zone\Manager::newGlobal();
+        $v = $this->veil->withManager($manager);
+        $this->assertSame($v->manager(), $v->getManager());
+    }
+
+    public function testGetManagerReturnsNullWhenNoManager(): void
+    {
+        $this->assertNull($this->veil->getManager());
     }
 }

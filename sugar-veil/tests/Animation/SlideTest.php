@@ -58,6 +58,38 @@ final class SlideTest extends TestCase
         $this->assertLessThan(0, $result['horizontalOffset']);
     }
 
+    public function testSlideFromBottomAnchor(): void
+    {
+        $slide = new Slide();
+        // Use multi-line content so vertical offset rounds to non-zero
+        $result = $slide->apply("A\nB\nC\nD", 0.5, Position::BOTTOM, Position::LEFT);
+
+        // Should have negative vertical offset (from bottom)
+        $this->assertLessThan(0, $result['verticalOffset']);
+    }
+
+    public function testSlideFromBottomRightAnchor(): void
+    {
+        $slide = new Slide();
+        // Use content with both height and width for non-zero offsets
+        $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::BOTTOM, Position::RIGHT);
+
+        // Should have negative offsets in both directions
+        $this->assertLessThan(0, $result['verticalOffset']);
+        $this->assertLessThan(0, $result['horizontalOffset']);
+    }
+
+    public function testSlideFromTopLeftAnchor(): void
+    {
+        $slide = new Slide();
+        // Use content with both height and width for non-zero offsets
+        $result = $slide->apply("ABCD\nEFGH\nIJKL\nMNOP", 0.5, Position::TOP_LEFT, Position::LEFT);
+
+        // Should have positive offsets in both directions (from top-left corner)
+        $this->assertGreaterThan(0, $result['verticalOffset']);
+        $this->assertGreaterThan(0, $result['horizontalOffset']);
+    }
+
     public function testSlideWithCustomEasing(): void
     {
         $slide = new Slide(CubicBezier::easeIn());

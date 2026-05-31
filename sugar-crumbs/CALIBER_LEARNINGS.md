@@ -25,3 +25,8 @@ caller is responsible for `scan()` / mouse dispatch on the output string.
 See: `Breadcrumb::withZoneManager()`, `Breadcrumb::wrapAllCrumbs()`.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+## Mouse hit-testing
+
+- Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
+- `withZoneManager()` is kept as deprecated back-compat; internally delegates to own `Scanner`
