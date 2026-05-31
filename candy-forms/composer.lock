@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e21888dd812e79b1eba9ea24fe164a3c",
+    "content-hash": "85ecb55b6b8f02b97374e695affd4477",
     "packages": [
         {
             "name": "react/event-loop",
@@ -152,6 +152,63 @@
             "time": "2025-08-19T18:57:03+00:00"
         },
         {
+            "name": "sugarcraft/candy-async",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-async",
+                "reference": "da4cecf42d60c6d575dd7d088da78fb9516d180a"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Async\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Async\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
+            "homepage": "https://github.com/sugarcraft/candy-async",
+            "keywords": [
+                "async",
+                "cancellation",
+                "event-loop",
+                "promise",
+                "reactphp",
+                "sugarcraft"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-async/issues",
+                "source": "https://github.com/sugarcraft/candy-async",
+                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-buffer",
             "version": "dev-master",
             "dist": {
@@ -211,12 +268,13 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-core",
-                "reference": "a738b974de64cb5e70249bdae5f11248755bfbd6"
+                "reference": "e637b25fae235c47b813c4afae2a121d8d2d7f39"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
                 "react/promise": "^3.3",
+                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-pty": "dev-master"
             },
             "require-dev": {
@@ -2249,6 +2307,7 @@
     "aliases": [],
     "minimum-stability": "dev",
     "stability-flags": {
+        "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-fuzzy": 20,

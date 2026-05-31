@@ -33,6 +33,7 @@
         "php": "^8.3",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
+        "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-pty": "dev-master"
     },
     "require-dev": {
@@ -56,6 +57,13 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "../candy-pty",
