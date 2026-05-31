@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Query\Db\DatabaseInterface;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
@@ -37,7 +38,7 @@ final class App implements Model
      * @param string|null $savedBuf Buffer saved when navigating into history (restored on historyDown from 0)
      */
     public function __construct(
-        public readonly Database $db,
+        public readonly DatabaseInterface $db,
         public readonly array $tables = [],
         public readonly int $tableCursor = 0,
         public readonly ?string $selectedTable = null,
@@ -53,7 +54,7 @@ final class App implements Model
         public readonly ?string $savedBuf = null,  // temp storage for current buffer when navigating history
     ) {}
 
-    public static function start(Database $db): self
+    public static function start(DatabaseInterface $db): self
     {
         $tables = $db->tables();
         $a = new self(db: $db, tables: $tables);
@@ -66,6 +67,14 @@ final class App implements Model
     public function init(): ?\Closure
     {
         return null;
+    }
+
+    /**
+     * Create an App via a fluent builder.
+     */
+    public static function builder(): AppBuilder
+    {
+        return new AppBuilder();
     }
 
     public function update(Msg $msg): array
