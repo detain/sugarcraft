@@ -176,4 +176,41 @@ final class AsyncSuggestionsTest extends TestCase
 
         $this->assertNotNull($cmd);
     }
+
+    public function testDebounceCancelCancelsPreviousFetch(): void
+    {
+        $fetcherInvokedCount = 0;
+        $fetcher = static function (string $input) use (&$fetcherInvokedCount): PromiseInterface {
+            $fetcherInvokedCount++;
+            return \React\Promise\resolve(["suggestion for: $input"]);
+        };
+
+        $f = Input::new('test')->withAsyncSuggestions($fetcher, 100); // 100ms debounce
+        [$f, ] = $f->focus();
+
+        // First keystroke: schedules debounce #1
+        [$f, $asyncCmd1] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+
+        // Second keystroke immediately after (no delay): cancels debounce #1, schedules debounce #2
+        [$f2, $asyncCmd2] = $f->update(new KeyMsg(KeyType::Char, 'a'));
+
+        // Execute both async commands to schedule their timers on the event loop
+        // The first timer (debounce #1) should be cancelled before it fires
+        $this->assertNotNull($asyncCmd1);
+        $this->assertNotNull($asyncCmd2);
+
+        // Execute the async commands to schedule timers on the global event loop
+        $asyncCmd1();
+        $asyncCmd2();
+
+        // Run the event loop long enough for any uncancelled debounce to fire
+        // (200ms = 2x debounce window to ensure the second debounce has time to fire if not cancelled)
+        Loop::addTimer(0.25, static fn () => Loop::stop());
+        Loop::run();
+
+        // Assert: the fetcher was only called once (for the second debounce),
+        // because the first debounce was cancelled before its timer fired.
+        // This verifies that rapid keystrokes cancel previous pending async operations.
+        $this->assertSame(1, $fetcherInvokedCount, 'First debounced fetch should have been cancelled');
+    }
 }

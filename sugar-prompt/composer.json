@@ -32,6 +32,7 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
@@ -56,6 +57,13 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "../candy-core",

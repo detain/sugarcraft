@@ -49,8 +49,27 @@
         }
     },
     "repositories": [
-        {"type": "path", "url": "../candy-core", "options": {"symlink": true}},
-        {"type": "path", "url": "../candy-layout", "options": {"symlink": true}}
+        {
+            "type": "path",
+            "url": "../candy-core",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        }
     ],
     "minimum-stability": "dev",
     "prefer-stable": true

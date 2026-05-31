@@ -48,6 +48,15 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-23 | coder] candy-forms + sugar-prompt + candy-core: adopt candy-async:
+  - candy-forms Input.php + Select.php: replaced manual debounce + Deferred with CancellationSource/CancellationToken for proper cancellation when user types again before debounce window elapses
+  - candy-core Program.php: async errors now flow through both ExceptionMsg dispatch (backward compat) and the user-configured exceptionHandler
+  - composer.json changes: added `sugarcraft/candy-async` + path-repo to candy-forms, sugar-prompt, candy-core (plus 45 transitive libs received candy-async path-repo via check-path-repos.php --fix)
+  - Branch: `ai/async-consumers`
+  - Tests: candy-forms 706 pass, sugar-prompt 301 pass, candy-core 619 pass (25 skipped, pre-existing)
+  - Path-repo closure: clean (55 libs scanned)
+  - CALIBER_LEARNINGS.md entries added to candy-forms and candy-core
+
 - [BLOCKING | 2026-05-31 | step-22 | tester] sugar-veil Veil::scan() implementation bug — Veil::scan() modifies the internal Scanner in place but then calls `$this->mutate(lastRendered: $rendered)` without passing the scanner. The new Veil instance gets `scanner: null` which defaults to `new Scanner()` — an empty scanner. Result: 2 new tests fail (testScanHitDetectsZoneInside, testScanHitDetectsZoneById). Fix needed in `sugar-veil/src/Veil.php`: change `return $this->mutate(lastRendered: $rendered)` to `return $this->mutate(scanner: $this->scanner, lastRendered: $rendered)`.
 
 - [2026-05-31 | step-22 | tester] sugar-crumbs + sugar-veil scanner tests added:
