@@ -39,10 +39,11 @@ $form = Form::new(
 
 ## Shared foundations
 
-sugar-prompt is built on top of three shared foundation packages:
+sugar-prompt is built on top of four shared foundation packages:
 
 | Package | Role |
 | ------- | ---- |
+| `sugarcraft/candy-async` | Async/await engine — drives `withAsyncSuggestions` cancellable fetchers via `Async\Await` + `CancelledException` |
 | `sugarcraft/candy-buffer` | Ring-buffer output renderer — handles SGR sequence batching and viewport sync for the form viewport |
 | `sugarcraft/candy-fuzzy` | Smith-Waterman local-alignment fuzzy matcher — powers `withFuzzySuggestions()` on `Input` and `Select` fields |
 | `sugarcraft/candy-testing` | Test harness — provides `ProgramSimulator`, `ScriptedInput`, and golden-file tape helpers for TEA-program tests |

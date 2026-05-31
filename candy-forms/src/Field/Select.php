@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Core\AsyncCmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
@@ -44,6 +45,9 @@ final class Select implements \SugarCraft\Forms\Field
     /** @var int Sequence counter for pending async operations */
     private int $pendingAsyncSeq = 0;
 
+    /** @var CancellationSource|null Cancellation source for the pending async operation */
+    private ?CancellationSource $pendingAsyncCancellation = null;
+
     /** @var string Current filter text at the time async was scheduled */
     private string $pendingAsyncFilterText = '';
 
@@ -56,6 +60,7 @@ final class Select implements \SugarCraft\Forms\Field
         callable $asyncSuggestionsFetcher = null,
         int $asyncSuggestionsDebounceMs = 150,
         int $pendingAsyncSeq = 0,
+        ?CancellationSource $pendingAsyncCancellation = null,
         string $pendingAsyncFilterText = '',
         public readonly ?string $enumClass = null,
     ) {
@@ -63,21 +68,23 @@ final class Select implements \SugarCraft\Forms\Field
         $this->asyncSuggestionsFetcher = $asyncSuggestionsFetcher;
         $this->asyncSuggestionsDebounceMs = $asyncSuggestionsDebounceMs;
         $this->pendingAsyncSeq = $pendingAsyncSeq;
+        $this->pendingAsyncCancellation = $pendingAsyncCancellation;
         $this->pendingAsyncFilterText = $pendingAsyncFilterText;
     }
 
     public static function new(string $key): self
     {
         return new self(
-            $key,
-            ItemList::new([], 60, 5)->withShowDescription(false),
-            '',
-            '',
-            [],
-            null,
-            150,
-            0,
-            '',
+            key:                       $key,
+            list:                      ItemList::new([], 60, 5)->withShowDescription(false),
+            title:                     '',
+            description:               '',
+            fuzzyCandidates:           [],
+            asyncSuggestionsFetcher:  null,
+            asyncSuggestionsDebounceMs: 150,
+            pendingAsyncSeq:           0,
+            pendingAsyncCancellation:  null,
+            pendingAsyncFilterText:   '',
         );
     }
 
@@ -118,15 +125,16 @@ final class Select implements \SugarCraft\Forms\Field
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {
         return new self(
-            $this->key,
-            $this->list,
-            $this->title,
-            $this->description,
-            $this->fuzzyCandidates,
-            $fetcher,
-            $debounceMs,
-            $this->pendingAsyncSeq,
-            $this->pendingAsyncFilterText,
+            key:                       $this->key,
+            list:                      $this->list,
+            title:                     $this->title,
+            description:               $this->description,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:   $fetcher,
+            asyncSuggestionsDebounceMs: $debounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            pendingAsyncFilterText:    $this->pendingAsyncFilterText,
         );
     }
 
@@ -161,6 +169,27 @@ final class Select implements \SugarCraft\Forms\Field
     public function options(string ...$options): self    { return $this->withOptions(...$options); }
     public function fuzzy(array $candidates): self         { return $this->withFuzzySuggestions($candidates); }
     public function enum(string $enumClass): self         { return $this->withEnum($enumClass); }
+
+    /**
+     * Attach a pending async cancellation source.
+     *
+     * @internal
+     */
+    public function withPendingAsyncCancellation(CancellationSource $cancellationSource): self
+    {
+        return new self(
+            key:                       $this->key,
+            list:                      $this->list,
+            title:                     $this->title,
+            description:               $this->description,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $cancellationSource,
+            pendingAsyncFilterText:    $this->pendingAsyncFilterText,
+        );
+    }
 
     public function key(): string  { return $this->key; }
     public function value(): mixed
@@ -223,11 +252,16 @@ final class Select implements \SugarCraft\Forms\Field
         $next = $this->mutate(list: $l);
 
         // Schedule async suggestions with debounce when filter text changes and is not empty
+        // Cancel any previously pending operation so only the latest keystroke fires
         if ($this->asyncSuggestionsFetcher !== null
             && $l->isFiltering()
             && $l->filterText !== ''
             && $l->filterText !== $this->list->filterText
         ) {
+            // Cancel previous pending async
+            $this->pendingAsyncCancellation?->cancel();
+            // Create a new cancellation source and store it on $next
+            $next = $next->withPendingAsyncCancellation(CancellationSource::new());
             $asyncCmd = $this->scheduleAsyncSuggestions($next, $l->filterText);
             if ($cmd !== null) {
                 return [$next, fn() => $cmd()];
@@ -241,11 +275,17 @@ final class Select implements \SugarCraft\Forms\Field
     /**
      * Schedule async suggestions fetch with debounce.
      * Returns a Cmd that will perform the debounce and return AsyncCmd.
+     * Uses CancellationSource to cancel the previous pending operation when
+     * the user types again before the debounce window elapses.
      *
+     * @param self $field  The field instance to use for getting current input value
+     * @param string $filterText  The filter text at scheduling time
      * @return \Closure|null Returns a Cmd closure, or null if no async suggestions
      */
     private function scheduleAsyncSuggestions(self $field, string $filterText): ?\Closure
     {
+        // Create a new cancellation source for this operation
+        $cancellationSource = CancellationSource::new();
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $currentSeq = ++$this->pendingAsyncSeq;
@@ -254,17 +294,29 @@ final class Select implements \SugarCraft\Forms\Field
         // Store the filter text at time of scheduling for sequence tracking
         $scheduledFilterText = $filterText;
 
-        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $scheduledFilterText): \SugarCraft\Core\AsyncCmd {
+        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $scheduledFilterText, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
+            $token = $cancellationSource->token();
+
+            // Register cancellation: if the user types again, this will fire
+            // and reject the deferred before the timer fires.
+            $token->onCancel(static function () use ($deferred): void {
+                $deferred->reject(new \RuntimeException('Async suggestions cancelled'));
+            });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $scheduledFilterText): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $scheduledFilterText): void {
+                // Check if cancelled before proceeding
+                if ($token->isCancelled()) {
+                    return;
+                }
+
                 // Call the fetcher to get a promise
                 $promise = $fetcher($scheduledFilterText);
 
                 // Chain to resolve the deferred when the fetcher promise resolves
                 $promise->then(
-                    function (array $suggestions) use ($deferred, $currentSeq, $field): void {
+                    function (array $suggestions) use ($deferred, $fieldKey, $field): void {
                         // Resolve with the suggestions message
                         $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
                     },
@@ -327,6 +379,7 @@ final class Select implements \SugarCraft\Forms\Field
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
             pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             pendingAsyncFilterText:    $this->pendingAsyncFilterText,
             enumClass:                 $enumClass  ?? $this->enumClass,
         );

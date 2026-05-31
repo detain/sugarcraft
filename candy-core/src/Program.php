@@ -474,7 +474,10 @@ final class Program
                     $this->dispatch($resolvedMsg);
                 }
             })->otherwise(function (\Throwable $e): void {
+                // Dispatch ExceptionMsg for backward compat and also
+                // invoke the user-configured exception handler.
                 $this->dispatch(new ExceptionMsg($e));
+                ($this->exceptionHandler)($e);
             });
             return;
         }

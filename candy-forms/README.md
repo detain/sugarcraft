@@ -62,7 +62,7 @@ $spinner = Spinner::new(Style::dot());
 
 ## Shared foundations
 
-candy-forms is built on four shared packages:
+candy-forms is built on five shared packages:
 
 - **[candy-buffer](/sugarcraft/candy-buffer)** — Cell-grid model + `Buffer::toAnsi()` for
   rendering glyphs and styles to ANSI bytes. TextInput / TextArea use the buffer
@@ -76,6 +76,10 @@ candy-forms is built on four shared packages:
 - **[candy-fuzzy](/sugarcraft/candy-fuzzy)** — `SmithWatermanMatcher` scores.
   Select / MultiSelect filter delegates to it internally; the existing public
   `withFilter(callable)` injection point is preserved for custom filters.
+- **[candy-async](/sugarcraft/candy-async)** — `Async\Await` + `CancelledException`
+  for async suggestion fetchers. `withAsyncSuggestions` stores a
+  `CancellationSource` on the model and cancels the previous timer before
+  scheduling the next, so rapid keystrokes only fire one network request.
 
 The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
 remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`

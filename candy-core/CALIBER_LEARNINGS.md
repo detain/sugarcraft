@@ -51,4 +51,6 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
  - **[pattern:candy-core:program-options-builder]** `ProgramOptions` kept the 16-arg constructor for full back-compat. New code should use `ProgramOptions::builder()` instead — a fluent immutable builder with `with*()` per param. The builder's `build()` validates required fields and throws `\InvalidArgumentException` on missing required. Mirrors: `docs/repo_map_update.md §327.1`.
 
+ - **[pattern:async-suggestions:cancel]** Use `CancellationToken` for any user-cancellable async op. ReactPHP loop is shared — accept `LoopInterface`, don't construct. When implementing debounced async suggestions, store a `CancellationSource` on the model and call `cancel()` on the previous source before scheduling a new timer, so rapid keystrokes only fire one fetch.
+
  - **[pattern:candy-core:undo-action-type]** `UndoActionType` enum (Delete / Move / Rename / Copy / Custom) replaces 4+ ad-hoc `str_starts_with($desc, 'delete ')` / `str_starts_with($desc, 'move ')` detection schemes that existed in super-candy, candy-mines, and candy-tetris. Consumers migrate in steps 25 and 32. Mirrors: `docs/repo_map_update.md §345.8`.
