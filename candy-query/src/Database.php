@@ -4,18 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query;
 
+use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Lang;
 
 /**
- * Thin SQLite wrapper. Everything else in this app talks to a {@see
- * Database} (an interface in spirit, sealed concrete class in
- * practice — promote to an interface the day a non-SQLite driver
- * lands).
+ * Thin SQLite wrapper implementing DatabaseInterface.
+ *
+ * Everything else in this app talks to a {@see Database} (an interface
+ * in spirit, sealed concrete class in practice — now implements
+ * DatabaseInterface so any impl can be substituted).
  *
  * The wrapper is split out so the Model can be tested against an
  * in-memory `:memory:` PDO with no fixture files on disk.
  */
-final class Database
+final class Database implements DatabaseInterface
 {
     public function __construct(public readonly \PDO $pdo)
     {
@@ -48,9 +50,7 @@ final class Database
         return $out;
     }
 
-    /**
-     * @return list<array<string,mixed>>
-     */
+    /** @return list<array<string,mixed>> */
     public function rows(string $table, int $limit = 100): array
     {
         $sql = sprintf('SELECT * FROM "%s" LIMIT %d', str_replace('"', '""', $table), $limit);
@@ -58,12 +58,7 @@ final class Database
         return $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Run an arbitrary SELECT and return the rowset, or return a
-     * single-row `affected => N` map for non-SELECT statements.
-     *
-     * @return list<array<string,mixed>>
-     */
+    /** @return list<array<string,mixed>> */
     public function query(string $sql): array
     {
         $stmt = $this->pdo->prepare($sql);
@@ -72,6 +67,28 @@ final class Database
             return $stmt->fetchAll(\PDO::FETCH_ASSOC);
         }
         return [['affected' => $stmt->rowCount()]];
+    }
+
+    public function lastInsertId(): string|int
+    {
+        return $this->pdo->lastInsertId();
+    }
+
+    public function quote(string $value): string
+    {
+        return $this->pdo->quote($value);
+    }
+
+    public function exec(string $sql): int
+    {
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute();
+        return $stmt->rowCount();
+    }
+
+    public function close(): void
+    {
+        $this->pdo = null;
     }
 
     /**
