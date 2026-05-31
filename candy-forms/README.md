@@ -80,6 +80,10 @@ candy-forms is built on five shared packages:
   for async suggestion fetchers. `withAsyncSuggestions` stores a
   `CancellationSource` on the model and cancels the previous timer before
   scheduling the next, so rapid keystrokes only fire one network request.
+- **Vim keybindings** — `VimKeyHandler` provides a shared vim mode handler
+  (`VimState`: Insert/Normal/Visual/VisualLine; `VimAction`: CursorLeft,
+  CursorRight, DeleteChar, YankLine, …). sugar-prompt, sugar-bits, and
+  sugar-readline delegate to it — new bindings benefit all 4 libs at once.
 
 The legacy `SugarCraft\Forms\Fuzzy\FuzzyMatcher` (step-07 back-compat shim)
 remains as a deprecated alias — it delegates to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`
