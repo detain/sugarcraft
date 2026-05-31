@@ -184,11 +184,26 @@ final class Inspector
                     continue;
                 }
                 // Also check if next element is "4:N" format.
-                if (isset($codes[$i + 1]) && preg_match('/^4:(\d+)$/', $codes[$i + 1]) === 1) {
+                if (isset($codes[$i + 1]) && preg_match('/^4:(\d+)$/', $codes[$i + 1], $m) === 1) {
                     $sub = (int) $codes[$i + 1];
                     $parts[] = self::underlineStyleName($sub);
                     $i++; // Skip the sub-parameter.
                     continue;
+                }
+                // Handle "4;<N>" semicolon format (e.g. "4;99" = underline style 99).
+                // Trigger for 2-digit numbers that are NOT standard SGR color codes (30-37, 90-97).
+                if (isset($codes[$i + 1]) && preg_match('/^\d{2}$/', $codes[$i + 1]) === 1) {
+                    $nextCode = (int) $codes[$i + 1];
+                    // Skip if it's a standard color code (30-37, 90-97) or other known SGR code
+                    if ($nextCode >= 30 && $nextCode <= 37) {
+                        // Standard foreground - don't combine
+                    } elseif ($nextCode >= 90 && $nextCode <= 97) {
+                        // Bright foreground - don't combine
+                    } else {
+                        $parts[] = self::underlineStyleName($nextCode);
+                        $i++; // Skip the sub-parameter.
+                        continue;
+                    }
                 }
             }
             // 38;5;n (256-color fg) and 38;2;r;g;b (truecolor fg).
