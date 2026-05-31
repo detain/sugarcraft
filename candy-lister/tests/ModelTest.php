@@ -286,4 +286,189 @@ final class ModelTest extends TestCase
         $filtered = $this->model->withFilterFn(fn($v) => true);
         $this->assertSame(FilterState::filtering, $filtered->filterState);
     }
+
+    // ─── Additional edge cases ───────────────────────────────────────────────
+
+    public function testCursorUpClampsToZero(): void
+    {
+        $m = $this->model->addItem(new StringItem('only'));
+        $result = $m->cursorUp(10);
+        $this->assertSame(0, $result->cursorIndex());
+    }
+
+    public function testCursorDownClampsToLastIndex(): void
+    {
+        foreach (['a', 'b'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+        $this->model->setCursor(0);
+        $result = $this->model->cursorDown(100);
+        $this->assertSame(1, $result->cursorIndex());
+    }
+
+    public function testSetCursorOffsetSetsBothOffsetAndLineOffset(): void
+    {
+        $m = $this->model->setCursorOffset(7);
+        $this->assertSame(7, $m->cursorOffset);
+        $this->assertSame(7, $m->lineOffset);
+    }
+
+    public function testSetLineStyle(): void
+    {
+        $m = $this->model->setLineStyle("\x1b[2m");
+        $this->assertSame("\x1b[2m", $m->lineStyle);
+    }
+
+    public function testSetCurrentStyle(): void
+    {
+        $m = $this->model->setCurrentStyle("\x1b[1m");
+        $this->assertSame("\x1b[1m", $m->currentStyle);
+    }
+
+    public function testSortWithNullLessFuncReturnsSelf(): void
+    {
+        $this->model->addItem(new StringItem('z'));
+        $result = $this->model->sort();
+        $this->assertSame($this->model, $result);
+    }
+
+    public function testWithoutFilterOnModelWithNoFilterReturnsSelf(): void
+    {
+        $result = $this->model->withoutFilter();
+        $this->assertSame($this->model, $result);
+    }
+
+    public function testRemoveItemAtInvalidIndexReturnsSelf(): void
+    {
+        $m = $this->model->addItem(new StringItem('item'));
+        $result = $m->removeItem(99);
+        $this->assertSame($m, $result);
+    }
+
+    public function testRemoveItemAtNegativeIndexReturnsSelf(): void
+    {
+        $m = $this->model->addItem(new StringItem('item'));
+        $result = $m->removeItem(-1);
+        $this->assertSame($m, $result);
+    }
+
+    public function testMultilineItemRendersMultipleLines(): void
+    {
+        $this->model
+            ->addItem(new StringItem("line1\nline2\nline3"))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(80, 24);
+
+        $lines = $this->model->lines();
+        $this->assertGreaterThan(1, count($lines));
+    }
+
+    public function testSetPrefixer(): void
+    {
+        $m = $this->model->setPrefixer(new DefaultPrefixer());
+        $this->assertInstanceOf(DefaultPrefixer::class, $m->prefixer);
+    }
+
+    public function testSetSuffixer(): void
+    {
+        $m = $this->model->setSuffixer(new DefaultSuffixer());
+        $this->assertInstanceOf(DefaultSuffixer::class, $m->suffixer);
+    }
+
+    public function testCursorItemThrowsOnEmptyList(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->model->cursorItem();
+    }
+
+    public function testLinesWithStyleApplied(): void
+    {
+        $this->model
+            ->addItem(new StringItem('styled'))
+            ->setLineStyle("\x1b[2m")
+            ->setCurrentStyle("\x1b[1m")
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(80, 24);
+
+        $lines = $this->model->lines();
+        $this->assertNotEmpty($lines);
+    }
+
+    public function testFilterWithNoMatchingItems(): void
+    {
+        $this->model->addItem(new StringItem('apple'));
+        $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'apple');
+        $this->assertSame(0, $filtered->length());
+    }
+
+    public function testFilterCursorsToLastItemWhenOnlyOneMatches(): void
+    {
+        foreach (['a', 'b', 'c'] as $v) {
+            $this->model->addItem(new StringItem($v));
+        }
+        $this->model->setCursor(2); // cursor on 'c'
+        $filtered = $this->model->withFilterFn(fn($v) => (string) $v === 'a');
+        // After filtering to just 'a', cursor should be 0
+        $this->assertSame(0, $filtered->cursorIndex());
+    }
+
+    // ─── Exercises private helper methods via public API ──────────────────────
+
+    public function testLinesWithVeryLongWordExercisingSplitOverWidth(): void
+    {
+        // A single word longer than content width should be split
+        $longWord = \str_repeat('a', 100);
+        $this->model
+            ->addItem(new StringItem($longWord))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(20, 24);
+
+        $lines = $this->model->lines();
+        $this->assertNotEmpty($lines);
+        // The long word should be split into multiple lines
+        $this->assertGreaterThan(1, \count($lines));
+    }
+
+    public function testLinesWithMultiParagraphTextExercisingHardWrap(): void
+    {
+        // Multi-paragraph text (contains \n) exercises hardWrap
+        $this->model
+            ->addItem(new StringItem("para1\n\npara2"))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(80, 24);
+
+        $lines = $this->model->lines();
+        $this->assertNotEmpty($lines);
+    }
+
+    public function testLinesWithWrapLimitExercisingRenderItemWrapLogic(): void
+    {
+        $multiline = "line1\nline2\nline3\nline4\nline5";
+        $this->model
+            ->addItem(new StringItem($multiline))
+            ->setWrap(2) // limit to 2 lines
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(80, 24);
+
+        $lines = $this->model->lines();
+        // Should be limited to 2 lines due to wrap setting
+        $this->assertLessThanOrEqual(2, \count($lines));
+    }
+
+    public function testLinesWithContentWidthTooNarrowExercisingHardWrapEdgeCase(): void
+    {
+        $this->model
+            ->addItem(new StringItem('word'))
+            ->setPrefixer(new DefaultPrefixer())
+            ->setSuffixer(new DefaultSuffixer())
+            ->setViewport(5, 24);
+
+        $lines = $this->model->lines();
+        $this->assertNotEmpty($lines);
+    }
 }

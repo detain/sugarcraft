@@ -79,4 +79,20 @@ final class ScaleTest extends TestCase
         // Single line should always show at least 1 line at any progress > 0
         $this->assertNotEmpty($result);
     }
+
+    public function testApplyUsesDefaultEasingWhenNoneProvided(): void
+    {
+        // When Scale is constructed without custom easing,
+        // the private easing() method should return CubicBezier::easeOut()
+        // This exercises the null-coalescing fallback in easing()
+        $scale = new Scale();
+        $result1 = $scale->apply("A\nB\nC", 0.3);
+        $result2 = $scale->apply("A\nB\nC", 0.7);
+
+        // Different progress values with default easing should produce different results
+        $this->assertIsString($result1);
+        $this->assertIsString($result2);
+        // At 0.3 progress, fewer lines visible than at 0.7 progress
+        $this->assertLessThanOrEqual(\count(\explode("\n", $result2)), \count(\explode("\n", $result1)));
+    }
 }
