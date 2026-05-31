@@ -423,8 +423,10 @@ final class Input implements \SugarCraft\Forms\Field
      */
     private function scheduleAsyncSuggestions(self $field): ?\Closure
     {
-        // Create a new cancellation source for this operation
-        $cancellationSource = CancellationSource::new();
+        // Use the cancellation source already stored on $field (passed from update()).
+        // This is the CancellationSource that gets cancelled on subsequent keystrokes,
+        // ensuring rapid keystrokes cancel previous pending async operations.
+        $cancellationSource = $field->pendingAsyncCancellation;
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $currentSeq = ++$this->pendingAsyncSeq;
