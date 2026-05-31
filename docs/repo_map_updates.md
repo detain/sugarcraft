@@ -163,6 +163,19 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
     - Branch: `ai/mouse-consumers`
 
 
+- [2026-05-31 | step-26 | coder] candy-buffer: implemented Buffer::diff() with delta ANSI ops:
+  - Created 9 new files: DiffOp abstract base, MoveCursorOp, SetCellOp, EraseRunOp, RepeatRunOp, SetStyleOp, SetHyperlinkOp, DiffEncoder, DiffOptimiser
+  - Buffer.php: implemented diff(Buffer $prev) and applyDiff(list<DiffOp> $ops) — pure round-trip pair
+  - diff() algorithm: walks cell grid; emits MoveCursorOp + SetStyleOp + SetCellOp for changes; RepeatRunOp for horizontal identical-cell runs; EraseRunOp for ≥3 consecutive blank default cells
+  - DiffEncoder: tracks cursor+SGR+hyperlink state across ops; emits minimal ANSI byte stream (CUP/ECH/REP/SGR/OSC8)
+  - DiffOptimiser: peephole pass — merges adjacent SetStyleOps, coalesces same-style spans
+  - applyDiff(): interprets ops to produce new Buffer — used for round-trip testing
+  - 125 tests (64→125), 1186 assertions, ALL PASS
+  - Byte savings: 1-char change in 80×24 → 8 bytes vs 1943-byte full repaint (~99.6% reduction)
+  - Coverage: 85.58% overall, 92.68% diff machinery (gap: defensive-only branches in DiffEncoder hyperlink/overline/REP fallback — cannot be triggered with correct diff input)
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/buffer-diff-impl, PR #905
+
 - [2026-05-31 | step-25 | coder] super-candy + candy-query: builders + UndoActionType + DatabaseInterface:
   - super-candy/Manager.php: added `builder()` static method returning ManagerBuilder; reverseAction() now routes by UndoActionType enum instead of str_starts_with on description labels
   - super-candy/UndoAction.php: added `type: UndoActionType` property; factory methods (delete/move/rename/copy/mkdir) now capture type at creation time
