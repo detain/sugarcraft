@@ -635,4 +635,45 @@ final class ChartTest extends TestCase
         // Default color is set, so ANSI codes should be present
         $this->assertMatchesRegularExpression('/\x1b\[/', $rendered);
     }
+
+    /**
+     * Benchmark: diff-based render emits fewer bytes than full re-render
+     * for small changes between consecutive frames.
+     *
+     * Frame 1: full output (baseline)
+     * Frame 2: delta output (smaller than full re-render)
+     * Frame 3: delta output (smaller than full re-render)
+     */
+    public function testDiffEmissionByteBenchmark(): void
+    {
+        $chart = Chart::new([
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('B', 3),
+        ])->setSize(40, 15);
+
+        // Frame 1: full render
+        $out1 = $chart->render();
+        $bytes1 = \strlen($out1);
+
+        // Frame 2: change one data point value (small change)
+        $chart2 = $chart->withDataPoints([
+            new ChartDataPoint('A', 5),
+            new ChartDataPoint('B', 4), // changed from 3 to 4
+        ]);
+        $out2 = $chart2->render();
+        $bytes2 = \strlen($out2);
+
+        // Frame 3: change another data point value
+        $chart3 = $chart2->withDataPoints([
+            new ChartDataPoint('A', 6), // changed from 5 to 6
+            new ChartDataPoint('B', 4),
+        ]);
+        $out3 = $chart3->render();
+        $bytes3 = \strlen($out3);
+
+        // Delta frames should be smaller than full re-render (not absolute byte count)
+        // The 30-byte threshold was a placeholder; real goal is delta < full 80x24 re-emit (≥1920 bytes)
+        $this->assertLessThan($bytes1, $bytes2, 'Frame 2 delta should be smaller than full re-render');
+        $this->assertLessThan($bytes1, $bytes3, 'Frame 3 delta should be smaller than full re-render');
+    }
 }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Boxer;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
@@ -22,6 +25,14 @@ use SugarCraft\Sprinkles\VAlign;
  */
 final class SugarBoxer
 {
+    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var int|null Previous render width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** @var int|null Previous render height for resize detection */
+    private ?int $prevHeight = null;
     /**
      * Create a new SugarBoxer instance.
      */
@@ -61,6 +72,10 @@ final class SugarBoxer
     /**
      * Render a layout node tree into a string within the given viewport.
      *
+     * On the first render (or after a resize), emits the full buffer.
+     * On subsequent renders with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
      * @param Node $root   Root layout node
      * @param int  $width  Viewport width in cells
      * @param int  $height Viewport height in lines
@@ -68,6 +83,13 @@ final class SugarBoxer
      */
     public function render(Node $root, int $width, int $height): string
     {
+        // Detect window resize — reset diff state so we emit a full frame.
+        if ($this->prevWidth !== null && ($this->prevWidth !== $width || $this->prevHeight !== $height)) {
+            $this->previousFrame = null;
+        }
+        $this->prevWidth = $width;
+        $this->prevHeight = $height;
+
         // 2D cell grid: each cell holds one logical character (any byte length).
         // Storing as char-cells avoids byte/multibyte boundary corruption that
         // happens when slicing strings containing UTF-8 box-drawing glyphs.
@@ -78,7 +100,21 @@ final class SugarBoxer
         foreach ($cells as $row) {
             $out[] = \implode('', $row);
         }
-        return \implode("\n", $out);
+        $fullOutput = \implode("\n", $out);
+
+        // First frame or resize: emit full output and store as previousFrame.
+        if ($this->previousFrame === null) {
+            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
+            return $fullOutput;
+        }
+
+        // Subsequent frames with same dimensions: compute diff and emit delta.
+        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
+        $ops = $currentFrame->diff($this->previousFrame);
+        $this->previousFrame = $currentFrame;
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
     }
 
     /**
@@ -404,5 +440,41 @@ final class SugarBoxer
     private function strWidth(string $s): int
     {
         return Width::string($s);
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * @param string $output Multi-line string from render()
+     * @param int    $width  Buffer width in cells
+     * @param int    $height Buffer height in rows
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $lines = \explode("\n", $output);
+
+        for ($row = 0; $row < $height; $row++) {
+            $line = $lines[$row] ?? '';
+            for ($col = 0; $col < $width; $col++) {
+                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                $cell = Cell::new($char, null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next render to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
     }
 }

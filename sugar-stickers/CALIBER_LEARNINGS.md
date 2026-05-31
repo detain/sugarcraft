@@ -20,3 +20,9 @@ deferred to step 10.12. The Viewport wrapper currently delegates all rendering
 to the sugar-bits Viewport.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+## Buffer diffing
+
+- Table renderer holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
+- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- **Source:** step-27 ai/buffer-diff-consumers

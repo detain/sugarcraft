@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Veil;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Mouse\Mark;
@@ -60,6 +63,15 @@ final class Veil
     /** @var Manager|null Stored manager for back-compat only (deprecated) */
     private readonly ?Manager $manager;
 
+    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var int|null Previous output width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** @var int|null Previous output height for resize detection */
+    private ?int $prevHeight = null;
+
     /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
      * @param AnimationKind|null $animationKind Animation kind for transitions
@@ -92,6 +104,9 @@ final class Veil
         $this->lastRendered = $lastRendered;
         $this->marker = new Mark();
         $this->manager = $manager;
+        $this->previousFrame = null;
+        $this->prevWidth = null;
+        $this->prevHeight = null;
     }
 
     /**
@@ -370,6 +385,10 @@ final class Veil
     /**
      * Composite a foreground string over a background string.
      *
+     * On the first composite (or after a resize), emits the full output.
+     * On subsequent composites with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     *
      * @param string    $foreground  The overlay content (e.g. a modal)
      * @param string    $background   The base content
      * @param Position $vertical     Vertical position anchor
@@ -389,6 +408,13 @@ final class Veil
         $bgLines  = $this->splitLines($background);
         $bgHeight = \count($bgLines);
         $bgWidth  = $this->maxLineWidth($bgLines);
+
+        // Detect window resize — reset diff state so we emit a full frame.
+        if ($this->prevWidth !== null && ($this->prevWidth !== $bgWidth || $this->prevHeight !== $bgHeight)) {
+            $this->previousFrame = null;
+        }
+        $this->prevWidth = $bgWidth;
+        $this->prevHeight = $bgHeight;
 
         // When autoSize is enabled, apply border chrome first and compute dimensions from bordered content
         if ($this->autoSize) {
@@ -444,7 +470,21 @@ final class Veil
             }
         }
 
-        return \implode("\n", $output);
+        $fullOutput = \implode("\n", $output);
+
+        // First frame or resize: emit full output and store as previousFrame.
+        if ($this->previousFrame === null) {
+            $this->previousFrame = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
+            return $fullOutput;
+        }
+
+        // Subsequent frames with same dimensions: compute diff and emit delta.
+        $currentFrame = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
+        $ops = $currentFrame->diff($this->previousFrame);
+        $this->previousFrame = $currentFrame;
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
     }
 
     /**
@@ -610,5 +650,41 @@ final class Veil
             lastRendered: $lastRendered ?? $this->lastRendered,
             manager: $manager ?? $this->manager,
         );
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * @param string $output Multi-line string from composite()
+     * @param int    $width  Buffer width in cells
+     * @param int    $height Buffer height in rows
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $lines = \explode("\n", $output);
+
+        for ($row = 0; $row < $height; $row++) {
+            $line = $lines[$row] ?? '';
+            for ($col = 0; $col < $width; $col++) {
+                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                $cell = Cell::new($char, null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next composite to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
     }
 }
