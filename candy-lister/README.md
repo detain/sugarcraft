@@ -170,6 +170,10 @@ $results = $matcher->match('sep', $items);
 // Returns [ [StringItem('September'), 11], ... ] sorted by score descending
 ```
 
+## Shared foundations
+
+Mouse hit-testing (if needed) is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally.
+
 ## License
 
 [MIT](LICENSE)

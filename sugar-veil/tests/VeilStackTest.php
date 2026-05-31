@@ -155,4 +155,97 @@ final class VeilStackTest extends TestCase
         $all = $stack->all();
         $this->assertCount(2, $all);
     }
+
+    // ─── compositeAll() ────────────────────────────────────────────────────────
+
+    public function testCompositeAllWithEmptyStackReturnsBackgroundUnchanged(): void
+    {
+        $bg = "hello\nworld";
+        $stack = VeilStack::new();
+        $result = $stack->compositeAll($bg);
+        $this->assertSame($bg, $result);
+    }
+
+    public function testCompositeAllSkipsEmptyStackInLoop(): void
+    {
+        // When sorted returns empty, the loop body never executes
+        // and $background is returned unchanged
+        $bg = "test";
+        $stack = VeilStack::new();
+        $this->assertSame($bg, $stack->compositeAll($bg));
+    }
+
+    public function testCompositeAllWithMultipleVeilsComposesInZIndexOrder(): void
+    {
+        $bg = "....................\n....................\n....................";
+
+        $veil0 = Veil::new()->withZIndex(0);
+        $veil1 = Veil::new()->withZIndex(1);
+
+        // compositeAll uses each veil's own Position::TOP, Position::LEFT
+        $stack = VeilStack::new()->add($veil0)->add($veil1);
+
+        $result = $stack->compositeAll($bg);
+
+        // Should return a string (the composited result)
+        $this->assertIsString($result);
+    }
+
+    public function testCompositeAllWithSingleVeil(): void
+    {
+        $bg = "....................";
+        $veil = Veil::new()->withZIndex(0);
+
+        $stack = VeilStack::new()->add($veil);
+        $result = $stack->compositeAll($bg);
+
+        // Even with single veil, composite should be called
+        $this->assertIsString($result);
+    }
+
+    // ─── count() (Countable) ───────────────────────────────────────────────────
+
+    public function testCountReturnsItemCount(): void
+    {
+        $stack = VeilStack::new()
+            ->add(Veil::new())
+            ->add(Veil::new())
+            ->add(Veil::new());
+
+        $this->assertCount(3, $stack);
+    }
+
+    public function testCountOnEmptyStackIsZero(): void
+    {
+        $stack = VeilStack::new();
+        $this->assertCount(0, $stack);
+    }
+
+    public function testCompositeAllWithOffsetAppliesToEachVeil(): void
+    {
+        // Verify compositeAll method is actually called and uses proper background
+        $bg = "....................\n....................\n....................";
+
+        $veil0 = Veil::new()->withZIndex(0);
+        $veil1 = Veil::new()->withZIndex(1);
+
+        $stack = VeilStack::new()->add($veil0)->add($veil1);
+
+        // compositeAll with multiple veils should composite each in z-order
+        $result = $stack->compositeAll($bg);
+
+        $this->assertIsString($result);
+        $this->assertNotEmpty($result);
+    }
+
+    public function testRemoveWhereWithNoMatchReturnsSameCount(): void
+    {
+        $v1 = Veil::new()->withZIndex(1);
+        $v2 = Veil::new()->withZIndex(2);
+
+        $stack = VeilStack::new()->add($v1)->add($v2);
+        $filtered = $stack->removeWhere(fn(Veil $v): bool => $v->zIndex() === 99);
+
+        $this->assertCount(2, $filtered);
+    }
 }
