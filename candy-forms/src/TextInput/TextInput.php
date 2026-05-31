@@ -8,6 +8,9 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Forms\Cursor\BlinkMsg;
 use SugarCraft\Forms\Cursor\Cursor;
+use SugarCraft\Forms\Vim\VimAction;
+use SugarCraft\Forms\Vim\VimKeyHandler;
+use SugarCraft\Forms\Vim\VimState;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -150,88 +153,52 @@ final class TextInput implements Model
     /**
      * Handle vim mode key events.
      *
+     * Uses VimKeyHandler for normal mode navigation/commands.
+     * Preserves original insert mode behavior for character insertion and edits.
+     *
      * @return array{0:Model, 1:?\Closure}
      */
     private function vimUpdate(KeyMsg $msg): array
     {
-        // In normal mode, handle vim navigation and commands
+        // VimKeyHandler handles normal mode
         if ($this->vimNormalMode) {
-            // Escape does nothing in normal mode (already there)
-            // Arrow keys work in both modes
-            if ($msg->type === KeyType::Left) {
-                return [$this->moveCursor(max(0, $this->cursorPos - 1)), null];
-            }
-            if ($msg->type === KeyType::Right) {
-                return [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null];
-            }
-            // Up/Down arrows navigate history in vim normal mode too
-            if ($msg->type === KeyType::Up) {
-                return $this->historyNavigateUp();
-            }
-            if ($msg->type === KeyType::Down) {
-                return $this->historyNavigateDown();
-            }
+            return $this->vimUpdateNormalMode($msg);
+        }
 
-            // h key also moves left
-            if ($msg->type === KeyType::Char && $msg->rune === 'h' && !$msg->ctrl) {
-                return [$this->moveCursor(max(0, $this->cursorPos - 1)), null];
-            }
-            // l key also moves right
-            if ($msg->type === KeyType::Char && $msg->rune === 'l' && !$msg->ctrl) {
-                return [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null];
-            }
-            // w = word forward
-            if ($msg->type === KeyType::Char && $msg->rune === 'w' && !$msg->ctrl) {
-                return [$this->vimWordForward(), null];
-            }
-            // b = word backward
-            if ($msg->type === KeyType::Char && $msg->rune === 'b' && !$msg->ctrl) {
-                return [$this->vimWordBackward(), null];
-            }
-            // 0 = beginning of line
-            if ($msg->type === KeyType::Char && $msg->rune === '0' && !$msg->ctrl) {
-                return [$this->moveCursor(0), null];
-            }
-            // $ = end of line
-            if ($msg->type === KeyType::Char && $msg->rune === '$' && !$msg->ctrl) {
-                return [$this->moveCursor($this->length()), null];
-            }
-            // x = delete character under cursor (like vim)
-            if ($msg->type === KeyType::Char && $msg->rune === 'x' && !$msg->ctrl) {
-                return [$this->vimDeleteChar(), null];
-            }
-            // i = enter insert mode
-            if ($msg->type === KeyType::Char && $msg->rune === 'i' && !$msg->ctrl) {
-                return [$this->mutate(vimNormalMode: false), null];
-            }
-            // a = append (move cursor right, enter insert mode)
-            if ($msg->type === KeyType::Char && $msg->rune === 'a' && !$msg->ctrl) {
-                $nextPos = min($this->length(), $this->cursorPos + 1);
-                return [$this->mutate(cursorPos: $nextPos, vimNormalMode: false), null];
-            }
-            // A = append at end of line, enter insert mode
-            if ($msg->type === KeyType::Char && $msg->rune === 'A' && !$msg->ctrl) {
-                return [$this->mutate(cursorPos: $this->length(), vimNormalMode: false), null];
-            }
-            // I = insert at beginning of line, enter insert mode
-            if ($msg->type === KeyType::Char && $msg->rune === 'I' && !$msg->ctrl) {
-                return [$this->mutate(cursorPos: 0, vimNormalMode: false), null];
-            }
-            // u = undo (basic implementation)
-            if ($msg->type === KeyType::Char && $msg->rune === 'u' && !$msg->ctrl) {
-                // TODO: implement undo functionality
+        // Insert mode: preserve original behavior
+        return $this->vimUpdateInsertMode($msg);
+    }
+
+    /**
+     * Handle vim mode in normal mode - delegates to VimKeyHandler.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdateNormalMode(KeyMsg $msg): array
+    {
+        [$key, $ctrl] = VimKeyHandler::normalizeKeyMsg($msg);
+        $action = VimKeyHandler::handle($key, VimState::Normal, VimKeyHandler::FEAT_ALL, $ctrl);
+
+        if ($action === null || $action === VimAction::NoOp) {
+            // For unhandled keys in normal mode, check if it's a character to insert
+            if ($msg->type === KeyType::Char && !$msg->ctrl) {
+                // In normal mode, most characters are not handled (vim beeps)
                 return [$this, null];
             }
-            // Ctrl+r = redo
-            if ($msg->ctrl && $msg->rune === 'r') {
-                // TODO: implement redo functionality
-                return [$this, null];
-            }
-
             return [$this, null];
         }
 
-        // In insert mode, behave like normal but watch for Escape
+        return $this->consumeVimAction($action, $msg);
+    }
+
+    /**
+     * Handle vim mode in insert mode - preserves original behavior.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function vimUpdateInsertMode(KeyMsg $msg): array
+    {
+        // Escape enters normal mode
         if ($msg->type === KeyType::Escape) {
             return [$this->mutate(vimNormalMode: true), null];
         }
@@ -259,6 +226,86 @@ final class TextInput implements Model
             KeyType::Enter     => $this->handleEnter(),
             default            => [$this, null],
         };
+    }
+
+    /**
+     * Consume a VimAction returned by VimKeyHandler.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function consumeVimAction(VimAction $action, KeyMsg $msg): array
+    {
+        return match (true) {
+            // State transitions
+            $action === VimAction::EnterNormalMode
+                => [$this->mutate(vimNormalMode: true), null],
+
+            $action === VimAction::EnterInsertMode
+                => $this->handleEnterInsertMode($msg),
+
+            // Cursor movements
+            $action === VimAction::CursorLeft
+                => [$this->moveCursor(max(0, $this->cursorPos - 1)), null],
+
+            $action === VimAction::CursorRight
+                => [$this->moveCursor(min($this->length(), $this->cursorPos + 1)), null],
+
+            $action === VimAction::CursorLineStart
+                => [$this->moveCursor(0), null],
+
+            $action === VimAction::CursorLineEnd
+                => [$this->moveCursor($this->length()), null],
+
+            $action === VimAction::CursorWordForward
+                => [$this->vimWordForward(), null],
+
+            $action === VimAction::CursorWordBackward
+                => [$this->vimWordBackward(), null],
+
+            // History navigation
+            $action === VimAction::HistoryUp
+                => $this->historyNavigateUp(),
+
+            $action === VimAction::HistoryDown
+                => $this->historyNavigateDown(),
+
+            // Deletions
+            $action === VimAction::DeleteChar
+                => [$this->vimDeleteChar(), null],
+
+            // Unhandled actions (undo, redo, paste, etc. not yet implemented)
+            default
+                => [$this, null],
+        };
+    }
+
+    /**
+     * Handle EnterInsertMode action with cursor adjustments for a/A/I.
+     *
+     * @return array{0:Model, 1:?\Closure}
+     */
+    private function handleEnterInsertMode(KeyMsg $msg): array
+    {
+        // Determine the rune for cursor adjustment decisions
+        $rune = $msg->type === KeyType::Char ? $msg->rune : '';
+
+        $cursorPos = $this->cursorPos;
+
+        // 'a' = append (move cursor right before entering insert mode)
+        if ($rune === 'a') {
+            $cursorPos = min($this->length(), $cursorPos + 1);
+        }
+        // 'A' = append at end of line
+        elseif ($rune === 'A') {
+            $cursorPos = $this->length();
+        }
+        // 'I' = insert at beginning of line
+        elseif ($rune === 'I') {
+            $cursorPos = 0;
+        }
+        // 'i' = just enter insert mode at current position
+
+        return [$this->mutate(cursorPos: $cursorPos, vimNormalMode: false), null];
     }
 
     /**

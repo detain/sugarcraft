@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Readline\Mode;
 
+use SugarCraft\Forms\Vim\VimAction;
+use SugarCraft\Forms\Vim\VimKeyHandler;
+use SugarCraft\Forms\Vim\VimState;
 use SugarCraft\Readline\Key;
 use SugarCraft\Readline\TextPrompt;
 
@@ -14,6 +17,8 @@ use SugarCraft\Readline\TextPrompt;
  * - insert: default; ESC enters normal mode; typing inserts characters via TextPrompt
  * - normal: h/l/0/$/b/w move cursor; i/a/A switch to insert mode; dd deletes line
  * - visual: v from normal; movement extends selection (selection stored in prompt mode)
+ *
+ * Uses VimKeyHandler from candy-forms for key-to-action mapping.
  *
  * Mirrors erikgeiser/promptkit vi mode.
  */
@@ -66,7 +71,7 @@ final class ViMode implements ModeInterface
     }
 
     // -------------------------------------------------------------------------
-    // Normal mode — vi navigation and actions
+    // Normal mode — vi navigation and actions (delegates to VimKeyHandler)
     // -------------------------------------------------------------------------
 
     private function handleNormalMode(TextPrompt $prompt, string $key): TextPrompt
@@ -76,51 +81,155 @@ final class ViMode implements ModeInterface
             return $this->resolvePendingMotion($prompt, $key);
         }
 
+        // Normalize key for VimKeyHandler
+        $normalizedKey = $this->normalizeKey($key);
+        if ($normalizedKey === null) {
+            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        [$normKey, $ctrl] = $normalizedKey;
+        $action = VimKeyHandler::handle($normKey, VimState::Normal, VimKeyHandler::FEAT_ALL, $ctrl);
+
+        if ($action === null || $action === VimAction::NoOp) {
+            return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
+        }
+
+        return $this->consumeAction($prompt, $action, $key);
+    }
+
+    /**
+     * Normalize a sugar-readline key to VimKeyHandler format.
+     *
+     * @return array{0: string, 1: bool}|null [normalized key, ctrl flag] or null if not handled
+     */
+    private function normalizeKey(string $key): ?array
+    {
+        // Handle Ctrl+P/Ctrl+N as history navigation
+        if ($key === "\x10") {
+            return ['ctrl_p', false];
+        }
+        if ($key === "\x0e") {
+            return ['ctrl_n', false];
+        }
+
+        // Single character keys (a-z, 0-9, etc.)
+        if (strlen($key) === 1 && ord($key) >= 32 && ord($key) <= 126) {
+            $ord = ord($key);
+            // Check if it's an uppercase letter (65-90) -> make it lowercase
+            if ($ord >= 65 && $ord <= 90) {
+                $key = chr($ord + 32); // lowercase
+            }
+            // Check if it's a special vim key name passed as string
+            // But for single chars, just return the lowercase char
+            return [$key, false];
+        }
+
+        // Special key names
         return match ($key) {
-            // Movement
-            'h' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($this->moveCursor($prompt, -1)),
-            'l' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($this->moveCursor($prompt, 1)),
-            'w' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($this->wordForward($prompt)),
-            'b' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($this->wordBack($prompt)),
-            '0' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($prompt->handleKeyDirect(Key::Home)),
-            '$' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($prompt->handleKeyDirect(Key::End)),
-
-            // Enter insert mode
-            'i' => $this->withViMode(self::VI_MODE_INSERT)->attachTo($prompt),
-            'a' => $this->withViMode(self::VI_MODE_INSERT)
-                ->attachTo($prompt->handleKeyDirect(Key::Right)),
-            'A' => $this->withViMode(self::VI_MODE_INSERT)
-                ->attachTo($prompt->handleKeyDirect(Key::End)),
-
-            // Enter visual mode
-            'v' => $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt),
-
-            // Delete motions
-            'd' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->withPendingMotion('d')->attachTo($prompt),
-
-            // Yank line (yy) — not implemented yet, just enter insert at line start
-            'y' => $this->withViMode(self::VI_MODE_NORMAL)
-                ->withPendingMotion('y')->attachTo($prompt),
-
-            // History navigation (Ctrl+P = Up, Ctrl+N = Down)
-            "\x10" => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($prompt->handleKeyDirect(Key::Up)),
-            "\x0e" => $this->withViMode(self::VI_MODE_NORMAL)
-                ->attachTo($prompt->handleKeyDirect(Key::Down)),
-
-            default => $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt),
+            Key::Left      => ['left', false],
+            Key::Right     => ['right', false],
+            Key::Up        => ['up', false],
+            Key::Down      => ['down', false],
+            Key::Home      => ['0', false],     // 0 = beginning of line
+            Key::End       => ['$', false],      // $ = end of line
+            default        => null,
         };
     }
 
+    /**
+     * Consume a VimAction and execute it on the prompt.
+     */
+    private function consumeAction(TextPrompt $prompt, VimAction $action, string $originalKey): TextPrompt
+    {
+        $nextMode = $this->viMode;
+
+        return match (true) {
+            // State transitions
+            $action === VimAction::EnterNormalMode
+                => $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt),
+
+            $action === VimAction::EnterInsertMode
+                => $this->handleEnterInsertMode($prompt, $originalKey),
+
+            $action === VimAction::EnterVisualMode
+                => $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt),
+
+            // Cursor movements
+            $action === VimAction::CursorLeft
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->moveCursor($prompt, -1)),
+
+            $action === VimAction::CursorRight
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->moveCursor($prompt, 1)),
+
+            $action === VimAction::CursorWordForward
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->wordForward($prompt)),
+
+            $action === VimAction::CursorWordBackward
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($this->wordBack($prompt)),
+
+            $action === VimAction::CursorLineStart
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Home)),
+
+            $action === VimAction::CursorLineEnd
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::End)),
+
+            // History navigation
+            $action === VimAction::HistoryUp
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Up)),
+
+            $action === VimAction::HistoryDown
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Down)),
+
+            // Delete motions
+            $action === VimAction::DeleteLine
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->withPendingMotion('d')->attachTo($prompt),
+
+            // Yank line (yy) — pending motion
+            $action === VimAction::YankLine
+                => $this->withViMode(self::VI_MODE_NORMAL)
+                    ->withPendingMotion('y')->attachTo($prompt),
+
+            default
+                => $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt),
+        };
+    }
+
+    /**
+     * Handle EnterInsertMode with cursor adjustments for a/A/I.
+     */
+    private function handleEnterInsertMode(TextPrompt $prompt, string $originalKey): TextPrompt
+    {
+        // Normalize the key for comparison
+        $normKey = strlen($originalKey) === 1 ? strtolower($originalKey) : $originalKey;
+
+        // 'a' = append (move cursor right before entering insert mode)
+        if ($normKey === 'a') {
+            $prompt = $prompt->handleKeyDirect(Key::Right);
+        }
+        // 'A' = append at end of line
+        elseif ($normKey === 'A') {
+            $prompt = $prompt->handleKeyDirect(Key::End);
+        }
+        // 'I' = insert at beginning of line
+        elseif ($normKey === 'I') {
+            $prompt = $prompt->handleKeyDirect(Key::Home);
+        }
+        // 'i' = just enter insert mode at current position
+
+        return $this->withViMode(self::VI_MODE_INSERT)->attachTo($prompt);
+    }
+
     // -------------------------------------------------------------------------
-    // Visual mode — character-wise selection
+    // Visual mode — character-wise selection (delegates to VimKeyHandler)
     // -------------------------------------------------------------------------
 
     private function handleVisualMode(TextPrompt $prompt, string $key): TextPrompt
@@ -130,24 +239,48 @@ final class ViMode implements ModeInterface
             return $this->withViMode(self::VI_MODE_NORMAL)->attachTo($prompt);
         }
 
-        // Handle movement keys in visual mode
-        $movedPrompt = match ($key) {
-            'h' => $this->moveCursor($prompt, -1),
-            'l' => $this->moveCursor($prompt, 1),
-            'w' => $this->wordForward($prompt),
-            'b' => $this->wordBack($prompt),
-            '0' => $prompt->handleKeyDirect(Key::Home),
-            '$' => $prompt->handleKeyDirect(Key::End),
-            default => null,
-        };
-
-        if ($movedPrompt !== null) {
-            // Still in visual mode, cursor moved for selection
-            return $this->withViMode(self::VI_MODE_VISUAL)->attachTo($movedPrompt);
+        // Normalize key for VimKeyHandler
+        $normalizedKey = $this->normalizeKey($key);
+        if ($normalizedKey === null) {
+            return $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt);
         }
 
-        // ESC already handled above
-        return $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt);
+        [$normKey] = $normalizedKey;
+        $action = VimKeyHandler::handle($normKey, VimState::Visual, VimKeyHandler::FEAT_VISUAL, false);
+
+        if ($action === null || $action === VimAction::NoOp) {
+            return $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt);
+        }
+
+        // Execute the action in visual mode
+        return match (true) {
+            $action === VimAction::CursorLeft
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($this->moveCursor($prompt, -1)),
+
+            $action === VimAction::CursorRight
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($this->moveCursor($prompt, 1)),
+
+            $action === VimAction::CursorWordForward
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($this->wordForward($prompt)),
+
+            $action === VimAction::CursorWordBackward
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($this->wordBack($prompt)),
+
+            $action === VimAction::CursorLineStart
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::Home)),
+
+            $action === VimAction::CursorLineEnd
+                => $this->withViMode(self::VI_MODE_VISUAL)
+                    ->attachTo($prompt->handleKeyDirect(Key::End)),
+
+            default
+                => $this->withViMode(self::VI_MODE_VISUAL)->attachTo($prompt),
+        };
     }
 
     // -------------------------------------------------------------------------
