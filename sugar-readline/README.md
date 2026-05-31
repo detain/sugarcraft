@@ -20,6 +20,7 @@ PHP port of [erikgeiser/promptkit](https://github.com/erikgeiser/promptkit) — 
 - **ConfirmationPrompt** — yes/no with customizable labels, decoupled select-vs-submit
 - **TextareaPrompt** — multi-line text input with line/column cursor and optional max-line cap
 - **Pure renderer** — every method returns a new immutable instance; `view()` returns ANSI strings, `value()` returns the data
+- **Vim keybindings** — vi-mode (Insert/Normal/Visual/VisualLine) handled by the shared `candy-forms` `VimKeyHandler` — the same handler backing `sugar-prompt` and `sugar-bits`; new bindings in `VimAction` enum benefit all three libs
 
 ## Install
 

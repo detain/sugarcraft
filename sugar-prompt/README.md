@@ -39,7 +39,7 @@ $form = Form::new(
 
 ## Shared foundations
 
-sugar-prompt is built on top of four shared foundation packages:
+sugar-prompt is built on top of five shared foundation packages:
 
 | Package | Role |
 | ------- | ---- |
@@ -47,6 +47,7 @@ sugar-prompt is built on top of four shared foundation packages:
 | `sugarcraft/candy-buffer` | Ring-buffer output renderer — handles SGR sequence batching and viewport sync for the form viewport |
 | `sugarcraft/candy-fuzzy` | Smith-Waterman local-alignment fuzzy matcher — powers `withFuzzySuggestions()` on `Input` and `Select` fields |
 | `sugarcraft/candy-testing` | Test harness — provides `ProgramSimulator`, `ScriptedInput`, and golden-file tape helpers for TEA-program tests |
+| **Vim keybindings** | **Via candy-forms `VimKeyHandler`** — `TextInput` vim mode (Insert/Normal/Visual) is shared across all 4 libs; new bindings added to `VimAction` enum benefit sugar-prompt automatically |
 
 ## Field types
 
