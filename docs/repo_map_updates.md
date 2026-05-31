@@ -48,6 +48,20 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-21 | tester] sugar-readline coverage analysis + test additions:
+  - Overall: 65.98% lines (741/1123), 54.69% methods (105/192), 20.00% classes (3/15) — 151 tests pass
+  - Path-repo closure: clean (55 libs scanned)
+  - **Pre-existing gaps** (confirmed NOT introduced by this step):
+    - `EmacsMode` 15.38% lines (22/143): Alt+B/F/D, Ctrl+W/T/L/P/N word operations not exercised by tests
+    - `ViMode` 36.61% lines (41/112): Visual mode (v), pending motions (dd/yy), deleteLine, wordForward/wordBack (w/b) not exercised
+    - `Readline::run()` 0% lines: infinite loop architecture — untestable via unit tests; covered by 3 integration tests (Ctrl+C, Enter, paste) that verify symbolic key dispatch and abort/submit behavior
+  - **New from this step**: `Readline.php` 74.51% lines (76/102) — well-covered by 10 dedicated tests including symbolic key mapping (37 assertions for arrow/Fn/ctrl/alt/shift keys) and 3 integration tests with StreamInputDriver
+  - **Feasible additions**: None — EmacsMode/ViMode word operations require TextPrompt subclasses that don't exist in the current test suite architecture; the mode handlers delegate complex state transitions that are not independently testable without the full prompt lifecycle
+  - **Assessment**: Coverage gap is pre-existing and architectural — EmacsMode/ViMode are state-machine modes with many untested edge transitions; Readline::run() is a TTY read loop inherently untestable in unit tests
+  - Branch: `ai/sugar-readline-input`
+
+- [2026-05-30 | step-21 | coder] sugar-readline: wired candy-input InputDriver into new Readline.php. composer.json: added `sugarcraft/candy-input` + path-repo. New `Readline.php`: accepts optional `InputDriver` (default `StreamInputDriver::fromStdin()`), routes KeyEvents to symbolic key handlers (map EscapeDecoder output ArrowUp→'up', Ctrl+C→'ctrl_c', etc.), exposes `onKey()`/`onMouse()`/`onFocus()`/`onPaste()` callbacks. New `examples/interactive.php`: live TTY demo with history + Ctrl+C abort. All 139 existing tests pass. path-repo closure clean. Coverage: Readline.php is new infrastructure (not exercised by existing tests — coverage baseline 59.22% is pre-existing). Branch: `ai/sugar-readline-input`.
+
 - [2026-05-30 | step-20 | fixer] sugar-spark DCS test failures fixed (4 failures → 0). The 4 DCS tests (testDcsXTVERSIONReply, testDcsDecrpssReply, testDcsSixel, testDcsUnknown) were failing because candy-ansi Parser parses DCS bytes per VT100 spec (prefix/intermediate/final/data structure) while old byte-loop captured raw bytes. Changes made:
   - `Inspector.php::describeDcs()`: updated signature to `describeDcs(string $payload, int $final = 0)` for backward compat with StreamingInspector; added checks for XTVERSION (final='|' case), sixel (final='q' case), and DECRPSS (intermediate='$' case with semantic reconstruction).
   - `AnsiHandler.php::dcsDispatch()`: pass `$final` to `describeDcs()`.
