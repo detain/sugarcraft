@@ -49,6 +49,13 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-mouse",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }
