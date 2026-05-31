@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-testing",
-    "description": "Test harness for TEA programs — ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
+    "description": "Test harness for TEA programs \u2014 ProgramSimulator, golden-file assertions, and snapshot helpers for SugarCraft.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -56,6 +56,13 @@
         {
             "type": "path",
             "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-async",
             "options": {
                 "symlink": true
             }

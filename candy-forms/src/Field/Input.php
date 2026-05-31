@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Field;
 use React\EventLoop\Loop;
 use React\Promise\Deferred;
 use React\Promise\PromiseInterface;
+use SugarCraft\Async\CancellationSource;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
@@ -47,6 +48,9 @@ final class Input implements \SugarCraft\Forms\Field
     /** @var int Sequence counter for pending async operations (for cancellation) */
     private int $pendingAsyncSeq = 0;
 
+    /** @var CancellationSource|null Cancellation source for the pending async operation */
+    private ?CancellationSource $pendingAsyncCancellation = null;
+
     /** @var WorkerPool|null */
     private $workerPool = null;
 
@@ -62,6 +66,7 @@ final class Input implements \SugarCraft\Forms\Field
         callable $asyncSuggestionsFetcher = null,
         int $asyncSuggestionsDebounceMs = 150,
         int $pendingAsyncSeq = 0,
+        ?CancellationSource $pendingAsyncCancellation = null,
         WorkerPool $workerPool = null,
     ) {
         $this->validators = $validators;
@@ -70,6 +75,7 @@ final class Input implements \SugarCraft\Forms\Field
         $this->asyncSuggestionsFetcher = $asyncSuggestionsFetcher;
         $this->asyncSuggestionsDebounceMs = $asyncSuggestionsDebounceMs;
         $this->pendingAsyncSeq = $pendingAsyncSeq;
+        $this->pendingAsyncCancellation = $pendingAsyncCancellation;
         $this->workerPool = $workerPool;
     }
 
@@ -85,6 +91,7 @@ final class Input implements \SugarCraft\Forms\Field
             asyncSuggestionsFetcher: null,
             asyncSuggestionsDebounceMs: 150,
             pendingAsyncSeq: 0,
+            pendingAsyncCancellation: null,
             workerPool: null,
         );
     }
@@ -112,6 +119,30 @@ final class Input implements \SugarCraft\Forms\Field
     public function email(): self { return $this->withValidator(new \SugarCraft\Forms\Validator\Email()); }
     public function minlength(int $n): self { return $this->withValidator(new \SugarCraft\Forms\Validator\MinLength($n)); }
     public function maxlength(int $n): self { return $this->withValidator(new \SugarCraft\Forms\Validator\MaxLength($n)); }
+
+    /**
+     * Attach a pending async cancellation source.
+     *
+     * @internal
+     */
+    public function withPendingAsyncCancellation(CancellationSource $cancellationSource): self
+    {
+        return new self(
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $this->suggestionsFunc,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $cancellationSource,
+            workerPool:                $this->workerPool,
+        );
+    }
 
     /**
      * Mask the rendered value with a fixed echo character. Mirrors huh's
@@ -156,18 +187,19 @@ final class Input implements \SugarCraft\Forms\Field
     public function withSuggestionsFunc(\Closure $fn): self
     {
         return new self(
-            $this->key,
-            $this->input,
-            $this->title,
-            $this->description,
-            $this->error,
-            $this->validators,
-            $fn,
-            $this->fuzzyCandidates,
-            $this->asyncSuggestionsFetcher,
-            $this->asyncSuggestionsDebounceMs,
-            $this->pendingAsyncSeq,
-            $this->workerPool,
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $fn,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            workerPool:                $this->workerPool,
         );
     }
 
@@ -193,18 +225,19 @@ final class Input implements \SugarCraft\Forms\Field
         };
 
         return new self(
-            $this->key,
-            $this->input,
-            $this->title,
-            $this->description,
-            $this->error,
-            $this->validators,
-            $fn,
-            $candidates,
-            $this->asyncSuggestionsFetcher,
-            $this->asyncSuggestionsDebounceMs,
-            $this->pendingAsyncSeq,
-            $this->workerPool,
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $fn,
+            fuzzyCandidates:           $candidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            workerPool:                $this->workerPool,
         );
     }
 
@@ -221,18 +254,19 @@ final class Input implements \SugarCraft\Forms\Field
     public function withAsyncSuggestions(callable $fetcher, int $debounceMs = 150, WorkerPool $workerPool = null): self
     {
         return new self(
-            $this->key,
-            $this->input,
-            $this->title,
-            $this->description,
-            $this->error,
-            $this->validators,
-            $this->suggestionsFunc,
-            $this->fuzzyCandidates,
-            $fetcher,
-            $debounceMs,
-            $this->pendingAsyncSeq,
-            $workerPool,
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $this->validators,
+            suggestionsFunc:           $this->suggestionsFunc,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $fetcher,
+            asyncSuggestionsDebounceMs: $debounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            workerPool:                $workerPool,
         );
     }
 
@@ -264,18 +298,19 @@ final class Input implements \SugarCraft\Forms\Field
 
         $chained = $this->buildChainedValidator($fn);
         return new self(
-            $this->key,
-            $this->input,
-            $this->title,
-            $this->description,
-            $this->error,
-            $chained,
-            $this->suggestionsFunc,
-            $this->fuzzyCandidates,
-            $this->asyncSuggestionsFetcher,
-            $this->asyncSuggestionsDebounceMs,
-            $this->pendingAsyncSeq,
-            $this->workerPool,
+            key:                       $this->key,
+            input:                     $this->input,
+            title:                     $this->title,
+            description:               $this->description,
+            error:                     $this->error,
+            validators:                $chained,
+            suggestionsFunc:           $this->suggestionsFunc,
+            fuzzyCandidates:           $this->fuzzyCandidates,
+            asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+            asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+            pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+            workerPool:                $this->workerPool,
         );
     }
 
@@ -356,10 +391,15 @@ final class Input implements \SugarCraft\Forms\Field
         $next = $next->validate();
 
         // Schedule async suggestions with debounce on Char keystroke
+        // Cancel any previously pending operation so only the latest keystroke fires
         if ($this->asyncSuggestionsFetcher !== null
             && $msg instanceof \SugarCraft\Core\Msg\KeyMsg
             && $msg->type === \SugarCraft\Core\KeyType::Char
         ) {
+            // Cancel previous pending async
+            $this->pendingAsyncCancellation?->cancel();
+            // Create a new cancellation source and store it on $next
+            $next = $next->withPendingAsyncCancellation(CancellationSource::new());
             $asyncCmd = $this->scheduleAsyncSuggestions($next);
             // Combine with any existing cmd from the synchronous update
             if ($cmd !== null) {
@@ -375,22 +415,39 @@ final class Input implements \SugarCraft\Forms\Field
     /**
      * Schedule async suggestions fetch with debounce.
      * Returns a Cmd that will perform the debounce and return AsyncCmd.
+     * Uses CancellationSource to cancel the previous pending operation when
+     * the user types again before the debounce window elapses.
      *
+     * @param self $field  The field instance to use for getting current input value
      * @return \Closure|null Returns a Cmd closure, or null if no async suggestions
      */
     private function scheduleAsyncSuggestions(self $field): ?\Closure
     {
+        // Create a new cancellation source for this operation
+        $cancellationSource = CancellationSource::new();
         $fetcher = $this->asyncSuggestionsFetcher;
         $debounceMs = $this->asyncSuggestionsDebounceMs;
         $currentSeq = ++$this->pendingAsyncSeq;
         $fieldKey = $this->key;
         $workerPool = $this->workerPool;
 
-        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $workerPool): \SugarCraft\Core\AsyncCmd {
+        return function () use ($fetcher, $debounceMs, $currentSeq, $fieldKey, $field, $workerPool, $cancellationSource): \SugarCraft\Core\AsyncCmd {
             $deferred = new Deferred();
+            $token = $cancellationSource->token();
+
+            // Register cancellation: if the user types again, this will fire
+            // and reject the deferred before the timer fires.
+            $token->onCancel(static function () use ($deferred): void {
+                $deferred->reject(new \RuntimeException('Async suggestions cancelled'));
+            });
 
             // Schedule the debounce timer
-            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $workerPool): void {
+            Loop::addTimer($debounceMs / 1000.0, function () use ($fetcher, $fieldKey, $currentSeq, $field, $deferred, $token, $cancellationSource): void {
+                // Check if cancelled before proceeding
+                if ($token->isCancelled()) {
+                    return;
+                }
+
                 // Get current input value
                 $inputValue = $field->input->value;
 
@@ -399,9 +456,7 @@ final class Input implements \SugarCraft\Forms\Field
 
                 // Chain to resolve the deferred when the fetcher promise resolves
                 $promise->then(
-                    function (array $suggestions) use ($deferred, $currentSeq, $field): void {
-                        // Check if this result is still relevant (sequence check)
-                        // Note: We pass the sequence through the promise chain
+                    function (array $suggestions) use ($deferred, $fieldKey, $field): void {
                         $deferred->resolve(new SuggestionsReadyMsg($fieldKey, $suggestions));
                     },
                     function (\Throwable $e) use ($deferred): void {
@@ -451,19 +506,37 @@ final class Input implements \SugarCraft\Forms\Field
                     return $this;
                 }
                 return new self(
-                    $this->key, $this->input, $this->title, $this->description, $err,
-                    $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates,
-                    $this->asyncSuggestionsFetcher, $this->asyncSuggestionsDebounceMs,
-                    $this->pendingAsyncSeq, $this->workerPool,
+                    key:                       $this->key,
+                    input:                     $this->input,
+                    title:                     $this->title,
+                    description:               $this->description,
+                    error:                     $err,
+                    validators:                $this->validators,
+                    suggestionsFunc:           $this->suggestionsFunc,
+                    fuzzyCandidates:           $this->fuzzyCandidates,
+                    asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+                    asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+                    pendingAsyncSeq:           $this->pendingAsyncSeq,
+                    pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+                    workerPool:                $this->workerPool,
                 );
             }
         }
         if ($this->error !== null) {
             return new self(
-                $this->key, $this->input, $this->title, $this->description, null,
-                $this->validators, $this->suggestionsFunc, $this->fuzzyCandidates,
-                $this->asyncSuggestionsFetcher, $this->asyncSuggestionsDebounceMs,
-                $this->pendingAsyncSeq, $this->workerPool,
+                key:                       $this->key,
+                input:                     $this->input,
+                title:                     $this->title,
+                description:               $this->description,
+                error:                     null,
+                validators:                $this->validators,
+                suggestionsFunc:           $this->suggestionsFunc,
+                fuzzyCandidates:           $this->fuzzyCandidates,
+                asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
+                asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
+                pendingAsyncSeq:           $this->pendingAsyncSeq,
+                pendingAsyncCancellation:  $this->pendingAsyncCancellation,
+                workerPool:                $this->workerPool,
             );
         }
         return $this;
@@ -483,6 +556,7 @@ final class Input implements \SugarCraft\Forms\Field
             asyncSuggestionsFetcher:  $this->asyncSuggestionsFetcher,
             asyncSuggestionsDebounceMs: $this->asyncSuggestionsDebounceMs,
             pendingAsyncSeq:           $this->pendingAsyncSeq,
+            pendingAsyncCancellation:  $this->pendingAsyncCancellation,
             workerPool:                $this->workerPool,
         );
     }
