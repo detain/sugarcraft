@@ -60,4 +60,59 @@ final class FadeTest extends TestCase
         $this->assertStringContainsString('B', $result);
         $this->assertStringContainsString('C', $result);
     }
+
+    // ─── opacity() ───────────────────────────────────────────────────────────
+
+    public function testOpacityAtProgressZero(): void
+    {
+        $fade = new Fade();
+        $this->assertSame(0, $fade->opacity(0.0));
+    }
+
+    public function testOpacityAtProgressOne(): void
+    {
+        $fade = new Fade();
+        $this->assertSame(100, $fade->opacity(1.0));
+    }
+
+    public function testOpacityAtMidProgress(): void
+    {
+        $fade = new Fade();
+        // At mid-progress with default easeInOut, opacity should be somewhere between 0 and 100
+        $opacity = $fade->opacity(0.5);
+        $this->assertGreaterThan(0, $opacity);
+        $this->assertLessThan(100, $opacity);
+    }
+
+    public function testOpacityAtNegativeProgressClampsToZero(): void
+    {
+        $fade = new Fade();
+        $this->assertSame(0, $fade->opacity(-0.5));
+    }
+
+    public function testOpacityAtOversizedProgressClampsTo100(): void
+    {
+        $fade = new Fade();
+        $this->assertSame(100, $fade->opacity(1.5));
+    }
+
+    public function testOpacityWithCustomEasing(): void
+    {
+        $fade = new Fade(CubicBezier::linear());
+        // Linear easing at 0.5 progress gives 50% opacity
+        $opacity = $fade->opacity(0.5);
+        $this->assertSame(50, $opacity);
+    }
+
+    public function testOpacityIsMonotonic(): void
+    {
+        $fade = new Fade();
+        // Opacity should always increase as progress increases
+        $prev = 0;
+        foreach ([0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0] as $progress) {
+            $opacity = $fade->opacity($progress);
+            $this->assertGreaterThanOrEqual($prev, $opacity);
+            $prev = $opacity;
+        }
+    }
 }

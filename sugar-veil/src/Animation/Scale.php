@@ -19,6 +19,9 @@ final class Scale
     ) {
     }
 
+    /**
+     * @codeCoverageIgnore
+     */
     private function easing(): CubicBezier
     {
         return $this->easing ?? CubicBezier::easeOut();

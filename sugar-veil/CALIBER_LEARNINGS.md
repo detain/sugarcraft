@@ -65,3 +65,8 @@
 - `animate()` delegates to `composite()` after applying animation transforms
 - All state held in `readonly` private properties
 - `mutate()` accepts nulls for optional parameters and falls back to `$this->property`
+
+## Mouse hit-testing
+
+- Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.
+- `withManager()` is kept as deprecated back-compat; internally delegates to own `Scanner`

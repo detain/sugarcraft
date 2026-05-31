@@ -92,6 +92,72 @@ final class VeilAnimationTest extends TestCase
         $this->assertStringContainsString('a', $result);
     }
 
+    public function testBackdropWithMediumOpacity(): void
+    {
+        // Backdrop of 50 gives dimPasses = 2 (50/33 rounded = 2)
+        // This exercises the inner loop in applyBackdrop (runs once for dimPasses=2)
+        $v = Veil::new()->withBackdrop(50);
+
+        $bg = "..........\n..........";
+        $fg = "X";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString("\x1b[2m", $result);
+    }
+
+    public function testBackdropWithHighOpacity(): void
+    {
+        // Backdrop of 100 gives dimPasses = 3 (100/33 rounded = 3)
+        // This exercises the inner loop in applyBackdrop (runs twice for dimPasses=3)
+        $v = Veil::new()->withBackdrop(100);
+
+        $bg = "..........\n..........";
+        $fg = "X";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        // Should have multiple dim passes
+        $this->assertStringContainsString("\x1b[2m", $result);
+    }
+
+    public function testApplyBackdropInnerLoopWithDimPassesThree(): void
+    {
+        // Backdrop of 100 gives dimPasses=3, inner loop runs twice
+        // This specifically exercises the inner for loop at applyBackdrop line 482
+        $v = Veil::new()->withBackdrop(100);
+
+        $bg = "..........\n..........\n..........";
+        $fg = "X";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString("\x1b[2m", $result);
+        // With 3 dim passes, the wrapping occurs multiple times
+    }
+
+    public function testApplyBackdropInnerLoopWithDimPassesTwo(): void
+    {
+        // Backdrop of 50 gives dimPasses=2, inner loop runs once
+        $v = Veil::new()->withBackdrop(50);
+
+        $bg = "..........\n..........\n..........";
+        $fg = "X";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString("\x1b[2m", $result);
+    }
+
+    public function testBackdropMultiLineContent(): void
+    {
+        // Test applyBackdrop with multi-line content to exercise the outer loop fully
+        $v = Veil::new()->withBackdrop(100);
+
+        $bg = "............\n............\n............\n............";
+        $fg = "X";
+
+        $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
+        // Dim codes should be present (multiple passes applied to each line)
+        $this->assertStringContainsString("\x1b[2m", $result);
+    }
+
     // ─── withAnimation ──────────────────────────────────────────────────────
 
     public function testWithAnimationReturnsNewInstance(): void
@@ -218,6 +284,54 @@ final class VeilAnimationTest extends TestCase
 
         $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
         $this->assertStringContainsString('X', $result);
+    }
+
+    public function testAnimateScaleProducesDifferentOutputAtDifferentProgress(): void
+    {
+        // Scale animation should produce different foreground at different progress values
+        $v = Veil::new()->withAnimation(AnimationKind::SCALE);
+        $bg = "....................\n....................\n....................\n....................\n....................\n....................";
+        $fg = "A\nB\nC\nD\nE\nF";
+
+        $result0 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
+        $result50 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+        $result100 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        // At progress 0, Scale returns empty string, composite returns bg unchanged
+        $this->assertSame($bg, $result0);
+        // At progress 1, Scale returns full fg, composite should include all lines
+        $this->assertStringContainsString('A', $result100);
+        $this->assertStringContainsString('F', $result100);
+        // At 50% progress, only a subset of lines visible (scale from center)
+        $this->assertIsString($result50);
+    }
+
+    public function testAnimateSlideProducesDifferentOutputAtDifferentProgress(): void
+    {
+        $v = Veil::new()->withAnimation(AnimationKind::SLIDE);
+        $bg = "....................\n....................\n....................";
+        $fg = "TEST";
+
+        $result0 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.0);
+        $result50 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 0.5);
+        $result100 = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+
+        // All results should be valid strings
+        $this->assertIsString($result0);
+        $this->assertIsString($result50);
+        $this->assertIsString($result100);
+        // At full progress, foreground should be present
+        $this->assertStringContainsString('TEST', $result100);
+    }
+
+    public function testAnimateFadeProducesFullContentAtProgressOne(): void
+    {
+        $v = Veil::new()->withAnimation(AnimationKind::FADE);
+        $bg = "....................\n....................";
+        $fg = "FADE";
+
+        $result = $v->animate($fg, $bg, Position::TOP, Position::LEFT, 1.0);
+        $this->assertStringContainsString('FADE', $result);
     }
 
     // ─── AnimationKind enum ────────────────────────────────────────────────

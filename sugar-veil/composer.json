@@ -26,6 +26,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/candy-zone": "dev-master",
         "sugarcraft/honey-bounce": "dev-master"
@@ -34,6 +35,13 @@
         {
             "type": "path",
             "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-mouse",
             "options": {
                 "symlink": true
             }

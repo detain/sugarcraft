@@ -7,3 +7,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:filter-state-machine]** List filter state is modelled as a three-state enum (`FilterState::unfiltered → filtering → filtered`). `withFilterFn()` clones the model, saves `originalItems`, applies the filter, and transitions the enum. `withoutFilter()` restores `originalItems` and resets to `unfiltered`. The enum documents the transition contract explicitly — never infer state from item count alone.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+## Mouse hit-testing
+
+- Mouse hit-testing self-contained via candy-mouse. Don't pass Managers around for new code.

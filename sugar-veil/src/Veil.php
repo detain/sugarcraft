@@ -6,6 +6,9 @@ namespace SugarCraft\Veil;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
+use SugarCraft\Mouse\Zone;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Veil\Animation\AnimationKind;
@@ -45,7 +48,16 @@ final class Veil
     /** @var Border|null Border chrome to wrap content with */
     private readonly ?Border $border;
 
-    /** @var Manager|null Zone manager for click-outside hit testing */
+    /** @var Scanner Self-contained mouse hit-testing scanner (always present) */
+    private readonly Scanner $scanner;
+
+    /** @var string|null Last rendered output — feed to scanner via scan() before hit-testing */
+    private readonly ?string $lastRendered;
+
+    /** @var Mark Zone marker helper */
+    private readonly Mark $marker;
+
+    /** @var Manager|null Stored manager for back-compat only (deprecated) */
     private readonly ?Manager $manager;
 
     /**
@@ -55,7 +67,9 @@ final class Veil
      * @param bool $clickOutsideDismiss Dismiss on outside click
      * @param bool $autoSize Compute size from content
      * @param Border|null $border Border chrome
-     * @param Manager|null $manager Zone manager for click-outside detection
+     * @param Scanner|null $scanner Self-contained mouse hit-testing scanner
+     * @param string|null $lastRendered Last rendered output for scanner
+     * @param Manager|null $manager Stored manager for back-compat (deprecated)
      */
     private function __construct(
         int $backdropOpacity = 0,
@@ -64,6 +78,8 @@ final class Veil
         bool $clickOutsideDismiss = false,
         bool $autoSize = false,
         ?Border $border = null,
+        ?Scanner $scanner = null,
+        ?string $lastRendered = null,
         ?Manager $manager = null,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
@@ -72,6 +88,9 @@ final class Veil
         $this->clickOutsideDismiss = $clickOutsideDismiss;
         $this->autoSize = $autoSize;
         $this->border = $border;
+        $this->scanner = $scanner ?? Scanner::new();
+        $this->lastRendered = $lastRendered;
+        $this->marker = new Mark();
         $this->manager = $manager;
     }
 
@@ -174,8 +193,9 @@ final class Veil
     /**
      * Set the zone manager for click-outside hit testing.
      *
-     * Required when using clickOutsideDismiss to determine
-     * whether a mouse click fell inside or outside the veil zone.
+     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
+     *   A self-contained Scanner is always used for hit-testing. The Manager
+     *   parameter is stored for back-compat only. Prefer scan()/hit() instead.
      */
     public function withManager(Manager $manager): self
     {
@@ -184,13 +204,18 @@ final class Veil
 
     /**
      * Zone manager for click-outside hit testing.
+     *
+     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
+     *   Use the self-contained scanner via scan()/hit() instead.
      */
     public function manager(): ?Manager
     {
         return $this->manager;
     }
 
-    /** @deprecated Use manager() instead */
+    /**
+     * @deprecated Use manager() instead
+     */
     public function getManager(): ?Manager
     {
         return $this->manager;
@@ -215,15 +240,61 @@ final class Veil
     /**
      * Check if a mouse message is outside the veil zone.
      *
-     * Uses the candy-zone Manager to determine if the click was
-     * outside the veil's bounds.
+     * Requires scan($renderedOutput) to be called first with the
+     * rendered veil output so the scanner knows the zone bounds.
+     * Returns false if no scan data is available (nothing has been scanned yet).
+     *
+     * @see scan()
+     * @see hit()
      */
     public function isClickOutside(\SugarCraft\Core\Msg\MouseMsg $mouse): bool
     {
-        if (!$this->clickOutsideDismiss || $this->manager === null) {
+        if (!$this->clickOutsideDismiss) {
             return false;
         }
-        return $this->manager->anyInBounds($mouse) === null;
+        // If no rendered output has been scanned, cannot determine click position
+        if ($this->lastRendered === null) {
+            return false;
+        }
+        return $this->hit($mouse->x, $mouse->y) === null;
+    }
+
+    /**
+     * Feed a rendered output string to the internal scanner so that
+     * subsequent hit-testing can determine which zone contains
+     * a given coordinate pair.
+     *
+     * Call this after animate() or composite() return, before calling
+     * hit() or isClickOutside().
+     *
+     * Uses candy-mouse Scanner internally — no external Manager needed.
+     */
+    public function scan(string $rendered): self
+    {
+        $this->scanner->scan($rendered);
+        return $this->mutate(scanner: $this->scanner, lastRendered: $rendered);
+    }
+
+    /**
+     * Return the zone at the given terminal coordinate, or null if
+     * no zone contains that cell.
+     *
+     * Requires scan() to have been called after the last render.
+     */
+    public function hit(int $col, int $row): ?Zone
+    {
+        return $this->scanner->hit($col, $row);
+    }
+
+    /**
+     * Wrap $content with an invisible zone marker so the scanner
+     * can later extract bounding boxes.
+     *
+     * Uses candy-mouse Mark internally — no external Manager needed.
+     */
+    public function mark(string $id, string $content): string
+    {
+        return $this->marker->wrap($id, $content);
     }
 
     /**
@@ -294,12 +365,6 @@ final class Veil
                 'horizontalOffset' => 0,
             ];
         }
-
-        return [
-            'foreground' => $foreground,
-            'verticalOffset' => 0,
-            'horizontalOffset' => 0,
-        ];
     }
 
     /**
@@ -530,6 +595,8 @@ final class Veil
         ?bool $clickOutsideDismiss = null,
         ?bool $autoSize = null,
         ?Border $border = null,
+        ?Scanner $scanner = null,
+        ?string $lastRendered = null,
         ?Manager $manager = null,
     ): self {
         return new self(
@@ -539,6 +606,8 @@ final class Veil
             clickOutsideDismiss: $clickOutsideDismiss ?? $this->clickOutsideDismiss,
             autoSize: $autoSize ?? $this->autoSize,
             border: $border ?? $this->border,
+            scanner: $scanner,
+            lastRendered: $lastRendered ?? $this->lastRendered,
             manager: $manager ?? $this->manager,
         );
     }
