@@ -49,4 +49,13 @@ catches these; grep `src/` for `SugarCraft\\Bits` / `SugarCraft\\Prompt` after
 any extraction. Also keep the lang keys (`spinner.*`, `scrollbar.*`) in
 `candy-forms/lang/en.php` in sync with what `src/` references.
 
+## VimKeyHandler shared vim mode handler
+
+`candy-forms/src/Vim/VimKeyHandler` provides a unified vim keybinding handler
+(enum VimState: Insert/Normal/Visual/VisualLine; enum VimAction: CursorLeft,
+CursorRight, CursorWord, DeleteChar, etc.). 4 libs now delegate to it:
+candy-forms TextInput, sugar-readline ViMode, sugar-prompt (via class_alias),
+sugar-bits (via class_alias). Add new bindings to VimAction enum + VimKeyHandler
+so all consumers benefit. Mirrors: `docs/repo_map_step_24.md`.
+
 - **[pattern:async-suggestions:cancel]** Use `CancellationToken` for any user-cancellable async op. ReactPHP loop is shared — accept `LoopInterface`, don't construct. When implementing debounced async suggestions (e.g. `withAsyncSuggestions`), store a `CancellationSource` on the model and call `cancel()` on the previous source before scheduling a new timer, so rapid keystrokes only fire one fetch. The pattern: `$previous?->cancel(); $next = $next->withPendingAsyncCancellation(CancellationSource::new());`. Mirrors: `docs/repo_map_update.md §23.4`.
