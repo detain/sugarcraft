@@ -53,7 +53,11 @@
 - **`McpClient::forClaudeCode()`** factory provides the canonical `command: 'claude', args: ['--mcp']` invocation for the official Claude Code MCP server.
 - **`disconnect()`** closes pipes and calls `proc_close()` in a loop; `__destruct()` ensures cleanup if the client is abandoned.
 
-## Test patterns
+## Buffer diffing
+
+- `Renderer` holds a `?Buffer $previousFrame`; on each render it diffs against the prior frame and emits only delta ops via `DiffEncoder`.
+- Reset `previousFrame` on window resize, cursor-position-lost, or first paint — diffing across these boundaries produces visual corruption.
+- **Source:** step-27 ai/buffer-diff-consumers
 - **Behaviour tests** for `Chat` drive `update()` with scripted `KeyMsg` / `MouseMsg` / `Tick` objects and assert the `[Model, ?Cmd]` tuple shape.
 - **Coercion tests** for `Session` feed edge cases (missing file, empty string, wrong type) and assert the no-op / clamp / fresh-session outcome.
 - **Generator tests** for `StreamingDirectoryLister` assert the yielded `[index, absolutePath]` pairs and handle early-exit by exhausting the generator normally.

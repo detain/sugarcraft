@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plot\Chart;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\ColorProfile;
@@ -42,6 +45,15 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
 {
     private ?int $width = null;
     private ?int $height = null;
+
+    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var int|null Previous output width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** @var int|null Previous output height for resize detection */
+    private ?int $prevHeight = null;
 
     /** @var list<ChartDataPoint> */
     private array $dataPoints;
@@ -104,11 +116,22 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
 
     /**
      * Render the chart as a string.
+     *
+     * On the first render (or after a resize), emits the full output.
+     * On subsequent renders with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      */
     public function render(): string
     {
         $chartWidth = $this->getChartWidth();
         $chartHeight = $this->getChartHeight();
+
+        // Detect window resize — reset diff state so we emit a full frame.
+        if ($this->prevWidth !== null && ($this->prevWidth !== $chartWidth || $this->prevHeight !== $chartHeight)) {
+            $this->previousFrame = null;
+        }
+        $this->prevWidth = $chartWidth;
+        $this->prevHeight = $chartHeight;
 
         if ($chartWidth <= 0 || $chartHeight <= 0 || empty($this->dataPoints)) {
             return '';
@@ -134,7 +157,19 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
             $output = $this->renderLineChart($chartWidth, $chartHeight, $minValue, $maxValue, $gridLines);
         }
 
-        return $output;
+        // First frame or resize: emit full output and store as previousFrame.
+        if ($this->previousFrame === null) {
+            $this->previousFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
+            return $output;
+        }
+
+        // Subsequent frames with same dimensions: compute diff and emit delta.
+        $currentFrame = $this->bufferFromOutput($output, $chartWidth, $chartHeight);
+        $ops = $currentFrame->diff($this->previousFrame);
+        $this->previousFrame = $currentFrame;
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
     }
 
     /**
@@ -652,5 +687,41 @@ final class Chart implements \SugarCraft\Dash\Foundation\Sizer
             gridColor: $this->gridColor,
             labelColor: $color,
         );
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * @param string $output Multi-line string from render()
+     * @param int    $width  Buffer width in cells
+     * @param int    $height Buffer height in rows
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $lines = \explode("\n", $output);
+
+        for ($row = 0; $row < $height; $row++) {
+            $line = $lines[$row] ?? '';
+            for ($col = 0; $col < $width; $col++) {
+                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                $cell = Cell::new($char, null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next render to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
     }
 }
