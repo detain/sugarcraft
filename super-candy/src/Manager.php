@@ -12,6 +12,7 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
+use SugarCraft\SuperCandy\Manager\ManagerBuilder;
 
 /**
  * The dual-pane file manager `Model`.

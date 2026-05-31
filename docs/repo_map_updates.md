@@ -162,3 +162,17 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
       - VeilStack: `compositeAll()` has existing bug (calls `composite($result, Position::TOP, Position::LEFT)` but composite() expects `composite(string $foreground, string $background, Position $vertical, Position $horizontal)` — 2nd arg must be string background not Position) — 6 lines uncovered
     - Branch: `ai/mouse-consumers`
 
+
+- [2026-05-31 | step-25 | coder] super-candy + candy-query: builders + UndoActionType + DatabaseInterface:
+  - super-candy/Manager.php: added `builder()` static method returning ManagerBuilder; reverseAction() now routes by UndoActionType enum instead of str_starts_with on description labels
+  - super-candy/UndoAction.php: added `type: UndoActionType` property; factory methods (delete/move/rename/copy/mkdir) now capture type at creation time
+  - super-candy/src/Manager/ManagerBuilder.php: new fluent builder with with*() for all 15 Manager params
+  - super-candy/src/Undo/UndoActionFactory.php: new factory wrapping UndoAction static methods
+  - candy-query/src/Db/DatabaseInterface.php: new interface with 7 methods (tables/rows/query/lastInsertId/quote/exec/close)
+  - candy-query/src/Db/SqliteDatabase.php: new concrete implementation of DatabaseInterface using PDO
+  - candy-query/src/Database.php: updated to implement DatabaseInterface (added lastInsertId/quote/exec/close)
+  - candy-query/src/App.php: constructor now accepts DatabaseInterface instead of concrete Database; added builder() static method
+  - candy-query/src/App/AppBuilder.php: new fluent builder with with*() for all 14 App params
+  - Branch: ai/god-class-builders
+  - Tests: super-candy 187 pass (458 assertions), candy-query 123 pass (233 assertions)
+  - Path-repo closure: clean (55 libs scanned)

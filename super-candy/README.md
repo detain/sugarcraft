@@ -119,6 +119,33 @@ The whole transition layer is pure — filesystem I/O is injected as a `Closure(
 
 ![hidden-files](.vhs/hidden-files.gif)
 
+## Constructing Manager
+
+`Manager` has 15 constructor parameters. Use the fluent builder for readability and to avoid parameter-order mistakes:
+
+```php
+$manager = Manager::builder()
+    ->withLeft($leftPane)
+    ->withRight($rightPane)
+    ->withActiveIdx(0)
+    ->withStatus('')
+    ->withConfirm(ConfirmState::None)
+    ->withLister(fn(string $path): list<Entry> => FsLister::lister()($path))
+    ->withSearchQuery(null)
+    ->withSearchResults([])
+    ->withSearchCursor(0)
+    ->withTabs([])
+    ->withTabIndex(0)
+    ->withShowTabBar(false)
+    ->withUndoStack([])
+    ->withRedoStack([])
+    ->withPendingOpDest(null)
+    ->withPendingOpType(null)
+    ->build();
+```
+
+The direct constructor is kept for backward compatibility only — new code should use `Manager::builder()`.
+
 ## Status
 
 Phase 10 entry — copy / move / rename / undo are wired. Three-phase confirm gate (`c`/`m`/`R` arms, `y` confirms, anything else cancels). Undo restores delete/move/rename; copy undo is informational (original preserved). Everything underneath (the pure-state transition layer) is already in place.

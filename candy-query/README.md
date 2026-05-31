@@ -152,6 +152,25 @@ Columns auto-size to the widest value; cells exceeding `maxCellWidth` (default 4
 
 ![query-history](.vhs/query-history.gif)
 
+## DatabaseInterface
+
+`App` depends on `DatabaseInterface` rather than a concrete PDO/SQLite implementation. This decouples the UI from the database driver, enabling future MySQL and Postgres support without changing application logic.
+
+The interface defines 7 methods: `tables()`, `rows()`, `query()`, `lastInsertId()`, `quote()`, `exec()`, `close()`.
+
+```php
+use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\SqliteDatabase;
+
+// Default: SQLite via PDO
+$db = new SqliteDatabase('/path/to/db.sqlite');
+$app = App::builder()
+    ->withDb($db)
+    ->build();
+```
+
+To add MySQL or Postgres support, implement `DatabaseInterface` and pass your implementation to `App::builder()->withDb($yourImpl)->build()`.
+
 ## Test
 
 ```bash
