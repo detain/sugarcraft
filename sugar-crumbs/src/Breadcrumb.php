@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crumbs;
 
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Mouse\Mark;
+use SugarCraft\Mouse\Scanner;
 use SugarCraft\Zone\Manager;
 
 /**
@@ -31,8 +33,11 @@ final class Breadcrumb
     /** @var \Closure(NavigationItem, int): string|null */
     private ?\Closure $itemRenderer = null;
 
-    /** Zone manager for mouse-click tracking, or null if disabled. */
-    private ?Manager $zoneManager = null;
+    /** Self-contained scanner for mouse-click hit-testing, or null if disabled. */
+    private ?Scanner $scanner = null;
+
+    /** Zone marker helper (lazy init on first use) */
+    private ?Mark $marker = null;
 
     public function setSeparator(string $s): self
     {
@@ -65,17 +70,52 @@ final class Breadcrumb
     /**
      * Attach a {@see Manager} for mouse-click zone tracking.
      *
-     * When a manager is attached, each crumb item is wrapped in a named
-     * APC zone (`crumb-0`, `crumb-1`, …). The parent should call
-     * `Manager::scan()` on the render output to record zone bounds,
-     * then route {@see \SugarCraft\Core\Msg\MouseMsg} through
-     * `Manager::anyInBoundsAndUpdate()`.
+     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
+     *   The Manager parameter is ignored; use withScanner() or call
+     *   Scanner::scan() on the rendered output after rendering.
      */
     public function withZoneManager(?Manager $manager): self
     {
+        return $this;
+    }
+
+    /**
+     * Attach a self-contained {@see Scanner} for mouse-click hit-testing.
+     *
+     * When a scanner is attached, each crumb item is wrapped in a named
+     * zone marker during render. After rendering, call scan($output) on
+     * the scanner to parse zone bounds, then hit($col, $row) to find
+     * which crumb was clicked.
+     */
+    public function withScanner(?Scanner $scanner): self
+    {
         $clone = clone $this;
-        $clone->zoneManager = $manager;
+        $clone->scanner = $scanner;
         return $clone;
+    }
+
+    /**
+     * Feed a rendered breadcrumb string to the internal scanner so that
+     * subsequent hit-testing can determine which crumb zone contains
+     * a given coordinate pair.
+     *
+     * Call this after render() returns, before calling hit().
+     */
+    public function scan(string $rendered): self
+    {
+        $this->scanner?->scan($rendered);
+        return $this;
+    }
+
+    /**
+     * Return the zone at the given terminal coordinate, or null if no
+     * crumb zone contains that cell.
+     *
+     * Requires scan() to have been called after the last render.
+     */
+    public function hit(int $col, int $row): ?\SugarCraft\Mouse\Zone
+    {
+        return $this->scanner?->hit($col, $row);
     }
 
     /**
@@ -131,8 +171,8 @@ final class Breadcrumb
             $titles = $this->titlesFromTruncatedResult($result);
         }
 
-        // Wrap each crumb in a zone marker when a manager is attached.
-        if ($this->zoneManager !== null) {
+        // Wrap each crumb in a zone marker when a scanner is attached.
+        if ($this->scanner !== null) {
             $result = $this->wrapAllCrumbs($titles);
         }
 
@@ -186,19 +226,24 @@ final class Breadcrumb
     }
 
     /**
-     * Wrap each crumb item in a named APC zone marker.
+     * Wrap each crumb item in a named zone marker.
      *
      * Each item is individually wrapped so click coordinates map back
      * to the correct crumb. Used after the final item list is known
      * (post-truncation).
      *
+     * Uses candy-mouse Mark::wrap() internally — no external Manager needed.
+     *
      * @param list<string> $titles  Items in display order (oldest→newest)
      */
     private function wrapAllCrumbs(array $titles): string
     {
+        if ($this->marker === null) {
+            $this->marker = new Mark();
+        }
         $wrapped = [];
         foreach ($titles as $i => $title) {
-            $wrapped[] = $this->zoneManager->mark("crumb-{$i}", $title);
+            $wrapped[] = $this->marker->wrap("crumb-{$i}", $title);
         }
         return \implode($this->separator, $wrapped);
     }
