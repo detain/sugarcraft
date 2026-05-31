@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\SuperCandy\Tests;
 
 use SugarCraft\SuperCandy\UndoAction;
+use SugarCraft\Core\Undo\UndoActionType;
 use PHPUnit\Framework\TestCase;
 
 final class UndoActionTest extends TestCase
@@ -18,6 +19,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('delete 1 item(s)', $action->description);
         $this->assertSame($items, $action->items);
+        $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
     public function testDeleteMultipleItems(): void
@@ -31,6 +33,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('delete 3 item(s)', $action->description);
         $this->assertCount(3, $action->items);
+        $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
     public function testDeleteWithDirectories(): void
@@ -42,6 +45,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('delete 1 item(s)', $action->description);
         $this->assertTrue($action->items[0]['isDir']);
+        $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
     public function testRenameCreatesRenameAction(): void
@@ -53,6 +57,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('rename 1 item(s)', $action->description);
         $this->assertSame($renames, $action->items);
+        $this->assertSame(UndoActionType::Rename, $action->type);
     }
 
     public function testRenameMultipleItems(): void
@@ -65,6 +70,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('rename 2 item(s)', $action->description);
         $this->assertCount(2, $action->items);
+        $this->assertSame(UndoActionType::Rename, $action->type);
     }
 
     public function testMoveCreatesMoveAction(): void
@@ -76,6 +82,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('move 1 item(s)', $action->description);
         $this->assertSame($moves, $action->items);
+        $this->assertSame(UndoActionType::Move, $action->type);
     }
 
     public function testMoveMultipleItems(): void
@@ -88,6 +95,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('move 2 item(s)', $action->description);
         $this->assertCount(2, $action->items);
+        $this->assertSame(UndoActionType::Move, $action->type);
     }
 
     public function testCopyCreatesCopyAction(): void
@@ -99,6 +107,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('copy 1 item(s)', $action->description);
         $this->assertSame($copies, $action->items);
+        $this->assertSame(UndoActionType::Copy, $action->type);
     }
 
     public function testCopyMultipleItems(): void
@@ -111,6 +120,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('copy 2 item(s)', $action->description);
         $this->assertCount(2, $action->items);
+        $this->assertSame(UndoActionType::Copy, $action->type);
     }
 
     public function testMkdirCreatesMkdirAction(): void
@@ -122,6 +132,7 @@ final class UndoActionTest extends TestCase
         $this->assertCount(1, $action->items);
         $this->assertSame('/tmp/newdir', $action->items[0]['path']);
         $this->assertTrue($action->items[0]['isDir']);
+        $this->assertSame(UndoActionType::Insert, $action->type);
     }
 
     public function testMkdirMultiplePaths(): void
@@ -134,6 +145,7 @@ final class UndoActionTest extends TestCase
         foreach ($action->items as $item) {
             $this->assertTrue($item['isDir']);
         }
+        $this->assertSame(UndoActionType::Insert, $action->type);
     }
 
     public function testMkdirTransformsPathsToItemsFormat(): void
@@ -146,6 +158,7 @@ final class UndoActionTest extends TestCase
         $this->assertArrayHasKey('isDir', $action->items[0]);
         $this->assertSame('/tmp/mydir', $action->items[0]['path']);
         $this->assertTrue($action->items[0]['isDir']);
+        $this->assertSame(UndoActionType::Insert, $action->type);
     }
 
     public function testEmptyDeleteAction(): void
@@ -154,6 +167,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('delete 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
+        $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
     public function testEmptyRenameAction(): void
@@ -162,6 +176,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('rename 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
+        $this->assertSame(UndoActionType::Rename, $action->type);
     }
 
     public function testEmptyMoveAction(): void
@@ -170,6 +185,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('move 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
+        $this->assertSame(UndoActionType::Move, $action->type);
     }
 
     public function testEmptyCopyAction(): void
@@ -178,6 +194,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('copy 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
+        $this->assertSame(UndoActionType::Copy, $action->type);
     }
 
     public function testEmptyMkdirAction(): void
@@ -186,6 +203,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('mkdir 0 item(s)', $action->description);
         $this->assertSame([], $action->items);
+        $this->assertSame(UndoActionType::Insert, $action->type);
     }
 
     public function testDescriptionIsReadonly(): void
@@ -194,6 +212,7 @@ final class UndoActionTest extends TestCase
 
         $this->assertSame('delete 1 item(s)', $action->description);
         $this->assertSame('delete 1 item(s)', $action->description); // Ensure it's consistent
+        $this->assertSame(UndoActionType::Delete, $action->type);
     }
 
     public function testItemsPreservesOriginalStructure(): void

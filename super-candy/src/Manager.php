@@ -11,6 +11,8 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
+use SugarCraft\Core\Undo\UndoActionType;
+use SugarCraft\SuperCandy\Manager\ManagerBuilder;
 
 /**
  * The dual-pane file manager `Model`.
@@ -92,6 +94,14 @@ final class Manager implements Model
     public function init(): ?\Closure
     {
         return null;
+    }
+
+    /**
+     * Create a Manager via a fluent builder.
+     */
+    public static function builder(): ManagerBuilder
+    {
+        return new ManagerBuilder();
     }
 
     public function update(Msg $msg): array
@@ -845,59 +855,86 @@ final class Manager implements Model
     private function reverseAction(UndoAction $action): int
     {
         $errors = 0;
-        $desc = $action->description;
-        // Detect action type from description prefix
-        if (str_starts_with($desc, 'delete ')) {
-            // For delete actions, restore the items
-            foreach ($action->items as $item) {
-                if (!isset($item['path'])) {
-                    continue;
-                }
-                $path = $item['path'];
-                if (isset($item['isDir']) && $item['isDir']) {
-                    // Restore directory
-                    if (!is_dir($path) && !@mkdir($path, 0755, true)) {
-                        $errors++;
-                    }
-                } elseif (isset($item['content']) && $item['content'] !== null) {
-                    // Restore file
-                    $dir = dirname($path);
-                    if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-                        $errors++;
-                        continue;
-                    }
-                    if (@file_put_contents($path, $item['content']) === false) {
-                        $errors++;
-                    }
-                }
+        // Route by UndoActionType enum — no string prefix detection
+        match ($action->type) {
+            UndoActionType::Delete => $errors = $this->reverseDelete($action->items),
+            UndoActionType::Move => $errors = $this->reverseMove($action->items),
+            UndoActionType::Rename => $errors = $this->reverseRename($action->items),
+            // Insert (mkdir): items is list<array{path:string,isDir:bool}> — same reverse as delete
+            UndoActionType::Insert => $errors = $this->reverseDelete($action->items),
+            // Copy cannot be undone — original still exists
+            UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
+        };
+        return $errors;
+    }
+
+    /**
+     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items
+     */
+    private function reverseDelete(array $items): int
+    {
+        $errors = 0;
+        foreach ($items as $item) {
+            if (!isset($item['path'])) {
+                continue;
             }
-        } elseif (str_starts_with($desc, 'move ')) {
-            // For move actions, move items back to their original location
-            foreach ($action->items as $oldPath => $newPath) {
-                if (!is_string($oldPath) || !is_string($newPath)) {
-                    continue;
-                }
-                // newPath -> oldPath reverses the move
-                if (!@rename($newPath, $oldPath)) {
+            $path = $item['path'];
+            if (isset($item['isDir']) && $item['isDir']) {
+                // Restore directory
+                if (!is_dir($path) && !@mkdir($path, 0755, true)) {
                     $errors++;
                 }
-            }
-        } elseif (str_starts_with($desc, 'rename ')) {
-            // For rename actions, rename back to original name
-            foreach ($action->items as $oldPath => $newPath) {
-                if (!is_string($oldPath) || !is_string($newPath)) {
+            } elseif (isset($item['content']) && $item['content'] !== null) {
+                // Restore file
+                $dir = dirname($path);
+                if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
+                    $errors++;
                     continue;
                 }
-                // Extract original name from oldPath
-                $oldName = basename($oldPath);
-                $newDir = dirname($newPath);
-                $targetPath = Pane::join($newDir, $oldName);
-                if (!@rename($newPath, $targetPath)) {
+                if (@file_put_contents($path, $item['content']) === false) {
                     $errors++;
                 }
             }
         }
-        // Note: copy actions cannot truly be undone (original still exists)
+        return $errors;
+    }
+
+    /**
+     * @param array<string,string> $moves Map of original path => new path
+     */
+    private function reverseMove(array $moves): int
+    {
+        $errors = 0;
+        foreach ($moves as $oldPath => $newPath) {
+            if (!is_string($oldPath) || !is_string($newPath)) {
+                continue;
+            }
+            // newPath -> oldPath reverses the move
+            if (!@rename($newPath, $oldPath)) {
+                $errors++;
+            }
+        }
+        return $errors;
+    }
+
+    /**
+     * @param array<string,string> $renames Map of old path => new path
+     */
+    private function reverseRename(array $renames): int
+    {
+        $errors = 0;
+        foreach ($renames as $oldPath => $newPath) {
+            if (!is_string($oldPath) || !is_string($newPath)) {
+                continue;
+            }
+            // Extract original name from oldPath
+            $oldName = basename($oldPath);
+            $newDir = dirname($newPath);
+            $targetPath = Pane::join($newDir, $oldName);
+            if (!@rename($newPath, $targetPath)) {
+                $errors++;
+            }
+        }
         return $errors;
     }
 

@@ -12,3 +12,8 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:horizontal-scroll-table]** — Horizontal scrolling for wide result sets uses a computed `$offset` (first visible column index) and `$visibleWidth` (character budget per render) to derive the visible column slice. Auto-sizing columns to the widest value in the full set requires a full pass at construction time — worth it because the layout is stable across scrolls. Canonical: `ResultTable::visibleColumns()` / `scrollLeft()` / `scrollRight()`.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+### 2026-05-31 — god-class App needs a builder
+Pattern: A fluent builder relieves a long parameter list and makes dependency injection explicit. App had 14 params; the builder names each one so call sites are self-documenting.
+Anti-pattern: Constructing App with 14 positional args — parameter-order mistakes are silent and the code is unreadable.
+Source: step-25 ai/god-class-builders
