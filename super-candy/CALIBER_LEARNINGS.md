@@ -6,3 +6,8 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:confirmation-gate]** Destructive operations (delete/copy/move/rename) use a three-phase confirm gate: `armXxx()` sets `ConfirmState::XxxSelected` + status prompt; the next `KeyMsg` is consumed by `resolveConfirm()` which checks for `y` to `performXxx()` or any other key to cancel. Copy undo is informational only — `UndoAction::copy` logs the mapping but `reverseAction()` skips it since the original is preserved. This prevents accidental destructive acts while keeping the undo stack accurate for real reversals.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+### 2026-05-31 — god-class Manager needs a builder
+Pattern: When a constructor grows beyond ~10 parameters, a fluent builder improves readability and eliminates parameter-order mistakes. Manager had 15 params; the builder captures each as a named `with*()` method so call sites are self-documenting.
+Anti-pattern: Constructing Manager with 15 positional args — the order is impossible to memorise and a mistake is silent.
+Source: step-25 ai/god-class-builders
