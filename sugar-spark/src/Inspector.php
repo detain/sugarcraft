@@ -350,16 +350,37 @@ final class Inspector
     }
 
     /** Decode DCS payloads — XTVERSION reply, DECRQSS, DECRPSS, sixel. */
-    public static function describeDcs(string $payload): string
+    public static function describeDcs(string $payload, int $final = 0): string
     {
+        // XTVERSION reply: DCS P >| version ST
+        // candy-ansi parser interprets: '>' as intermediate, '|' as final, 'version' as data
+        // So payload = '>version' and final = '|'
+        if (chr($final) === '|' && str_starts_with($payload, '>')) {
+            return 'terminal version (XTVERSION reply): ' . substr($payload, 1);
+        }
+        // For StreamingInspector (old byte-loop) or when final is not available,
+        // the payload may contain the full sequence including intermediate+final
         if (str_starts_with($payload, '>|')) {
             return 'terminal version (XTVERSION reply): ' . substr($payload, 2);
         }
-        if (str_starts_with($payload, '1$r') || str_starts_with($payload, '0$r')) {
-            return 'DECRPSS reply ' . $payload;
-        }
-        if (str_starts_with($payload, 'q')) {
+        // sixel: DCS P q data ST
+        // The 'q' is consumed as final byte, data starts directly with sixel pixels
+        if ($final === ord('q') || str_contains($payload, 'sixel')) {
             return 'sixel image (' . strlen($payload) . ' bytes)';
+        }
+        // DECRPSS reply: candy-ansi parses '1$r0$p' as:
+        // - final='r' (first final byte in 0x40-0x7E range), data='0$p'
+        // - payload='$$1;0' from intermediate+prefix+params
+        // Produce semantic: 'DECRPSS reply 1$r0$p'
+        if (chr($final) === 'r' && str_starts_with($payload, '$$')) {
+            $params = explode(';', substr($payload, 2));
+            if (count($params) >= 2) {
+                return 'DECRPSS reply ' . $params[0] . '$r' . $params[1] . '$p';
+            }
+        }
+        // Unknown DCS: reconstruct full sequence including final byte
+        if ($final !== 0) {
+            return 'DCS ' . chr($final) . $payload;
         }
         return 'DCS ' . $payload;
     }

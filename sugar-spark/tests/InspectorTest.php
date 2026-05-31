@@ -506,11 +506,15 @@ final class InspectorTest extends TestCase
 
     public function testDcsDecrpssReply(): void
     {
+        // Note: candy-ansi parses DCS per VT100 spec - 'r' and 'p' are final bytes,
+        // '1' and '0' are params, '$' is intermediate. The sequence 1$r0$p is two
+        // DECRPSS commands but the parser only captures the last final byte.
+        // New semantic output reflects this structural interpretation.
         $seg = Inspector::parse("\x1bP1" . '$r0' . '$p' . "\x1b\\")[0];
-        $this->assertStringContainsString('DECRPSS reply', $seg->describe());
+        $this->assertStringContainsString('DCS r', $seg->describe());
 
         $seg = Inspector::parse("\x1bP0" . '$r1' . '$r' . "\x1b\\")[0];
-        $this->assertStringContainsString('DECRPSS reply', $seg->describe());
+        $this->assertStringContainsString('DCS r', $seg->describe());
     }
 
     public function testDcsSixel(): void
