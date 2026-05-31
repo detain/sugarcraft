@@ -188,7 +188,6 @@ final class Parser
 
     private function start(int $byte, State $from): void
     {
-        $this->stringBuffer = '';
         // For DCS, the byte that triggers Start IS the final command.
         if ($from === State::DcsEntry || $from === State::DcsParam || $from === State::DcsIntermediate) {
             $this->cmd = ($this->cmd & ~0xFF) | $byte;

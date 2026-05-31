@@ -252,6 +252,41 @@ final class HermitTest extends TestCase
         $this->assertSame($h->statusBar(), $h2->statusBar());
     }
 
+    public function testHighlightMatchesCjk(): void
+    {
+        $h = Hermit::new([
+            new FilteredItem(1, '日本語'),
+            new FilteredItem(2, '中文'),
+            new FilteredItem(3, '한국어'),
+        ])->show()->setMatchStyle("\x1b[33m");
+
+        $h = $h->type('本');
+
+        $bg = str_repeat("....................\n", 5);
+        $view = $h->View($bg);
+
+        // Verify the ANSI highlight is present (yellow), confirming CJK matching works.
+        $this->assertStringContainsString("\x1b[33m", $view);
+        // Verify '本' appears somewhere in the output (ANSI-wrapped but present)
+        $this->assertStringContainsString('本', $view);
+    }
+
+    public function testHighlightMatchesEmoji(): void
+    {
+        $h = Hermit::new([
+            new FilteredItem(1, '👍🏽'),
+            new FilteredItem(2, '👍🏿'),
+            new FilteredItem(3, '👎🏽'),
+        ])->show()->setMatchStyle("\x1b[31m");
+
+        $h = $h->type('👍');
+
+        $bg = str_repeat("....................\n", 5);
+        $view = $h->View($bg);
+
+        $this->assertStringContainsString("\x1b[31m", $view);
+    }
+
     public function testSigwinchOnResizeCallback(): void
     {
         $receivedCols = -1;
