@@ -12,7 +12,7 @@ Cell-grid value objects for terminal rendering — immutable `Buffer` and `Cell`
 - **`Style`** — minimal style record (fg colour, bg colour, attributes bitmask) for per-cell styling.
 - **`Hyperlink`** — OSC 8 hyperlink anchor (url + id).
 
-> **`Buffer::diff()`** is declared but not yet implemented — see [step-26](https://github.com/sugarcraft/sugarcraft/blob/master/docs/repo_map_step_26.md) for the delta-ANSI emitter.
+> **`Buffer::diff()`** produces minimal delta ANSI ops — see [`## Diffing & delta ANSI`](#diffing--delta-ansi) for details.
 
 ## Install
 
@@ -65,12 +65,65 @@ $cell = Cell::new('中'); // width=2, next cell must be a continuation
 - `Buffer::withCellAt(int $col, int $row, Cell $cell): self` — immutable cell setter.
 - `Buffer::withRegion(Region $region, Buffer $source): self` — blit `$source` into `$region`.
 - `Buffer::width(): int`, `Buffer::height(): int`, `Buffer::region(): Region`.
-- `Buffer::diff(Buffer $previous): list<DiffOp>` — **stub**: returns `[]`; full implementation in step-26.
+- `Buffer::diff(Buffer $previous): list<DiffOp>` — returns minimal delta ops (see [Diffing & delta ANSI](#diffing--delta-ansi)).
 
 ### Cell
 
 - `Cell::new(string $rune = ' ', ?Style $style = null, ?Hyperlink $link = null, int $width = 1): self`
 - `Cell::rune(): string`, `Cell::style(): ?Style`, `Cell::link(): ?Hyperlink`, `Cell::width(): int`
+
+## Diffing & delta ANSI
+
+`Buffer::diff(Buffer $previous)` compares two frames and returns a minimal list of `DiffOp` objects. Passing those ops through `DiffEncoder::encode()` produces a tight ANSI byte stream — no full repaint, just the cells that changed.
+
+**DiffOp types**
+
+| Op | ANSI | When used |
+|---|---|---|
+| `MoveCursorOp` | CUP `\x1b[row;colH` | Reposition before a run of changes |
+| `SetStyleOp` | SGR `\x1b[...m` | Style transition (only when style differs) |
+| `SetCellOp` | raw rune bytes | One or more consecutive changed cells |
+| `RepeatRunOp` | REP `\x1b[N b` | 2+ identical adjacent cells with same style |
+| `EraseRunOp` | ECH `\x1b[N X` | Large regions cleared to blanks |
+| `SetHyperlinkOp` | OSC 8 | Open/close OSC 8 hyperlink anchors |
+
+**Worked example**
+
+Two 5×2 buffers, before (all blanks) and after (styled 'A' at col 0, bold 'BBB' at col 1):
+
+```php
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
+use SugarCraft\Buffer\Diff\DiffEncoder;
+
+$prev = Buffer::new(5, 2);                           // all blanks
+$curr = $prev
+    ->withCellAt(0, 0, Cell::new('A', Style::fg(0xFF0000)))  // red A
+    ->withCellAt(1, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)))  // blue bold B
+    ->withCellAt(2, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)))
+    ->withCellAt(3, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)));
+
+$ops = $curr->diff($prev);
+// [MoveCursorOp(0,0), SetStyleOp(red), SetCellOp([A]),
+//  SetStyleOp(blue+bold), SetCellOp([B]), RepeatRunOp('B',2)]
+
+$bytes = (new DiffEncoder())->encode($ops);
+```
+
+Emitted bytes (annotated):
+
+```
+\x1b[1;1H           # CUP → col 0, row 0  (from MoveCursorOp)
+\x1b[38;2;255;0;0m  # SGR → red fg         (from SetStyleOp)
+A                  # SetCellOp 'A'
+\x1b[38;2;0;0;255;1m  # SGR → blue fg + bold  (style transition)
+B                  # SetCellOp first 'B'
+\x1b[2b            # REP → repeat 'B' 2×   (from RepeatRunOp)
+\x1b[0m            # SGR reset             (DiffEncoder close)
+```
+
+Total: ~38 bytes vs ~95 bytes for a full 5×2 repaint. The diff is round-trip verified: `$curr->diff($prev)->apply($prev)` equals `$curr`.
 
 ## Upstream
 

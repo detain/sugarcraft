@@ -6,65 +6,117 @@ namespace SugarCraft\Buffer\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\DiffOp;
+use SugarCraft\Buffer\Diff\DiffOp;
+use SugarCraft\Buffer\Diff\EraseRunOp;
+use SugarCraft\Buffer\Diff\MoveCursorOp;
+use SugarCraft\Buffer\Diff\RepeatRunOp;
+use SugarCraft\Buffer\Diff\SetCellOp;
+use SugarCraft\Buffer\Diff\SetHyperlinkOp;
+use SugarCraft\Buffer\Diff\SetStyleOp;
+use SugarCraft\Buffer\Hyperlink;
 use SugarCraft\Buffer\Style;
 
-/**
- * @covers \SugarCraft\Buffer\DiffOp
- */
 final class DiffOpTest extends TestCase
 {
-    public function testReplaceConstant(): void
+    public function testTypeConstants(): void
     {
-        $this->assertSame('replace', DiffOp::TYPE_REPLACE);
+        $this->assertSame('move_cursor', DiffOp::TYPE_MOVE_CURSOR);
+        $this->assertSame('set_cell', DiffOp::TYPE_SET_CELL);
+        $this->assertSame('erase_run', DiffOp::TYPE_ERASE_RUN);
+        $this->assertSame('repeat_run', DiffOp::TYPE_REPEAT_RUN);
+        $this->assertSame('set_style', DiffOp::TYPE_SET_STYLE);
+        $this->assertSame('set_hyperlink', DiffOp::TYPE_SET_HYPERLINK);
     }
 
-    public function testInsertConstant(): void
+    public function testMoveCursorOpConstruction(): void
     {
-        $this->assertSame('insert', DiffOp::TYPE_INSERT);
+        $op = new MoveCursorOp(5, 3);
+
+        $this->assertSame(5, $op->col);
+        $this->assertSame(3, $op->row);
     }
 
-    public function testDeleteConstant(): void
+    public function testMoveCursorOpInfo(): void
     {
-        $this->assertSame('delete', DiffOp::TYPE_DELETE);
+        $op = new MoveCursorOp(5, 3);
+
+        $info = $op->info();
+        $this->assertSame(5, $info['col']);
+        $this->assertSame(3, $info['row']);
     }
 
-    public function testNewReplace(): void
+    public function testSetCellOpConstruction(): void
     {
         $cell = Cell::new('X', Style::bold());
-        $op = new DiffOp(DiffOp::TYPE_REPLACE, 5, 10, $cell);
+        $op = new SetCellOp([$cell]);
 
-        $this->assertSame(DiffOp::TYPE_REPLACE, $op->type);
-        $this->assertSame(5, $op->col);
-        $this->assertSame(10, $op->row);
-        $this->assertSame($cell, $op->cell);
+        $this->assertCount(1, $op->cells);
+        $this->assertSame('X', $op->cells[0]->rune());
     }
 
-    public function testNewInsert(): void
+    public function testSetCellOpCount(): void
     {
-        $cell = Cell::new('Y');
-        $op = new DiffOp(DiffOp::TYPE_INSERT, 0, 0, $cell);
+        $op = new SetCellOp([
+            Cell::new('A'),
+            Cell::new('B'),
+            Cell::new('C'),
+        ]);
 
-        $this->assertSame(DiffOp::TYPE_INSERT, $op->type);
-        $this->assertSame(0, $op->col);
-        $this->assertSame(0, $op->row);
-        $this->assertSame($cell, $op->cell);
+        $this->assertSame(3, $op->count());
     }
 
-    public function testNewDelete(): void
+    public function testEraseRunOpConstruction(): void
     {
-        $op = new DiffOp(DiffOp::TYPE_DELETE, 3, 7);
+        $op = new EraseRunOp(10);
 
-        $this->assertSame(DiffOp::TYPE_DELETE, $op->type);
-        $this->assertSame(3, $op->col);
-        $this->assertSame(7, $op->row);
-        $this->assertNull($op->cell);
+        $this->assertSame(10, $op->count);
     }
 
-    public function testNewWithNullCell(): void
+    public function testRepeatRunOpConstruction(): void
     {
-        $op = new DiffOp(DiffOp::TYPE_REPLACE, 1, 2, null);
+        $op = new RepeatRunOp('X', 5, 1);
 
-        $this->assertNull($op->cell);
+        $this->assertSame('X', $op->rune);
+        $this->assertSame(5, $op->count);
+        $this->assertSame(1, $op->width);
+    }
+
+    public function testRepeatRunOpDefaultWidth(): void
+    {
+        $op = new RepeatRunOp('Y', 3);
+
+        $this->assertSame(1, $op->width);
+    }
+
+    public function testSetStyleOpConstruction(): void
+    {
+        $style = Style::bold();
+        $op = new SetStyleOp($style);
+
+        $this->assertSame($style, $op->style);
+    }
+
+    public function testSetStyleOpWithNullStyle(): void
+    {
+        $op = new SetStyleOp(null);
+
+        $this->assertNull($op->style);
+    }
+
+    public function testSetHyperlinkOpConstruction(): void
+    {
+        $link = Hyperlink::new('https://example.com', 'id123');
+        $op = new SetHyperlinkOp($link);
+
+        $this->assertSame($link, $op->hyperlink);
+        $this->assertSame('https://example.com', $op->hyperlink->url());
+        $this->assertSame('id123', $op->hyperlink->id());
+    }
+
+    public function testSetHyperlinkOpClose(): void
+    {
+        $op = new SetHyperlinkOp(null);
+
+        $this->assertNull($op->hyperlink);
     }
 }
