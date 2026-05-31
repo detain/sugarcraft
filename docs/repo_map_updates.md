@@ -48,6 +48,14 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
+  - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
+  - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)
+  - All 6 libs: added `bufferFromOutput()` helper, `resetPreviousFrame()` public method, `testDiffEmissionByteBenchmark` tests
+  - Tests: sugar-dash 5410 pass (1 skipped), sugar-crush 159 pass, sugar-veil 150 pass, candy-lister 76 pass, sugar-stickers 61 pass, sugar-boxer 36 pass
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/buffer-diff-consumers, PR #906
+
 - [2026-05-31 | step-24 | coder] VimKeyHandler location recommendation — **candy-forms** (default per step-24 brief). Rationale: candy-forms TextInput holds the canonical vim-mode implementation (vimMode/vimNormalMode flags, h/l/w/b/0$/x/i/a/A/I keybindings, mode switching). sugar-prompt/Input.php and sugar-bits/TextInput.php are class_alias shims to candy-forms — not independent implementations. sugar-readline/ViMode.php is a separate full implementation (insert/normal/visual modes). Proceeding with candy-forms as VimKeyHandler host as default.
 
 - [2026-05-31 | step-23 | coder] candy-forms + sugar-prompt + candy-core: adopt candy-async:
