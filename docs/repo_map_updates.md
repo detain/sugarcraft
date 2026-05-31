@@ -48,6 +48,8 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-24 | coder] VimKeyHandler location recommendation — **candy-forms** (default per step-24 brief). Rationale: candy-forms TextInput holds the canonical vim-mode implementation (vimMode/vimNormalMode flags, h/l/w/b/0$/x/i/a/A/I keybindings, mode switching). sugar-prompt/Input.php and sugar-bits/TextInput.php are class_alias shims to candy-forms — not independent implementations. sugar-readline/ViMode.php is a separate full implementation (insert/normal/visual modes). Proceeding with candy-forms as VimKeyHandler host as default.
+
 - [2026-05-31 | step-23 | coder] candy-forms + sugar-prompt + candy-core: adopt candy-async:
   - candy-forms Input.php + Select.php: replaced manual debounce + Deferred with CancellationSource/CancellationToken for proper cancellation when user types again before debounce window elapses
   - candy-core Program.php: async errors now flow through both ExceptionMsg dispatch (backward compat) and the user-configured exceptionHandler

@@ -53,6 +53,15 @@ to keep the static `Progress` lean).
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
 | `FilePicker\FilePicker` | Directory browser with icons / size / sort modes | — |
 
+### Vim mode
+
+`TextInput` vim mode (Insert/Normal/Visual/VisualLine keybindings) is
+powered by `candy-forms`'s shared `VimKeyHandler` — the same handler
+backing `sugar-prompt` and `sugar-readline`. Adding a new binding to the
+`VimAction` enum benefits all three libs at once. The per-lib opt-in flag
+`withVimMode(true)` is preserved; consumers control whether vim mode is
+enabled.
+
 ### Msg routing cheat-sheet
 
 Forward these into your model's `update()` so the embedded component
