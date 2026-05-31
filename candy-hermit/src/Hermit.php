@@ -451,7 +451,7 @@ final class Hermit
                 $itemStr = $this->highlightMatches($itemStr, $filter);
             }
 
-            $itemStr = \str_pad(\substr($itemStr, 0, $winWidth), $winWidth, ' ');
+            $itemStr = \str_pad(\mb_substr($itemStr, 0, $winWidth, 'UTF-8'), $winWidth, ' ');
             $lines[] = $itemStr;
         }
 
@@ -523,6 +523,7 @@ final class Hermit
             /** @var list<int> */
             private array $positions;
             private string $string;
+            private int $byteOffset = 0;
 
             public function __construct(array &$positions, string &$string)
             {
@@ -532,16 +533,45 @@ final class Hermit
 
             public function printChar(string $rune): void
             {
-                $this->positions[] = \strlen($this->string);
+                $this->positions[] = $this->byteOffset;
                 $this->string .= $rune;
+                $this->byteOffset += \strlen($rune);
             }
 
-            public function execute(int $byte): void { }
-            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void { }
-            public function escDispatch(int $final, int $intermediate): void { }
-            public function oscDispatch(string $data): void { }
-            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void { }
-            public function sosPmApcDispatch(string $kind, string $data): void { }
+            public function execute(int $byte): void
+            {
+                $this->byteOffset += 1;
+            }
+
+            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
+            {
+                $this->byteOffset += 1;
+                foreach ($params as $p) {
+                    if ($p > 0) {
+                        $this->byteOffset += \strlen((string) $p) + 1;
+                    }
+                }
+            }
+
+            public function escDispatch(int $final, int $intermediate): void
+            {
+                $this->byteOffset += $intermediate > 0 ? 2 : 1;
+            }
+
+            public function oscDispatch(string $data): void
+            {
+                $this->byteOffset += \strlen($data) + 2;
+            }
+
+            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
+            {
+                $this->byteOffset += 1 + \strlen($data) + 2;
+            }
+
+            public function sosPmApcDispatch(string $kind, string $data): void
+            {
+                $this->byteOffset += \strlen($data) + 2;
+            }
         };
 
         $parser = new \SugarCraft\Ansi\Parser\Parser($handler);
@@ -564,10 +594,7 @@ final class Hermit
                     $matchLenChars = $flen;
                     $result .= $this->matchStyle;
                     for ($j = 0; $j < $matchLenChars; $j++) {
-                        $charIdx = $i + $j;
-                        $byteOffset = $charPositions[$charIdx] ?? 0;
-                        $nextByteOffset = $charPositions[$charIdx + 1] ?? \strlen($text);
-                        $result .= \substr($text, $byteOffset, $nextByteOffset - $byteOffset);
+                        $result .= \mb_substr($charString, $i + $j, 1, 'UTF-8');
                     }
                     $result .= Ansi::reset();
                     $i += $matchLenChars;
@@ -575,9 +602,7 @@ final class Hermit
                 }
             }
             if (!$matched) {
-                $byteOffset = $charPositions[$i] ?? 0;
-                $nextByteOffset = $charPositions[$i + 1] ?? \strlen($text);
-                $result .= \substr($text, $byteOffset, $nextByteOffset - $byteOffset);
+                $result .= \mb_substr($charString, $i, 1, 'UTF-8');
                 $i++;
             }
         }
