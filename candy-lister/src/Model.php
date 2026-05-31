@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Lister;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Lister\Lang;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
@@ -74,6 +77,15 @@ final class Model
 
     private int $cursorIndex = 0;
     private int $idCounter = 0;
+
+    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var int|null Previous output width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** @var int|null Previous output height for resize detection */
+    private ?int $prevHeight = null;
 
     // -------------------------------------------------------------------------
     // Factory
@@ -375,11 +387,37 @@ final class Model
 
     /**
      * Render the list and return as a single newline-joined string.
+     *
+     * On the first render (or after a resize), emits the full output.
+     * On subsequent renders with the same dimensions, emits only the
+     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
      */
     public function View(): string
     {
         try {
-            return \implode("\n", $this->lines()) . "\n";
+            // Detect window resize — reset diff state so we emit a full frame.
+            if ($this->prevWidth !== null && ($this->prevWidth !== $this->width || $this->prevHeight !== $this->height)) {
+                $this->previousFrame = null;
+            }
+            $this->prevWidth = $this->width;
+            $this->prevHeight = $this->height;
+
+            $lines = $this->lines();
+            $fullOutput = \implode("\n", $lines) . "\n";
+
+            // First frame or resize: emit full output and store as previousFrame.
+            if ($this->previousFrame === null) {
+                $this->previousFrame = $this->bufferFromOutput($fullOutput, $this->width, $this->height);
+                return $fullOutput;
+            }
+
+            // Subsequent frames with same dimensions: compute diff and emit delta.
+            $currentFrame = $this->bufferFromOutput($fullOutput, $this->width, $this->height);
+            $ops = $currentFrame->diff($this->previousFrame);
+            $this->previousFrame = $currentFrame;
+
+            $encoder = new DiffEncoder();
+            return $encoder->encode($ops);
         } catch (\RuntimeException $e) {
             return $e->getMessage() . "\n";
         }
@@ -528,5 +566,41 @@ final class Model
     private function ansiWidth(string $s): int
     {
         return Width::string($s);
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * @param string $output Multi-line string from View()
+     * @param int    $width  Buffer width in cells
+     * @param int    $height Buffer height in rows
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $lines = \explode("\n", $output);
+
+        for ($row = 0; $row < $height; $row++) {
+            $line = $lines[$row] ?? '';
+            for ($col = 0; $col < $width; $col++) {
+                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                $cell = Cell::new($char, null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next View to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
     }
 }

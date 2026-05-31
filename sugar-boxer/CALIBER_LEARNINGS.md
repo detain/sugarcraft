@@ -63,3 +63,8 @@ Margin is implemented directly on Node rather than delegated to Style,
 preserving the Boundary between the layout engine and the styling system.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+### 2026-05-31 — buffer-diff-boundaries
+**Pattern:** Reset `previousFrame` on resize / cursor-position-lost / first paint. Don't try to diff across these boundaries.
+**Anti-pattern:** Retaining a previousFrame across a window resize or cursor-move event produces a delta against a buffer that no longer maps to the physical terminal state — visual corruption.
+**Source:** step-27 ai/buffer-diff-consumers

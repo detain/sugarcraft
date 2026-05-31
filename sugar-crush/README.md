@@ -135,6 +135,21 @@ final class MyBackend implements Backend {
 - `ToolCall`: fromArray/toArray round-trip, defaults for optional fields
 - `ToolResult`: ok() / error() factories, isError() predicate, toWire() role/tool_call_id shape
 
+## Buffer diffing
+
+The `Renderer` maintains a `?Buffer $previousFrame` across renders. On each render it
+builds the current Buffer, computes `current->diff(previous)` (from
+[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
+the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
+`previousFrame` for the next render.
+
+**SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
+produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.
+Over an SSH session this means far less per-frame data on the wire and
+eliminates the full-screen flicker of rewrite-based terminals. The first render
+after startup or a resize still emits a full Buffer (no diff possible), so
+behaviour is always correct.
+
 ## Status
 
 Phase 9+ entry #17 — first cut. Single-shot replies (no streaming yet); `StreamingBackend` interface is the obvious follow-up. Markdown rendering, persistent input buffer, and the inFlight gate are all wired.

@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush;
 
 use React\Promise\PromiseInterface;
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
@@ -39,6 +42,12 @@ use SugarCraft\Core\Msg\KeyMsg;
 final class Chat implements Model
 {
     private readonly Backend $backend;
+
+    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    private ?Buffer $previousFrame = null;
+
+    /** @var int|null Previous output height for dimension-change detection */
+    private ?int $prevHeight = null;
 
     /**
      * @param list<Message> $history
@@ -187,7 +196,31 @@ final class Chat implements Model
 
     public function view(): string
     {
-        return Renderer::render($this);
+        $fullOutput = Renderer::render($this);
+
+        // Compute output height (number of lines).
+        $height = substr_count($fullOutput, "\n") + 1;
+        $width = 80; // Assumed terminal width.
+
+        // Detect dimension change (e.g., history grew): reset diff state.
+        if ($this->prevHeight !== null && $this->prevHeight !== $height) {
+            $this->previousFrame = null;
+        }
+        $this->prevHeight = $height;
+
+        // First frame or dimension change: emit full output and store as previousFrame.
+        if ($this->previousFrame === null) {
+            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
+            return $fullOutput;
+        }
+
+        // Subsequent frames with same dimensions: compute diff and emit delta.
+        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
+        $ops = $currentFrame->diff($this->previousFrame);
+        $this->previousFrame = $currentFrame;
+
+        $encoder = new DiffEncoder();
+        return $encoder->encode($ops);
     }
 
     public function backend(): Backend
@@ -344,5 +377,41 @@ final class Chat implements Model
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
         return null;
+    }
+
+    /**
+     * Build a Buffer from a multi-line string output.
+     *
+     * All cells are created with null style — the diff algorithm will
+     * still work correctly for detecting changed character positions.
+     *
+     * @param string $output Multi-line string from Renderer::render()
+     * @param int    $width  Buffer width in cells
+     * @param int    $height Buffer height in rows
+     */
+    private function bufferFromOutput(string $output, int $width, int $height): Buffer
+    {
+        $buffer = Buffer::new($width, $height);
+        $lines = \explode("\n", $output);
+
+        for ($row = 0; $row < $height; $row++) {
+            $line = $lines[$row] ?? '';
+            for ($col = 0; $col < $width; $col++) {
+                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
+                $cell = Cell::new($char, null, null, 1);
+                $buffer = $buffer->withCellAt($col, $row, $cell);
+            }
+        }
+
+        return $buffer;
+    }
+
+    /**
+     * Reset the previous-frame buffer, forcing the next view to emit
+     * a full frame (used on window resize or cursor-position-lost events).
+     */
+    public function resetPreviousFrame(): void
+    {
+        $this->previousFrame = null;
     }
 }

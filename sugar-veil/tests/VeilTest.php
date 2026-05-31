@@ -701,4 +701,44 @@ final class VeilTest extends TestCase
     {
         $this->assertNull($this->veil->getManager());
     }
+
+    /**
+     * Benchmark: diff-based composite emits fewer bytes than full re-render
+     * for small changes between consecutive frames.
+     *
+     * Frame 1: full composite output
+     * Frame 2: delta output (≤30 bytes for a small foreground change)
+     * Frame 3: delta output (≤30 bytes for another small foreground change)
+     * Total delta: ≤60 bytes for 2 delta frames (30×2)
+     */
+    public function testDiffEmissionByteBenchmark(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+        $fg1 = "overlay";
+        $fg2 = "overlay!";
+        $fg3 = "overlay!!";
+
+        // Frame 1: full composite
+        $out1 = $this->veil->composite($fg1, $bg, Position::CENTER, Position::CENTER);
+        $bytes1 = \strlen($out1);
+
+        // Frame 2: small foreground change
+        $out2 = $this->veil->composite($fg2, $bg, Position::CENTER, Position::CENTER);
+        $bytes2 = \strlen($out2);
+
+        // Frame 3: another small foreground change
+        $out3 = $this->veil->composite($fg3, $bg, Position::CENTER, Position::CENTER);
+        $bytes3 = \strlen($out3);
+
+        // First frame is full output (baseline)
+        $this->assertGreaterThan(50, $bytes1, 'Frame 1 should be full output');
+
+        // Subsequent frames should be delta (≤30 bytes per frame for small changes)
+        $this->assertLessThanOrEqual(30, $bytes2, 'Frame 2 delta should be ≤30 bytes');
+        $this->assertLessThanOrEqual(30, $bytes3, 'Frame 3 delta should be ≤30 bytes');
+
+        // Total delta bytes for 2 frames should be ≤60 (30×2)
+        $totalDelta = $bytes2 + $bytes3;
+        $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
+    }
 }
