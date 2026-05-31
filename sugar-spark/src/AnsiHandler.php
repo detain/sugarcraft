@@ -194,7 +194,7 @@ final class AnsiHandler implements Handler
             $params,
         ));
 
-        $fullPayload = $prefixStr . $intermediateStr . $paramsStr . $data;
+        $fullPayload = $intermediateStr . $prefixStr . $paramsStr . $data;
         $rawBytes = "\x1bP{$fullPayload}\x1b\\";
         $this->segments[] = new SequenceSegment($rawBytes, Inspector::describeDcs($fullPayload));
 
@@ -203,12 +203,18 @@ final class AnsiHandler implements Handler
 
     public function sosPmApcDispatch(string $kind, string $data): void
     {
-        $this->flushText();
-
         $isSosPm = $kind === 'sos' || $kind === 'pm';
         if ($isSosPm) {
             $this->sosPmInProgress = true;
+            if ($data === '') {
+                $this->sosPmInProgress = false;
+                $label = $kind === 'sos' ? Inspector::describeEsc('X') : Inspector::describeEsc('^');
+                $this->segments[] = new SequenceSegment("\x1b" . ($kind === 'sos' ? 'X' : '^'), $label);
+                return;
+            }
         }
+
+        $this->flushText();
 
         $label = match ($kind) {
             'sos' => self::describeSosPm($data),
@@ -225,15 +231,16 @@ final class AnsiHandler implements Handler
         };
 
         $this->segments[] = new SequenceSegment($rawBytes, $label);
+
+        if ($isSosPm) {
+            $this->sosPmInProgress = false;
+        }
     }
 
     private static function describeSosPm(string $data): string
     {
         if ($data === '') {
-            return match (true) {
-                false => 'SOS start',
-                default => 'SOS string',
-            };
+            return 'SOS string';
         }
         return 'SOS/PM ' . strlen($data) . ' bytes';
     }
