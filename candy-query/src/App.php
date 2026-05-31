@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\App\AppBuilder;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
