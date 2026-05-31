@@ -101,7 +101,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 22 — Mouse hit-test consumers onto candy-mouse](repo_map_step_22.md) — branch: `ai/mouse-consumers`, PR #901
 - [x] [Step 23 — Async consumers onto candy-async](repo_map_step_23.md) — branch: `ai/async-consumers`, PR #902
 - [x] [Step 24 — Vim mode consolidation](repo_map_step_24.md) — branch: `ai/vim-mode-shared`, PR #903
-- [ ] [Step 25 — God-class refactors (super-candy + candy-query)](repo_map_step_25.md) — branch: `ai/god-class-builders`
+- [x] [Step 25 — God-class refactors (super-candy + candy-query)](repo_map_step_25.md) — branch: `ai/god-class-builders`, PR #904
 
 ### Phase 5 — Cross-cutting via shared packages (4)
 - [ ] [Step 26 — candy-buffer::diff() delta ANSI](repo_map_step_26.md) — branch: `ai/buffer-diff-impl`
