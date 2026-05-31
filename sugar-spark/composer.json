@@ -31,6 +31,7 @@
     ],
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-ansi": "dev-master",
         "sugarcraft/candy-core": "dev-master"
     },
     "require-dev": {
@@ -49,6 +50,13 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "../candy-core",

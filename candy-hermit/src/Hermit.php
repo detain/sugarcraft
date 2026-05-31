@@ -451,7 +451,7 @@ final class Hermit
                 $itemStr = $this->highlightMatches($itemStr, $filter);
             }
 
-            $itemStr = \str_pad(\substr($itemStr, 0, $winWidth), $winWidth, ' ');
+            $itemStr = \str_pad(\mb_substr($itemStr, 0, $winWidth, 'UTF-8'), $winWidth, ' ');
             $lines[] = $itemStr;
         }
 
@@ -515,28 +515,94 @@ final class Hermit
 
     private function highlightMatches(string $text, string $filter): string
     {
-        $lower = \strtolower($text);
-        $flen  = \strlen($filter);
+        $charPositions = [];
+        $charString = '';
+
+        $handler = new class($charPositions, $charString) implements \SugarCraft\Ansi\Parser\Handler
+        {
+            /** @var list<int> */
+            private array $positions;
+            private string $string;
+            private int $byteOffset = 0;
+
+            public function __construct(array &$positions, string &$string)
+            {
+                $this->positions = &$positions;
+                $this->string = &$string;
+            }
+
+            public function printChar(string $rune): void
+            {
+                $this->positions[] = $this->byteOffset;
+                $this->string .= $rune;
+                $this->byteOffset += \strlen($rune);
+            }
+
+            public function execute(int $byte): void
+            {
+                $this->byteOffset += 1;
+            }
+
+            public function csiDispatch(int $final, array $params, int $prefix, int $intermediate): void
+            {
+                $this->byteOffset += 1;
+                foreach ($params as $p) {
+                    if ($p > 0) {
+                        $this->byteOffset += \strlen((string) $p) + 1;
+                    }
+                }
+            }
+
+            public function escDispatch(int $final, int $intermediate): void
+            {
+                $this->byteOffset += $intermediate > 0 ? 2 : 1;
+            }
+
+            public function oscDispatch(string $data): void
+            {
+                $this->byteOffset += \strlen($data) + 2;
+            }
+
+            public function dcsDispatch(int $final, array $params, int $prefix, int $intermediate, string $data): void
+            {
+                $this->byteOffset += 1 + \strlen($data) + 2;
+            }
+
+            public function sosPmApcDispatch(string $kind, string $data): void
+            {
+                $this->byteOffset += \strlen($data) + 2;
+            }
+        };
+
+        $parser = new \SugarCraft\Ansi\Parser\Parser($handler);
+        $parser->feed($text);
+        $parser->flush();
+
+        $lower = \mb_strtolower($charString, 'UTF-8');
+        $filterLower = \mb_strtolower($filter, 'UTF-8');
+        $flen = \mb_strlen($filterLower, 'UTF-8');
+        $charLen = \mb_strlen($charString, 'UTF-8');
         $result = '';
         $i = 0;
-        $len = \strlen($text);
 
-        while ($i < $len) {
+        while ($i < $charLen) {
             $matched = false;
-            // Check if text[i:] starts with filter (case-insensitive)
-            if (\strncasecmp($text[$i], $filter, \min($flen, $len - $i)) === 0) {
-                // Highlight all matched chars
-                $matchLen = \min($flen, $len - $i);
-                $result .= $this->matchStyle;
-                for ($j = 0; $j < $matchLen; $j++) {
-                    $result .= $text[$i + $j];
+            $remainingChars = $charLen - $i;
+            if ($remainingChars >= $flen) {
+                $charSubstr = \mb_substr($lower, $i, $flen, 'UTF-8');
+                if ($charSubstr === $filterLower) {
+                    $matchLenChars = $flen;
+                    $result .= $this->matchStyle;
+                    for ($j = 0; $j < $matchLenChars; $j++) {
+                        $result .= \mb_substr($charString, $i + $j, 1, 'UTF-8');
+                    }
+                    $result .= Ansi::reset();
+                    $i += $matchLenChars;
+                    $matched = true;
                 }
-                $result .= Ansi::reset();
-                $i += $matchLen;
-                $matched = true;
             }
             if (!$matched) {
-                $result .= $text[$i];
+                $result .= \mb_substr($charString, $i, 1, 'UTF-8');
                 $i++;
             }
         }
@@ -567,28 +633,28 @@ final class Hermit
 
     private function replaceSegment(string $line, int $x, int $width, string $replacement): string
     {
-        $len = \strlen($line);
-        $result = '';
+        $lineLen = \grapheme_strlen($line);
 
-        for ($i = 0; $i < $len; $i++) {
-            if ($i >= $x && $i < $x + $width) {
-                $repIdx = $i - $x;
-                if ($repIdx < \strlen($replacement)) {
-                    $result .= $replacement[$repIdx];
-                } else {
-                    $result .= ' ';
-                }
-            } else {
-                $result .= $line[$i];
-            }
+        if ($lineLen === 0) {
+            return $replacement;
         }
 
-        // If overlay extends beyond background line, pad
-        $remaining = $x + $width - $len;
-        if ($remaining > 0) {
-            $result .= \substr($replacement, $len - $x, $remaining);
+        $prefix = $x > 0 ? (\grapheme_substr($line, 0, $x) ?: '') : '';
+        $suffixStart = $x + $width;
+        $suffix = $suffixStart < $lineLen ? (\grapheme_substr($line, $suffixStart) ?: '') : '';
+
+        $repLen = \grapheme_strlen($replacement);
+        $replacementPart = \grapheme_substr($replacement, 0, $width) ?: '';
+
+        if (\grapheme_strlen($replacementPart) < $width) {
+            $replacementPart .= \str_repeat(' ', $width - \grapheme_strlen($replacementPart));
         }
 
-        return $result;
+        if ($suffixStart >= $lineLen && $repLen > $width) {
+            $remainingChars = $repLen - $width;
+            $suffix = \grapheme_substr($replacement, $width, $remainingChars) ?: '';
+        }
+
+        return $prefix . $replacementPart . $suffix;
     }
 }
