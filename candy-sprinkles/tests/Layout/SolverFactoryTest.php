@@ -17,11 +17,11 @@ final class SolverFactoryTest extends TestCase
         parent::tearDown();
     }
 
-    public function testDefaultReturnsCassowarySolver(): void
+    public function testDefaultReturnsGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER');
         $solver = SolverFactory::default();
-        $this->assertInstanceOf(CassowarySolver::class, $solver);
+        $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
     public function testEnvCassowaryReturnsCassowarySolver(): void
@@ -38,17 +38,17 @@ final class SolverFactoryTest extends TestCase
         $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    public function testEnvGarbageDefaultsToCassowarySolver(): void
+    public function testEnvGarbageDefaultsToGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=garbage');
         $solver = SolverFactory::default();
-        $this->assertInstanceOf(CassowarySolver::class, $solver);
+        $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 
-    public function testEnvEmptyDefaultsToCassowarySolver(): void
+    public function testEnvEmptyDefaultsToGreedySolver(): void
     {
         putenv('SUGARCRAFT_LAYOUT_SOLVER=""');
         $solver = SolverFactory::default();
-        $this->assertInstanceOf(CassowarySolver::class, $solver);
+        $this->assertInstanceOf(GreedySolver::class, $solver);
     }
 }

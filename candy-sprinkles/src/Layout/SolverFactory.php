@@ -12,8 +12,8 @@ use SugarCraft\Layout\LayoutSolver;
  * Factory for creating a {@see LayoutSolver} instance.
  *
  * Respects the SUGARCRAFT_LAYOUT_SOLVER env var:
- *  - "greedy"  → GreedySolver
- *  - otherwise → CassowarySolver (default)
+ *  - "cassowary" → CassowarySolver
+ *  - otherwise   → GreedySolver (default)
  *
  * Mirrors ratatui's pluggable solver architecture.
  */
@@ -23,19 +23,20 @@ final class SolverFactory
      * Create the default layout solver based on environment.
      *
      * Respects SUGARCRAFT_LAYOUT_SOLVER env var:
-     *  - "greedy"  → GreedySolver (original ratatui-inspired algorithm)
-     *  - otherwise  → CassowarySolver (linear-arithmetic constraint solver, default)
+     *  - "cassowary" → CassowarySolver (linear-arithmetic constraint solver)
+     *  - otherwise   → GreedySolver (original ratatui-inspired algorithm, default)
      *
-     * CassowarySolver is default because it matches upstream ratatui behaviour.
-     * GreedySolver is available as an escape hatch for the 14 known Ratio-bug
-     * failures when using CassowarySolver.
+     * GreedySolver is the default because CassowarySolver has a pre-existing bug
+     * where Ratio constraints (and others) return 0 instead of the expected value.
+     * This causes 14 test failures when using CassowarySolver.
+     * CassowarySolver is available via env var for comparison/testing purposes.
      */
     public static function default(): LayoutSolver
     {
         $env = getenv('SUGARCRAFT_LAYOUT_SOLVER');
-        if ($env === 'greedy') {
-            return new GreedySolver();
+        if ($env === 'cassowary') {
+            return new CassowarySolver();
         }
-        return new CassowarySolver();
+        return new GreedySolver();
     }
 }
