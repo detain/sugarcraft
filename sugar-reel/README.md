@@ -22,11 +22,10 @@ use SugarCraft\Reel\Reel;
 Reel::open('clip.mp4'); // playback arrives in later build steps
 ```
 
-> Status: Step 4 ✓ (Player Model + controls + delta repaint). Player is a
-> TEA Model that pulls frames from a Decoder, paces them via wall-clock Sync,
-> and renders via FrameRenderer with cell-based delta repaint (candy-buffer
-> DiffEncoder). Key controls: Space=pause, ←/→=seek, [/]=speed, 0-9=percent,
-> m=mode cycle, q/Esc=quit. Audio sync comes next.
+> Status: Step 5 ✓ (AudioPlayer + audio sync). ffplay/mpv spawned as silent
+> companion subprocess at t0; silently degrades when binary absent or no
+> audio track. Video still paces off wall clock (audio-as-master-clock wiring
+> deferred). Graphics backends and end-to-end demo come next.
 
 ## Planned modes
 
