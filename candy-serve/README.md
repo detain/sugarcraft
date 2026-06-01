@@ -180,6 +180,10 @@ Supported selections:
 - **Private** — only collaborators can read or push
 - **Collaborators** — added by admin via SSH public key
 
+## Shared foundations
+
+candy-serve uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for graceful shutdown via subscriptions on Git daemon connections.
+
 ## License
 
 [MIT](LICENSE)

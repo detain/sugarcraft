@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Tick;
 
+use SugarCraft\Async\CancellationToken;
+
 /**
  * JSONL-backed heartbeat store. One file per day under
  * `~/.local/share/sugar-tick/YYYY-MM-DD.jsonl` — the path stays
@@ -66,13 +68,42 @@ final class Store
         return $rows;
     }
 
-    public function append(Heartbeat $hb): void
+    /**
+     * Append a heartbeat to today's JSONL file.
+     *
+     * @param Heartbeat $hb
+     * @param CancellationToken|null $token  Optional cancellation token to abort the write
+     * @throws \RuntimeException  If the write is cancelled or fails
+     *
+     * @note CancellationToken provides best-effort detection only. PHP cannot
+     *       interrupt a blocking `file_put_contents()` mid-write — the token is
+     *       checked before the call and the callback fires after the I/O completes.
+     *       True pre-emptive cancellation requires a non-blocking/async rewrite.
+     */
+    public function append(Heartbeat $hb, ?CancellationToken $token = null): void
     {
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException('Heartbeat append cancelled');
+        }
+
         if (!is_dir($this->dir)) {
             @mkdir($this->dir, 0755, true);
         }
         $file = $this->dir . '/' . date('Y-m-d', $hb->time) . '.jsonl';
         $line = json_encode($hb->toArray(), JSON_UNESCAPED_SLASHES) . "\n";
+
+        // Register cancellation callback before blocking I/O
+        $cancelled = false;
+        if ($token !== null) {
+            $token->onCancel(static function () use (&$cancelled): void {
+                $cancelled = true;
+            });
+        }
+
         file_put_contents($file, $line, FILE_APPEND);
+
+        if ($cancelled) {
+            throw new \RuntimeException('Heartbeat append cancelled during I/O');
+        }
     }
 }
