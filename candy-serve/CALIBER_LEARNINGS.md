@@ -24,3 +24,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:git-daemon-pid-file]** PID file is written as plain text (just the PID) to the specified path. Created with `mkdir` on the directory first if needed. Removed in `cleanup()` via `unlink`. Default location is `<data_path>/git-daemon.pid`.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+### 2026-06-01 — CancellationToken for best-effort I/O cancellation
+Pattern: Use CancellationToken for best-effort I/O cancellation; true preemption requires async rewrite.
+Source: step-35 ai/async-adopters
