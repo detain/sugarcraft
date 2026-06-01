@@ -2,7 +2,7 @@ PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
 # dimensions: 80x24 (80x24)
 # example: dashboard-devtools
 ---
-PHP Fatal error:  Uncaught Error: Class "SugarCraft\Dash\Grid\StackedGrid" not found in /tmp/golden_dashboard-devtools_80x24.php:17
+PHP Fatal error:  Uncaught Error: Class "SugarCraft\Dash\Layout\Grid\StackedGrid" not found in /tmp/golden_dashboard-devtools_80x24.php:17
 Stack trace:
 #0 {main}
   thrown in /tmp/golden_dashboard-devtools_80x24.php on line 17

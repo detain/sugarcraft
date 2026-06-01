@@ -2,7 +2,7 @@ PHP 8.3.6 (cli) (built: Mar 20 2026 02:32:55) (NTS)
 # dimensions: 80x24 (80x24)
 # example: sparkline
 ---
-PHP Fatal error:  Uncaught Error: Class "SugarCraft\Dash\Grid\Sparkline" not found in /tmp/golden_sparkline_80x24.php:11
+PHP Fatal error:  Uncaught Error: Class "SugarCraft\Dash\Layout\Grid\Sparkline" not found in /tmp/golden_sparkline_80x24.php:11
 Stack trace:
 #0 {main}
   thrown in /tmp/golden_sparkline_80x24.php on line 11
