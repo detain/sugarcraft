@@ -17,6 +17,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware;
 use SugarCraft\Wish\Middleware\Logger;
 use SugarCraft\Wish\Middleware\RateLimit;
@@ -49,11 +50,11 @@ Server::new()
     ->use(new Logger())
     ->use(new RateLimit(statePath: sys_get_temp_dir() . '/wish-showcase-buckets.json', burst: 5, ratePerSec: 0.5))
     ->use(new class implements Middleware {
-        public function handle(Session $s, callable $next): void
+        public function handle(Context $ctx, Session $s, callable $next): void
         {
             echo "  [hello] welcome, {$s->user}@{$s->clientHost}\n";
             echo "  [hello]   pty {$s->cols}x{$s->rows}, term={$s->term}\n";
-            $next($s);
+            $next($ctx, $s);
         }
     })
     ->serve($session);
