@@ -333,3 +333,9 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - All 4 remaining libs from step-30 audit have DEFERRED status in followups (candy-pty, candy-zone, candy-metrics, candy-log, candy-mold)
   - No source code changes; PR is documentation-only marker for end of actionable migration work
   - Commit SHA: 237fad86
+
+- [2026-06-01 | step-38 | shipper] docs: root sweep — 8 new packages + consumer migrations — MERGED PR #918:
+  - Branch ai/docs-root merged to master
+  - 4 files changed, 16 insertions(+), 13 deletions(-)
+  - Updated AGENTS.md, CONTRIBUTING.md, README.md, docs/MATCHUPS.md
+  - Commit SHA: eaafed14
