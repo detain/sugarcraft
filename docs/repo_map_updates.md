@@ -48,6 +48,17 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-28 | coder] 9 rendering libs: golden-file snapshot tests via candy-testing:
+  - Added `sugarcraft/candy-testing` (dev) + path-repo to: sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, candy-shine (candy-forms + sugar-prompt already had it)
+  - Created `GoldenRenderTest.php` in each lib with `assertGoldenAnsi` tests covering representative render() output
+  - Created `tests/fixtures/` directories with .golden files captured via `UPDATE_GOLDENS=1`
+  - Note: candy-vt, candy-vcr required adding candy-buffer as a dependency since candy-testing requires it transitively
+  - Also fixed: candy-sprinkles path-repo was missing in candy-vcr's transitive closure (check-path-repos.php only fixed 1 issue, manual fix needed for candy-vcr)
+  - Tests: candy-forms 709 pass, sugar-prompt 302 pass, sugar-bits 685 pass, sugar-charts 369 pass, sugar-table 165 pass, sugar-glow 68 pass, candy-vt 508 pass, candy-vcr 650 pass, candy-shine 214 pass
+  - UPDATE_GOLDENS=1 verified working (spot check: sugar-bits without env var passes with existing goldens)
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/golden-file-rollout
+
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
   - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)

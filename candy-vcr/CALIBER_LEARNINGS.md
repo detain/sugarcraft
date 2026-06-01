@@ -307,3 +307,10 @@ hit hash drift between runs on a single machine, that's a real
 non-determinism bug — chase down the source (palette ordering, frame
 timing rounding) before relaxing the test.
 
+## Golden-file snapshot tests
+
+Use `assertGoldenAnsi` for any new `render()` test. Fixture files live
+in `tests/fixtures/` with a `.golden` extension. Re-record goldens with
+`UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes.
+Mirrors: `docs/repo_map_step_28.md`.
+

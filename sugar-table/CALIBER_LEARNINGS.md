@@ -53,6 +53,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
+- **[pattern:assert-golden-ansi]** Use `assertGoldenAnsi` for any new `render()` test. Fixture files live in `tests/fixtures/` with a `.golden` extension. Re-record goldens with `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes. Mirrors: `docs/repo_map_step_28.md`.
 - **[pattern:stylefunc-signature-shift]** `Table::withStyleFunc()` now accepts
   `(int $row, int $col, string $value): Style|string`. The new `Style`-return path
   is the preferred style (PHP 8.3+ typed return, immutable). A back-compat

@@ -1032,6 +1032,17 @@ git revert <sha-of-section-h-pr>     # one-line revert of the workflow file
 
 The legacy `render` job is untouched by the soak, so reverting only removes the parallel candy-vcr job — existing CI keeps working.
 
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
 ## License
 
 MIT

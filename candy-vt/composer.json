@@ -26,6 +26,7 @@
     },
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },
@@ -33,7 +34,8 @@
         "phpunit/phpunit": "^10.5",
         "phpstan/phpstan": "^2.1",
         "phpstan/phpstan-phpunit": "^2.0",
-        "friendsofphp/php-cs-fixer": "^3.65"
+        "friendsofphp/php-cs-fixer": "^3.65",
+        "sugarcraft/candy-testing": "dev-master"
     },
     "autoload": {
         "psr-4": {
@@ -48,6 +50,13 @@
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
         {
             "type": "path",
             "url": "../candy-core",
@@ -72,6 +81,13 @@
         {
             "type": "path",
             "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-testing",
             "options": {
                 "symlink": true
             }

@@ -37,4 +37,21 @@ final class GoldenRenderTest extends TestCase
             $output,
         );
     }
+
+    public function testConfirmFieldRendersReverseVideoAnsi(): void
+    {
+        $f = Confirm::new('agree')
+            ->withTitle('Confirm?')
+            ->withDefault(false);
+
+        $output = $f->view();
+
+        $this->assertNotEmpty($output);
+        // Confirm field should contain ANSI reverse video codes
+        $this->assertStringContainsString('Confirm?', $output);
+        Assertions::assertGoldenAnsi(
+            $this->fixturesDir . '/confirm-field.golden',
+            $output,
+        );
+    }
 }
