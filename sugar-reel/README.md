@@ -22,9 +22,9 @@ use SugarCraft\Reel\Reel;
 Reel::open('clip.mp4'); // playback arrives in later build steps
 ```
 
-> Status: scaffold / work in progress (Step 0). The facade records the source
-> path; decoding, rendering, playback, and audio sync land in subsequent steps —
-> nothing plays yet.
+> Status: Step 1 ✓ (Probe + VideoSource). The Reel facade records the source
+> path; VideoSource probes metadata (w/h/duration/fps/hasAudio) via ffprobe.
+> Decoding, rendering, playback, and audio sync land in subsequent steps.
 
 ## Planned modes
 
