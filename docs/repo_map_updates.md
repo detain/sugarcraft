@@ -208,3 +208,12 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Branch: ai/god-class-builders
   - Tests: super-candy 187 pass (458 assertions), candy-query 123 pass (233 assertions)
   - Path-repo closure: clean (55 libs scanned)
+
+- [2026-05-31 | step-29 | coder] sugar-glow + candy-wish: add candy-palette, wire TerminalProbe (defensive):
+  - **IMPORTANT FINDING**: Neither sugar-glow nor candy-wish actually has env-var/terminfo parsing code for terminal capability probing. The step file's premise (§387.9) that "both libs do their own probing" is inaccurate based on current source. sugar-glow only uses `TtyDetect::isAtty(STDIN)` for TTY presence detection (not capability), and candy-wish uses `getenv()` only for SSH session metadata (TERM, SSH_CONNECTION, etc.) — which is distinct from color/capability probing.
+  - sugar-glow: already had `candy-palette` path-repo. Added defensive `TerminalProbe::run()` via new `terminalSupportsColor()` private method in RenderCommand — wraps the probe call with `\Throwable` catch and falls back to `true` (assume color available) per step's graceful-failure requirement. No env-var/terminfo code was removed because none existed for capability detection.
+  - candy-wish: added `sugarcraft/candy-palette` require + path-repo to composer.json (was missing). Added CALIBER_LEARNINGS entry clarifying that Session::fromEnvironment() reads SSH env vars for session metadata (TERM, SSH_CONNECTION, etc.) — this is NOT terminal capability probing and does not route through TerminalProbe.
+  - Path-repo closure: candy-wish received candy-async + candy-layout path-repos via check-path-repos.php --fix (transitive deps of candy-palette). Clean (55 libs scanned).
+  - Branch: ai/probe-consumers
+  - Tests: sugar-glow 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
+  - TerminalProbe already in sugar-glow dependency tree (via candy-shine -> sugar-glow path-repos); NOT in candy-wish dependency tree before this step
