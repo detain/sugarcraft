@@ -120,6 +120,7 @@ single-purpose lib.
 | **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) + ZoneClickTracker. Mirrors bubblezone semantics but no external Manager wiring — scanner is owned by each consumer. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = SQLite browser. clear. |
+| **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 
 ## ⚠️ Functional half is weak / vague
 

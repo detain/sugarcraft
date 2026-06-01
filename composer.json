@@ -84,6 +84,7 @@
         "sugarcraft/sugar-post": "dev-master",
         "sugarcraft/sugar-prompt": "dev-master",
         "sugarcraft/sugar-readline": "dev-master",
+        "sugarcraft/sugar-reel": "dev-master",
         "sugarcraft/sugar-skate": "dev-master",
         "sugarcraft/sugar-spark": "dev-master",
         "sugarcraft/sugar-stash": "dev-master",
@@ -393,6 +394,13 @@
         {
             "type": "path",
             "url": "sugar-readline",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "sugar-reel",
             "options": {
                 "symlink": true
             }

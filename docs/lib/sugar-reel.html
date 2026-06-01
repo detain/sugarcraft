@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarReel — SugarCraft</title>
+<meta name="description" content="SugarReel: terminal video player. Plays mp4 and more as ASCII / ANSI / half-block / sixel / kitty.">
+<meta property="og:title" content="SugarReel — SugarCraft">
+<meta property="og:description" content="Terminal video player. Plays mp4 as ASCII / ANSI / half-block / sixel / kitty.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-reel.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-reel.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-reel.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-reel.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-reel.png" alt="SugarReel">
+      <div>
+        <h2>🎬 SugarReel</h2>
+        <p class="detail-sub">Terminal video player</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">prior art: <a href="https://github.com/maxcurzi/tplay" style="color: inherit;">tplay</a> · <a href="https://github.com/seatedro/glyph" style="color: inherit;">glyph</a> · <a href="https://github.com/joelibaceta/video-to-ascii" style="color: inherit;">video-to-ascii</a></span>
+          <span class="tag-chip">video</span>
+          <span class="tag-chip">ascii-art</span>
+          <span class="tag-chip">half-block</span>
+          <span class="tag-chip">sixel</span>
+          <span class="tag-chip">ffmpeg</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Plays a video file — <code>mp4</code> and more — by decoding frames on the fly and rendering each one to the terminal as ASCII, ANSI 256-color, truecolor half-blocks, sixel, or kitty graphics. Like <code>mpv -vo tct</code>, but PHP, and reusing the SugarCraft rendering stack throughout.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-reel</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Reel\Reel;
+
+Reel::open('clip.mp4'); // playback arrives in later build steps</code></pre>
+
+    <p class="lede" style="margin-top: 24px;"><strong>Status:</strong> scaffold (Step 0). The facade records the source path; decoding (ffmpeg pipe + pure-PHP GIF fallback), rendering, playback controls, and audio sync land in subsequent steps.</p>
+
+    <h3 style="margin-top: 32px;">Design</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>ffmpeg decode pipe</strong><span>Shells to the <code>ffmpeg</code> binary via <code>proc_open</code> for raw <code>rgb24</code> frames, pre-scaled and fps-decimated by ffmpeg so PHP never decodes a codec itself.</span></div>
+      <div class="feature"><strong>Pure-PHP GIF fallback</strong><span>When ffmpeg is absent, falls back to <a href="candy-flip.html">candy-flip</a>'s GD-based decoder for <code>.gif</code> sources.</span></div>
+      <div class="feature"><strong>Reused renderers</strong><span>Half-block / sixel / kitty / iTerm2 rendering delegates to <a href="candy-mosaic.html">candy-mosaic</a> rather than being re-implemented.</span></div>
+      <div class="feature"><strong>Color mapping</strong><span><a href="candy-palette.html">candy-palette</a> maps RGB to 256-color and truecolor SGR for non-truecolor TTYs.</span></div>
+      <div class="feature"><strong>TEA runtime</strong><span>Playback is a <a href="candy-core.html">candy-core</a> <code>Model</code> paced by <code>Cmd::tick()</code> — no busy-waiting.</span></div>
+      <div class="feature"><strong>Audio sync</strong><span>Audio subprocess (<code>ffplay</code> / <code>mpv --no-video</code>) is the master wall clock; video frame-skips to track it.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-reel">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-reel/blob/master/README.md">Full README</a></li>
+      <li>Prior art: <a href="https://github.com/maxcurzi/tplay">tplay</a> · <a href="https://github.com/seatedro/glyph">glyph</a> · <a href="https://github.com/joelibaceta/video-to-ascii">video-to-ascii</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Reel</td><td>new()</td><td>Construct an empty player with no source bound</td></tr>
+<tr><td>Reel</td><td>open(path)</td><td>Open a video source by path (records path; does not decode)</td></tr>
+<tr><td>Reel</td><td>path()</td><td>The source path the player was opened with</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-reel">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-reel/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

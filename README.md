@@ -27,7 +27,7 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Forty-nine libraries grouped by layer:
+Fifty libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
@@ -85,6 +85,7 @@ Forty-nine libraries grouped by layer:
 | <img src="media/icons/sugar-tick.png" width="48" alt=""> | **[SugarTick](sugar-tick/)** | Privacy-first coding-time tracker — JSONL on disk, SugarCharts-driven dashboard, no cloud / no MongoDB. Port of [TakaTime](https://github.com/Rtarun3606k/TakaTime). |
 | <img src="media/icons/candy-mines.png" width="48" alt=""> | **[CandyMines](candy-mines/)** | Minesweeper — first-click safety, recursive flood-fill, flag toggle, win/lose detection, deterministic-RNG injectable. Port of [go-sweep](https://github.com/maxpaulus43/go-sweep). |
 | <img src="media/icons/candy-flip.png" width="48" alt=""> | **[CandyFlip](candy-flip/)** | ASCII GIF viewer — ext-gd decode, downsample to a cell grid, render as ANSI 24-bit blocks or a luminance-ramp. Port of [gifterm](https://github.com/namzug16/gifterm). |
+| <img src="media/icons/sugar-reel.png" width="48" alt=""> | **[SugarReel](sugar-reel/)** | Terminal video player — decodes mp4 (and more) on the fly and renders to ASCII / ANSI / truecolor half-block / sixel / kitty. Prior art: [tplay](https://github.com/maxcurzi/tplay), [glyph](https://github.com/seatedro/glyph), [video-to-ascii](https://github.com/joelibaceta/video-to-ascii). |
 | <img src="media/icons/honey-flap.png" width="48" alt=""> | **[HoneyFlap](honey-flap/)** | Flappy-Bird-style game — bird motion is a HoneyBounce projectile, pipes scroll left at a fixed cell rate. Port of [flapioca](https://github.com/kbrgl/flapioca). |
 
 Each library has its own `README.md` with usage examples and a deep dive into
