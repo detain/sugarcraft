@@ -11,6 +11,7 @@ alwaysApply: false
 
 Patterns (`sugar-bits/tests/`, `candy-core/tests/`, `candy-vt/tests/`):
 - **Snapshot byte** — assert raw `\x1b[1m`-style SGR strings from `view()`. Don't abstract.
+- **Golden render** — `<slug>/tests/GoldenRenderTest.php` asserts byte-exact `view()`/`render()` output against committed `<slug>/tests/fixtures/*.golden` files via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi($path, $output)`. Needs `sugarcraft/candy-testing` dev-dep + path-repo (canonical `sugar-charts/tests/GoldenRenderTest.php`).
 - **Snapshot cell-grid** — drive through `SugarCraft\Vt\Terminal\Terminal`, assert `$term->screen()->cell($r,$c)` (`$screen->cols`/`rows` are properties).
 - **Behaviour** — drive `update()` with scripted `KeyMsg`/`MouseMsg`, assert `[Model, ?Cmd]`.
 - **Coercion** — negative/oversized index, empty, null; assert clamp/no-op.

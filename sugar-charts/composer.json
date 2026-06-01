@@ -81,10 +81,18 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-testing",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "sugarcraft/candy-testing": "dev-master"
     },
     "autoload": {
         "psr-4": {
