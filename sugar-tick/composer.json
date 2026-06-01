@@ -30,6 +30,7 @@
     ],
     "require": {
         "php": ">=8.3",
+        "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/sugar-charts": "dev-master"

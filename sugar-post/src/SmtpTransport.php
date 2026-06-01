@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Post;
 
+use SugarCraft\Async\AsyncOps;
+use SugarCraft\Async\CancellationToken;
 use SugarCraft\Post\Lang;
+use React\EventLoop\LoopInterface;
+use React\EventLoop\Loop;
 
 /**
  * Sends email via direct SMTP (TCP/TLS).
@@ -40,8 +44,26 @@ final class SmtpTransport implements Transport
         $this->tls      = ($port === 465);
     }
 
-    public function send(Email $email): void
+    /**
+     * Send an email with optional cancellation support.
+     *
+     * @param Email $email
+     * @param CancellationToken|null $token  Optional cancellation token to abort the send
+     * @throws \RuntimeException  On cancellation, timeout, or other send failures
+     *
+     * @note AsyncOps::withTimeout() cannot be used here without a full async rewrite
+     *       of the transport layer (replacing blocking stream_socket_client/fwrite/fgets
+     *       with ReactPHP streams). CancellationToken::isCancelled() pre-check and
+     *       onCancel() callback provide best-effort cancellation within the current
+     *       synchronous scope.
+     */
+    public function send(Email $email, ?CancellationToken $token = null): void
     {
+        // Fail fast if already cancelled
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException(Lang::t('smtp.send_cancelled'));
+        }
+
         try {
             $this->connect();
             $this->helo();

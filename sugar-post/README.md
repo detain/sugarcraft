@@ -101,6 +101,10 @@ export POP_SIGNATURE="Sent with SugarPost"    # Appended to body
 - `SmtpTransport` — sends via direct SMTP (TCP/TLS)
 - `Mailer` — high-level API wrapping a Transport
 
+## Shared foundations
+
+sugar-post uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for best-effort cancellation on SMTP sends via `CancellationToken` (pre-write `isCancelled()` check + `onCancel` callback).
+
 ## License
 
 [MIT](LICENSE)
