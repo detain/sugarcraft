@@ -15,6 +15,11 @@ use SugarCraft\Core\I18n\T;
  */
 abstract class Lang
 {
+    /** Subclass must override with its library's translation namespace. */
+    protected const NAMESPACE = '';
+    /** Subclass must override with its library's lang/ directory path. */
+    protected const DIR = '';
+
     /**
      * Translate a message key within this namespace.
      *

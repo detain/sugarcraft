@@ -21,8 +21,6 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  * The first call registers candy-core's `lang/` directory with the
  * shared {@see T} registry; subsequent calls are no-ops, so this helper
  * stays cheap to use anywhere user-facing text is generated.
- *
- * @extends BaseLang
  */
 final class Lang extends BaseLang
 {
