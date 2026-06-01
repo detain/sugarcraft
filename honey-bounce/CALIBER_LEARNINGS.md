@@ -15,3 +15,5 @@ Accumulated patterns and gotchas from building this library.
 [pattern:reduced-motion-instant-snap] — `Spring::update()` checks `Probe::reducedMotion()` at call time and returns `[$target, 0.0]` instantly when reduced motion is signalled. This is a pure conditional in `update()` — no separate factory or configuration step needed. Callers that already pass `Spring::update($pos, $vel, $target)` get reduced-motion support automatically when the env var is set.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+[pattern:snapshot-testing-assert-golden] — Use `candy-testing`'s `assertGolden*` for any renderable/serializable output — ANSI cell renders via `assertGoldenAnsi`, numeric trajectories via `assertGolden` file equality. This pins canonical output so refactors are intentional rather than accidental regressions.
