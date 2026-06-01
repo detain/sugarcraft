@@ -167,6 +167,17 @@ measured/sliced with `Width::*`, never `strlen`/`substr`/`str_pad`.
 helpers (`Ansi::sgr()`, `Ansi::fg16()`, `Ansi::reset()`) so SGR construction is
 centralized and consistent.
 
+## [pattern:buffer-cell-grid] Use Buffer for cell-grid rendering; ANSI SGR parse at render entry
+
+The notification queue benefits from per-cell composition for overlapping
+toasts. Each toast is rendered into a sub-`Buffer`, then composited into
+the screen `Buffer` at its positioned cell. Call `Buffer::toAnsi()` only at
+the outermost `view()` entry point.
+
+Source: step-34 ai/widget-shared
+
+---
+
 ## [gotcha:top-stacking-overlap] Top-positioned toasts must stack DOWNWARD
 
 `Position::yOffset()` returned `0` for all Top positions, ignoring the
