@@ -65,6 +65,20 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }

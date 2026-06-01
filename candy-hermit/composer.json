@@ -64,6 +64,13 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
         }
     ],
     "require-dev": {
