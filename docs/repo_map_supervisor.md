@@ -112,7 +112,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
 - [x] [Step 30 — Ecosystem audit (no code, produces roadmap)](repo_map_step_30.md) — branch: `ai/ecosystem-audit`, PR #909
 - [x] [Step 31 — candy-pty adopts candy-input + candy-ansi](repo_map_step_31.md) — branch: `ai/candy-pty-shared`, PR #910
-- [ ] [Step 32 — candy-tetris + candy-mines adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`
+- [x] [Step 32 — candy-tetris + candy-mines adopt candy-buffer/mouse/testing](repo_map_step_32.md) — branch: `ai/games-shared`, PR #911
 - [ ] [Step 33 — sugar-skate + sugar-wishlist + sugar-stash adopt candy-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`
 - [ ] [Step 34 — sugar-calendar + sugar-toast adopt candy-buffer + candy-testing](repo_map_step_34.md) — branch: `ai/widget-shared`
 - [ ] [Step 35 — sugar-tick + sugar-post + candy-serve adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`
