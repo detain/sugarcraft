@@ -67,10 +67,9 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         }
 
         // Sort by score descending, then candidate ascending as tiebreak
-        usort($results, static fn(MatchResult $a, MatchResult $b) => [
-            $b->score <=> $a->score,
-            $a->haystack <=> $b->haystack,
-        ]);
+        usort($results, static fn(MatchResult $a, MatchResult $b) =>
+            $b->score <=> $a->score ?? $a->haystack <=> $b->haystack
+        );
 
         return $results;
     }
