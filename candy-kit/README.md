@@ -75,3 +75,9 @@ echo StatusLine::error('connection refused'), "\n";
 ```sh
 cd candy-kit && composer install && vendor/bin/phpunit
 ```
+
+## Snapshot tests
+
+Presenter output is pinned via `candy-testing`'s `assertGoldenAnsi` golden-file
+snapshots. Any change to the ANSI slide output must be intentional — re-record the
+fixture with `--update-golden` to accept a new canonical render.
