@@ -48,6 +48,17 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-31 | coder] candy-pty: adopt candy-input + candy-ansi:
+  - Added `sugarcraft/candy-input` + `sugarcraft/candy-ansi` to require + path-repos in candy-pty/composer.json
+  - Created `src/Input/PtyInputDecoder.php` — wraps MasterPty + EscapeDecoder for decoded KeyEvent/MouseEvent/FocusEvent/PasteEvent input
+  - Created `src/Output/SgrState.php` — immutable SGR state value object (foreground, background, bold, italic, underline, dim, blink, reverse, invisible, strike)
+  - Created `src/Output/SgrHandler.php` — ANSI Parser Handler tracking SGR state per VT500 spec (handles SGR 0/1/2/3/4/5/6/7/8/9, 30-37/38/39/40-47/48/49, 90-97/100-107)
+  - Created `src/Output/AnsiOutputParser.php` — wraps MasterPty + Parser + SgrHandler for tracking SGR transitions in PTY output
+  - Path-repo closure propagated across 55 libs via check-path-repos.php --fix (92 issues fixed)
+  - Tests: candy-pty 331 pass, 7 skipped (FFI gating via requirePtySyscalls())
+  - Branch: ai/candy-pty-shared
+  - Note: coverage at 62% is pre-existing (many infrastructure classes untested); new helper classes are additive infrastructure for consumers
+
 - [2026-05-31 | step-28 | coder] 9 rendering libs: golden-file snapshot tests via candy-testing:
   - Added `sugarcraft/candy-testing` (dev) + path-repo to: sugar-bits, sugar-charts, sugar-table, sugar-glow, candy-vt, candy-vcr, candy-shine (candy-forms + sugar-prompt already had it)
   - Created `GoldenRenderTest.php` in each lib with `assertGoldenAnsi` tests covering representative render() output
