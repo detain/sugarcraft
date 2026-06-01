@@ -43,6 +43,29 @@ $fixture = new class implements GitDriver {
     }
     public function stage(string $path): void   {}
     public function unstage(string $path): void {}
+    public function checkout(string $branch): void {}
+    public function commit(string $message): void {}
+    public function stageAll(): void {}
+    public function diff(string $path): array { return []; }
+    public function discard(string $path): void {}
+    public function amend(): void {}
+    public function stagePatch(string $path, string $hunk): void {}
+    public function createBranch(string $name): void {}
+    public function deleteBranch(string $name): void {}
+    public function merge(string $branch): void {}
+    public function rebaseContinue(): void {}
+    public function rebaseAbort(): void {}
+    public function rebaseSkip(): void {}
+    public function reset(): void {}
+    public function stashList(): array { return []; }
+    public function stashApply(string $stashRef): void {}
+    public function stashDrop(string $stashRef): void {}
+    public function cherryPick(string $commit): void {}
+    public function cherryPickContinue(): void {}
+    public function cherryPickAbort(): void {}
+    public function worktreeList(): array { return []; }
+    public function worktreeAdd(string $path, string $branch): void {}
+    public function worktreeRemove(string $path): void {}
 };
 
 (new Program(App::start($fixture), new ProgramOptions(useAltScreen: true)))->run();

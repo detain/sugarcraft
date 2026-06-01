@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dash\Components\Card\{Text, Card, Accordion};
 use SugarCraft\Dash\Components\Tree\Timeline;
 
