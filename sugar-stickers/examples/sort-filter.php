@@ -45,10 +45,10 @@ echo $table->render();
 echo "\n";
 
 // Set cursor to row 2 (0-indexed), toggle sort
-$table = $table->setCursor(2)->sortByNext();
+$table = $table->setCursor(2)->sortByNext(0);  // sort by Name (col 0), descending (was asc)
 echo "=== After setCursor(2) then sortByNext() (Name desc) ===\n";
 echo $table->render();
 echo "\n";
 
-echo "cursor row: {$table->currentRow()}, col: {$table->currentCell()}\n";
+echo "cursor row: " . json_encode($table->currentRow()) . ", col0: {$table->currentCell(0)}\n";
 echo "total rows: {$table->rowCount()}, cols: {$table->colCount()}\n";
