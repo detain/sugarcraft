@@ -9,6 +9,8 @@ use SugarCraft\Glow\Lang;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Core\Util\Tty;
+use SugarCraft\Palette\Probe\Capability;
+use SugarCraft\Palette\Probe\TerminalProbe;
 use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -27,6 +29,15 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'render', description: 'Render Markdown and print or page it.')]
 final class RenderCommand extends Command
 {
+    /** @var callable|null */
+    private static $colorProbeCallback = null;
+
+    /** @deprecated test seam only */
+    public static function setColorProbeCallback(?callable $callback): void
+    {
+        self::$colorProbeCallback = $callback;
+    }
+
     protected function configure(): void
     {
         $this
@@ -96,6 +107,25 @@ final class RenderCommand extends Command
         };
     }
 
+    /**
+     * Probe the terminal for ANSI color capability.
+     *
+     * Falls back to true (assume color capable) on any probe error
+     * so we never incorrectly refuse input due to a broken probe.
+     */
+    private static function terminalSupportsColor(): bool
+    {
+        try {
+            if (self::$colorProbeCallback !== null) {
+                return (self::$colorProbeCallback)();
+            }
+            $report = TerminalProbe::run();
+            return !$report->has(Capability::NoColor);
+        } catch (\Throwable) {
+            return true; // Fall back to assuming color is available.
+        }
+    }
+
     /** @return string|null */
     public static function loadInput(string $file): ?string
     {
@@ -105,6 +135,14 @@ final class RenderCommand extends Command
         }
         if (!defined('STDIN') || !is_resource(STDIN) || TtyDetect::isAtty(STDIN)) {
             return null;
+        }
+        // Guard: if the terminal doesn't support color (NO_COLOR set or
+        // no-color capability detected), still read stdin but the caller
+        // will render with a non-color theme.  On probe failure, assume
+        // color is available (graceful degradation per step-29 brief).
+        if (!self::terminalSupportsColor()) {
+            $raw = stream_get_contents(STDIN);
+            return is_string($raw) && $raw !== '' ? $raw : null;
         }
         $raw = stream_get_contents(STDIN);
         return is_string($raw) && $raw !== '' ? $raw : null;
