@@ -69,9 +69,6 @@ final class RendererFactory
 
     /**
      * Return the renderer for the given explicit mode.
-     *
-     * Sixel, Kitty, and Iterm2 modes are stubbed in Step 3
-     * and will be implemented in Step 6.
      */
     public static function create(Mode $mode): FrameRenderer
     {
@@ -80,12 +77,9 @@ final class RendererFactory
             Mode::Ansi256   => new AsciiRenderer(),
             Mode::TrueColor => new AsciiRenderer(),
             Mode::HalfBlock => new HalfBlockRenderer(),
-            // Step 6 will add SixelRenderer, KittyRenderer, Iterm2Renderer.
-            Mode::Sixel,
-            Mode::Kitty,
-            Mode::Iterm2 => throw new \InvalidArgumentException(
-                "Renderer for mode {$mode->value} is not implemented yet (Step 6)"
-            ),
+            Mode::Sixel     => new GraphicsRenderer(Mode::Sixel),
+            Mode::Kitty     => new GraphicsRenderer(Mode::Kitty),
+            Mode::Iterm2    => new GraphicsRenderer(Mode::Iterm2),
         };
     }
 }
