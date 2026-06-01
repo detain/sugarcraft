@@ -172,6 +172,15 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
     - Wide-char column test: existing `testWideCharColumnLayout` only asserts width ≥ 4, does not assert exact column widths or overall byte output for `['short', '中文', 'longer label']`
   - These gaps are test-design limitations (private render method) rather than missing code — the Buffer rendering is implemented correctly but not directly testable without exposing internal state
 
+## Active Items
+
+- [2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs:
+  - Created `docs/repo_map_update_followups.md` — structured per-lib opportunity matrix covering all SugarCraft libs NOT migrated in steps 9-29.
+  - 19 remaining libs audited: candy-pty, candy-tetris, candy-mines, candy-flip, candy-kit, candy-zone, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, honey-bounce, honey-flap, candy-metrics, candy-log, candy-mold.
+  - Each lib mapped to 1-3 of the 8 shared packages (candy-ansi/buffer/layout/mouse/input/fuzzy/async/testing) with benefit description and effort estimate (S/M/L).
+  - Coverage map groups libs by steps 31-37 so each refactor step knows which libs to tackle.
+  - No code changes — documentation only. Branch: ai/ecosystem-audit.
+
 ## Resolved Items
 
 - [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
