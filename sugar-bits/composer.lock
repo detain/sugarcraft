@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5c064fa22c0ba87aac5898b758c9c448",
+    "content-hash": "a319e409eac5bb592b40149787710e24",
     "packages": [
         {
             "name": "react/event-loop",
@@ -152,6 +152,63 @@
             "time": "2025-08-19T18:57:03+00:00"
         },
         {
+            "name": "sugarcraft/candy-ansi",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-ansi",
+                "reference": "a6279580eb9abdfecfe3c64c629ee37ec16a3f98"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Ansi\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Ansi\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+            "homepage": "https://github.com/sugarcraft/candy-ansi",
+            "keywords": [
+                "ansi",
+                "charmbracelet",
+                "ecma-48",
+                "parser",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt500"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-ansi/issues",
+                "source": "https://github.com/sugarcraft/candy-ansi",
+                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-async",
             "version": "dev-master",
             "dist": {
@@ -268,7 +325,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-core",
-                "reference": "e637b25fae235c47b813c4afae2a121d8d2d7f39"
+                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
             },
             "require": {
                 "php": "^8.3",
@@ -339,7 +396,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-forms",
-                "reference": "ca831e857dc2161da38b076972ce6045f7ce5dae"
+                "reference": "67f038ee0957e9e05587674e99e90be3b8e67b9a"
             },
             "require": {
                 "php": "^8.3",
@@ -451,6 +508,64 @@
             }
         },
         {
+            "name": "sugarcraft/candy-input",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-input",
+                "reference": "1d775d2cf576fd650b1940504ffd8057bbb93fed"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Input\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Input\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
+            "homepage": "https://github.com/sugarcraft/candy-input",
+            "keywords": [
+                "escape-sequences",
+                "input",
+                "keyboard",
+                "kitty",
+                "mouse",
+                "sgr",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-input/issues",
+                "source": "https://github.com/sugarcraft/candy-input",
+                "docs": "https://sugarcraft.github.io/lib/candy-input.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-layout",
             "version": "dev-master",
             "dist": {
@@ -511,7 +626,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-mouse",
-                "reference": "8ce24a4e1cb243261570b9a419e78c3ef832f725"
+                "reference": "1081d83104a52e05627071e169d79a87e29ccb9f"
             },
             "require": {
                 "php": "^8.3",
@@ -567,12 +682,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-palette.git",
-                "reference": "ff51df924b7df852ce8702507281df24257b34ad"
+                "reference": "60021be3c28aba819033d4878a84a6370afc78a6"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/ff51df924b7df852ce8702507281df24257b34ad",
-                "reference": "ff51df924b7df852ce8702507281df24257b34ad",
+                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/60021be3c28aba819033d4878a84a6370afc78a6",
+                "reference": "60021be3c28aba819033d4878a84a6370afc78a6",
                 "shasum": ""
             },
             "require": {
@@ -616,7 +731,7 @@
                 "issues": "https://github.com/sugarcraft/candy-palette/issues",
                 "source": "https://github.com/sugarcraft/candy-palette"
             },
-            "time": "2026-05-31T20:34:19+00:00"
+            "time": "2026-06-01T01:34:13+00:00"
         },
         {
             "name": "sugarcraft/candy-pty",
@@ -624,18 +739,20 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "52e015bb77a994ef9e726dff4c3c02dcb38395e4"
+                "reference": "9eeb4347e2018a2ac0df300ad7ff43ea45b314a8"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/52e015bb77a994ef9e726dff4c3c02dcb38395e4",
-                "reference": "52e015bb77a994ef9e726dff4c3c02dcb38395e4",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/9eeb4347e2018a2ac0df300ad7ff43ea45b314a8",
+                "reference": "9eeb4347e2018a2ac0df300ad7ff43ea45b314a8",
                 "shasum": ""
             },
             "require": {
                 "ext-ffi": "*",
                 "php": "^8.3",
-                "sugarcraft/candy-core": "dev-master"
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-input": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5",
@@ -683,7 +800,7 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty"
             },
-            "time": "2026-05-31T20:34:19+00:00"
+            "time": "2026-06-01T01:32:30+00:00"
         },
         {
             "name": "sugarcraft/candy-sprinkles",
@@ -691,7 +808,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-sprinkles",
-                "reference": "3ec6db714fd1768e014595ce16eee3bb763b609c"
+                "reference": "3e1418d7c50824d30bf3eec42a17c18b8043074d"
             },
             "require": {
                 "php": "^8.3",
@@ -754,7 +871,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-zone",
-                "reference": "515457122527a91b07cac8edd572c2a149c9bfa1"
+                "reference": "785928d57a2308a8e79ff883132ff719ec5afd38"
             },
             "require": {
                 "php": "^8.3",
@@ -813,7 +930,7 @@
             "dist": {
                 "type": "path",
                 "url": "../honey-bounce",
-                "reference": "f28784bdcbd686fa7b68581b2cb8c4b4ff257c32"
+                "reference": "be1687cb57828165eb224d213f172f486dec346b"
             },
             "require": {
                 "php": "^8.3",
@@ -821,7 +938,8 @@
                 "sugarcraft/candy-palette": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
             },
             "type": "library",
             "autoload": {
@@ -2494,7 +2612,7 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-testing",
-                "reference": "cc35abd1304277ca7b92d28fa5b325c0b27c11e7"
+                "reference": "6beb6d9938f3d9841c9415be7ab33c8f8c59342c"
             },
             "require": {
                 "php": "^8.3",
