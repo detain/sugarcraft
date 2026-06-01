@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\AvatarGroup;
+use SugarCraft\Dash\Layout\Grid\AvatarGroup;
 
 // Avatar group with multiple users
 $component = AvatarGroup::fromNames(['Alice', 'Bob', 'Charlie']);

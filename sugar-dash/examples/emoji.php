@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\Emoji;
+use SugarCraft\Dash\Layout\Grid\Emoji;
 
 // Emoji display - thumbs up
 $component = Emoji::thumbsUp();

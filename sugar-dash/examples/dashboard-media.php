@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions, QRCode, Barcode, Pictogram};
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions, QRCode, Barcode, Pictogram};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame};
 use SugarCraft\Dash\Components\Card\{Text, Card};
 

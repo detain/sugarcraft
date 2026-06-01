@@ -2,7 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Dash\Grid\{StackedGrid, Options, ItemOptions};
+use SugarCraft\Dash\Layout\Grid\{StackedGrid, Options, ItemOptions};
 use SugarCraft\Dash\Layout\{VStack, HStack, Frame, Spacer};
 use SugarCraft\Dash\Components\Card\{Text, Card, Badge, Tag, Chip, ChipGroup, Divider, Highlight, Comment, Testimonial};
 use SugarCraft\Dash\Components\Toast\{Tooltip, Hint};
