@@ -57,7 +57,7 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Tests: candy-forms 709 pass, sugar-prompt 302 pass, sugar-bits 685 pass, sugar-charts 369 pass, sugar-table 165 pass, sugar-glow 68 pass, candy-vt 508 pass, candy-vcr 650 pass, candy-shine 214 pass
   - UPDATE_GOLDENS=1 verified working (spot check: sugar-bits without env var passes with existing goldens)
   - Path-repo closure: clean (55 libs scanned)
-  - Branch: ai/golden-file-rollout
+  - Branch: ai/golden-file-rollout, PR #907
 
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null

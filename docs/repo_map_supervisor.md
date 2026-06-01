@@ -106,7 +106,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 ### Phase 5 — Cross-cutting via shared packages (4)
 - [x] [Step 26 — candy-buffer::diff() delta ANSI](repo_map_step_26.md) — branch: `ai/buffer-diff-impl`, PR #905
 - [x] [Step 27 — Wire buffer-diff into renderers](repo_map_step_27.md) — branch: `ai/buffer-diff-consumers`, PR #906
-- [ ] [Step 28 — Golden-file snapshot rollout via candy-testing](repo_map_step_28.md) — branch: `ai/golden-file-rollout`
+- [x] [Step 28 — Golden-file snapshot rollout via candy-testing](repo_map_step_28.md) — branch: `ai/golden-file-rollout`, PR #907
 - [ ] [Step 29 — Terminal-probe consumers (sugar-glow, candy-wish)](repo_map_step_29.md) — branch: `ai/probe-consumers`
 
 ### Phase 6 — Ecosystem-wide adoption sweep (8)
