@@ -88,6 +88,14 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - All effort estimates are S or M (none rated L effort)
   - Branch: ai/ecosystem-audit, PR #909
 
+- [2026-05-31 | step-31 | coder] candy-pty: adopt candy-input + candy-ansi:
+  - Created PtyInputDecoder (wraps MasterPty + EscapeDecoder), SgrState (immutable SGR snapshot), SgrHandler (full VT500 SGR Handler impl), AnsiOutputParser (wraps MasterPty + Parser + SgrHandler)
+  - Modified candy-pty/composer.json: added sugarcraft/candy-input + sugarcraft/candy-ansi + path-repos
+  - 417 tests (+86 new), 1081 assertions, OK (7 skipped — FFI gating)
+  - New files: PtyInputDecoder 100% lines, AnsiOutputParser 95.45% lines, SgrHandler 100%, SgrState 100%
+  - Path-repo closure: clean (55 libs scanned); 48 transitive composer.json changes pushed as separate commit
+  - Branch: ai/candy-pty-shared, PR #910
+
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
   - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)
