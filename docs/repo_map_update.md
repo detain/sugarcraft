@@ -6,7 +6,7 @@
 
 ## Plan retrospective (executed 2026-06-01)
 
-_The shared-foundation refactor outlined above ran across 39 PRs (PRs #882–#920, excluding the step-15 candy-forms migration which was not completed), creating 8 new foundation packages and migrating 15 consumer libs. Below is the final accounting against the analysis sections._
+_The shared-foundation refactor outlined above ran across 41 PRs (PRs #882–#920 + hotfix #913 + VHS fixes), creating 8 new foundation packages and migrating 15 consumer libs. Step-15 (candy-forms) was completed via PRs #870 and #895. Below is the final accounting against the analysis sections._
 
 ### §326 Shared Internal Frameworks
 - ✅ candy-ansi (step-01, PR #882)
