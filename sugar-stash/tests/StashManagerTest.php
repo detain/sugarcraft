@@ -84,4 +84,57 @@ final class StashManagerTest extends TestCase
         $this->assertNull($sm->current());
         $this->assertSame(0, $sm->count());
     }
+
+    public function testFuzzyFilterFiltersByMessage(): void
+    {
+        $stashes = [
+            new StashEntry(0, 'a', 'main', 'add user authentication'),
+            new StashEntry(1, 'b', 'main', 'fix config issue'),
+            new StashEntry(2, 'c', 'feature', 'add user profile'),
+        ];
+        $sm = new StashManager($stashes);
+
+        $filtered = $sm->fuzzyFilter('user');
+        // Smith-Waterman can produce low-score false positives (e.g. 'issue' shares 'se' with 'user')
+        // but the top-scoring matches should be the ones with 'user' in them
+        $messages = array_map(static fn($e) => $e->message, $filtered->stashes);
+        $this->assertGreaterThanOrEqual(2, $filtered->count());
+        // First two results should be the clear 'user' matches (highest scores)
+        $this->assertSame('add user authentication', $filtered->stashes[0]->message);
+        $this->assertSame('add user profile', $filtered->stashes[1]->message);
+    }
+
+    public function testFuzzyFilterEmptyQueryReturnsSameManager(): void
+    {
+        $stashes = [
+            new StashEntry(0, 'a', 'main', 'first'),
+            new StashEntry(1, 'b', 'main', 'second'),
+        ];
+        $sm = new StashManager($stashes);
+        $filtered = $sm->fuzzyFilter('');
+        $this->assertSame($sm->stashes, $filtered->stashes);
+    }
+
+    public function testFuzzyFilterNoMatchReturnsEmptyStashes(): void
+    {
+        $stashes = [
+            new StashEntry(0, 'a', 'main', 'alpha'),
+            new StashEntry(1, 'b', 'main', 'beta'),
+        ];
+        $sm = new StashManager($stashes);
+        $filtered = $sm->fuzzyFilter('xyz');
+        $this->assertSame(0, $filtered->count());
+    }
+
+    public function testFuzzyFilterResetsCursorToZero(): void
+    {
+        $stashes = [
+            new StashEntry(0, 'a', 'main', 'aaa'),
+            new StashEntry(1, 'b', 'main', 'bbb'),
+            new StashEntry(2, 'c', 'main', 'ccc'),
+        ];
+        $sm = new StashManager($stashes, cursor: 2);
+        $filtered = $sm->fuzzyFilter('a');
+        $this->assertSame(0, $filtered->cursor);
+    }
 }

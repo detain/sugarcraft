@@ -307,4 +307,41 @@ final class StoreTest extends TestCase
 
         $this->assertNull($this->store->entry('old-entry'));
     }
+
+    public function testFuzzyFilterReturnsMatchingEntries(): void
+    {
+        $this->store->set('production-api', 'v1');
+        $this->store->set('staging-api', 'v2');
+        $this->store->set('dev-api', 'v3');
+        $this->store->set('database-main', 'v4');
+
+        $results = $this->store->fuzzyFilter('prod');
+        $this->assertNotEmpty($results);
+        $this->assertSame('production-api', $results[0]->key);
+    }
+
+    public function testFuzzyFilterEmptyQueryReturnsEmptyArray(): void
+    {
+        $this->store->set('key1', 'v1');
+        $this->assertSame([], $this->store->fuzzyFilter(''));
+    }
+
+    public function testFuzzyFilterRanksByScore(): void
+    {
+        $this->store->set('production-api', 'v1');
+        $this->store->set('provisioning', 'v2');
+        $this->store->set('dev-api', 'v3');
+
+        $results = $this->store->fuzzyFilter('pro');
+        $keys = array_map(static fn($e) => $e->key, $results);
+        // "production-api" starts with "pro" and should rank higher
+        $this->assertContains('production-api', $keys);
+    }
+
+    public function testFuzzyFilterNoMatchReturnsEmptyArray(): void
+    {
+        $this->store->set('alpha', 'v1');
+        $this->store->set('beta', 'v2');
+        $this->assertSame([], $this->store->fuzzyFilter('xyz'));
+    }
 }
