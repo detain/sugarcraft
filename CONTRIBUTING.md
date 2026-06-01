@@ -5,7 +5,7 @@ and PRs are all welcome.
 
 ## Development setup
 
-SugarCraft is a monorepo of 13 PHP libraries. Each library has its own
+SugarCraft is a monorepo of 50 PHP libraries. Each library has its own
 `composer.json` + `vendor/` and is tested independently.
 
 ```sh
@@ -18,9 +18,12 @@ composer install
 vendor/bin/phpunit
 
 # Or, for the whole monorepo:
-for d in candy-core candy-sprinkles honey-bounce candy-zone sugar-bits \
-         sugar-charts sugar-prompt candy-shell candy-shine candy-kit \
-         candy-freeze sugar-glow sugar-spark; do
+for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testing candy-mouse candy-input candy-fuzzy candy-sprinkles honey-bounce candy-zone candy-forms \
+         sugar-bits sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
+         candy-freeze sugar-glow sugar-spark \
+         candy-wish sugar-wishlist candy-metrics \
+         candy-mold candy-tetris super-candy sugar-crush \
+         sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
     (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done
 ```

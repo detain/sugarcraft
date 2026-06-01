@@ -1,6 +1,6 @@
 # SugarCraft contributor playbook
 
-PHP monorepo of 49 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/` wired via path repositories.
+PHP monorepo of 50 TUI library ports (Charmbracelet ecosystem). PSR-4, PHP 8.3+ (8.4+ for Windows FFI), PHPUnit 10, ReactPHP. Each lib has its own `composer.json` + `vendor/` wired via path repositories.
 
 ## Source-of-truth files
 
