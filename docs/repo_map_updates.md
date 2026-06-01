@@ -70,6 +70,13 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Path-repo closure: clean (55 libs scanned)
   - Branch: ai/probe-consumers, PR #908
 
+- [2026-05-31 | step-30 | coder] Documentation: ecosystem audit — adoption opportunity matrix:
+  - Created `docs/repo_map_update_followups.md` with structured per-lib opportunity matrix for 19 remaining libs not migrated in steps 9-29
+  - Each lib: tables with Package | Benefit | Effort (S/M/L) + rationale + specific source patterns
+  - Coverage map groups 19 libs into step-31 through step-37 groupings
+  - All effort estimates are S or M (none rated L effort)
+  - Branch: ai/ecosystem-audit, PR #909
+
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
   - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)
