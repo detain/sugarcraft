@@ -30,3 +30,13 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:auto-probe-ci-warnings]** `Mosaic::diagnose()` and `Probe::colorProfile()` emit PHP warnings in non-TTY (CI) environments — tests for `auto()` may show warnings but still pass. These are environmental, not bugs.
 
 - **[pattern:mosaic-delegation]** `HalfBlockRenderer` bridges `RgbFrame → ImageSource → MosaicHalfBlockRenderer`, reusing the full image rendering stack without reimplementing SGR output.
+
+- **[pattern:backward-seek-requires-reopen]** Video decoders are forward-only streams. Seeking backward re-opens the decoder from the source file and skips forward to the target frame. This is O(n) but necessary — a frame cache would be a future optimization.
+
+- **[pattern:view-must-be-pure]** The TEA `view()` function should only render, not update model state. In `sugar-reel`, delta repaint state (prevBuffer) is managed in `update()` via `withNewFrame()`, not in `view()`.
+
+- **[pattern:sync-inline-math-after-speed-change]** After speed changes, the Sync object's internal speed was stale. Inlined the `targetFrame` computation directly in `updateTick()` using `$this->speed` so changes take effect immediately on the next tick.
+
+- **[pattern:scripted-input-program-simulator-tea]** `ScriptedInput` (declares key sequence) and `ProgramSimulator` (runs a TEA Model through scripted input) from candy-testing enable behaviour-testing the Player without real video or a PTY.
+
+- **[pattern:fake-decoder-isolated-testing]** A test helper implementing `Decoder` that yields synthetic `RgbFrame[]` allows unit-testing the Player without ffmpeg or live video files.
