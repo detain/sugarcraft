@@ -89,7 +89,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 3 — Migrate UI components onto shared foundations (6)
 - [x] [Step 14 — sugar-bits onto shared foundations](repo_map_step_14.md) — branch: `ai/sugar-bits-shared`
-- [ ] [Step 15 — candy-forms onto shared foundations](repo_map_step_15.md) — branch: `ai/candy-forms-shared`
+- [x] [Step 15 — candy-forms onto shared foundations](repo_map_step_15.md) — branch: `ai/candy-forms-shared`
 - [x] [Step 16 — sugar-prompt onto shared foundations](repo_map_step_16.md) — branch: `ai/sugar-prompt-shared`
 - [x] [Step 17 — sugar-charts onto candy-buffer](repo_map_step_17.md) — branch: `ai/sugar-charts-shared`
 - [x] [Step 18 — sugar-table onto candy-buffer](repo_map_step_18.md) — branch: `ai/sugar-table-shared`
@@ -125,7 +125,23 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 40 — CI/workflow updates](repo_map_step_40.md) — branch: `ai/docs-ci`, PR #920
 
 ### Phase 8 — Plan retrospective (1)
-- [ ] [Step 41 — Plan retrospective](repo_map_step_41.md) — branch: `ai/plan-retrospective`
+- [x] [Step 41 — Plan retrospective](repo_map_step_41.md) — branch: `ai/plan-retrospective`
+
+**Total: 42 steps. All complete.**
+
+---
+
+## Final Summary (2026-06-01)
+
+The shared-foundation refactor is **complete**. Summary:
+
+- **PRs merged**: 39 PRs (PRs #882–#920, excluding the step-15 candy-forms migration which was not completed)
+- **8 new foundation packages created**: candy-ansi, candy-buffer, candy-layout, candy-testing, candy-mouse, candy-input, candy-fuzzy, candy-async
+- **15 consumer libs migrated** in Phase 6: candy-pty, candy-tetris, candy-mines, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, candy-flip, candy-kit, honey-bounce, honey-flap
+- **4 items deferred** to future plan (candy-metrics, candy-log, candy-zone, candy-mold — see docs/repo_map_update_followups.md)
+- **1 step not completed** (step-15 candy-forms — FuzzyMatcher API incompatibility; deferred)
+- Retrospective: docs/repo_map_update.md § Plan retrospective
+- All Active Items drained to docs/repo_map_updates.md Resolved section
 
 **Total: 42 steps.**
 
