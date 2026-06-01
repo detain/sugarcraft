@@ -58,3 +58,8 @@ Test edge cases: missing `HostName` (pattern becomes host), missing `Port` (defa
 - **[pattern:raw-mode]** `Picker::setRawMode()` no longer shells out to `stty` directly — it delegates to `SugarCraft\Core\Util\RawMode::enable()` / `RawMode::disable()` (candy-core, already a required dep). RawMode is the portable controlling-terminal toggle and is a safe no-op on non-tty streams, so PickerTest can drive in-memory streams without overriding `setRawMode()` (the override is now belt-and-suspenders).
 
 - **[anti-pattern:single-quoted-escape]** Single-quoted PHP strings do NOT interpret `\x1b` — `'\x1b[2m'` is literal text, not an ESC sequence. Use `Ansi::sgr(...)`/`Ansi::reset()` (or double-quoted `"\x1b..."`) for terminal escapes. Picker.php:135 once shipped the single-quoted form and printed the literal `\x1b[2m…` instead of dimming the description.
+
+### 2026-05-31 — Use candy-fuzzy for scored filter matching
+Pattern: When a lib needs type-to-filter with ranked results, adopt `sugarcraft/candy-fuzzy` and use `SmithWatermanMatcher::matchAll()` — it returns scored `MatchResult` objects with grapheme-aligned highlight indices wired into the renderer (ANSI bold+cyan on matched clusters).
+Anti-pattern: Ad-hoc `str_contains()` or `stripos()` boolean filtering; it gives no ranking signal and no match-position data for highlighting.
+Source: step-33 ai/filter-consumers

@@ -114,6 +114,10 @@ Each database gets its own SQLite file: `~/.config/skate/<dbname>.db`.
 
 ![glob](.vhs/glob.gif)
 
+## Shared foundations
+
+sugar-skate uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) for Smith-Waterman scored matching infrastructure. The matcher is wired for future fuzzy key search; glob-to-SQLIKE pattern filtering remains the active filter path today.
+
 ## License
 
 [MIT](LICENSE)
