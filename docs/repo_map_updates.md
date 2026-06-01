@@ -326,3 +326,10 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - candy-kit: added new CALIBER_LEARNINGS.md
   - Updated READMEs and composer.json (added candy-testing dev dep + path-repos) for all 4 libs
   - Commit SHA: 0995878a
+
+- [2026-06-01 | step-37 | shipper] NO-OP — step-37 catch-all: deferral sweep complete, no remaining actionable libs — MERGED PR #917:
+  - Branch ai/sweep-catchall merged to master
+  - 1 file changed, 8 insertions(+) in docs/repo_map_update_followups.md (DEFERRED notes only, no source code changes)
+  - All 4 remaining libs from step-30 audit have DEFERRED status in followups (candy-pty, candy-zone, candy-metrics, candy-log, candy-mold)
+  - No source code changes; PR is documentation-only marker for end of actionable migration work
+  - Commit SHA: 237fad86
