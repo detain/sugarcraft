@@ -92,7 +92,7 @@ final class FuzzyMatcherTest extends TestCase
         $this->assertNotEmpty($result);
         $scores = array_column($result, 1);
         for ($i = 1; $i < count($scores); $i++) {
-            $this->assertGreaterThanOrEqual($scores[$i - 1], $scores[$i]);
+            $this->assertGreaterThanOrEqual($scores[$i], $scores[$i - 1]);
         }
     }
 
@@ -126,7 +126,8 @@ final class FuzzyMatcherTest extends TestCase
         $this->assertContains('documentation', $matched);
         $this->assertContains('do', $matched);
         $this->assertContains('dog', $matched);
-        $this->assertSame('bodacious', $matched[0]);
+        // Results are ranked best-first; 'documentation' is the strongest 'doc' match.
+        $this->assertSame('documentation', $matched[0]);
     }
 
     public function testScoreIsPositiveForPartialMatch(): void

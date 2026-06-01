@@ -23,7 +23,11 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: mbstring, intl, json, pcntl, gd, curl, ssh2, ffi
+          # Must cover every ext-* in the root composer.lock platform reqs;
+          # composer install verifies the lock against the platform and aborts
+          # (exit 4) on any missing extension. sqlite3/pdo_sqlite/openssl were
+          # absent and broke the smoke job. Mirrors the main CI extension set.
+          extensions: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl, ffi
           tools: composer:v2
 
       - name: Install ffmpeg + file
