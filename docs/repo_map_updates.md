@@ -224,6 +224,17 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Coverage map groups libs by steps 31-37 so each refactor step knows which libs to tackle.
   - No code changes — documentation only. Branch: ai/ecosystem-audit.
 
+- [2026-06-01 | step-34 | coder] sugar-calendar + sugar-toast: adopt candy-buffer + candy-testing:
+  - sugar-calendar: added DatePicker widget with calendar grid rendering, ANSI escape sequences for navigation
+  - sugar-toast: extended Toast with border styling (new `withBorder()` + `withRoundedCorners()`) and queue management (maxConcurrent, dismiss oldest when full)
+  - Adopted candy-buffer (ANSI rendering) and candy-testing (program simulator + golden-file assertions) in both libs
+  - Added comprehensive golden-file snapshot tests: `GoldenRenderTest.php`, `DatePickerStyleTest.php`, `ToastRenderingTest.php` with `tests/fixtures/` .golden files
+  - Added `sugarcraft/candy-buffer` + `sugarcraft/candy-testing` (dev) + path-repos to both composer.json
+  - sugar-calendar: 20 files changed, +1304/-40 lines
+  - sugar-toast: 8 new .golden fixtures (empty-queue, max-concurrent-alerts, single-info-alert, three-stacked-alerts)
+  - Path-repo closure: propagated to all transitive consumers via check-path-repos.php --fix
+  - Branch: ai/widget-shared, PR #914
+
 ## Resolved Items
 
 - [RESOLVED | step-03 | tester | 2026-05-28] candy-layout coverage: full Cassowary implementation + targeted tests achieved 95.19% (396/416 lines). BLOCKING resolved.
