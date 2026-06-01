@@ -13,3 +13,8 @@ Accumulated patterns and gotchas from building and shipping this lib.
 [pattern:board-atomic-serialization] — `Board::serialize()` emits a versioned JSON payload (`{v:1,...}`) covering every cell field. `Board::unserialize()` validates all required keys and array shapes before constructing a `Board`, throwing `InvalidArgumentException` with a generic message on any malformation. The version tag allows forward-compatible additions without breaking existing saved games.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+### 2026-05-31 — mouse-zone-per-cell
+Pattern: Zone-tag each interactive cell via `Mark::zone("cell:$row:$col", $glyph)` — `Scanner::hit($x, $y)` then maps directly to a cell address without any coordinate arithmetic. The renderer returns `(string, Scanner)` so the model can own the scanner.
+Anti-pattern: Raw x/y mouse coordinates without zone abstraction require the click handler to reverse-engineer grid layout.
+Source: step-32 ai/games-shared
