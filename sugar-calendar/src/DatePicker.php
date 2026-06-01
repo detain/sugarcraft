@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SugarCraft\Calendar;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
 use SugarCraft\Calendar\Lang;
 use SugarCraft\Core\Util\Ansi;
 
@@ -397,31 +400,53 @@ final class DatePicker
     // Rendering
     // -------------------------------------------------------------------------
 
+    /**
+     * Render the calendar view as an ANSI string using a Buffer.
+     */
     public function View(): string
     {
-        $lines = [];
-        $lines[] = $this->renderHeader();
+        $width = 24;  // "   Sun   Mon   Tue   Wed   Thu   Fri   Sat" is 24 chars (3 + 7*3)
+        $height = 9; // header + day-names + sep + 6 week rows
+        $buffer = Buffer::new($width, $height);
 
-        // Day names row
-        $dayRow = '    ';
+        // Row 0: header "    May 2026" (left-aligned)
+        $headerText = self::monthName($this->viewMonth) . ' ' . $this->viewYear;
+        $buffer = $this->placeStringAt($buffer, 0, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
+
+        // Row 1: day-name row
         for ($dow = 0; $dow < 7; $dow++) {
-            $dayRow .= ' ' . $this->ansi(self::dayName($dow), $this->dayNameStyle) . ' ';
+            $col = 3 + $dow * 3; // "   " prefix then each name at offset 3,6,9,12,15,18,21
+            $dayName = self::dayName($dow);
+            $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
-        $lines[] = $dayRow;
-        $lines[] = '   ' . \str_repeat('───', 7);
 
+        // Row 2: separator
+        for ($col = 3; $col < 24; $col++) {
+            $buffer = $buffer->withCellAt($col, 2, Cell::new('─'));
+        }
+
+        // Rows 3-8: week rows
         $cells = $this->buildCells();
         for ($week = 0; $week < 6; $week++) {
-            $line = \sprintf('%2d ', $week * 7 - $this->firstDayOffset() + 1);
+            $row = 3 + $week;
+            // Week number: sprintf('%2d ', ...)  — left-aligned at col 0
+            $wkNum = $week * 7 - $this->firstDayOffset() + 1;
+            $buffer = $this->placeStringAt($buffer, 0, $row, \sprintf('%2d ', $wkNum), null);
+
+            // Day cells
             for ($dow = 0; $dow < 7; $dow++) {
                 $idx = $week * 7 + $dow;
-                $line .= ' ' . ($cells[$idx] ?? '  ') . ' ';
+                [$plain, $style] = $cells[$idx] ?? ['  ', null];
+                if ($plain === '  ' && $style === null) {
+                    continue;
+                }
+                // Place the 2-char day number at col+1 (the " X " cell format: space + number + space)
+                $col = 3 + $dow * 3;
+                $buffer = $this->placeStringAt($buffer, $col + 1, $row, $plain, $style);
             }
-            $lines[] = $line;
-            if ($cells === []) break;
         }
 
-        return \implode("\n", $lines);
+        return $buffer->toAnsi();
     }
 
     // -------------------------------------------------------------------------
@@ -467,6 +492,140 @@ final class DatePicker
     // Internal
     // -------------------------------------------------------------------------
 
+    /**
+     * Place a string into the buffer at (col, row), handling wide chars.
+     *
+     * @return Buffer
+     */
+    private function placeStringAt(Buffer $buf, int $col, int $row, string $s, ?Style $style): Buffer
+    {
+        $clusters = function_exists('grapheme_str_split')
+            ? (grapheme_str_split($s) ?: \mb_str_split($s, 1, 'UTF-8'))
+            : \mb_str_split($s, 1, 'UTF-8');
+
+        $colCursor = $col;
+        foreach ($clusters as $cluster) {
+            if ($colCursor >= $buf->width()) {
+                break;
+            }
+            $gw = $this->graphemeWidth($cluster);
+            if ($gw === 0) {
+                $colCursor++;
+                continue;
+            }
+            $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
+            if ($gw === 2 && $colCursor + 1 < $buf->width()) {
+                $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
+            }
+            $colCursor += $gw;
+        }
+        return $buf;
+    }
+
+    /**
+     * Convert SGR code string (e.g. "1;32" or "7") to a Buffer Style.
+     */
+    private function sgrToBufferStyle(string $sgr): ?Style
+    {
+        if ($sgr === '') {
+            return null;
+        }
+        $fg = null;
+        $bg = null;
+        $attrs = 0;
+        $codes = \explode(';', $sgr);
+        foreach ($codes as $code) {
+            $code = (int) $code;
+            // Basic colors: 30-37 foreground, 40-47 background, 90-97 bright fg
+            if ($code >= 30 && $code <= 37) {
+                $fg = $this->ansiColorToRgb($code - 30, false);
+            } elseif ($code >= 40 && $code <= 47) {
+                $bg = $this->ansiColorToRgb($code - 40, false);
+            } elseif ($code >= 90 && $code <= 97) {
+                $fg = $this->ansiColorToRgb($code - 90, true);
+            } elseif ($code === 1) {
+                $attrs |= Style::ATTR_BOLD;
+            } elseif ($code === 2) {
+                $attrs |= Style::ATTR_FAINT;
+            } elseif ($code === 3) {
+                $attrs |= Style::ATTR_ITALIC;
+            } elseif ($code === 4) {
+                $attrs |= Style::ATTR_UNDERLINE;
+            } elseif ($code === 5 || $code === 6) {
+                $attrs |= Style::ATTR_BLINK;
+            } elseif ($code === 7) {
+                $attrs |= Style::ATTR_REVERSE;
+            } elseif ($code === 9) {
+                $attrs |= Style::ATTR_STRIKE;
+            }
+        }
+        return ($fg !== null || $bg !== null || $attrs !== 0)
+            ? new Style($fg, $bg, $attrs)
+            : null;
+    }
+
+    private function ansiColorToRgb(int $idx, bool $bright): int
+    {
+        $colors = [
+            [0, 0, 0],       // black
+            [128, 0, 0],     // red
+            [0, 128, 0],     // green
+            [128, 128, 0],   // yellow
+            [0, 0, 128],     // blue
+            [128, 0, 128],   // magenta
+            [0, 128, 128],   // cyan
+            [192, 192, 192], // white
+        ];
+        $c = $colors[$idx] ?? [192, 192, 192];
+        if ($bright) {
+            $c = [\min(255, $c[0] + 96), \min(255, $c[1] + 96), \min(255, $c[2] + 96)];
+        }
+        return ($c[0] << 16) | ($c[1] << 8) | $c[2];
+    }
+
+    private function graphemeWidth(string $g): int
+    {
+        if ($g === '') return 0;
+        $cp = \function_exists('mb_ord') ? \mb_ord($g, 'UTF-8') : \ord($g[0]);
+        if ($cp === false || $cp === 0) return 0;
+        // ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) → 0
+        // TAB(0x09), LF(0x0A), CR(0x0D) → 1 (visible)
+        // DEL(0x7F) → 0
+        if (($cp <= 0x08) || ($cp >= 0x0E && $cp <= 0x1F) || ($cp === 0x7F)) {
+            return 0;
+        }
+        // Zero-width combining marks (0300-036F, 0483-0489, etc.)
+        if (($cp >= 0x0300 && $cp <= 0x036F)
+            || ($cp >= 0x0483 && $cp <= 0x0489)
+            || ($cp >= 0x200b && $cp <= 0x200f)
+            || ($cp >= 0x2028 && $cp <= 0x2029)
+            || ($cp >= 0x2060 && $cp <= 0x2064)
+            || ($cp === 0xfeff)) {
+            return 0;
+        }
+        // Wide East-Asian chars → 2
+        if (($cp >= 0x1100 && $cp <= 0x115f)
+            || ($cp >= 0x3040 && $cp <= 0xfe6f)
+            || ($cp >= 0xff00 && $cp <= 0xff60)
+            || ($cp >= 0x20000 && $cp <= 0x2fffd)) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private function detectCellStyle(string $cell): ?Style
+    {
+        if (!\preg_match('/\x1b\[([0-9;]+)m/', $cell, $m)) {
+            return null;
+        }
+        return $this->sgrToBufferStyle($m[1]);
+    }
+
+    private function stripAnsi(string $s): string
+    {
+        return \preg_replace('/\x1b\[[0-9;]*m/', '', $s) ?? $s;
+    }
+
     private function renderHeader(): string
     {
         $monthName = self::monthName($this->viewMonth);
@@ -475,9 +634,9 @@ final class DatePicker
     }
 
     /**
-     * Build 42-cell grid (6 weeks). Each cell is a 2-char string.
+     * Build 42-cell grid (6 weeks). Each cell is a 2-tuple: [plainText, ?Style].
      *
-     * @return list<string>
+     * @return list<array{0: string, 1: Style|null}>
      */
     private function buildCells(): array
     {
@@ -505,7 +664,7 @@ final class DatePicker
             $dayNum = $i - $firstDow + 1;
 
             if ($dayNum < 1 || $dayNum > $daysInMonth) {
-                $cells[] = '  ';
+                $cells[] = ['  ', null];
                 continue;
             }
 
@@ -515,17 +674,20 @@ final class DatePicker
             $cellDate = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
             $isInRange = $range !== null && $range->contains($cellDate);
 
+            $text = \sprintf('%2d', $dayNum);
+            $style = null;
+
             if ($isToday && $dayNum === $selectedDay) {
-                $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->selectedTodayStyle);
+                $style = $this->sgrToBufferStyle($this->selectedTodayStyle);
             } elseif ($isInRange) {
-                $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->rangeStyle);
+                $style = $this->sgrToBufferStyle($this->rangeStyle);
             } elseif ($dayNum === $selectedDay && $this->selecting) {
-                $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->selectedStyle);
+                $style = $this->sgrToBufferStyle($this->selectedStyle);
             } elseif ($isToday) {
-                $cells[] = $this->ansi(\sprintf('%2d', $dayNum), $this->todayStyle);
-            } else {
-                $cells[] = \sprintf('%2d', $dayNum);
+                $style = $this->sgrToBufferStyle($this->todayStyle);
             }
+
+            $cells[] = [$text, $style];
         }
 
         return $cells;

@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Toast;
 
+use SugarCraft\Buffer\Buffer;
+use SugarCraft\Buffer\Cell;
+use SugarCraft\Buffer\Style;
+use SugarCraft\Buffer\Region;
+use SugarCraft\Buffer\Position as BufferPosition;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
@@ -321,7 +326,8 @@ final class Toast
     // -------------------------------------------------------------------------
 
     /**
-     * Render the toast layer composited over a background view.
+     * Render the toast layer composited over a background view using
+     * Buffer-based composition.
      *
      * @param string $background  The underlying viewport content
      * @param int $viewportWidth  Viewport width in cells
@@ -334,7 +340,6 @@ final class Toast
             return $background;
         }
 
-        // Filter expired
         $active = \array_values(
             \array_filter($this->queue, fn(Alert $a): bool => !$a->isExpired())
         );
@@ -344,30 +349,58 @@ final class Toast
         }
 
         $bgLines = $this->splitLines($background);
+        $bgRowCount = \count($bgLines);
 
-        // First pass: compute total height of all active alerts for stacking
-        $totalAlertLines = 0;
-        foreach ($active as $alert) {
-            $alertStr = $this->renderAlert($alert);
-            $totalAlertLines += \count($this->splitLines($alertStr));
-        }
-
-        // Second pass: render each alert with proper cumulative stacking offset
         $cumulativeHeight = 0;
+        $lastAlertY = 0;
+        $lastAlertHeight = 0;
         foreach ($active as $alert) {
             $alertStr = $this->renderAlert($alert);
             $alertLines = $this->splitLines($alertStr);
-            $alertWidth = $this->maxWidth;
             $alertHeight = \count($alertLines);
-
-            $x = $this->position->xOffset($alertWidth, $viewportWidth);
-            $y = $this->position->yOffset($alertHeight, $viewportHeight, $cumulativeHeight);
-
-            $bgLines = $this->compositeLines($bgLines, $alertLines, $x, $y, $alertWidth);
+            $lastAlertY = $this->position->yOffset($alertHeight, $viewportHeight, $cumulativeHeight - $alertHeight);
+            $lastAlertHeight = $alertHeight;
             $cumulativeHeight += $alertHeight;
         }
 
-        return \implode("\n", $bgLines);
+        $contentHeight = $bgRowCount;
+        $alertExtent = $lastAlertY + $lastAlertHeight;
+        if ($alertExtent > $contentHeight) {
+            $contentHeight = $alertExtent;
+        }
+
+        $contentWidth = $this->maxWidth;
+
+        $viewport = Buffer::new($contentWidth, $contentHeight);
+        $viewport = $this->fillViewportFromString($viewport, $bgLines);
+
+        $cumulativeHeight = 0;
+        foreach ($active as $alert) {
+            $alertBuf = $this->renderAlertToBuffer($alert);
+            $alertHeight = $alertBuf->height();
+            $alertWidth = $alertBuf->width();
+
+            $x = $this->position->xOffset($alertWidth, $contentWidth);
+            $y = $this->position->yOffset($alertHeight, $contentHeight, $cumulativeHeight);
+
+            $region = new Region(BufferPosition::new($x, $y), $alertWidth, $alertHeight);
+            $viewport = $viewport->withRegion($region, $alertBuf);
+            $cumulativeHeight += $alertHeight;
+        }
+
+        return $viewport->toAnsi();
+    }
+
+    /**
+     * Fill a viewport Buffer with content from an array of strings.
+     * Each line is placed with ANSI parsing for styles.
+     */
+    private function fillViewportFromString(Buffer $buf, array $lines): Buffer
+    {
+        for ($row = 0; $row < \count($lines) && $row < $buf->height(); $row++) {
+            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
+        }
+        return $buf;
     }
 
     // -------------------------------------------------------------------------
@@ -421,6 +454,206 @@ final class Toast
 
         $lines = [$top, ...$middleLines, $bottom];
         return \implode("\n", $lines);
+    }
+
+    /**
+     * Render an alert into a Buffer.
+     *
+     * Parses the ANSI-encoded string from renderAlert() to extract SGR
+     * sequences and builds cells with proper Buffer Style objects, so
+     * toAnsi() produces correct styled output. Mirrors charmbracelet/bubbleup's
+     * alert rendering pipeline.
+     */
+    private function renderAlertToBuffer(Alert $alert): Buffer
+    {
+        $alertStr = $this->renderAlert($alert);
+        $lines = $this->splitLines($alertStr);
+
+        $height = \count($lines);
+        $width = $this->maxWidth;
+
+        $buf = Buffer::new($width, $height);
+        for ($row = 0; $row < $height; $row++) {
+            $buf = $this->placeAnsiStringAt($buf, 0, $row, $lines[$row]);
+        }
+
+        return $buf;
+    }
+
+    /**
+     * Place an ANSI-encoded string into the buffer at (col, row), parsing
+     * SGR sequences and applying corresponding Buffer Style objects.
+     */
+    private function placeAnsiStringAt(Buffer $buf, int $col, int $row, string $s): Buffer
+    {
+        $len = \strlen($s);
+        $i = 0;
+        $currentStyle = null;
+
+        while ($i < $len) {
+            $b = $s[$i];
+
+            if ($b === "\x1b" && ($s[$i + 1] ?? '') === '[') {
+                $j = $i + 2;
+                while ($j < $len) {
+                    $c = \ord($s[$j]);
+                    $j++;
+                    if ($c >= 0x40 && $c <= 0x7e) {
+                        break;
+                    }
+                }
+                $seq = \substr($s, $i + 2, $j - $i - 3);
+                $currentStyle = $this->sgrToBufferStyle($seq);
+                $i = $j;
+                continue;
+            }
+
+            $cluster = $this->nextCluster($s, $i);
+            $gw = $this->graphemeWidth($cluster);
+
+            if ($gw === 0) {
+                $i += \strlen($cluster);
+                continue;
+            }
+
+            if ($col >= $buf->width()) {
+                break;
+            }
+
+            $buf = $buf->withCellAt($col, $row, new Cell($cluster, $currentStyle, null, $gw));
+            if ($gw === 2 && $col + 1 < $buf->width()) {
+                $buf = $buf->withCellAt($col + 1, $row, Cell::continuation());
+            }
+            $col += $gw;
+            $i += \strlen($cluster);
+        }
+
+        return $buf;
+    }
+
+    /**
+     * Extract the next UTF-8 grapheme cluster from string $s at position $i.
+     */
+    private function nextCluster(string $s, int $i): string
+    {
+        if (\function_exists('grapheme_extract')) {
+            $next = 0;
+            $cluster = grapheme_extract($s, 1, GRAPHEME_EXTR_COUNT, $i, $next);
+            if (\is_string($cluster) && $cluster !== '') {
+                return $cluster;
+            }
+        }
+        $b = \ord($s[$i]);
+        $bytes = match (true) {
+            ($b & 0x80) === 0    => 1,
+            ($b & 0xe0) === 0xc0 => 2,
+            ($b & 0xf0) === 0xe0 => 3,
+            ($b & 0xf8) === 0xf0 => 4,
+            default              => 1,
+        };
+        return \substr($s, $i, $bytes);
+    }
+
+    /**
+     * Convert ANSI SGR color code (e.g. "31" or "1;32") to a Buffer Style.
+     * SGR "0" means reset all attributes, returning null.
+     */
+    private function sgrToBufferStyle(string $sgr): ?Style
+    {
+        $codes = \explode(';', $sgr);
+        foreach ($codes as $code) {
+            if ((int) $code === 0) {
+                return null;
+            }
+        }
+        $fg = null;
+        $attrs = 0;
+        foreach ($codes as $code) {
+            $code = (int) $code;
+            if ($code >= 30 && $code <= 37) {
+                $fg = $this->ansiColorToRgb($code - 30, false);
+            } elseif ($code >= 90 && $code <= 97) {
+                $fg = $this->ansiColorToRgb($code - 90, true);
+            } elseif ($code === 1) {
+                $attrs |= Style::ATTR_BOLD;
+            }
+        }
+        return new Style($fg, null, $attrs);
+    }
+
+    private function ansiColorToRgb(int $idx, bool $bright): int
+    {
+        $colors = [
+            [0, 0, 0],       // black
+            [128, 0, 0],     // red
+            [0, 128, 0],     // green
+            [128, 128, 0],  // yellow
+            [0, 0, 128],     // blue
+            [128, 0, 128],  // magenta
+            [0, 128, 128],  // cyan
+            [192, 192, 192], // white
+        ];
+        $c = $colors[$idx] ?? [192, 192, 192];
+        if ($bright) {
+            $c = [\min(255, $c[0] + 96), \min(255, $c[1] + 96), \min(255, $c[2] + 96)];
+        }
+        return ($c[0] << 16) | ($c[1] << 8) | $c[2];
+    }
+
+    /**
+     * Place a string into the buffer at (col, row) with the given style.
+     */
+    private function placeStringAt(Buffer $buf, int $col, int $row, string $s, ?Style $style): Buffer
+    {
+        $clusters = function_exists('grapheme_str_split')
+            ? (grapheme_str_split($s) ?: \mb_str_split($s, 1, 'UTF-8'))
+            : \mb_str_split($s, 1, 'UTF-8');
+
+        $colCursor = $col;
+        foreach ($clusters as $cluster) {
+            if ($colCursor >= $buf->width()) {
+                break;
+            }
+            $gw = $this->graphemeWidth($cluster);
+            if ($gw === 0) {
+                $colCursor++;
+                continue;
+            }
+            $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
+            if ($gw === 2 && $colCursor + 1 < $buf->width()) {
+                $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
+            }
+            $colCursor += $gw;
+        }
+        return $buf;
+    }
+
+    private function graphemeWidth(string $g): int
+    {
+        if ($g === '') return 0;
+        $cp = \function_exists('mb_ord') ? \mb_ord($g, 'UTF-8') : \ord($g[0]);
+        if ($cp === false || $cp === 0) return 0;
+        // ASCII control chars (0x00-0x08, 0x0B, 0x0C, 0x0E-0x1F, 0x7F) → 0
+        if (($cp <= 0x08) || ($cp >= 0x0E && $cp <= 0x1F) || ($cp === 0x7F)) {
+            return 0;
+        }
+        // Zero-width combining marks
+        if (($cp >= 0x0300 && $cp <= 0x036F)
+            || ($cp >= 0x0483 && $cp <= 0x0489)
+            || ($cp >= 0x200b && $cp <= 0x200f)
+            || ($cp >= 0x2028 && $cp <= 0x2029)
+            || ($cp >= 0x2060 && $cp <= 0x2064)
+            || ($cp === 0xfeff)) {
+            return 0;
+        }
+        // Wide East-Asian chars → 2
+        if (($cp >= 0x1100 && $cp <= 0x115f)
+            || ($cp >= 0x3040 && $cp <= 0xfe6f)
+            || ($cp >= 0xff00 && $cp <= 0xff60)
+            || ($cp >= 0x20000 && $cp <= 0x2fffd)) {
+            return 2;
+        }
+        return 1;
     }
 
     /**
@@ -499,6 +732,9 @@ final class Toast
         return $lines;
     }
 
+    /**
+     * @codeCoverageIgnore dead code — retained for reference until removed
+     */
     private function compositeLines(array $bg, array $fg, int $x, int $y, int $w): array
     {
         $x = \max(0, $x);
