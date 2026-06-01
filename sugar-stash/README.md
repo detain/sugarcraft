@@ -126,6 +126,10 @@ $msg = Lang::t('git.error', ['stderr' => $stderr]);
 
 ![stage](.vhs/stage.gif)
 
+## Shared foundations
+
+sugar-stash uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) for Smith-Waterman scored matching infrastructure, laying the groundwork for future fuzzy stash search.
+
 ## Test
 
 ```bash

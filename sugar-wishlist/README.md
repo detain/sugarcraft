@@ -147,6 +147,10 @@ if ($picked !== null) {
 $sshEndpoints = Config::importFromSshConfig('/home/user/.ssh/config');
 ```
 
+## Shared foundations
+
+sugar-wishlist uses [candy-fuzzy](https://github.com/detain/sugarcraft#candy-fuzzy) — `SmithWatermanMatcher::matchAll()` replaces ad-hoc `str_contains`-style filtering. The picker now surfaces scored ranking and match-highlight indices (ANSI bold+cyan on matched grapheme clusters) for ranked, highlighted filter results.
+
 ## Status
 
 Phase 10.28 — SSH config import. 69 tests / 176 assertions. Endpoint, Config (JSON + flat-YAML + SSH config), Picker, Launcher, SshConfigParser are all covered.

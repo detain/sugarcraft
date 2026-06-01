@@ -280,3 +280,13 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Branch: ai/probe-consumers
   - Tests: sugar-glow 68 pass (143 assertions), candy-wish 144 pass (352 assertions)
   - TerminalProbe already in sugar-glow dependency tree (via candy-shine -> sugar-glow path-repos); NOT in candy-wish dependency tree before this step
+
+- [2026-05-31 | step-33 | coder] sugar-skate + sugar-wishlist + sugar-stash: adopt candy-fuzzy:
+  - Added `sugarcraft/candy-fuzzy: dev-master` + path-repo to all three libs' composer.json
+  - sugar-wishlist: replaced `Picker::filterMatches()` `str_contains`-style filter with `SmithWatermanMatcher::matchAll()` — scored ranking + match-highlight indices wired into renderer via `highlightLine()` (ANSI bold+cyan on matched grapheme clusters)
+  - sugar-skate: no interactive filter UI present — only glob-to-SQLLIKE pattern filtering in `Database::buildGlobQuery()`. Added candy-fuzzy dependency as infrastructure for future fuzzy key search (Levenshtein `suggestSimilar()` remains typo-suggestion only).
+  - sugar-stash: no interactive filter UI present — StashManager has cursor navigation but no type-to-search. Added candy-fuzzy dependency as infrastructure for future fuzzy stash search.
+  - Tests: sugar-wishlist 70 pass (180 assertions), sugar-skate 66 pass (122 assertions), sugar-stash 116 pass (333 assertions, 2 skipped)
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/filter-consumers
+  - Note: `highlightLine()` re-matches displayLine against filter needle to get indices aligned with the rendered text; applies ANSI bold+cyan (sgr 1,36) on matched grapheme clusters
