@@ -84,6 +84,7 @@ Status legend:
 | [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime) | **SugarTick** | `sugar-tick/` | `sugarcraft/sugar-tick` | `SugarCraft\Tick` | 🟢 | Privacy-first coding-time tracker — JSONL on disk |
 | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep) | **CandyMines** | `candy-mines/` | `sugarcraft/candy-mines` | `SugarCraft\Mines` | 🟢 | Minesweeper — first-click safety / flood-fill |
 | [namzug16/gifterm](https://github.com/namzug16/gifterm) | **CandyFlip** | `candy-flip/` | `sugarcraft/candy-flip` | `SugarCraft\Flip` | 🟢 | ASCII GIF viewer (ext-gd) |
+| [maxcurzi/tplay](https://github.com/maxcurzi/tplay) · [seatedro/glyph](https://github.com/seatedro/glyph) · [joelibaceta/video-to-ascii](https://github.com/joelibaceta/video-to-ascii) | **SugarReel** | `sugar-reel/` | `sugarcraft/sugar-reel` | `SugarCraft\Reel` | 🟡 | Terminal video player (mp4 → ascii/ansi/half-block/sixel/kitty); no single upstream — scaffold only |
 | [kbrgl/flapioca](https://github.com/kbrgl/flapioca) | **HoneyFlap** | `honey-flap/` | `sugarcraft/honey-flap` | `SugarCraft\Flap` | 🟢 | Flappy Bird clone — bird is a HoneyBounce projectile |
 
 <!--
