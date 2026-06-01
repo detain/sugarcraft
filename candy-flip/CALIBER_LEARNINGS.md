@@ -20,3 +20,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:weakmap-frame-cache]** {@see WeakMap} keyed by object identity is ideal for memoizing per-frame rendered output. Use `offsetExists`/`offsetGet`/`offsetSet` rather than the WeakMap directly for compatibility. Entries are dropped automatically when the Frame is garbage-collected, avoiding memory pressure in long-running players.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
+
+- **[pattern:snapshot-testing-assert-golden]** Use `candy-testing`'s `assertGolden*` for any renderable/serializable output — ANSI cell renders via `assertGoldenAnsi`, numeric data via `assertGolden` file equality. This pins canonical output so refactors are intentional rather than accidental regressions.

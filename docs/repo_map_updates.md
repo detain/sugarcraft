@@ -219,6 +219,12 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Branch: ai/async-adopters
   - Note: sugar-tick's flock() issue (§157) OUT OF SCOPE per step-30 audit — did not touch file locking
 
+- [2026-06-01 | step-35 | shipper] sugar-tick + sugar-post + candy-serve: adopt candy-async — MERGED PR #915:
+  - Branch ai/async-adopters merged to master
+  - 13 files changed, 132 insertions(+), 2 deletions(-)
+  - Created CALIBER_LEARNINGS.md in sugar-post and sugar-tick
+  - Commit SHA: 30ea7afa
+
 - [2026-05-31 | step-32 | coder] candy-tetris + candy-mines: adopt candy-buffer + candy-mouse + candy-testing:
   - Added `sugarcraft/candy-buffer` + `sugarcraft/candy-mouse` to require + path-repos in candy-tetris/composer.json and candy-mines/composer.json; `sugarcraft/candy-testing` (dev) added to both
   - candy-tetris/Renderer.php: playfield interior refactored to Buffer (10×20 cells) with per-tetromino background style (block) and faint foreground style (ghost); Sprinkles border wraps Buffer::toAnsi() interior
