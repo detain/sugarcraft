@@ -22,11 +22,11 @@ use SugarCraft\Reel\Reel;
 Reel::open('clip.mp4'); // playback arrives in later build steps
 ```
 
-> Status: Step 3 ✓ (Mode + LumaRamp + Ascii/HalfBlock renderers). Each
-> RgbFrame is rendered through AsciiRenderer (truecolor/ansi256/ascii modes)
-> or HalfBlockRenderer (delegates to candy-mosaic). RendererFactory::auto()
-> probes terminal capabilities and picks the best mode. Rendering to playback
-> (Player Model) and audio sync come in subsequent steps.
+> Status: Step 4 ✓ (Player Model + controls + delta repaint). Player is a
+> TEA Model that pulls frames from a Decoder, paces them via wall-clock Sync,
+> and renders via FrameRenderer with cell-based delta repaint (candy-buffer
+> DiffEncoder). Key controls: Space=pause, ←/→=seek, [/]=speed, 0-9=percent,
+> m=mode cycle, q/Esc=quit. Audio sync comes next.
 
 ## Planned modes
 
