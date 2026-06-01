@@ -27,7 +27,7 @@ composer require sugarcraft/sugarcraft
 
 ## What's in the box
 
-Forty-eight libraries grouped by layer:
+Forty-nine libraries grouped by layer:
 
 | | Library | Role |
 |---|---|---|
@@ -157,7 +157,7 @@ The umbrella package is a metapackage; each library has its own
 `composer.json` + `vendor/`. To test everything:
 
 ```sh
-for d in candy-core candy-ansi candy-sprinkles honey-bounce candy-zone candy-forms \
+for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testing candy-mouse candy-input candy-fuzzy candy-sprinkles honey-bounce candy-zone candy-forms \
          sugar-bits sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
