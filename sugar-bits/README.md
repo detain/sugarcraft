@@ -317,6 +317,17 @@ $paginator = $t->getPaginator();    // Paginator instance
 
 Pagination works with sort and filter: changing the sort order, filter query, or page size automatically re-clamps the cursor to the first row of the current page so the cursor never points to a row outside the current page boundary.
 
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
 ## Test
 
 ```sh

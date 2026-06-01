@@ -15,4 +15,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:sugar-charts]** All chart renderers build a Buffer first. Don't re-implement string padding — use candy-buffer.
 
+- **[pattern:assert-golden-ansi]** Use `assertGoldenAnsi` for any new `render()` test. Fixture files live in `tests/fixtures/` with a `.golden` extension. Re-record goldens with `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes. Mirrors: `docs/repo_map_step_28.md`.
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.

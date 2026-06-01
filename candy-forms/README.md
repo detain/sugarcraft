@@ -94,6 +94,17 @@ with no behavioural divergence.
 - `sugarcraft/candy-core` — Elm-architecture TUI runtime
 - `sugarcraft/candy-sprinkles` — Declarative styling
 
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
 ## License
 
 MIT
