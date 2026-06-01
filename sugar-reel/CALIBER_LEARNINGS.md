@@ -52,3 +52,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:kitty-uses-dcs-apc-not-osc]** The kitty graphics protocol uses DCS `\x1b_Ga=...` (not the OSC `\x1b]1337;` that iTerm2 uses). These are distinct protocols — kitty uses DCS APC sequences while iTerm2 uses OSC 1337.
 
 - **[pattern:graphics-renderer-cell-dimensions-always-1x1]** The graphics protocols fill the terminal with the image; they don't use a cell grid. cellDimensions returns [1,1] meaning "one virtual cell = the whole image".
+
+- **[pattern:synthetic-gif-for-example-without-binary-deps]** `examples/play.php` generates a rainbow-gradient GIF using ext-gd and saves it to `/tmp` when run without a video argument. This allows the full player to be demonstrated without any video files or external binaries in the example. The player shelled out to ffprobe during open() — if ffprobe is absent, `VideoSource::probe()` gracefully returns defaults and playback still works (audio just won't be detected).
+
+- **[pattern:vhs-tape-shows-help-or-static-output]** For a TUI player with keyboard interaction, the VHS demo (`play.tape`) shows the `--help` output rather than a video playback — it produces clean static terminal output that's perfect for GIF encoding. The player is demonstrated to work via the examples/play.php, not necessarily via the VHS tape.
+
+- **[pattern:player-open-vs-open-for-test]** `Player::open()` wraps `VideoSource::probe()` + `DecoderFactory::create()`, requiring an actual file path and optionally ffprobe. `Player::openForTest()` takes a Decoder directly and bypasses VideoSource::probe(), used in unit tests with FakeDecoder. The example (not tests) uses `Player::open()` with the generated synthetic GIF path — ffprobe is optional for the GIF path since `VideoSource::probe()` degrades gracefully.
