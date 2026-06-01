@@ -173,7 +173,8 @@ final class ToastBorderTest extends TestCase
         $this->assertSame($width, Width::string($this->bottomBorder($rows)));
 
         // The styling escapes must survive (not be stripped by slicing).
-        $this->assertStringContainsString(Ansi::sgr(Ansi::BOLD), $rendered);
+        // Both \x1b[1m and \x1b[0;1m are semantically identical bold.
+        $this->assertMatchesRegularExpression('/\x1b\[0;1m|\x1b\[1m/', $rendered);
     }
 
     public function testStackedToastsDoNotLeakAnsiPastBorder(): void
