@@ -129,6 +129,14 @@ Width::padRight('hi', 8);         // "hi      "
 Width::truncate('hello world', 8); // "hello wo"
 ```
 
+## Shared foundations
+
+sugar-glow uses **candy-palette** for terminal capability probing. The
+`RenderCommand::terminalSupportsColor()` wrapper calls
+`\SugarCraft\Palette\Probe\TerminalProbe::run()` and falls back to
+`true` (assume color) if the probe throws — ensuring graceful degradation
+on Windows, over SSH, and in old terminals.
+
 ## Snapshot tests
 
 Render output is covered by golden-file snapshot tests. Fixture files live

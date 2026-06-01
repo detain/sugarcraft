@@ -16,6 +16,14 @@ PHP port of [`charmbracelet/wish`](https://github.com/charmbracelet/wish) — an
 composer require sugarcraft/candy-wish
 ```
 
+## Shared foundations
+
+CandyWish uses **candy-palette** for terminal capability probing. Call
+`\SugarCraft\Palette\Probe\TerminalProbe::run()` to detect color support,
+Sixel, HalfBlock, and other terminal capabilities — do not call `getenv()`
+or read terminfo directly. The probe is used by UI components that need to
+adapt rendering to the client's feature set.
+
 ## Architecture
 
 CandyWish leans on the host's OpenSSH daemon rather than implementing the SSH wire protocol from scratch. Each SSH connection forks a fresh PHP process under `sshd` (via `ForceCommand`). What that PHP process does internally depends on the active **transport**:
