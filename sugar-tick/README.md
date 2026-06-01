@@ -50,6 +50,10 @@ By default heartbeats land in `$XDG_DATA_HOME/sugar-tick` (or
 
 The Store is intentionally append-only at the file level, so editor plug-ins can `>>` echo a JSON line directly without coordinating with the dashboard. The dashboard reads at `r` / on launch / when the day shifts — never holds a file lock.
 
+## Shared foundations
+
+sugar-tick uses [candy-async](https://github.com/detain/sugarcraft/tree/master/candy-async) for cancellation support in async write operations.
+
 ## Test
 
 ```bash

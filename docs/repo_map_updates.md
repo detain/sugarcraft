@@ -209,6 +209,16 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-06-01 | step-35 | coder] sugar-tick + sugar-post + candy-serve: adopt candy-async:
+  - sugar-tick: added CancellationToken support to Store::append() — optional param, checks isCancelled() before write, registers onCancel callback for mid-I/O cancellation
+  - sugar-post: added CancellationToken support to SmtpTransport::send() — checks isCancelled() before starting, proper cleanup on throw
+  - candy-serve: added Subscriptions for graceful shutdown in GitDaemon — new Subscriptions field, addSubscription()/clearSubscriptions() methods, subscriptions unsubscribed in cleanup() before closing client sockets
+  - Added `sugarcraft/candy-async: dev-master` + path-repo to sugar-tick, sugar-post, candy-serve composer.json
+  - Tests: sugar-tick 106 pass, sugar-post 54 pass, candy-serve 140 pass
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/async-adopters
+  - Note: sugar-tick's flock() issue (§157) OUT OF SCOPE per step-30 audit — did not touch file locking
+
 - [2026-05-31 | step-32 | coder] candy-tetris + candy-mines: adopt candy-buffer + candy-mouse + candy-testing:
   - Added `sugarcraft/candy-buffer` + `sugarcraft/candy-mouse` to require + path-repos in candy-tetris/composer.json and candy-mines/composer.json; `sugarcraft/candy-testing` (dev) added to both
   - candy-tetris/Renderer.php: playfield interior refactored to Buffer (10×20 cells) with per-tetromino background style (block) and faint foreground style (ghost); Sprinkles border wraps Buffer::toAnsi() interior
