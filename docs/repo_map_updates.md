@@ -317,3 +317,12 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Path-repo closure: clean (55 libs scanned)
   - Branch: ai/filter-consumers
   - Note: `highlightLine()` re-matches displayLine against filter needle to get indices aligned with the rendered text; applies ANSI bold+cyan (sgr 1,36) on matched grapheme clusters
+
+- [2026-06-01 | step-36 | shipper] candy-flip + candy-kit + honey-bounce + honey-flap: adopt candy-testing — MERGED PR #916:
+  - Branch ai/testing-rollout merged to master
+  - 25 files changed, 571 insertions(+), 5 deletions(-)
+  - Added `GoldenRenderTest.php` snapshot tests to all 4 libs via candy-testing
+  - Added golden fixtures: candy-flip (density-3x3), candy-kit (stage-step, stage-substep), honey-bounce (projectile-trajectory, spring-trajectory), honey-flap (game-state-5ticks, game-state-crash)
+  - candy-kit: added new CALIBER_LEARNINGS.md
+  - Updated READMEs and composer.json (added candy-testing dev dep + path-repos) for all 4 libs
+  - Commit SHA: 0995878a

@@ -116,7 +116,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 33 — sugar-skate + sugar-wishlist + sugar-stash adopt candy-fuzzy](repo_map_step_33.md) — branch: `ai/filter-consumers`, PR #912 *(hotfix PR #913: SmithWatermanMatcher usort callback returning array instead of scalar int)*
 - [x] [Step 34 — sugar-calendar + sugar-toast adopt candy-buffer + candy-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
 - [x] [Step 35 — sugar-tick + sugar-post + candy-serve adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`, PR #915
-- [ ] [Step 36 — candy-flip + candy-kit + honey-bounce + honey-flap adopt candy-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`
+- [x] [Step 36 — candy-flip + candy-kit + honey-bounce + honey-flap adopt candy-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
 - [ ] [Step 37 — Catch-all: any remaining lib from the audit](repo_map_step_37.md) — branch: `ai/sweep-catchall`
 
 ### Phase 7 — Final documentation & CI (3)
