@@ -7,6 +7,7 @@ namespace SugarCraft\Reel\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Reel\Render\AsciiRenderer;
 use SugarCraft\Reel\Render\FrameRenderer;
+use SugarCraft\Reel\Render\GraphicsRenderer;
 use SugarCraft\Reel\Render\HalfBlockRenderer;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
@@ -67,40 +68,40 @@ final class RendererFactoryTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
-    // Unimplemented modes throw InvalidArgumentException
+    // Graphics modes return GraphicsRenderer
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox create(Mode::Sixel) throws InvalidArgumentException (Step 6 scope)
+     * @testdox create(Mode::Sixel) returns a GraphicsRenderer instance
      */
-    public function testCreateThrowsForSixelMode(): void
+    public function testCreateReturnsGraphicsRendererForSixelMode(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('sixel');
+        $renderer = RendererFactory::create(Mode::Sixel);
 
-        RendererFactory::create(Mode::Sixel);
+        $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
+        $this->assertInstanceOf(FrameRenderer::class, $renderer);
     }
 
     /**
-     * @testdox create(Mode::Kitty) throws InvalidArgumentException (Step 6 scope)
+     * @testdox create(Mode::Kitty) returns a GraphicsRenderer instance
      */
-    public function testCreateThrowsForKittyMode(): void
+    public function testCreateReturnsGraphicsRendererForKittyMode(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('kitty');
+        $renderer = RendererFactory::create(Mode::Kitty);
 
-        RendererFactory::create(Mode::Kitty);
+        $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
+        $this->assertInstanceOf(FrameRenderer::class, $renderer);
     }
 
     /**
-     * @testdox create(Mode::Iterm2) throws InvalidArgumentException (Step 6 scope)
+     * @testdox create(Mode::Iterm2) returns a GraphicsRenderer instance
      */
-    public function testCreateThrowsForIterm2Mode(): void
+    public function testCreateReturnsGraphicsRendererForIterm2Mode(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('iterm2');
+        $renderer = RendererFactory::create(Mode::Iterm2);
 
-        RendererFactory::create(Mode::Iterm2);
+        $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
+        $this->assertInstanceOf(FrameRenderer::class, $renderer);
     }
 
     // -------------------------------------------------------------------------

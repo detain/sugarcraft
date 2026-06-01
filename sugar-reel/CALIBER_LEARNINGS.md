@@ -46,3 +46,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:proc-open-pipe-fd-cleanup]** When `proc_open` returns `false` or `0` (binary missing), the three pipe handles may have been partially-created before failure. All must be `fclose()`d in the failure path to avoid FD leaks. Guard with `is_resource($pipe)` before each `fclose()`.
 
 - **[pattern:fake-audio-player-test-double]** `FakeAudioPlayer` test double overrides `buildCommand()` to return a controlled command (or null), enabling testing of the start/stop/isPlaying lifecycle without live ffplay/mpv binaries.
+
+- **[pattern:mosaic-kitty-no-static-factory]** candy-mosaic has `KittyRenderer` class and `Mosaic::iterm2()` but no `Mosaic::kitty()` static factory. For kitty mode, use `new Mosaic(new KittyRenderer(), Capability::universal(), null, null, null)->render(...)` directly. Always check the actual candy-mosaic API rather than assuming naming symmetry.
+
+- **[pattern:kitty-uses-dcs-apc-not-osc]** The kitty graphics protocol uses DCS `\x1b_Ga=...` (not the OSC `\x1b]1337;` that iTerm2 uses). These are distinct protocols — kitty uses DCS APC sequences while iTerm2 uses OSC 1337.
+
+- **[pattern:graphics-renderer-cell-dimensions-always-1x1]** The graphics protocols fill the terminal with the image; they don't use a cell grid. cellDimensions returns [1,1] meaning "one virtual cell = the whole image".
