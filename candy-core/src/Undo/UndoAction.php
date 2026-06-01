@@ -7,7 +7,7 @@ namespace SugarCraft\Core\Undo;
 /**
  * Represents a single undoable action with its type, payload, and label.
  */
-final readonly class UndoAction
+readonly class UndoAction
 {
     public function __construct(
         public UndoActionType $type,

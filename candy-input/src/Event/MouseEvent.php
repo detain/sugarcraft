@@ -13,7 +13,7 @@ use SugarCraft\Input\KeyModifier;
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
  */
-final readonly class MouseEvent implements Event
+readonly class MouseEvent implements Event
 {
     /**
      * Mouse button identifiers.

@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Components\Modal\Msg;
 /**
  * Represents an edit action on an item (used by ListModal, MultiselectModal).
  */
-final readonly class AnsweredEditMsg extends Msg
+readonly class AnsweredEditMsg extends Msg
 {
     public function __construct(
         public readonly mixed $item,

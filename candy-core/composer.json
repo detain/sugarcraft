@@ -30,7 +30,7 @@
         "docs": "https://sugarcraft.github.io/lib/candy-core.html"
     },
     "require": {
-        "php": "^8.3",
+        "php": "^8.1",
         "react/event-loop": "^1.6",
         "react/promise": "^3.3",
         "sugarcraft/candy-async": "dev-master",

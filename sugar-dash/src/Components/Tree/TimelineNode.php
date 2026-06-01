@@ -10,7 +10,7 @@ use SugarCraft\Core\Util\Width;
 /**
  * A node in a timeline.
  */
-final readonly class TimelineNode
+readonly class TimelineNode
 {
     public function __construct(
         public string $label,

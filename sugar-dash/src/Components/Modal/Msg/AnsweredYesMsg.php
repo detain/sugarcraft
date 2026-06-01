@@ -7,4 +7,4 @@ namespace SugarCraft\Dash\Components\Modal\Msg;
 /**
  * Represents an affirmative answer (OK / Yes / Confirm).
  */
-final readonly class AnsweredYesMsg extends Msg {}
+readonly class AnsweredYesMsg extends Msg {}

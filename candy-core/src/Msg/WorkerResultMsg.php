@@ -10,7 +10,7 @@ use SugarCraft\Core\Msg;
  * Dispatched when a worker finishes executing a callable, carrying
  * the result (or exception) back to the calling model.
  */
-final readonly class WorkerResultMsg implements Msg
+readonly class WorkerResultMsg implements Msg
 {
     /**
      * @param mixed $result The serialized return value of the worker callable

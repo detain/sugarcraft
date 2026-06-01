@@ -24,7 +24,7 @@ enum ChartType: string
 /**
  * Data point for charts.
  */
-final readonly class ChartDataPoint
+readonly class ChartDataPoint
 {
     public function __construct(
         public string $label,

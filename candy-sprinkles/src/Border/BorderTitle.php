@@ -9,7 +9,7 @@ namespace SugarCraft\Sprinkles\Border;
  *
  * @internal Not part of the public API — rendered by Style::applyBorder().
  */
-final readonly class BorderTitle
+readonly class BorderTitle
 {
     public function __construct(
         public string $text,

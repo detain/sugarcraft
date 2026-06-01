@@ -286,7 +286,7 @@ final class TreeViz implements \SugarCraft\Dash\Foundation\Sizer
 /**
  * A node in a tree visualization.
  */
-final readonly class TreeVizNode
+readonly class TreeVizNode
 {
     /**
      * @param list<TreeVizNode> $children

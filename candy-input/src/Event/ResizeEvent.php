@@ -12,7 +12,7 @@ use SugarCraft\Input\Event;
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
  */
-final readonly class ResizeEvent implements Event
+readonly class ResizeEvent implements Event
 {
     public function __construct(
         public int $cols,
