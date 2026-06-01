@@ -22,9 +22,10 @@ use SugarCraft\Reel\Reel;
 Reel::open('clip.mp4'); // playback arrives in later build steps
 ```
 
-> Status: Step 1 ✓ (Probe + VideoSource). The Reel facade records the source
-> path; VideoSource probes metadata (w/h/duration/fps/hasAudio) via ffprobe.
-> Decoding, rendering, playback, and audio sync land in subsequent steps.
+> Status: Step 2 ✓ (RgbFrame + FfmpegDecoder + GifDecoder). Frames are decoded
+> from ffmpeg's raw rgb24 pipe (W*H*3 byte chunks) or the pure-PHP candy-flip
+> GIF decoder. DecoderFactory auto-selects based on extension and ffmpeg availability.
+> Rendering, playback, and audio sync land in subsequent steps.
 
 ## Planned modes
 

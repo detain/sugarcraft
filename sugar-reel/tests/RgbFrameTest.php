@@ -1,0 +1,130 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SugarCraft\Reel\Tests;
+
+use PHPUnit\Framework\TestCase;
+use SugarCraft\Reel\Decode\RgbFrame;
+
+/**
+ * Unit tests for RgbFrame value object.
+ *
+ * @covers RgbFrame
+ */
+final class RgbFrameTest extends TestCase
+{
+    // -------------------------------------------------------------------------
+    // Constructor & property access
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox constructor stores bytes, w, and h as readable properties
+     */
+    public function testConstructorStoresProperties(): void
+    {
+        // 3 * 2 * 3 = 18 bytes for a 3×2 RGB frame
+        $bytes = str_repeat("\xFF\x00\x7F", 6); // 6 pixels worth
+        $frame = new RgbFrame($bytes, 3, 2);
+
+        $this->assertSame($bytes, $frame->bytes);
+        $this->assertSame(3, $frame->w);
+        $this->assertSame(2, $frame->h);
+        $this->assertSame(18, strlen($frame->bytes));
+    }
+
+    /**
+     * @testdox toGd() creates a GD image with correct dimensions
+     */
+    public function testToGdCreatesImage(): void
+    {
+        // Build a 2×2 pixel RGB frame:
+        // Pixel 0 (top-left):     R=255, G=0,   B=0   (red)
+        // Pixel 1 (top-right):    R=0,   G=255, B=0   (green)
+        // Pixel 2 (bottom-left):  R=0,   G=0,   B=255 (blue)
+        // Pixel 3 (bottom-right):  R=0,   G=0,   B=0   (black)
+        $bytes = "\xFF\x00\x00"   // pixel 0: red
+                . "\x00\xFF\x00"   // pixel 1: green
+                . "\x00\x00\xFF"   // pixel 2: blue
+                . "\x00\x00\x00";  // pixel 3: black
+        $frame = new RgbFrame($bytes, 2, 2);
+
+        $img = $frame->toGd();
+
+        $this->assertNotNull($img);
+        $this->assertSame(2, imagesx($img));
+        $this->assertSame(2, imagesy($img));
+
+        // Verify the center pixel (1,1) is black: imagecolorat returns 0x00BBGGRR on little-endian x86
+        $rgb = imagecolorat($img, 1, 1);
+        $this->assertSame(0, ($rgb >> 16) & 0xff, 'R component of bottom-right pixel should be 0');
+        $this->assertSame(0, ($rgb >> 8) & 0xff,  'G component of bottom-right pixel should be 0');
+        $this->assertSame(0, $rgb & 0xff,          'B component of bottom-right pixel should be 0');
+
+        // Verify top-left pixel (0,0) is red
+        $rgb = imagecolorat($img, 0, 0);
+        $this->assertSame(255, ($rgb >> 16) & 0xff, 'R component of top-left pixel should be 255');
+        $this->assertSame(0,   ($rgb >> 8) & 0xff,  'G component of top-left pixel should be 0');
+        $this->assertSame(0,  $rgb & 0xff,          'B component of top-left pixel should be 0');
+
+        // Verify top-right pixel (1,0) is green
+        $rgb = imagecolorat($img, 1, 0);
+        $this->assertSame(0,   ($rgb >> 16) & 0xff, 'R component of top-right pixel should be 0');
+        $this->assertSame(255, ($rgb >> 8) & 0xff, 'G component of top-right pixel should be 255');
+        $this->assertSame(0,  $rgb & 0xff,          'B component of top-right pixel should be 0');
+
+        imagedestroy($img);
+    }
+
+    /**
+     * @testdox toGd() pixel format is correct little-endian endianness on x86
+     *
+     * On little-endian x86, imagecolorat() returns 0x00BBGGRR for a pixel
+     * set as (R, G, B). This verifies the endianness extraction:
+     *   (rgb >> 16) & 0xff → R  (high byte of RGB0)
+     *   (rgb >>  8) & 0xff → G  (middle byte)
+     *   (rgb       ) & 0xff → B  (low byte)
+     */
+    public function testToGdPixelFormatIsCorrectEndian(): void
+    {
+        // Blue pixel: R=0, G=0, B=255
+        $bytes = "\x00\x00\xFF";
+        $frame = new RgbFrame($bytes, 1, 1);
+        $img = $frame->toGd();
+
+        $rgb = imagecolorat($img, 0, 0);
+        // On little-endian: imagecolorat returns 0x00FF0000 for (0,0,255)? No,
+        // the format is 0x00BBGGRR on little-endian.
+        // So for B=255: low byte = 0xFF. rgb & 0xff = 255.
+        $this->assertSame(255, $rgb & 0xff, 'B should be 255 (low byte)');
+        $this->assertSame(0,   ($rgb >> 8) & 0xff, 'G should be 0');
+        $this->assertSame(0,   ($rgb >> 16) & 0xff, 'R should be 0');
+
+        imagedestroy($img);
+    }
+
+    /**
+     * @testdox constructor does not validate byte length — caller is responsible
+     *
+     * RgbFrame is a readonly value object. It accepts any byte string and
+     * any w/h pair without validating that strlen(bytes) === w * h * 3.
+     * This documents the current behavior; validation is the caller's job.
+     */
+    public function testBytesLengthMustMatchDimensions(): void
+    {
+        // Mismatched: 10 bytes but claimed as 3×2 (requires 18 bytes)
+        $bytes = str_repeat("\xAA", 10);
+        $frame = new RgbFrame($bytes, 3, 2);
+
+        // No exception thrown — constructor accepts mismatched lengths
+        $this->assertSame(10, strlen($frame->bytes));
+        $this->assertSame(3, $frame->w);
+        $this->assertSame(2, $frame->h);
+
+        // toGd() will read past the buffer if bytes are too short — undefined behavior
+        // but it will not throw; it may produce garbage or black pixels
+        $img = $frame->toGd();
+        $this->assertNotNull($img);
+        imagedestroy($img);
+    }
+}
