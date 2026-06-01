@@ -339,3 +339,11 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - 4 files changed, 16 insertions(+), 13 deletions(-)
   - Updated AGENTS.md, CONTRIBUTING.md, README.md, docs/MATCHUPS.md
   - Commit SHA: eaafed14
+
+- [2026-06-01 | step-39 | shipper] docs: public site for 8 new shared foundation libs — MERGED PR #919:
+  - Branch ai/docs-site merged to master
+  - 17 files changed, 47 insertions(+)
+  - docs/repo_map_update.md: +47 lines status section for 8 new shared foundation libs
+  - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, candy-fuzzy, candy-input, candy-layout, candy-mouse, candy-testing)
+  - media/icons/: 8 new placeholder PNG icons (same 8 libs)
+  - Commit SHA: 218695bd
