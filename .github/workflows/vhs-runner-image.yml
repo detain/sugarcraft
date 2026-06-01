@@ -1,8 +1,5 @@
 name: VHS runner image
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 # Build + publish ghcr.io/<owner>/vhs-runner. Used by vhs.yml so render
 # jobs don't need to hit GitHub release APIs (vhs / ttyd / ffmpeg) on
 # every push. Weekly rebuild picks up upstream releases without manual
@@ -29,6 +26,7 @@ permissions:
   packages: write
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/vhs-runner
 
 jobs:

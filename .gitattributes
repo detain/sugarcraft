@@ -1,0 +1,11 @@
+# Test fixtures are byte-exact snapshot data. Never apply EOL conversion:
+# on Windows checkouts (core.autocrlf=true on GitHub's windows runners) LF
+# would be rewritten to CRLF, corrupting the bytes so golden comparisons
+# fail against the renderer's LF output. See candy-shine / sugar-table
+# GoldenRenderTest + RendererTest.
+**/tests/fixtures/** -text
+
+# Belt-and-suspenders for snapshot files wherever they live.
+*.golden -text
+*.ansi   -text
+*.tape   -text
