@@ -94,19 +94,21 @@ final class Player implements Model
      * Probes the video to get FPS and dimensions, creates the appropriate
      * decoder, and returns a Player in the paused state at frame 0.
      *
-     * @param string $videoPath Path to the video file (mp4, gif, avi, etc.)
-     * @param int    $cellsW    Target terminal cell width
-     * @param int    $cellsH    Target terminal cell height
+     * @param string     $videoPath    Path to the video file (mp4, gif, avi, etc.)
+     * @param int       $cellsW       Target terminal cell width
+     * @param int       $cellsH       Target terminal cell height
+     * @param float|null $fpsOverride FPS override (null = auto from probe)
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null): self
     {
         $source = VideoSource::probe($videoPath);
 
-        // FPS from probe, default 24 if not available.
-        $fps = $source->fps > 0.0 ? $source->fps : 24.0;
+        // FPS from probe, default 24 if not available. Use override when set.
+        $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
 
         // Create decoder for the source.
-        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps);
+        // Mode is HalfBlock at startup; seek recreates decoder with current mode.
+        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, Mode::HalfBlock);
 
         $sync = new Sync($fps, 1.0);
 
@@ -365,9 +367,14 @@ final class Player implements Model
     /**
      * Render the current frame to an ANSI string.
      *
-     * For delta-capable modes (Ascii/Ansi256/TrueColor/HalfBlock), uses
-     * candy-buffer Buffer::diff() + DiffEncoder to emit only changed cells.
-     * For other modes, delegates to FrameRenderer directly.
+     * For Ascii/TrueColor/HalfBlock: uses candy-buffer Buffer::diff() +
+     * DiffEncoder to emit only changed cells (delta repaint).
+     *
+     * For Ansi256: delegates directly to AsciiRenderer (bypasses buffer/diff
+     * path) because DiffEncoder can only emit truecolor SGR sequences
+     * (38;2;R;G;B) and we need ANSI 256 sequences (38;5;N).
+     *
+     * For Sixel/Kitty/Iterm2: delegates directly to renderer (no cell diff).
      *
      * @return string
      */
@@ -381,9 +388,11 @@ final class Player implements Model
             return $this->renderPlaceholder();
         }
 
-        // Check if mode benefits from delta repaint.
-        if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2) {
-            // Image protocol modes: delegate directly to renderer (no cell diff).
+        // Modes that bypass buffer/diff path (delta repaint not possible
+        // or not beneficial):
+        // - Sixel/Kitty/Iterm2: image protocols, full-frame renders
+        // - Ansi256: DiffEncoder emits truecolor (38;2;), not ANSI 256 (38;5;)
+        if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
             return $this->renderDirect($frame);
         }
 
@@ -509,25 +518,17 @@ final class Player implements Model
     }
 
     /**
-     * Convert RGB to ANSI 256-color 0xRRGGBB index encoded as 0xRRGGBB.
+     * Convert RGB to a 0xRRGGBB integer.
      *
-     * Uses the same Color::toAnsi256Index() approach as the existing
-     * AsciiRenderer — but for a Style fg we encode it as 0xRRGGBB
-     * since that's what Style accepts (not the raw index).
-     * For TrueColor we use the full 0xRRGGBB directly.
+     * Note: For Ansi256 mode, rendering bypasses the buffer/diff path
+     * entirely via renderDirect() → AsciiRenderer, which emits the
+     * correct 38;5;N SGR sequences using Color::toAnsi256Index().
+     * This method is no longer used for Ansi256 rendering output.
+     *
+     * @deprecated Ansi256 rendering uses renderDirect() path instead.
      */
     private function toAnsi256Rgb(int $r, int $g, int $b): int
     {
-        $color = new Color($r, $g, $b);
-        $idx = $color->toAnsi256Index();
-        // Encode index as 0xRRGGBB-like value for consistency.
-        // The Style fg field accepts 0xRRGGBB; we store the index
-        // as a compact form so the DiffEncoder's emitSgr can handle it.
-        // Actually Style fg is used as raw RGB in emitSgr (via 38;2;R;G;B).
-        // For Ansi256 we'd need 38;5;N. Let's simplify: use TrueColor
-        // path for everything except Ascii (Style fg=null = no SGR).
-        // For Ansi256, we fall back to TrueColor coloring to avoid
-        // complexity in the cell-level diff encoding.
         return (($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF);
     }
 
@@ -577,7 +578,8 @@ final class Player implements Model
         // Backward seek: re-open the decoder and skip forward to target.
         // This is O(n) but necessary since decoders are forward-only.
         if ($targetIndex < $this->frameIndex) {
-            $newDecoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps);
+            // Pass current mode so decoder outputs at correct resolution.
+            $newDecoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode);
 
             // Skip frames to reach target (decoder starts at frame 0).
             for ($i = 0; $i < $targetIndex; $i++) {

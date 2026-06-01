@@ -4,13 +4,15 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Decode;
 
+use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
 
 /**
  * Ffmpeg-based video decoder using proc_open with a raw rgb24 pipe.
  *
- * One frame = exactly cellsW * cellsH * 2 * 3 bytes (half-block mode:
- * ffmpeg scales to cellsH*2 rows so each terminal cell maps to 2 source rows).
+ * For HalfBlock mode: ffmpeg scales to cellsH*2 rows so each terminal cell
+ * maps to 2 source rows. One frame = cellsW * cellsH * 2 * 3 bytes.
+ * For other modes: ffmpeg scales to cellsH rows. One frame = cellsW * cellsH * 3 bytes.
  * All CLI args are passed via array to proc_open (no shell injection).
  * Partial frames at end-of-stream are silently discarded.
  *
@@ -31,16 +33,21 @@ final class FfmpegDecoder implements Decoder
     private int $cellsW = 0;
     private int $cellsH = 0;
     private int $frameBytes = 0;
+    private int $frameH = 0;
 
     /**
      * @inheritDoc
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
     {
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
-        // Half-block mode: 2 rows per cell, so H = cellsH * 2
-        $this->frameBytes = $cellsW * $cellsH * 2 * 3;
+
+        // HalfBlock mode: 2 rows per cell, so ffmpeg scales to cellsH*2.
+        // Other modes: ffmpeg scales to cellsH.
+        $isHalfBlock = $mode === null || $mode === Mode::HalfBlock;
+        $this->frameH = $isHalfBlock ? $cellsH * 2 : $cellsH;
+        $this->frameBytes = $cellsW * $this->frameH * 3;
 
         $ffmpegPath = Probe::ffmpeg();
         if ($ffmpegPath === null) {
@@ -48,19 +55,19 @@ final class FfmpegDecoder implements Decoder
         }
 
         // Build command as array — never a shell string.
-        // Each element is individually escaped for safety.
+        // No escaping needed; proc_open passes args directly with no shell.
         $cmd = [
             $ffmpegPath,
             '-hide_banner',
             '-loglevel', 'error',
-            '-i', escapeshellarg($source),
+            '-i', $source,
             '-f', 'rawvideo',
             '-pix_fmt', 'rgb24',
             '-vf', sprintf(
                 'fps=%s,scale=%d:%d:flags=bilinear',
                 (string) $fps,
                 $cellsW,
-                $cellsH * 2
+                $this->frameH
             ),
             '-',
         ];
@@ -120,7 +127,7 @@ final class FfmpegDecoder implements Decoder
             return null;
         }
 
-        return new RgbFrame($frameBytes, $this->cellsW, $this->cellsH * 2);
+        return new RgbFrame($frameBytes, $this->cellsW, $this->frameH);
     }
 
     /**

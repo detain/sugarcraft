@@ -86,6 +86,38 @@ final class PlayerTest extends TestCase
         $this->assertTrue($this->getPlayerProperty($player, 'paused'));
     }
 
+    /**
+     * @testdox Player::openForTest stores the fps parameter in the player
+     *
+     * The fps is stored as a public readonly property so tests can access
+     * it directly without reflection.
+     */
+    public function testOpenForTestStoresFps(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 60.0);
+
+        // fps is a public readonly property on Player
+        $this->assertSame(60.0, $player->fps);
+    }
+
+    /**
+     * @testdox Player::openForTest stores different fps values correctly
+     */
+    public function testOpenForTestStoresVariousFpsValues(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+
+        $player24 = Player::openForTest($decoder, 24.0);
+        $this->assertSame(24.0, $player24->fps);
+
+        $player30 = Player::openForTest($decoder, 30.0);
+        $this->assertSame(30.0, $player30->fps);
+
+        $player5994 = Player::openForTest($decoder, 59.94);
+        $this->assertSame(59.94, $player5994->fps);
+    }
+
     // -------------------------------------------------------------------------
     // Space key toggles pause
     // -------------------------------------------------------------------------
