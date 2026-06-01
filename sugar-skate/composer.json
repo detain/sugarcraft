@@ -26,6 +26,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-fuzzy": "dev-master",
         "ext-sqlite3": "*"
     },
     "require-dev": {
@@ -71,6 +72,13 @@
         {
             "type": "path",
             "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-fuzzy",
             "options": {
                 "symlink": true
             }

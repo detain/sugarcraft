@@ -17,6 +17,7 @@ declare(strict_types=1);
  */
 namespace SugarCraft\Skate;
 
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 use SugarCraft\Skate\Lang;
 
 /**
@@ -136,6 +137,44 @@ final class Store
     {
         [$dbName, $entryKey] = $this->parseKey($key);
         return $this->database($dbName)->get($entryKey);
+    }
+
+    /**
+     * Filter entries using fuzzy search on keys.
+     *
+     * Uses Smith-Waterman local alignment to score and rank entries
+     * by similarity to the query string. Returns entries with score > 0,
+     * sorted by score descending.
+     *
+     * @param string      $query  Fuzzy search query
+     * @param string|null $dbName Database to search. Default = the store's default database.
+     * @return list<Entry> Filtered, ranked entries
+     */
+    public function fuzzyFilter(string $query, ?string $dbName = null): array
+    {
+        if ($query === '') {
+            return [];
+        }
+
+        $db = $this->database($dbName ?? $this->defaultDb);
+        $matcher = new SmithWatermanMatcher();
+
+        // Collect all keys and map to entries
+        $keysToEntries = [];
+        $keys = [];
+        foreach ($db->list() as $entry) {
+            if ($entry instanceof Entry) {
+                $keys[] = $entry->key;
+                $keysToEntries[$entry->key] = $entry;
+            }
+        }
+
+        $results = $matcher->matchAll($query, $keys);
+
+        return array_map(
+            static fn($result) => $keysToEntries[$result->haystack],
+            $results
+        );
     }
 
     /**

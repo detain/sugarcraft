@@ -6,6 +6,8 @@ namespace SugarCraft\Wishlist;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\RawMode;
+use SugarCraft\Fuzzy\MatchResult;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
 
 /**
  * Tiny terminal picker — renders a numbered list of {@see Endpoint}s,
@@ -28,6 +30,7 @@ class Picker
     protected $out;
     private string $filter = '';
     private int $cursor = 0;
+    private SmithWatermanMatcher $matcher;
 
     /**
      * @param resource|null $in
@@ -37,6 +40,7 @@ class Picker
     {
         $this->in  = $in  ?? STDIN;
         $this->out = $out ?? STDOUT;
+        $this->matcher = new SmithWatermanMatcher();
     }
 
     /**
@@ -66,7 +70,7 @@ class Picker
                         if ($matches === []) {
                             continue 2;
                         }
-                        return $matches[$this->cursor];
+                        return $matches[$this->cursor]['endpoint'];
                     case 'j':
                     case "\x1b[B":
                         if ($this->cursor < count($matches) - 1) {
@@ -99,26 +103,50 @@ class Picker
 
     /**
      * @param list<Endpoint> $endpoints
-     * @return list<Endpoint>
+     * @return list<array{endpoint: Endpoint, result: ?MatchResult}>
      */
     private function filterMatches(array $endpoints): array
     {
         if ($this->filter === '') {
-            return $endpoints;
+            return array_map(
+                fn(Endpoint $e) => ['endpoint' => $e, 'result' => null],
+                $endpoints
+            );
         }
-        $needle = strtolower($this->filter);
+
+        // Score each candidate; SmithWatermanMatcher returns null for no match
+        $results = $this->matcher->matchAll(
+            $this->filter,
+            array_map(
+                fn(Endpoint $e) => $e->name . ' ' . $e->host . ' ' . ($e->user ?? ''),
+                $endpoints
+            )
+        );
+
+        // Build a map from haystack string to MatchResult for quick lookup
+        $resultMap = [];
+        foreach ($results as $r) {
+            $resultMap[$r->haystack] = $r;
+        }
+
+        // Walk endpoints in original order, attaching MatchResult
         $out = [];
         foreach ($endpoints as $e) {
-            $hay = strtolower($e->name . ' ' . $e->host . ' ' . ($e->user ?? ''));
-            if (str_contains($hay, $needle)) {
-                $out[] = $e;
-            }
+            $hay = $e->name . ' ' . $e->host . ' ' . ($e->user ?? '');
+            $out[] = ['endpoint' => $e, 'result' => $resultMap[$hay] ?? null];
         }
-        return $out;
+
+        // Filter to only matched (score > 0) and sort by score descending
+        $matched = array_filter($out, static fn(array $r) => $r['result'] !== null);
+        usort($matched, static fn(array $a, array $b) =>
+            $b['result']->score <=> $a['result']->score
+        );
+
+        return $matched;
     }
 
     /**
-     * @param list<Endpoint> $matches
+     * @param list<array{endpoint: Endpoint, result: ?MatchResult}> $matches
      */
     private function draw(array $matches): void
     {
@@ -128,15 +156,52 @@ class Picker
         if ($matches === []) {
             fwrite($this->out, "  (no matches)\r\n");
         }
-        foreach ($matches as $i => $e) {
+        foreach ($matches as $i => $record) {
+            $e = $record['endpoint'];
             $marker = $i === $this->cursor ? Ansi::sgr(1, 36) . '▸' . Ansi::reset() . ' ' : '  ';
-            $line   = $e->displayLine();
+            $line = $this->highlightLine($e->displayLine(), $record['result']);
             if ($e->description !== null && $e->description !== '') {
                 $line .= '  ' . Ansi::sgr(Ansi::FAINT) . $e->description . Ansi::reset();
             }
             fwrite($this->out, "{$marker}{$line}\r\n");
         }
         fwrite($this->out, "\r\n  ↑/↓ select · Enter connect · Esc quit · type to filter\r\n");
+    }
+
+    /**
+     * Apply bold+cyan highlighting to matched character positions in a display line.
+     *
+     * Re-matches the display line against the filter needle to get fresh
+     * matched indices, then applies ANSI highlighting to those positions.
+     */
+    private function highlightLine(string $line, ?MatchResult $result): string
+    {
+        if ($result === null) {
+            return $line;
+        }
+
+        // Re-match against the display line to get indices aligned with it
+        $dispResult = $this->matcher->match($result->needle, $line);
+        if ($dispResult === null || $dispResult->matchedIndices === []) {
+            return $line;
+        }
+
+        $matchSet = array_flip($dispResult->matchedIndices);
+
+        // Walk the line as grapheme clusters and wrap matched ones in ANSI bold+cyan
+        $highlighted = '';
+        $idx = 0;
+        preg_match_all('/\X/u', $line, $matches);
+        foreach ($matches[0] as $grapheme) {
+            if (isset($matchSet[$idx])) {
+                $highlighted .= Ansi::sgr(1, 36) . $grapheme . Ansi::reset();
+            } else {
+                $highlighted .= $grapheme;
+            }
+            $idx++;
+        }
+
+        return $highlighted;
     }
 
     private function readKey(): string
