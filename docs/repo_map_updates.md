@@ -347,3 +347,14 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - docs/img/icons/: 8 new placeholder PNG icons (candy-ansi, candy-async, candy-buffer, candy-fuzzy, candy-input, candy-layout, candy-mouse, candy-testing)
   - media/icons/: 8 new placeholder PNG icons (same 8 libs)
   - Commit SHA: 218695bd
+
+- [2026-06-01 | step-40 | shipper] ci: codecov + vhs.yml audit for 8 new shared foundation libs — MERGED PR #920:
+  - Branch ai/docs-ci merged to master
+  - All acceptance criteria already met — NO source code changes
+  - codecov.yml: 8 new flags already present
+  - vhs.yml: all=(...) already has all 31-36 visual libs; 8 new foundations are non-visual (no tapes)
+  - scripts/affected-libs.php --all: auto-discovers all 8 new libs
+  - tools/check-path-repos.php: exits 0
+  - .github/workflows/tests.yml: file does not exist (SVN creds item is N/A — pre-existing state)
+  - Empty commit created to document verification: 52aeb8dd
+  - Commit SHA: 854062c9 (merge commit)
