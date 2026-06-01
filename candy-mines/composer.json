@@ -28,11 +28,14 @@
     ],
     "require": {
         "php": ">=8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-mouse": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.0",
+        "sugarcraft/candy-testing": "dev-master"
     },
     "autoload": {
         "psr-4": {
@@ -85,6 +88,27 @@
         {
             "type": "path",
             "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-mouse",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-testing",
             "options": {
                 "symlink": true
             }

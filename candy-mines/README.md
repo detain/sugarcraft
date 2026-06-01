@@ -67,6 +67,10 @@ The first reveal is always safe — mines are placed only after click 1, with th
 
 ![flagging](.vhs/flagging.gif)
 
+## Shared foundations
+
+The minefield renderer builds output via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer) — each cell is zone-tagged via `Mark::zone("cell:$row:$col", $glyph)` so `Scanner::hit($x, $y)` maps directly to a cell address. `Renderer::resolveClick()` bridges mouse coordinates to row/col. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (first-click safe area, cascade reveal, win overlay).
+
 ## Test
 
 ```bash

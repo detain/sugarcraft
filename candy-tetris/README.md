@@ -170,3 +170,7 @@ VsRenderer   ──►    split-screen view for VS mode
 Rotation/
   SrsKickTable  ──►  official SRS kick-offset tables (J/L/S/T/Z + I piece)
 ```
+
+## Shared foundations
+
+All game renderers build their playfield and score panel via [candy-buffer](https://github.com/detain/sugarcraft/tree/master/candy-buffer). The 10×20 playfield is a canonical `Buffer` cell grid; per-tetromino background style and ghost-piece foreground style are applied per-cell. `Buffer::withRegion` composites the score panel over the playfield interior. Snapshot tests via [candy-testing](https://github.com/detain/sugarcraft/tree/master/candy-testing) pin canonical game states (starting board, T-spin completion, pause overlay).
