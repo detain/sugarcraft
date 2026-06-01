@@ -59,6 +59,17 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Path-repo closure: clean (55 libs scanned)
   - Branch: ai/golden-file-rollout, PR #907
 
+- [2026-05-31 | step-29 | coder] sugar-glow + candy-wish: TerminalProbe migration:
+  - Found NEITHER lib had actual capability probing code (contrary to step-29's §387.9 diagnosis)
+  - sugar-glow: added `terminalSupportsColor()` private static method using TerminalProbe with try/catch graceful fallback (returns true on failure)
+  - sugar-wish: no code changes needed; already clean for capability probing; SSH session metadata via getenv('TERM', ...) is correctly NOT capability probing
+  - candy-wish: added candy-palette to composer.json; then Fixer removed it (dead dep — never consumed in src/)
+  - sugar-glow: added 3 tests covering terminalSupportsColor() (color/NoColor/graceful-failure paths)
+  - Tests: sugar-glow 71 pass, candy-wish 144 pass
+  - Coverage: sugar-glow 83.25%→84.50% overall, RenderCommand 73.02%→77.27% lines (gap is pre-existing infrastructure: FileWatcher 33%)
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/probe-consumers, PR #908
+
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
   - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)
