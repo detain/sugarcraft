@@ -200,6 +200,14 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
 
 ## Active Items
 
+- [2026-05-31 | step-32 | coder] candy-tetris + candy-mines: adopt candy-buffer + candy-mouse + candy-testing:
+  - Added `sugarcraft/candy-buffer` + `sugarcraft/candy-mouse` to require + path-repos in candy-tetris/composer.json and candy-mines/composer.json; `sugarcraft/candy-testing` (dev) added to both
+  - candy-tetris/Renderer.php: playfield interior refactored to Buffer (10×20 cells) with per-tetromino background style (block) and faint foreground style (ghost); Sprinkles border wraps Buffer::toAnsi() interior
+  - candy-mines/Renderer.php: minefield refactored to Buffer; each cell zone-tagged via `Mark::zone("cell:$row:$col", $glyph)`; added `renderWithScanner()` returning (string, Scanner) pair and `resolveClick()` for mouse→cell mapping
+  - 208 tests pass (117 tetris + 91 mines), 2085 assertions, path-repo closure clean (55 libs scanned)
+  - Branch: ai/games-shared
+  - Note: snapshot tests via candy-testing are the TestEngineer's job per role file; CALIBER_LEARNINGS updates are the Scribe's job
+
 - [2026-05-31 | step-30 | coder] Ecosystem audit: adoption opportunity matrix for 19 remaining libs:
   - Created `docs/repo_map_update_followups.md` — structured per-lib opportunity matrix covering all SugarCraft libs NOT migrated in steps 9-29.
   - 19 remaining libs audited: candy-pty, candy-tetris, candy-mines, candy-flip, candy-kit, candy-zone, sugar-skate, sugar-wishlist, sugar-stash, sugar-calendar, sugar-toast, sugar-tick, sugar-post, candy-serve, honey-bounce, honey-flap, candy-metrics, candy-log, candy-mold.
