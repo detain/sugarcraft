@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Serve\Git;
 
+use SugarCraft\Async\Subscription;
+use SugarCraft\Async\Subscriptions;
 use SugarCraft\Serve\{AccessControl, Config, Repo, User};
 
 /**
@@ -40,9 +42,13 @@ final class GitDaemon
     /** Client connections */
     private array $clients = [];
 
+    /** Subscriptions for graceful shutdown */
+    private Subscriptions $subscriptions;
+
     public function __construct(Config $config)
     {
         $this->config = $config;
+        $this->subscriptions = new Subscriptions();
     }
 
     // -------------------------------------------------------------------------
@@ -73,6 +79,24 @@ final class GitDaemon
         foreach ($users as $user) {
             $this->users[$user->username] = $user;
         }
+    }
+
+    /**
+     * Register a subscription for cleanup on graceful shutdown.
+     *
+     * @param Subscription $subscription
+     */
+    public function addSubscription(Subscription $subscription): void
+    {
+        $this->subscriptions->add($subscription);
+    }
+
+    /**
+     * Unregister all subscriptions (used after shutdown).
+     */
+    public function clearSubscriptions(): void
+    {
+        $this->subscriptions->unsubscribe();
     }
 
     // -------------------------------------------------------------------------
@@ -618,6 +642,9 @@ final class GitDaemon
 
     private function cleanup(): void
     {
+        // Unsubscribe all subscriptions (graceful shutdown of background tasks)
+        $this->subscriptions->unsubscribe();
+
         // Close all client connections
         foreach ($this->clients as $client) {
             @\socket_close($client['socket']);
@@ -658,5 +685,10 @@ final class GitDaemon
     public function activeConnections(): int
     {
         return \count($this->clients);
+    }
+
+    public function subscriptions(): Subscriptions
+    {
+        return $this->subscriptions;
     }
 }
