@@ -199,20 +199,23 @@ function should_force_all(array $changedFiles): bool
 }
 
 /**
- * GitHub Actions base-axes matrix. Cross-product is implicit; empty `lib`
- * collapses the whole matrix to 0 cells (no placeholder check_runs).
+ * GitHub Actions base-axes matrix. Cross-product is implicit.
+ *
+ * Empty case returns `{include: []}`, NOT `{php: [], lib: []}`. An empty
+ * matrix *dimension* (`php: []`) is a hard error — Actions aborts the job
+ * with "Matrix vector 'php' does not contain any values", which marks the
+ * whole run failed even though no cell ran (seen on narrow change-sets where
+ * phpstan/macos resolve to zero libs). An empty `include` list, by contrast,
+ * collapses to zero cells with zero check_runs and no error.
  *
  * @param list<string> $libs
  * @param list<string> $versions
- * @return array{php:list<string>, lib:list<string>}
+ * @return array{php:list<string>, lib:list<string>}|array{include:list<array<string,string>>}
  */
 function php_lib_matrix(array $libs, array $versions): array
 {
-    // Don't broadcast the PHP axis when there are no libs — leaves both
-    // axes empty so the matrix collapses regardless of which axis Actions
-    // multiplies first.
     if ($libs === []) {
-        return ['php' => [], 'lib' => []];
+        return ['include' => []];
     }
     return ['php' => $versions, 'lib' => $libs];
 }
@@ -343,7 +346,9 @@ $output = [
     'macos_matrix'    => php_lib_matrix($macosLibs,   MACOS_PHP_VERSIONS),
 ];
 
-$cells = static fn (array $m) => count($m['lib']) * count($m['php']);
+$cells = static fn (array $m) => isset($m['lib'], $m['php'])
+    ? count($m['lib']) * count($m['php'])
+    : count($m['include'] ?? []);
 
 fwrite(STDERR, sprintf(
     "affected-libs: force_all=%s, changed=%d, affected=%d/%d, "
