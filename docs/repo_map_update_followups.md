@@ -99,6 +99,8 @@ The 8 shared packages:
 
 **Notes:** candy-zone is a mouse zone-tracking layer. It already has zone concepts similar to candy-mouse but uses a custom Manager. Adopting candy-mouse would standardize the Zone hit-testing API.
 
+**Step 37 status:** ⚠️ DEFERRED — candy-zone uses its own APC-marker encoding with manual grapheme-width iteration in Manager::scan(). Adopting candy-mouse for hit-testing is not a drop-in (different MouseMsg types, incompatible Zone abstractions). Buffer for mark() output would replace simple string concatenation with APC markers — not a natural fit. Revisit if zone tracking API is refactored.
+
 ---
 
 ### sugar-skate
@@ -249,6 +251,8 @@ The 8 shared packages:
 
 **Notes:** candy-metrics has async counter/gauge wrappers that use manual ReactPHP Deferred. Adopting candy-async would reduce boilerplate. Metrics rendering could use Buffer for diff-friendly output.
 
+**Step 37 status:** ⚠️ DEFERRED — source inspection shows AsyncCounter/AsyncGauge do NOT use manual Deferred (they call synchronous \Closure() callbacks at observe() time). Backend is a pull-based interface; backends (InMemory, Prometheus, StatsD, JSON) are synchronous writers with no string-rendering loop for Buffer to simplify. No minimal adoption found; revisit if async metric collection patterns are introduced.
+
 ---
 
 ### candy-log
@@ -260,6 +264,8 @@ The 8 shared packages:
 
 **Notes:** candy-log is a logging library. Async hook dispatch is the primary opportunity — non-blocking log delivery to multiple hooks (especially network-based ones like StatsdBackend). Buffer adoption is lower priority.
 
+**Step 37 status:** ⚠️ DEFERRED — async hook dispatch (M effort) requires redesigning Hook interface to return futures and wrapping all backends; Buffer adoption touches all formatters. Both are larger than "minimal". Revisit in dedicated async-logging refactor.
+
 ---
 
 ### candy-mold
@@ -270,6 +276,8 @@ The 8 shared packages:
 | candy-buffer | Counter.php renders via string — Buffer would give formatted output with diff | S |
 
 **Notes:** candy-mold is a minimal counter utility. Very small surface area — low-effort adoption candidate for both candy-async and candy-buffer.
+
+**Step 37 status:** ⚠️ DEFERRED — candy-mold is a TUI demo app (Counter Model driven by ↑/↓ keys), NOT a metric/increment utility. The followups description was a mischaracterization. No viable candy-async or candy-buffer adoption path exists for this template project.
 
 ---
 
