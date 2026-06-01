@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Tests;
 
 use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Render\Mode;
 
 /**
  * A Decoder that yields a fixed sequence of synthetic RgbFrame objects.
@@ -32,7 +33,13 @@ final class FakeDecoder implements Decoder
         $this->frames = $frames;
     }
 
-    public function open(string $source, int $cellsW, int $cellsH, float $fps): void
+    /**
+     * @inheritDoc
+     *
+     * The $mode parameter is accepted for interface compatibility but ignored
+     * since FakeDecoder always outputs its predetermined frame sequence.
+     */
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
     {
         $this->opened = true;
         $this->everOpened = true;

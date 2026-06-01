@@ -6,6 +6,7 @@ namespace SugarCraft\Reel\Decode;
 
 use SugarCraft\Flip\Decoder as FlipDecoder;
 use SugarCraft\Flip\Frame as FlipFrame;
+use SugarCraft\Reel\Render\Mode;
 
 /**
  * Decoder implementation that wraps candy-flip's pure-PHP GIF decoder.
@@ -32,8 +33,12 @@ final class GifDecoder implements Decoder
 
     /**
      * @inheritDoc
+     *
+     * The $mode parameter is accepted for interface compatibility but ignored:
+     * GIF decoding via candy-flip always outputs at cell resolution regardless
+     * of the rendering mode.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
     {
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;

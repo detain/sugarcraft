@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Decode;
 
+use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
 
 /**
@@ -23,9 +24,10 @@ final class DecoderFactory
      * @param int $cellsW Target width in terminal cells
      * @param int $cellsH Target height in terminal cells
      * @param float $fps Target frames per second
+     * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
      * @return Decoder
      */
-    public static function create(string $source, int $cellsW, int $cellsH, float $fps): Decoder
+    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): Decoder
     {
         $isGif = preg_match('/\.gif$/i', $source) === 1;
 
@@ -38,7 +40,7 @@ final class DecoderFactory
             $decoder = new GifDecoder();
         }
 
-        $decoder->open($source, $cellsW, $cellsH, $fps);
+        $decoder->open($source, $cellsW, $cellsH, $fps, $mode);
         return $decoder;
     }
 }

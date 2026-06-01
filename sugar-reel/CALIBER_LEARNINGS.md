@@ -13,7 +13,7 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 
 - **[pattern:chunk-framing-edge-case]** `fread()` can return fewer bytes than requested (short read), especially when the subprocess is flushing at end of stream. The loop `while ($bytesRead < $frameBytes) { $chunk = fread(...); ... }` accumulates until a full frame is available, and discards incomplete last frames.
 
-- **[pattern:proc-open-array-form]** Passing `$cmdArray` directly to `proc_open` (not `implode(' ', $cmdArray)`) avoids shell injection and is the secure pattern per video_plan.md. Each element is individually escaped via `escapeshellarg()`.
+- **[pattern:proc-open-array-form]** Passing `$cmdArray` directly to `proc_open` (not `implode(' ', $cmdArray)`) avoids the shell entirely — no element needs `escapeshellarg()`. Raw strings go directly as argv; the shell is bypassed. Use `implode(' ', $cmdArray)` + `escapeshellarg()` only when a shell string is required.
 
 - **[pattern:gif-frame-size]** `FlipDecoder::decode()` already does area-average downsampling internally; `GifDecoder` receives frames at `cellsW × cellsH` (not `cellsH * 2` — that scaling is specific to the half-block ffmpeg path where ffmpeg scales to `cellsH * 2` rows so each terminal cell maps to 2 source rows).
 

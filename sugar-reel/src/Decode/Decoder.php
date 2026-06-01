@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Reel\Decode;
 
+use SugarCraft\Reel\Render\Mode;
+
 /**
  * Interface for video decoders that produce RgbFrame objects.
  *
@@ -18,10 +20,11 @@ interface Decoder
      *
      * @param string $source Path to the video source (mp4, avi, gif, etc.)
      * @param int $cellsW Target width in terminal cells
-     * @param int $cellsH Target height in terminal cells (half-block mode reads 2 rows per cell)
+     * @param int $cellsH Target height in terminal cells
      * @param float $fps Target frames per second
+     * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps): void;
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void;
 
     /**
      * Yield the next RgbFrame, or null if there are no more frames.

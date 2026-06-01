@@ -23,9 +23,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
-use SugarCraft\Reel\Player;
+use SugarCraft\Reel\Reel;
 use SugarCraft\Reel\Render\Mode;
 
 const SYNTHETIC_GIF_PATH = '/tmp/sugar-reel-synthetic.gif';
@@ -146,24 +144,16 @@ if ($pathArg === 'synthetic') {
     $path = $pathArg;
 }
 
-// ── Open player ───────────────────────────────────────────────────────────────
-
-// VideoSource::probe() and DecoderFactory::create() are called inside
-// Player::open(). They gracefully degrade when ffprobe is absent.
-$player = Player::open($path, $cols, $rows);
-
-// Override mode if explicitly requested.
-if ($mode !== null) {
-    // Player starts paused (Space to play). Mutate to set the requested mode.
-    $player = $player->mutate(['mode' => $mode]);
-}
-
-// ── Run the TEA player ─────────────────────────────────────────────────────────
-
-$options = new ProgramOptions(
-    useAltScreen: true,
-    hideCursor: true,
-);
+// ── Run the player via the Reel facade ─────────────────────────────────────────
 
 fwrite(STDERR, "SugarReel — Space=play  q=quit  m=mode  ? for help\n");
-(new Program($player, $options))->run();
+
+$reel = Reel::open($path)
+    ->withSize($cols, $rows);
+
+// Apply mode override if explicitly requested via CLI.
+if ($mode !== null) {
+    $reel = $reel->withMode($mode);
+}
+
+$reel->play();

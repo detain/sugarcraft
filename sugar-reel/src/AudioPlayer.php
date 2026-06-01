@@ -141,19 +141,19 @@ class AudioPlayer
                 $cmd[] = '-ss';
                 $cmd[] = (string)($this->startMs / 1000.0);
             }
-            $cmd[] = escapeshellarg($this->videoPath);
+            $cmd[] = $this->videoPath;
             return $cmd;
         }
 
         // Fall back to mpv.
         $mpvPath = $this->findMpv();
         if ($mpvPath !== null) {
-            $cmd = [$mpvPath, '--no-video'];
+            $cmd = [$mpvPath];
             if ($this->startMs !== null) {
                 // Numeric string from division — safe, no shell-special chars.
                 $cmd[] = '--start=' . (string)($this->startMs / 1000.0) . 's';
             }
-            $cmd[] = escapeshellarg($this->videoPath);
+            $cmd[] = $this->videoPath;
             return $cmd;
         }
 
