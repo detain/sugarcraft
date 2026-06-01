@@ -61,6 +61,11 @@ $model = new class($tree) implements Model {
         $footer = "\n\n  Selected: " . ($value ?? '—') . "  ·  q to quit\n";
         return $this->tree->view() . $footer;
     }
+
+    public function subscriptions(): ?\SugarCraft\Core\Subscriptions
+    {
+        return null;
+    }
 };
 
 (new Program($model))->run();

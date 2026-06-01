@@ -16,6 +16,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Subscriptions;
 
 final class TickMsg implements Msg
 {
@@ -52,6 +53,11 @@ final class Timer implements Model
         $m = intdiv($this->seconds % 3600, 60);
         $s = $this->seconds % 60;
         return sprintf("⏱  %02d:%02d:%02d\n\nq to quit\n", $h, $m, $s);
+    }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
     }
 }
 
