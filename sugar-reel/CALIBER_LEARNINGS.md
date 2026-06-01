@@ -20,3 +20,13 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:undersized-byte-buffer-warning-suppression]** `toGd()` clamps missing bytes to black rather than emitting `Uninitialized string offset` warnings when the byte buffer is shorter than `w*h*3`. This documents that `RgbFrame` is a trust-but-verify value object.
 
 - **[pattern:foreach-on-iterable-objects]** `foreach ($decoder as $frame)` internally calls `getIterator()`, creating a fresh generator each iteration. To iterate an existing iterator, use `foreach ($iterator as $frame)` — not `foreach ($decoder as $frame)`.
+
+- **[pattern:bt601-vs-bt709-luma]** The integer formula `(77*R + 150*G + 29*B) >> 8` used by tplay is BT.601 (SMPTE-C), not BT.709. Visually indistinguishable in practice but documented explicitly so future porters know why the spec formula differs.
+
+- **[pattern:sgr-per-cell-reset]** Each cell in `AsciiRenderer` emits `\x1b[0m` after the char to prevent color bleed into adjacent cells — important for delta-repaint rendering.
+
+- **[pattern:halfblock-cell-dimensions]** `cellDimensions(Mode::HalfBlock)` returns `[1, 2]` because each terminal cell maps to 2 source rows (the `▀` char uses top+bottom pixel). All other modes return `[1, 1]`.
+
+- **[pattern:auto-probe-ci-warnings]** `Mosaic::diagnose()` and `Probe::colorProfile()` emit PHP warnings in non-TTY (CI) environments — tests for `auto()` may show warnings but still pass. These are environmental, not bugs.
+
+- **[pattern:mosaic-delegation]** `HalfBlockRenderer` bridges `RgbFrame → ImageSource → MosaicHalfBlockRenderer`, reusing the full image rendering stack without reimplementing SGR output.
