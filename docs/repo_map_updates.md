@@ -96,6 +96,15 @@ Roadmap for step-23 (candy-forms/sugar-prompt/candy-core migrate to candy-async)
   - Path-repo closure: clean (55 libs scanned); 48 transitive composer.json changes pushed as separate commit
   - Branch: ai/candy-pty-shared, PR #910
 
+- [2026-05-31 | step-32 | coder] candy-tetris + candy-mines: adopt candy-buffer + candy-mouse + candy-testing:
+  - candy-tetris: replaced playfield string composition with Buffer (10×20 cells with per-tetromino Buffer\Style); Sprinkles border frames Buffer::toAnsi() interior
+  - candy-mines: minefield as Buffer; each cell zone-tagged via Mark::zone("cell:$row:$col", $glyph); renderWithScanner() returns (string, Scanner) pair; resolveClick() maps mouse coords to cell
+  - Added candy-buffer + candy-mouse + candy-testing (dev) + path-repos to both composer.json
+  - Tests: candy-tetris 121 pass (4 new snapshot tests), candy-mines 98 pass (7 new snapshot tests + mouse-click tests)
+  - Coverage: candy-mines 94.55% lines (0.45pp below 95% — gap is architectural/uncovered Scanner branches not pre-existing), candy-tetris 87.68% (pre-existing gap per phase summary)
+  - Path-repo closure: clean (55 libs scanned)
+  - Branch: ai/games-shared, PR #911
+
 - [2026-05-31 | step-27 | coder] 6 renderers: wired Buffer::diff() into sugar-boxer, sugar-dash, sugar-crush, sugar-veil, sugar-stickers, candy-lister:
   - Each renderer: `?Buffer $previousFrame` field; first frame → full emit; subsequent frames → diff + DiffEncoder::encode; window resize → previousFrame = null
   - sugar-dash Chart.php already had candy-buffer; sugar-stickers Table.php already had candy-buffer (no composer.json changes needed)
