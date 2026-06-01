@@ -319,4 +319,34 @@ final class RenderCommandTest extends TestCase
             unlink($tmp);
         }
     }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        RenderCommand::setColorProbeCallback(null);
+    }
+
+    public function testTerminalSupportsColorWhenProbeSaysColorCapable(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => true);
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorWhenProbeSaysNoColor(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => false);
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertFalse($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorGracefulDegradationOnProbeFailure(): void
+    {
+        RenderCommand::setColorProbeCallback(fn () => throw new \RuntimeException('probe failed'));
+        $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+        $method->setAccessible(true);
+        $this->assertTrue($method->invoke(null));
+    }
 }

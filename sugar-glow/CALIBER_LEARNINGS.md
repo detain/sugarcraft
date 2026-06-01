@@ -8,5 +8,6 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:glow]** GlamourTheme::fromJson() and ::fromFile() both return a bare `new self()` on invalid input rather than throwing. Callers receive an empty theme silently. If validation is needed, check `$theme->chroma !== []` or inspect the returned values.
 - **[pattern:assert-golden-ansi]** Use `assertGoldenAnsi` for any new `render()` test. Fixture files live in `tests/fixtures/` with a `.golden` extension. Re-record goldens with `UPDATE_GOLDENS=1 vendor/bin/phpunit` after intentional output changes. Mirrors: `docs/repo_map_step_28.md`.
 - **[pattern:glow]** GlamourTheme chroma keys are arbitrary strings (e.g., `emphasis`, `strong`, `code`) matched against token names emitted by the renderer. There is no fixed enumeration — resolve() returns `null` for unknown tokens rather than throwing.
+- **[rule:step-29]** Don't call `getenv()` or read terminfo directly for terminal capability probing — go through `\SugarCraft\Palette\Probe\TerminalProbe::run()` and handle `\Throwable` gracefully (fall back to lowest-common-denominator rendering). RenderCommand::loadInput() demonstrates the pattern with a defensive `terminalSupportsColor()` wrapper.
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
