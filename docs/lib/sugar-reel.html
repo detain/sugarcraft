@@ -56,11 +56,36 @@
     <pre class="code"><code>composer require sugarcraft/sugar-reel</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Reel\Reel;
+    <pre class="code"><code>use SugarCraft\Reel\Player;
 
-Reel::open('clip.mp4'); // playback arrives in later build steps</code></pre>
+$player = Player::open('clip.mp4', cols: 80, rows: 24);
+(new \SugarCraft\Core\Program($player))->run();</code></pre>
 
-    <p class="lede" style="margin-top: 24px;"><strong>Status:</strong> scaffold (Step 0). The facade records the source path; decoding (ffmpeg pipe + pure-PHP GIF fallback), rendering, playback controls, and audio sync land in subsequent steps.</p>
+    <p class="lede" style="margin-top: 24px;"><strong>Status:</strong> Step 7 ✓ (final). Full implementation with ffmpeg decode pipe, pure-PHP GIF fallback via candy-flip, all rendering modes (ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2), delta repaint, seek, speed control, and a runnable example.</p>
+
+    <h3 style="margin-top: 28px;">Rendering modes</h3>
+    <table class="api-table">
+    <tr><th>Mode</th><th>Description</th><th>Terminal</th></tr>
+    <tr><td>ascii</td><td>Grayscale luminance ramp</td><td>Any</td></tr>
+    <tr><td>ansi256</td><td>256-color cube + grey ramp</td><td>256-color</td></tr>
+    <tr><td>truecolor</td><td>24-bit RGB truecolor</td><td>24-bit</td></tr>
+    <tr><td>halfblock</td><td>24-bit half-block (▀), 2× vertical resolution</td><td>24-bit</td></tr>
+    <tr><td>sixel</td><td>Sixel graphics (DEC)</td><td>Sixel</td></tr>
+    <tr><td>kitty</td><td>Kitty graphics (DCS APC)</td><td>Kitty</td></tr>
+    <tr><td>iterm2</td><td>iTerm2 inline image (OSC 1337)</td><td>iTerm2/WezTerm</td></tr>
+    <tr><td>auto</td><td>Probe terminal, pick best available</td><td>—</td></tr>
+    </table>
+
+    <h3 style="margin-top: 28px;">Controls</h3>
+    <table class="api-table">
+    <tr><th>Key</th><th>Action</th></tr>
+    <tr><td>Space</td><td>Pause / resume</td></tr>
+    <tr><td>← →</td><td>Seek ±10 frames</td></tr>
+    <tr><td>[ ]</td><td>Speed −/+ (0.25–4.0×)</td></tr>
+    <tr><td>0–9</td><td>Seek to 0–90% of duration</td></tr>
+    <tr><td>m</td><td>Cycle rendering mode</td></tr>
+    <tr><td>q / Esc</td><td>Quit</td></tr>
+    </table>
 
     <h3 style="margin-top: 32px;">Design</h3>
     <div class="feature-grid">
@@ -84,9 +109,13 @@ Reel::open('clip.mp4'); // playback arrives in later build steps</code></pre>
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Reel</td><td>new()</td><td>Construct an empty player with no source bound</td></tr>
-<tr><td>Reel</td><td>open(path)</td><td>Open a video source by path (records path; does not decode)</td></tr>
-<tr><td>Reel</td><td>path()</td><td>The source path the player was opened with</td></tr>
+<tr><td>Player</td><td>::open(path, cellsW, cellsH)</td><td>Open a video file and return a paused Player ready for Program::run()</td></tr>
+<tr><td>Player</td><td>::openForTest(decoder, fps, ...)</td><td>Open with an injected Decoder for testing (bypasses ffprobe)</td></tr>
+<tr><td>Decoder</td><td>::open(source, cellsW, cellsH, fps)</td><td>Open a source file for decoding</td></tr>
+<tr><td>Decoder</td><td>::next()</td><td>Return the next RgbFrame or null</td></tr>
+<tr><td>RgbFrame</td><td>bytes/w/h</td><td>Raw rgb24 bytes with pixel dimensions</td></tr>
+<tr><td>Mode</td><td>::cases()</td><td>All rendering modes (Ascii/Ansi256/TrueColor/HalfBlock/Sixel/Kitty/Iterm2)</td></tr>
+<tr><td>RendererFactory</td><td>::auto(?Mode)</td><td>Auto-detect or force rendering mode</td></tr>
 </table>
   </div>
 </section>
