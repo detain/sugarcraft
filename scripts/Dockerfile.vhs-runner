@@ -1,15 +1,25 @@
 FROM php:8.3-cli-bookworm
 
+# Dev headers for the PHP extensions built below. Note the package names:
+# gd builds against libpng/libjpeg/freetype (NOT libgd-dev), mbstring needs
+# libonig-dev, intl needs libicu-dev, ssh2 needs libssh2-1-dev. The earlier
+# "libmbstring-dev"/"libintl-dev" names do not exist and made apt exit 100.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
-    libgd-dev \
-    libmbstring-dev \
-    libintl-dev \
-    libcurl4-openssl-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfreetype6-dev \
+    libonig-dev \
+    libicu-dev \
     libssh2-1-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install gd curl ssh2
+# curl is already bundled+enabled in php:8.3-cli, so it is not re-installed
+# here. ssh2 is a PECL extension (not a core ext), hence pecl install + enable.
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j"$(nproc)" gd mbstring intl \
+    && pecl install ssh2-1.4.1 \
+    && docker-php-ext-enable ssh2
 
 COPY candy-vcr/fonts/*.ttf /usr/local/share/fonts/
 RUN fc-cache -f /usr/local/share/fonts/
