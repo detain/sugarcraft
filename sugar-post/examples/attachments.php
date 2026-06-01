@@ -24,12 +24,12 @@ register_shutdown_function(fn() => @array_map('unlink', glob("{$tmpDir}/*") ?: [
 $transport = new ResendTransport(getenv('RESEND_API_KEY') ?: 're_placeholder');
 $mailer = new Mailer($transport);
 
-$email = new Email(
+$email = (new Email(
     from:    ['sender@example.com'],
     to:      ['recipient@example.com'],
     subject: 'Your invoice is attached',
     body:    "Please find your invoice attached.\n",
-)
+))
     ->withAttachment('invoice.pdf', $pdfPath)
     ->withAttachment('data.csv', $csvPath)
     ->withSignature('— SugarPost');
