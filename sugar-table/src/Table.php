@@ -1119,19 +1119,19 @@ final class Table
         if ($text === '') {
             return [];
         }
+        // grapheme_str_split is PHP 8.4+; cascade to codepoint-level splitters on
+        // 8.3 so multi-byte text (box-drawing chars, etc.) renders identically
+        // across PHP versions. Mirrors candy-core Util\Width::graphemes().
         if (\function_exists('grapheme_str_split')) {
             $result = @grapheme_str_split($text);
             if (\is_array($result)) {
                 return $result;
             }
         }
-        // Fallback: split by byte (will be wrong for multi-byte but won't crash)
-        $result = [];
-        $len = \strlen($text);
-        for ($i = 0; $i < $len; $i++) {
-            $result[] = $text[$i];
+        if (\function_exists('mb_str_split')) {
+            return \mb_str_split($text, 1, 'UTF-8');
         }
-        return $result;
+        return \preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     }
 
     /**
