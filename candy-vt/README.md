@@ -618,6 +618,17 @@ vendor/bin/phpstan analyze                                      # static analysi
 vendor/bin/php-cs-fixer fix --config=../.php-cs-fixer.dist.php  # lint + auto-fix style
 ```
 
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
 Code style is enforced by `php-cs-fixer` via the root `.php-cs-fixer.dist.php` (PSR-12 + `declare_strict_types` + `strict_param` + short array syntax). Append `--dry-run --diff` to preview without writing.
 
 ## Related

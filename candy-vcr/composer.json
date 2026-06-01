@@ -29,14 +29,7 @@
     "repositories": [
         {
             "type": "path",
-            "url": "../candy-vt",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-pty",
+            "url": "../candy-buffer",
             "options": {
                 "symlink": true
             }
@@ -50,7 +43,42 @@
         },
         {
             "type": "path",
+            "url": "../candy-layout",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-vt",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "../candy-async",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-testing",
             "options": {
                 "symlink": true
             }
@@ -58,6 +86,7 @@
     ],
     "require": {
         "php": "^8.3",
+        "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-pty": "dev-master",
         "symfony/console": "^6.4 || ^7.0",
@@ -69,6 +98,7 @@
         "phpstan/phpstan-phpunit": "^2.0",
         "friendsofphp/php-cs-fixer": "^3.65",
         "sugarcraft/candy-vt": "dev-master",
+        "sugarcraft/candy-testing": "dev-master",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {

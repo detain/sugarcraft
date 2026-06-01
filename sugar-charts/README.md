@@ -215,6 +215,17 @@ sinks. `Heatmap::withCellStyle(Style)` overlays additional attributes
 | Scatter | 🟡 single-dataset only — per-point rune/style sets pending |
 | Picture | 🟡 Sixel renderer only — Kitty graphics protocol + iTerm2 inline + half-block fallback pending |
 
+## Snapshot tests
+
+Render output is covered by golden-file snapshot tests. Fixture files live
+in `tests/fixtures/` with a `.golden` extension and are compared against
+actual ANSI byte output via `SugarCraft\Testing\Snapshot\Assertions::assertGoldenAnsi()`.
+To re-record fixtures after intentional output changes:
+
+```sh
+UPDATE_GOLDENS=1 vendor/bin/phpunit
+```
+
 ## Test
 
 ```sh
