@@ -9,7 +9,7 @@ namespace SugarCraft\Sprinkles;
  *
  * Produced by {@see StyleParser} when parsing inline `[text](fg:red)` syntax.
  */
-final readonly class Cell
+readonly class Cell
 {
     public function __construct(
         public string $rune,

@@ -11,7 +11,7 @@ use SugarCraft\Core\Util\ColorProfile;
 /**
  * A stage in a funnel chart.
  */
-final readonly class FunnelStage
+readonly class FunnelStage
 {
     public function __construct(
         public string $label,

@@ -391,7 +391,7 @@ final class MetricsGrid implements \SugarCraft\Dash\Foundation\Sizer
 /**
  * A metric card for the metrics grid.
  */
-final readonly class MetricCard
+readonly class MetricCard
 {
     public function __construct(
         public string $label,

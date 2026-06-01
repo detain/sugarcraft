@@ -7,4 +7,4 @@ namespace SugarCraft\Dash\Components\Modal\Msg;
 /**
  * Represents a negative answer (No / Cancel).
  */
-final readonly class AnsweredNoMsg extends Msg {}
+readonly class AnsweredNoMsg extends Msg {}

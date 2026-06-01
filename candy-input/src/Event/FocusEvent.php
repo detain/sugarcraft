@@ -15,7 +15,7 @@ use SugarCraft\Input\Event;
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
  */
-final readonly class FocusEvent implements Event
+readonly class FocusEvent implements Event
 {
     public function __construct(
         public bool $gained,

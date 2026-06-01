@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Layout\Grid;
 /**
  * Per-item placement options within a StackedGrid.
  */
-final readonly class ItemOptions
+readonly class ItemOptions
 {
     public function __construct(
         /**

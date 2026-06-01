@@ -7,4 +7,4 @@ namespace SugarCraft\Dash\Components\Modal\Msg;
 /**
  * Represents the modal being closed (cancelled).
  */
-final readonly class ClosedMsg extends Msg {}
+readonly class ClosedMsg extends Msg {}
