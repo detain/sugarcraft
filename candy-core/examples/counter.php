@@ -18,6 +18,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Program;
+use SugarCraft\Core\Subscriptions;
 
 final class Counter implements Model
 {
@@ -48,6 +49,11 @@ final class Counter implements Model
     public function view(): string
     {
         return "Count: {$this->count}\n\n↑ / ↓ to count, q to quit\n";
+    }
+
+    public function subscriptions(): ?Subscriptions
+    {
+        return null;
     }
 }
 
