@@ -12,3 +12,7 @@ parameters:
         - src/Util/Tty/Kernel32.php
         - src/Util/Tty/Kernel32Interface.php
         - src/Util/Tty/WindowsBackend.php
+    ignoreErrors:
+        -
+            identifier: trait.unused
+            path: src/Concerns/Mutable.php

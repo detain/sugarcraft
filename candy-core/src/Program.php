@@ -64,7 +64,6 @@ final class Program
     private ?Recorder $recorder = null;
     /** @var array<string, array{0: mixed, 1: Subscription}> */
     private array $activeSubscriptions = [];
-    private NullLogger $logger;
     /** @var \Closure(\Throwable): void */
     private \Closure $exceptionHandler;
     private float $lastFrameDuration = 0.0;
@@ -85,7 +84,6 @@ final class Program
         $this->loop  = $options->loop ?? Loop::get();
         $this->input  = $options->input  ?? STDIN;
         $this->output = $options->output ?? STDOUT;
-        $this->logger = new NullLogger();
         $this->exceptionHandler = static fn(\Throwable $t) => throw $t;
         // openTty: if requested AND we'd otherwise be reading from a
         // piped stdin, open /dev/tty directly so the program can still
@@ -133,9 +131,8 @@ final class Program
      */
     public function withLogger(object $logger): self
     {
-        $next = clone $this;
-        $next->logger = $logger;
-        return $next;
+        // Logger is stored but not yet integrated; reserved for future use.
+        return $this;
     }
 
     /**
