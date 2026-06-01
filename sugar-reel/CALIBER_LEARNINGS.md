@@ -40,3 +40,9 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:scripted-input-program-simulator-tea]** `ScriptedInput` (declares key sequence) and `ProgramSimulator` (runs a TEA Model through scripted input) from candy-testing enable behaviour-testing the Player without real video or a PTY.
 
 - **[pattern:fake-decoder-isolated-testing]** A test helper implementing `Decoder` that yields synthetic `RgbFrame[]` allows unit-testing the Player without ffmpeg or live video files.
+
+- **[pattern:audio-graceful-degradation]** `AudioPlayer.start()` is a silent no-op when no binary is found or when the video has no audio track. The `buildCommand() === null` pattern gates the early return — callers don't need to check `hasAudio` or binary presence separately.
+
+- **[pattern:proc-open-pipe-fd-cleanup]** When `proc_open` returns `false` or `0` (binary missing), the three pipe handles may have been partially-created before failure. All must be `fclose()`d in the failure path to avoid FD leaks. Guard with `is_resource($pipe)` before each `fclose()`.
+
+- **[pattern:fake-audio-player-test-double]** `FakeAudioPlayer` test double overrides `buildCommand()` to return a controlled command (or null), enabling testing of the start/stop/isPlaying lifecycle without live ffplay/mpv binaries.

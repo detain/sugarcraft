@@ -66,6 +66,7 @@ final class Player implements Model
      * @param int                         $cellsW       Terminal cell width
      * @param int                         $cellsH       Terminal cell height
      * @param string                      $videoPath    Source video file path (for seek/restart)
+     * @param AudioPlayer|null            $audioPlayer  Audio subprocess handle (null when no audio)
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -83,6 +84,7 @@ final class Player implements Model
         public readonly int $cellsW,
         public readonly int $cellsH,
         private readonly string $videoPath,
+        private readonly ?AudioPlayer $audioPlayer,
     ) {
     }
 
@@ -108,6 +110,13 @@ final class Player implements Model
 
         $sync = new Sync($fps, 1.0);
 
+        // Start audio subprocess if the video has an audio track.
+        $audioPlayer = null;
+        if ($source->hasAudio) {
+            $audioPlayer = new AudioPlayer($videoPath);
+            $audioPlayer->start();
+        }
+
         // Player starts paused; the first tick is scheduled via init().
         return new self(
             decoder: $decoder,
@@ -125,6 +134,7 @@ final class Player implements Model
             cellsW: $cellsW,
             cellsH: $cellsH,
             videoPath: $videoPath,
+            audioPlayer: $audioPlayer,
         );
     }
 
@@ -166,6 +176,7 @@ final class Player implements Model
             cellsW: $cellsW,
             cellsH: $cellsH,
             videoPath: $videoPath,
+            audioPlayer: null,
         );
     }
 
@@ -284,6 +295,7 @@ final class Player implements Model
         if ($msg->type === KeyType::Escape
             || ($msg->type === KeyType::Char && $msg->rune === 'q')
             || ($msg->ctrl && $msg->rune === 'c')) {
+            $this->audioPlayer?->stop();
             $this->decoder->close();
             return [$this, Cmd::quit()];
         }
@@ -593,6 +605,7 @@ final class Player implements Model
                 cellsW: $this->cellsW,
                 cellsH: $this->cellsH,
                 videoPath: $this->videoPath,
+                audioPlayer: $this->audioPlayer,
             );
         }
 
@@ -630,6 +643,7 @@ final class Player implements Model
             cellsW: $this->cellsW,
             cellsH: $this->cellsH,
             videoPath: $this->videoPath,
+            audioPlayer: $this->audioPlayer,
         );
     }
 
@@ -660,6 +674,7 @@ final class Player implements Model
             cellsW: $this->cellsW,
             cellsH: $this->cellsH,
             videoPath: $this->videoPath,
+            audioPlayer: $this->audioPlayer,
         );
     }
 
@@ -686,6 +701,7 @@ final class Player implements Model
             cellsW: $changes['cellsW'] ?? $this->cellsW,
             cellsH: $changes['cellsH'] ?? $this->cellsH,
             videoPath: $this->videoPath,
+            audioPlayer: $changes['audioPlayer'] ?? $this->audioPlayer,
         );
     }
 

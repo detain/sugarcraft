@@ -548,6 +548,7 @@ final class PlayerTest extends TestCase
             'cellsW' => $cellsW,
             'cellsH' => $cellsH,
             'videoPath' => $videoPath,
+            'audioPlayer' => null,
         ];
 
         foreach ($overrides as $k => $v) {
