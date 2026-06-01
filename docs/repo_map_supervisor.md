@@ -117,7 +117,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 - [x] [Step 34 — sugar-calendar + sugar-toast adopt candy-buffer + candy-testing](repo_map_step_34.md) — branch: `ai/widget-shared`, PR #914
 - [x] [Step 35 — sugar-tick + sugar-post + candy-serve adopt candy-async](repo_map_step_35.md) — branch: `ai/async-adopters`, PR #915
 - [x] [Step 36 — candy-flip + candy-kit + honey-bounce + honey-flap adopt candy-testing](repo_map_step_36.md) — branch: `ai/testing-rollout`, PR #916
-- [ ] [Step 37 — Catch-all: any remaining lib from the audit](repo_map_step_37.md) — branch: `ai/sweep-catchall`
+- [x] [Step 37 — Catch-all: any remaining lib from the audit](repo_map_step_37.md) — branch: `ai/sweep-catchall`, PR #917
 
 ### Phase 7 — Final documentation & CI (3)
 - [ ] [Step 38 — Root docs sweep](repo_map_step_38.md) — branch: `ai/docs-root`
