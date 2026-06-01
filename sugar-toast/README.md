@@ -258,6 +258,14 @@ for now.
 | `Overflow` | DropOldest, DropNewest, Enqueue |
 | `SymbolSet` | NerdFont, Unicode, ASCII |
 
+## Shared foundations
+
+- **[candy-buffer](https://github.com/sugarcraft/candy-buffer)** — alert queue
+  composited via `Buffer`; each toast is a sub-`Buffer` composited into the
+  screen `Buffer` for per-cell positioning and overlap resolution.
+- **[candy-testing](https://github.com/sugarcraft/candy-testing)** — golden-file
+  snapshot tests via `assertGoldenAnsi()` pin canonical queue layouts.
+
 ## License
 
 [MIT](LICENSE)
