@@ -22,10 +22,11 @@ use SugarCraft\Reel\Reel;
 Reel::open('clip.mp4'); // playback arrives in later build steps
 ```
 
-> Status: Step 5 ✓ (AudioPlayer + audio sync). ffplay/mpv spawned as silent
-> companion subprocess at t0; silently degrades when binary absent or no
-> audio track. Video still paces off wall clock (audio-as-master-clock wiring
-> deferred). Graphics backends and end-to-end demo come next.
+> Status: Step 6 ✓ (Graphics backends sixel/kitty/iterm2 + auto-mode). Each
+> graphics protocol delegates to candy-mosaic's Mosaic facade (sixel/kitty/iTerm2
+> renderers). RendererFactory::auto() probes Mosaic::diagnose() and selects
+> sixel → kitty → iterm2 → half-block → ansi256 → ascii in order of preference.
+> Examples, VHS demo, and final polish come in the last step.
 
 ## Planned modes
 
