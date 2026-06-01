@@ -59,6 +59,13 @@
     "repositories": [
         {
             "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
             "url": "../candy-core",
             "options": {
                 "symlink": true
@@ -81,6 +88,20 @@
         {
             "type": "path",
             "url": "../candy-ansi",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-sprinkles",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-layout",
             "options": {
                 "symlink": true
             }
