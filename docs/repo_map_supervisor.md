@@ -121,7 +121,7 @@ Mark `[x]` only after the shipper returns clean and master is updated.
 
 ### Phase 7 — Final documentation & CI (3)
 - [x] [Step 38 — Root docs sweep](repo_map_step_38.md) — branch: `ai/docs-root`, PR #918
-- [ ] [Step 39 — Public site docs](repo_map_step_39.md) — branch: `ai/docs-site`
+- [x] [Step 39 — Public site docs](repo_map_step_39.md) — branch: `ai/docs-site`, PR #919
 - [ ] [Step 40 — CI/workflow updates](repo_map_step_40.md) — branch: `ai/docs-ci`
 
 ### Phase 8 — Plan retrospective (1)
