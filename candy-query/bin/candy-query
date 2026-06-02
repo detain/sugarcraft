@@ -26,6 +26,13 @@ use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Lang;
 
 $argv = $argv ?? [];
+
+// Handle --help/-h and --version/-V before anything else
+$exit = handleGlobalFlags($argv);
+if ($exit !== null) {
+    exit($exit);
+}
+
 $database = buildDatabase($argv);
 
 (new Program(
@@ -34,13 +41,133 @@ $database = buildDatabase($argv);
 ))->run();
 
 /**
+ * Print help or handle version flag, return exit code or null to continue.
+ *
+ * @param array<string> $argv
+ * @return int|null null means "continue", int means "exit with this code"
+ */
+function handleGlobalFlags(array $argv): ?int
+{
+    $args = array_slice($argv, 1);
+    $hasHelp = false;
+    $hasVersion = false;
+
+    foreach ($args as $arg) {
+        // Normalize: strip leading dashes, split on =, take the flag name
+        $normalized = ltrim($arg, '-');
+        if (str_contains($normalized, '=')) {
+            [$flag] = explode('=', $normalized, 2);
+        } else {
+            $flag = $normalized;
+        }
+
+        if (in_array($flag, ['h', 'help'], true)) {
+            $hasHelp = true;
+        }
+        if (in_array($flag, ['V', 'version'], true)) {
+            $hasVersion = true;
+        }
+    }
+
+    if ($hasVersion) {
+        fwrite(STDOUT, "candy-query 1.0.0\n");
+        return 0;
+    }
+
+    if ($hasHelp) {
+        showHelp();
+        return 0;
+    }
+
+    return null;
+}
+
+/**
+ * Print the full help screen.
+ */
+function showHelp(): void
+{
+    fwrite(STDOUT, <<<'HELP'
+candy-query - Terminal SQL browser (SQLite, MySQL, PostgreSQL)
+
+USAGE
+  candy-query [OPTIONS] [path-or-dsn]
+
+ARGUMENTS
+  path-or-dsn
+    SQLite database file path, e.g.: app.sqlite
+    Or a DSN string, e.g.:  mysql://user:pass@localhost:3306/dbname
+
+  When omitted entirely, this help is shown.
+
+OPTIONS
+  --help, -h
+    Show this help screen.
+
+  --version, -V
+    Show the version number.
+
+  --dsn=<dsn>
+    Full DSN connection string.
+    Format: <driver>://<user>:<pass>@<host>:<port>/<dbname>[?ssl-mode=<mode>]
+    Examples:
+      mysql://root:secret@localhost:3306/mydb?ssl-mode=require
+      pgsql://postgres:pass@db.example.com:5432/production
+      sqlite:///var/data/app.sqlite
+      sqlite://:memory:
+
+  --driver=<driver>
+  --db=<dbname>
+  --host=<host>
+  --port=<port>
+  --user=<user>
+  --pass=<pass>
+  --ssl-mode=<mode>
+    Individual connection parameters (all except --driver and --db are optional).
+    --driver must be one of: sqlite, mysql, pgsql
+    --ssl-mode defaults to "prefer" for MySQL.
+
+EXAMPLES
+  # SQLite (default — bare path or DSN)
+  candy-query app.sqlite
+  candy-query sqlite:///var/data/app.sqlite
+  candy-query sqlite://:memory:
+
+  # MySQL via DSN
+  candy-query mysql://root:secret@localhost:3306/mydb
+  candy-query --dsn=mysql://root:secret@localhost:3306/mydb
+
+  # MySQL via individual flags
+  candy-query --driver=mysql --host=localhost --port=3306 --user=root --pass=secret --db=mydb
+
+  # PostgreSQL
+  candy-query pgsql://postgres:pass@db.example.com:5432/mydb
+  candy-query --driver=pgsql --host=db.example.com --port=5432 --user=postgres --pass=pass --db=mydb
+
+KEYBOARD SHORTCUTS (TUI)
+  Tab         Cycle focus through panes (Tables → Rows → Query)
+  ↑ / ↓       Navigate list rows (or j/k)
+  Enter       Load selected table's rows
+  Ctrl+Enter  Execute the current query
+  Ctrl+R      Execute the current query
+  q           Quit (from Tables or Rows pane)
+
+SEE ALSO
+  https://github.com/sugarcraft/candy-query
+
+HELP
+    );
+}
+
+/**
  * Build a DatabaseInterface from CLI arguments.
  *
  * Supports:
  *   - Bare path (e.g. app.sqlite) → SQLite connection
+ *   - DSN as first argument (e.g. mysql://user:pass@host:3306/db)
  *   - --dsn=<dsn> → ConnectionFactory::fromDsn()
  *   - --driver=<driver> --db=<db> [--host=<host>] [--port=<port>]
- *     [--user=<user>] [--pass=<pass>] → ConnectionFactory::fromArgv()
+ *     [--user=<user>] [--pass=<pass>] [--ssl-mode=<mode>]
  *
  * @param array<string> $argv Command line arguments (includes script name at index 0)
  * @return DatabaseInterface
@@ -52,7 +179,8 @@ function buildDatabase(array $argv): DatabaseInterface
 
     // No arguments → show usage
     if ($args === []) {
-        fwrite(STDERR, Lang::t('cli.usage') . "\n");
+        fwrite(STDOUT, "USAGE: candy-query [OPTIONS] [path-or-dsn]\n");
+        fwrite(STDOUT, "       candy-query --help   # for full usage information\n");
         exit(1);
     }
 

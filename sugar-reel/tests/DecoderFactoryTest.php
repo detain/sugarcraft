@@ -14,7 +14,7 @@ use SugarCraft\Reel\Source\Probe;
 /**
  * Unit tests for DecoderFactory.
  *
- * @covers DecoderFactory
+ * @covers \SugarCraft\Reel\Decode\DecoderFactory
  */
 final class DecoderFactoryTest extends TestCase
 {
@@ -149,9 +149,14 @@ final class DecoderFactoryTest extends TestCase
             $this->markTestSkipped('ffmpeg is present; this tests the no-ffmpeg fallback path');
         }
 
-        // Create a temp file with unknown extension
+        // Create a temp file with unknown extension but valid GIF content
+        // so GifDecoder can actually open it after factory falls back.
         $tempFile = sys_get_temp_dir() . '/decoder-factory-test-' . uniqid('', true) . '.xyz';
-        file_put_contents($tempFile, '');
+        $img = imagecreate(1, 1);
+        $black = imagecolorallocate($img, 0, 0, 0);
+        imagesetpixel($img, 0, 0, $black);
+        imagegif($img, $tempFile);
+        imagedestroy($img);
 
         try {
             // With ffmpeg absent, factory should fall back to GifDecoder

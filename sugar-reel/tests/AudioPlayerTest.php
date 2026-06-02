@@ -54,7 +54,7 @@ final class FakeAudioPlayer extends AudioPlayer
  * so no real ffplay/mpv binary is required. The "binary present" path is covered
  * by verifying buildCommand() output structure via reflection.
  *
- * @covers AudioPlayer
+ * @covers \SugarCraft\Reel\AudioPlayer
  */
 final class AudioPlayerTest extends TestCase
 {

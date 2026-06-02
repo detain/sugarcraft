@@ -18,7 +18,7 @@ use SugarCraft\Reel\Render\Mode;
  *   Row 1: blue [0,0,255], yellow [255,255,0], magenta [255,0,255]
  *   Row 2: cyan [0,255,255], white [255,255,255], dark grey [64,64,64]
  *
- * @covers AsciiRenderer
+ * @covers \SugarCraft\Reel\Render\AsciiRenderer
  */
 final class AsciiRendererTest extends TestCase
 {

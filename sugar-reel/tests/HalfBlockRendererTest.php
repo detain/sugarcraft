@@ -12,7 +12,7 @@ use SugarCraft\Reel\Render\Mode;
 /**
  * Unit tests for HalfBlockRenderer — delegates to candy-mosaic.
  *
- * @covers HalfBlockRenderer
+ * @covers \SugarCraft\Reel\Render\HalfBlockRenderer
  */
 final class HalfBlockRendererTest extends TestCase
 {

@@ -15,7 +15,7 @@ use SugarCraft\Reel\Render\RendererFactory;
 /**
  * Unit tests verifying the FrameRenderer interface contract.
  *
- * @covers FrameRenderer
+ * @covers \SugarCraft\Reel\Render\FrameRenderer
  */
 final class FrameRendererTest extends TestCase
 {

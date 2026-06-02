@@ -59,7 +59,9 @@ final class PostgresDatabase implements DatabaseInterface
 
         $out = [];
         foreach ($rows as $row) {
-            if (is_array($row) && isset($row['table_name'])) {
+            // Normalize case for cross-driver compatibility
+            $row = array_change_key_case($row, CASE_LOWER);
+            if (isset($row['table_name'])) {
                 $out[] = (string) $row['table_name'];
             }
         }

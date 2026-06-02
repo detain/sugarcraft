@@ -15,7 +15,7 @@ use SugarCraft\Reel\Source\Probe;
  * We test the binary-absent path directly, and verify internal math
  * for chunk-framing without needing a real subprocess.
  *
- * @covers FfmpegDecoder
+ * @covers \SugarCraft\Reel\Decode\FfmpegDecoder
  */
 final class FfmpegDecoderTest extends TestCase
 {
