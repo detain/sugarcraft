@@ -82,6 +82,54 @@ final class CsvExporter
     }
 
     /**
+     * Export report results to a CSV file.
+     *
+     * Writes the column headers followed by all data rows.
+     * Uses Width utility for proper column alignment.
+     *
+     * @param string $path  Path to the output CSV file
+     * @param list<string> $columns Column names (headers)
+     * @param list<array<string,mixed>> $rows Result rows to export
+     * @throws \RuntimeException If the file can't be opened for writing
+     */
+    public function exportReportResults(string $path, array $columns, array $rows): void
+    {
+        $handle = fopen($path, 'w');
+        if ($handle === false) {
+            throw new \RuntimeException("Cannot open file for writing: {$path}");
+        }
+
+        try {
+            $maxWidths = array_fill_keys($columns, 0);
+            foreach ($columns as $col) {
+                $maxWidths[$col] = Width::string($col);
+            }
+            foreach ($rows as $row) {
+                foreach ($columns as $col) {
+                    $value = (string) ($row[$col] ?? '');
+                    $maxWidths[$col] = max($maxWidths[$col], Width::string($value));
+                }
+            }
+
+            $headerRow = implode(',', array_map(
+                fn(string $col): string => Width::padRight($col, $maxWidths[$col]),
+                $columns
+            ));
+            fwrite($handle, $headerRow . "\n");
+
+            foreach ($rows as $row) {
+                $values = array_map(
+                    fn(string $col): string => Width::padRight((string) ($row[$col] ?? ''), $maxWidths[$col]),
+                    $columns
+                );
+                fwrite($handle, implode(',', $values) . "\n");
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    /**
      * Export a table to a CSV file with column-width aware output.
      *
      * The first row contains column headers, followed by all table rows.
