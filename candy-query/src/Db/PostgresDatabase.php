@@ -195,4 +195,12 @@ final class PostgresDatabase implements DatabaseInterface
         }
         return $out;
     }
+
+    public function prepare(string $sql): mixed
+    {
+        if ($this->pdo === null) {
+            return false;
+        }
+        return $this->pdo->prepare($sql);
+    }
 }
