@@ -11,6 +11,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminQueryCache;
 use SugarCraft\Query\Admin\CachingServerContext;
@@ -45,10 +46,11 @@ use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
  * Tab cycles focus; j/k or arrows move the cursor in list panes;
  * `q` quits.
  *
- * Query history:
- *   - Up/Down arrows in Query pane cycle through history
- *   - Ctrl+F favorites the current query
- *   - Ctrl+Shift+F unfavorites
+ * Query editor:
+ *   - The Query pane is backed by a candy-forms {@see TextArea} — it owns
+ *     the cursor, UTF-8 editing, and Up/Down line movement.
+ *   - Ctrl+R / Ctrl+E run the query; Ctrl+F favorites it; Ctrl+Shift+F
+ *     unfavorites. Executed queries are recorded in {@see $queryHistory}.
  */
 final class App implements Model
 {
@@ -59,7 +61,8 @@ final class App implements Model
      * @param list<array<string,mixed>> $rows
      * @param list<string> $queryHistory Recently executed queries (newest first)
      * @param list<string> $queryFavorites Saved/favorited queries
-     * @param string|null $savedBuf Buffer saved when navigating into history (restored on historyDown from 0)
+     * @param TextArea|null $queryEditor Multi-line SQL editor widget (candy-forms);
+     *        null until the Query pane is first focused (see {@see editor()}).
      */
     public function __construct(
         public readonly DatabaseInterface $db,
@@ -69,14 +72,12 @@ final class App implements Model
         public readonly ?string $selectedTable = null,
         public readonly array $rows = [],
         public readonly int $rowCursor = 0,
-        public readonly string $queryBuf = '',
+        public readonly ?TextArea $queryEditor = null,
         public readonly Pane $pane = Pane::Tables,
         public readonly ?string $error = null,
         public readonly ?string $status = null,
         public readonly array $queryHistory = [],
         public readonly array $queryFavorites = [],
-        public readonly int $historyIndex = -1,  // -1 means current buffer, 0 = most recent
-        public readonly ?string $savedBuf = null,  // temp storage for current buffer when navigating history
         public readonly AdminPane $adminPane = AdminPane::ProcessList,
         public readonly int $adminCursor = 0,
         public readonly bool $paused = false,
@@ -274,71 +275,52 @@ final class App implements Model
 
     private function editQuery(KeyMsg $msg): self
     {
-        // Up arrow: navigate to older query in history
-        if ($msg->type === KeyType::Up) {
-            return $this->historyUp();
-        }
-        // Down arrow: navigate to newer query in history
-        if ($msg->type === KeyType::Down) {
-            return $this->historyDown();
-        }
-        // Ctrl+F: favorite the current query
-        if ($msg->ctrl && !$msg->shift && $msg->rune === 'f') {
-            return $this->favoriteQuery();
-        }
-        // Ctrl+Shift+F: unfavorite the current query
-        if ($msg->ctrl && $msg->shift && $msg->rune === 'f') {
-            return $this->unfavoriteQuery();
-        }
+        // candy-query-specific shortcuts are intercepted before the widget
+        // sees them (Ctrl+E would otherwise be the TextArea's move-to-line-end).
         if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
             || ($msg->type === KeyType::Enter && $msg->ctrl)) {
             return $this->runQuery();
         }
-        if ($msg->type === KeyType::Backspace) {
-            return $this->withQueryBuf(self::dropLast($this->queryBuf));
+        if ($msg->ctrl && !$msg->shift && $msg->rune === 'f') {
+            return $this->favoriteQuery();
         }
-        if ($msg->type === KeyType::Enter) {
-            return $this->withQueryBuf($this->queryBuf . "\n");
+        if ($msg->ctrl && $msg->shift && $msg->rune === 'f') {
+            return $this->unfavoriteQuery();
         }
-        if ($msg->type === KeyType::Space) {
-            return $this->withQueryBuf($this->queryBuf . ' ');
-        }
-        if ($msg->type === KeyType::Char && !$msg->ctrl) {
-            return $this->withQueryBuf($this->queryBuf . $msg->rune);
-        }
-        return $this;
+        // Everything else drives the editor: chars, backspace, space,
+        // Enter→newline, and Up/Down move the cursor between lines.
+        [$editor, ] = $this->editor()->update($msg);
+        return $this->mutate(['queryEditor' => $editor]);
     }
 
     private function runQuery(): self
     {
-        $trimmed = trim($this->queryBuf);
+        $sql = $this->editor()->value();
+        $trimmed = trim($sql);
         if ($trimmed === '') {
             return $this;
         }
-        // Add to history (front = newest), reset historyIndex, clear buffer
+        // Record in history (front = newest), de-duping consecutive repeats.
         $history = $this->queryHistory;
         if (($history[0] ?? '') !== $trimmed) {
             array_unshift($history, $trimmed);
         }
-        $newHistoryIndex = -1;
         try {
-            $rows = $this->db->query($this->queryBuf);
+            $rows = $this->db->query($sql);
             return $this->mutate([
                 'selectedTable' => '(query)',
                 'rows' => $rows,
                 'rowCursor' => 0,
-                'queryBuf' => '',
+                'queryEditor' => $this->editor()->reset(),
                 'error' => null,
                 'status' => count($rows) . ' rows',
                 'queryHistory' => $history,
-                'historyIndex' => $newHistoryIndex,
             ]);
         } catch (\PDOException $e) {
             return $this->mutate([
                 'error' => $e->getMessage(),
                 'status' => null,
                 'queryHistory' => $history,
-                'historyIndex' => $newHistoryIndex,
             ]);
         }
     }
@@ -459,68 +441,31 @@ final class App implements Model
 
     private function withPane(Pane $p): self
     {
-        return $this->mutate(['pane' => $p]);
+        // The editor is focused only while the Query pane is active, so its
+        // cursor renders only there (matching the old per-pane cursor mark).
+        $editor = $p === Pane::Query ? $this->editor()->focus()[0] : $this->editor()->blur();
+        return $this->mutate(['pane' => $p, 'queryEditor' => $editor]);
     }
 
-    private function withQueryBuf(string $buf): self
+    /**
+     * The SQL editor, lazily defaulted so a freshly constructed App (e.g. in
+     * tests) needn't supply one. {@see withPane()} swaps in the focused
+     * instance when the Query pane is entered.
+     */
+    public function editor(): TextArea
     {
-        return $this->mutate(['queryBuf' => $buf]);
+        return $this->queryEditor ?? self::newEditor();
     }
 
-    private function historyUp(): self
+    private static function newEditor(): TextArea
     {
-        // If history is empty, no-op
-        if ($this->queryHistory === []) {
-            return $this;
-        }
-        $historySize = count($this->queryHistory);
-        // At the current buffer (-1): stash it in savedBuf, then step to the
-        // next-older entry — index 1 when there are ≥2, else the only entry (0).
-        if ($this->historyIndex === -1) {
-            $target = $historySize >= 2 ? 1 : 0;
-            return $this->mutate([
-                'queryBuf' => $this->queryHistory[$target],
-                'historyIndex' => $target,
-                'savedBuf' => $this->queryBuf,
-            ]);
-        }
-        // Already in history: step toward older entries.
-        if ($this->historyIndex > 0) {
-            $newIndex = $this->historyIndex - 1;
-            return $this->mutate([
-                'queryBuf' => $this->queryHistory[$newIndex],
-                'historyIndex' => $newIndex,
-            ]);
-        }
-        return $this;
-    }
-
-    private function historyDown(): self
-    {
-        // If historyIndex is -1 (at current buffer), no-op
-        if ($this->historyIndex === -1) {
-            return $this;
-        }
-        // If historyIndex > 0, decrement index (going toward newer/most recent)
-        if ($this->historyIndex > 0) {
-            $newIndex = $this->historyIndex - 1;
-            return $this->mutate([
-                'queryBuf' => $this->queryHistory[$newIndex],
-                'historyIndex' => $newIndex,
-            ]);
-        }
-        // At index 0 (newest): return to the live buffer and restore savedBuf.
-        return $this->mutate([
-            'queryBuf' => $this->savedBuf ?? '',
-            'historyIndex' => -1,
-            'savedBuf' => null,
-        ]);
+        return TextArea::new()->withPlaceholder('-- type SQL, ctrl+r to run --');
     }
 
     private function favoriteQuery(): self
     {
-        $trimmed = trim($this->queryBuf);
-        // If queryBuf is empty or already in favorites, return $this
+        $trimmed = trim($this->editor()->value());
+        // No-op on an empty editor or an already-saved query.
         if ($trimmed === '' || in_array($trimmed, $this->queryFavorites, true)) {
             return $this;
         }
@@ -531,22 +476,12 @@ final class App implements Model
 
     private function unfavoriteQuery(): self
     {
-        $trimmed = trim($this->queryBuf);
+        $trimmed = trim($this->editor()->value());
         $favorites = array_values(array_filter(
             $this->queryFavorites,
             fn(string $f) => $f !== $trimmed
         ));
         return $this->mutate(['queryFavorites' => $favorites]);
-    }
-
-    private static function dropLast(string $s): string
-    {
-        if ($s === '') return $s;
-        $i = strlen($s) - 1;
-        while ($i > 0 && (ord($s[$i]) & 0xc0) === 0x80) {
-            $i--;
-        }
-        return substr($s, 0, $i);
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
