@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Terminal;
 
+use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Query\App;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
@@ -58,25 +60,35 @@ final class BorderFrame
         $titleBar = self::buildTitleBar($a, $width);
         $statusBar = self::buildStatusBar($a, $width);
 
-        // Clear screen and home cursor to prevent old content bleeding through
-        $clear = "\x1b[2J\x1b[H";
+        // No explicit screen clear here: the Program's frame-diff renderer
+        // (candy-core) owns the screen — it clears once on the first frame and
+        // emits minimal per-line diffs after. Emitting \x1b[2J every frame
+        // fought that diff (full-screen erase + repaint each keystroke), which
+        // both flickered and desynced the renderer's line model on remote
+        // sessions. Returning pure content lets the diff renderer do its job.
 
-        // Frame overhead: 1 top + 1 title + 1 divider + content + 1 divider + 1 status + 1 bottom = 7 lines
-        $frameOverhead = 7;
-        $availableContentHeight = $height - $frameOverhead;
+        // Frame overhead is the number of NON-content lines this method emits:
+        // 1 top border + 1 title + 1 divider + 1 divider + 1 status + 1 bottom
+        // = 6 (NOT 7 — the content rows sit *between* the two dividers). An
+        // off-by-one here left the frame one row short of the terminal, so it
+        // never filled the full height and the bottom row stayed blank.
+        $frameOverhead = 6;
+        $availableContentHeight = max(0, $height - $frameOverhead);
 
-        // Split content into lines and measure
+        // Split content into lines and normalise to EXACTLY
+        // $availableContentHeight rows: pad short content with blanks, and
+        // hard-truncate content taller than the screen. This guarantees the
+        // whole frame is always exactly $height lines — a constant line count
+        // the candy-core frame-diff renderer relies on. A frame taller than
+        // the terminal would scroll the alt-screen and permanently desync the
+        // renderer's one-line-per-row model (stale rows, missing bottom).
         $contentLines = explode("\n", $content);
-        $contentLineCount = count($contentLines);
-
-        // Pad content to fill available height
+        if (count($contentLines) > $availableContentHeight) {
+            $contentLines = array_slice($contentLines, 0, $availableContentHeight);
+        }
         $paddedLines = $contentLines;
-        if ($contentLineCount < $availableContentHeight) {
-            // Add blank lines to fill
-            $paddingCount = $availableContentHeight - $contentLineCount;
-            for ($i = 0; $i < $paddingCount; $i++) {
-                $paddedLines[] = '';
-            }
+        for ($i = count($paddedLines); $i < $availableContentHeight; $i++) {
+            $paddedLines[] = '';
         }
 
         // Build the frame
@@ -93,7 +105,7 @@ final class BorderFrame
         $lines[] = '║' . self::padRight($statusBar, $width - 2) . '║';
         $lines[] = self::bottomBorder($width);
 
-        return $clear . implode("\n", $lines);
+        return implode("\n", $lines);
     }
 
     /**
@@ -264,15 +276,23 @@ final class BorderFrame
      */
     private static function padRight(string $s, int $width): string
     {
-        // Strip ANSI codes for length calculation
-        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $s);
-        $len = mb_strlen($stripped);
+        // Measure by display CELLS (not codepoints): wide CJK chars, combining
+        // marks and emoji each diverge from mb_strlen, and a wrong measurement
+        // misplaces the right border `║` or, worse, makes the line wider than
+        // the terminal so it wraps — which corrupts the frame-diff renderer's
+        // one-line-per-row model and cascades into the screen garbage users saw.
+        $len = Width::string($s);
 
         if ($len > $width) {
-            // Truncate to fit, appending ellipsis to indicate overflow
-            $visibleWidth = $width - 1; // Leave room for ellipsis
-            $truncated = mb_substr($stripped, 0, $visibleWidth);
-            return $truncated . '…';
+            // Truncate by display width, leaving one cell for the ellipsis.
+            // Width::truncate strips ANSI, so reset SGR afterwards to be safe.
+            $s = Width::truncate($s, max(0, $width - 1)) . '…' . Ansi::reset();
+            // Re-measure: truncate can stop short of the requested width (it
+            // won't split a wide glyph), so `truncated + …` is NOT guaranteed
+            // to be exactly $width cells. Fall through to pad it out — skipping
+            // this left the line one cell short and pushed the right border `║`
+            // inward, the "break on the right side" users saw.
+            $len = Width::string($s);
         }
 
         if ($len < $width) {
@@ -289,16 +309,16 @@ final class BorderFrame
      */
     private static function padCenter(string $s, int $width): string
     {
-        $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $s);
-        $len = mb_strlen($stripped);
+        $len = Width::string($s);
 
         if ($len > $width) {
-            // Truncate with ellipsis
-            $visibleWidth = $width - 1;
-            return mb_substr($stripped, 0, $visibleWidth) . '…';
+            // As in padRight, truncation can stop short of $width, so
+            // re-measure and centre-pad the result to fill exactly $width.
+            $s = Width::truncate($s, max(0, $width - 1)) . '…' . Ansi::reset();
+            $len = Width::string($s);
         }
 
-        $pad = $width - $len;
+        $pad = max(0, $width - $len);
         $left = (int) floor($pad / 2);
         $right = $pad - $left;
 
