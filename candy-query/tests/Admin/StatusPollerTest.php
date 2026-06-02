@@ -178,4 +178,8 @@ final class FakePollerContext implements \SugarCraft\Query\Admin\ServerContextIn
     {
         return $this->wasReset;
     }
+
+    public function refresh(): void
+    {
+    }
 }
