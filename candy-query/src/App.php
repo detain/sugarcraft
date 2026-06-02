@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query;
 
 use SugarCraft\Core\Cmd;
+use SugarCraft\Core\Concerns\Mutable;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
@@ -51,6 +52,8 @@ use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
  */
 final class App implements Model
 {
+    use Mutable;
+
     /**
      * @param list<string> $tables
      * @param list<array<string,mixed>> $rows
@@ -195,39 +198,13 @@ final class App implements Model
     {
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: max(0, $this->rowCursor - 1),
-                queryBuf: $this->queryBuf, pane: $this->pane,
-                error: $this->error, status: $this->status,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate(['rowCursor' => max(0, $this->rowCursor - 1)]);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
-                queryBuf: $this->queryBuf, pane: $this->pane,
-                error: $this->error, status: $this->status,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'rowCursor' => min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
+            ]);
         }
         return $this;
     }
@@ -346,36 +323,23 @@ final class App implements Model
         $newHistoryIndex = -1;
         try {
             $rows = $this->db->query($this->queryBuf);
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: '(query)', rows: $rows, rowCursor: 0,
-                queryBuf: '', pane: $this->pane,
-                error: null, status: count($rows) . ' rows',
-                queryHistory: $history, queryFavorites: $this->queryFavorites,
-                historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'selectedTable' => '(query)',
+                'rows' => $rows,
+                'rowCursor' => 0,
+                'queryBuf' => '',
+                'error' => null,
+                'status' => count($rows) . ' rows',
+                'queryHistory' => $history,
+                'historyIndex' => $newHistoryIndex,
+            ]);
         } catch (\PDOException $e) {
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-                pane: $this->pane,
-                error: $e->getMessage(), status: null,
-                queryHistory: $history, queryFavorites: $this->queryFavorites,
-                historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'error' => $e->getMessage(),
+                'status' => null,
+                'queryHistory' => $history,
+                'historyIndex' => $newHistoryIndex,
+            ]);
         }
     }
 
@@ -383,37 +347,19 @@ final class App implements Model
     {
         try {
             $rows = $this->db->rows($name);
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables,
-                tableCursor: array_search($name, $this->tables, true) ?: 0,
-                selectedTable: $name, rows: $rows, rowCursor: 0,
-                queryBuf: $this->queryBuf, pane: $this->pane,
-                error: null, status: count($rows) . ' rows',
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'tableCursor' => array_search($name, $this->tables, true) ?: 0,
+                'selectedTable' => $name,
+                'rows' => $rows,
+                'rowCursor' => 0,
+                'error' => null,
+                'status' => count($rows) . ' rows',
+            ]);
         } catch (\PDOException $e) {
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-                pane: $this->pane,
-                error: $e->getMessage(), status: null,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'error' => $e->getMessage(),
+                'status' => null,
+            ]);
         }
     }
 
@@ -421,95 +367,31 @@ final class App implements Model
     {
         $size = count($this->tables);
         if ($size === 0) return $this;
-        $i = max(0, min($size - 1, $i));
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $i,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-            pane: $this->pane, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['tableCursor' => max(0, min($size - 1, $i))]);
     }
 
     private function withAdminPane(AdminPane $adminPane): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: null,  // reset adminPage to force recreation
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        // adminPage reset to null forces lazy recreation against the new pane.
+        return $this->mutate(['adminPane' => $adminPane, 'adminPage' => null]);
     }
 
     private function withAdminCursor(int $adminCursor): self
     {
         $allPanes = AdminPane::cases();
-        $adminCursor = max(0, min($adminCursor, count($allPanes) - 1));
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate([
+            'adminCursor' => max(0, min($adminCursor, count($allPanes) - 1)),
+        ]);
     }
 
     private function withPaused(bool $paused): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['paused' => $paused]);
     }
 
     private function withAdminPage(PageBase $newPage): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $newPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['adminPage' => $newPage]);
     }
 
     /**
@@ -577,38 +459,12 @@ final class App implements Model
 
     private function withPane(Pane $p): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-            pane: $p, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['pane' => $p]);
     }
 
     private function withQueryBuf(string $buf): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor, queryBuf: $buf,
-            pane: $this->pane, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['queryBuf' => $buf]);
     }
 
     private function historyUp(): self
@@ -618,63 +474,23 @@ final class App implements Model
             return $this;
         }
         $historySize = count($this->queryHistory);
-        // If historyIndex is -1 (at current buffer), save current buffer and go to older (index 1 if exists)
+        // At the current buffer (-1): stash it in savedBuf, then step to the
+        // next-older entry — index 1 when there are ≥2, else the only entry (0).
         if ($this->historyIndex === -1) {
-            if ($historySize >= 2) {
-                return new self(
-                    db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                    selectedTable: $this->selectedTable, rows: $this->rows,
-                    rowCursor: $this->rowCursor,
-                    queryBuf: $this->queryHistory[1],
-                    pane: $this->pane, error: $this->error, status: $this->status,
-                    queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                    historyIndex: 1,
-                    savedBuf: $this->queryBuf,
-                    adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                    serverContext: $this->serverContext, adminPage: $this->adminPage,
-                    adminCachedStatusVars: $this->adminCachedStatusVars,
-                    adminCachedServerVars: $this->adminCachedServerVars,
-                    adminCacheTs: $this->adminCacheTs,
-                    adminLoading: $this->adminLoading,
-                );
-            }
-            // Only one item, go to index 0
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: $this->rowCursor,
-                queryBuf: $this->queryHistory[0],
-                pane: $this->pane, error: $this->error, status: $this->status,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: 0,
-                savedBuf: $this->queryBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            $target = $historySize >= 2 ? 1 : 0;
+            return $this->mutate([
+                'queryBuf' => $this->queryHistory[$target],
+                'historyIndex' => $target,
+                'savedBuf' => $this->queryBuf,
+            ]);
         }
-        // If historyIndex > 0, decrement index (going toward older)
+        // Already in history: step toward older entries.
         if ($this->historyIndex > 0) {
             $newIndex = $this->historyIndex - 1;
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: $this->rowCursor,
-                queryBuf: $this->queryHistory[$newIndex],
-                pane: $this->pane, error: $this->error, status: $this->status,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $newIndex,
-                savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'queryBuf' => $this->queryHistory[$newIndex],
+                'historyIndex' => $newIndex,
+            ]);
         }
         return $this;
     }
@@ -688,40 +504,17 @@ final class App implements Model
         // If historyIndex > 0, decrement index (going toward newer/most recent)
         if ($this->historyIndex > 0) {
             $newIndex = $this->historyIndex - 1;
-            return new self(
-                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-                selectedTable: $this->selectedTable, rows: $this->rows,
-                rowCursor: $this->rowCursor,
-                queryBuf: $this->queryHistory[$newIndex],
-                pane: $this->pane, error: $this->error, status: $this->status,
-                queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-                historyIndex: $newIndex,
-                savedBuf: $this->savedBuf,
-                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-                serverContext: $this->serverContext, adminPage: $this->adminPage,
-                adminCachedStatusVars: $this->adminCachedStatusVars,
-                adminCachedServerVars: $this->adminCachedServerVars,
-                adminCacheTs: $this->adminCacheTs,
-                adminLoading: $this->adminLoading,
-            );
+            return $this->mutate([
+                'queryBuf' => $this->queryHistory[$newIndex],
+                'historyIndex' => $newIndex,
+            ]);
         }
-        // If at index 0 (newest), go back to -1 and restore savedBuf
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor,
-            queryBuf: $this->savedBuf ?? '',
-            pane: $this->pane, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: -1,
-            savedBuf: null,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        // At index 0 (newest): return to the live buffer and restore savedBuf.
+        return $this->mutate([
+            'queryBuf' => $this->savedBuf ?? '',
+            'historyIndex' => -1,
+            'savedBuf' => null,
+        ]);
     }
 
     private function favoriteQuery(): self
@@ -733,20 +526,7 @@ final class App implements Model
         }
         $favorites = $this->queryFavorites;
         array_unshift($favorites, $trimmed);
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-            pane: $this->pane, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $favorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['queryFavorites' => $favorites]);
     }
 
     private function unfavoriteQuery(): self
@@ -756,20 +536,7 @@ final class App implements Model
             $this->queryFavorites,
             fn(string $f) => $f !== $trimmed
         ));
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows,
-            rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
-            pane: $this->pane, error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $favorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $this->adminLoading,
-        );
+        return $this->mutate(['queryFavorites' => $favorites]);
     }
 
     private static function dropLast(string $s): string
@@ -896,37 +663,17 @@ final class App implements Model
 
     private function withAdminCachedData(array $statusVars, array $serverVars, float $ts): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: $this->adminPage,
-            adminCachedStatusVars: $statusVars,
-            adminCachedServerVars: $serverVars,
-            adminCacheTs: $ts,
-            adminLoading: false,
-        );
+        return $this->mutate([
+            'adminCachedStatusVars' => $statusVars,
+            'adminCachedServerVars' => $serverVars,
+            'adminCacheTs' => $ts,
+            'adminLoading' => false,
+        ]);
     }
 
     private function withAdminLoading(bool $loading): self
     {
-        return new self(
-            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
-            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
-            queryBuf: $this->queryBuf, pane: $this->pane,
-            error: $this->error, status: $this->status,
-            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
-            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
-            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
-            serverContext: $this->serverContext, adminPage: null,  // reset to force recreation with fresh data
-            adminCachedStatusVars: $this->adminCachedStatusVars,
-            adminCachedServerVars: $this->adminCachedServerVars,
-            adminCacheTs: $this->adminCacheTs,
-            adminLoading: $loading,
-        );
+        // adminPage reset to null forces recreation against the fresh data.
+        return $this->mutate(['adminPage' => null, 'adminLoading' => $loading]);
     }
 }
