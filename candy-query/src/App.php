@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
 
 /**
@@ -55,7 +56,10 @@ final class App implements Model
         public readonly ?string $savedBuf = null,  // temp storage for current buffer when navigating history
     ) {}
 
-    public static function start(DatabaseInterface $db): self
+    /**
+     * @param Flavor::* $flavor Database flavor for driver-specific behavior
+     */
+    public static function start(DatabaseInterface $db, Flavor $flavor = Flavor::Sqlite): self
     {
         $tables = $db->tables();
         $a = new self(db: $db, tables: $tables);
