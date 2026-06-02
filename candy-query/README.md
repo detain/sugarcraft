@@ -47,6 +47,21 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `Backspace`        | Delete last character (query pane)              |
 | `q` / `Esc`        | Quit (except inside the query pane — `q` types) |
 
+### Admin Dashboard Keys
+
+| Key                | Action                                          |
+|--------------------|-------------------------------------------------|
+| `[p]`              | Pause/resume auto-refresh (Dashboard)           |
+| `[r]`              | Reset all counters and graphs (Dashboard)       |
+| `[j/k]`            | Navigate rows down/up (Variables, Connections, Reports) |
+| `[e]`              | Edit selected variable (Variables page)         |
+| `[w]`              | Toggle read/write filter (Variables page)       |
+| `[s]`              | Focus search input (Variables page)              |
+| `[tab]`            | Toggle Status/System tab (Variables page)       |
+| `[c]`              | Commit pending changes (PerfSchema page)        |
+| `[x]`              | Export report to CSV (Reports page)             |
+| `[t]`              | Toggle column unit formatting (Reports page)    |
+
 ## Architecture
 
 | File              | Role                                                                                          |
