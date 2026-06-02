@@ -93,6 +93,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>StatementTimeout</strong><span>Wall-clock timeout on <code>PDOStatement::execute()</code> via <code>pcntl_alarm()</code>. Gracefully degrades when pcntl is unavailable. Cancels query via <code>KILL CONNECTION_ID()</code> on timeout, throws <code>StatementTimeoutException</code>.</span></div>
       <div class="feature"><strong>Restart detection</strong><span><code>Sampler::registerUptime()</code> records uptime at construction; <code>StatusPoller</code> compares uptime snapshots to detect MySQL restarts and reset stale cached state.</span></div>
       <div class="feature"><strong>Alerting</strong><span>Stateless <code>AlertManager</code> evaluates metrics against <code>AlertThresholds</code> presets (<code>::default()</code>, <code>::strict()</code>). <code>Alert</code> value objects carry severity, metric, value, and threshold. <code>AlertNotifier</code> dispatches toasts via <code>sugar-toast</code> with mute-safe degradation when no factory is available. Maps <code>Severity::Critical → ToastType::Error</code>, <code>Warning → Warning</code>, <code>Info → Info</code>.</span></div>
+      <div class="feature"><strong>Query History (optional)</strong><span>Opt-in SQLite persistence via <code>SqliteHistoryStore</code> (WAL mode, auto-pruned at 1000 entries). <code>HistoryRecorder</code> implements <code>StatusSnapshotProviderInterface</code> for passive recording in the polling loop. <code>HistoryQuery</code> computes <code>queriesPerSecond()</code>, <code>averageDuration()</code>, <code>errorRate()</code>, and <code>topQueries()</code> over time ranges.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -194,6 +195,17 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>AlertManager</td><td>checkConnectionUsage(ConnectionCounters)</td><td>Evaluate connection counters, return array&lt;string, Alert&gt;</td></tr>
 <tr><td>AlertManager</td><td>checkAllMetrics(statusVars, serverVars)</td><td>Evaluate SHOW GLOBAL STATUS/VARIABLES, return array&lt;string, Alert&gt;</td></tr>
 <tr><td>AlertManager</td><td>checkAndDispatch(ConnectionCounters)</td><td>Combined check + notify, returns ['alerts', 'notifier']</td></tr>
+<tr><td>HistoryStoreInterface</td><td>save(entry)</td><td>Persist a history entry (query, duration_ms, rows_affected, error, ts)</td></tr>
+<tr><td>HistoryStoreInterface</td><td>query(from, to, limit)</td><td>Retrieve history entries within time range</td></tr>
+<tr><td>HistoryStoreInterface</td><td>prune(before)</td><td>Delete entries older than given DateTimeImmutable</td></tr>
+<tr><td>HistoryStoreInterface</td><td>count()</td><td>Return total number of stored entries</td></tr>
+<tr><td>SqliteHistoryStore</td><td>open(path)</td><td>Open or create SQLite file with WAL mode</td></tr>
+<tr><td>SqliteHistoryStore</td><td>—</td><td>HistoryStoreInterface via SQLite. Schema: id, query, duration_ms, rows_affected, error, ts. Auto-prunes at 1000 entries on save().</td></tr>
+<tr><td>HistoryRecorder</td><td>provideStatusSnapshot(previous)</td><td>Implements StatusSnapshotProviderInterface. Calls store->save() when invoked by polling loop.</td></tr>
+<tr><td>HistoryQuery</td><td>queriesPerSecond(from, to)</td><td>Compute QPS over a time range</td></tr>
+<tr><td>HistoryQuery</td><td>averageDuration(from, to)</td><td>Compute mean execution time in ms over a time range</td></tr>
+<tr><td>HistoryQuery</td><td>errorRate(from, to)</td><td>Compute fraction of queries that resulted in error</td></tr>
+<tr><td>HistoryQuery</td><td>topQueries(limit)</td><td>Return most-frequent queries with counts</td></tr>
 </table>
   </div>
 </section>
