@@ -8,6 +8,7 @@ use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
+use SugarCraft\Query\ResultTable;
 
 /**
  * Fluent builder for App.
@@ -19,6 +20,7 @@ use SugarCraft\Query\Pane;
  * @method self withSelectedTable(?string $selectedTable)
  * @method self withRows(array $rows)
  * @method self withRowCursor(int $rowCursor)
+ * @method self withResultTable(?ResultTable $resultTable)
  * @method self withQueryEditor(?TextArea $queryEditor)
  * @method self withPane(Pane $pane)
  * @method self withError(?string $error)
@@ -35,6 +37,7 @@ final class AppBuilder
     private ?string $selectedTable = null;
     private array $rows = [];
     private int $rowCursor = 0;
+    private ?ResultTable $resultTable = null;
     private ?TextArea $queryEditor = null;
     private Pane $pane = Pane::Tables;
     private ?string $error = null;
@@ -88,6 +91,13 @@ final class AppBuilder
     {
         $clone = clone $this;
         $clone->rowCursor = $rowCursor;
+        return $clone;
+    }
+
+    public function withResultTable(?ResultTable $resultTable): self
+    {
+        $clone = clone $this;
+        $clone->resultTable = $resultTable;
         return $clone;
     }
 
@@ -147,6 +157,7 @@ final class AppBuilder
             $this->selectedTable,
             $this->rows,
             $this->rowCursor,
+            $this->resultTable,
             $this->queryEditor,
             $this->pane,
             $this->error,

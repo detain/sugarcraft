@@ -9,6 +9,7 @@ use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
+use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminSection;
 use SugarCraft\Query\Terminal\BorderFrame;
@@ -241,80 +242,46 @@ final class Renderer
             );
         }
 
-        // Phase 1: Measure actual content width per field (header + all row values).
-        $colWidths = array_fill(0, $numFields, 0);
-        foreach ($cols as $j => $col) {
-            $colWidths[$j] = Width::string((string) $col);
-            foreach ($a->rows as $row) {
-                $val = self::cellString($row[$col] ?? '');
-                $valLen = Width::string($val);
-                if ($valLen > $colWidths[$j]) {
-                    $colWidths[$j] = $valLen;
-                }
-            }
-            // Ensure minimum of 1 for legibility even if content is empty.
-            if ($colWidths[$j] === 0) {
-                $colWidths[$j] = 1;
-            }
+        // Executed-query results render through ResultTable (its horizontal-
+        // scroll grid with JSON pretty-printing + a styled NULL token); regular
+        // table browsing renders through sugar-table.
+        if ($a->resultTable !== null) {
+            $body = $a->resultTable->withVisibleWidth($width)->render();
+            return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
-        // Phase 2: Proportional expansion to fill available width.
-        // Constraint: sum(fieldWidths) + (numFields - 1) * 2 <= availableWidth
-        // Each field takes fieldWidth + 2 for separator (2 spaces), except last.
-        $totalActual = array_sum($colWidths);
-        $totalWithSeparators = $totalActual + ($numFields - 1) * 2;
-        if ($totalWithSeparators < $width) {
-            // Content fits — expand proportionally to fill available space.
-            $excess = $width - $totalWithSeparators;
-            $expansionRatio = ($totalActual + $excess) / $totalActual;
-            $expansionRatio = max(1.0, $expansionRatio);
-            foreach ($colWidths as $j => $w) {
-                $colWidths[$j] = max($w, (int) floor($w * $expansionRatio));
-            }
-        } else {
-            // Content exceeds available width — use measured widths but ensure minimum 12.
-            foreach ($colWidths as $j => $w) {
-                $colWidths[$j] = max($w, 12);
-            }
+        // Keep panes balanced: show at most ~11 rows from the top (the bottom
+        // overhead is header + frame). The active row is highlighted via
+        // sugar-table's own selection, driven by our rowCursor.
+        $maxRows = max(1, min(11, $available - 2));
+
+        // Size each column to share the pane width (minus the table's own
+        // border); sugar-table truncates cell content to the column maxWidth.
+        $colBudget = max(6, (int) floor(($width - 1 - ($numFields - 1)) / max(1, $numFields)));
+        $columns = [];
+        foreach ($cols as $col) {
+            $columns[] = Column::new((string) $col, (string) $col, $colBudget)
+                ->withAlignLeft()
+                ->withMaxWidth($colBudget);
         }
 
-        // Phase 3: Build output with computed widths.
-        $headerCells = [];
-        foreach ($cols as $j => $col) {
-            $headerCells[] = str_pad($col, $colWidths[$j]);
+        $tableRows = [];
+        foreach ($a->rows as $row) {
+            $data = [];
+            foreach ($cols as $col) {
+                $data[(string) $col] = CellValue::display($row[$col] ?? null);
+            }
+            $tableRows[] = Row::new(RowData::from($data));
         }
-        $headerLine = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(implode('  ', $headerCells));
-        $bodyLines = [$headerLine];
 
-        // Limit visible data rows to min(11, available - 2) to keep panes balanced.
-        // available - 2 accounts for rowsPane header + bottom border overhead.
-        $maxRows = max(0, min(11, $available - 2));
-        foreach ($a->rows as $i => $row) {
-            $cells = [];
-            foreach ($cols as $j => $c) {
-                $val = self::cellString($row[$c] ?? '');
-                $cellWidth = $colWidths[$j];
-                if (Width::string($val) > $cellWidth) {
-                    // Truncate by display width, leaving a cell for the ellipsis.
-                    $val = Width::truncate($val, max(0, $cellWidth - 1)) . '…';
-                }
-                // Pad by display width, not byte/codepoint count, so wide
-                // characters don't misalign columns.
-                $pad = $cellWidth - Width::string($val);
-                if ($pad > 0) {
-                    $val .= str_repeat(' ', $pad);
-                }
-                $cells[] = $val;
-            }
-            $line = implode('  ', $cells);
-            if ($a->pane === Pane::Rows && $i === $a->rowCursor) {
-                $line = Style::new()->reverse()->render($line);
-            }
-            $bodyLines[] = $line;
-            if ($i >= $maxRows) break;
-        }
-        return self::frame($a, Pane::Rows, $title, implode("\n", $bodyLines), $width);
+        $table = Table::withColumns($columns)
+            ->withRows($tableRows)
+            ->withSelectable()
+            ->withZebra()
+            ->withViewportHeight($maxRows)
+            ->withSelectedIndex($a->rowCursor);
+
+        return self::frame($a, Pane::Rows, $title, $table->View(), $width);
     }
 
     private static function queryPane(App $a, int $terminalCols): string
@@ -397,51 +364,6 @@ final class Renderer
             : $st->borderForeground(Color::hex('#ff66aa'));
 
         return $st->render($combined);
-    }
-
-    /**
-     * Turn an arbitrary DB cell value into a safe, single-line display string.
-     *
-     * Database columns can hold binary BLOBs (geometry, encrypted payloads,
-     * etc.). Rendering those bytes verbatim is catastrophic in a TUI: a raw
-     * ESC (0x1b) injects a bogus escape sequence that desyncs the frame-diff
-     * renderer's line model, NUL/control bytes garble the terminal, and BEL
-     * makes it beep on every repaint. We:
-     *   1. stringify (scalars cast, NULL labelled, arrays/objects JSON-encoded),
-     *   2. repair invalid UTF-8 so width measurement / truncation stay sane,
-     *   3. collapse newlines to a visible marker, and
-     *   4. replace every other control byte (C0, DEL, C1) with a middle dot.
-     */
-    private static function cellString(mixed $val): string
-    {
-        if ($val === null) {
-            return 'NULL';
-        }
-        if (is_scalar($val)) {
-            $s = (string) $val;
-        } else {
-            $s = json_encode($val);
-            if ($s === false) {
-                $s = '';
-            }
-        }
-
-        // Repair invalid UTF-8 (binary data) before any mb_*/Width work.
-        if (!mb_check_encoding($s, 'UTF-8')) {
-            $prev = mb_substitute_character();
-            mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
-            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
-            mb_substitute_character($prev);
-        }
-
-        // Visualize newlines so they can't break the pane into extra rows.
-        $s = str_replace(["\r\n", "\r", "\n"], '↵', $s);
-        // Strip dangerous control bytes: C0 (0x00-0x1F) + DEL (0x7F)…
-        $s = preg_replace('/[\x00-\x1F\x7F]/', '·', $s) ?? $s;
-        // …and the C1 control range (U+0080-U+009F), now valid UTF-8.
-        $s = preg_replace('/[\x{0080}-\x{009F}]/u', '·', $s) ?? $s;
-
-        return $s;
     }
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
