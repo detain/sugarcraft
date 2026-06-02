@@ -18,6 +18,8 @@ final class Sampler
     private ?array $previous = null;
     private float $previousTs = 0.0;
     private bool $firstSample = true;
+    private ?float $lastUptime = null;
+    private bool $wasReset = false;
 
     public function __construct(
         private readonly StatusSnapshotProviderInterface $provider,
@@ -92,6 +94,38 @@ final class Sampler
         $this->previous = null;
         $this->previousTs = 0.0;
         $this->firstSample = true;
+        $this->wasReset = true;
+    }
+
+    /**
+     * Register the current server uptime and detect if the server restarted.
+     *
+     * If the new uptime is less than the last known uptime, the server
+     * has restarted and resetAll() is called.
+     */
+    public function registerUptime(float $uptime): void
+    {
+        if ($this->lastUptime !== null && $uptime < $this->lastUptime) {
+            $this->resetAll();
+            return;
+        }
+
+        $this->lastUptime = $uptime;
+    }
+
+    /**
+     * Check if a server restart was detected since last check.
+     *
+     * Returns true once after a restart is detected, then clears the flag.
+     */
+    public function wasReset(): bool
+    {
+        if ($this->wasReset) {
+            $this->wasReset = false;
+            return true;
+        }
+
+        return false;
     }
 
     /**
