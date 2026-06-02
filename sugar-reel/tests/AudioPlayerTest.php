@@ -298,7 +298,11 @@ final class AudioPlayerTest extends TestCase
      */
     private function invokeBuildCommand(AudioPlayer $player): ?array
     {
-        $ref = new \ReflectionMethod(AudioPlayer::class, 'buildCommand');
+        // Reflect on the runtime class, not AudioPlayer::class — ReflectionMethod
+        // invokes the declaring class's implementation with no virtual dispatch, so
+        // a fixed AudioPlayer::class target would skip FakeAudioPlayer's override and
+        // run the real (binary-dependent) buildCommand() instead of the fake.
+        $ref = new \ReflectionMethod($player::class, 'buildCommand');
         $ref->setAccessible(true);
         /** @var list<string>|null */
         return $ref->invoke($player);

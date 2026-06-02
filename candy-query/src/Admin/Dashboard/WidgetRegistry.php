@@ -114,6 +114,56 @@ final class WidgetRegistry
     }
 
     /**
+     * Assemble the full widget list for PostgreSQL.
+     *
+     * Combines I/O + Transactions + Cache widgets.
+     *
+     * @return list<Widget>
+     */
+    public static function buildForPostgres(): array
+    {
+        $catalog = new PostgresWidgetCatalog();
+
+        return self::widgetsFromEntries(
+            array_merge(
+                $catalog->io(),
+                $catalog->transactions(),
+                $catalog->cache(),
+            ),
+        );
+    }
+
+    /**
+     * Get only the I/O panel widgets for PostgreSQL.
+     *
+     * @return list<Widget>
+     */
+    public static function postgresIo(): array
+    {
+        return self::widgetsFromEntries((new PostgresWidgetCatalog())->io());
+    }
+
+    /**
+     * Get only the Transactions panel widgets for PostgreSQL.
+     *
+     * @return list<Widget>
+     */
+    public static function postgresTransactions(): array
+    {
+        return self::widgetsFromEntries((new PostgresWidgetCatalog())->transactions());
+    }
+
+    /**
+     * Get only the Cache panel widgets for PostgreSQL.
+     *
+     * @return list<Widget>
+     */
+    public static function postgresCache(): array
+    {
+        return self::widgetsFromEntries((new PostgresWidgetCatalog())->cache());
+    }
+
+    /**
      * Validate that a kind string is a known widget kind.
      */
     public static function isValidKind(string $kind): bool

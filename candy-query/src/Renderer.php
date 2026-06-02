@@ -94,7 +94,7 @@ final class Renderer
             $admin = self::adminPane($a, $cols);
             $query = self::queryPane($a, $cols);
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('tab  switch pane  ·  1-6  select admin page  ·  p  pause  ·  r  reset  ·  q  quit');
+                ->render('1-6  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit');
             $status = '';
             if ($a->error !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
@@ -116,8 +116,14 @@ final class Renderer
 
         $query  = self::queryPane($a, $cols);
 
-        $help   = Style::new()->foreground(Color::hex('#7d6e98'))
-            ->render('tab  switch pane  ·  enter  load table  ·  ctrl+r  run query  ·  q  quit');
+        // Help text differs per pane
+        if ($a->pane === Pane::Query) {
+            $help = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render('tab  switch pane  ·  ctrl+r  run  ·  ctrl+e  clear  ·  ctrl+h  history  ·  q  quit');
+        } else {
+            $help = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render('tab  switch pane  ·  enter  load table  ·  ctrl+r  run query  ·  q  quit');
+        }
 
         $status = '';
         if ($a->error !== null) {
