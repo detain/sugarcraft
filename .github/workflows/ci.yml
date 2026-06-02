@@ -18,7 +18,7 @@ env:
   # both the cache-extensions step (for cache-key computation) and the
   # setup-php step (for the actual install). See the test job for why
   # we install everything on every cell.
-  PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, ssh2, gd, curl, openssl, ffi
+  PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
 
 jobs:
   # Compute every job's matrix by diffing the change-set and walking the
@@ -161,7 +161,7 @@ jobs:
           extensions: ${{ env.PHP_EXTENSIONS }}
           # Bump key suffix when adding/removing extensions or when a runner
           # image upgrade invalidates ABI compatibility.
-          key: php-ext-v3
+          key: php-ext-v4
 
       - name: Restore PHP extensions
         uses: actions/cache@v5
@@ -358,7 +358,7 @@ jobs:
         with:
           php-version: '8.3'
           extensions: ${{ env.PHP_EXTENSIONS }}
-          key: php-ext-cov-v3
+          key: php-ext-cov-v4
 
       - name: Restore PHP extensions
         uses: actions/cache@v5
@@ -468,7 +468,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: ${{ env.PHP_EXTENSIONS }}
-          key: php-ext-stan-v3
+          key: php-ext-stan-v4
 
       - name: Restore PHP extensions
         uses: actions/cache@v5

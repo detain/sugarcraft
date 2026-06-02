@@ -23,6 +23,10 @@ use SugarCraft\Query\App;
 use SugarCraft\Query\App\AppBuilder;
 use SugarCraft\Query\Db\ConnectionFactory;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\MysqlDatabase;
+use SugarCraft\Query\Db\PostgresDatabase;
+use SugarCraft\Query\Db\SqliteDatabase;
 use SugarCraft\Query\Lang;
 
 $argv = $argv ?? [];
@@ -35,8 +39,16 @@ if ($exit !== null) {
 
 $database = buildDatabase($argv);
 
+// Extract flavor from database type
+$flavor = match (true) {
+    $database instanceof MysqlDatabase => Flavor::MySQL,
+    $database instanceof PostgresDatabase => Flavor::Postgres,
+    $database instanceof SqliteDatabase => Flavor::Sqlite,
+    default => Flavor::Sqlite,
+};
+
 (new Program(
-    App::start($database),
+    App::start($database, $flavor),
     new ProgramOptions(useAltScreen: true),
 ))->run();
 

@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Connections;
 
+use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Table\{Column, Row, RowData, Table};
-use SugarCraft\Table\ColumnWidth;
 
 /**
  * Connections page component integrating processlist, counters, filters, and actions.
@@ -18,17 +18,22 @@ use SugarCraft\Table\ColumnWidth;
  *
  * @see Mirrors charmbracelet/lazysql connections page
  */
-final class ConnectionsPage
+final class ConnectionsPage extends PageBase
 {
     private ?ProcesslistResult $selectedThread = null;
+    private ?ConnectionFilters $filters = null;
+    private ?ProcesslistProvider $processlistProvider = null;
+    private ?ConnectionCounters $counters = null;
+    private ?ConnectionActions $actions = null;
+    private ?ConnectionDetailTabs $detailTabs = null;
 
     public function __construct(
-        private readonly ProcesslistProvider $processlistProvider,
-        private readonly ConnectionCounters $counters,
-        private readonly ConnectionFilters $filters,
-        private readonly ConnectionActions $actions,
-        private readonly ConnectionDetailTabs $detailTabs,
-    ) {}
+        ServerContextInterface $context,
+        private readonly ?int $maxConnections = 151,
+    ) {
+        parent::__construct($context);
+        $this->filters = ConnectionFilters::new();
+    }
 
     /**
      * Create a new connections page with standard dependencies.
@@ -37,20 +42,15 @@ final class ConnectionsPage
         ServerContextInterface $context,
         ?int $maxConnections = 151,
     ): self {
-        $provider = ProcesslistProvider::new($context);
-        $actions = ConnectionActions::new($context);
-        $detailTabs = ConnectionDetailTabs::new($context);
-
-        return new self(
-            processlistProvider: $provider,
-            counters: ConnectionCounters::fromSnapshot(
-                new StatusSnapshot($context->statusVariables(), $context->statusVariablesTs()),
-                $maxConnections ?? 151
-            ),
-            filters: ConnectionFilters::new(),
-            actions: $actions,
-            detailTabs: $detailTabs,
+        $instance = new self($context, $maxConnections);
+        $instance->processlistProvider = ProcesslistProvider::new($context);
+        $instance->actions = ConnectionActions::new($context);
+        $instance->detailTabs = ConnectionDetailTabs::new($context);
+        $instance->counters = ConnectionCounters::fromSnapshot(
+            new StatusSnapshot($context->statusVariables(), $context->statusVariablesTs()),
+            $maxConnections ?? 151
         );
+        return $instance;
     }
 
     /**
@@ -134,9 +134,42 @@ final class ConnectionsPage
      */
     public function refresh(): self
     {
+        $this->context->refresh();
         $clone = clone $this;
-        $clone->processlistProvider = $clone->processlistProvider->refresh();
+        $clone->processlistProvider = $this->processlistProvider->refresh();
         return $clone;
+    }
+
+    /**
+     * Validate that the context is usable.
+     */
+    protected function validate(): bool
+    {
+        try {
+            $this->context->serverVariables();
+            return true;
+        } catch (\Throwable) {
+            $this->errorMessage = 'Unable to fetch server variables';
+            return false;
+        }
+    }
+
+    /**
+     * Build the page content.
+     */
+    protected function build(): string
+    {
+        $lines = [];
+
+        // Render counters bar
+        $counters = $this->counters;
+        $lines[] = "Connections: {$counters->threadsConnected} / {$counters->maxConnections}";
+
+        // Render table
+        $table = $this->getTable();
+        $lines[] = $table->render();
+
+        return implode("\n", $lines);
     }
 
     /**

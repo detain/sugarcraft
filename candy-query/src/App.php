@@ -9,6 +9,17 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Query\Admin\AdminPane;
+use SugarCraft\Query\Admin\Connections\ConnectionsPage;
+use SugarCraft\Query\Admin\Dashboard\DashboardPage;
+use SugarCraft\Query\Admin\PageBase;
+use SugarCraft\Query\Admin\PostgresServerContext;
+use SugarCraft\Query\Admin\Reports\ReportsPage;
+use SugarCraft\Query\Admin\Providers\PostgresAdminProvider;
+use SugarCraft\Query\Admin\ServerContext;
+use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
+use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
@@ -41,6 +52,7 @@ final class App implements Model
      */
     public function __construct(
         public readonly DatabaseInterface $db,
+        public readonly Flavor $flavor = Flavor::Sqlite,
         public readonly array $tables = [],
         public readonly int $tableCursor = 0,
         public readonly ?string $selectedTable = null,
@@ -54,6 +66,11 @@ final class App implements Model
         public readonly array $queryFavorites = [],
         public readonly int $historyIndex = -1,  // -1 means current buffer, 0 = most recent
         public readonly ?string $savedBuf = null,  // temp storage for current buffer when navigating history
+        public readonly AdminPane $adminPane = AdminPane::ProcessList,
+        public readonly int $adminCursor = 0,
+        public readonly bool $paused = false,
+        public readonly ?ServerContextInterface $serverContext = null,
+        public readonly ?PageBase $adminPage = null,
     ) {}
 
     /**
@@ -62,7 +79,7 @@ final class App implements Model
     public static function start(DatabaseInterface $db, Flavor $flavor = Flavor::Sqlite): self
     {
         $tables = $db->tables();
-        $a = new self(db: $db, tables: $tables);
+        $a = new self(db: $db, flavor: $flavor, tables: $tables, adminPane: AdminPane::ProcessList, adminCursor: 0, paused: false);
         if ($tables !== []) {
             $a = $a->loadTable($tables[0]);
         }
@@ -100,6 +117,9 @@ final class App implements Model
         }
         if ($this->pane === Pane::Tables) {
             return [$this->handleTablesKey($msg), null];
+        }
+        if ($this->pane === Pane::Admin) {
+            return [$this->handleAdminKey($msg), null];
         }
         return [$this->handleRowsKey($msg), null];
     }
@@ -142,26 +162,69 @@ final class App implements Model
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: max(0, $this->rowCursor - 1),
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: $this->error, status: $this->status,
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: $this->error, status: $this->status,
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
+        }
+        return $this;
+    }
+
+    private function handleAdminKey(KeyMsg $msg): self
+    {
+        // [1-6] keys directly select an admin pane
+        if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '6') {
+            $index = (int) $msg->rune - 1;
+            $allPanes = AdminPane::cases();
+            if (isset($allPanes[$index])) {
+                return $this->withAdminPane($allPanes[$index]);
+            }
+        }
+        // j/k or arrows navigate within admin sidebar
+        if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
+            return $this->withAdminCursor($this->adminCursor + 1);
+        }
+        if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
+            return $this->withAdminCursor(max(0, $this->adminCursor - 1));
+        }
+        // [p] pause/resume polling (sync with DashboardPage if present)
+        if ($msg->type === KeyType::Char && $msg->rune === 'p') {
+            $newPaused = !$this->paused;
+            $page = $this->adminPage();
+            if ($page instanceof \SugarCraft\Query\Admin\Dashboard\DashboardPage) {
+                $page = $page->withPaused($newPaused);
+                return $this->withPaused($newPaused)->withAdminPage($page);
+            }
+            return $this->withPaused($newPaused);
+        }
+        // [r] reset — delegate to admin page's update
+        if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+            $page = $this->adminPage();
+            [$newPage, ] = $page->update($msg);
+            if ($newPage !== $page) {
+                return $this->withAdminPage($newPage);
+            }
+            return $this;
         }
         return $this;
     }
@@ -218,22 +281,26 @@ final class App implements Model
         try {
             $rows = $this->db->query($this->queryBuf);
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: '(query)', rows: $rows, rowCursor: 0,
                 queryBuf: '', pane: $this->pane,
                 error: null, status: count($rows) . ' rows',
                 queryHistory: $history, queryFavorites: $this->queryFavorites,
                 historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         } catch (\PDOException $e) {
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
                 pane: $this->pane,
                 error: $e->getMessage(), status: null,
                 queryHistory: $history, queryFavorites: $this->queryFavorites,
                 historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
     }
@@ -243,23 +310,27 @@ final class App implements Model
         try {
             $rows = $this->db->rows($name);
             return new self(
-                db: $this->db, tables: $this->tables,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables,
                 tableCursor: array_search($name, $this->tables, true) ?: 0,
                 selectedTable: $name, rows: $rows, rowCursor: 0,
                 queryBuf: $this->queryBuf, pane: $this->pane,
                 error: null, status: count($rows) . ' rows',
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         } catch (\PDOException $e) {
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
                 pane: $this->pane,
                 error: $e->getMessage(), status: null,
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
     }
@@ -270,36 +341,149 @@ final class App implements Model
         if ($size === 0) return $this;
         $i = max(0, min($size - 1, $i));
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $i,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $i,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $this->pane, error: $this->error, status: $this->status,
             queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
+    }
+
+    private function withAdminPane(AdminPane $adminPane): self
+    {
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: null,  // reset adminPage to force recreation
+        );
+    }
+
+    private function withAdminCursor(int $adminCursor): self
+    {
+        $allPanes = AdminPane::cases();
+        $adminCursor = max(0, min($adminCursor, count($allPanes) - 1));
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
+        );
+    }
+
+    private function withPaused(bool $paused): self
+    {
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
+        );
+    }
+
+    private function withAdminPage(PageBase $newPage): self
+    {
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $newPage,
+        );
+    }
+
+    /**
+     * Lazily create the admin page for the currently selected admin pane.
+     *
+     * Uses ServerContext (MySQL) or PostgresServerContext (PostgreSQL) to
+     * instantiate the appropriate PageBase subclass. Cache is invalidated
+     * when adminPane changes (via withAdminPane resetting adminPage to null).
+     *
+     * Note: ProcessList and ConnStats currently use DashboardPage as placeholder
+     * since ConnectionsPage does not extend PageBase. Full ConnectionsPage
+     * integration will come in a later phase.
+     */
+    public function adminPage(): PageBase
+    {
+        if ($this->adminPage !== null) {
+            return $this->adminPage;
+        }
+
+        $context = $this->serverContext ?? $this->createContext();
+
+        return match ($this->adminPane) {
+            // TODO: Use ConnectionsPage once it extends PageBase
+            AdminPane::ProcessList, AdminPane::ConnStats => new DashboardPage($context),
+            AdminPane::Variables => VariablesPage::new($context),
+            AdminPane::Status => ServerStatusPage::new($context),
+            AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
+        };
+    }
+
+    /**
+     * Create the appropriate server context based on database flavor.
+     */
+    private function createContext(): ServerContextInterface
+    {
+        return match ($this->flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new ServerContext($this->db, $this->flavor),
+            Flavor::Postgres => $this->createPostgresContext(),
+            default => throw new \RuntimeException('Admin not supported for ' . $this->flavor->value),
+        };
+    }
+
+    /**
+     * Create a PostgresServerContext wrapping PostgresAdminProvider.
+     */
+    private function createPostgresContext(): ServerContextInterface
+    {
+        $provider = PostgresAdminProvider::new($this->db);
+        return PostgresServerContext::new($this->db, $provider);
     }
 
     private function withPane(Pane $p): self
     {
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $p, error: $this->error, status: $this->status,
             queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
     }
 
     private function withQueryBuf(string $buf): self
     {
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $buf,
             pane: $this->pane, error: $this->error, status: $this->status,
             queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
     }
 
@@ -314,7 +498,7 @@ final class App implements Model
         if ($this->historyIndex === -1) {
             if ($historySize >= 2) {
                 return new self(
-                    db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                    db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                     selectedTable: $this->selectedTable, rows: $this->rows,
                     rowCursor: $this->rowCursor,
                     queryBuf: $this->queryHistory[1],
@@ -322,11 +506,13 @@ final class App implements Model
                     queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                     historyIndex: 1,
                     savedBuf: $this->queryBuf,
+                    adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                    serverContext: $this->serverContext, adminPage: $this->adminPage,
                 );
             }
             // Only one item, go to index 0
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: $this->rowCursor,
                 queryBuf: $this->queryHistory[0],
@@ -334,13 +520,15 @@ final class App implements Model
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: 0,
                 savedBuf: $this->queryBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
         // If historyIndex > 0, decrement index (going toward older)
         if ($this->historyIndex > 0) {
             $newIndex = $this->historyIndex - 1;
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: $this->rowCursor,
                 queryBuf: $this->queryHistory[$newIndex],
@@ -348,6 +536,8 @@ final class App implements Model
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $newIndex,
                 savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
         return $this;
@@ -363,7 +553,7 @@ final class App implements Model
         if ($this->historyIndex > 0) {
             $newIndex = $this->historyIndex - 1;
             return new self(
-                db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+                db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
                 selectedTable: $this->selectedTable, rows: $this->rows,
                 rowCursor: $this->rowCursor,
                 queryBuf: $this->queryHistory[$newIndex],
@@ -371,11 +561,13 @@ final class App implements Model
                 queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
                 historyIndex: $newIndex,
                 savedBuf: $this->savedBuf,
+                adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+                serverContext: $this->serverContext, adminPage: $this->adminPage,
             );
         }
         // If at index 0 (newest), go back to -1 and restore savedBuf
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor,
             queryBuf: $this->savedBuf ?? '',
@@ -383,6 +575,8 @@ final class App implements Model
             queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
             historyIndex: -1,
             savedBuf: null,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
     }
 
@@ -396,12 +590,14 @@ final class App implements Model
         $favorites = $this->queryFavorites;
         array_unshift($favorites, $trimmed);
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $this->pane, error: $this->error, status: $this->status,
             queryHistory: $this->queryHistory, queryFavorites: $favorites,
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
     }
 
@@ -413,12 +609,14 @@ final class App implements Model
             fn(string $f) => $f !== $trimmed
         ));
         return new self(
-            db: $this->db, tables: $this->tables, tableCursor: $this->tableCursor,
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
             selectedTable: $this->selectedTable, rows: $this->rows,
             rowCursor: $this->rowCursor, queryBuf: $this->queryBuf,
             pane: $this->pane, error: $this->error, status: $this->status,
             queryHistory: $this->queryHistory, queryFavorites: $favorites,
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
         );
     }
 
