@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests;
 
 use SugarCraft\Query\Database;
+use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Explain\ExplainProviderInterface;
 use SugarCraft\Query\ExplainRow;
 use SugarCraft\Query\ExplainView;
 use PHPUnit\Framework\TestCase;
@@ -85,7 +87,8 @@ final class ExplainViewTest extends TestCase
     public function testEmptyResultSetShowsPlaceholder(): void
     {
         // Construct with empty raw data to test placeholder rendering.
-        $view = new ExplainView([]);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView([], Flavor::Sqlite, $provider);
         $out = $view->render();
         $this->assertStringContainsString('no query plan', $out);
     }
@@ -97,7 +100,8 @@ final class ExplainViewTest extends TestCase
             ['detail' => 'SEARCH t USING INDEX idx_a'],
             ['detail' => '  |--SEARCH t USING COVERING INDEX idx_a'],
         ];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertCount(2, $view->rows);
         // "  |--" should give depth >= 1 for the second row.
         $this->assertGreaterThanOrEqual(1, $view->rows[1]->depth);
@@ -106,35 +110,40 @@ final class ExplainViewTest extends TestCase
     public function testTagSearchForUsingIndex(): void
     {
         $raw = [['detail' => 'SEARCH t USING INDEX idx_a (a=?)']];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertSame('SEARCH', $view->rows[0]->tag);
     }
 
     public function testTagScanForTableScan(): void
     {
         $raw = [['detail' => 'SCAN t FULL TABLE SCAN']];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertSame('SCAN', $view->rows[0]->tag);
     }
 
     public function testTagJoinForJoinOperation(): void
     {
         $raw = [['detail' => 'SEARCH u BY PRIMARY KEY QUERY PLAN JOIN']];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertSame('JOIN', $view->rows[0]->tag);
     }
 
     public function testTagSubqueryForCorrelated(): void
     {
         $raw = [['detail' => 'SCAN (subquery) CORRELATED SUBQUERY']];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertSame('SUBQUERY', $view->rows[0]->tag);
     }
 
     public function testTagCompoundForUnion(): void
     {
         $raw = [['detail' => 'COMPOUND QUERY USING TEMP B-TREE FOR UNION']];
-        $view = new ExplainView($raw);
+        $provider = $this->createMock(ExplainProviderInterface::class);
+        $view = new ExplainView($raw, Flavor::Sqlite, $provider);
         $this->assertSame('COMPOUND', $view->rows[0]->tag);
     }
 }

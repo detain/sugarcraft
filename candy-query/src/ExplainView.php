@@ -5,19 +5,20 @@ declare(strict_types=1);
 namespace SugarCraft\Query;
 
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Explain\ExplainProviderInterface;
+use SugarCraft\Query\Explain\SqliteExplainProvider;
+use SugarCraft\Query\Explain\MysqlExplainProvider;
+use SugarCraft\Query\Explain\PostgresExplainProvider;
 use SugarCraft\Sprinkles\Style;
 
 /**
- * Renders the output of SQLite's `EXPLAIN QUERY PLAN` as a
+ * Renders the output of database EXPLAIN commands as a
  * readable ANSI tree with colour-coded operation types.
  *
- * SQLite's raw output is a flat list of (detail) lines. This class
- * parses the tree-structure implicit in the `|`/`--` prefix and
- * applies:
- *
- *   - indentation for nesting depth
- *   - colour by op type (SEARCH=cyan, SCAN=yellow, SUBQUERY=magenta, etc.)
- *   - bold headers / labels
+ * Uses driver-specific ExplainProvider implementations to execute
+ * the appropriate EXPLAIN syntax for each database driver.
  *
  * Immutable — factory methods return new instances.
  */
@@ -37,28 +38,50 @@ final class ExplainView
      */
     public readonly array $rows;
 
-    /** Raw PDO fetch-all result from `EXPLAIN QUERY PLAN`. */
+    /** Raw PDO fetch-all result from EXPLAIN. */
     private readonly array $raw;
+
+    /** @var Flavor Database flavor for driver detection */
+    private readonly Flavor $flavor;
+
+    /** @var ExplainProviderInterface The active explain provider */
+    private readonly ExplainProviderInterface $provider;
 
     /**
      * @param list<array{.detail:string}> $raw
      */
-    public function __construct(array $raw)
+    public function __construct(array $raw, Flavor $flavor, ExplainProviderInterface $provider)
     {
         $this->raw = $raw;
+        $this->flavor = $flavor;
+        $this->provider = $provider;
         $this->rows = $this->parse($raw);
     }
 
     /**
-     * Run `EXPLAIN QUERY PLAN` against $db and return a new ExplainView.
+     * Run EXPLAIN against $db and return a new ExplainView.
      */
-    public static function run(Database $db, string $sql): self
+    public static function run(DatabaseInterface $db, string $sql): self
     {
-        $stmt = $db->pdo->prepare("EXPLAIN QUERY PLAN {$sql}");
-        $stmt->execute();
-        /** @var list<array{ detail:string }> */
-        $raw = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-        return new self($raw);
+        $flavor = Flavor::detectFromVersionString($db->serverVersion());
+        $provider = self::createProvider($db, $flavor);
+        $raw = $provider->explain($sql);
+
+        return new self($raw, $flavor, $provider);
+    }
+
+    /**
+     * Create the appropriate explain provider based on database flavor.
+     *
+     * Uses strategy pattern to select driver-specific implementation.
+     */
+    private static function createProvider(DatabaseInterface $db, Flavor $flavor): ExplainProviderInterface
+    {
+        return match ($flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new MysqlExplainProvider($db),
+            Flavor::Postgres => new PostgresExplainProvider($db),
+            Flavor::Sqlite => new SqliteExplainProvider($db),
+        };
     }
 
     /**
@@ -93,9 +116,9 @@ final class ExplainView
         return array_map(
             static fn(ExplainRow $r): array => [
                 'depth'   => $r->depth,
-                'tag'     => $r->tag,
-                'detail'  => $r->detail,
-                'indent'  => $r->indent,
+                'tag'      => $r->tag,
+                'detail'   => $r->detail,
+                'indent'   => $r->indent,
             ],
             $this->rows,
         );
@@ -118,9 +141,9 @@ final class ExplainView
             self::TAG_SEARCH    => Color::hex('#7dd3fc'),  // cyan
             self::TAG_SCAN      => Color::hex('#fde68a'),  // yellow
             self::TAG_USING     => Color::hex('#6ee7b7'),  // green
-            self::TAG_JOIN      => Color::hex('#c084fc'),  // purple
-            self::TAG_SUBQUERY  => Color::hex('#f9a8d4'),  // pink
-            self::TAG_COMPOUND  => Color::hex('#fb923c'),  // orange
+            self::TAG_JOIN     => Color::hex('#c084fc'),  // purple
+            self::TAG_SUBQUERY => Color::hex('#f9a8d4'),  // pink
+            self::TAG_COMPOUND => Color::hex('#fb923c'),  // orange
             default             => Color::hex('#e2e8f0'),  // light gray
         };
     }
@@ -153,10 +176,10 @@ final class ExplainView
     }
 
     /**
-     * Extract tree depth from SQLite detail line.
+     * Extract tree depth from detail line.
      *
-     * SQLite uses |--  (depth 1), |----  (depth 2) etc.
-     * and \`--  for the last child at that depth.
+     * For SQLite: |--  (depth 1), |----  (depth 2) etc.
+     * and `--  for the last child at that depth.
      */
     private function depthFromDetail(string $detail): int
     {
@@ -213,7 +236,7 @@ final class ExplainView
 }
 
 /**
- * A single parsed row from `EXPLAIN QUERY PLAN`.
+ * A single parsed row from EXPLAIN output.
  *
  * @readonly
  */
