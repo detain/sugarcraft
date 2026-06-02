@@ -288,6 +288,16 @@ final class DashboardPage extends PageBase
         return $clone;
     }
 
+    public function withPaused(bool $paused): self
+    {
+        if ($this->paused === $paused) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->paused = $paused;
+        return $clone;
+    }
+
     public function withReset(): self
     {
         $clone = clone $this;

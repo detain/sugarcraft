@@ -32,7 +32,13 @@ final class ServerContext implements ServerContextInterface
 
     public function __construct(
         private readonly DatabaseInterface $connection,
-    ) {}
+        private readonly ?Flavor $flavor = null,
+    ) {
+        // If flavor is provided, use it to pre-set the cache
+        if ($this->flavor !== null) {
+            $this->flavorCache = $this->flavor;
+        }
+    }
 
     public function connection(): DatabaseInterface
     {

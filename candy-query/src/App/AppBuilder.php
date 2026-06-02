@@ -5,12 +5,14 @@ declare(strict_types=1);
 namespace SugarCraft\Query\App;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
 
 /**
  * Fluent builder for App.
  *
  * @method self withDb(DatabaseInterface $db)
+ * @method self withFlavor(Flavor $flavor)
  * @method self withTables(array $tables)
  * @method self withTableCursor(int $tableCursor)
  * @method self withSelectedTable(?string $selectedTable)
@@ -28,6 +30,7 @@ use SugarCraft\Query\Pane;
 final class AppBuilder
 {
     private ?DatabaseInterface $db = null;
+    private Flavor $flavor = Flavor::Sqlite;
     private array $tables = [];
     private int $tableCursor = 0;
     private ?string $selectedTable = null;
@@ -46,6 +49,13 @@ final class AppBuilder
     {
         $clone = clone $this;
         $clone->db = $db;
+        return $clone;
+    }
+
+    public function withFlavor(Flavor $flavor): self
+    {
+        $clone = clone $this;
+        $clone->flavor = $flavor;
         return $clone;
     }
 
@@ -148,6 +158,7 @@ final class AppBuilder
 
         return new \SugarCraft\Query\App(
             $this->db,
+            $this->flavor,
             $this->tables,
             $this->tableCursor,
             $this->selectedTable,
