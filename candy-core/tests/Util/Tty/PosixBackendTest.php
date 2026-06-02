@@ -41,11 +41,18 @@ final class PosixBackendTest extends TestCase
         }
     }
 
-    public function testSizeHonorsEnv(): void
+    /**
+     * Env COLUMNS/LINES are honored as the FALLBACK when there is no live
+     * tty to ioctl (the stream here is a memory stream, so isTty() is false).
+     * On a real tty the kernel ioctl takes precedence over these — env is
+     * often stale across resizes — but that path can't be exercised here.
+     */
+    public function testSizeHonorsEnvWhenNotTty(): void
     {
         $r = fopen('php://memory', 'r+');
         $this->assertNotFalse($r);
         $tty = new PosixBackend($r);
+        $this->assertFalse($tty->isTty(), 'memory stream must not be a tty for this test');
 
         $prevCols = getenv('COLUMNS');
         $prevRows = getenv('LINES');

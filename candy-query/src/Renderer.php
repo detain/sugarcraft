@@ -6,6 +6,7 @@ namespace SugarCraft\Query;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminSection;
 use SugarCraft\Query\Terminal\BorderFrame;
@@ -28,11 +29,31 @@ final class Renderer
     private static ?array $terminalSize = null;
 
     /**
-     * Get the terminal size, trying multiple backends in order:
-     *   1. Environment variables (COLUMNS/LINES, set by some terminal emulators)
-     *   2. FFI ioctl(TIOCGWINSZ) via PosixBackend
+     * Record the authoritative terminal size handed to us by the framework.
+     *
+     * The {@see \SugarCraft\Core\Program} emits a
+     * {@see \SugarCraft\Core\Msg\WindowSizeMsg} at startup and on every
+     * `SIGWINCH`; {@see App::update()} forwards it here so the renderer lays
+     * out for exactly the space the program's own screen renderer is driving.
+     * This is the single source of truth — it overrides any independent
+     * detection below (which is only a fallback for contexts where no
+     * WindowSizeMsg arrives, e.g. tests).
+     */
+    public static function setSize(int $cols, int $rows): void
+    {
+        if ($cols > 0 && $rows > 0) {
+            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
+        }
+    }
+
+    /**
+     * Get the terminal size. Once {@see setSize()} has been called with the
+     * framework's WindowSizeMsg, that value is authoritative. Otherwise fall
+     * back to detection, trying backends in order:
+     *   1. FFI ioctl(TIOCGWINSZ) via PosixBackend — live kernel size
+     *   2. Environment variables (COLUMNS/LINES) — often stale, last resort
      *   3. Shell-out to `stty size`
-     *   4. Hard default of 32 rows × 200 cols
+     *   4. Hard default of 60 rows × 200 cols
      *
      * @return array{rows:int, cols:int}
      */
@@ -42,15 +63,10 @@ final class Renderer
             return self::$terminalSize;
         }
 
-        // 1. Environment variables (set by terminal emulators / resize commands)
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES') ?: 0);
-        if ($cols > 0 && $rows > 0) {
-            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
-            return self::$terminalSize;
-        }
-
-        // 2. FFI ioctl via PosixBackend (candy-core/candy-pty)
+        // 1. FFI ioctl via PosixBackend (candy-core/candy-pty). The kernel
+        // TIOCGWINSZ is the ground truth and tracks resizes live; prefer it
+        // over the COLUMNS/LINES env vars, which are frequently stale under
+        // SSH/tmux and produced frames sized to the wrong (half) height.
         try {
             $backend = new PosixBackend(STDOUT);
             $size = $backend->size();
@@ -60,6 +76,14 @@ final class Renderer
             }
         } catch (\Throwable) {
             // FFI not available or ioctl failed — fall through
+        }
+
+        // 2. Environment variables (fallback when there is no live tty).
+        $cols = (int) (getenv('COLUMNS') ?: 0);
+        $rows = (int) (getenv('LINES') ?: 0);
+        if ($cols > 0 && $rows > 0) {
+            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
+            return self::$terminalSize;
         }
 
         // 3. Shell fallback: `stty size` ( POSIX-compatible )
@@ -146,8 +170,12 @@ final class Renderer
         // Calculate width: expand to use up to half the terminal (minus 3-char gap).
         // Use max(24, ...) to keep at least 24 chars for readability.
         // Formula: width = max(24, min(max_table_name_length, floor(terminalCols/2) - 3))
+        // Cap each pane at floor(cols/2) - 6 so the two panes side-by-side fit
+        // the outer frame: each rendered pane is paneWidth + 4 (border+padding),
+        // joined with a 2-space gap, all inside the outer frame's (cols-2)
+        // content area → 2*(w+4) + 2 ≤ cols-2 ⇒ w ≤ floor(cols/2) - 6.
         $maxTableLen = $a->tables !== [] ? max(array_map('strlen', $a->tables)) : 0;
-        $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 3));
+        $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 6));
 
         if ($a->tables === []) {
             $body[] = Style::new()->foreground(Color::hex('#7d6e98'))
@@ -170,9 +198,11 @@ final class Renderer
 
         if ($count <= $available) {
             // Everything fits — render the full list without scroll indicators.
-            // Pass available=count so array_slice only processes O(available) items,
-            // and use count as frame height so the frame exactly fits the content.
-            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), max($count, $width));
+            // Pass available=count so array_slice only processes O(available) items.
+            // The frame's height follows the body line count automatically; the
+            // last arg is the column WIDTH (must be $width — passing $count here
+            // mistook a row count for a width and could overflow the layout).
+            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), $width);
         }
 
         // Need to scroll: determine the visible window around the cursor
@@ -257,9 +287,9 @@ final class Renderer
         $cols = array_keys($a->rows[0] ?? []);
         $numFields = count($cols);
 
-        // Calculate available content width using the same formula as before.
-        // Use floor(terminalCols/2) - 3 to leave room for tables pane + gap.
-        $width = min($numFields * 14, (int) floor($terminalCols / 2) - 3);
+        // Cap at floor(cols/2) - 6 (see tablesPane) so tables + rows fit the
+        // outer frame side-by-side without overflowing and wrapping.
+        $width = min($numFields * 14, (int) floor($terminalCols / 2) - 6);
         $width = max(60, $width);
 
         if ($a->rows === []) {
@@ -273,18 +303,10 @@ final class Renderer
         // Phase 1: Measure actual content width per field (header + all row values).
         $colWidths = array_fill(0, $numFields, 0);
         foreach ($cols as $j => $col) {
-            $headerLen = mb_strlen($col);
-            $colWidths[$j] = $headerLen;
+            $colWidths[$j] = Width::string((string) $col);
             foreach ($a->rows as $row) {
-                $val = $row[$col] ?? '';
-                if (is_scalar($val)) {
-                    $val = (string) $val;
-                } else {
-                    $val = json_encode($val) ?: '';
-                }
-                // Replace newlines with visual marker so they don't break pane layout
-                $val = str_replace(["\r\n", "\r", "\n"], '↵', $val);
-                $valLen = mb_strlen($val);
+                $val = self::cellString($row[$col] ?? '');
+                $valLen = Width::string($val);
                 if ($valLen > $colWidths[$j]) {
                     $colWidths[$j] = $valLen;
                 }
@@ -330,20 +352,19 @@ final class Renderer
         foreach ($a->rows as $i => $row) {
             $cells = [];
             foreach ($cols as $j => $c) {
-                $val = $row[$c] ?? '';
-                if (is_scalar($val)) {
-                    $val = (string) $val;
-                } else {
-                    $val = json_encode($val) ?: '';
-                }
-                // Replace newlines with visual marker so they don't break pane layout
-                $val = str_replace(["\r\n", "\r", "\n"], '↵', $val);
+                $val = self::cellString($row[$c] ?? '');
                 $cellWidth = $colWidths[$j];
-                if (mb_strlen($val) > $cellWidth) {
-                    // Truncate: keep $cellWidth - 1 chars + ellipsis.
-                    $val = mb_substr($val, 0, $cellWidth - 1) . '…';
+                if (Width::string($val) > $cellWidth) {
+                    // Truncate by display width, leaving a cell for the ellipsis.
+                    $val = Width::truncate($val, max(0, $cellWidth - 1)) . '…';
                 }
-                $cells[] = str_pad($val, $cellWidth);
+                // Pad by display width, not byte/codepoint count, so wide
+                // characters don't misalign columns.
+                $pad = $cellWidth - Width::string($val);
+                if ($pad > 0) {
+                    $val .= str_repeat(' ', $pad);
+                }
+                $cells[] = $val;
             }
             $line = implode('  ', $cells);
             if ($a->pane === Pane::Rows && $i === $a->rowCursor) {
@@ -359,8 +380,12 @@ final class Renderer
     {
         $cursorMark = $a->pane === Pane::Query ? '▮' : ' ';
         $body = ($a->queryBuf === '' ? '-- type SQL, ctrl+r to run --' : $a->queryBuf) . $cursorMark;
-        // Use full terminal width minus 4 for frame border/padding.
-        $width = max(80, $terminalCols - 4);
+        // This pane spans the full width. The outer BorderFrame gives each line
+        // a content area of (cols - 2); a bordered+padded Style adds 4 (2 border
+        // + 2 padding), so the inner CONTENT width must be (cols - 2) - 4 = cols - 6.
+        // Using cols - 4 (the old value) overflowed the outer frame by 2 cells,
+        // wrapping the query box and dropping its right border.
+        $width = max(20, $terminalCols - 6);
         return self::frame($a, Pane::Query, ' query ', $body, $width);
     }
 
@@ -408,10 +433,15 @@ final class Renderer
         // Get admin page content — no frame wrapping from here
         $pageContent = $a->adminPage()->view();
 
-        // Calculate widths
+        // This pane spans the full width. The outer BorderFrame content area is
+        // (cols - 2); a bordered+padded Style adds 4, so the inner content width
+        // must be (cols - 6). Using cols - 2 (the old value) overflowed by 4.
+        $innerWidth = max(20, $terminalCols - 6);
+
+        // Calculate widths within the inner content region.
         $sidebarWidth = (int) floor($terminalCols / 4);
         $sidebarWidth = max(20, $sidebarWidth);  // minimum 20 chars
-        $contentWidth = $terminalCols - $sidebarWidth - 3;  // 3 for gap
+        $contentWidth = max(10, $innerWidth - $sidebarWidth - 2);  // 2 for gap
 
         // Join sidebar and content horizontally — use raw strings, NOT pre-styled frames
         // Layout::joinHorizontal takes strings and pads shorter one with blank lines at the bottom
@@ -419,12 +449,57 @@ final class Renderer
 
         // Wrap the combined output in a single frame
         $title = ' admin ';
-        $st = Style::new()->border(Border::rounded())->padding(0, 1)->width($terminalCols - 2);
+        $st = Style::new()->border(Border::rounded())->padding(0, 1)->width($innerWidth);
         $st = $a->pane === Pane::Admin
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
 
         return $st->render(Style::new()->bold()->render($title) . "\n" . $combined);
+    }
+
+    /**
+     * Turn an arbitrary DB cell value into a safe, single-line display string.
+     *
+     * Database columns can hold binary BLOBs (geometry, encrypted payloads,
+     * etc.). Rendering those bytes verbatim is catastrophic in a TUI: a raw
+     * ESC (0x1b) injects a bogus escape sequence that desyncs the frame-diff
+     * renderer's line model, NUL/control bytes garble the terminal, and BEL
+     * makes it beep on every repaint. We:
+     *   1. stringify (scalars cast, NULL labelled, arrays/objects JSON-encoded),
+     *   2. repair invalid UTF-8 so width measurement / truncation stay sane,
+     *   3. collapse newlines to a visible marker, and
+     *   4. replace every other control byte (C0, DEL, C1) with a middle dot.
+     */
+    private static function cellString(mixed $val): string
+    {
+        if ($val === null) {
+            return 'NULL';
+        }
+        if (is_scalar($val)) {
+            $s = (string) $val;
+        } else {
+            $s = json_encode($val);
+            if ($s === false) {
+                $s = '';
+            }
+        }
+
+        // Repair invalid UTF-8 (binary data) before any mb_*/Width work.
+        if (!mb_check_encoding($s, 'UTF-8')) {
+            $prev = mb_substitute_character();
+            mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
+            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
+            mb_substitute_character($prev);
+        }
+
+        // Visualize newlines so they can't break the pane into extra rows.
+        $s = str_replace(["\r\n", "\r", "\n"], '↵', $s);
+        // Strip dangerous control bytes: C0 (0x00-0x1F) + DEL (0x7F)…
+        $s = preg_replace('/[\x00-\x1F\x7F]/', '·', $s) ?? $s;
+        // …and the C1 control range (U+0080-U+009F), now valid UTF-8.
+        $s = preg_replace('/[\x{0080}-\x{009F}]/u', '·', $s) ?? $s;
+
+        return $s;
     }
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
