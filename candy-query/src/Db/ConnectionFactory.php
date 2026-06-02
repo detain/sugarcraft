@@ -210,4 +210,19 @@ final class ConnectionFactory
         $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
         return new SqliteDatabase($pdo, $config->dbname);
     }
+
+    /**
+     * Create a DatabaseInterface from a bare SQLite path.
+     *
+     * This handles the default CLI behavior where a bare path like
+     * `app.sqlite` is interpreted as a SQLite database file.
+     *
+     * @param string $path SQLite database path (relative or absolute)
+     * @return SqliteDatabase
+     * @throws \RuntimeException If the database file does not exist
+     */
+    public static function fromPath(string $path): SqliteDatabase
+    {
+        return SqliteDatabase::open($path);
+    }
 }

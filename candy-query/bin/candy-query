@@ -3,6 +3,8 @@
 
 declare(strict_types=1);
 
+namespace SugarCraft\Query\bin;
+
 (static function () {
     foreach (['vendor/autoload.php', __DIR__ . '/../vendor/autoload.php', __DIR__ . '/../../../autoload.php'] as $candidate) {
         $path = str_starts_with($candidate, '/') ? $candidate : __DIR__ . '/../' . $candidate;
@@ -18,14 +20,57 @@ declare(strict_types=1);
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Query\App;
-use SugarCraft\Query\Database;
+use SugarCraft\Query\App\AppBuilder;
+use SugarCraft\Query\Db\ConnectionFactory;
+use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Lang;
 
 $argv = $argv ?? [];
-$path = $argv[1] ?? null;
-if ($path === null) {
-    fwrite(STDERR, Lang::t('cli.usage') . "\n");
-    exit(1);
-}
+$database = buildDatabase($argv);
 
-(new Program(App::start(Database::open($path)), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(
+    App::start($database),
+    new ProgramOptions(useAltScreen: true),
+))->run();
+
+/**
+ * Build a DatabaseInterface from CLI arguments.
+ *
+ * Supports:
+ *   - Bare path (e.g. app.sqlite) → SQLite connection
+ *   - --dsn=<dsn> → ConnectionFactory::fromDsn()
+ *   - --driver=<driver> --db=<db> [--host=<host>] [--port=<port>]
+ *     [--user=<user>] [--pass=<pass>] → ConnectionFactory::fromArgv()
+ *
+ * @param array<string> $argv Command line arguments (includes script name at index 0)
+ * @return DatabaseInterface
+ */
+function buildDatabase(array $argv): DatabaseInterface
+{
+    // Filter out the script name at index 0
+    $args = array_slice($argv, 1);
+
+    // No arguments → show usage
+    if ($args === []) {
+        fwrite(STDERR, Lang::t('cli.usage') . "\n");
+        exit(1);
+    }
+
+    // Check if first argument is a bare path (doesn't start with --)
+    // or is a DSN string (contains ://)
+    $firstArg = $args[0];
+
+    if (!str_starts_with($firstArg, '--') && !str_contains($firstArg, '://')) {
+        // Bare path → SQLite connection (default behavior preserved)
+        return ConnectionFactory::fromPath($firstArg);
+    }
+
+    // Check for DSN as first argument (e.g., mysql://user:pass@host:3306/db)
+    if (str_contains($firstArg, '://')) {
+        // DSN passed as first argument without --dsn= prefix
+        array_unshift($args, '--dsn=' . $firstArg);
+    }
+
+    // Parse and build from ConnectionFactory
+    return ConnectionFactory::fromArgv($args);
+}
