@@ -1,0 +1,254 @@
+# candy-query upstream-extraction — PHASE 2 (execution plan)
+
+Self-contained worklist for a fresh session. Phase 1 (foundation + cleanups) is
+DONE and committed; this file covers everything that remains. Read the original
+analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
+
+## Where we are
+
+- **Branch:** `ai/candy-query-upstream-extraction` (off `master`). `master` is the
+  "before" for diffing. Keep working on this branch.
+- **Phase 1 — DONE (6 commits, all green):**
+  - `Core\Util\Format` (byte/duration/scale/picosecond) + `Width::truncateMiddle()` in candy-core.
+  - `candy-query Admin\Format` now delegates to core; latent `0 !== 0.0` duration bug fixed.
+  - `Dash\Foundation\Threshold` health-ramp in sugar-dash; `SidebarGauge::thresholdColor` adopts it.
+  - `App.php` converted to the `Mutable` trait (932→679 lines).
+  - dead `PerfSchemaRenderer` deleted.
+- **Baseline green counts:** candy-core 637, candy-query 1091, sugar-dash Threshold 6/6.
+  (sugar-dash `GoldenSnapshotTest` has 38 PRE-EXISTING failures on master — stale
+  fixtures, ignore them; do not "fix" by editing unrelated goldens.)
+
+## Key facts that change the risk picture
+
+- **candy-query does NOT depend on `candy-forms`** — that is why it hand-rolls
+  TextInput/TextArea/Viewport/Scrollbar/ItemList/Spinner. Step 0 below adds it.
+- **candy-query tests are mostly SUBSTRING assertions**, not byte-exact goldens.
+  `RendererTest` asserts `assertStringContainsString('SugarSQL' / 'users' /
+  'alice' / 'switch pane' …)`. So adopting widgets rarely breaks a byte snapshot —
+  it breaks only if a substring disappears. This makes the Renderer/admin-page
+  rewrites far safer than a golden-locked codebase. Still run the full suite per step.
+- **Frame-diff invariants (candy-core renderer) — DO NOT VIOLATE** when touching
+  `BorderFrame`/full-screen output: constant total line count per frame, no line
+  wider than the terminal, no mid-frame `\x1b[2J`. See the comments in
+  `candy-query/src/Terminal/BorderFrame.php::wrap()`.
+
+## Upstream widget catalog (verified APIs — use these, don't re-roll)
+
+**candy-forms** (`SugarCraft\Forms\*`; requires candy-async/buffer/fuzzy/layout/sprinkles/core):
+- `TextArea\TextArea`: `init/update/view/focus/blur/setValue/value/reset/withPlaceholder/
+  withWidth/withHeight/withCharLimit/showLineNumbers/withPrompt/cursorUp/cursorDown/
+  insertRune/insertString/lineCount/focused/cursor/...`
+- `TextInput\TextInput`: `setValue/value/focus/blur/withPlaceholder/withPrompt/
+  withHistory/addToHistory/withCharLimit/withWidth/withEchoMode/withValidator/
+  withSuggestions/position/...` (built-in Up/Down history — use for the search box AND
+  can back the SQL editor's history).
+- `Viewport\Viewport`: `setContent/withSize/setWidth/setHeight/setYOffset/withScrollbar/
+  withVerticalScrollbar/withMouseWheelEnabled/lineUp/lineDown/halfPageUp/halfPageDown/
+  pageUp/pageDown/gotoTop/gotoBottom/scrollPercent/atTop/atBottom/...` (this is the
+  "resizing panes with scrollbar").
+- `Scrollbar\Scrollbar`: `withTrackChar/withThumbChar/withArrows/view`.
+- `ItemList\ItemList`: `init/update/view/selectedItem/visibleItems/index/focus/blur/
+  setItems/items/cursorUp/cursorDown/goToStart/goToEnd/prevPage/nextPage/select/
+  withTitle/withShowStatusBar/withShowHelp/withShowFilter/withInfiniteScrolling/...`
+- `Spinner\Spinner`: `view/tick/frame/withStyle`.
+
+**sugar-bits** (`SugarCraft\Bits\*`; thin layer over candy-forms + own widgets):
+- `Tabs\Tabs::new(array $labels, int $width=80)` → `update/view/active/withActive/withActiveStyle`.
+- `Tree\Tree` (interactive master-detail tree), `Paginator\Paginator`, `Help\Help`
+  (`shortView($keymap)`/`fullView`), `Key\Binding`/`KeyMap`.
+
+**sugar-dash** (`SugarCraft\Dash\*`):
+- `Components\Card\Card::new()/titled($c,$title)/withTitle/setSize/render`.
+- `Components\Card\Badge::new/success/warning/error/info` + **TO ADD: `bool()`/`tristate()` (B6)**.
+- `Components\Card\Divider::new/h/v($label)/render`; `Header::new/centered/hero`; `Footer`;
+  `Kbd::new/single/combo`; `Stat::new/number/percent/currency`; `Metric`.
+- `Components\Feedback\EmptyState::new/noResults/noData/error`; `LoadingText::new`.
+- `Plot\Chart\Gauge`/`GaugeCircle`/`Meter` (already used) + `Foundation\Threshold` (added in P1).
+
+**candy-sprinkles** (`SugarCraft\Sprinkles\*`):
+- `Border::rounded()/normal()/double()` + `->withTitle(string, ?TitleAnchor)` / `->withTitles(map)`.
+- `Style::new()->border(Border)->borderForeground(Color)->padding()->width()` (already used).
+- `Layout::joinHorizontal(float $pos, ...$blocks)` / `joinVertical` / `place` (ANSI-width aware).
+- `Canvas`+`Layer` (z-overlay), `Theme`/`Palette` (replace hardcoded hex).
+
+**sugar-table** (`SugarCraft\Table\*`): `Table::withColumns([Column])->withRows([Row])->
+  withSelectable()->withZebra()->withShowFooter(bool)->View()`; `Column::new(key,label,width)->
+  withAlignLeft()->withFilterable()->withMaxWidth()`; `Row::new(RowData::from([...]))->withStyle('7')`.
+  (Already used by ConnectionsPage/ReportsPage/VariablesPage.)
+
+**candy-kit** (`SugarCraft\Kit\*`): `StatusLine`, `Section`, `Stage`, `Banner` — home for the
+  new `Frame` (B1).
+
+---
+
+## STEP 0 — add the candy-forms dependency (do FIRST)
+
+1. `candy-query/composer.json`: add `"sugarcraft/candy-forms": "@dev"` to `require`.
+2. Add the path-repo closure. candy-forms pulls candy-async/candy-buffer/candy-fuzzy/
+   candy-layout (candy-core/candy-sprinkles already present). Easiest:
+   `php tools/check-path-repos.php --fix` from repo root, then eyeball the diff.
+3. `cd candy-query && composer update sugarcraft/* --quiet` (local vendor is gitignored &
+   goes stale — always update before trusting a local phpunit failure).
+4. Verify: `vendor/bin/phpunit` still 1091 green (no usage yet, just wiring).
+5. Commit: "candy-query: depend on candy-forms (wire path-repos)".
+
+---
+
+## A — adopt widgets in the 3-pane browser (Renderer + App)
+
+Do these as 1 commit each; run `cd candy-query && vendor/bin/phpunit` after each.
+
+### A1 — query editor → `Forms\TextArea`
+- **Files:** `src/App.php` (`editQuery` L~298, `historyUp/historyDown` L~470-580,
+  `favoriteQuery/unfavoriteQuery`, `dropLast`, `queryBuf`/`historyIndex`/`savedBuf` fields),
+  `src/Renderer.php` (`queryPane` L~379 draws the `▮` cursor by hand), `tests/AppTest.php`.
+- **Do:** replace the `queryBuf` string + manual char accumulation + history scrollback
+  with a `Forms\TextArea` (or `TextInput` with `withHistory()` for single-line). Keep
+  `queryFavorites` as domain state bound to the widget value. `editQuery` becomes
+  "route KeyMsg to the widget, intercept Ctrl+R/Ctrl+E and favorite keys". Delete
+  `historyUp/historyDown/savedBuf/dropLast`.
+- **Tests:** AppTest asserts editQuery behavior (typing builds the buffer, Ctrl+R runs,
+  Up/Down history). Rewrite those to drive the widget and assert `value()`/run effects.
+
+### A2 — tables list + scroll window → `Forms\Viewport` + `Forms\ItemList`
+- **Files:** `src/Renderer.php` (`tablesPane` L~166, `renderTableList` L~235 — the
+  `↑ N–M of T ↑` indicators, centered window, slice), `tests/RendererTest.php`.
+- **Do:** render the tables list via `ItemList` (owns cursor + selection styling) inside a
+  `Viewport`(`withScrollbar()`) for the scroll window. Drop the hand-rolled indicators.
+- **Tests:** substring-based — keep emitting table names + a selection marker so
+  `assertStringContainsString('users' / selected styling)` still holds.
+
+### A3 — rows pane → `sugar-table\Table`; retire `ResultTable`
+- **Files:** `src/Renderer.php` (`rowsPane` L~283 — 3-phase column sizing), `src/ResultTable.php`
+  (461 lines, standalone, NOT wired into the app, has `tests/ResultTableTest.php`),
+  `cellString()` (keep — the BLOB/ANSI sanitizer at L~473 is genuinely needed; consider
+  moving it to a small helper).
+- **Do:** build a `sugar-table\Table` from `$a->rows` (mirror ConnectionsPage::buildTable).
+  Delete `ResultTable` + its test (it duplicates sugar-table and isn't used by `App`), OR
+  reduce it to a thin adapter if you want to keep the public class — prefer deletion.
+- **Keep `cellString()`** for binary/ANSI safety; feed sanitized cells into the table.
+
+### A4 — per-pane frame → `Border::withTitle()`
+- **Files:** `src/Renderer.php` (`frame` L~505, `adminPane` frame L~451 — both put a bold
+  title line INSIDE the border by hand).
+- **Do:** `Style::new()->border(Border::rounded()->withTitle(' tables '))->borderForeground(...)`.
+- **Tests:** substring — keep the title text present.
+
+---
+
+## B — additive upstream pieces still needed
+
+### B2 — `Dash\Components\Card\DefinitionList` (NEW in sugar-dash)
+- Aligned `label : value` rows with a `—`/`Unknown` placeholder for null. Composes inside `Card`.
+- Add class + test + a `docs/lib` mention is not needed (component, not a lib).
+- **Consumers:** `ServerInfoCard`, `ServerStatusPage` panels, `VariablesPage` header rows.
+
+### B6 — `Badge::bool()` / `Badge::tristate()` (sugar-dash)
+- Add to `Components\Card\Badge`: `bool(?bool, yes:'Yes', no:'No', unknown:'Unknown')` mapping
+  true→success / false→error / null→subtle; and a `[x]/[ ]/[~]` glyph variant for PS toggles.
+- Add tests. **Consumers:** `ServerStatusPage::tristate`, PerfSchema toggles.
+
+### B5 — chart axis auto-scale into sugar-charts
+- Move `TimeSeriesCell::niceCeiling()` (candy-query) into sugar-charts as auto-scale on
+  `Streamline`/`Chart` (`->withAutoScale()` or a `NiceScale` helper). Adopt in TimeSeriesCell.
+- Add test. Low risk (pure math).
+
+### B1 — extract `BorderFrame` → `Kit\Frame` (candy-kit) — DO LAST of the visible work
+- Move the full-screen chrome (title bar + dividers + status bar + pad/truncate to EXACT
+  terminal height, constant line count) from `candy-query/src/Terminal/BorderFrame.php` into
+  a new `SugarCraft\Kit\Frame`. The candy-query-specific content builders
+  (`buildTitleBar`/`buildStatusBar`: dsn, version, table count) stay in candy-query and feed
+  the generic Frame. Port `padRight`/`padCenter` (ANSI-width aware) too.
+- **MUST preserve frame-diff invariants** (see top). Port BorderFrame's tests with it.
+- New lib class ⇒ follow the add-to-existing-lib flow: src + test + README mention; update
+  `MATCHUPS.md` only if it's a new upstream mapping (it's an internal primitive, likely not).
+
+---
+
+## A5–A11 — rewrite the 6 admin pages (one page per commit)
+
+Each page hand-rolls header / tabBar / footer-keybar / separator / tristate / selectable list /
+side-by-side. Replace with: `Bits\Tabs`, `Forms\ItemList`/`Bits\Tree`, `Dash\Card\Header`/
+`Footer`/`Divider`/`Badge`/`Kbd`/`EmptyState`/`LoadingText` + new `DefinitionList`,
+`Sprinkles\Layout::joinHorizontal` (NOT `str_pad`), `Forms\Spinner`. Suggested order
+(simple→complex), each with its `tests/Admin/...PageTest.php` kept green:
+
+1. **ServerStatusPage** (`src/Admin/ServerStatus/ServerStatusPage.php` + `ServerInfoCard.php`)
+   — 6 panels → `Card`+`DefinitionList`; `tristate` → `Badge::bool`; separators/header/footer
+   → Dash. Most repetitive, best first win.
+2. **VariablesPage** (`.../Variables/VariablesPage.php`) — `renderTabBar`→`Bits\Tabs`,
+   `renderCategoryTree`→`ItemList`/`Tree`, search box→`Forms\TextInput`,
+   `renderSideBySide`→`Layout::joinHorizontal`, grid stays `sugar-table`.
+3. **ReportsPage** (`.../Reports/ReportsPage.php`) — `renderCategoryTree` (master-detail)→
+   `Bits\Tree`, `renderSideBySide`→`Layout::joinHorizontal`, loading→`Spinner`/`LoadingText`,
+   grid stays `sugar-table`. (Note: known `withExport` no-op stub; also the ReportsPage had
+   prior sugar-table API drift — see memory `project_candy_query_admin_async`.)
+4. **PerfSchemaPage** (`.../PerfSchema/PerfSchemaPage.php`) — the worst offender: tabBar→
+   `Bits\Tabs`, all the `[x]/[ ]` toggle lists→`ItemList`+`Badge::tristate`, manual `%-Ns`
+   tables (threads/timers)→`sugar-table`, header/footer/separator→Dash, `…and N more`/middle-
+   ellipsis→`Width::truncateMiddle` (already in core).
+5. **DashboardPage** (`.../Dashboard/DashboardPage.php`) — keep `candy-layout` GreedySolver but
+   (C3) feed it the REAL size instead of hardcoded `width=80,height=24`; `assembleLayout`
+   str-join → `Layout::joinHorizontal`; loading screen → `Spinner`. Cells already use
+   sugar-charts/sugar-dash.
+6. **ConnectionsPage** (`.../Connections/ConnectionsPage.php`) — already uses sugar-table;
+   smallest. Counters bar → `Dash\Stat`/`Metric`; tidy header/footer.
+
+After all six: delete any now-unused helpers; re-check `Renderer::adminPane` sidebar →
+`ItemList` grouped (or keep, it already uses `Layout::joinHorizontal`).
+
+---
+
+## C — remaining cleanups
+
+- **C3 — DashboardPage real size:** done as part of A/DashboardPage above (thread
+  WindowSizeMsg dims through instead of `width=80,height=24`).
+- **C4 — size detection:** `Renderer::getTerminalSize()` (FFI→env→stty→default, L~60-103)
+  duplicates candy-core `PosixBackend`. Keep `WindowSizeMsg` (forwarded via
+  `Renderer::setSize`) as the single source of truth; thin the fallback ladder or push it
+  into candy-core `Tty`. Low priority; do after the visible work.
+
+---
+
+## Sequencing (recommended)
+
+0. STEP 0 (candy-forms dep) → 1 commit.
+1. B2 (DefinitionList) + B6 (Badge bool/tristate) in sugar-dash → 1-2 commits (needed by pages).
+2. A1, A2, A3, A4 (Renderer/App browser) → 1 commit each.
+3. A5–A11 admin pages, ServerStatus→…→Connections → 1 commit each (folds in C3).
+4. B5 (chart autoscale) → 1 commit.
+5. B1 (Kit\Frame) → 1 commit. C4 → 1 commit.
+
+## Verification (run per touched lib; vendor is gitignored & stale — `composer update sugarcraft/*` first)
+
+```sh
+cd candy-core    && vendor/bin/phpunit      # 637 baseline
+cd candy-query   && vendor/bin/phpunit      # 1091 baseline
+cd sugar-dash    && vendor/bin/phpunit --filter 'Threshold|Badge|DefinitionList'   # ignore 38 pre-existing GoldenSnapshot fails
+cd candy-forms   && vendor/bin/phpunit
+```
+Also lint touched files: `php -l <file>`.
+
+## Gotchas / house rules
+
+- **Stale vendor → false failures:** `composer update sugarcraft/*` in the lib before
+  trusting a local phpunit red.
+- **Path-repo closure:** any new transitive `@dev` dep needs its path-repo in EVERY consuming
+  `repositories[]`; `php tools/check-path-repos.php --fix`. `composer validate --strict` flags
+  `@dev` — EXPECTED, drop `--strict`.
+- **Don't touch the 38 pre-existing sugar-dash GoldenSnapshot failures** — they're on master too.
+- **Frame-diff invariants** for any full-screen output (B1) — constant line count, no
+  over-wide lines, no mid-frame `\x1b[2J`.
+- **Ship-as-you-go:** bundle 2-4 related commits per PR; branch `ai/<slug>-<short>`; author
+  `Joe Huss <detain@interserver.net>`; `unset GITHUB_TOKEN && gh ...`; end commit msgs with the
+  `Co-Authored-By: Claude ...` trailer. **Skip Caliber on this machine** (do not run
+  `caliber refresh`; if a hook stages Caliber files, unstage them).
+- **One sub-agent at a time** if delegating — concurrent writes to MATCHUPS.md/README collide.
+
+## Definition of done
+
+candy-query renders the 3-pane browser + all 6 admin pages using upstream widgets, with no
+hand-rolled tabBar/list/scroll/card/badge/separator/side-by-side and no raw `\x1b[…m` literals
+in page code (use `Sprinkles\Style`/`Theme`). `ResultTable`/`ResultPager` retired or adapter-only.
+`BorderFrame` lives in candy-kit as `Frame`. All lib suites green (modulo the 38 pre-existing
+sugar-dash golden fails). `git diff master --stat` shows candy-query net-smaller.
