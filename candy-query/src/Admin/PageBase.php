@@ -48,10 +48,25 @@ abstract class PageBase implements Model
 
     /**
      * Render the error screen.
+     *
+     * With no specific message, show a neutral "no data" line rather than a
+     * bare "Error:" — an empty async cache during the first ticks is not an
+     * error, just data that has not arrived yet.
      */
     protected function errorScreen(): string
     {
+        if ($this->errorMessage === '') {
+            return "\x1b[90m  No data available yet.\x1b[0m";
+        }
         return 'Error: ' . $this->errorMessage;
+    }
+
+    /**
+     * Render the loading screen shown while the first async fetch is in flight.
+     */
+    protected function loadingScreen(): string
+    {
+        return "\x1b[33m  ◌ Loading…\x1b[0m\n\n  \x1b[90mFetching data from the server.\x1b[0m";
     }
 
     public function init(): ?\Closure
@@ -66,6 +81,13 @@ abstract class PageBase implements Model
 
     public function view(): string
     {
+        // While the first async fetch is in flight and nothing is cached yet,
+        // show a loading screen instead of failing validate() into "Error:".
+        if ($this->context instanceof CachingServerContext
+            && $this->context->isLoading()
+            && !$this->context->hasCachedData()) {
+            return $this->loadingScreen();
+        }
         if (!$this->validate()) {
             return $this->errorScreen();
         }

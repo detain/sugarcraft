@@ -11,14 +11,15 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Query\Admin\AdminPane;
+use SugarCraft\Query\Admin\AdminQueryCache;
 use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\EmptyServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\PostgresServerContext;
-use SugarCraft\Query\Admin\AmpMysqlConnection;
-use SugarCraft\Query\Admin\AmpPostgresConnection;
+use SugarCraft\Query\Admin\ReactMysqlConnection;
+use SugarCraft\Query\Admin\ReactPostgresConnection;
 use SugarCraft\Query\Admin\Reports\ReportsPage;
 use SugarCraft\Query\Admin\Providers\PostgresAdminProvider;
 use SugarCraft\Query\Admin\ServerContext;
@@ -144,7 +145,7 @@ final class App implements Model
                 // First time entering admin - set loading immediately and trigger fetch
                 return [
                     $this->withPane($nextPane)->withAdminLoading(true),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise())(),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
                 ];
             }
             return [$this->withPane($nextPane), null];
@@ -241,7 +242,7 @@ final class App implements Model
             $index = (int) $msg->rune - 1;
             if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
             }
             if (isset($allPanes[$index])) {
                 return [$this->withAdminCursor($index), null];
@@ -257,7 +258,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -266,7 +267,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -280,8 +281,10 @@ final class App implements Model
             }
             return [$this->withPaused($newPaused), null];
         }
-        // [r] reset — delegate to admin page's update
+        // [r] reset — drop cached query results so the next tick re-fetches
+        // everything immediately, then delegate to the admin page's update.
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
+            AdminQueryCache::instance()->forget();
             $page = $this->adminPage();
             [$newPage, ] = $page->update($msg);
             if ($newPage !== $page) {
@@ -542,8 +545,8 @@ final class App implements Model
         );
 
         return match ($this->adminPane) {
-            // TODO: Use ConnectionsPage once it extends PageBase
-            AdminPane::ProcessList, AdminPane::ConnStats => new DashboardPage($context),
+            AdminPane::ProcessList => ConnectionsPage::new($context),
+            AdminPane::ConnStats => new DashboardPage($context),
             AdminPane::Variables => VariablesPage::new($context),
             AdminPane::Status => ServerStatusPage::new($context),
             AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
@@ -790,7 +793,11 @@ final class App implements Model
             return null;
         }
 
-        return Subscriptions::withTick('admin-fetch', 3.0, function(): \SugarCraft\Core\Msg {
+        // Tick at 1s so page-driven queries (process list, sys reports, etc.)
+        // discovered during render are drained promptly. The adminLoading gate
+        // above prevents overlapping fetches, so a slow report in the batch
+        // simply delays the next poll rather than piling up.
+        return Subscriptions::withTick('admin-fetch', 1.0, function(): \SugarCraft\Core\Msg {
             return Cmd::batch(
                 fn() => new AdminFetchStartedMsg(),
                 Cmd::promise(fn() => $this->createAdminFetchPromise()),
@@ -816,22 +823,28 @@ final class App implements Model
         $username = $context->connection()->username() ?? '';
         $password = $context->connection()->password() ?? '';
 
-        if ($context instanceof PostgresServerContext) {
+        $isPostgres = $context instanceof PostgresServerContext;
+
+        // Reuse a single async connection across ticks (lazy connect — avoids
+        // opening a fresh TCP/auth connection every poll).
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        if ($isPostgres) {
             $statusQuery = "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks FROM pg_stat_database";
             $serverQuery = 'SELECT name, setting FROM pg_settings';
-            $connection = new AmpPostgresConnection($dsn);
-            $statusPromise = $connection->query($statusQuery);
-            $serverPromise = $connection->query($serverQuery);
         } else {
             $statusQuery = 'SHOW GLOBAL STATUS';
             $serverQuery = 'SHOW GLOBAL VARIABLES';
-            $connection = new AmpMysqlConnection($dsn, $username, $password);
-            $statusPromise = $connection->query($statusQuery);
-            $serverPromise = $connection->query($serverQuery);
         }
 
-        return \React\Promise\all([
-            'status' => $statusPromise
+        $promises = [
+            'status' => $connection->query($statusQuery)
                 ->then(function(array $rows): array {
                     $out = [];
                     foreach ($rows as $row) {
@@ -841,7 +854,7 @@ final class App implements Model
                     }
                     return $out;
                 }),
-            'server' => $serverPromise
+            'server' => $connection->query($serverQuery)
                 ->then(function(array $rows): array {
                     $out = [];
                     foreach ($rows as $row) {
@@ -853,10 +866,27 @@ final class App implements Model
                     }
                     return $out;
                 }),
-        ])->then(function(array $results): AdminDataLoadedMsg {
+        ];
+
+        // Drain page-driven queries (process list, replica status, sys reports,
+        // availability) requested during the last render. Each is isolated so a
+        // single failing query can't sink the batch, and every result — even an
+        // empty one — is cached so the next render renders instead of blocking.
+        foreach ($cache->takePending() as $sql) {
+            $promises[] = $connection->query($sql)->then(
+                static function(array $rows) use ($cache, $sql): void {
+                    $cache->store($sql, $rows);
+                },
+                static function(\Throwable $e) use ($cache, $sql): void {
+                    $cache->store($sql, []);
+                },
+            );
+        }
+
+        return \React\Promise\all($promises)->then(function(array $results): AdminDataLoadedMsg {
             return new AdminDataLoadedMsg(
-                statusVars: $results['status'],
-                serverVars: $results['server'],
+                statusVars: $results['status'] ?? [],
+                serverVars: $results['server'] ?? [],
                 fetchedAt: microtime(true),
             );
         })->otherwise(function(\Throwable $e): AdminDataLoadedMsg {

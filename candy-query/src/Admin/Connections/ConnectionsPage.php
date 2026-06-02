@@ -167,7 +167,7 @@ final class ConnectionsPage extends PageBase
 
         // Render table
         $table = $this->getTable();
-        $lines[] = $table->render();
+        $lines[] = $table->View();
 
         return implode("\n", $lines);
     }

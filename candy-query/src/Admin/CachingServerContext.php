@@ -21,7 +21,9 @@ final class CachingServerContext implements ServerContextInterface
 
     public function connection(): \SugarCraft\Query\Db\DatabaseInterface
     {
-        return $this->inner->connection();
+        // Route admin-page queries through the async cache so a slow sys query
+        // never blocks the event loop during view(). See AdminQueryCache.
+        return new CachedConnection($this->inner->connection());
     }
 
     /** @return array<string, string> */
