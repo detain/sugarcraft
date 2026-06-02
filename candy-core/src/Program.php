@@ -880,7 +880,27 @@ final class Program
      */
     private function writeOutput(string $bytes): void
     {
-        fwrite($this->output, $bytes);
+        // Loop over short writes: a single fwrite() to a PTY/pipe (e.g. an
+        // SSH session) with a partially full kernel buffer consumes only what
+        // fits and returns a short count. Dropping the tail left mode-setting
+        // sequences and large RawMsg/PrintMsg payloads partially emitted.
+        $len = strlen($bytes);
+        $written = 0;
+        while ($written < $len) {
+            $n = @fwrite($this->output, $written === 0 ? $bytes : substr($bytes, $written));
+            if ($n === false) {
+                break;
+            }
+            if ($n === 0) {
+                $w = [$this->output];
+                $r = $e = null;
+                if (@stream_select($r, $w, $e, 1) === false) {
+                    break;
+                }
+                continue;
+            }
+            $written += $n;
+        }
         $this->recorder?->recordOutput($bytes);
     }
 

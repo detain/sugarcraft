@@ -273,4 +273,74 @@ final class RendererTest extends TestCase
         fclose($cellOut);
         fclose($lineOut);
     }
+
+    /**
+     * Regression: emit() must write the WHOLE frame even when the underlying
+     * stream accepts only a few bytes per fwrite(). A PTY/pipe (SSH session)
+     * with a partially full kernel buffer returns short counts; a single
+     * un-looped fwrite() dropped the tail, so a large first frame painted only
+     * a non-deterministic fraction of itself. Drive the renderer through a
+     * stream wrapper capped at 7 bytes/write and assert nothing is lost.
+     */
+    public function testEmitSurvivesShortWrites(): void
+    {
+        ShortWriteStream::$captured = '';
+        ShortWriteStream::$chunk = 7;
+        if (!in_array('shortwrite', stream_get_wrappers(), true)) {
+            stream_wrapper_register('shortwrite', ShortWriteStream::class);
+        }
+
+        $out = fopen('shortwrite://x', 'w');
+        $this->assertNotFalse($out);
+        $r = new Renderer($out);
+
+        // A frame large enough to span many capped writes.
+        $frame = implode("\n", array_map(static fn(int $i) => str_repeat("col$i ", 20), range(1, 40)));
+        $r->render($frame);
+        fclose($out);
+
+        // Every line of the frame must be present in the captured output,
+        // proving the short-write loop drained the whole buffer.
+        foreach (explode("\n", $frame) as $line) {
+            $this->assertStringContainsString($line, ShortWriteStream::$captured);
+        }
+        $this->assertStringContainsString(Ansi::syncEnd(), ShortWriteStream::$captured);
+    }
+}
+
+/**
+ * Test-only stream wrapper that accepts at most {@see self::$chunk} bytes per
+ * write, mimicking a PTY/pipe under buffer pressure, and captures everything
+ * actually written for assertions.
+ *
+ * @internal
+ */
+final class ShortWriteStream
+{
+    public static string $captured = '';
+    public static int $chunk = 7;
+
+    /** @var resource */
+    public $context;
+
+    public function stream_open(string $path, string $mode, int $options, ?string &$opened_path): bool
+    {
+        return true;
+    }
+
+    public function stream_write(string $data): int
+    {
+        $take = min(self::$chunk, strlen($data));
+        self::$captured .= substr($data, 0, $take);
+        return $take;
+    }
+
+    public function stream_close(): void
+    {
+    }
+
+    public function stream_set_option(int $option, int $arg1, ?int $arg2): bool
+    {
+        return true;
+    }
 }
