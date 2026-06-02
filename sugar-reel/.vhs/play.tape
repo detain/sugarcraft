@@ -12,4 +12,4 @@ Enter
 Sleep 2500ms
 Space
 Sleep 2000ms
-q
+Type "q"
