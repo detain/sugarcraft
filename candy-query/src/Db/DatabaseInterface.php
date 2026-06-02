@@ -108,4 +108,25 @@ interface DatabaseInterface
      * @return mixed A prepared statement object (implementation-specific) or false on failure
      */
     public function prepare(string $sql): mixed;
+
+    /**
+     * Get the DSN connection string.
+     *
+     * @return string DSN string (e.g., "mysql:host=localhost;dbname=test")
+     */
+    public function dsn(): string;
+
+    /**
+     * Get the database username.
+     *
+     * @return string Username
+     */
+    public function username(): string;
+
+    /**
+     * Get the database password.
+     *
+     * @return string Password
+     */
+    public function password(): string;
 }

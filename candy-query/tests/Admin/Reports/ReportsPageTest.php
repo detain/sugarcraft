@@ -109,6 +109,10 @@ final class ReportsPageTest extends TestCase
             {
                 return false;
             }
+
+            public function dsn(): string { return ''; }
+            public function username(): string { return ''; }
+            public function password(): string { return ''; }
         };
     }
 
@@ -139,6 +143,9 @@ final class ReportsPageTest extends TestCase
             public function ping(): bool { return true; }
             public function databases(): array { return ['test']; }
             public function prepare(string $sql): mixed { return false; }
+            public function dsn(): string { return ''; }
+            public function username(): string { return ''; }
+            public function password(): string { return ''; }
         };
 
         $this->context->method('connection')->willReturn($brokenDb);

@@ -328,4 +328,19 @@ final class MysqlDatabase implements DatabaseInterface
             // Silently ignore - uptime tracking is best-effort
         }
     }
+
+    public function dsn(): string
+    {
+        return $this->connectionConfig?->dsn ?? '';
+    }
+
+    public function username(): string
+    {
+        return $this->connectionConfig?->user ?? '';
+    }
+
+    public function password(): string
+    {
+        return $this->connectionConfig?->pass ?? '';
+    }
 }

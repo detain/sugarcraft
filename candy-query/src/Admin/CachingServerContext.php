@@ -16,6 +16,7 @@ final class CachingServerContext implements ServerContextInterface
         private ServerContextInterface $inner,
         private ?array $cachedStatusVars = null,
         private ?array $cachedServerVars = null,
+        private bool $isLoading = false,
     ) {}
 
     public function connection(): \SugarCraft\Query\Db\DatabaseInterface
@@ -32,6 +33,10 @@ final class CachingServerContext implements ServerContextInterface
     /** @return array<string, string> */
     public function statusVariables(): array
     {
+        // If loading and no cached data, return empty to trigger loading screen
+        if ($this->isLoading && $this->cachedStatusVars === null) {
+            return [];
+        }
         return $this->cachedStatusVars ?? $this->inner->statusVariables();
     }
 
@@ -69,5 +74,15 @@ final class CachingServerContext implements ServerContextInterface
     public function refresh(): void
     {
         $this->inner->refresh();
+    }
+
+    public function isLoading(): bool
+    {
+        return $this->isLoading;
+    }
+
+    public function hasCachedData(): bool
+    {
+        return $this->cachedStatusVars !== null && $this->cachedStatusVars !== [];
     }
 }

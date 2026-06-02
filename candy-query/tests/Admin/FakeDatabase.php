@@ -136,6 +136,10 @@ final class FakeDatabase implements DatabaseInterface
     {
         $this->executions = [];
     }
+
+    public function dsn(): string { return ''; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }
 
 /**

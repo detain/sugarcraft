@@ -303,4 +303,8 @@ final class SequentialFakeDatabase implements DatabaseInterface
     {
         return false;
     }
+
+    public function dsn(): string { return ''; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }

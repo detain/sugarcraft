@@ -12,6 +12,7 @@ namespace SugarCraft\Query\Db;
 final class PostgresDatabase implements DatabaseInterface
 {
     private ?\PDO $pdo;
+    private ?ConnectionConfig $connectionConfig = null;
 
     private function __construct(\PDO $pdo)
     {
@@ -35,7 +36,10 @@ final class PostgresDatabase implements DatabaseInterface
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ]);
 
-        return new self($pdo);
+        $instance = new self($pdo);
+        $instance->connectionConfig = $config;
+
+        return $instance;
     }
 
     /** @return list<string> */
@@ -204,5 +208,20 @@ final class PostgresDatabase implements DatabaseInterface
             return false;
         }
         return $this->pdo->prepare($sql);
+    }
+
+    public function dsn(): string
+    {
+        return $this->connectionConfig?->dsn ?? '';
+    }
+
+    public function username(): string
+    {
+        return $this->connectionConfig?->user ?? '';
+    }
+
+    public function password(): string
+    {
+        return $this->connectionConfig?->pass ?? '';
     }
 }

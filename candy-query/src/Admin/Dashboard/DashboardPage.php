@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Dashboard;
 
+use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
@@ -69,6 +70,33 @@ final class DashboardPage extends PageBase
         } catch (\Throwable) {
             return false;
         }
+    }
+
+    public function view(): string
+    {
+        // Show loading screen when fetch is in flight and no cached data available
+        if ($this->context instanceof CachingServerContext
+            && $this->context->isLoading()
+            && !$this->context->hasCachedData()) {
+            return $this->renderLoadingScreen();
+        }
+        if (!$this->validate()) {
+            return $this->errorScreen();
+        }
+        return $this->build();
+    }
+
+    private function renderLoadingScreen(): string
+    {
+        $out = [];
+        $out[] = "\x1b[1;36m  Performance Dashboard\x1b[0m";
+        $out[] = "";
+        $out[] = "\x1b[33m    ◌ Fetching server metrics...\x1b[0m";
+        $out[] = "";
+        $out[] = "  \x1b[90mSHOW GLOBAL STATUS / pg_stat_database\x1b[0m";
+        $out[] = "";
+        $out[] = "  \x1b[90mPress \x1b[33m[q]\x1b[90m to return to browse mode\x1b[0m";
+        return implode("\n", $out);
     }
 
     protected function build(): string

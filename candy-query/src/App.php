@@ -15,6 +15,8 @@ use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\PostgresServerContext;
+use SugarCraft\Query\Admin\AmpMysqlConnection;
+use SugarCraft\Query\Admin\AmpPostgresConnection;
 use SugarCraft\Query\Admin\Reports\ReportsPage;
 use SugarCraft\Query\Admin\Providers\PostgresAdminProvider;
 use SugarCraft\Query\Admin\ServerContext;
@@ -25,6 +27,7 @@ use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
+use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
@@ -76,6 +79,7 @@ final class App implements Model
         public readonly ?array $adminCachedStatusVars = null,
         public readonly ?array $adminCachedServerVars = null,
         public readonly float $adminCacheTs = 0.0,
+        public readonly bool $adminLoading = false,
     ) {}
 
     /**
@@ -106,6 +110,12 @@ final class App implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof AdminFetchStartedMsg) {
+            if (!$this->adminLoading) {
+                return [$this->withAdminLoading(true), null];
+            }
+            return [$this, null];
+        }
         if ($msg instanceof AdminDataLoadedMsg) {
             return [$this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt), null];
         }
@@ -118,7 +128,18 @@ final class App implements Model
             return [$this, Cmd::quit()];
         }
         if ($msg->type === KeyType::Tab) {
-            return [$this->withPane($this->pane->next()), null];
+            $nextPane = $this->pane->next();
+            if ($nextPane === Pane::Admin) {
+                // First time entering admin - set loading immediately and trigger fetch
+                return [
+                    $this->withPane($nextPane)->withAdminLoading(true),
+                    Cmd::batch(
+                        fn() => new AdminFetchStartedMsg(),
+                        Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                    )(),
+                ];
+            }
+            return [$this->withPane($nextPane), null];
         }
         if ($this->pane === Pane::Query) {
             return [$this->editQuery($msg), null];
@@ -127,7 +148,7 @@ final class App implements Model
             return [$this->handleTablesKey($msg), null];
         }
         if ($this->pane === Pane::Admin) {
-            return [$this->handleAdminKey($msg), null];
+            return $this->handleAdminKey($msg);
         }
         return [$this->handleRowsKey($msg), null];
     }
@@ -182,6 +203,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
         if ($msg->type === KeyType::Down
@@ -199,12 +221,13 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
         return $this;
     }
 
-    private function handleAdminKey(KeyMsg $msg): self
+    private function handleAdminKey(KeyMsg $msg): array
     {
         $allPanes = AdminPane::cases();
         $count = count($allPanes);
@@ -212,24 +235,45 @@ final class App implements Model
         // [1-6] keys directly select an admin pane
         if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '6') {
             $index = (int) $msg->rune - 1;
+            if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
+                $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
+                return [$newApp, Cmd::batch(
+                    fn() => new AdminFetchStartedMsg(),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                )()];
+            }
             if (isset($allPanes[$index])) {
-                return $this->withAdminCursor($index)->withAdminPane($allPanes[$index]);
+                return [$this->withAdminCursor($index), null];
             }
         }
         // [q] returns to Tables pane
         if ($msg->type === KeyType::Char && $msg->rune === 'q') {
-            return $this->withPane(Pane::Tables);
+            return [$this->withPane(Pane::Tables), null];
         }
         // j/k or arrows navigate within admin sidebar (with wrap-around)
         if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             $newCursor = ($this->adminCursor + 1) % $count;
             $newPane = $allPanes[$newCursor];
-            return $this->withAdminCursor($newCursor)->withAdminPane($newPane);
+            if ($newPane !== $this->adminPane) {
+                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                return [$newApp, Cmd::batch(
+                    fn() => new AdminFetchStartedMsg(),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                )()];
+            }
+            return [$this->withAdminCursor($newCursor), null];
         }
         if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
             $newCursor = ($this->adminCursor - 1 + $count) % $count;
             $newPane = $allPanes[$newCursor];
-            return $this->withAdminCursor($newCursor)->withAdminPane($newPane);
+            if ($newPane !== $this->adminPane) {
+                $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
+                return [$newApp, Cmd::batch(
+                    fn() => new AdminFetchStartedMsg(),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                )()];
+            }
+            return [$this->withAdminCursor($newCursor), null];
         }
         // [p] pause/resume polling (sync with DashboardPage if present)
         if ($msg->type === KeyType::Char && $msg->rune === 'p') {
@@ -237,20 +281,20 @@ final class App implements Model
             $page = $this->adminPage();
             if ($page instanceof \SugarCraft\Query\Admin\Dashboard\DashboardPage) {
                 $page = $page->withPaused($newPaused);
-                return $this->withPaused($newPaused)->withAdminPage($page);
+                return [$this->withPaused($newPaused)->withAdminPage($page), null];
             }
-            return $this->withPaused($newPaused);
+            return [$this->withPaused($newPaused), null];
         }
         // [r] reset — delegate to admin page's update
         if ($msg->type === KeyType::Char && $msg->rune === 'r') {
             $page = $this->adminPage();
             [$newPage, ] = $page->update($msg);
             if ($newPage !== $page) {
-                return $this->withAdminPage($newPage);
+                return [$this->withAdminPage($newPage), null];
             }
-            return $this;
+            return [$this, null];
         }
-        return $this;
+        return [$this, null];
     }
 
     private function editQuery(KeyMsg $msg): self
@@ -316,6 +360,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -331,6 +376,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
     }
@@ -352,6 +398,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -367,6 +414,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
     }
@@ -388,6 +436,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -405,6 +454,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -424,6 +474,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -441,6 +492,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -458,6 +510,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -485,6 +538,7 @@ final class App implements Model
             $context,
             $this->adminCachedStatusVars,
             $this->adminCachedServerVars,
+            $this->adminLoading,
         );
 
         return match ($this->adminPane) {
@@ -531,6 +585,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -548,6 +603,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -575,6 +631,7 @@ final class App implements Model
                     adminCachedStatusVars: $this->adminCachedStatusVars,
                     adminCachedServerVars: $this->adminCachedServerVars,
                     adminCacheTs: $this->adminCacheTs,
+                    adminLoading: $this->adminLoading,
                 );
             }
             // Only one item, go to index 0
@@ -592,6 +649,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
         // If historyIndex > 0, decrement index (going toward older)
@@ -611,6 +669,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
         return $this;
@@ -639,6 +698,7 @@ final class App implements Model
                 adminCachedStatusVars: $this->adminCachedStatusVars,
                 adminCachedServerVars: $this->adminCachedServerVars,
                 adminCacheTs: $this->adminCacheTs,
+                adminLoading: $this->adminLoading,
             );
         }
         // If at index 0 (newest), go back to -1 and restore savedBuf
@@ -656,6 +716,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -680,6 +741,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -702,6 +764,7 @@ final class App implements Model
             adminCachedStatusVars: $this->adminCachedStatusVars,
             adminCachedServerVars: $this->adminCachedServerVars,
             adminCacheTs: $this->adminCacheTs,
+            adminLoading: $this->adminLoading,
         );
     }
 
@@ -721,14 +784,21 @@ final class App implements Model
             return null;
         }
 
+        // Skip tick if fetch is already in progress (avoid double-fetch)
+        if ($this->adminLoading) {
+            return null;
+        }
+
         return Subscriptions::withTick('admin-fetch', 3.0, function(): \SugarCraft\Core\Msg {
-            return \SugarCraft\Core\Cmd::promise(fn() => $this->createAdminFetchPromise())();
+            return Cmd::batch(
+                fn() => new AdminFetchStartedMsg(),
+                Cmd::promise(fn() => $this->createAdminFetchPromise()),
+            )();
         });
     }
 
     private function createAdminFetchPromise(): \React\Promise\PromiseInterface
     {
-        $executor = new ProcessQueryExecutor();
         $context = $this->serverContext ?? $this->createContext();
 
         $dsn = $context->connection()->dsn();
@@ -738,13 +808,19 @@ final class App implements Model
         if ($context instanceof PostgresServerContext) {
             $statusQuery = "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks FROM pg_stat_database";
             $serverQuery = 'SELECT name, setting FROM pg_settings';
+            $connection = new AmpPostgresConnection($dsn);
+            $statusPromise = $connection->query($statusQuery);
+            $serverPromise = $connection->query($serverQuery);
         } else {
             $statusQuery = 'SHOW GLOBAL STATUS';
             $serverQuery = 'SHOW GLOBAL VARIABLES';
+            $connection = new AmpMysqlConnection($dsn, $username, $password);
+            $statusPromise = $connection->query($statusQuery);
+            $serverPromise = $connection->query($serverQuery);
         }
 
         return \React\Promise\all([
-            'status' => $executor->query($dsn, $username, $password, $statusQuery)
+            'status' => $statusPromise
                 ->then(function(array $rows): array {
                     $out = [];
                     foreach ($rows as $row) {
@@ -754,7 +830,7 @@ final class App implements Model
                     }
                     return $out;
                 }),
-            'server' => $executor->query($dsn, $username, $password, $serverQuery)
+            'server' => $serverPromise
                 ->then(function(array $rows): array {
                     $out = [];
                     foreach ($rows as $row) {
@@ -791,6 +867,25 @@ final class App implements Model
             adminCachedStatusVars: $statusVars,
             adminCachedServerVars: $serverVars,
             adminCacheTs: $ts,
+            adminLoading: false,
+        );
+    }
+
+    private function withAdminLoading(bool $loading): self
+    {
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: null,  // reset to force recreation with fresh data
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
+            adminLoading: $loading,
         );
     }
 }
