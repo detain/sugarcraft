@@ -19,7 +19,11 @@ use SugarCraft\Query\Db\Version;
  */
 final class ServerContext implements ServerContextInterface
 {
+    private const STATUS_CACHE_TTL = 3.0;
+    private const SERVER_CACHE_TTL = 30.0;
+
     private ?array $serverVariablesCache = null;
+    private ?float $serverVariablesTsCache = null;
     private ?array $statusVariablesCache = null;
     private ?float $statusVariablesTsCache = null;
     /** @var list<array<string, mixed>>|null */
@@ -48,10 +52,15 @@ final class ServerContext implements ServerContextInterface
     /** @return array<string, string> */
     public function serverVariables(): array
     {
-        if ($this->serverVariablesCache !== null) {
-            return $this->serverVariablesCache;
+        $now = microtime(true);
+
+        if ($this->serverVariablesCache !== null && $this->serverVariablesTsCache !== null) {
+            if (($now - $this->serverVariablesTsCache) < self::SERVER_CACHE_TTL) {
+                return $this->serverVariablesCache;
+            }
         }
 
+        $this->serverVariablesTsCache = $now;
         $this->serverVariablesCache = $this->fetchServerVariables();
         return $this->serverVariablesCache;
     }
@@ -59,11 +68,15 @@ final class ServerContext implements ServerContextInterface
     /** @return array<string, string> */
     public function statusVariables(): array
     {
-        if ($this->statusVariablesCache !== null) {
-            return $this->statusVariablesCache;
+        $now = microtime(true);
+
+        if ($this->statusVariablesCache !== null && $this->statusVariablesTsCache !== null) {
+            if (($now - $this->statusVariablesTsCache) < self::STATUS_CACHE_TTL) {
+                return $this->statusVariablesCache;
+            }
         }
 
-        $this->statusVariablesTsCache = microtime(true);
+        $this->statusVariablesTsCache = $now;
         $this->statusVariablesCache = $this->fetchStatusVariables();
         $this->detectReset();
         return $this->statusVariablesCache;
@@ -146,6 +159,7 @@ final class ServerContext implements ServerContextInterface
     public function refresh(): void
     {
         $this->serverVariablesCache = null;
+        $this->serverVariablesTsCache = null;
         $this->statusVariablesCache = null;
         $this->statusVariablesTsCache = null;
         $this->pluginsCache = null;

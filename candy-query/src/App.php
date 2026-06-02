@@ -10,6 +10,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Query\Admin\AdminPane;
+use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
 use SugarCraft\Query\Admin\PageBase;
@@ -23,6 +24,7 @@ use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
+use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
@@ -71,6 +73,9 @@ final class App implements Model
         public readonly bool $paused = false,
         public readonly ?ServerContextInterface $serverContext = null,
         public readonly ?PageBase $adminPage = null,
+        public readonly ?array $adminCachedStatusVars = null,
+        public readonly ?array $adminCachedServerVars = null,
+        public readonly float $adminCacheTs = 0.0,
     ) {}
 
     /**
@@ -101,6 +106,9 @@ final class App implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof AdminDataLoadedMsg) {
+            return [$this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -171,6 +179,9 @@ final class App implements Model
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
         if ($msg->type === KeyType::Down
@@ -185,6 +196,9 @@ final class App implements Model
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
         return $this;
@@ -299,6 +313,9 @@ final class App implements Model
                 historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -311,6 +328,9 @@ final class App implements Model
                 historyIndex: $newHistoryIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
     }
@@ -329,6 +349,9 @@ final class App implements Model
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         } catch (\PDOException $e) {
             return new self(
@@ -341,6 +364,9 @@ final class App implements Model
                 historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
     }
@@ -359,6 +385,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -373,6 +402,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: null,  // reset adminPage to force recreation
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -389,6 +421,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -403,6 +438,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -417,6 +455,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $newPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -438,6 +479,13 @@ final class App implements Model
         }
 
         $context = $this->serverContext ?? $this->createContext();
+
+        // Build context with cached data if available
+        $context = new CachingServerContext(
+            $context,
+            $this->adminCachedStatusVars,
+            $this->adminCachedServerVars,
+        );
 
         return match ($this->adminPane) {
             // TODO: Use ConnectionsPage once it extends PageBase
@@ -480,6 +528,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -494,6 +545,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -518,6 +572,9 @@ final class App implements Model
                     savedBuf: $this->queryBuf,
                     adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                     serverContext: $this->serverContext, adminPage: $this->adminPage,
+                    adminCachedStatusVars: $this->adminCachedStatusVars,
+                    adminCachedServerVars: $this->adminCachedServerVars,
+                    adminCacheTs: $this->adminCacheTs,
                 );
             }
             // Only one item, go to index 0
@@ -532,6 +589,9 @@ final class App implements Model
                 savedBuf: $this->queryBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
         // If historyIndex > 0, decrement index (going toward older)
@@ -548,6 +608,9 @@ final class App implements Model
                 savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
         return $this;
@@ -573,6 +636,9 @@ final class App implements Model
                 savedBuf: $this->savedBuf,
                 adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
                 serverContext: $this->serverContext, adminPage: $this->adminPage,
+                adminCachedStatusVars: $this->adminCachedStatusVars,
+                adminCachedServerVars: $this->adminCachedServerVars,
+                adminCacheTs: $this->adminCacheTs,
             );
         }
         // If at index 0 (newest), go back to -1 and restore savedBuf
@@ -587,6 +653,9 @@ final class App implements Model
             savedBuf: null,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -608,6 +677,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -627,6 +699,9 @@ final class App implements Model
             historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
             adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
             serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $this->adminCachedStatusVars,
+            adminCachedServerVars: $this->adminCachedServerVars,
+            adminCacheTs: $this->adminCacheTs,
         );
     }
 
@@ -642,6 +717,80 @@ final class App implements Model
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
     {
-        return null;
+        if ($this->pane !== Pane::Admin) {
+            return null;
+        }
+
+        return Subscriptions::withTick('admin-fetch', 3.0, function(): \SugarCraft\Core\Msg {
+            return \SugarCraft\Core\Cmd::promise(fn() => $this->createAdminFetchPromise())();
+        });
+    }
+
+    private function createAdminFetchPromise(): \React\Promise\PromiseInterface
+    {
+        $executor = new ProcessQueryExecutor();
+        $context = $this->serverContext ?? $this->createContext();
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username() ?? '';
+        $password = $context->connection()->password() ?? '';
+
+        if ($context instanceof PostgresServerContext) {
+            $statusQuery = "SELECT datname, numbackends, xact_commit, xact_rollback, blks_read, blks_hit, tup_returned, tup_fetched, tup_inserted, tup_updated, tup_deleted, conflicts, temp_files, temp_bytes, deadlocks FROM pg_stat_database";
+            $serverQuery = 'SELECT name, setting FROM pg_settings';
+        } else {
+            $statusQuery = 'SHOW GLOBAL STATUS';
+            $serverQuery = 'SHOW GLOBAL VARIABLES';
+        }
+
+        return \React\Promise\all([
+            'status' => $executor->query($dsn, $username, $password, $statusQuery)
+                ->then(function(array $rows): array {
+                    $out = [];
+                    foreach ($rows as $row) {
+                        if (isset($row['Variable_name'], $row['Value'])) {
+                            $out[(string)$row['Variable_name']] = (string)$row['Value'];
+                        }
+                    }
+                    return $out;
+                }),
+            'server' => $executor->query($dsn, $username, $password, $serverQuery)
+                ->then(function(array $rows): array {
+                    $out = [];
+                    foreach ($rows as $row) {
+                        if (isset($row['Variable_name'], $row['Value'])) {
+                            $out[(string)$row['Variable_name']] = (string)$row['Value'];
+                        } elseif (isset($row['name'], $row['setting'])) {
+                            $out[(string)$row['name']] = (string)$row['setting'];
+                        }
+                    }
+                    return $out;
+                }),
+        ])->then(function(array $results): AdminDataLoadedMsg {
+            return new AdminDataLoadedMsg(
+                statusVars: $results['status'],
+                serverVars: $results['server'],
+                fetchedAt: microtime(true),
+            );
+        })->otherwise(function(\Throwable $e): AdminDataLoadedMsg {
+            return new AdminDataLoadedMsg([], [], microtime(true));
+        });
+    }
+
+    private function withAdminCachedData(array $statusVars, array $serverVars, float $ts): self
+    {
+        return new self(
+            db: $this->db, flavor: $this->flavor, tables: $this->tables, tableCursor: $this->tableCursor,
+            selectedTable: $this->selectedTable, rows: $this->rows, rowCursor: $this->rowCursor,
+            queryBuf: $this->queryBuf, pane: $this->pane,
+            error: $this->error, status: $this->status,
+            queryHistory: $this->queryHistory, queryFavorites: $this->queryFavorites,
+            historyIndex: $this->historyIndex, savedBuf: $this->savedBuf,
+            adminPane: $this->adminPane, adminCursor: $this->adminCursor, paused: $this->paused,
+            serverContext: $this->serverContext, adminPage: $this->adminPage,
+            adminCachedStatusVars: $statusVars,
+            adminCachedServerVars: $serverVars,
+            adminCacheTs: $ts,
+        );
     }
 }
