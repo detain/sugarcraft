@@ -123,8 +123,9 @@ final class FormatTest extends TestCase
 
     public function testDurationMinutes(): void
     {
-        $this->assertSame('1m 0s', Format::duration(60));
-        $this->assertSame('5m 0s', Format::duration(300));
+        // Exact-minute spans omit the seconds component ("1m", not "1m 0s").
+        $this->assertSame('1m', Format::duration(60));
+        $this->assertSame('5m', Format::duration(300));
         $this->assertSame('5m 30s', Format::duration(330));
     }
 

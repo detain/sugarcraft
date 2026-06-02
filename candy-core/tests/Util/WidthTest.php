@@ -146,4 +146,39 @@ final class WidthTest extends TestCase
         $out = Width::wrapAnsi("\x1b[31mhello\x1b[0m world", 5);
         $this->assertSame("\x1b[31mhello\x1b[0m\nworld", $out);
     }
+
+    public function testTruncateMiddleShortStringUnchanged(): void
+    {
+        $this->assertSame('short', Width::truncateMiddle('short', 10));
+    }
+
+    public function testTruncateMiddleKeepsBothEnds(): void
+    {
+        // "abcdefghij" (10) into 7 cells: budget 6, head 3, tail 3 → "abc…hij".
+        $this->assertSame('abc…hij', Width::truncateMiddle('abcdefghij', 7));
+    }
+
+    public function testTruncateMiddleResultFitsWidth(): void
+    {
+        $out = Width::truncateMiddle('/var/lib/mysql/data/very/deep/path.db', 20);
+        $this->assertLessThanOrEqual(20, Width::string($out));
+        $this->assertStringContainsString('…', $out);
+    }
+
+    public function testTruncateMiddleStripsAnsi(): void
+    {
+        $this->assertSame('hello', Width::truncateMiddle("\x1b[31mhello\x1b[0m", 10));
+    }
+
+    public function testTruncateMiddleZeroWidth(): void
+    {
+        $this->assertSame('', Width::truncateMiddle('anything', 0));
+    }
+
+    public function testTruncateMiddleEllipsisWiderThanMaxFallsBack(): void
+    {
+        // max smaller than the ellipsis → plain head-truncate, still fits.
+        $out = Width::truncateMiddle('abcdef', 1, '...');
+        $this->assertLessThanOrEqual(1, Width::string($out));
+    }
 }

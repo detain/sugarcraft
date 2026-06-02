@@ -276,23 +276,13 @@ final class PerfSchemaRenderer
     /**
      * Format a duration in human-readable form.
      *
+     * Delegates to the shared {@see Format::duration()} helper.
+     *
      * @param int $seconds Duration in seconds
      */
     public static function formatDuration(int $seconds): string
     {
-        if ($seconds < 60) {
-            return "{$seconds}s";
-        }
-
-        if ($seconds < 3600) {
-            $minutes = (int) ($seconds / 60);
-            $secs = $seconds % 60;
-            return "{$minutes}m {$secs}s";
-        }
-
-        $hours = (int) ($seconds / 3600);
-        $minutes = (int) (($seconds % 3600) / 60);
-        return "{$hours}h {$minutes}m";
+        return Format::duration($seconds);
     }
 
     /**
