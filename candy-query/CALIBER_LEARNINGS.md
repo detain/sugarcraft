@@ -64,3 +64,18 @@ Source: step-7.3 ai/history
 Pattern: Components that need to participate in the status polling loop implement `StatusSnapshotProviderInterface` without extending a base class. The interface has a single method `provideStatusSnapshot(?StatusSnapshot $previous): StatusSnapshot`, making it a pure decoration that can be composed onto any object. History, alerts, and gauges all implement the same interface and are composed in the poll loop.
 Canonical: `HistoryRecorder implements StatusSnapshotProviderInterface` — same contract as `AlertManager`, `Sampler`, and all other poll participants.
 Source: step-7.3 ai/history
+
+### 2026-06-02 — flavor-agnostic AdminProviderInterface
+Pattern: An `AdminProviderInterface` with a static `forFlavor(Flavor, ServerContext)` factory abstracts the MySQL vs. Postgres distinction behind a common API. Callers never reference the concrete provider class — they call `dashboard()` / `connections()` / `serverInfo()` and get back flavor-native data shaped into a shared format. This keeps admin UI code free of conditional branching on Flavor.
+Canonical: `AdminProviderInterface::forFlavor(Flavor::Postgres, $ctx)->serverInfo()` returns a `PostgresServerInfo` value object regardless of the call site.
+Source: step-7.4 ai/postgres-admin
+
+### 2026-06-02 — Postgres pg_stat_database mapping in PostgresAdminProvider
+Pattern: `pg_stat_database` returns a row-per-database with counters (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`). Map these into the same `PostgresServerInfo` fields that MySQL's `SHOW GLOBAL STATUS` produces, so the same admin rendering code works for both flavors without modification.
+Canonical: `PostgresAdminProvider::serverInfo()` queries `pg_stat_database WHERE datname = current_database()` and maps the counters.
+Source: step-7.4 ai/postgres-admin
+
+### 2026-06-02 — graceful degradation on Postgres permission errors
+Pattern: `pg_stat_database`, `pg_stat_activity`, and `pg_settings` require varying privilege levels. When a query fails due to insufficient permissions, catch the PDOException and return a safe stub (`null` or an empty array) rather than propagating the error. This allows the admin UI to render the panels it can access even when others are restricted.
+Canonical: `PostgresAdminProvider` wraps each stat query in try/catch and falls back to `null` for the affected panel, preserving `serverInfo()` availability for the broader admin flow.
+Source: step-7.4 ai/postgres-admin
