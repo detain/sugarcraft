@@ -12,7 +12,7 @@ namespace SugarCraft\Core;
  * need more geometry helpers may use {@see \SugarCraft\Sprinkles\Layout\Rect}
  * which extends this type.
  */
-readonly class Rect
+final readonly class Rect
 {
     public function __construct(
         public int $x,

@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Plot\Canvas;
 /**
  * Point in 2D space.
  */
-readonly class CanvasPoint
+final readonly class CanvasPoint
 {
     public function __construct(
         public int $x,

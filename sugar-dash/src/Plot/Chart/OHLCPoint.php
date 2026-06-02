@@ -6,7 +6,7 @@ namespace SugarCraft\Dash\Plot\Chart;
 
 use SugarCraft\Core\Util\Color;
 
-readonly class OHLCPoint
+final readonly class OHLCPoint
 {
     public function __construct(
         public string $label,

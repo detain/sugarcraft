@@ -311,7 +311,7 @@ final class ActivityFeed implements \SugarCraft\Dash\Foundation\Sizer
 /**
  * An event in an activity feed.
  */
-readonly class ActivityEvent
+final readonly class ActivityEvent
 {
     public function __construct(
         public string $actor,

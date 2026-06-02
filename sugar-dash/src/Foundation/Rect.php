@@ -13,7 +13,7 @@ namespace SugarCraft\Dash\Foundation;
  *
  * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-rect-models].
  */
-readonly class Rect
+final readonly class Rect
 {
     public function __construct(
         public int $minX,

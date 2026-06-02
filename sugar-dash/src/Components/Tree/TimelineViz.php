@@ -316,7 +316,7 @@ final class TimelineViz implements \SugarCraft\Dash\Foundation\Sizer
 /**
  * An event in a timeline.
  */
-readonly class TimelineEvent
+final readonly class TimelineEvent
 {
     public function __construct(
         public string $time,

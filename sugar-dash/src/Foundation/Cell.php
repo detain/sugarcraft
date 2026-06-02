@@ -12,7 +12,7 @@ namespace SugarCraft\Dash\Foundation;
  *
  * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-cell-shapes].
  */
-readonly class Cell
+final readonly class Cell
 {
     public function __construct(
         public string $rune,

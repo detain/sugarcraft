@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Components\Modal;
 /**
  * A step in a wizard.
  */
-readonly class WizardStep
+final readonly class WizardStep
 {
     public function __construct(
         public string $title,

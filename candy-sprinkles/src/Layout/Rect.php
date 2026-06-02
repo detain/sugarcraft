@@ -9,7 +9,7 @@ namespace SugarCraft\Sprinkles\Layout;
  *
  * Mirrors ratatui's `Rect` — top-left corner (x,y) plus width/height.
  */
-readonly class Rect
+final readonly class Rect
 {
     public function __construct(
         public int $x,

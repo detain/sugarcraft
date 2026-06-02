@@ -18,7 +18,7 @@ use SugarCraft\Core\Util\ColorProfile;
  *
  * See sugar-dash/CALIBER_LEARNINGS.md entry [pattern:dual-style-ssot].
  */
-readonly class Style
+final readonly class Style
 {
     public function __construct(
         public ?Color $foreground = null,

@@ -7,7 +7,7 @@ namespace SugarCraft\Dash\Layout\Grid;
 /**
  * Grid-level configuration options.
  */
-readonly class Options
+final readonly class Options
 {
     public function __construct(
         /**

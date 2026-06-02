@@ -10,7 +10,7 @@ use SugarCraft\Core\Msg;
  * Dispatched when async suggestions are ready (after debounce + fetch).
  * Carries the field key and the fetched suggestions list.
  */
-readonly class SuggestionsReadyMsg implements Msg
+final readonly class SuggestionsReadyMsg implements Msg
 {
     /**
      * @param string $fieldKey Which field the suggestions are for

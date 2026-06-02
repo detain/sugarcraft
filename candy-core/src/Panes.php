@@ -21,7 +21,7 @@ use SugarCraft\Core\Msg\KeyMsg;
  * ]);
  * ```
  */
-readonly class Panes implements Model
+final readonly class Panes implements Model
 {
     /** @param list<Pane> $panes */
     private array $panes;

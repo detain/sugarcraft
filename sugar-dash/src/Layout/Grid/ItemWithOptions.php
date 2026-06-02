@@ -9,7 +9,7 @@ namespace SugarCraft\Dash\Layout\Grid;
  *
  * @internal
  */
-readonly class ItemWithOptions
+final readonly class ItemWithOptions
 {
     public function __construct(
         public \SugarCraft\Dash\Foundation\Item $item,
