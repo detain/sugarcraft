@@ -39,6 +39,8 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         $this->assertSame(Pane::Query, $a->pane);
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame(Pane::Admin, $a->pane);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         $this->assertSame(Pane::Tables, $a->pane);
     }
 
