@@ -124,6 +124,17 @@ final class ServerContext implements ServerContextInterface
     }
 
     /**
+     * Get the last known server uptime.
+     *
+     * Returns null if uptime has not been tracked yet.
+     */
+    public function lastUptime(): ?int
+    {
+        $this->statusVariables();
+        return $this->lastUptime;
+    }
+
+    /**
      * Force a refresh of all cached values.
      */
     public function refresh(): void
@@ -222,8 +233,7 @@ final class ServerContext implements ServerContextInterface
         $message = strtolower($e->getMessage());
         return str_contains($message, 'access denied')
             || str_contains($message, 'command denied')
-            || str_contains($message, 'table')
-            && str_contains($message, 'doesn\'t exist')
+            || (str_contains($message, 'table') && str_contains($message, 'doesn\'t exist'))
             || str_contains($message, 'can\'t connect')
             || str_contains($message, 'lost connection')
             || str_contains($message, 'timeout');
