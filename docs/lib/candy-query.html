@@ -99,6 +99,7 @@ $db = Database::open('app.sqlite');
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
 <tr><td>Database ⚠️</td><td>—</td><td><strong>Deprecated</strong> thin alias to <code>SqliteDatabase</code>. Use <code>DatabaseInterface</code> instead.</td></tr>
 <tr><td>MysqlDatabase</td><td>—</td><td><code>DatabaseInterface</code> implementation via PDO <code>mysql</code>. Implements <code>serverVersion()</code>, <code>driverName()</code>, <code>ping()</code>, <code>databases()</code>.</td></tr>
+<tr><td>PostgresDatabase</td><td>—</td><td><code>DatabaseInterface</code> implementation via PDO <code>pgsql</code>. Implements <code>serverVersion()</code>, <code>driverName()</code>, <code>ping()</code>, <code>databases()</code>.</td></tr>
 <tr><td>DatabaseInterface</td><td>serverVersion()</td><td>Get database server version</td></tr>
 <tr><td>DatabaseInterface</td><td>driverName()</td><td>Get driver name (e.g., sqlite, mysql)</td></tr>
 <tr><td>DatabaseInterface</td><td>ping()</td><td>Check connection is alive</td></tr>
