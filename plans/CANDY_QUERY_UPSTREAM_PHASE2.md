@@ -4,6 +4,32 @@ Self-contained worklist for a fresh session. Phase 1 (foundation + cleanups) is
 DONE and committed; this file covers everything that remains. Read the original
 analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
 
+## Progress log
+
+- **DONE (this session, 8 commits on the branch, all suites green):**
+  - STEP 0 — candy-forms dep + local path-repo closure (candy-buffer/forms/fuzzy/pty).
+  - B2 — `Dash\Components\Card\DefinitionList` (+12 tests).
+  - B6 — `Badge::bool()` / `Badge::tristate()` (+Badge tests).
+  - A1 — query editor → `Forms\TextArea` (App.php; history-recall via Up/Down retired —
+    Up/Down now move the editor cursor; `queryHistory` still recorded).
+  - A2 — tables list → `Forms\ItemList` (dropped hand-rolled window + `↑ N–M of T ↑`).
+    NOTE: used ItemList ALONE (it self-windows); a Viewport+Scrollbar would double-window
+    and risk the exact-fill frame invariant.
+  - A4 — pane titles → `Border::rounded()->withTitle()` (frame() + adminPane()).
+  - sugar-table — added `Table::withSelectedIndex()` (+tests) for the rows cursor.
+  - A3 — rows pane: table-browse → `sugar-table` (withSelectedIndex highlight); **ResultTable
+    KEPT and wired** for executed-query results (App `resultTable` state, h/l + ←/→ scroll,
+    loadTable clears it). New shared `CellValue` helper (display()+sanitize()) for binary/ANSI
+    safety in BOTH grids. Fixed latent ResultTable numeric-column-name bug.
+- **Baselines after this session:** candy-core 637, candy-query **1092**, sugar-table 169,
+  sugar-dash Badge/DefinitionList green. `git diff master --stat candy-query/src` ≈ −777 net.
+- **REMAINING:** A5–A11 (6 admin pages — see section below; ServerStatusPage first),
+  B5 (chart autoscale), B1 (`Kit\Frame`), C4 (size detection).
+  - A5 note: `ServerStatusPage::tristate(bool|string|null): string` is a **public, directly-
+    tested** method — adopting `Badge::bool()` changes its byte output, so update
+    `ServerStatusPageTest` accordingly. ServerInfoCard + the 6 panels map cleanly onto
+    `Card` + `DefinitionList` (+ `withPlaceholder('Unknown')`).
+
 ## Where we are
 
 - **Branch:** `ai/candy-query-upstream-extraction` (off `master`). `master` is the
