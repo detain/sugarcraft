@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyForms</title>
+<meta name="description" content="CandyForms: Foundation lib for form and input primitives — TextInput, TextArea, ItemList, Viewport, FilePicker, Field interface, Confirm, Form.">
+<meta property="og:title" content="SugarCraft — CandyForms">
+<meta property="og:description" content="Foundation lib for form and input primitives — the raw component implementations that sugar-bits and sugar-prompt re-export.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-forms.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-forms.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-forms.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-forms.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-forms.png" alt="CandyForms">
+      <div>
+        <h2>🍬 CandyForms</h2>
+        <p class="detail-sub">Foundation lib for form and input primitives</p>
+        <div class="detail-meta">
+          <span class="tag-chip">foundation</span>
+          <span class="tag-chip">forms</span>
+          <span class="tag-chip">inputs</span>
+          <span class="tag-chip">leaf-package</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Foundation lib for form and input primitives — the raw component implementations that <code>sugar-bits</code> and <code>sugar-prompt</code> re-export. Extracted out of those two leaf libs so the form/prompt engine can ship as a single standalone dependency.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-forms</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Form;
+use SugarCraft\Forms\Validator\Required;
+
+$form = Form::new(
+    Input::new('name')
+        ->withTitle('What is your name?')
+        ->withValidator(new Required())
+);
+
+echo $form->view();</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Input primitives</strong><span>TextInput, TextArea, ItemList, Viewport, FilePicker, Cursor, Scrollbar, Spinner.</span></div>
+      <div class="feature"><strong>Form engine</strong><span>Field interface + Field{Input, Text, Confirm, Select, MultiSelect, Note, FilePicker}, Form, Group, KeyMap, Theme.</span></div>
+      <div class="feature"><strong>Validators</strong><span>Required, Email, MinLength, MaxLength, Pattern — pluggable validator interface.</span></div>
+      <div class="feature"><strong>Fuzzy matching</strong><span>Fuzzy\FuzzyMatcher with Smith-Waterman algorithm for filter-as-you-type in Select/MultiSelect.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Standalone form primitives</strong> — when you want the raw inputs without sugar-bits or sugar-prompt overhead.</li>
+      <li><strong>Custom form engines</strong> — build your own form system on top of the Field interface.</li>
+      <li><strong>Spinner and progress components</strong> — standalone spinner now lives here, was previously in sugar-bits.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-forms">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-forms/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-forms/tree/main/examples">Runnable examples</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Form</td><td>new(Field[])</td><td>Create a new form with fields</td></tr>
+<tr><td>Field\Input</td><td>new(string)</td><td>Create a text input field</td></tr>
+<tr><td>Field\Confirm</td><td>new(string)</td><td>Create a confirmation field</td></tr>
+<tr><td>Field\Select</td><td>new(string, Options)</td><td>Create a select field</td></tr>
+<tr><td>Validator\Required</td><td>validate(mixed)</td><td>Check value is not empty</td></tr>
+<tr><td>Validator\Email</td><td>validate(mixed)</td><td>Check valid email format</td></tr>
+<tr><td>Spinner\Spinner</td><td>new(Style)</td><td>Create a spinner with style</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the library. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-forms/.vhs/demo.gif" alt="CandyForms demo">
+                <h3>Form primitives</h3>
+                <span class="demo-caption">TextInput, TextArea, Select and more — the foundation components.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-forms">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-forms/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
