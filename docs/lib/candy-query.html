@@ -74,7 +74,7 @@ $db = Database::open('app.sqlite');
       <div class="feature"><strong>Tab / Backspace / Space</strong><span>Pane cycle, character delete, and space typing all respect the focused pane.</span></div>
       <div class="feature"><strong>Cursor clamping</strong><span>Lists never let the cursor escape their bounds; switching panes preserves per-pane positions.</span></div>
       <div class="feature"><strong>PDO under the hood</strong><span><code>:memory:</code> driving in tests covers the full transition surface without fixture files.</span></div>
-      <div class="feature"><strong>SchemaBrowser</strong><span>PRAGMA-based introspection — tables, columns, indexes, foreign keys. Returns immutable <code>SchemaTable</code>/<code>SchemaColumn</code>/<code>SchemaIndex</code>/<code>SchemaForeignKey</code> value objects.</span></div>
+      <div class="feature"><strong>SchemaBrowser</strong><span>Strategy pattern for schema introspection — delegates to driver-specific <code>SchemaProviderInterface</code> (<code>SqliteSchemaProvider</code>, <code>MysqlSchemaProvider</code>, <code>PostgresSchemaProvider</code>) based on <code>Flavor</code>. Returns immutable <code>SchemaTable</code>/<code>SchemaColumn</code>/<code>SchemaIndex</code>/<code>SchemaForeignKey</code> value objects.</span></div>
       <div class="feature"><strong>ResultPager</strong><span>Cursor-based pagination for SQL result sets. Immutable + fluent: <code>nextPage()</code>, <code>prevPage()</code>, <code>goToPage()</code>, <code>withPageSize()</code>. Default page size 25.</span></div>
       <div class="feature"><strong>CellEditor</strong><span>Cell-level UPDATE by primary-key identity. <code>updateCell()</code>, <code>updateRow()</code>, <code>readCell()</code> — all safely quoted, all return rows affected.</span></div>
       <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
@@ -110,7 +110,15 @@ $db = Database::open('app.sqlite');
 <tr><td>DatabaseInterface</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
 <tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query</td></tr>
 <tr><td>App</td><td>start(database)</td><td>Create the app model</td></tr>
-<tr><td>SchemaBrowser</td><td>refresh()</td><td>Load all tables + columns + indexes + FKs via PRAGMA</td></tr>
+<tr><td>SchemaBrowser</td><td>refresh()</td><td>Load schema via driver-specific SchemaProviderInterface</td></tr>
+<tr><td>SchemaBrowser</td><td>forFlavor(flavor, pdo)</td><td>Create browser with explicit Flavor (static factory)</td></tr>
+<tr><td>SchemaProviderInterface</td><td>tables(pdo)</td><td>List all tables/views</td></tr>
+<tr><td>SchemaProviderInterface</td><td>columns(pdo, table)</td><td>Get columns for a table</td></tr>
+<tr><td>SchemaProviderInterface</td><td>indexes(pdo, table)</td><td>Get indexes for a table</td></tr>
+<tr><td>SchemaProviderInterface</td><td>foreignKeys(pdo, table)</td><td>Get foreign keys for a table</td></tr>
+<tr><td>SqliteSchemaProvider</td><td>—</td><td>SchemaProviderInterface via PRAGMA queries</td></tr>
+<tr><td>MysqlSchemaProvider</td><td>—</td><td>SchemaProviderInterface via INFORMATION_SCHEMA</td></tr>
+<tr><td>PostgresSchemaProvider</td><td>—</td><td>SchemaProviderInterface via pg_catalog</td></tr>
 <tr><td>SchemaBrowser</td><td>dropTable(name)</td><td>DROP table and re-refresh</td></tr>
 <tr><td>SchemaTable</td><td>column(name)</td><td>Find a column by name</td></tr>
 <tr><td>ResultPager</td><td>page()</td><td>Rows on current page</td></tr>
