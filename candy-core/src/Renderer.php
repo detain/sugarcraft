@@ -115,8 +115,46 @@ final class Renderer
 
     private function emit(string $bytes): void
     {
-        fwrite($this->out, $bytes);
+        self::writeAll($this->out, $bytes);
         $this->recorder?->recordOutput($bytes);
+    }
+
+    /**
+     * Write every byte of $bytes to $out, looping over short writes.
+     *
+     * A single `fwrite()` is NOT guaranteed to consume the whole string:
+     * a full-screen frame is tens of KB, and when the destination is a
+     * PTY/pipe (notably an SSH session) whose kernel buffer is partially
+     * full, `fwrite()` writes only what fits and returns a short count.
+     * The unwritten tail used to be silently dropped, so a large first
+     * frame painted only partially — a different, non-deterministic amount
+     * each launch — while the small per-keystroke diffs always fit. Loop
+     * until the buffer drains (waiting for writability when it's full) so a
+     * frame is all-or-nothing on screen.
+     *
+     * @param resource $out
+     */
+    private static function writeAll($out, string $bytes): void
+    {
+        $len = strlen($bytes);
+        $written = 0;
+        while ($written < $len) {
+            $n = @fwrite($out, $written === 0 ? $bytes : substr($bytes, $written));
+            if ($n === false) {
+                return; // unrecoverable write error — drop the rest
+            }
+            if ($n === 0) {
+                // Non-blocking stream with a full buffer: block until it can
+                // take more rather than busy-spinning and dropping the tail.
+                $w = [$out];
+                $r = $e = null;
+                if (@stream_select($r, $w, $e, 1) === false) {
+                    return;
+                }
+                continue;
+            }
+            $written += $n;
+        }
     }
 
     /**
