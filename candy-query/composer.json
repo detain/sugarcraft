@@ -36,8 +36,8 @@
         "sugarcraft/sugar-dash": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
         "sugarcraft/sugar-toast": "dev-master",
-        "amphp/mysql": "^3.1",
-        "amphp/postgres": "^2.2",
+        "react/mysql": "0.7.x-dev",
+        "voryx/pgasync": "^2.2",
         "ext-pdo_sqlite": "*",
         "ext-pdo_mysql": "*",
         "ext-pdo_pgsql": "*"

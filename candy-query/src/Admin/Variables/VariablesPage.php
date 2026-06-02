@@ -82,7 +82,8 @@ final class VariablesPage extends PageBase
                 : $this->context->serverVariables();
 
             return \count($vars) > 0;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->errorMessage = 'Unable to load variables: ' . $e->getMessage();
             return false;
         }
     }

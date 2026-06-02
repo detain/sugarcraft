@@ -338,7 +338,13 @@ final class ReportsPage extends PageBase
     private function renderReportGrid(): string
     {
         if ($this->currentResult === null) {
-            return 'Select a report from the left panel.';
+            // The available-report list comes from the sys-schema availability
+            // probe, which is fetched asynchronously; until it lands no report
+            // is selected and we are still loading rather than awaiting input.
+            if ($this->selectedReport === null) {
+                return "\x1b[33m◌ Loading reports…\x1b[0m";
+            }
+            return "\x1b[33m◌ Loading {$this->currentReportCaption()}…\x1b[0m";
         }
 
         if ($this->currentResult->isEmpty()) {
@@ -377,9 +383,13 @@ final class ReportsPage extends PageBase
     {
         $columns = [];
         foreach ($report->columns as $col) {
-            $alignment = $col->type->isNumeric() ? Column::ALIGN_RIGHT : Column::ALIGN_LEFT;
-            $columns[] = Column::new($col->name, $col->name, $col->width)
-                ->withAlignment($alignment);
+            $column = Column::new($col->name, $col->name, $col->width);
+            // Numeric columns stay right-aligned (the Column default); text,
+            // time and byte columns read better left-aligned.
+            if (!$col->isNumeric()) {
+                $column = $column->withAlignLeft();
+            }
+            $columns[] = $column;
         }
 
         return $columns;
@@ -393,18 +403,19 @@ final class ReportsPage extends PageBase
     {
         $tableRows = [];
         foreach ($rows as $index => $row) {
-            $cells = [];
-            foreach ($row as $value) {
-                $cells[] = (string) ($value ?? 'NULL');
+            // Key cells by column name so the Table matches them to the columns
+            // built in buildColumns() (keyed by $col->name).
+            $data = [];
+            foreach ($row as $key => $value) {
+                $data[(string) $key] = (string) ($value ?? 'NULL');
             }
-            $rowData = RowData::new($cells);
-            $row = Row::new($rowData);
+            $tableRow = Row::new(RowData::from($data));
 
             if ($index === $this->selectedRowIndex) {
-                $row = $row->withStyle('7');
+                $tableRow = $tableRow->withStyle('7');
             }
 
-            $tableRows[] = $row;
+            $tableRows[] = $tableRow;
         }
 
         return $tableRows;
@@ -452,6 +463,19 @@ final class ReportsPage extends PageBase
     }
 
     // ─── Data Loading ─────────────────────────────────────────────────────────
+
+    /**
+     * Human-readable caption for the currently selected report (falls back to
+     * the raw view name), used by the loading placeholder.
+     */
+    private function currentReportCaption(): string
+    {
+        if ($this->selectedReport === null) {
+            return 'report';
+        }
+        $report = $this->catalog?->get($this->selectedReport);
+        return $report->caption ?? $this->selectedReport;
+    }
 
     private function loadCurrentReport(): void
     {
