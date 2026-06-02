@@ -126,4 +126,12 @@ final class SqliteDatabase implements DatabaseInterface
         }
         return [basename($this->path)];
     }
+
+    public function prepare(string $sql): mixed
+    {
+        if ($this->pdo === null) {
+            return false;
+        }
+        return $this->pdo->prepare($sql);
+    }
 }

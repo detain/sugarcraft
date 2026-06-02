@@ -139,6 +139,11 @@ final class Database implements DatabaseInterface
         return $this->delegate->databases();
     }
 
+    public function prepare(string $sql): mixed
+    {
+        return $this->delegate->prepare($sql);
+    }
+
     /**
      * @deprecated Use CsvExporter via csvExporter() instead
      */
