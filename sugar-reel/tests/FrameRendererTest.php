@@ -15,7 +15,10 @@ use SugarCraft\Reel\Render\RendererFactory;
 /**
  * Unit tests verifying the FrameRenderer interface contract.
  *
- * @covers \SugarCraft\Reel\Render\FrameRenderer
+ * An interface has no executable code, so it cannot be @covers-ed — these
+ * structural assertions intentionally cover nothing.
+ *
+ * @coversNothing
  */
 final class FrameRendererTest extends TestCase
 {

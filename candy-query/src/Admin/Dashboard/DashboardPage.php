@@ -7,6 +7,7 @@ namespace SugarCraft\Query\Admin\Dashboard;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\Version;
 use SugarCraft\Layout\Region;
 use SugarCraft\Layout\Direction;
@@ -23,18 +24,12 @@ use SugarCraft\Layout\Constraint\Constraint;
  * Keyboard shortcuts:
  *   [p] - pause/resume auto-refresh
  *   [r] - reset all counters and graphs
- *   [1] - focus Network panel
- *   [2] - focus MySQL panel
- *   [3] - focus InnoDB panel
- *   [q] - quit to previous view
  *
  * @see Mirrors mysql-workbench/wb_admin_performance_dashboard
  */
 final class DashboardPage extends PageBase
 {
     private bool $paused = false;
-
-    private int $focusedPanel = 0;
 
     private ?float $lastPollAt = null;
 
@@ -52,12 +47,17 @@ final class DashboardPage extends PageBase
 
     private ?string $previousSnapshot = null;
 
+    private bool $isPostgres = false;
+
     public function __construct(
         ServerContextInterface $context,
         ?Version $version = null,
     ) {
         parent::__construct($context);
-        $this->allWidgets = WidgetRegistry::build($version ?? $this->context->version());
+        $this->isPostgres = $this->context->flavor() === Flavor::Postgres;
+        $this->allWidgets = $this->isPostgres
+            ? WidgetRegistry::buildForPostgres()
+            : WidgetRegistry::build($version ?? $this->context->version());
         $this->initializeCells();
     }
 
@@ -93,9 +93,9 @@ final class DashboardPage extends PageBase
         $mysqlCol = $columns[1] ?? $region;
         $innodbCol = $columns[2] ?? $region;
 
-        $networkContent = $this->renderPanel('Network', $networkCol, 'network');
-        $mysqlContent = $this->renderPanel('MySQL', $mysqlCol, 'mysql');
-        $innodbContent = $this->renderPanel('InnoDB', $innodbCol, 'innodb');
+        $networkContent = $this->renderPanel($this->isPostgres ? 'I/O' : 'Network', $networkCol, 'network');
+        $mysqlContent = $this->renderPanel($this->isPostgres ? 'Transactions' : 'MySQL', $mysqlCol, 'mysql');
+        $innodbContent = $this->renderPanel($this->isPostgres ? 'Cache' : 'InnoDB', $innodbCol, 'innodb');
 
         $header = $this->renderHeader();
         $footer = $this->renderFooter();
@@ -114,10 +114,6 @@ final class DashboardPage extends PageBase
         return match (true) {
             $ch === 'p' => [$this->withTogglePause(), null],
             $ch === 'r' => [$this->withReset(), null],
-            $ch === '1' => [$this->withFocusedPanel(0), null],
-            $ch === '2' => [$this->withFocusedPanel(1), null],
-            $ch === '3' => [$this->withFocusedPanel(2), null],
-            $ch === 'q' => [$this->withQuit(), null],
             default => [$this, null],
         };
     }
@@ -215,6 +211,15 @@ final class DashboardPage extends PageBase
      */
     private function getWidgetsForSection(string $section): array
     {
+        if ($this->isPostgres) {
+            return match ($section) {
+                'network' => WidgetRegistry::postgresIo(),
+                'mysql' => WidgetRegistry::postgresTransactions(),
+                'innodb' => WidgetRegistry::postgresCache(),
+                default => [],
+            };
+        }
+
         $networkWidgets = WidgetRegistry::network();
         $mysqlWidgets = WidgetRegistry::mysql($this->context->version());
         $innodbWidgets = WidgetRegistry::innodb();
@@ -230,9 +235,18 @@ final class DashboardPage extends PageBase
     private function renderHeader(): string
     {
         $version = $this->context->versionString();
+        $status = $this->paused ? ' [PAUSED]' : '';
+
+        if ($this->isPostgres) {
+            return sprintf(
+                "Performance Dashboard%s | PostgreSQL %s | Uptime: N/A\n",
+                $status,
+                $version,
+            );
+        }
+
         $uptime = $this->context->statusVariables()['Uptime'] ?? '0';
         $uptimeStr = Format::duration((float) $uptime);
-        $status = $this->paused ? ' [PAUSED]' : '';
 
         return sprintf(
             "Performance Dashboard%s | MySQL %s | Uptime: %s\n",
@@ -244,7 +258,7 @@ final class DashboardPage extends PageBase
 
     private function renderFooter(): string
     {
-        return "[p] pause  [r] reset  [1-3] panels  [q] quit";
+        return "[p] pause  [r] reset";
     }
 
     private function assembleLayout(
@@ -315,26 +329,9 @@ final class DashboardPage extends PageBase
         return $clone;
     }
 
-    public function withFocusedPanel(int $panel): self
-    {
-        $clone = clone $this;
-        $clone->focusedPanel = $panel;
-        return $clone;
-    }
-
-    public function withQuit(): self
-    {
-        $clone = clone $this;
-        return $clone;
-    }
-
     public function isPaused(): bool
     {
         return $this->paused;
     }
 
-    public function focusedPanel(): int
-    {
-        return $this->focusedPanel;
-    }
 }

@@ -192,20 +192,30 @@ final class App implements Model
 
     private function handleAdminKey(KeyMsg $msg): self
     {
+        $allPanes = AdminPane::cases();
+        $count = count($allPanes);
+
         // [1-6] keys directly select an admin pane
         if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '6') {
             $index = (int) $msg->rune - 1;
-            $allPanes = AdminPane::cases();
             if (isset($allPanes[$index])) {
-                return $this->withAdminPane($allPanes[$index]);
+                return $this->withAdminCursor($index)->withAdminPane($allPanes[$index]);
             }
         }
-        // j/k or arrows navigate within admin sidebar
+        // [q] returns to Tables pane
+        if ($msg->type === KeyType::Char && $msg->rune === 'q') {
+            return $this->withPane(Pane::Tables);
+        }
+        // j/k or arrows navigate within admin sidebar (with wrap-around)
         if ($msg->type === KeyType::Down || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            return $this->withAdminCursor($this->adminCursor + 1);
+            $newCursor = ($this->adminCursor + 1) % $count;
+            $newPane = $allPanes[$newCursor];
+            return $this->withAdminCursor($newCursor)->withAdminPane($newPane);
         }
         if ($msg->type === KeyType::Up || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            return $this->withAdminCursor(max(0, $this->adminCursor - 1));
+            $newCursor = ($this->adminCursor - 1 + $count) % $count;
+            $newPane = $allPanes[$newCursor];
+            return $this->withAdminCursor($newCursor)->withAdminPane($newPane);
         }
         // [p] pause/resume polling (sync with DashboardPage if present)
         if ($msg->type === KeyType::Char && $msg->rune === 'p') {
