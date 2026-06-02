@@ -111,6 +111,20 @@
             "options": {
                 "symlink": true
             }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-charts",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-dash",
+            "options": {
+                "symlink": true
+            }
         }
     ]
 }
