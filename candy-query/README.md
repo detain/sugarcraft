@@ -53,7 +53,11 @@ candy-query path/to/db.sqlite
 | `ResultPager`     | Cursor-based pagination for SQL result sets. Immutable + fluent `nextPage()`/`prevPage()`. |
 | `CellEditor`       | Cell-level UPDATE by primary-key identity. `updateCell()`, `updateRow()`, `readCell()`.     |
 | `SnippetStore`   | File-backed JSON store for named SQL snippets. Immutable + fluent `add()`/`delete()`/`find()`/`search()`. Persists to `/tmp/candy-query-snippets.json`. |
-| `ExplainView`     | Renders `EXPLAIN QUERY PLAN` output as a colour-coded ANSI tree (SEARCH=cyan, SCAN=yellow, SUBQUERY=magenta, etc.). Static `run()` executes against a Database. |
+| `ExplainView`     | Renders `EXPLAIN` output as a colour-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
+| `ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(pdo, sql)` returning a list of explain rows. |
+| `SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
+| `MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
+| `PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
@@ -182,15 +186,29 @@ $store->delete('active-users')->flush();          // remove and persist
 
 ## Query plan viewer
 
-`ExplainView` parses and colour-renders SQLite's `EXPLAIN QUERY PLAN` output:
+`ExplainView` uses a strategy pattern based on `Flavor` to delegate EXPLAIN parsing to the appropriate `ExplainProviderInterface` implementation:
 
 ```php
-$view = ExplainView::run($db, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
+use SugarCraft\Query\QueryPlan\ExplainView;
+use SugarCraft\Query\Db\Flavor;
+
+// Auto-detect driver from PDO and use correct provider
+$view = ExplainView::run($pdo, 'SELECT * FROM users JOIN orders ON users.id = orders.user_id');
 echo $view->render();   // ANSI coloured tree
 print_r($view->toArray());  // JSON-serialisable structure
+
+// Or specify flavor explicitly
+$view = ExplainView::forFlavor(Flavor::MySQL, $pdo);
+$view = ExplainView::forFlavor(Flavor::Postgres, $pdo);
+$view = ExplainView::forFlavor(Flavor::Sqlite, $pdo);
 ```
 
-Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange). Depth is inferred from SQLite's `|--` / `` `-- `` tree prefixes.
+Each detail line is classified by op type: `SEARCH` (cyan), `SCAN` (yellow), `USING` (green), `JOIN` (purple), `SUBQUERY` (pink), `COMPOUND` (orange).
+
+Available providers:
+- **`SqliteExplainProvider`** — `EXPLAIN QUERY PLAN`, parses tree prefixes (`|--`, `` `-- ``) for depth
+- **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
+- **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
 
 ## Result table
 
