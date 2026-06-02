@@ -95,10 +95,14 @@ $db = Database::open('app.sqlite');
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Database</td><td>open(path)</td><td>Open SQLite database</td></tr>
-<tr><td>Database</td><td>tables()</td><td>List all tables</td></tr>
-<tr><td>Database</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
-<tr><td>Database</td><td>query(sql)</td><td>Execute SQL query</td></tr>
+<tr><td>Database ⚠️</td><td>—</td><td><strong>Deprecated</strong> thin alias to <code>SqliteDatabase</code>. Use <code>DatabaseInterface</code> instead.</td></tr>
+<tr><td>DatabaseInterface</td><td>serverVersion()</td><td>Get database server version</td></tr>
+<tr><td>DatabaseInterface</td><td>driverName()</td><td>Get driver name (e.g., sqlite, mysql)</td></tr>
+<tr><td>DatabaseInterface</td><td>ping()</td><td>Check connection is alive</td></tr>
+<tr><td>DatabaseInterface</td><td>databases()</td><td>List available databases</td></tr>
+<tr><td>DatabaseInterface</td><td>tables()</td><td>List all tables</td></tr>
+<tr><td>DatabaseInterface</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
+<tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query</td></tr>
 <tr><td>App</td><td>start(database)</td><td>Create the app model</td></tr>
 <tr><td>SchemaBrowser</td><td>refresh()</td><td>Load all tables + columns + indexes + FKs via PRAGMA</td></tr>
 <tr><td>SchemaBrowser</td><td>dropTable(name)</td><td>DROP table and re-refresh</td></tr>
@@ -123,6 +127,8 @@ $db = Database::open('app.sqlite');
 <tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>
 <tr><td>ResultTable</td><td>withVisibleWidth(n) / withJsonPretty(bool) / withNullToken(s)</td><td>Fluent configuration builders</td></tr>
 <tr><td>ResultTable</td><td>render() / renderPlain()</td><td>Render ANSI string or plain text</td></tr>
+<tr><td>CsvExporter</td><td>export(table)</td><td>Export table rows to CSV string</td></tr>
+<tr><td>SqlExporter</td><td>export(table)</td><td>Export table rows to SQL INSERT statements</td></tr>
 </table>
   </div>
 </section>

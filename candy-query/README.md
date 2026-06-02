@@ -35,7 +35,7 @@ candy-query path/to/db.sqlite
 
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
-| `Database`        | Thin PDO/SQLite wrapper. Throws `RuntimeException` on missing files; promotes PDO errors.   |
+| `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
 | `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
@@ -48,7 +48,7 @@ candy-query path/to/db.sqlite
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
-Multi-driver (MySQL / Postgres / Mongo) is a planned follow-up — the current `Database` class is a SQLite-only concrete; promoting it to an interface is a one-class job once the second driver lands.
+Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and `SqlExporter` provide driver-agnostic export.
 
 ## Schema introspection
 
@@ -154,19 +154,45 @@ Columns auto-size to the widest value; cells exceeding `maxCellWidth` (default 4
 
 ## DatabaseInterface
 
-`App` depends on `DatabaseInterface` rather than a concrete PDO/SQLite implementation. This decouples the UI from the database driver, enabling future MySQL and Postgres support without changing application logic.
+`App` depends on `DatabaseInterface` rather than a concrete PDO/SQLite implementation. This decouples the UI from the database driver, enabling MySQL and Postgres support without changing application logic.
 
-The interface defines 7 methods: `tables()`, `rows()`, `query()`, `lastInsertId()`, `quote()`, `exec()`, `close()`.
+The interface defines 11 methods:
+
+| Method | Description |
+|--------|-------------|
+| `tables()` | List all tables/views |
+| `rows()` | Fetch rows from a table |
+| `query()` | Execute a SQL query |
+| `lastInsertId()` | Return the last insert ID |
+| `quote()` | Quote a string for safe SQL |
+| `exec()` | Execute SQL without results |
+| `close()` | Close the connection |
+| `serverVersion()` | Get database server version |
+| `driverName()` | Get the driver name (e.g., `sqlite`, `mysql`) |
+| `ping()` | Check connection is alive |
+| `databases()` | List available databases |
+
+### Deprecated: `Database` class
+
+`src/Database.php` is deprecated — it is a thin alias to `SqliteDatabase`. New code should use `DatabaseInterface` directly:
 
 ```php
 use SugarCraft\Query\Db\DatabaseInterface;
-use SugarCraft\Query\Db\SqliteDatabase;
 
-// Default: SQLite via PDO
-$db = new SqliteDatabase('/path/to/db.sqlite');
-$app = App::builder()
-    ->withDb($db)
-    ->build();
+// Type-hint against the interface for driver-agnostic code
+function processDb(DatabaseInterface $db): void { ... }
+```
+
+### Exporters
+
+`Db\Export\CsvExporter` and `Db\Export\SqlExporter` provide driver-agnostic export:
+
+```php
+use SugarCraft\Query\Db\Export\CsvExporter;
+use SugarCraft\Query\Db\Export\SqlExporter;
+
+$csv = (new CsvExporter($db))->export('users');
+$sql = (new SqlExporter($db))->export('users');
 ```
 
 To add MySQL or Postgres support, implement `DatabaseInterface` and pass your implementation to `App::builder()->withDb($yourImpl)->build()`.
