@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "5a5a06c6b659729acdae8863e3b52c9b",
+    "content-hash": "07efed1db98b6e5f066dccd2d73c9824",
     "packages": [
         {
             "name": "dflydev/dot-access-data",
@@ -1355,16 +1355,16 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-input.git",
-                "reference": "267148b7534100ec15e5765a67ddcb5a0f1834aa"
+                "reference": "1c6900d1266b86bd67c1e0cb6064bb0392ac514a"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/267148b7534100ec15e5765a67ddcb5a0f1834aa",
-                "reference": "267148b7534100ec15e5765a67ddcb5a0f1834aa",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/1c6900d1266b86bd67c1e0cb6064bb0392ac514a",
+                "reference": "1c6900d1266b86bd67c1e0cb6064bb0392ac514a",
                 "shasum": ""
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.1"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -1405,7 +1405,7 @@
                 "issues": "https://github.com/sugarcraft/candy-input/issues",
                 "source": "https://github.com/sugarcraft/candy-input"
             },
-            "time": "2026-05-31T04:24:05+00:00"
+            "time": "2026-06-01T14:48:14+00:00"
         },
         {
             "name": "sugarcraft/candy-kit",
@@ -2077,9 +2077,11 @@
             "dist": {
                 "type": "path",
                 "url": "candy-query",
-                "reference": "843a437ea97563af1ad51d4879dbbdee6a36e524"
+                "reference": "ae4ba9bb2d275a8b4574b5d08b4d9718e12c93e8"
             },
             "require": {
+                "ext-pdo_mysql": "*",
+                "ext-pdo_pgsql": "*",
                 "ext-pdo_sqlite": "*",
                 "php": ">=8.3",
                 "sugarcraft/candy-core": "dev-master",
@@ -3602,6 +3604,78 @@
             "support": {
                 "issues": "https://github.com/sugarcraft/sugar-readline/issues",
                 "source": "https://github.com/sugarcraft/sugar-readline"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/sugar-reel",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-reel",
+                "reference": "6d4f7734eea23303d0557878ac2dba79781a01ce"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-buffer": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-flip": "dev-master",
+                "sugarcraft/candy-input": "dev-master",
+                "sugarcraft/candy-mosaic": "dev-master",
+                "sugarcraft/candy-palette": "dev-master",
+                "sugarcraft/candy-sprinkles": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "sugarcraft/candy-testing": "dev-master"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Reel\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Reel\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal video player for SugarCraft — plays mp4 (and more) by decoding frames on the fly and rendering them to ASCII / ANSI / truecolor half-block / sixel / kitty output.",
+            "homepage": "https://github.com/sugarcraft/sugar-reel",
+            "keywords": [
+                "ansi",
+                "ascii",
+                "ascii-art",
+                "ffmpeg",
+                "kitty",
+                "sixel",
+                "sugarcraft",
+                "terminal",
+                "tplay",
+                "tui",
+                "video",
+                "video-player",
+                "video-to-ascii"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-reel/issues",
+                "source": "https://github.com/sugarcraft/sugar-reel",
+                "docs": "https://sugarcraft.github.io/lib/sugar-reel.html"
             },
             "transport-options": {
                 "symlink": true,
@@ -5215,6 +5289,7 @@
         "sugarcraft/sugar-post": 20,
         "sugarcraft/sugar-prompt": 20,
         "sugarcraft/sugar-readline": 20,
+        "sugarcraft/sugar-reel": 20,
         "sugarcraft/sugar-skate": 20,
         "sugarcraft/sugar-spark": 20,
         "sugarcraft/sugar-stash": 20,
