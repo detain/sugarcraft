@@ -93,6 +93,10 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::default()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
+| `HistoryStoreInterface` | Persistence interface for query history. Implement `save(entry)`, `query(from, to, limit)`, `prune(before)`, and `count()` to plug in any storage backend. |
+| `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `id INTEGER PRIMARY KEY`, `query TEXT`, `duration_ms INTEGER`, `rows_affected INTEGER`, `error TEXT`, `ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. |
+| `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no主动 recording, no coupling to the UI. |
+| `HistoryQuery` | Historical query helpers: `queriesPerSecond(from, to)`, `averageDuration(from, to)`, `errorRate(from, to)`, `topQueries(limit)`. All accept an optional `limit` to bound results. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -392,6 +396,35 @@ try {
 ```
 
 When `pcntl` is unavailable, `StatementTimeout::execute()` degrades gracefully and runs without enforcement (logs a warning at construction time).
+
+## Query History (optional)
+
+Query history is an opt-in SQLite-backed layer that records every executed query with its duration, rows affected, and error state:
+
+```php
+use SugarCraft\Query\Admin\History\SqliteHistoryStore;
+use SugarCraft\Query\Admin\History\HistoryRecorder;
+use SugarCraft\Query\Admin\History\HistoryQuery;
+
+// Persist to a SQLite file (WAL mode, auto-pruned at 1000 entries)
+$store = SqliteHistoryStore::open('/tmp/candy-query-history.sqlite');
+$recorder = new HistoryRecorder($store);
+
+// Attach to the polling loop via StatusSnapshotProviderInterface
+// The recorder only writes when provideStatusSnapshot() is called
+$status = $recorder->provideStatusSnapshot($previousStatus);
+
+// Query historical patterns
+$q = new HistoryQuery($store);
+$qps = $q->queriesPerSecond(from: new DateTimeImmutable('-1 hour'), to: new DateTimeImmutable());
+$avgDuration = $q->averageDuration(from: new DateTimeImmutable('-1 day'), to: new DateTimeImmutable());
+$errorRate = $q->errorRate(from: new DateTimeImmutable('-1 hour'), to: new DateTimeImmutable());
+
+// Prune entries older than 30 days
+$store->prune(before: new DateTimeImmutable('-30 days'));
+```
+
+The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots into the existing polling loop without coupling to the UI. The `SqliteHistoryStore` uses WAL mode for safe concurrent reads during writes.
 
 ## Demos
 
