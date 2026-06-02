@@ -206,6 +206,42 @@ final class AppTest extends TestCase
         $this->assertSame(['SELECT 2', 'SELECT 1'], $a->queryHistory);
     }
 
+    public function testRunQueryPopulatesResultTable(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        foreach (str_split('SELECT name FROM users') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNull($a->error);
+        $this->assertNotNull($a->resultTable);
+        $this->assertStringContainsString('alice', $a->resultTable->render());
+    }
+
+    public function testLoadTableClearsResultTable(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → rows
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
+        foreach (str_split('SELECT 1') as $c) {
+            [$a, ] = $a->update($c === ' '
+                ? new KeyMsg(KeyType::Space, '')
+                : new KeyMsg(KeyType::Char, $c));
+        }
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
+        $this->assertNotNull($a->resultTable);
+        // Cycle Query → Admin → Tables, then Enter loads a table, which drops
+        // the query result viewer back to the sugar-table browse grid.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → admin
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → tables
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, '')); // load selected table
+        $this->assertNull($a->resultTable);
+    }
+
     public function testEnterInsertsNewlineInEditor(): void
     {
         $a = App::start($this->db());

@@ -72,6 +72,7 @@ final class App implements Model
         public readonly ?string $selectedTable = null,
         public readonly array $rows = [],
         public readonly int $rowCursor = 0,
+        public readonly ?ResultTable $resultTable = null,
         public readonly ?TextArea $queryEditor = null,
         public readonly Pane $pane = Pane::Tables,
         public readonly ?string $error = null,
@@ -207,6 +208,17 @@ final class App implements Model
                 'rowCursor' => min(max(0, count($this->rows) - 1), $this->rowCursor + 1),
             ]);
         }
+        // For wide query results, h/l + ←/→ scroll the ResultTable's columns.
+        if ($this->resultTable !== null) {
+            if ($msg->type === KeyType::Left
+                || ($msg->type === KeyType::Char && $msg->rune === 'h')) {
+                return $this->mutate(['resultTable' => $this->resultTable->scrollLeft()]);
+            }
+            if ($msg->type === KeyType::Right
+                || ($msg->type === KeyType::Char && $msg->rune === 'l')) {
+                return $this->mutate(['resultTable' => $this->resultTable->scrollRight()]);
+            }
+        }
         return $this;
     }
 
@@ -311,6 +323,9 @@ final class App implements Model
                 'selectedTable' => '(query)',
                 'rows' => $rows,
                 'rowCursor' => 0,
+                // Query results render through ResultTable (horizontal scroll,
+                // JSON pretty, styled NULL). Cleared again on table browse.
+                'resultTable' => ResultTable::fromRows($rows),
                 'queryEditor' => $this->editor()->reset(),
                 'error' => null,
                 'status' => count($rows) . ' rows',
@@ -334,6 +349,8 @@ final class App implements Model
                 'selectedTable' => $name,
                 'rows' => $rows,
                 'rowCursor' => 0,
+                // Browsing a table → the sugar-table grid, not the query viewer.
+                'resultTable' => null,
                 'error' => null,
                 'status' => count($rows) . ' rows',
             ]);
