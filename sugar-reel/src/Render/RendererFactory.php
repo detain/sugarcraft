@@ -7,6 +7,7 @@ namespace SugarCraft\Reel\Render;
 use SugarCraft\Mosaic\Mosaic;
 use SugarCraft\Palette\ColorProfile;
 use SugarCraft\Palette\Probe;
+use SugarCraft\Palette\Probe\Capability;
 
 /**
  * Static factory for FrameRenderer instances.
@@ -43,13 +44,13 @@ final class RendererFactory
         // via Mosaic::diagnose() (candy-mosaic Mosaic.php:124).
         $report = Mosaic::diagnose();
 
-        if ($report->sixel) {
+        if ($report->has(Capability::Sixel)) {
             return self::create(Mode::Sixel);
         }
-        if ($report->kitty) {
+        if ($report->has(Capability::KittyKeyboard)) {
             return self::create(Mode::Kitty);
         }
-        if ($report->iterm2) {
+        if ($report->has(Capability::ITerm2)) {
             return self::create(Mode::Iterm2);
         }
 
