@@ -32,11 +32,11 @@ final class Renderer
      *   1. Environment variables (COLUMNS/LINES, set by some terminal emulators)
      *   2. FFI ioctl(TIOCGWINSZ) via PosixBackend
      *   3. Shell-out to `stty size`
-     *   4. Hard default of 24 rows × 80 cols
+     *   4. Hard default of 32 rows × 200 cols
      *
      * @return array{rows:int, cols:int}
      */
-    private static function getTerminalSize(): array
+    public static function getTerminalSize(): array
     {
         if (self::$terminalSize !== null) {
             return self::$terminalSize;
@@ -72,8 +72,9 @@ final class Renderer
             }
         }
 
-        // 4. Hard default
-        self::$terminalSize = ['rows' => 24, 'cols' => 80];
+        // 4. Hard default for modern wide/tall terminals (60 rows accommodates
+        // large table lists + rows pane + query pane + help + status without cutting)
+        self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;
     }
 

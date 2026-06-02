@@ -80,22 +80,30 @@ final class PosixBackend implements Backend
     /** @return array{cols:int, rows:int} */
     public function size(): array
     {
+        // 1. Env vars (set by terminal emulators on resize)
         $cols = (int) (getenv('COLUMNS') ?: 0);
         $rows = (int) (getenv('LINES') ?: 0);
         if ($cols > 0 && $rows > 0) {
             return ['cols' => $cols, 'rows' => $rows];
         }
+
+        // 2. FFI ioctl on the stream's fd (works for PTY slave)
         if ($this->isTty()) {
             $fd = (int) $this->stream;
             if ($fd >= 0) {
                 try {
                     $result = SizeIoctl::query($fd);
-                    return ['cols' => $result['cols'], 'rows' => $result['rows']];
-                } catch (\RuntimeException) {
+                    // Validate: kernel returns 0 for unset fields on some emulators
+                    if ($result['cols'] > 0 && $result['rows'] > 0) {
+                        return ['cols' => $result['cols'], 'rows' => $result['rows']];
+                    }
+                } catch (\Throwable $e) {
+                    // FFI ioctl failed — fall through to next method
                 }
             }
         }
-        // Non-TTY stream: try /dev/tty directly.
+
+        // 3. /dev/tty — the controlling terminal (always has the real size)
         $tty = self::openTty();
         if ($tty !== null) {
             try {
@@ -103,13 +111,50 @@ final class PosixBackend implements Backend
                 $result = SizeIoctl::query($ttyFd);
                 fclose($tty[0]);
                 fclose($tty[1]);
-                return ['cols' => $result['cols'], 'rows' => $result['rows']];
-            } catch (\RuntimeException) {
-                fclose($tty[0]);
-                fclose($tty[1]);
+                if ($result['cols'] > 0 && $result['rows'] > 0) {
+                    return ['cols' => $result['cols'], 'rows' => $result['rows']];
+                }
+            } catch (\Throwable $e) {
+                // /dev/tty query failed — fall through
+                if (is_resource($tty[0])) {
+                    @fclose($tty[0]);
+                }
+                if (is_resource($tty[1])) {
+                    @fclose($tty[1]);
+                }
             }
         }
-        return ['cols' => 80, 'rows' => 24];
+
+        // 4. stty -F /dev/tty — queries the controlling terminal directly (most reliable)
+        // This avoids the stdin redirection problem where "stty size" reads from pipe
+        $sttyTty = trim((string) shell_exec('stty -F /dev/tty size 2>/dev/null'));
+        if ($sttyTty !== '' && str_contains($sttyTty, ' ')) {
+            [$sRows, $sCols] = explode(' ', $sttyTty, 2);
+            if ((int) $sRows > 0 && (int) $sCols > 0) {
+                return ['cols' => (int) $sCols, 'rows' => (int) $sRows];
+            }
+        }
+
+        // 5. stty size fallback — works when stdin is the terminal
+        $stty = trim((string) shell_exec('stty size 2>/dev/null'));
+        if ($stty !== '' && str_contains($stty, ' ')) {
+            [$sRows, $sCols] = explode(' ', $stty, 2);
+            if ((int) $sRows > 0 && (int) $sCols > 0) {
+                return ['cols' => (int) $sCols, 'rows' => (int) $sRows];
+            }
+        }
+
+        // 6. Wtmp query — check last login's terminal size (rough proxy)
+        $who = trim((string) shell_exec('who -a 2>/dev/null | grep -m1 pts/0'));
+        if ($who !== '' && preg_match('/\d+\s+\d+\s+(\d+)\s+(\d+)/', $who, $m)) {
+            // who format: user tty pts/0 ... rows cols
+            if ((int) $m[1] > 0 && (int) $m[2] > 0) {
+                return ['cols' => (int) $m[2], 'rows' => (int) $m[1]];
+            }
+        }
+
+        // 7. Final fallback — reasonable default for modern terminals
+        return ['cols' => 200, 'rows' => 60];
     }
 
     public function enableRawMode(): void
