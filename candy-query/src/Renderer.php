@@ -85,8 +85,9 @@ final class Renderer
     public static function render(App $a): string
     {
         $size = self::getTerminalSize();
+        $available = max(3, $size['rows'] - 26);
         $tables = self::tablesPane($a, $size['rows']);
-        $rows   = self::rowsPane($a);
+        $rows   = self::rowsPane($a, $available);
         $top    = Layout::joinHorizontal(Position::TOP, $tables, '  ', $rows);
 
         $query  = self::queryPane($a);
@@ -122,20 +123,15 @@ final class Renderer
         return self::frame($a, Pane::Tables, ' tables ', $bodyText, 24);
         }
 
-        // Reserve 9 lines for: title(1) + top border(1) + query section(5) +
-        // help(1) + status(1) + gap(1). The remaining space is split evenly
-        // between the two panes so the total output fits exactly in terminalRows.
-        // Each pane needs: title + top border + content + bottom border = 4 lines overhead.
-        // With 12 visible items: 4 + 12 + 1 (bottom indicator) = 17 per pane,
-        // which overflows. Using 11 visible items: 4 + 11 + 1 = 16 per pane.
-        // Total: title + gap + 16 (tables) + 16 (rows) + 5 (query) + 1 + 1 + 1 = 25 (off by 1).
-        // We reduce rows content to 11 visible rows (header + 11 = 12 body) so rows
-        // is also 15 lines: title + top + 12 content + bottom = 15.
-        // Total: 1 + 1 + 16 + 16 + 5 + 1 + 1 + 1 = 26 → reduce tables to 10.
-        // Minimum working: 10 tables visible (frame=15) + 10 rows visible (frame=14).
-        // Total: 1+1+15+15+5+1+1+1 = 25 → still off by 1.
-        // Final: 9 available = frame=14 for tables + 13 for rows = 24 exactly!
-        $available = max(3, $terminalRows - 9);
+        // Layout: title(1) + gap(1) + [tablesPane | rowsPane joined horizontally] +
+        // query(3) + help(1) + status(1) + finalNL(1) = 8 lines overhead.
+        // tablesPane frame: 1 title + 1 top + content + 1 bottom = content + 3.
+        // rowsPane frame: 1 title + 1 top + content + 1 bottom; fixed at ~15 lines
+        //   when showing 11 data rows (header + 11 = 12 body + 4 frame = 16 total).
+        // Both panes joined at TOP → height = max(tablesPane, rowsPane).
+        // Constraint: 1 + 1 + max(available+3, 16) + 3 + 1 + 1 + 1 ≤ terminalRows
+        //           → available ≤ terminalRows - 26. Use max(3, terminalRows - 26).
+        $available = max(3, $terminalRows - 26);
 
         $count = count($a->tables);
 
@@ -189,7 +185,7 @@ final class Renderer
         // Top scroll indicator if not showing from the beginning
         if ($visibleStart > 0) {
             $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↑ ' . ($visibleStart + 1) . '–' . min($visibleStart + $available, $count) . ' of ' . $count . ' ↑');
+                ->render('↑ ' . ($visibleStart + 1) . '–' . min($visibleStart + $available - 1, $count - 1) . ' of ' . $count . ' ↑');
         }
 
         // Only iterate the visible slice — O(visible) not O(total)
@@ -211,13 +207,17 @@ final class Renderer
         $endIndex = min($visibleStart + $available - 1, $count - 1);
         if ($endIndex < $count - 1) {
             $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↓ ' . ($endIndex + 2) . '–' . $count . ' of ' . $count . ' ↓');
+                ->render('↓ ' . ($endIndex + 1) . '–' . $count . ' of ' . $count . ' ↓');
         }
 
         return implode("\n", $lines);
     }
 
-    private static function rowsPane(App $a): string
+    /**
+     * @param int $available The number of lines available for the tables pane content.
+     *                       Used to proportionally limit rows pane height.
+     */
+    private static function rowsPane(App $a, int $available = 12): string
     {
         $title = ' rows ' . ($a->selectedTable ? "[{$a->selectedTable}] " : '');
         if ($a->rows === []) {
@@ -232,6 +232,9 @@ final class Renderer
         $headerLine = Style::new()->bold()->foreground(Color::hex('#fde68a'))
             ->render(implode('  ', array_map(static fn($c) => str_pad($c, 12), $cols)));
         $bodyLines = [$headerLine];
+        // Limit visible data rows to min(11, available - 2) to keep panes balanced.
+        // available - 2 accounts for rowsPane header + bottom border overhead.
+        $maxRows = max(0, min(11, $available - 2));
         foreach ($a->rows as $i => $row) {
             $cells = [];
             foreach ($cols as $c) {
@@ -251,10 +254,7 @@ final class Renderer
                 $line = Style::new()->reverse()->render($line);
             }
             $bodyLines[] = $line;
-            // Limit to 11 visible data rows (header + 11 = 12 body lines = 15 frame lines)
-            // This balances the heights of the tables and rows panes so the total
-            // render output fits within the terminal height without overflow.
-            if ($i >= 11) break;
+            if ($i >= $maxRows) break;
         }
         return self::frame($a, Pane::Rows, $title, implode("\n", $bodyLines), 60);
     }
