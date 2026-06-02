@@ -31,6 +31,7 @@
     "require": {
         "php": ">=8.3",
         "sugarcraft/candy-core": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-dash": "dev-master",
@@ -124,6 +125,34 @@
         {
             "type": "path",
             "url": "../sugar-dash",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-buffer",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-forms",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-fuzzy",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
             "options": {
                 "symlink": true
             }
