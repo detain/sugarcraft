@@ -8,6 +8,7 @@ use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminSection;
+use SugarCraft\Query\Terminal\BorderFrame;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
@@ -103,9 +104,8 @@ final class Renderer
                 $status = "\n " . Style::new()->foreground(Color::hex('#6ee7b7'))
                     ->render($a->status);
             }
-            $title = Style::new()->bold()->foreground(Color::hex('#7dd3fc'))
-                ->render(' CandyQuery ');
-            return $title . "\n" . $admin . "\n" . $query . "\n " . $help . $status . "\n";
+            $content = $admin . "\n" . $query . "\n " . $help . $status;
+            return BorderFrame::wrap($a, $content);
         }
 
         // Standard 3-pane layout: tables + rows + query
@@ -134,10 +134,8 @@ final class Renderer
                 ->render($a->status);
         }
 
-        $title = Style::new()->bold()->foreground(Color::hex('#7dd3fc'))
-            ->render(' CandyQuery ');
-
-        return $title . "\n" . $top . "\n" . $query . "\n " . $help . $status . "\n";
+        $content = $top . "\n" . $query . "\n " . $help . $status;
+        return BorderFrame::wrap($a, $content);
     }
 
     private static function tablesPane(App $a, int $terminalRows, int $terminalCols): string
