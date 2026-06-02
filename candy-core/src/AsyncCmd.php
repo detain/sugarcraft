@@ -10,7 +10,7 @@ use React\Promise\PromiseInterface;
  * Sentinel Msg that wraps an async promise.
  * Mirrors charmbracelet/bubbletea Cmd system.
  */
-readonly class AsyncCmd implements Msg
+final readonly class AsyncCmd implements Msg
 {
     public function __construct(
         public PromiseInterface $promise,

@@ -15,7 +15,7 @@ use SugarCraft\Input\Event;
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
  */
-readonly class PasteEvent implements Event
+final readonly class PasteEvent implements Event
 {
     public const MAX_SIZE = 1 << 20; // 1 MiB
 

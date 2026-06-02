@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Dash\Plot\Chart;
 
-readonly class AreaPoint
+final readonly class AreaPoint
 {
     public function __construct(
         public string $label,

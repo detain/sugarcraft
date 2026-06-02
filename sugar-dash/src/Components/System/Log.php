@@ -52,7 +52,7 @@ enum LogLevel: string
 /**
  * A log entry with timestamp, level, and message.
  */
-readonly class LogEntry
+final readonly class LogEntry
 {
     public function __construct(
         public string $timestamp,

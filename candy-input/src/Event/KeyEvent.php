@@ -13,7 +13,7 @@ use SugarCraft\Input\KeyModifier;
  * @see Mirrors charmbracelet/bubbletea (input handling).
  * @readonly
  */
-readonly class KeyEvent implements Event
+final readonly class KeyEvent implements Event
 {
     /**
      * @param string         $key       Symbolic key name (e.g. "ArrowUp", "Enter", "a", "F1")

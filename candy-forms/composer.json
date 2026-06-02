@@ -24,7 +24,7 @@
         "docs": "https://github.com/sugarcraft/candy-forms/blob/master/README.md"
     },
     "require": {
-        "php": "^8.1",
+        "php": "^8.3",
         "sugarcraft/candy-async": "dev-master",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",

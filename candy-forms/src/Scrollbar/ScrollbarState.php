@@ -12,7 +12,7 @@ use SugarCraft\Forms\Lang;
  *
  * Mirrors ratatui/ScrollbarState.
  */
-readonly class ScrollbarState
+final readonly class ScrollbarState
 {
     /** Total number of content lines. */
     public int $total;

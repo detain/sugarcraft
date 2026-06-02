@@ -16,7 +16,7 @@ use SugarCraft\Core\Util\Ansi;
  * Mirrors the role of a "Pane" in Bubble Tea's view system — a region
  * of the screen occupied by a sub-model.
  */
-readonly class Pane
+final readonly class Pane
 {
     public function __construct(
         public Model $model,

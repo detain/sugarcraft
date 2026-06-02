@@ -6,7 +6,7 @@ namespace SugarCraft\Dash\Components\System;
 
 use SugarCraft\Core\Util\Color;
 
-readonly class ConsoleEntry
+final readonly class ConsoleEntry
 {
     public function __construct(
         public string $message,
