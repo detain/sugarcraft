@@ -38,40 +38,54 @@ final class BorderFrame
      *   - Content lines (║ + padded content + ║)
      *   - Divider (╠ + ═ + ╣)
      *   - Bottom border (╚ + ║ + ╝) with status bar on last line
+     *
+     * Uses \x1b[2J to clear the screen and \x1b[H to home the cursor,
+     * ensuring no leftover content from previous renders.
      */
     public static function wrap(App $a, string $content): string
     {
-        $width = self::terminalWidth();
-        $height = self::terminalHeight();
-
+        // Use Renderer::getTerminalSize() once to ensure frame dimensions match
+        // the dimensions used to render the content.
+        try {
+            $size = \SugarCraft\Query\Renderer::getTerminalSize();
+            $width = $size['cols'];
+            $height = $size['rows'];
+        } catch (\Throwable) {
+            // Fallback: match Renderer hard-coded default (200 cols × 60 rows for modern terminals)
+            $width = 200;
+            $height = 60;
+        }
         $titleBar = self::buildTitleBar($a, $width);
         $statusBar = self::buildStatusBar($a, $width);
 
-        // Count actual content lines
+        // Clear screen and home cursor to prevent old content bleeding through
+        $clear = "\x1b[2J\x1b[H";
+
+        // Frame overhead: 1 top + 1 title + 1 divider + content + 1 divider + 1 status + 1 bottom = 7 lines
+        $frameOverhead = 7;
+        $availableContentHeight = $height - $frameOverhead;
+
+        // Split content into lines and measure
         $contentLines = explode("\n", $content);
         $contentLineCount = count($contentLines);
 
-        // Calculate padding to fill available terminal height
-        // Frame overhead: 1 top + 1 title + 1 divider + content + 1 divider + 1 bottom = 5 lines + content
-        $frameOverhead = 5;
-        $minHeight = 8;
-        $availableContent = max($minHeight, $height - $frameOverhead);
-
-        // Pad content if it doesn't fill the terminal
-        $paddedContent = $content;
-        if ($contentLineCount < $availableContent) {
-            $paddingNeeded = $availableContent - $contentLineCount;
-            $padding = str_repeat("\n" . str_repeat(' ', $width - 4), $paddingNeeded);
-            $paddedContent .= $padding;
+        // Pad content to fill available height
+        $paddedLines = $contentLines;
+        if ($contentLineCount < $availableContentHeight) {
+            // Add blank lines to fill
+            $paddingCount = $availableContentHeight - $contentLineCount;
+            for ($i = 0; $i < $paddingCount; $i++) {
+                $paddedLines[] = '';
+            }
         }
 
-        // Build the frame, inserting content lines with side borders
+        // Build the frame
         $lines = [];
         $lines[] = self::topBorder($width);
         $lines[] = '║' . self::padCenter($titleBar, $width - 2) . '║';
         $lines[] = self::divider($width);
 
-        foreach (explode("\n", $paddedContent) as $line) {
+        foreach ($paddedLines as $line) {
             $lines[] = '║' . self::padRight($line, $width - 2) . '║';
         }
 
@@ -79,7 +93,7 @@ final class BorderFrame
         $lines[] = '║' . self::padRight($statusBar, $width - 2) . '║';
         $lines[] = self::bottomBorder($width);
 
-        return implode("\n", $lines);
+        return $clear . implode("\n", $lines);
     }
 
     /**
@@ -176,27 +190,26 @@ final class BorderFrame
     }
 
     /**
-     * Get terminal width, trying multiple fallbacks.
+     * Get terminal width, using Renderer::getTerminalSize() for consistency.
      */
     private static function terminalWidth(): int
     {
-        // 1. Environment variable (set by some terminal emulators / resize)
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        if ($cols > 0) {
-            return $cols;
-        }
-
-        // 2. FFI ioctl via PosixBackend
+        // Try to use Renderer's detection for consistency
         try {
-            $backend = new \SugarCraft\Core\Util\Tty\PosixBackend(STDOUT);
-            $size = $backend->size();
+            $size = \SugarCraft\Query\Renderer::getTerminalSize();
             if ($size['cols'] > 0) {
                 return $size['cols'];
             }
         } catch (\Throwable) {
         }
 
-        // 3. Shell fallback: stty size
+        // Fallback: env vars
+        $cols = (int) (getenv('COLUMNS') ?: 0);
+        if ($cols > 0) {
+            return $cols;
+        }
+
+        // Fallback: stty
         $stty = trim((string) shell_exec('stty size 2>/dev/null'));
         if ($stty !== '' && str_contains($stty, ' ')) {
             [$rows, $cols] = explode(' ', $stty, 2);
@@ -205,31 +218,31 @@ final class BorderFrame
             }
         }
 
+        // Default: match Renderer fallback of 80 columns
         return 80;
     }
 
     /**
-     * Get terminal height, trying multiple fallbacks.
+     * Get terminal height, using Renderer::getTerminalSize() for consistency.
      */
     private static function terminalHeight(): int
     {
-        // 1. Environment variable
-        $rows = (int) (getenv('LINES') ?: 0);
-        if ($rows > 0) {
-            return $rows;
-        }
-
-        // 2. FFI ioctl via PosixBackend
+        // Try to use Renderer's detection for consistency
         try {
-            $backend = new \SugarCraft\Core\Util\Tty\PosixBackend(STDOUT);
-            $size = $backend->size();
+            $size = \SugarCraft\Query\Renderer::getTerminalSize();
             if ($size['rows'] > 0) {
                 return $size['rows'];
             }
         } catch (\Throwable) {
         }
 
-        // 3. Shell fallback
+        // Fallback: env vars
+        $rows = (int) (getenv('LINES') ?: 0);
+        if ($rows > 0) {
+            return $rows;
+        }
+
+        // Fallback: stty
         $stty = trim((string) shell_exec('stty size 2>/dev/null'));
         if ($stty !== '' && str_contains($stty, ' ')) {
             [$rows, $cols] = explode(' ', $stty, 2);
@@ -238,43 +251,51 @@ final class BorderFrame
             }
         }
 
-        return 24;
+        // Default: match Renderer fallback of 48 rows for modern terminals
+        return 48;
     }
 
     /**
      * Pad string to width on the right with spaces.
      *
      * Handles ANSI escape sequences by measuring stripped length
-     * but preserving escapes in output. When content exceeds width,
-     * returns the original string without truncation to avoid
-     * corrupting ANSI escape sequences.
+     * but truncating the visible content to fit within $width.
+     * Truncation appends "…" (ellipsis) to indicate overflow.
      */
     private static function padRight(string $s, int $width): string
     {
+        // Strip ANSI codes for length calculation
         $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $s);
         $len = mb_strlen($stripped);
-        if ($len >= $width) {
-            // Content too wide — return as-is to avoid corrupting ANSI sequences
-            // by mid-sequence truncation. Panes should already be sized correctly.
-            return $s;
+
+        if ($len > $width) {
+            // Truncate to fit, appending ellipsis to indicate overflow
+            $visibleWidth = $width - 1; // Leave room for ellipsis
+            $truncated = mb_substr($stripped, 0, $visibleWidth);
+            return $truncated . '…';
         }
 
-        return $s . str_repeat(' ', $width - $len);
+        if ($len < $width) {
+            return $s . str_repeat(' ', $width - $len);
+        }
+
+        return $s;
     }
 
     /**
      * Center string within width, padding equally on both sides.
      *
-     * When content exceeds width, returns the original string without
-     * truncation to avoid corrupting ANSI escape sequences.
+     * When content exceeds width, truncates to fit with ellipsis.
      */
     private static function padCenter(string $s, int $width): string
     {
         $stripped = preg_replace('/\x1b\[[0-9;]*m/', '', $s);
         $len = mb_strlen($stripped);
-        if ($len >= $width) {
-            // Content too wide — return as-is to avoid corrupting ANSI sequences
-            return $s;
+
+        if ($len > $width) {
+            // Truncate with ellipsis
+            $visibleWidth = $width - 1;
+            return mb_substr($stripped, 0, $visibleWidth) . '…';
         }
 
         $pad = $width - $len;
