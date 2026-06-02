@@ -76,4 +76,49 @@ final class BadgeTest extends TestCase
         $newBadge = $badge->withIcon('★');
         $this->assertNotSame($badge, $newBadge);
     }
+
+    public function testBoolTrueRendersYesSuccess(): void
+    {
+        $out = Badge::bool(true)->render();
+        $this->assertStringContainsString('Yes', $out);
+        $this->assertStringContainsString('✓', $out);
+    }
+
+    public function testBoolFalseRendersNoError(): void
+    {
+        $out = Badge::bool(false)->render();
+        $this->assertStringContainsString('No', $out);
+        $this->assertStringContainsString('✗', $out);
+    }
+
+    public function testBoolNullRendersUnknown(): void
+    {
+        $out = Badge::bool(null)->render();
+        $this->assertStringContainsString('Unknown', $this->strip($out));
+    }
+
+    public function testBoolCustomLabels(): void
+    {
+        $this->assertStringContainsString('On', $this->strip(Badge::bool(true, yes: 'On')->render()));
+        $this->assertStringContainsString('Off', $this->strip(Badge::bool(false, no: 'Off')->render()));
+        $this->assertStringContainsString('N/A', $this->strip(Badge::bool(null, unknown: 'N/A')->render()));
+    }
+
+    public function testTristateGlyphs(): void
+    {
+        $this->assertStringContainsString('[x]', $this->strip(Badge::tristate(true)->render()));
+        $this->assertStringContainsString('[ ]', $this->strip(Badge::tristate(false)->render()));
+        $this->assertStringContainsString('[~]', $this->strip(Badge::tristate(null)->render()));
+    }
+
+    public function testTristateDoesNotDoubleBracket(): void
+    {
+        // Subtle style must not wrap the glyph in another set of [ ].
+        $this->assertStringNotContainsString('[[', $this->strip(Badge::tristate(true)->render()));
+    }
+
+    private function strip(string $s): string
+    {
+        return preg_replace('/\x1b\[[0-9;]*m/', '', $s) ?? $s;
+    }
 }
