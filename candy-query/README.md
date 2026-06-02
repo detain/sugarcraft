@@ -84,6 +84,10 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional Sampler. |
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, group memberships. Single MySQL system variable. |
 | `Catalog` | Loads `data/variable_metadata.json` (73 variables, 16 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`. |
+| `ReconnectManager` | Detects MySQL errors 2002/2003/2013 (connection lost), stores `ConnectionConfig`, and retries via `attemptReconnect()`. Throws `ReconnectException` on failure. |
+| `ReconnectException` | Exception thrown when reconnection fails after a MySQL connection error. |
+| `StatementTimeout` | Wraps `PDOStatement::execute()` with a wall-clock timeout via `pcntl_alarm()`. Degrades gracefully (logs warning, no timeout) when pcntl is unavailable. Throws `StatementTimeoutException`. |
+| `StatementTimeoutException` | Thrown when a statement exceeds its wall-clock timeout and is cancelled via `KILL CONNECTION_ID()`. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -277,6 +281,46 @@ echo $page->render();
 ```
 
 `ReplicaStatusProvider` uses `SHOW REPLICA STATUS` on MySQL 8+ and `SHOW SLAVE STATUS` on MySQL 5.x/MariaDB, gracefully handling error 1227 (REPLICATION CLIENT privilege denied).
+
+## Resilience
+
+`MysqlDatabase` integrates resilience primitives to handle transient MySQL failures gracefully:
+
+### Reconnect on connection loss
+
+`ReconnectManager` detects MySQL error codes 2002 (Can't connect to local MySQL server), 2003 (Can't connect to MySQL server), and 2013 (Lost connection during query). When `MysqlDatabase::query()` encounters one of these, it returns `null` to signal the caller that a reconnect is needed:
+
+```php
+use SugarCraft\Query\Db\MysqlDatabase;
+use SugarCraft\Query\Admin\Resilience\ReconnectManager;
+
+$db = new MysqlDatabase($pdo, reconnectManager: new ReconnectManager());
+// On error 2002/2003/2013, query() returns null instead of throwing
+// Caller should re-fetch the connection and retry
+```
+
+### Restart detection
+
+`Sampler::registerUptime()` records the server's uptime at construction time. `StatusPoller` compares uptime snapshots across polls to detect MySQL restarts, resetting cached state before it becomes stale.
+
+### Statement timeout
+
+`StatementTimeout` enforces a wall-clock timeout on heavy report queries using `pcntl_alarm()`. If the timeout fires, it cancels the query via `KILL CONNECTION_ID()` and throws `StatementTimeoutException`:
+
+```php
+use SugarCraft\Query\Admin\Resilience\StatementTimeout;
+use SugarCraft\Query\Admin\Resilience\StatementTimeoutException;
+
+$timeout = new StatementTimeout(timeoutSeconds: 60);
+try {
+    $stmt = $pdo->prepare('SELECT * FROM big_table WHERE conditions');
+    $timeout->execute($stmt);
+} catch (StatementTimeoutException) {
+    echo 'Query exceeded 60s timeout and was cancelled';
+}
+```
+
+When `pcntl` is unavailable, `StatementTimeout::execute()` degrades gracefully and runs without enforcement (logs a warning at construction time).
 
 ## Demos
 

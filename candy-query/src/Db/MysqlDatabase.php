@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Db;
 
+use SugarCraft\Query\Admin\Sampler;
+use SugarCraft\Query\Admin\Resilience\ReconnectException;
+use SugarCraft\Query\Admin\Resilience\ReconnectManager;
+
 /**
  * MySQL implementation of DatabaseInterface using PDO.
  *
@@ -11,7 +15,11 @@ namespace SugarCraft\Query\Db;
  */
 final class MysqlDatabase implements DatabaseInterface
 {
-    private ?\PDO $pdo;
+    private ?\PDO $pdo = null;
+    private ?float $lastUptime = null;
+    private ?ConnectionConfig $connectionConfig = null;
+    private ?ReconnectManager $reconnectManager = null;
+    private ?Sampler $sampler = null;
 
     private function __construct(\PDO $pdo)
     {
@@ -35,7 +43,10 @@ final class MysqlDatabase implements DatabaseInterface
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
         ]);
 
-        return new self($pdo);
+        $instance = new self($pdo);
+        $instance->connectionConfig = $config;
+
+        return $instance;
     }
 
     /** @return list<string> */
@@ -82,21 +93,43 @@ final class MysqlDatabase implements DatabaseInterface
         return $stmt === false ? [] : $stmt->fetchAll();
     }
 
-    /** @return list<array<string,mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string,mixed>>|null */
+    public function query(string $sql): array|null
     {
         if ($this->pdo === null) {
             return [];
         }
 
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute();
+        try {
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute();
 
-        if ($stmt->columnCount() > 0) {
-            return $stmt->fetchAll();
+            if ($stmt->columnCount() > 0) {
+                return $stmt->fetchAll();
+            }
+
+            return [['affected' => $stmt->rowCount()]];
+        } catch (\PDOException $e) {
+            if ($this->reconnectManager !== null && $this->reconnectManager->shouldReconnect($e)) {
+                $this->pdo = null;
+                $reconnected = $this->reconnectManager->attemptReconnect(
+                    fn () => $this->reconnect(),
+                );
+                if ($reconnected) {
+                    $this->reconnectManager->setConnectionConfig($this->connectionConfig);
+                    // Reset sampler to clear state after server restart
+                    $this->sampler?->resetAll();
+                    // Track uptime to detect future restarts
+                    $this->trackUptimeAfterReconnect();
+                    return null;
+                }
+                throw new ReconnectException(
+                    'Failed to reconnect after connection error: ' . $e->getMessage(),
+                    $e,
+                );
+            }
+            throw $e;
         }
-
-        return [['affected' => $stmt->rowCount()]];
     }
 
     public function lastInsertId(): string|int
@@ -131,6 +164,7 @@ final class MysqlDatabase implements DatabaseInterface
     public function close(): void
     {
         $this->pdo = null;
+        $this->connectionConfig = null;
     }
 
     public function serverVersion(): string
@@ -202,5 +236,94 @@ final class MysqlDatabase implements DatabaseInterface
         }
 
         return $this->pdo->prepare($sql);
+    }
+
+    /**
+     * Get the last known server uptime.
+     *
+     * Returns null if uptime has not been tracked yet.
+     */
+    public function lastUptime(): ?float
+    {
+        return $this->lastUptime;
+    }
+
+    /**
+     * Update the tracked server uptime.
+     *
+     * Called after fetching SHOW GLOBAL STATUS to detect server restarts.
+     */
+    public function trackUptime(?float $uptime): void
+    {
+        $this->lastUptime = $uptime;
+    }
+
+    /**
+     * Inject a ReconnectManager for connection error handling.
+     */
+    public function setReconnectManager(ReconnectManager $reconnectManager): void
+    {
+        $this->reconnectManager = $reconnectManager;
+    }
+
+    /**
+     * Inject a Sampler for reset signaling after server restarts.
+     */
+    public function setSampler(Sampler $sampler): void
+    {
+        $this->sampler = $sampler;
+    }
+
+    /**
+     * Attempt to reconnect using the stored connection config.
+     *
+     * @return DatabaseInterface|false Returns a new connection or false on failure
+     */
+    private function reconnect(): DatabaseInterface|false
+    {
+        if ($this->connectionConfig === null) {
+            return false;
+        }
+
+        try {
+            $pdo = new \PDO(
+                $this->connectionConfig->dsn,
+                $this->connectionConfig->user,
+                $this->connectionConfig->pass,
+                [
+                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+                ],
+            );
+            $this->pdo = $pdo;
+            return $this;
+        } catch (\PDOException) {
+            $this->pdo = null;
+            return false;
+        }
+    }
+
+    /**
+     * Track uptime after a successful reconnect to detect future restarts.
+     */
+    private function trackUptimeAfterReconnect(): void
+    {
+        if ($this->pdo === null) {
+            return;
+        }
+
+        try {
+            $result = $this->pdo->query('SHOW GLOBAL STATUS LIKE "Uptime"');
+            if ($result !== false) {
+                $row = $result->fetch();
+                if ($row !== false && isset($row['Value'])) {
+                    $uptime = (float) $row['Value'];
+                    $this->lastUptime = $uptime;
+                    $this->sampler?->registerUptime($uptime);
+                }
+            }
+        } catch (\PDOException) {
+            // Silently ignore - uptime tracking is best-effort
+        }
     }
 }
