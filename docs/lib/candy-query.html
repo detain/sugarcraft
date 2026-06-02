@@ -92,6 +92,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>ReconnectManager</strong><span>Detects MySQL errors 2002/2003/2013 (connection lost). Stores <code>ConnectionConfig</code>, retries via <code>attemptReconnect()</code>, throws <code>ReconnectException</code> on failure.</span></div>
       <div class="feature"><strong>StatementTimeout</strong><span>Wall-clock timeout on <code>PDOStatement::execute()</code> via <code>pcntl_alarm()</code>. Gracefully degrades when pcntl is unavailable. Cancels query via <code>KILL CONNECTION_ID()</code> on timeout, throws <code>StatementTimeoutException</code>.</span></div>
       <div class="feature"><strong>Restart detection</strong><span><code>Sampler::registerUptime()</code> records uptime at construction; <code>StatusPoller</code> compares uptime snapshots to detect MySQL restarts and reset stale cached state.</span></div>
+      <div class="feature"><strong>Alerting</strong><span>Stateless <code>AlertManager</code> evaluates metrics against <code>AlertThresholds</code> presets (<code>::default()</code>, <code>::strict()</code>). <code>Alert</code> value objects carry severity, metric, value, and threshold. <code>AlertNotifier</code> dispatches toasts via <code>sugar-toast</code> with mute-safe degradation when no factory is available. Maps <code>Severity::Critical → ToastType::Error</code>, <code>Warning → Warning</code>, <code>Info → Info</code>.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -169,6 +170,30 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>StatementTimeout</td><td>execute(stmt, values)</td><td>Execute with wall-clock timeout via pcntl_alarm()</td></tr>
 <tr><td>StatementTimeout</td><td>didTimeout()</td><td>Check if last execution timed out</td></tr>
 <tr><td>StatementTimeoutException</td><td>—</td><td>Thrown when statement exceeds timeout and is cancelled</td></tr>
+<tr><td>Severity</td><td>toToastType()</td><td>Map to ToastType: Info→Info, Warning→Warning, Critical→Error</td></tr>
+<tr><td>Alert</td><td>warning() / critical() / info()</td><td>Factory helpers for alert creation</td></tr>
+<tr><td>Alert</td><td>isCritical() / isWarning() / isInfo()</td><td>Severity predicates</td></tr>
+<tr><td>Alert</td><td>toToastMessage()</td><td>Format as "metric: message (X% > Y%)"</td></tr>
+<tr><td>AlertThresholds</td><td>new() / default() / strict()</td><td>Factory presets: bare, 60%/80%, 50%/70%</td></tr>
+<tr><td>AlertThresholds</td><td>connectionWarningThreshold() / connectionCriticalThreshold()</td><td>Connection usage ratio thresholds</td></tr>
+<tr><td>AlertThresholds</td><td>withConnectionWarningThreshold() / withConnectionCriticalThreshold()</td><td>Fluent threshold setters (0.0–1.0)</td></tr>
+<tr><td>AlertThresholds</td><td>abortedRateThreshold() / withAbortedRateThreshold()</td><td>Aborted connection rate threshold</td></tr>
+<tr><td>AlertThresholds</td><td>slowQueryThreshold() / withSlowQueryThreshold()</td><td>Slow query time threshold in seconds</td></tr>
+<tr><td>AlertThresholds</td><td>threadRunningThreshold() / withThreadRunningThreshold()</td><td>Thread running ratio threshold</td></tr>
+<tr><td>AlertThresholds</td><td>connectionErrorsThreshold() / withConnectionErrorsThreshold()</td><td>Absolute connection error count threshold</td></tr>
+<tr><td>AlertThresholds</td><td>watchedMetrics() / withWatchedMetrics() / watches()</td><td>Filter which metrics are actively watched</td></tr>
+<tr><td>AlertThresholds</td><td>toastEnabled() / withToastEnabled() / toastPosition() / toastDuration()</td><td>Toast notification settings</td></tr>
+<tr><td>AlertNotifier</td><td>new() / withDefaults()</td><td>Factory (muted by default when no factory provided)</td></tr>
+<tr><td>AlertNotifier</td><td>notify(Alert) / notifyWarning() / notifyCritical() / notifyInfo()</td><td>Send notifications (all return new instance)</td></tr>
+<tr><td>AlertNotifier</td><td>withMuted() / isMuted()</td><td>Mute state control</td></tr>
+<tr><td>AlertNotifier</td><td>withToastFactory()</td><td>Late-bind toast factory</td></tr>
+<tr><td>AlertNotifier</td><td>view(background, width, height)</td><td>Compose toast over viewport string</td></tr>
+<tr><td>AlertNotifier</td><td>toast() / hasActiveAlert()</td><td>Direct toast access and state query</td></tr>
+<tr><td>AlertManager</td><td>new()</td><td>Fresh manager with default thresholds</td></tr>
+<tr><td>AlertManager</td><td>withThresholds() / withNotifier()</td><td>Attach threshold config and notifier</td></tr>
+<tr><td>AlertManager</td><td>checkConnectionUsage(ConnectionCounters)</td><td>Evaluate connection counters, return array&lt;string, Alert&gt;</td></tr>
+<tr><td>AlertManager</td><td>checkAllMetrics(statusVars, serverVars)</td><td>Evaluate SHOW GLOBAL STATUS/VARIABLES, return array&lt;string, Alert&gt;</td></tr>
+<tr><td>AlertManager</td><td>checkAndDispatch(ConnectionCounters)</td><td>Combined check + notify, returns ['alerts', 'notifier']</td></tr>
 </table>
   </div>
 </section>
