@@ -113,11 +113,21 @@ final class App implements Model
     {
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            return $this->withTableCursor($this->tableCursor - 1);
+            $newCursor = $this->tableCursor - 1;
+            $name = $this->tables[$newCursor] ?? null;
+            if ($name !== null && $name !== $this->selectedTable) {
+                return $this->loadTable($name);
+            }
+            return $this->withTableCursor($newCursor);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            return $this->withTableCursor($this->tableCursor + 1);
+            $newCursor = $this->tableCursor + 1;
+            $name = $this->tables[$newCursor] ?? null;
+            if ($name !== null && $name !== $this->selectedTable) {
+                return $this->loadTable($name);
+            }
+            return $this->withTableCursor($newCursor);
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {
