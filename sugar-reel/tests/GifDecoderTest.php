@@ -17,7 +17,7 @@ use SugarCraft\Reel\Source\Probe;
  * Creates a minimal valid GIF using PHP's built-in GD functions,
  * then tests GifDecoder against it. No hand-crafted hex bytes needed.
  *
- * @covers GifDecoder
+ * @covers \SugarCraft\Reel\Decode\GifDecoder
  */
 final class GifDecoderTest extends TestCase
 {

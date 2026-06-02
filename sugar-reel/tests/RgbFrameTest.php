@@ -10,7 +10,7 @@ use SugarCraft\Reel\Decode\RgbFrame;
 /**
  * Unit tests for RgbFrame value object.
  *
- * @covers RgbFrame
+ * @covers \SugarCraft\Reel\Decode\RgbFrame
  */
 final class RgbFrameTest extends TestCase
 {

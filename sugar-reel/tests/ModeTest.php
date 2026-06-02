@@ -10,7 +10,7 @@ use SugarCraft\Reel\Render\Mode;
 /**
  * Unit tests for the Mode enum backing values and enum cases.
  *
- * @covers Mode
+ * @covers \SugarCraft\Reel\Render\Mode
  */
 final class ModeTest extends TestCase
 {

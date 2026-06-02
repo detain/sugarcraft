@@ -131,7 +131,7 @@ class AudioPlayer
      *
      * @return list<string>|null Command array for proc_open(), or null
      */
-    private function buildCommand(): ?array
+    protected function buildCommand(): ?array
     {
         // Prefer ffplay.
         $ffplayPath = Probe::ffplay();

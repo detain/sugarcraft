@@ -28,7 +28,7 @@ final class FakeProbe extends Probe
  * Unit tests for Probe binary-detection class.
  * Uses FakeProbe to simulate "binary absent" behavior — no real ffmpeg needed.
  *
- * @covers Probe
+ * @covers \SugarCraft\Reel\Source\Probe
  */
 final class ProbeTest extends TestCase
 {

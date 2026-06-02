@@ -11,7 +11,7 @@ use SugarCraft\Reel\Source\VideoSource;
  * Unit tests for VideoSource value object.
  * Uses only canned JSON fixtures — no real ffmpeg or video files needed.
  *
- * @covers VideoSource
+ * @covers \SugarCraft\Reel\Source\VideoSource
  */
 final class VideoSourceTest extends TestCase
 {
