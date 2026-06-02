@@ -82,7 +82,7 @@ $db = Database::open('app.sqlite');
       <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code>, <code>fromConfig()</code>, <code>fromArgv()</code>. Builds configured PDO connections.</span></div>
       <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor.</span></div>
       <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
-      <div class="feature"><strong>ExplainView</strong><span>Colour-coded <code>EXPLAIN QUERY PLAN</code> tree. Static <code>run()</code> executes against a Database; <code>render()</code> produces ANSI output; <code>toArray()</code> returns JSON-serialisable rows.</span></div>
+      <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
     </div>
 
@@ -134,7 +134,12 @@ $db = Database::open('app.sqlite');
 <tr><td>SnippetStore</td><td>find(name)</td><td>Look up snippet by exact name</td></tr>
 <tr><td>SnippetStore</td><td>search(term)</td><td>Case-insensitive substring search on name and SQL</td></tr>
 <tr><td>SnippetStore</td><td>delete(name)</td><td>Remove snippet by name, return new store</td></tr>
-<tr><td>ExplainView</td><td>run(db, sql)</td><td>Execute EXPLAIN QUERY PLAN and return ExplainView instance</td></tr>
+<tr><td>ExplainView</td><td>run(pdo, sql)</td><td>Execute EXPLAIN via driver-specific ExplainProviderInterface</td></tr>
+<tr><td>ExplainView</td><td>forFlavor(flavor, pdo)</td><td>Create view with explicit Flavor (static factory)</td></tr>
+<tr><td>ExplainProviderInterface</td><td>explain(pdo, sql)</td><td>Execute EXPLAIN and return explain rows</td></tr>
+<tr><td>SqliteExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN QUERY PLAN</td></tr>
+<tr><td>MysqlExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN</td></tr>
+<tr><td>PostgresExplainProvider</td><td>—</td><td>ExplainProviderInterface via EXPLAIN (ANALYZE, FORMAT JSON)</td></tr>
 <tr><td>ExplainView</td><td>render()</td><td>Render plan as ANSI-coloured string</td></tr>
 <tr><td>ExplainView</td><td>toArray()</td><td>Return JSON-serialisable plan rows (depth, tag, detail, indent)</td></tr>
 <tr><td>ConnectionConfig</td><td>—</td><td>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn</td></tr>
