@@ -1,0 +1,517 @@
+{
+  "x$statement_analysis": {
+    "name": "x$statement_analysis",
+    "category": "problems",
+    "caption": "Statement Analysis",
+    "description": "Aggregated statistics of normalized statements. Shows query frequency, total latency, and execution metrics.",
+    "query": "SELECT * FROM sys.x$statement_analysis",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "full_scan", "type": "int", "width": 10},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "mean_latency", "type": "time", "width": 15},
+      {"name": "rows_sent", "type": "bigint", "width": 12},
+      {"name": "rows_examined", "type": "bigint", "width": 15},
+      {"name": "rows_sorted", "type": "bigint", "width": 12},
+      {"name": "tmp_tables", "type": "bigint", "width": 12},
+      {"name": "tmp_disk_tables", "type": "bigint", "width": 12},
+      {"name": "sort_merge_passes", "type": "bigint", "width": 12},
+      {"name": "no_index_used", "type": "int", "width": 10}
+    ]
+  },
+  "x$statements_with_runtimes_in_95th_percentile": {
+    "name": "x$statements_with_runtimes_in_95th_percentile",
+    "category": "problems",
+    "caption": "Statements in Highest 5% by Runtime",
+    "description": "Statements whose average runtime is in the top 5 percentile. High-impact queries requiring attention.",
+    "query": "SELECT * FROM sys.x$statements_with_runtimes_in_95th_percentile",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "mean_latency", "type": "time", "width": 15},
+      {"name": "rows_sent", "type": "bigint", "width": 12},
+      {"name": "rows_examined", "type": "bigint", "width": 15},
+      {"name": "first_seen", "type": "string", "width": 20},
+      {"name": "last_seen", "type": "string", "width": 20},
+      {"name": "no_index_used", "type": "int", "width": 10},
+      {"name": "no_good_index_used", "type": "int", "width": 10}
+    ]
+  },
+  "statements_with_temp_tables": {
+    "name": "statements_with_temp_tables",
+    "category": "problems",
+    "caption": "Using Temp Tables",
+    "description": "Statements that created internal temporary tables. Disk tables impact performance significantly.",
+    "query": "SELECT * FROM sys.statements_with_temp_tables",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "tmp_tables", "type": "bigint", "width": 12},
+      {"name": "tmp_disk_tables", "type": "bigint", "width": 12},
+      {"name": "rows_sent", "type": "bigint", "width": 12},
+      {"name": "rows_examined", "type": "bigint", "width": 15},
+      {"name": "tmp_table_sizes", "type": "bigint", "width": 15},
+      {"name": "tmp_disk_table_sizes", "type": "bigint", "width": 15}
+    ]
+  },
+  "statements_with_sorting": {
+    "name": "statements_with_sorting",
+    "category": "problems",
+    "caption": "With Sorting",
+    "description": "Statements that required sort operations. May indicate need for indexes or query optimization.",
+    "query": "SELECT * FROM sys.statements_with_sorting",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "sort_merge_passes", "type": "bigint", "width": 12},
+      {"name": "sort_operations", "type": "bigint", "width": 12},
+      {"name": "avg_sort_length", "type": "bigint", "width": 12},
+      {"name": "tmp_tables", "type": "bigint", "width": 12},
+      {"name": "tmp_disk_tables", "type": "bigint", "width": 12}
+    ]
+  },
+  "statements_with_full_table_scans": {
+    "name": "statements_with_full_table_scans",
+    "category": "problems",
+    "caption": "Full Table Scans",
+    "description": "Statements performing full table scans. Indicates missing indexes or suboptimal queries.",
+    "query": "SELECT * FROM sys.statements_with_full_table_scans",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "mean_latency", "type": "time", "width": 15},
+      {"name": "rows_sent", "type": "bigint", "width": 12},
+      {"name": "rows_examined", "type": "bigint", "width": 15},
+      {"name": "rows_scanned", "type": "bigint", "width": 15},
+      {"name": "no_index_used", "type": "int", "width": 10}
+    ]
+  },
+  "statements_with_errors_or_warnings": {
+    "name": "statements_with_errors_or_warnings",
+    "category": "problems",
+    "caption": "Errors or Warnings",
+    "description": "Statements that produced errors or warnings. Important for debugging application issues.",
+    "query": "SELECT * FROM sys.statements_with_errors_or_warnings",
+    "columns": [
+      {"name": "query", "type": "string", "width": 60},
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "exec_count", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "error_count", "type": "bigint", "width": 12},
+      {"name": "warning_count", "type": "bigint", "width": 12},
+      {"name": "first_error", "type": "string", "width": 40},
+      {"name": "first_warning", "type": "string", "width": 40}
+    ]
+  },
+  "schema_object_overview": {
+    "name": "schema_object_overview",
+    "category": "schema",
+    "caption": "Schema Object Overview (High Overhead)",
+    "description": "Counts of schema objects by type. Warning: This view can be slow on databases with many objects.",
+    "query": "SELECT * FROM sys.schema_object_overview",
+    "columns": [
+      {"name": "db", "type": "string", "width": 20},
+      {"name": "object_type", "type": "string", "width": 15},
+      {"name": "count", "type": "bigint", "width": 10}
+    ]
+  },
+  "x$schema_index_statistics": {
+    "name": "x$schema_index_statistics",
+    "category": "schema",
+    "caption": "Schema Index Statistics",
+    "description": "Statistics on index usage. Helps identify unused or rarely used indexes.",
+    "query": "SELECT * FROM sys.x$schema_index_statistics",
+    "columns": [
+      {"name": "table_schema", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "index_name", "type": "string", "width": 30},
+      {"name": "rows_scanned", "type": "bigint", "width": 15},
+      {"name": "latency", "type": "time", "width": 15},
+      {"name": "select_latency", "type": "time", "width": 15},
+      {"name": "insert_latency", "type": "time", "width": 15},
+      {"name": "update_latency", "type": "time", "width": 15},
+      {"name": "delete_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$schema_table_statistics": {
+    "name": "x$schema_table_statistics",
+    "category": "schema",
+    "caption": "Schema Table Statistics",
+    "description": "Table-level statistics including row operations and latency.",
+    "query": "SELECT * FROM sys.x$schema_table_statistics",
+    "columns": [
+      {"name": "table_schema", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "rows_fetched", "type": "bigint", "width": 15},
+      {"name": "rows_inserted", "type": "bigint", "width": 15},
+      {"name": "rows_updated", "type": "bigint", "width": 15},
+      {"name": "rows_deleted", "type": "bigint", "width": 15},
+      {"name": "fetch_latency", "type": "time", "width": 15},
+      {"name": "insert_latency", "type": "time", "width": 15},
+      {"name": "update_latency", "type": "time", "width": 15},
+      {"name": "delete_latency", "type": "time", "width": 15},
+      {"name": "total_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$schema_table_statistics_with_buffer": {
+    "name": "x$schema_table_statistics_with_buffer",
+    "category": "schema",
+    "caption": "Schema Table Statistics (with InnoDB buffer)",
+    "description": "Table statistics including InnoDB buffer pool impact. High overhead on large buffers.",
+    "query": "SELECT * FROM sys.x$schema_table_statistics_with_buffer",
+    "columns": [
+      {"name": "table_schema", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "rows_fetched", "type": "bigint", "width": 15},
+      {"name": "rows_inserted", "type": "bigint", "width": 15},
+      {"name": "rows_updated", "type": "bigint", "width": 15},
+      {"name": "rows_deleted", "type": "bigint", "width": 15},
+      {"name": "fetch_latency", "type": "time", "width": 15},
+      {"name": "insert_latency", "type": "time", "width": 15},
+      {"name": "update_latency", "type": "time", "width": 15},
+      {"name": "delete_latency", "type": "time", "width": 15},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "innodb_buffer_bytes", "type": "bytes", "width": 15},
+      {"name": "innodb_buffer_rows", "type": "bigint", "width": 15}
+    ]
+  },
+  "schema_tables_with_full_table_scans": {
+    "name": "schema_tables_with_full_table_scans",
+    "category": "schema",
+    "caption": "Tables with Full Table Scans",
+    "description": "Tables accessed with full table scans. May indicate missing indexes.",
+    "query": "SELECT * FROM sys.schema_tables_with_full_table_scans",
+    "columns": [
+      {"name": "table_schema", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "rows_fetched", "type": "bigint", "width": 15},
+      {"name": "rows_examined", "type": "bigint", "width": 15},
+      {"name": "fetch_latency", "type": "time", "width": 15},
+      {"name": "total_latency", "type": "time", "width": 15}
+    ]
+  },
+  "schema_unused_indexes": {
+    "name": "schema_unused_indexes",
+    "category": "schema",
+    "caption": "Unused Indexes",
+    "description": "Indexes that have not been used. Candidates for removal to reduce storage and maintenance overhead.",
+    "query": "SELECT * FROM sys.schema_unused_indexes",
+    "columns": [
+      {"name": "table_schema", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "index_name", "type": "string", "width": 30}
+    ]
+  },
+  "x$io_global_by_file_by_bytes": {
+    "name": "x$io_global_by_file_by_bytes",
+    "category": "io",
+    "caption": "Top File I/O Activity",
+    "description": "File I/O statistics ordered by bytes read/written. Identifies most heavily used files.",
+    "query": "SELECT * FROM sys.x$io_global_by_file_by_bytes",
+    "columns": [
+      {"name": "file", "type": "string", "width": 50},
+      {"name": "count_read", "type": "bigint", "width": 12},
+      {"name": "total_read", "type": "bytes", "width": 15},
+      {"name": "avg_read", "type": "bytes", "width": 15},
+      {"name": "count_write", "type": "bigint", "width": 12},
+      {"name": "total_written", "type": "bytes", "width": 15},
+      {"name": "avg_write", "type": "bytes", "width": 15},
+      {"name": "total", "type": "bytes", "width": 15}
+    ]
+  },
+  "x$io_global_by_file_by_latency": {
+    "name": "x$io_global_by_file_by_latency",
+    "category": "io",
+    "caption": "Top I/O by File by Time",
+    "description": "File I/O statistics ordered by latency. Identifies slowest files.",
+    "query": "SELECT * FROM sys.x$io_global_by_file_by_latency",
+    "columns": [
+      {"name": "file", "type": "string", "width": 50},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "count_read", "type": "bigint", "width": 12},
+      {"name": "read_latency", "type": "time", "width": 15},
+      {"name": "count_write", "type": "bigint", "width": 12},
+      {"name": "write_latency", "type": "time", "width": 15},
+      {"name": "count_misc", "type": "bigint", "width": 12},
+      {"name": "misc_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$io_global_by_wait_by_bytes": {
+    "name": "x$io_global_by_wait_by_bytes",
+    "category": "io",
+    "caption": "Top I/O by Event Category",
+    "description": "I/O wait events grouped by type, ordered by bytes transferred.",
+    "query": "SELECT * FROM sys.x$io_global_by_wait_by_bytes",
+    "columns": [
+      {"name": "event_name", "type": "string", "width": 40},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15},
+      {"name": "total_read", "type": "bytes", "width": 15},
+      {"name": "total_written", "type": "bytes", "width": 15},
+      {"name": "read_count", "type": "bigint", "width": 12},
+      {"name": "write_count", "type": "bigint", "width": 12}
+    ]
+  },
+  "x$io_global_by_wait_by_latency": {
+    "name": "x$io_global_by_wait_by_latency",
+    "category": "io",
+    "caption": "Top I/O in Time by Event Categories",
+    "description": "I/O wait events ordered by total latency. Identifies slowest I/O operations.",
+    "query": "SELECT * FROM sys.x$io_global_by_wait_by_latency",
+    "columns": [
+      {"name": "event_name", "type": "string", "width": 40},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15},
+      {"name": "total_read", "type": "bytes", "width": 15},
+      {"name": "total_written", "type": "bytes", "width": 15},
+      {"name": "read_count", "type": "bigint", "width": 12},
+      {"name": "write_count", "type": "bigint", "width": 12}
+    ]
+  },
+  "x$io_by_thread_by_latency": {
+    "name": "x$io_by_thread_by_latency",
+    "category": "io",
+    "caption": "Top I/O Time by User/Thread",
+    "description": "I/O statistics grouped by thread. Shows which threads cause most I/O latency.",
+    "query": "SELECT * FROM sys.x$io_by_thread_by_latency",
+    "columns": [
+      {"name": "thread_id", "type": "bigint", "width": 12},
+      {"name": "processlist_id", "type": "bigint", "width": 12},
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "count_read", "type": "bigint", "width": 12},
+      {"name": "read_latency", "type": "time", "width": 15},
+      {"name": "count_write", "type": "bigint", "width": 12},
+      {"name": "write_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$waits_global_by_latency": {
+    "name": "x$waits_global_by_latency",
+    "category": "wait",
+    "caption": "Global Waits by Time",
+    "description": "Global wait events ordered by total latency. Shows where the database waits most.",
+    "query": "SELECT * FROM sys.x$waits_global_by_latency",
+    "columns": [
+      {"name": "event_name", "type": "string", "width": 50},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$waits_by_user_by_latency": {
+    "name": "x$waits_by_user_by_latency",
+    "category": "wait",
+    "caption": "Waits by User by Time",
+    "description": "Wait events grouped by user. Shows which users experience the most wait time.",
+    "query": "SELECT * FROM sys.x$waits_by_user_by_latency",
+    "columns": [
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$wait_classes_global_by_latency": {
+    "name": "x$wait_classes_global_by_latency",
+    "category": "wait",
+    "caption": "Wait Classes by Time",
+    "description": "Wait events grouped by class (io, lock, sync, etc). High-level view of wait bottlenecks.",
+    "query": "SELECT * FROM sys.x$wait_classes_global_by_latency",
+    "columns": [
+      {"name": "event_class", "type": "string", "width": 20},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$wait_classes_global_by_avg_latency": {
+    "name": "x$wait_classes_global_by_avg_latency",
+    "category": "wait",
+    "caption": "Waits Classes by Average Time",
+    "description": "Wait classes ordered by average latency. Identifies inherently slow wait types.",
+    "query": "SELECT * FROM sys.x$wait_classes_global_by_avg_latency",
+    "columns": [
+      {"name": "event_class", "type": "string", "width": 20},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "min_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$innodb_buffer_stats_by_schema": {
+    "name": "x$innodb_buffer_stats_by_schema",
+    "category": "innodb",
+    "caption": "InnoDB Buffer Stats by Schema",
+    "description": "InnoDB buffer pool usage by database schema. Shows how much each schema uses the buffer.",
+    "query": "SELECT * FROM sys.x$innodb_buffer_stats_by_schema",
+    "columns": [
+      {"name": "database", "type": "string", "width": 20},
+      {"name": "allocated", "type": "bytes", "width": 15},
+      {"name": "data", "type": "bytes", "width": 15},
+      {"name": "pages", "type": "bigint", "width": 12},
+      {"name": "pages_hashed", "type": "bigint", "width": 12},
+      {"name": "pages_old", "type": "bigint", "width": 12},
+      {"name": "rows_cached", "type": "bigint", "width": 15}
+    ]
+  },
+  "x$innodb_buffer_stats_by_table": {
+    "name": "x$innodb_buffer_stats_by_table",
+    "category": "innodb",
+    "caption": "InnoDB Buffer Stats by Table",
+    "description": "InnoDB buffer pool usage by table. Shows which tables consume the most buffer space.",
+    "query": "SELECT * FROM sys.x$innodb_buffer_stats_by_table",
+    "columns": [
+      {"name": "database", "type": "string", "width": 20},
+      {"name": "table_name", "type": "string", "width": 30},
+      {"name": "allocated", "type": "bytes", "width": 15},
+      {"name": "data", "type": "bytes", "width": 15},
+      {"name": "pages", "type": "bigint", "width": 12},
+      {"name": "pages_hashed", "type": "bigint", "width": 12},
+      {"name": "pages_old", "type": "bigint", "width": 12},
+      {"name": "rows_cached", "type": "bigint", "width": 15}
+    ]
+  },
+  "x$user_summary": {
+    "name": "x$user_summary",
+    "category": "user_resource_use",
+    "caption": "Overview",
+    "description": "Summary of user resource consumption. Shows connections, statements, and I/O per user.",
+    "query": "SELECT * FROM sys.x$user_summary",
+    "columns": [
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "statements", "type": "bigint", "width": 15},
+      {"name": "statement_latency", "type": "time", "width": 15},
+      {"name": "statement_avg_latency", "type": "time", "width": 15},
+      {"name": "file_io_latency", "type": "time", "width": 15},
+      {"name": "file_io", "type": "bigint", "width": 12},
+      {"name": "current_connections", "type": "bigint", "width": 12},
+      {"name": "total_connections", "type": "bigint", "width": 15}
+    ]
+  },
+  "x$user_summary_by_file_io_type": {
+    "name": "x$user_summary_by_file_io_type",
+    "category": "user_resource_use",
+    "caption": "I/O Statistics",
+    "description": "File I/O statistics grouped by user and operation type.",
+    "query": "SELECT * FROM sys.x$user_summary_by_file_io_type",
+    "columns": [
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "event_name", "type": "string", "width": 30},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15}
+    ]
+  },
+  "x$user_summary_by_statement_type": {
+    "name": "x$user_summary_by_statement_type",
+    "category": "user_resource_use",
+    "caption": "Statement Statistics",
+    "description": "Statement statistics grouped by user and SQL command type.",
+    "query": "SELECT * FROM sys.x$user_summary_by_statement_type",
+    "columns": [
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "statement", "type": "string", "width": 20},
+      {"name": "count_star", "type": "bigint", "width": 12},
+      {"name": "total_latency", "type": "time", "width": 15},
+      {"name": "max_latency", "type": "time", "width": 15},
+      {"name": "avg_latency", "type": "time", "width": 15},
+      {"name": "lock_latency", "type": "time", "width": 15},
+      {"name": "rows_sent", "type": "bigint", "width": 12},
+      {"name": "rows_examined", "type": "bigint", "width": 15}
+    ]
+  },
+  "x$memory_global_total": {
+    "name": "x$memory_global_total",
+    "category": "memory",
+    "caption": "Total Memory",
+    "description": "Total memory usage across the MySQL server. Shows current and high-water mark.",
+    "query": "SELECT * FROM sys.x$memory_global_total",
+    "columns": [
+      {"name": "total_allocated", "type": "bytes", "width": 15},
+      {"name": "total_allocated_formatted", "type": "string", "width": 20}
+    ]
+  },
+  "x$memory_global_by_current_bytes": {
+    "name": "x$memory_global_by_current_bytes",
+    "category": "memory",
+    "caption": "Top Memory by Event",
+    "description": "Memory allocations ordered by current bytes used. Identifies largest memory consumers.",
+    "query": "SELECT * FROM sys.x$memory_global_by_current_bytes",
+    "columns": [
+      {"name": "event_name", "type": "string", "width": 50},
+      {"name": "current_allocated", "type": "bytes", "width": 15},
+      {"name": "high_count_used", "type": "bigint", "width": 12},
+      {"name": "high_allocated", "type": "bytes", "width": 15}
+    ]
+  },
+  "x$memory_by_user_by_current_bytes": {
+    "name": "x$memory_by_user_by_current_bytes",
+    "category": "memory",
+    "caption": "Top Memory by User",
+    "description": "Memory usage grouped by user. Shows which users consume the most memory.",
+    "query": "SELECT * FROM sys.x$memory_by_user_by_current_bytes",
+    "columns": [
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "current_allocated", "type": "bytes", "width": 15},
+      {"name": "total_allocated", "type": "bytes", "width": 15},
+      {"name": "high_count_used", "type": "bigint", "width": 12},
+      {"name": "high_allocated", "type": "bytes", "width": 15}
+    ]
+  },
+  "x$memory_by_host_by_current_bytes": {
+    "name": "x$memory_by_host_by_current_bytes",
+    "category": "memory",
+    "caption": "Top Memory by Host",
+    "description": "Memory usage grouped by host. Shows which hosts consume the most memory.",
+    "query": "SELECT * FROM sys.x$memory_by_host_by_current_bytes",
+    "columns": [
+      {"name": "host", "type": "string", "width": 20},
+      {"name": "current_allocated", "type": "bytes", "width": 15},
+      {"name": "total_allocated", "type": "bytes", "width": 15},
+      {"name": "high_count_used", "type": "bigint", "width": 12},
+      {"name": "high_allocated", "type": "bytes", "width": 15}
+    ]
+  },
+  "x$memory_by_thread_by_current_bytes": {
+    "name": "x$memory_by_thread_by_current_bytes",
+    "category": "memory",
+    "caption": "Top Memory by Thread",
+    "description": "Memory usage grouped by thread. Shows which threads consume the most memory.",
+    "query": "SELECT * FROM sys.x$memory_by_thread_by_current_bytes",
+    "columns": [
+      {"name": "thread_id", "type": "bigint", "width": 12},
+      {"name": "processlist_id", "type": "bigint", "width": 12},
+      {"name": "user", "type": "string", "width": 20},
+      {"name": "current_allocated", "type": "bytes", "width": 15},
+      {"name": "total_allocated", "type": "bytes", "width": 15},
+      {"name": "high_count_used", "type": "bigint", "width": 12},
+      {"name": "high_allocated", "type": "bytes", "width": 15}
+    ]
+  }
+}
