@@ -1,7 +1,7 @@
 # Project naming — rules + decision history
 
 > Canonical **upstream → SugarCraft port** mapping lives in
-> [MATCHUPS.md](./MATCHUPS.md). This file is the **rulebook** for picking
+> [MATCHUPS.md](./docs/MATCHUPS.md). This file is the **rulebook** for picking
 > a name plus the open-ended sketchpad — early ideas, rejected names,
 > and rationale. When you're adding a new library, pick a name here,
 > add it to MATCHUPS.md, then follow the contributor playbook in

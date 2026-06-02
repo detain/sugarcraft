@@ -146,7 +146,7 @@ and the v2-parity sweep against Bubble Tea v2 / Lipgloss v2 / Bubbles v2.
 ## Adding a new library or app
 
 The matchup of upstream → SugarCraft port is the source-of-truth in
-[MATCHUPS.md](./MATCHUPS.md), and the contributor / agent playbook in
+[MATCHUPS.md](./docs/MATCHUPS.md), and the contributor / agent playbook in
 [AGENTS.md](./AGENTS.md) walks through the full integration: naming
 conventions, package skeleton, tests, examples, VHS demos, website
 tiles, and the central docs to update. AI assistants should read
