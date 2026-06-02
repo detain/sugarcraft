@@ -390,14 +390,13 @@ final class Renderer
         // Layout::joinHorizontal takes strings and pads shorter one with blank lines at the bottom
         $combined = Layout::joinHorizontal(Position::TOP, $sidebarText, '  ', $pageContent);
 
-        // Wrap the combined output in a single frame
-        $title = ' admin ';
-        $st = Style::new()->border(Border::rounded())->padding(0, 1)->width($innerWidth);
+        // Wrap the combined output in a single frame; the title rides in the border.
+        $st = Style::new()->border(Border::rounded()->withTitle(' admin '))->padding(0, 1)->width($innerWidth);
         $st = $a->pane === Pane::Admin
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
 
-        return $st->render(Style::new()->bold()->render($title) . "\n" . $combined);
+        return $st->render($combined);
     }
 
     /**
@@ -447,11 +446,12 @@ final class Renderer
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
     {
-        $border = Border::rounded();
-        $st = Style::new()->border($border)->padding(0, 1)->width($width);
+        // The pane title rides in the rounded border itself (a first-class
+        // Sprinkles\Border feature) instead of a hand-drawn bold line inside it.
+        $st = Style::new()->border(Border::rounded()->withTitle($title))->padding(0, 1)->width($width);
         $st = $a->pane === $p
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
-        return $st->render(Style::new()->bold()->render($title) . "\n" . $body);
+        return $st->render($body);
     }
 }
