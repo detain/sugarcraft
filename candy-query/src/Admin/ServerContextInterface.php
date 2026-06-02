@@ -69,4 +69,9 @@ interface ServerContextInterface
      * (server was restarted or variables were reset).
      */
     public function wasReset(): bool;
+
+    /**
+     * Force a refresh of all cached values.
+     */
+    public function refresh(): void;
 }
