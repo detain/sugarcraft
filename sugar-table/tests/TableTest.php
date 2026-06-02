@@ -107,6 +107,33 @@ final class TableTest extends TestCase
         $this->assertSame('Carol', $t->CurrentRowData()?->get('name'));
     }
 
+    public function testWithSelectedIndexMovesCursor(): void
+    {
+        $t = $this->makeTable()->withSelectedIndex(2);
+        $this->assertSame(2, $t->SelectedIndex());
+        $this->assertSame('Carol', $t->CurrentRowData()?->get('name'));
+    }
+
+    public function testWithSelectedIndexClamps(): void
+    {
+        $t = $this->makeTable();
+        $this->assertSame(2, $t->withSelectedIndex(99)->SelectedIndex());
+        $this->assertSame(0, $t->withSelectedIndex(-5)->SelectedIndex());
+    }
+
+    public function testWithSelectedIndexNoOpOnEmpty(): void
+    {
+        $t = Table::withColumns([Column::new('id', 'ID', 5)])->withSelectedIndex(3);
+        $this->assertSame(0, $t->SelectedIndex());
+    }
+
+    public function testWithSelectedIndexImmutable(): void
+    {
+        $t = $this->makeTable();
+        $this->assertNotSame($t, $t->withSelectedIndex(1));
+        $this->assertSame(0, $t->SelectedIndex());
+    }
+
     public function testPagination(): void
     {
         $t = Table::withColumns([Column::new('n', 'N', 5)])

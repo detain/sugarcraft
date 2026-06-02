@@ -327,6 +327,23 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Move the selection directly to a 0-based row index, clamped to the
+     * filtered/sorted view. Mirrors Bubbles' table.SetCursor — lets a caller
+     * that tracks its own cursor (e.g. an external Model) drive the highlight
+     * without looping SelectNext/SelectPrevious.
+     */
+    public function withSelectedIndex(int $index): self
+    {
+        $view = $this->filteredSortedRows();
+        if ($view === []) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->selectedIndex = \max(0, \min(\count($view) - 1, $index));
+        return $clone;
+    }
+
     public function SelectPage(int $page): self
     {
         $clone = clone $this;
