@@ -49,3 +49,18 @@ Source: step-7.2 ai/alerting
 Pattern: Map a local `Severity` enum to an external `ToastType` using a `toToastType()` method on the enum. This keeps the local domain model independent of sugar-toast internals. The mapping is semantic: `Critical` maps to `ToastType::Error` (not `ToastType::Critical`) because critical is more severe than error in the toast taxonomy and gets the most prominent display treatment.
 Canonical: `Severity::toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`.
 Source: step-7.2 ai/alerting
+
+### 2026-06-02 — passive recorder pattern (StatusSnapshotProviderInterface delegation)
+Pattern: A recorder that implements `StatusSnapshotProviderInterface` only writes when `provideStatusSnapshot()` is called by the polling loop — it never主动 records on its own. This decoupling means the recorder has no dependency on the UI, making it safe for both TUI and headless contexts.
+Canonical: `HistoryRecorder` accepts a `HistoryStoreInterface` in the constructor and calls `$store->save(...)` only when invoked by the polling cycle.
+Source: step-7.3 ai/history
+
+### 2026-06-02 — SQLite WAL mode for concurrent read/write
+Pattern: Enable WAL mode (`PRAGMA journal_mode=WAL`) when a SQLite DB is accessed by both a polling loop writer and a query reader. WAL allows concurrent readers without blocking the writer, and writers don't block readers either.
+Canonical: `SqliteHistoryStore::open()` issues `PRAGMA journal_mode=WAL` after opening.
+Source: step-7.3 ai/history
+
+### 2026-06-02 — StatusSnapshotProviderInterface as composable decoration
+Pattern: Components that need to participate in the status polling loop implement `StatusSnapshotProviderInterface` without extending a base class. The interface has a single method `provideStatusSnapshot(?StatusSnapshot $previous): StatusSnapshot`, making it a pure decoration that can be composed onto any object. History, alerts, and gauges all implement the same interface and are composed in the poll loop.
+Canonical: `HistoryRecorder implements StatusSnapshotProviderInterface` — same contract as `AlertManager`, `Sampler`, and all other poll participants.
+Source: step-7.3 ai/history
