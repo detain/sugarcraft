@@ -378,14 +378,16 @@ final class Renderer
 
     private static function queryPane(App $a, int $terminalCols): string
     {
-        $cursorMark = $a->pane === Pane::Query ? '▮' : ' ';
-        $body = ($a->queryBuf === '' ? '-- type SQL, ctrl+r to run --' : $a->queryBuf) . $cursorMark;
         // This pane spans the full width. The outer BorderFrame gives each line
         // a content area of (cols - 2); a bordered+padded Style adds 4 (2 border
         // + 2 padding), so the inner CONTENT width must be (cols - 2) - 4 = cols - 6.
         // Using cols - 4 (the old value) overflowed the outer frame by 2 cells,
         // wrapping the query box and dropping its right border.
         $width = max(20, $terminalCols - 6);
+        // The candy-forms TextArea owns the cursor + placeholder; it renders the
+        // cursor only while focused (Query pane). Size it to the pane at render
+        // time without mutating App state.
+        $body = $a->editor()->withWidth($width)->view();
         return self::frame($a, Pane::Query, ' query ', $body, $width);
     }
 

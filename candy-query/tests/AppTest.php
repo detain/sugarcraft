@@ -121,8 +121,8 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
         [$a2, $cmd] = $a->update(new KeyMsg(KeyType::Char, 'q'));
         $this->assertNull($cmd);
-        // 'q' should land in the buffer.
-        $this->assertSame('q', $a2->queryBuf);
+        // 'q' should land in the editor.
+        $this->assertSame('q', $a2->editor()->value());
     }
 
     public function testCharsAccumulateInQueryBuffer(): void
@@ -133,7 +133,7 @@ final class AppTest extends TestCase
         foreach (['s', 'e', 'l', 'e', 'c', 't'] as $c) {
             [$a, ] = $a->update(new KeyMsg(KeyType::Char, $c));
         }
-        $this->assertSame('select', $a->queryBuf);
+        $this->assertSame('select', $a->editor()->value());
     }
 
     public function testCtrlREnterRunsQueryAndPopulatesRows(): void
@@ -178,10 +178,10 @@ final class AppTest extends TestCase
             [$a, ] = $a->update(new KeyMsg(KeyType::Char, $c));
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Backspace, ''));
-        $this->assertSame('ab', $a->queryBuf);
+        $this->assertSame('ab', $a->editor()->value());
     }
 
-    public function testUpArrowNavigatesHistory(): void
+    public function testRunQueryRecordsHistoryAndClearsEditor(): void
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
@@ -194,8 +194,9 @@ final class AppTest extends TestCase
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
         $this->assertSame(['SELECT 1'], $a->queryHistory);
-        $this->assertSame(-1, $a->historyIndex);
-        // Type and run second query
+        // Editor is reset after a successful run.
+        $this->assertSame('', $a->editor()->value());
+        // Type and run second query — newest lands at the front.
         foreach (str_split('SELECT 2') as $c) {
             [$a, ] = $a->update($c === ' '
                 ? new KeyMsg(KeyType::Space, '')
@@ -203,32 +204,18 @@ final class AppTest extends TestCase
         }
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
         $this->assertSame(['SELECT 2', 'SELECT 1'], $a->queryHistory);
-        // Press Up arrow - should navigate to older query (SELECT 1 at index 1)
-        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame('SELECT 1', $a->queryBuf);
-        $this->assertSame(1, $a->historyIndex);
     }
 
-    public function testDownArrowNavigatesHistory(): void
+    public function testEnterInsertsNewlineInEditor(): void
     {
         $a = App::start($this->db());
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
-        // Type and run a query
-        foreach (str_split('SELECT 1') as $c) {
-            [$a, ] = $a->update($c === ' '
-                ? new KeyMsg(KeyType::Space, '')
-                : new KeyMsg(KeyType::Char, $c));
-        }
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        $originalBuf = $a->queryBuf;
-        // Press Up to go into history
-        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame('SELECT 1', $a->queryBuf);
-        // Press Down to go back to current buffer
-        [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
-        $this->assertSame($originalBuf, $a->queryBuf);
-        $this->assertSame(-1, $a->historyIndex);
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'b'));
+        $this->assertSame("a\nb", $a->editor()->value());
+        $this->assertSame(2, $a->editor()->lineCount());
     }
 
     public function testCtrlFFavoritesQuery(): void
@@ -285,29 +272,4 @@ final class AppTest extends TestCase
         $this->assertSame('SELECT 1', $a->queryHistory[0]);
     }
 
-    public function testHistoryIndexResetOnNewQuery(): void
-    {
-        $a = App::start($this->db());
-        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));   // → query
-        // Type and run first query
-        foreach (str_split('SELECT 1') as $c) {
-            [$a, ] = $a->update($c === ' '
-                ? new KeyMsg(KeyType::Space, '')
-                : new KeyMsg(KeyType::Char, $c));
-        }
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        // Navigate up into history
-        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
-        $this->assertSame(0, $a->historyIndex);
-        // Type and run a new query
-        foreach (str_split('SELECT 2') as $c) {
-            [$a, ] = $a->update($c === ' '
-                ? new KeyMsg(KeyType::Space, '')
-                : new KeyMsg(KeyType::Char, $c));
-        }
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'r', ctrl: true));
-        // History index should be reset to -1
-        $this->assertSame(-1, $a->historyIndex);
-    }
 }
