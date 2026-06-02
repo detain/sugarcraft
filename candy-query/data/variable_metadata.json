@@ -1,0 +1,440 @@
+{
+  "max_connections": {
+    "name": "max_connections",
+    "description": "The maximum number of concurrent connections. Setting this variable requires the SUPER privilege or the SYSTEM_VARIABLES_ADMIN privilege (MySQL 8.0).",
+    "editable": true,
+    "groups": ["connection", "advanced"]
+  },
+  "wait_timeout": {
+    "name": "wait_timeout",
+    "description": "The number of seconds the server waits for activity on a noninteractive connection before closing it. Applies to TCP/IP and Unix socket connections.",
+    "editable": true,
+    "groups": ["connection"]
+  },
+  "interactive_timeout": {
+    "name": "interactive_timeout",
+    "description": "The number of seconds the server waits for activity on an interactive connection before closing it. Applies to TCP/IP and Unix socket connections.",
+    "editable": true,
+    "groups": ["connection"]
+  },
+  "connect_timeout": {
+    "name": "connect_timeout",
+    "description": "The number of seconds the mysqld server waits for a connect packet before responding with a Bad handshake. Used during the initial connection handshake.",
+    "editable": true,
+    "groups": ["connection"]
+  },
+  "thread_cache_size": {
+    "name": "thread_cache_size",
+    "description": "How many threads the server should cache for reuse. When a client disconnects, the client's threads are put in the cache if the cache is not full.",
+    "editable": true,
+    "groups": ["connection", "performance"]
+  },
+  "key_buffer_size": {
+    "name": "key_buffer_size",
+    "description": "The size of the buffer used for index blocks for MyISAM tables. Set this variable to a large value for optimal performance with large indexes.",
+    "editable": true,
+    "groups": ["buffer", "myisam"]
+  },
+  "innodb_buffer_pool_size": {
+    "name": "innodb_buffer_pool_size",
+    "description": "The size of the InnoDB buffer pool, the memory area where InnoDB caches table and index data. Essential for read performance.",
+    "editable": true,
+    "groups": ["buffer", "innodb", "performance"]
+  },
+  "tmp_table_size": {
+    "name": "tmp_table_size",
+    "description": "The maximum size of internal in-memory temporary tables. If a table grows larger than this, it is automatically converted to an on-disk table.",
+    "editable": true,
+    "groups": ["buffer", "memory"]
+  },
+  "max_heap_table_size": {
+    "name": "max_heap_table_size",
+    "description": "This variable sets the maximum size for MEMORY tables. Setting this variable does not affect existing MEMORY tables unless they are recreated.",
+    "editable": true,
+    "groups": ["buffer", "memory"]
+  },
+  "innodb_log_file_size": {
+    "name": "innodb_log_file_size",
+    "description": "The size in bytes of each InnoDB redo log file. The combined size of all redo log files is innodb_log_file_size * innodb_log_files_in_group.",
+    "editable": true,
+    "groups": ["buffer", "innodb", "advanced"]
+  },
+  "innodb_log_buffer_size": {
+    "name": "innodb_log_buffer_size",
+    "description": "The size of the buffer that InnoDB uses to write to the log files on disk. Larger values reduce disk I/O during transactions.",
+    "editable": true,
+    "groups": ["buffer", "innodb"]
+  },
+  "query_cache_size": {
+    "name": "query_cache_size",
+    "description": "The amount of memory allocated for caching query results. Note: query_cache_size is deprecated in MySQL 8.0 and removed in MySQL 8.0.29+.",
+    "editable": true,
+    "groups": ["buffer", "deprecated"]
+  },
+  "query_cache_type": {
+    "name": "query_cache_type",
+    "description": "Determines the operation mode of the query cache. Note: deprecated in MySQL 8.0 and removed in MySQL 8.0.29+.",
+    "editable": true,
+    "groups": ["buffer", "deprecated"]
+  },
+  "slow_query_log": {
+    "name": "slow_query_log",
+    "description": "Whether the slow query log is enabled. When enabled, queries that take longer than long_query_time seconds are logged.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "slow_query_log_file": {
+    "name": "slow_query_log_file",
+    "description": "The name of the slow query log file. The path is relative to the data directory unless an absolute path is given.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "long_query_time": {
+    "name": "long_query_time",
+    "description": "Queries slower than this many seconds are logged to the slow query log. Minimum value is 0, default is 10.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "log_queries_not_using_indexes": {
+    "name": "log_queries_not_using_indexes",
+    "description": "Whether queries that do not use indexes are logged to the slow query log. Requires slow_query_log to be enabled.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "log_throttle_queries_not_using_indexes": {
+    "name": "log_throttle_queries_not_using_indexes",
+    "description": "The maximum number of queries per minute that can be logged to the slow query log when log_queries_not_using_indexes is enabled.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "general_log": {
+    "name": "general_log",
+    "description": "Whether the general query log is enabled. Logs all SQL queries received from clients. Can generate large log files.",
+    "editable": true,
+    "groups": ["log", "security"]
+  },
+  "general_log_file": {
+    "name": "general_log_file",
+    "description": "The name of the general query log file. The path is relative to the data directory unless an absolute path is given.",
+    "editable": true,
+    "groups": ["log"]
+  },
+  "sql_log_off": {
+    "name": "sql_log_off",
+    "description": "Whether logging to the general query log is disabled for the current connection. Requires the SUPER privilege.",
+    "editable": true,
+    "groups": ["log", "security"]
+  },
+  "ssl_ca": {
+    "name": "ssl_ca",
+    "description": "The path to a file in PEM format that contains a list of trusted SSL certificate authorities.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "ssl_capath": {
+    "name": "ssl_capath",
+    "description": "The path to a directory that contains trusted SSL certificate authority certificates in PEM format.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "ssl_cert": {
+    "name": "ssl_cert",
+    "description": "The name of the SSL certificate file in PEM format to use for establishing encrypted connections.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "ssl_key": {
+    "name": "ssl_key",
+    "description": "The name of the SSL key file in PEM format to use for establishing encrypted connections.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "ssl_cipher": {
+    "name": "ssl_cipher",
+    "description": "A list of permitted ciphers or cipher suites for encrypted connections.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "require_secure_transport": {
+    "name": "require_secure_transport",
+    "description": "Whether clients are required to use SSL/TLS for connections. When enabled, non-SSL connections are rejected.",
+    "editable": true,
+    "groups": ["security"]
+  },
+  "ssl_crl": {
+    "name": "ssl_crl",
+    "description": "The path to a file containing certificate revocation lists for SSL connections.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "ssl_crlpath": {
+    "name": "ssl_crlpath",
+    "description": "The path to a directory containing SSL certificate revocation list files.",
+    "editable": true,
+    "groups": ["security", "ssl"]
+  },
+  "server_id": {
+    "name": "server_id",
+    "description": "The server ID uniquely identifies the MySQL server instance. Must be unique among servers in a replication topology.",
+    "editable": true,
+    "groups": ["replication"]
+  },
+  "binlog_format": {
+    "name": "binlog_format",
+    "description": "The format of binary log entries: ROW, STATEMENT, or MIXED. Determines how SQL statements are logged for replication.",
+    "editable": true,
+    "groups": ["replication"]
+  },
+  "binlog_expire_logs_seconds": {
+    "name": "binlog_expire_logs_seconds",
+    "description": "Sets the expire time in seconds for binary log files. Binary logs are purged after this many seconds.",
+    "editable": true,
+    "groups": ["replication", "log"]
+  },
+  "max_binlog_size": {
+    "name": "max_binlog_size",
+    "description": "The maximum size of a binary log file. When reached, the server rotates the log or starts a new one.",
+    "editable": true,
+    "groups": ["replication", "log"]
+  },
+  "binlog_cache_size": {
+    "name": "binlog_cache_size",
+    "description": "The size of the cache to hold changes to the binary log during a transaction. If a transaction exceeds this, it uses a temporary file.",
+    "editable": true,
+    "groups": ["replication", "buffer"]
+  },
+  "sync_binlog": {
+    "name": "sync_binlog",
+    "description": "Controls the number of binary log commits that are synchronized to disk. Setting to 1 provides the highest durability.",
+    "editable": true,
+    "groups": ["replication", "advanced"]
+  },
+  "relay_log": {
+    "name": "relay_log",
+    "description": "The name of the relay log file for replication. Includes base name and optional path.",
+    "editable": true,
+    "groups": ["replication"]
+  },
+  "relay_log_recovery": {
+    "name": "relay_log_recovery",
+    "description": "Whether automatic recovery of relay log positions is enabled after a server restart.",
+    "editable": true,
+    "groups": ["replication", "advanced"]
+  },
+  "read_only": {
+    "name": "read_only",
+    "description": "When enabled, the server allows updates only from users with the SUPER privilege. Used for replica servers.",
+    "editable": true,
+    "groups": ["replication", "security"]
+  },
+  "super_read_only": {
+    "name": "super_read_only",
+    "description": "When enabled, the server denies all updates, including from users with SUPER privilege. Used for read-only replicas.",
+    "editable": true,
+    "groups": ["replication", "security"]
+  },
+  "gtid_mode": {
+    "name": "gtid_mode",
+    "description": "Whether GTID-based replication is enabled. Values: OFF, OFF_PERMISSIVE, ON_PERMISSIVE, ON.",
+    "editable": true,
+    "groups": ["replication", "advanced"]
+  },
+  "enforce_gtid_consistency": {
+    "name": "enforce_gtid_consistency",
+    "description": "Ensures that only statements that are GTID-safe are executed. Required for GTID-based replication.",
+    "editable": true,
+    "groups": ["replication", "advanced"]
+  },
+  "performance_schema": {
+    "name": "performance_schema",
+    "description": "Whether the Performance Schema is enabled. Provides detailed instrumentation for monitoring server performance.",
+    "editable": true,
+    "groups": ["performance", "advanced"]
+  },
+  "performance_schema_events_statements_history_size": {
+    "name": "performance_schema_events_statements_history_size",
+    "description": "The size of the statement history for each thread in the Performance Schema.",
+    "editable": true,
+    "groups": ["performance", "advanced"]
+  },
+  "innodb_stats_on_metadata": {
+    "name": "innodb_stats_on_metadata",
+    "description": "When enabled, InnoDB updates statistics when metadata statements are executed. When disabled, statistics are updated only when needed.",
+    "editable": true,
+    "groups": ["performance", "innodb"]
+  },
+  "innodb_buffer_pool_instances": {
+    "name": "innodb_buffer_pool_instances",
+    "description": "The number of buffer pool instances for InnoDB. Each instance manages its own free lists and flush lists.",
+    "editable": true,
+    "groups": ["performance", "innodb", "advanced"]
+  },
+  "innodb_read_io_threads": {
+    "name": "innodb_read_io_threads",
+    "description": "The number of I/O threads for read operations in InnoDB. Range is 1-64.",
+    "editable": true,
+    "groups": ["performance", "innodb"]
+  },
+  "innodb_write_io_threads": {
+    "name": "innodb_write_io_threads",
+    "description": "The number of I/O threads for write operations in InnoDB. Range is 1-64.",
+    "editable": true,
+    "groups": ["performance", "innodb"]
+  },
+  "innodb_io_capacity": {
+    "name": "innodb_io_capacity",
+    "description": "The maximum number of I/O operations per second that InnoDB should perform for background tasks.",
+    "editable": true,
+    "groups": ["performance", "innodb"]
+  },
+  "innodb_io_capacity_max": {
+    "name": "innodb_io_capacity_max",
+    "description": "The maximum number of I/O operations per second that InnoDB can handle during emergency background tasks.",
+    "editable": true,
+    "groups": ["performance", "innodb", "advanced"]
+  },
+  "table_open_cache": {
+    "name": "table_open_cache",
+    "description": "The number of open tables cache for all threads. Increasing this value increases the number of file descriptors needed.",
+    "editable": true,
+    "groups": ["performance", "cache"]
+  },
+  "table_definition_cache": {
+    "name": "table_definition_cache",
+    "description": "The number of table definitions that can be cached. Increasing this value may reduce file open operations.",
+    "editable": true,
+    "groups": ["performance", "cache"]
+  },
+  "sort_buffer_size": {
+    "name": "sort_buffer_size",
+    "description": "Each session that must perform a sort allocates a buffer of this size. Setting large values can improve large sorts.",
+    "editable": true,
+    "groups": ["performance", "memory"]
+  },
+  "join_buffer_size": {
+    "name": "join_buffer_size",
+    "description": "The minimum size of the buffer used for plain index scans and range index scans. Used for joins without indexes.",
+    "editable": true,
+    "groups": ["performance", "memory"]
+  },
+  "read_buffer_size": {
+    "name": "read_buffer_size",
+    "description": "A memory buffer used for sequential scans of MyISAM tables. Each thread that does a sequential scan allocates this buffer.",
+    "editable": true,
+    "groups": ["performance", "buffer", "myisam"]
+  },
+  "read_rnd_buffer_size": {
+    "name": "read_rnd_buffer_size",
+    "description": "A memory buffer used for reading rows in sorted order after a sorted query. Reduces disk access for ORDER BY operations.",
+    "editable": true,
+    "groups": ["performance", "buffer"]
+  },
+  "net_buffer_length": {
+    "name": "net_buffer_length",
+    "description": "The initial size of the connection buffer for client communications. Can grow up to max_allowed_packet.",
+    "editable": true,
+    "groups": ["connection", "memory"]
+  },
+  "max_allowed_packet": {
+    "name": "max_allowed_packet",
+    "description": "The maximum size of a packet or any generated/intermediate string. Also limits the size of a row for INSERT statements.",
+    "editable": true,
+    "groups": ["connection", "buffer"]
+  },
+  "net_read_timeout": {
+    "name": "net_read_timeout",
+    "description": "The number of seconds to wait for more data from a client connection before closing the read.",
+    "editable": true,
+    "groups": ["connection"]
+  },
+  "net_write_timeout": {
+    "name": "net_write_timeout",
+    "description": "The number of seconds to wait for a block to be written to a client connection before closing the write.",
+    "editable": true,
+    "groups": ["connection"]
+  },
+  "character_set_server": {
+    "name": "character_set_server",
+    "description": "The default character set for the server. Used when no character set is specified in CREATE DATABASE or CREATE TABLE.",
+    "editable": true,
+    "groups": ["server"]
+  },
+  "collation_server": {
+    "name": "collation_server",
+    "description": "The default collation for the server. Used when no collation is specified in CREATE DATABASE or CREATE TABLE.",
+    "editable": true,
+    "groups": ["server"]
+  },
+  "time_zone": {
+    "name": "time_zone",
+    "description": "The server's current time zone. Used to initialize the connection time zone for client sessions.",
+    "editable": true,
+    "groups": ["server"]
+  },
+  "system_time_zone": {
+    "name": "system_time_zone",
+    "description": "The server system's time zone. Set at startup from the host's operating system or environment.",
+    "editable": false,
+    "groups": ["server"]
+  },
+  "autocommit": {
+    "name": "autocommit",
+    "description": "Whether changes to non-transactional tables are committed automatically. When disabled, transactions must be explicitly committed.",
+    "editable": true,
+    "groups": ["transaction"]
+  },
+  "transaction_isolation": {
+    "name": "transaction_isolation",
+    "description": "The default transaction isolation level. Values: READ-UNCOMMITTED, READ-COMMITTED, REPEATABLE-READ, SERIALIZABLE.",
+    "editable": true,
+    "groups": ["transaction"]
+  },
+  "explicit_defaults_for_timestamp": {
+    "name": "explicit_defaults_for_timestamp",
+    "description": "Whether TIMESTAMP columns default to NULL or to the current timestamp, and whether they can be NULL.",
+    "editable": true,
+    "groups": ["server", "advanced"]
+  },
+  "sql_mode": {
+    "name": "sql_mode",
+    "description": "The current SQL mode. Controls server SQL behaviors such as strict mode, zero dates, and automatic type casting.",
+    "editable": true,
+    "groups": ["server"]
+  },
+  "lower_case_table_names": {
+    "name": "lower_case_table_names",
+    "description": "Whether table names are stored in lowercase and compared case-insensitively. Set at server startup only.",
+    "editable": false,
+    "groups": ["server", "advanced"]
+  },
+  "default_storage_engine": {
+    "name": "default_storage_engine",
+    "description": "The default storage engine for new tables. Set to InnoDB for MySQL 5.5+ by default.",
+    "editable": true,
+    "groups": ["server"]
+  },
+  "innodb_strict_mode": {
+    "name": "innodb_strict_mode",
+    "description": "When enabled, InnoDB operates in strict mode and returns errors instead of warnings for certain invalid conditions.",
+    "editable": true,
+    "groups": ["innodb", "advanced"]
+  },
+  "innodb_file_per_table": {
+    "name": "innodb_file_per_table",
+    "description": "When enabled, InnoDB stores each table's data and indexes in its own file in the database directory.",
+    "editable": true,
+    "groups": ["innodb", "storage"]
+  },
+  "innodb_data_file_path": {
+    "name": "innodb_data_file_path",
+    "description": "The paths and sizes of the InnoDB system tablespace data files. Set at server startup only.",
+    "editable": false,
+    "groups": ["innodb", "storage", "advanced"]
+  },
+  "innodb_temp_data_file_path": {
+    "name": "innodb_temp_data_file_path",
+    "description": "The path and size of the InnoDB temporary tablespace data file.",
+    "editable": false,
+    "groups": ["innodb", "storage", "advanced"]
+  }
+}
