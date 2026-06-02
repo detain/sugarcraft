@@ -84,9 +84,6 @@ final class Renderer
 
     public static function render(App $a): string
     {
-        // Clear size cache at the start of each render pass
-        self::$terminalSize = null;
-
         $size = self::getTerminalSize();
         $tables = self::tablesPane($a, $size['rows']);
         $rows   = self::rowsPane($a);
@@ -120,7 +117,9 @@ final class Renderer
             $body[] = Style::new()->foreground(Color::hex('#7d6e98'))
                 ->render('(no tables)');
             $bodyText = implode("\n", $body);
-            return self::frame($a, Pane::Tables, ' tables ', $bodyText, 24);
+        // 24 chars is the standard terminal width for character-wrap; $available
+        // is a line count and does not directly translate to character width.
+        return self::frame($a, Pane::Tables, ' tables ', $bodyText, 24);
         }
 
         // Reserve 9 lines for: title(1) + top border(1) + query section(5) +
@@ -144,7 +143,8 @@ final class Renderer
             // Everything fits — render the full list without scroll indicators.
             // Pass available=count so array_slice only processes O(available) items,
             // and use count as frame height so the frame exactly fits the content.
-            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), $count);
+            // Use max(count, 24) for width so table names don't wrap heavily.
+            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), max($count, 24));
         }
 
         // Need to scroll: determine the visible window around the cursor
