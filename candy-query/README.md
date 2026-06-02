@@ -35,6 +35,8 @@ candy-query path/to/db.sqlite
 
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
+| `ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
+| `ConnectionFactory`| Static factory: `fromDsn()`, `fromConfig()`, `fromArgv()`. Builds configured connections.       |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
@@ -49,6 +51,51 @@ candy-query path/to/db.sqlite
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
 Multi-driver support is now available via `DatabaseInterface`. `CsvExporter` and `SqlExporter` provide driver-agnostic export.
+
+## Connection factory
+
+`ConnectionFactory` provides three static methods to build a configured `PDO` connection:
+
+```php
+use SugarCraft\Query\Db\ConnectionFactory;
+use SugarCraft\Query\Db\ConnectionConfig;
+
+// From a DSN string
+$pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname?ssl-mode=REQUIRED');
+
+// From a ConnectionConfig value object
+$config = new ConnectionConfig(
+    driver: 'mysql',
+    host: 'localhost',
+    port: 3306,
+    user: 'user',
+    pass: 'secret',
+    dbname: 'dbname',
+    sslMode: 'REQUIRED',
+);
+$pdo = ConnectionFactory::fromConfig($config);
+
+// From command-line arguments (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)
+$pdo = ConnectionFactory::fromArgv();
+```
+
+### DSN format
+
+```
+driver://user:pass@host:port/dbname?ssl-mode=MODE
+```
+
+| Part     | Description                          |
+|----------|--------------------------------------|
+| driver   | `mysql`, `pgsql`, `sqlite`, `sqlsrv` |
+| user     | Database username                    |
+| pass     | Database password (never echoed)      |
+| host     | Server hostname or IP                |
+| port     | Server port (default varies by driver)|
+| dbname   | Database name                        |
+| ssl-mode | Driver-specific SSL mode             |
+
+`ConnectionConfig` is a readonly value object with 8 properties: `driver`, `host`, `port`, `user`, `pass`, `dbname`, `sslMode`, `dsn`.
 
 ## Schema introspection
 
