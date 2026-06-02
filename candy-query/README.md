@@ -88,6 +88,11 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `ReconnectException` | Exception thrown when reconnection fails after a MySQL connection error. |
 | `StatementTimeout` | Wraps `PDOStatement::execute()` with a wall-clock timeout via `pcntl_alarm()`. Degrades gracefully (logs warning, no timeout) when pcntl is unavailable. Throws `StatementTimeoutException`. |
 | `StatementTimeoutException` | Thrown when a statement exceeds its wall-clock timeout and is cancelled via `KILL CONNECTION_ID()`. |
+| `Severity` | Enum: `Info`, `Warning`, `Critical`. Maps to `ToastType` via `toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`. |
+| `Alert` | Immutable alert value object: severity, metric, message, value, threshold, firedAt. Factory helpers: `::warning()`, `::critical()`, `::info()`. `toToastMessage()` formats as `"metric: message (X% > Y%)"`. |
+| `AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::default()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
+| `AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
+| `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -281,6 +286,72 @@ echo $page->render();
 ```
 
 `ReplicaStatusProvider` uses `SHOW REPLICA STATUS` on MySQL 8+ and `SHOW SLAVE STATUS` on MySQL 5.x/MariaDB, gracefully handling error 1227 (REPLICATION CLIENT privilege denied).
+
+## Alerting
+
+`AlertManager` evaluates metrics against configurable thresholds and fires `Alert` value objects, which `AlertNotifier` renders as toast notifications via `sugar-toast`:
+
+```php
+use SugarCraft\Query\Admin\Alerts\AlertManager;
+use SugarCraft\Query\Admin\Alerts\AlertThresholds;
+use SugarCraft\Query\Admin\Alerts\AlertNotifier;
+
+$manager = AlertManager::new()
+    ->withThresholds(AlertThresholds::default())
+    ->withNotifier(AlertNotifier::withDefaults());
+
+// Check connection counters and dispatch alerts
+$alerts = $manager->checkConnectionUsage($counters);
+foreach ($alerts as $alert) {
+    $notifier = $notifier->notify($alert);
+}
+
+// Or combine check + dispatch in one call
+['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
+```
+
+### Severity levels
+
+`Severity` enum maps to `ToastType` for display:
+
+| Severity | ToastType | Use case |
+|----------|-----------|----------|
+| `Info` | `ToastType::Info` | Informational notices |
+| `Warning` | `ToastType::Warning` | Elevated metrics, non-critical |
+| `Critical` | `ToastType::Error` | Threshold exceeded, action needed |
+
+### Threshold presets
+
+- **`AlertThresholds::new()`** — bare instance, all defaults
+- **`AlertThresholds::default()`** — 60% warning / 80% critical / 5% aborted rate / 5s slow query / 50% thread running
+- **`AlertThresholds::strict()`** — 50% warning / 70% critical / 1% aborted rate / 1s slow query / 30% thread running (production-sensitive)
+
+### Watched metrics
+
+| Metric | What it checks |
+|--------|----------------|
+| `connection_usage` | `threads_connected / max_connections` |
+| `aborted_rate` | `aborted_connects / total_connections` |
+| `thread_running` | `threads_running / max_connections` |
+| `slow_query` | `long_query_time` server variable |
+| `connection_errors` | `Connection_errors_total` status variable |
+| `max_connections` | `threads_connected / max_connections` (alias for connection_usage) |
+
+### Toast degradation
+
+`AlertNotifier` is mute-safe by default. When no toast factory is provided, all `notify*()` calls are no-ops. This allows the alerting system to run in non-TUI contexts without errors:
+
+```php
+// Safe to call even without sugar-toast available
+$notifier = AlertNotifier::new();  // muted by default
+$notifier->notifyWarning('High memory');  // no-op
+
+// Enable with a factory
+$notifier = AlertNotifier::withDefaults(
+    toastFactory: fn(): Toast => Toast::new(50)->withPosition(Position::TopRight)->withDuration(5.0),
+    muted: false,
+);
+```
 
 ## Resilience
 

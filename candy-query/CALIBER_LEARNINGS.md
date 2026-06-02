@@ -34,3 +34,18 @@ Source: step-7.1 ai/resilience
 ### 2026-06-02 — restart detection via uptime comparison
 Pattern: Record server uptime at construction (`Sampler::registerUptime()`) and compare uptime snapshots across polls to detect MySQL restarts. When uptime decreases (wraps or resets), clear cached state before it becomes stale.
 Source: step-7.1 ai/resilience
+
+### 2026-06-02 — stateless AlertManager pattern
+Pattern: An alert checker should hold no state between calls — each `check*()` invocation is independent and returns fresh `Alert` value objects. This makes the checker safe for both polling loops (3s DashboardPage cycle) and event-driven contexts without needing to reset state. The manager is constructed once with thresholds and notifier, then queried repeatedly.
+Canonical: `AlertManager::new()->withThresholds($t)->withNotifier($n)` — `checkConnectionUsage()` / `checkAllMetrics()` are pure functions over their inputs.
+Source: step-7.2 ai/alerting
+
+### 2026-06-02 — toast degradation and mute-safe AlertNotifier
+Pattern: A notifier that wraps an optional toast factory should default to muted when no factory is provided — every `notify*()` call becomes a no-op, making the system safe to use in non-TUI contexts without errors. The mute state is explicit (`isMuted()` / `withMuted()`) and all `notify*()` methods return new instances for immutability.
+Canonical: `AlertNotifier::new()` (muted by default) → `AlertNotifier::withDefaults($factory, muted: false)` to enable.
+Source: step-7.2 ai/alerting
+
+### 2026-06-02 — Severity → ToastType mapping
+Pattern: Map a local `Severity` enum to an external `ToastType` using a `toToastType()` method on the enum. This keeps the local domain model independent of sugar-toast internals. The mapping is semantic: `Critical` maps to `ToastType::Error` (not `ToastType::Critical`) because critical is more severe than error in the toast taxonomy and gets the most prominent display treatment.
+Canonical: `Severity::toToastType()` — `Info→Info`, `Warning→Warning`, `Critical→Error`.
+Source: step-7.2 ai/alerting
