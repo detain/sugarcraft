@@ -7,6 +7,8 @@ namespace SugarCraft\Query;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Tty\PosixBackend;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminSection;
 use SugarCraft\Query\Terminal\BorderFrame;
@@ -165,8 +167,6 @@ final class Renderer
 
     private static function tablesPane(App $a, int $terminalRows, int $terminalCols): string
     {
-        $body = [];
-
         // Calculate width: expand to use up to half the terminal (minus 3-char gap).
         // Use max(24, ...) to keep at least 24 chars for readability.
         // Formula: width = max(24, min(max_table_name_length, floor(terminalCols/2) - 3))
@@ -178,10 +178,8 @@ final class Renderer
         $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 6));
 
         if ($a->tables === []) {
-            $body[] = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('(no tables)');
-            $bodyText = implode("\n", $body);
-        return self::frame($a, Pane::Tables, ' tables ', $bodyText, $width);
+            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no tables)');
+            return self::frame($a, Pane::Tables, ' tables ', $body, $width);
         }
 
         // Layout: title(1) + gap(1) + [tablesPane | rowsPane joined horizontally] +
@@ -194,85 +192,28 @@ final class Renderer
         //           → available ≤ terminalRows - 18. Use max(3, terminalRows - 18).
         $available = max(3, $terminalRows - 18);
 
-        $count = count($a->tables);
-
-        if ($count <= $available) {
-            // Everything fits — render the full list without scroll indicators.
-            // Pass available=count so array_slice only processes O(available) items.
-            // The frame's height follows the body line count automatically; the
-            // last arg is the column WIDTH (must be $width — passing $count here
-            // mistook a row count for a width and could overflow the layout).
-            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), $width);
+        // candy-forms ItemList owns the cursor, selection styling and scroll
+        // window — no more hand-rolled centering/slice/`↑ N–M of T ↑` indicators.
+        // Pre-style each name (gold+bold for the loaded table, muted otherwise);
+        // the cursor row is rendered reverse-video by the widget.
+        $items = [];
+        foreach ($a->tables as $name) {
+            $items[] = new StringItem(
+                $name === $a->selectedTable
+                    ? Style::new()->foreground(Color::hex('#fde68a'))->bold()->render($name)
+                    : Style::new()->foreground(Color::hex('#c5b6dd'))->render($name)
+            );
         }
+        $list = ItemList::new($items, $width, $available)
+            ->withTitle('')
+            ->withShowStatusBar(false)
+            ->withShowHelp(false)
+            ->withShowFilter(false)
+            ->withCursorPrefix('')
+            ->withUnselectedPrefix('')
+            ->select($a->tableCursor);
 
-        // Need to scroll: determine the visible window around the cursor
-        $cursor = $a->tableCursor;
-
-        // Center the cursor in the visible window when possible
-        $halfWindow = (int) floor(($available - 1) / 2);
-        $start = $cursor - $halfWindow;
-
-        // Clamp to keep the window within bounds
-        $start = max(0, min($start, $count - $available));
-
-        $visibleTables = array_slice($a->tables, $start, $available);
-        $bodyText = self::renderTableList($a, $start, $count, $count, $start, $available);
-
-        return self::frame($a, Pane::Tables, ' tables ', $bodyText, $width);
-    }
-
-    /**
-     * Render the table list items for a window.
-     *
-     * @param App $a
-     * @param int $start Start index in the full tables array
-     * @param int $count Total table count
-     * @param int $total Total table count (alias for readability)
-     * @param int $visibleStart Start index of the visible window (for scroll indicator logic)
-     * @param int $available Height of the visible window
-     * @return string
-     */
-    private static function renderTableList(
-        App $a,
-        int $start,
-        int $count,
-        int $total,
-        ?int $visibleStart = null,
-        ?int $available = null,
-    ): string {
-        $lines = [];
-        $visibleStart ??= 0;
-        $available ??= $count;
-
-        // Top scroll indicator if not showing from the beginning
-        if ($visibleStart > 0) {
-            $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↑ ' . ($visibleStart + 1) . '–' . min($visibleStart + $available - 1, $count - 1) . ' of ' . $count . ' ↑');
-        }
-
-        // Only iterate the visible slice — O(visible) not O(total)
-        $visibleItems = array_slice($a->tables, $start, $available);
-        foreach ($visibleItems as $i => $name) {
-            $idx = $start + $i; // absolute index in the full tables array
-
-            $st = Style::new()->foreground(Color::hex('#c5b6dd'));
-            if ($name === $a->selectedTable) {
-                $st = $st->foreground(Color::hex('#fde68a'))->bold();
-            }
-            if ($a->pane === Pane::Tables && $idx === $a->tableCursor) {
-                $st = $st->reverse();
-            }
-            $lines[] = $st->render($name);
-        }
-
-        // Bottom scroll indicator if not showing through the end
-        $endIndex = min($visibleStart + $available - 1, $count - 1);
-        if ($endIndex < $count - 1) {
-            $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↓ ' . ($endIndex + 1) . '–' . $count . ' of ' . $count . ' ↓');
-        }
-
-        return implode("\n", $lines);
+        return self::frame($a, Pane::Tables, ' tables ', $list->view(), $width);
     }
 
     /**
