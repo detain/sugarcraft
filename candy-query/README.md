@@ -75,6 +75,9 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
 | `PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
+| `ServerStatusPage` | Admin page displaying server info, features, directories, SSL, replication, and firewall panels. `r` refresh, `q` quit. |
+| `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
+| `ReplicaStatusProvider` | Fetches replica status via `SHOW REPLICA STATUS` (MySQL 8+) or `SHOW SLAVE STATUS` (MySQL 5.x/MariaDB), graceful 1227 handling. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
 
@@ -245,6 +248,29 @@ if ($table->canScrollRight()) {
 ```
 
 Columns auto-size to the widest value; cells exceeding `maxCellWidth` (default 40) are truncated with `…`. Array/object values are JSON-encoded with 2-space indent when `visibleWidth >= 80`, collapsed to a single line otherwise.
+
+## Server Status page
+
+`ServerStatusPage` displays a comprehensive overview of the MySQL/MariaDB server:
+
+| Panel | Content |
+|-------|---------|
+| **Info Card** | Host, socket, port, MySQL version, uptime (formatted as duration + running-since timestamp) |
+| **Features** | InnoDB, SSL, Fulltext, Events, Stored Programs, Partitioning, X Plugin — tristate: Yes/No/Unknown |
+| **Directories** | datadir, tmpdir, log_error, pid_file |
+| **SSL** | have_ssl, ssl_cipher, tls_version, ssl_ca, ssl_cert, ssl_key |
+| **Replication** | Master Host/Port, IO/SQL Running state, Seconds Behind, Relay Log File/Pos — via `ReplicaStatusProvider` |
+| **Firewall** | AWS RDS firewall status (Aurora_lwm sentinel) |
+
+```php
+use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
+use SugarCraft\Query\Admin\ServerContextInterface;
+
+$page = ServerStatusPage::new($context);
+echo $page->render();
+```
+
+`ReplicaStatusProvider` uses `SHOW REPLICA STATUS` on MySQL 8+ and `SHOW SLAVE STATUS` on MySQL 5.x/MariaDB, gracefully handling error 1227 (REPLICATION CLIENT privilege denied).
 
 ## Demos
 
