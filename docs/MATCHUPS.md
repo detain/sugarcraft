@@ -80,7 +80,7 @@ Status legend:
 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` | `sugarcraft/candy-tetris` | `SugarCraft\Tetris` | 🟢 | Tetris clone — SRS / 7-bag / NES scoring |
 | [yorukot/superfile](https://github.com/yorukot/superfile) | **SuperCandy** | `super-candy/` | `sugarcraft/super-candy` | `SugarCraft\SuperCandy` | 🟢 | Dual-pane file manager |
 | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit) | **SugarStash** | `sugar-stash/` | `sugarcraft/sugar-stash` | `SugarCraft\Stash` | 🟢 | Three-pane git TUI — shells out to `git` |
-| [jorgerojas26/lazysql](https://github.com/jorgerojas26/lazysql) | **CandyQuery** | `candy-query/` | `sugarcraft/candy-query` | `SugarCraft\Query` | 🟢 | SQLite browser TUI |
+| [jorgerojas26/lazysql](https://github.com/jorgerojas26/lazysql) | **CandyQuery** | `candy-query/` | `sugarcraft/candy-query` | `SugarCraft\Query` | 🟢 | SQLite/MySQL/PostgreSQL browser TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history |
 | [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime) | **SugarTick** | `sugar-tick/` | `sugarcraft/sugar-tick` | `SugarCraft\Tick` | 🟢 | Privacy-first coding-time tracker — JSONL on disk |
 | [maxpaulus43/go-sweep](https://github.com/maxpaulus43/go-sweep) | **CandyMines** | `candy-mines/` | `sugarcraft/candy-mines` | `SugarCraft\Mines` | 🟢 | Minesweeper — first-click safety / flood-fill |
 | [namzug16/gifterm](https://github.com/namzug16/gifterm) | **CandyFlip** | `candy-flip/` | `sugarcraft/candy-flip` | `SugarCraft\Flip` | 🟢 | ASCII GIF viewer (ext-gd) |
