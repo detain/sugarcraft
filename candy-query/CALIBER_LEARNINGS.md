@@ -17,3 +17,20 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 Pattern: A fluent builder relieves a long parameter list and makes dependency injection explicit. App had 14 params; the builder names each one so call sites are self-documenting.
 Anti-pattern: Constructing App with 14 positional args — parameter-order mistakes are silent and the code is unreadable.
 Source: step-25 ai/god-class-builders
+
+### 2026-06-02 — MySQL connection resilience
+Pattern: MySQL error codes 2002 (Can't connect to local MySQL server), 2003 (Can't connect to MySQL server), and 2013 (Lost connection during query) are transient. A `ReconnectManager` stores the last known `ConnectionConfig` and `attemptReconnect()` lets callers retry without re-prompting for credentials. The manager extracts the numeric code from the PDOException message when the code is 0 (SQLSTATE-based).
+Source: step-7.1 ai/resilience
+
+### 2026-06-02 — pcntl_alarm wall-clock timeout
+Pattern: Use `pcntl_alarm()` for statement-level wall-clock timeouts — it fires a `SIGALRM` asynchronously and works across blocking I/O that `set_time_limit()` cannot interrupt. The handler saves the previous signal handler, arms `pcntl_alarm(seconds)`, executes the statement, then disarm with `pcntl_alarm(0)` in `finally`. On timeout, `KILL CONNECTION_ID()` cancels the query before re-throwing.
+Graceful degradation: When `pcntl_alarm()` / `pcntl_signal()` / `pcntl_async_signals()` are unavailable, log a warning at construction and execute without timeout enforcement.
+Source: step-7.1 ai/resilience
+
+### 2026-06-02 — null return for reconnectable query failure
+Pattern: `MysqlDatabase::query()` returns `array|null` — on reconnectable errors (2002/2003/2013) it returns `null`, signaling the caller to re-fetch the connection and retry. This avoids throwing an exception when the connection is legitimately being re-established.
+Source: step-7.1 ai/resilience
+
+### 2026-06-02 — restart detection via uptime comparison
+Pattern: Record server uptime at construction (`Sampler::registerUptime()`) and compare uptime snapshots across polls to detect MySQL restarts. When uptime decreases (wraps or resets), clear cached state before it becomes stale.
+Source: step-7.1 ai/resilience

@@ -35,10 +35,12 @@ interface DatabaseInterface
      *
      * For SELECT statements returns the result set.
      * For other statements returns [['affected' => N]].
+     * May return null after a connection error is handled, signaling
+     * the caller should retry the query.
      *
-     * @return list<array<string,mixed>>
+     * @return list<array<string,mixed>>|null
      */
-    public function query(string $sql): array;
+    public function query(string $sql): array|null;
 
     /**
      * Get the ID of the last inserted row.
