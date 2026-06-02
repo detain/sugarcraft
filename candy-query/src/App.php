@@ -11,6 +11,7 @@ use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\CachingServerContext;
+use SugarCraft\Query\Admin\EmptyServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
 use SugarCraft\Query\Admin\PageBase;
@@ -133,10 +134,7 @@ final class App implements Model
                 // First time entering admin - set loading immediately and trigger fetch
                 return [
                     $this->withPane($nextPane)->withAdminLoading(true),
-                    Cmd::batch(
-                        fn() => new AdminFetchStartedMsg(),
-                        Cmd::promise(fn() => $this->createAdminFetchPromise()),
-                    )(),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise())(),
                 ];
             }
             return [$this->withPane($nextPane), null];
@@ -237,10 +235,7 @@ final class App implements Model
             $index = (int) $msg->rune - 1;
             if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
-                return [$newApp, Cmd::batch(
-                    fn() => new AdminFetchStartedMsg(),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
-                )()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
             }
             if (isset($allPanes[$index])) {
                 return [$this->withAdminCursor($index), null];
@@ -256,10 +251,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::batch(
-                    fn() => new AdminFetchStartedMsg(),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
-                )()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -268,10 +260,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::batch(
-                    fn() => new AdminFetchStartedMsg(),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
-                )()];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())()];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -533,6 +522,11 @@ final class App implements Model
 
         $context = $this->serverContext ?? $this->createContext();
 
+        if ($context === null) {
+            // Unsupported flavor (e.g., SQLite) - use empty context to avoid render errors
+            $context = new EmptyServerContext();
+        }
+
         // Build context with cached data if available
         $context = new CachingServerContext(
             $context,
@@ -552,13 +546,14 @@ final class App implements Model
 
     /**
      * Create the appropriate server context based on database flavor.
+     * Returns null for unsupported flavors (e.g., SQLite).
      */
-    private function createContext(): ServerContextInterface
+    private function createContext(): ?ServerContextInterface
     {
         return match ($this->flavor) {
             Flavor::MySQL, Flavor::MariaDB, Flavor::Percona => new ServerContext($this->db, $this->flavor),
             Flavor::Postgres => $this->createPostgresContext(),
-            default => throw new \RuntimeException('Admin not supported for ' . $this->flavor->value),
+            default => null,
         };
     }
 
@@ -799,7 +794,17 @@ final class App implements Model
 
     private function createAdminFetchPromise(): \React\Promise\PromiseInterface
     {
-        $context = $this->serverContext ?? $this->createContext();
+        try {
+            $context = $this->serverContext ?? $this->createContext();
+        } catch (\RuntimeException $e) {
+            // Unsupported flavor (e.g., SQLite) - return empty data immediately
+            return \React\Promise\resolve(new AdminDataLoadedMsg([], [], microtime(true)));
+        }
+
+        // Null context means unsupported flavor
+        if ($context === null) {
+            return \React\Promise\resolve(new AdminDataLoadedMsg([], [], microtime(true)));
+        }
 
         $dsn = $context->connection()->dsn();
         $username = $context->connection()->username() ?? '';

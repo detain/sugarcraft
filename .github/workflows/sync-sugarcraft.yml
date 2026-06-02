@@ -53,19 +53,18 @@ jobs:
           git config user.email 'detain@interserver.net'
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-      # splitsh-lite is ~2x faster cold than `git subtree split` and keeps a
-      # per-repo commit cache (.git/splitsh.db) shared across prefixes, so the
-      # first lib pays the history walk and the rest are near-instant. It emits
-      # the IDENTICAL split SHA as `git subtree split`, so the pushed history is
-      # byte-for-byte the same — no divergence for existing sugarcraft/* clones.
-      - name: Cache splitsh commit cache
-        uses: actions/cache@v4
-        with:
-          path: .git/splitsh.db
-          key: splitsh-db-${{ github.sha }}
-          restore-keys: |
-            splitsh-db-
-
+      # splitsh-lite emits the IDENTICAL split SHA as `git subtree split`, so the
+      # pushed history is byte-for-byte the same — no divergence for existing
+      # sugarcraft/* clones. Within a single run it keeps an in-process commit
+      # cache (.git/splitsh.db) shared across prefixes, so the first lib pays the
+      # full history walk (~25s) and the remaining libs are near-instant — all 56
+      # libs split + push cold in ~70s.
+      #
+      # We deliberately do NOT persist .git/splitsh.db across runs via
+      # actions/cache: splitsh-lite opens the BoltDB cache read-write, and a
+      # cache-restored db is not reliably writable on the runner, which makes
+      # splitsh-lite abort instantly with "open .git/splitsh.db: permission
+      # denied". The ~30s a warm cache would save is not worth that fragility.
       - name: Install splitsh-lite
         run: |
           set -euo pipefail
@@ -110,6 +109,13 @@ jobs:
             # Monorepo-wide change: push all libs
             echo "force_all=yes — pushing all libs"
             mapfile -t libs < <(php scripts/affected-libs.php --all 2>/dev/null | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['all_libs']))")
+            # An empty force-all list means affected-libs.php (or php) failed — a
+            # process-sub failure can't trip `set -e`, so fail loudly here rather
+            # than silently "syncing" zero libs and reporting success.
+            if [ "${#libs[@]}" -eq 0 ]; then
+              echo "force_all but lib list is empty — affected-libs.php --all produced nothing" >&2
+              exit 1
+            fi
           else
             # Changed-only: push only affected libs
             echo "Pushing affected libs:"
