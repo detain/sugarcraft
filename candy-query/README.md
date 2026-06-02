@@ -77,6 +77,8 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 | `ServerStatusPage` | Admin page displaying server info, features, directories, SSL, replication, and firewall panels. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
+| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. Mirrors `charmbracelet/lazysql` VariablesPage. |
+| `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET GLOBAL PERSIST`. Uses prepared statements, handles errors 1142/1227/3680. Mirrors `mysql-workbench wb_admin_variable_editor`. |
 | `ReplicaStatusProvider` | Fetches replica status via `SHOW REPLICA STATUS` (MySQL 8+) or `SHOW SLAVE STATUS` (MySQL 5.x/MariaDB), graceful 1227 handling. |
 | `SidebarGauge` | Single metric gauge with threshold coloring (green/yellow/red). CPU uses circular GaugeCircle; others use horizontal Gauge. |
 | `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional Sampler. |
