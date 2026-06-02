@@ -6,9 +6,11 @@ namespace SugarCraft\Query\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Query\App;
 use SugarCraft\Query\Database;
 use SugarCraft\Query\Pane;
+use SugarCraft\Query\Renderer;
 use PHPUnit\Framework\TestCase;
 
 final class AppTest extends TestCase
@@ -61,6 +63,48 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
         $this->assertSame('users', $a->selectedTable);
         $this->assertCount(3, $a->rows);
+    }
+
+    /**
+     * Regression: moving the table cursor must NOT trigger a DB load. Auto-
+     * loading on every Up/Down ran a synchronous query per keystroke, which
+     * froze the UI for minutes when browsing a remote database.
+     */
+    public function testNavigationDoesNotLoadRows(): void
+    {
+        $a = App::start($this->db());
+        // App::start loads the first table ('posts', 2 rows).
+        $this->assertSame('posts', $a->selectedTable);
+        $this->assertCount(2, $a->rows);
+
+        // Move the cursor down to 'users' — selection/rows must stay put.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(1, $a->tableCursor);
+        $this->assertSame('posts', $a->selectedTable, 'cursor move must not change the loaded table');
+        $this->assertCount(2, $a->rows, 'cursor move must not re-query rows');
+
+        // Only Enter loads the cursored table.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
+        $this->assertSame('users', $a->selectedTable);
+        $this->assertCount(3, $a->rows);
+    }
+
+    /**
+     * Regression: the framework's WindowSizeMsg is the single source of truth
+     * for terminal dimensions. App must forward it to the Renderer (and leave
+     * the model otherwise unchanged) so layout matches the real screen.
+     */
+    public function testWindowSizeMsgUpdatesRendererSize(): void
+    {
+        $a = App::start($this->db());
+        try {
+            [$a2, $cmd] = $a->update(new WindowSizeMsg(123, 45));
+            $this->assertNull($cmd);
+            $this->assertSame($a, $a2, 'WindowSizeMsg should not mutate the model');
+            $this->assertSame(['rows' => 45, 'cols' => 123], Renderer::getTerminalSize());
+        } finally {
+            Renderer::resetSizeCache();
+        }
     }
 
     public function testQuitFromTablesPane(): void

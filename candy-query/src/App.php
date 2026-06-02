@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\EmptyServerContext;
@@ -111,6 +112,15 @@ final class App implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof WindowSizeMsg) {
+            // The Program is the single source of truth for terminal size:
+            // it emits this at startup and on every SIGWINCH. Forward it to
+            // the renderer so our layout always matches the screen the
+            // framework's own renderer is driving (no stale/independent
+            // detection, and resizes are honored).
+            Renderer::setSize($msg->cols, $msg->rows);
+            return [$this, null];
+        }
         if ($msg instanceof AdminFetchStartedMsg) {
             if (!$this->adminLoading) {
                 return [$this->withAdminLoading(true), null];
@@ -158,23 +168,19 @@ final class App implements Model
 
     private function handleTablesKey(KeyMsg $msg): self
     {
+        // Navigation only moves the cursor — it must NOT load rows. loadTable()
+        // runs a synchronous `SELECT * ... LIMIT 100`; auto-loading on every
+        // Up/Down froze the UI for minutes when browsing a remote database
+        // (each keypress = a blocking network round-trip, and holding the key
+        // queued one query per table). Rows load on Enter/Space, as the help
+        // text ("enter load table") and the class docstring already promise.
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            $newCursor = $this->tableCursor - 1;
-            $name = $this->tables[$newCursor] ?? null;
-            if ($name !== null && $name !== $this->selectedTable) {
-                return $this->loadTable($name);
-            }
-            return $this->withTableCursor($newCursor);
+            return $this->withTableCursor($this->tableCursor - 1);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            $newCursor = $this->tableCursor + 1;
-            $name = $this->tables[$newCursor] ?? null;
-            if ($name !== null && $name !== $this->selectedTable) {
-                return $this->loadTable($name);
-            }
-            return $this->withTableCursor($newCursor);
+            return $this->withTableCursor($this->tableCursor + 1);
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {

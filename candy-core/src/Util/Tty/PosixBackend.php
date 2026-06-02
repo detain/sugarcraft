@@ -80,14 +80,15 @@ final class PosixBackend implements Backend
     /** @return array{cols:int, rows:int} */
     public function size(): array
     {
-        // 1. Env vars (set by terminal emulators on resize)
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES') ?: 0);
-        if ($cols > 0 && $rows > 0) {
-            return ['cols' => $cols, 'rows' => $rows];
-        }
-
-        // 2. FFI ioctl on the stream's fd (works for PTY slave)
+        // 1. FFI ioctl on the stream's fd (works for PTY slave).
+        // The kernel's TIOCGWINSZ is the ground truth and is updated live on
+        // every resize. We prefer it over the COLUMNS/LINES env vars because
+        // those are frequently stale — bash only refreshes them for its own
+        // prompt (and does not export them by default), and SSH/tmux/screen
+        // sessions often export the size captured at login, which never
+        // tracks a later resize. Trusting stale env produced frames sized to
+        // the wrong (often halved) height. Env remains the fallback for the
+        // no-tty case where the ioctl can't run.
         if ($this->isTty()) {
             $fd = (int) $this->stream;
             if ($fd >= 0) {
@@ -101,6 +102,14 @@ final class PosixBackend implements Backend
                     // FFI ioctl failed — fall through to next method
                 }
             }
+        }
+
+        // 2. Env vars (the only signal when stdout is not a tty, e.g. piped
+        // or non-interactive; on a live tty the ioctl above already won).
+        $cols = (int) (getenv('COLUMNS') ?: 0);
+        $rows = (int) (getenv('LINES') ?: 0);
+        if ($cols > 0 && $rows > 0) {
+            return ['cols' => $cols, 'rows' => $rows];
         }
 
         // 3. /dev/tty — the controlling terminal (always has the real size)
