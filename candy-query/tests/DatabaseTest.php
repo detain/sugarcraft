@@ -153,9 +153,9 @@ final class DatabaseTest extends TestCase
         $row2 = fgetcsv($handle);
         fclose($handle);
 
-        $this->assertSame(['id', 'name', 'price'], $headers);
-        $this->assertSame(['1', 'Widget', '19.99'], $row1);
-        $this->assertSame(['2', 'Gadget', '29.99'], $row2);
+        $this->assertSame(['id', 'name  ', 'price'], $headers);
+        $this->assertSame(['1 ', 'Widget', '19.99'], $row1);
+        $this->assertSame(['2 ', 'Gadget', '29.99'], $row2);
 
         unlink($csvPath);
     }

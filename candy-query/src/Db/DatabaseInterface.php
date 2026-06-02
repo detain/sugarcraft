@@ -67,4 +67,35 @@ interface DatabaseInterface
      * Close the database connection.
      */
     public function close(): void;
+
+    /**
+     * Get the database server version string.
+     *
+     * @return string Server version (e.g. "SQLite version 3.41.0")
+     */
+    public function serverVersion(): string;
+
+    /**
+     * Get the driver name.
+     *
+     * @return string Driver identifier (e.g. "sqlite", "mysql", "pgsql")
+     */
+    public function driverName(): string;
+
+    /**
+     * Check if the database connection is alive.
+     *
+     * @return bool True if connection is alive, false otherwise
+     */
+    public function ping(): bool;
+
+    /**
+     * Get list of database names (for multi-database drivers).
+     *
+     * For single-database drivers like SQLite, returns the database
+     * name derived from the path, or ['memory'] for in-memory databases.
+     *
+     * @return list<string>
+     */
+    public function databases(): array;
 }
