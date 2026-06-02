@@ -40,23 +40,46 @@ final class Renderer
 
     public static function render(Game $g): string
     {
+        return self::frame($g, self::interior($g, mark: false));
+    }
+
+    /**
+     * Build the minefield ANSI string.
+     *
+     * When $mark is true each glyph is wrapped in a {@see Mark::zone()}
+     * sentinel for {@see Scanner} hit-testing. Those sentinels embed a
+     * plain-ASCII id ("cell:r:c") that {@see Scan} skips but that the
+     * Buffer/Width layer would otherwise count as visible width — which
+     * leaks the id text on screen and inflates the border box. So the
+     * displayed board is always built unmarked; only the throwaway copy
+     * fed to the Scanner carries zone sentinels.
+     */
+    private static function interior(Game $g, bool $mark): string
+    {
         $b = $g->board;
         $boardBuf = Buffer::new($b->width, $b->height);
 
         for ($y = 0; $y < $b->height; $y++) {
             for ($x = 0; $x < $b->width; $x++) {
-                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY));
+                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY, $mark));
             }
         }
 
-        $interior = $boardBuf->toAnsi();
+        return $boardBuf->toAnsi();
+    }
 
+    /**
+     * Wrap the minefield interior in the rounded border + status + help
+     * footer that make up the full view.
+     */
+    private static function frame(Game $g, string $interior): string
+    {
         $framed = SprinklesStyle::new()
             ->border(Border::rounded())
             ->padding(0, 1)
             ->render($interior);
 
-        $status = self::status($b, $g->elapsed());
+        $status = self::status($g->board, $g->elapsed());
         $help   = "↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit";
         return $framed . "\n " . $status . "\n " .
                SprinklesStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
@@ -65,10 +88,11 @@ final class Renderer
     /**
      * Build a Buffer cell for the minefield at (col, row).
      *
-     * Each cell is zone-tagged with Mark::wrap("cell:$row:$col", $glyph)
-     * so Scanner::hit() can map mouse coordinates back to a cell.
+     * When $mark is true the glyph is zone-tagged with
+     * Mark::wrap("cell:$row:$col", $glyph) so Scanner::hit() can map
+     * mouse coordinates back to a cell.
      */
-    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy): \SugarCraft\Buffer\Cell
+    private static function cellBufferCell(Board $b, int $col, int $row, int $cx, int $cy, bool $mark = false): \SugarCraft\Buffer\Cell
     {
         $cell = $b->cell($col, $row);
         if ($cell === null) {
@@ -77,11 +101,10 @@ final class Renderer
 
         [$glyph, $fg, $bg, $attrs] = self::cellStyleData($cell, $b, $col, $row, $cx, $cy);
 
-        // Zone-tag the glyph for mouse hit detection.
-        $marked = Mark::zone("cell:{$row}:{$col}", $glyph);
+        $content = $mark ? Mark::zone("cell:{$row}:{$col}", $glyph) : $glyph;
         $style = Style::new($fg, $bg, $attrs);
 
-        return \SugarCraft\Buffer\Cell::new($marked, $style);
+        return \SugarCraft\Buffer\Cell::new($content, $style);
     }
 
     /**
@@ -123,34 +146,20 @@ final class Renderer
     }
 
     /**
-     * Render just the minefield as ANSI with Mark zones, and also
-     * return a ready-to-use Scanner so callers can hit-test clicks.
+     * Render the minefield view and return a ready-to-use Scanner so
+     * callers can hit-test clicks.
+     *
+     * The displayed string is unmarked (see {@see interior()} for why);
+     * zone sentinels live only on the throwaway copy fed to the Scanner.
+     * Both share the same cell layout, so the Scanner's interior-relative
+     * coordinates line up with what {@see resolveClick()} resolves.
      *
      * @return array{0:string, 1:Scanner}
      */
     public static function renderWithScanner(Game $g): array
     {
-        $b = $g->board;
-        $boardBuf = Buffer::new($b->width, $b->height);
-
-        for ($y = 0; $y < $b->height; $y++) {
-            for ($x = 0; $x < $b->width; $x++) {
-                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY));
-            }
-        }
-
-        $interior = $boardBuf->toAnsi();
-        $scanner = Scanner::new()->scan($interior);
-
-        $framed = SprinklesStyle::new()
-            ->border(Border::rounded())
-            ->padding(0, 1)
-            ->render($interior);
-
-        $status = self::status($b, $g->elapsed());
-        $help   = "↑ ↓ ← →  move  ·  space  reveal  ·  f  flag  ·  r  restart  ·  q  quit";
-        $full = $framed . "\n " . $status . "\n " .
-                SprinklesStyle::new()->foreground(Color::hex('#7d6e98'))->render($help) . "\n";
+        $scanner = Scanner::new()->scan(self::interior($g, mark: true));
+        $full = self::frame($g, self::interior($g, mark: false));
 
         return [$full, $scanner];
     }
@@ -158,24 +167,14 @@ final class Renderer
     /**
      * Resolve a mouse click at (col, row) to a cell coordinate.
      *
-     * Uses Scanner to parse Mark zones from the rendered minefield.
-     * Returns null if the click was outside any cell zone.
+     * Uses Scanner to parse Mark zones from a marked copy of the
+     * minefield. Returns null if the click was outside any cell zone.
      *
      * @return array{0:int,1:int}|null col, row of the hit cell
      */
     public static function resolveClick(Game $g, int $col, int $row): ?array
     {
-        $b = $g->board;
-        $boardBuf = Buffer::new($b->width, $b->height);
-
-        for ($y = 0; $y < $b->height; $y++) {
-            for ($x = 0; $x < $b->width; $x++) {
-                $boardBuf = $boardBuf->withCellAt($x, $y, self::cellBufferCell($b, $x, $y, $g->cursorX, $g->cursorY));
-            }
-        }
-
-        $interior = $boardBuf->toAnsi();
-        $scanner = Scanner::new()->scan($interior);
+        $scanner = Scanner::new()->scan(self::interior($g, mark: true));
         $zone = $scanner->hit($col, $row);
 
         if ($zone === null) {

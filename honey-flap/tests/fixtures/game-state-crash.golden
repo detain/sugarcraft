@@ -1,8 +1,8 @@
 {
-    "tickIndex": 16,
+    "tickIndex": 30,
     "score": 0,
     "crashed": true,
     "birdX": 8,
     "birdRow": 18,
-    "pipeCount": 0
+    "pipeCount": 1
 }

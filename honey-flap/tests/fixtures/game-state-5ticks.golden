@@ -3,7 +3,7 @@
     "score": 0,
     "crashed": false,
     "birdX": 8,
-    "birdRow": 10,
+    "birdRow": 9,
     "pipeCount": 0,
     "pipes": []
 }
