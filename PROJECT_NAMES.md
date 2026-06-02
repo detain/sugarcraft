@@ -119,7 +119,7 @@ single-purpose lib.
 | **CandyInput** | candy + input = terminal escape sequence decoder. pioneering — no upstream parallel. EscapeDecoder consumes raw TTY bytes and emits typed Events (KeyEvent, MouseEvent, FocusEvent, PasteEvent, ResizeEvent). Unblocks sugar-readline migration to real-TTY input (step-21). |
 | **CandyMouse** | candy + mouse = self-contained Mark/Scan/Get mouse hit-testing (bubblezone pattern) + ZoneClickTracker. Mirrors bubblezone semantics but no external Manager wiring — scanner is owned by each consumer. |
 | **CandyMines** | candy + mines = Minesweeper. clear. |
-| **CandyQuery** | candy + query = SQLite browser. clear. |
+| **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
 
 ## ⚠️ Functional half is weak / vague
