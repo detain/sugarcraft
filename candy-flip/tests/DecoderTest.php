@@ -87,4 +87,39 @@ final class DecoderTest extends TestCase
             unlink($badPath);
         }
     }
+
+    /**
+     * Regression: a real GD-encoded GIF whose LZW image data spans
+     * multiple full-size (≥128-byte) sub-blocks used to decode to zero
+     * frames, because findImageDataEnd() bailed on any sub-block length
+     * ≥ 0x80 and truncated the stream so imagecreatefromstring() failed.
+     * The tiny hand-built fixtures elsewhere have single small sub-blocks
+     * and so never exercised this path.
+     */
+    public function testDecodeHandlesLargeLzwSubBlocks(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // A 120x60 gradient yields several 254-byte LZW sub-blocks.
+        $im = imagecreatetruecolor(120, 60);
+        for ($y = 0; $y < 60; $y++) {
+            for ($x = 0; $x < 120; $x++) {
+                $col = imagecolorallocate($im, (int) (255 * $x / 120), (int) (255 * $y / 60), 128);
+                imagesetpixel($im, $x, $y, $col);
+            }
+        }
+        $path = sys_get_temp_dir() . '/large-' . uniqid() . '.gif';
+        imagegif($im, $path);
+        imagedestroy($im);
+
+        try {
+            $frames = Decoder::decode($path, 60, 18);
+            $this->assertNotEmpty($frames, 'multi-sub-block GIF must decode to at least one frame');
+            $this->assertSame(60, $frames[0]->width());
+            $this->assertSame(18, $frames[0]->height());
+        } finally {
+            unlink($path);
+        }
+    }
 }

@@ -36,6 +36,9 @@ use SugarCraft\Table\Table;
  */
 final class ReportsPage extends PageBase
 {
+    /** @var DatabaseInterface|null */
+    private ?DatabaseInterface $db = null;
+
     /** @var Catalog|null */
     private ?Catalog $catalog = null;
 

@@ -147,17 +147,17 @@ final class ConnectionFactoryTest extends TestCase
     public function testFromConfigThrowsOnUnsupportedDriver(): void
     {
         $config = ConnectionConfig::create(
-            driver: 'mysql',
+            driver: 'sqlsrv',
             host: 'localhost',
-            port: 3306,
-            user: 'root',
-            pass: 'pass',
+            port: 1433,
+            user: 'sa',
+            pass: 'secret',
             dbname: 'testdb',
             sslMode: 'prefer',
         );
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Driver "mysql" not yet supported');
+        $this->expectExceptionMessage('Unsupported driver: sqlsrv');
 
         ConnectionFactory::fromConfig($config);
     }
@@ -199,16 +199,16 @@ final class ConnectionFactoryTest extends TestCase
     {
         $argv = [
             'program',
-            '--driver=mysql',
+            '--driver=sqlsrv',
             '--host=localhost',
-            '--port=3306',
-            '--user=root',
+            '--port=1433',
+            '--user=sa',
             '--pass=secret',
             '--db=mydb',
         ];
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Driver "mysql" not yet supported');
+        $this->expectExceptionMessage('Unsupported driver: sqlsrv');
 
         ConnectionFactory::fromArgv($argv);
     }
