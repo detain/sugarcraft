@@ -80,4 +80,16 @@ final readonly class SetupThreads
     {
         return $this->processlistId !== null;
     }
+
+    /**
+     * Generate SQL statement(s) to commit changes.
+     *
+     * Threads are read-only - they cannot be modified directly.
+     *
+     * @return list<string> Empty array - no statements generated
+     */
+    public function commitStatements(): array
+    {
+        return [];
+    }
 }

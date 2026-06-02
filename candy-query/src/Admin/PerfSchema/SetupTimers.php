@@ -51,4 +51,16 @@ final readonly class SetupTimers
     {
         return strtoupper($this->name) === 'CYCLE';
     }
+
+    /**
+     * Generate SQL statement(s) to commit changes.
+     *
+     * Timers are read-only - they are determined by the server build.
+     *
+     * @return list<string> Empty array - no statements generated
+     */
+    public function commitStatements(): array
+    {
+        return [];
+    }
 }
