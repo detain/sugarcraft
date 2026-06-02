@@ -15,7 +15,7 @@ use SugarCraft\Reel\Render\RendererFactory;
 /**
  * Unit tests for RendererFactory — creates FrameRenderer instances by Mode.
  *
- * @covers RendererFactory
+ * @covers \SugarCraft\Reel\Render\RendererFactory
  */
 final class RendererFactoryTest extends TestCase
 {

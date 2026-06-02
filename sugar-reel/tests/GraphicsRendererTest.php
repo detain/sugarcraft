@@ -12,7 +12,7 @@ use SugarCraft\Reel\Render\Mode;
 /**
  * Unit tests for GraphicsRenderer — delegates to candy-mosaic Sixel/Kitty/iTerm2.
  *
- * @covers GraphicsRenderer
+ * @covers \SugarCraft\Reel\Render\GraphicsRenderer
  */
 final class GraphicsRendererTest extends TestCase
 {

@@ -21,7 +21,7 @@ use SugarCraft\Testing\Input\ScriptedInput;
  * Uses FakeDecoder to provide deterministic frame sequences without
  * any real video file or external process.
  *
- * @covers Player
+ * @covers \SugarCraft\Reel\Player
  */
 final class PlayerTest extends TestCase
 {

@@ -10,7 +10,7 @@ use SugarCraft\Reel\Sync;
 /**
  * Unit tests for Sync wall-clock pacing math.
  *
- * @covers Sync
+ * @covers \SugarCraft\Reel\Sync
  */
 final class SyncTest extends TestCase
 {

@@ -13,8 +13,8 @@ use SugarCraft\Reel\Msg\TickMsg;
 /**
  * Unit tests for FrameMsg and TickMsg.
  *
- * @covers FrameMsg
- * @covers TickMsg
+ * @covers \SugarCraft\Reel\Msg\FrameMsg
+ * @covers \SugarCraft\Reel\Msg\TickMsg
  */
 final class MsgTest extends TestCase
 {

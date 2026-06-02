@@ -10,7 +10,7 @@ use SugarCraft\Reel\Render\LumaRamp;
 /**
  * Unit tests for LumaRamp character ramp and luminance mapping.
  *
- * @covers LumaRamp
+ * @covers \SugarCraft\Reel\Render\LumaRamp
  */
 final class LumaRampTest extends TestCase
 {
