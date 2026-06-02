@@ -33,7 +33,8 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
         "ext-pdo_sqlite": "*",
-        "ext-pdo_mysql": "*"
+        "ext-pdo_mysql": "*",
+        "ext-pdo_pgsql": "*"
     },
     "require-dev": {
         "phpunit/phpunit": "^10.0"
