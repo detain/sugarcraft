@@ -35,13 +35,15 @@ final class GameTest extends TestCase
     {
         $g = Game::start(static fn(int $max): int => 0);
         $beforeY = $g->bird->row();
-        // Without flap, bird drops several rows over 6 ticks.
-        $dropped = $g->tickN(6);
+        // Without flap, the bird drops over ~0.5s (15 ticks). Gravity is
+        // gentle enough now that a handful of ticks barely shifts the
+        // rounded row, so tick far enough for the fall to register.
+        $dropped = $g->tickN(15);
         $this->assertGreaterThan($beforeY, $dropped->bird->row());
         // With flap right before those ticks, bird is higher.
         $msg = new KeyMsg(KeyType::Space, '');
         [$g, ] = $g->update($msg);
-        $afterFlap = $g->tickN(6);
+        $afterFlap = $g->tickN(15);
         $this->assertLessThan($dropped->bird->row(), $afterFlap->bird->row());
     }
 

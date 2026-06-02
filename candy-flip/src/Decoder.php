@@ -331,18 +331,24 @@ final class Decoder
     }
 
     /**
-     * Walk LZW sub-blocks starting at $start and return the index of the
-     * last data byte (before the 0x00 sub-block terminator or any byte
-     * ≥ 0x80, which signals a GIF control byte mid-stream).
+     * Walk the LZW image data starting at $start (the minimum-code-size
+     * byte) and return the index of the 0x00 sub-block terminator.
+     *
+     * Sub-block lengths are full bytes (1–255) — only 0x00 ends the
+     * chain. An earlier version also broke on any length ≥ 0x80, but
+     * GIF encoders routinely emit 254-byte sub-blocks, so that truncated
+     * the LZW stream and made `imagecreatefromstring()` reject every
+     * real frame.
      */
     private static function findImageDataEnd(string $bytes, int $start): int
     {
-        $j = $start;
+        // Skip the leading LZW minimum-code-size byte before the sub-blocks.
+        $j = $start + 1;
         $len = strlen($bytes);
         while ($j < $len) {
             $subLen = ord($bytes[$j]);
             $j++;
-            if ($subLen === 0 || $subLen >= 0x80) {
+            if ($subLen === 0) {
                 break;
             }
             $j += $subLen;
