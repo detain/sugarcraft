@@ -80,6 +80,8 @@ $db = Database::open('app.sqlite');
       <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
       <div class="feature"><strong>ConnectionConfig</strong><span>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Password never echoed.</span></div>
       <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code>, <code>fromConfig()</code>, <code>fromArgv()</code>. Builds configured PDO connections.</span></div>
+      <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor.</span></div>
+      <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Colour-coded <code>EXPLAIN QUERY PLAN</code> tree. Static <code>run()</code> executes against a Database; <code>render()</code> produces ANSI output; <code>toArray()</code> returns JSON-serialisable rows.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
     </div>
@@ -131,6 +133,8 @@ $db = Database::open('app.sqlite');
 <tr><td>ConnectionFactory</td><td>fromDsn(dsn)</td><td>Build PDO from DSN string (e.g., mysql://user:pass@host:3306/db?ssl-mode=REQUIRED)</td></tr>
 <tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Build PDO from ConnectionConfig value object</td></tr>
 <tr><td>ConnectionFactory</td><td>fromArgv()</td><td>Build PDO from CLI args (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)</td></tr>
+<tr><td>Flavor</td><td>—</td><td>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code></td></tr>
+<tr><td>Version</td><td>isAtLeast(Version)</td><td>Compare version strings (handles MariaDB 5.5.5- prefix)</td></tr>
 <tr><td>ResultTable</td><td>fromRows(rows)</td><td>Factory from a list of associative row arrays</td></tr>
 <tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>
 <tr><td>ResultTable</td><td>withVisibleWidth(n) / withJsonPretty(bool) / withNullToken(s)</td><td>Fluent configuration builders</td></tr>
