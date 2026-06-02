@@ -17,8 +17,24 @@ Terminal SQLite browser on the SugarCraft stack — port of [`jorgerojas26/lazys
 
 ```bash
 composer require sugarcraft/candy-query
-candy-query path/to/db.sqlite
 ```
+
+## CLI usage
+
+```bash
+# SQLite via bare path (inferred as Flavor::Sqlite)
+bin/candy-query app.sqlite
+
+# Any DSN — MySQL, PostgreSQL, SQLite, SQLSRV
+bin/candy-query --dsn mysql://user:pass@localhost:3306/dbname
+bin/candy-query --dsn pgsql://user:pass@localhost:5432/dbname
+bin/candy-query --dsn sqlsrv://localhost/dbname
+
+# Explicit SQLite path via DSN
+bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
+```
+
+`App::start(database, ?Flavor $flavor = Flavor::Sqlite)` accepts an optional `$flavor` to override auto-detection.
 
 ## Keys
 

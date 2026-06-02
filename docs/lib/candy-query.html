@@ -55,16 +55,20 @@
     <pre class="code"><code>composer require sugarcraft/candy-query</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>candy-query path/to/db.sqlite
+    <pre class="code"><code># SQLite via bare path (inferred as Flavor::Sqlite)
+bin/candy-query app.sqlite
+
+# Any DSN — MySQL, PostgreSQL, SQLite, SQLSRV
+bin/candy-query --dsn mysql://user:pass@localhost:3306/dbname
 
 // Or wire it up programmatically:
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Query\App;
-use SugarCraft\Query\Database;
+use SugarCraft\Query\Db\ConnectionFactory;
 
-$db = Database::open('app.sqlite');
-(new Program(App::start($db), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
+$pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
+(new Program(App::start($pdo), new ProgramOptions(useAltScreen: true)))-&gt;run();</code></pre>
 
     <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
@@ -109,7 +113,7 @@ $db = Database::open('app.sqlite');
 <tr><td>DatabaseInterface</td><td>tables()</td><td>List all tables</td></tr>
 <tr><td>DatabaseInterface</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
 <tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query</td></tr>
-<tr><td>App</td><td>start(database)</td><td>Create the app model</td></tr>
+<tr><td>App</td><td>start(database, ?Flavor $flavor = Flavor::Sqlite)</td><td>Create the app model</td></tr>
 <tr><td>SchemaBrowser</td><td>refresh()</td><td>Load schema via driver-specific SchemaProviderInterface</td></tr>
 <tr><td>SchemaBrowser</td><td>forFlavor(flavor, pdo)</td><td>Create browser with explicit Flavor (static factory)</td></tr>
 <tr><td>SchemaProviderInterface</td><td>tables(pdo)</td><td>List all tables/views</td></tr>
