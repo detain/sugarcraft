@@ -88,6 +88,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
+      <div class="feature"><strong>ServerStatusPage</strong><span>Admin page displaying server info (host, socket, port, version, uptime + running-since), Features panel (tristate Yes/No/Unknown), Directories, SSL, Replication (<code>SHOW REPLICA STATUS</code> for MySQL 8+ / <code>SHOW SLAVE STATUS</code> for MySQL 5.x/MariaDB, graceful 1227 handling), and Firewall (AWS RDS).</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
