@@ -98,4 +98,12 @@ interface DatabaseInterface
      * @return list<string>
      */
     public function databases(): array;
+
+    /**
+     * Prepare a SQL statement for execution.
+     *
+     * @param string $sql The SQL statement to prepare
+     * @return mixed A prepared statement object (implementation-specific) or false on failure
+     */
+    public function prepare(string $sql): mixed;
 }

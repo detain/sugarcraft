@@ -245,6 +245,9 @@ final class FakeDatabase implements DatabaseInterface
     private ?\PDOException $queryException = null;
     private string $serverVersion = 'MySQL version 8.0.33';
 
+    /** @var list<array{sql: string, values: array}> */
+    private array $executions = [];
+
     public function setQueryResult(array $result): void
     {
         $this->queryResult = $result;
@@ -321,5 +324,32 @@ final class FakeDatabase implements DatabaseInterface
     public function databases(): array
     {
         return [];
+    }
+
+    public function prepare(string $sql): mixed
+    {
+        if ($this->queryException !== null) {
+            throw $this->queryException;
+        }
+        return new class($sql, $this) {
+            private string $sql;
+            private $db;
+            public function __construct(string $sql, $db) { $this->sql = $sql; $this->db = $db; }
+            public function execute(array $values = []): bool {
+                $this->db->recordExecution($this->sql, $values);
+                return true;
+            }
+            public function closeCursor(): void {}
+        };
+    }
+
+    public function recordExecution(string $sql, array $values): void
+    {
+        $this->executions[] = ['sql' => $sql, 'values' => $values];
+    }
+
+    public function getExecutions(): array
+    {
+        return $this->executions;
     }
 }
