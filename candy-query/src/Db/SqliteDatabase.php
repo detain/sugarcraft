@@ -14,11 +14,13 @@ use Sqlite3;
  */
 final class SqliteDatabase implements DatabaseInterface
 {
-    private \PDO $pdo;
+    private ?\PDO $pdo;
+    private string $path;
 
-    public function __construct(\PDO $pdo)
+    public function __construct(\PDO $pdo, string $path = ':memory:')
     {
         $this->pdo = $pdo;
+        $this->path = $path;
         $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     }
 
@@ -30,7 +32,8 @@ final class SqliteDatabase implements DatabaseInterface
         if ($path !== ':memory:' && !is_file($path)) {
             throw new \RuntimeException(Lang::t('database.no_file', ['path' => $path]));
         }
-        return new self(new \PDO('sqlite:' . $path));
+        $pdo = new \PDO('sqlite:' . $path);
+        return new self($pdo, $path);
     }
 
     /** @return list<string> */
@@ -90,5 +93,37 @@ final class SqliteDatabase implements DatabaseInterface
     public function close(): void
     {
         $this->pdo = null;
+    }
+
+    public function serverVersion(): string
+    {
+        return 'SQLite version ' . ($this->pdo->query('SELECT sqlite_version()')?->fetchColumn() ?? 'unknown');
+    }
+
+    public function driverName(): string
+    {
+        return 'sqlite';
+    }
+
+    public function ping(): bool
+    {
+        if ($this->pdo === null) {
+            return false;
+        }
+        try {
+            $result = $this->pdo->query('SELECT 1');
+            return $result !== false;
+        } catch (\PDOException) {
+            return false;
+        }
+    }
+
+    /** @return list<string> */
+    public function databases(): array
+    {
+        if ($this->path === ':memory:') {
+            return ['memory'];
+        }
+        return [basename($this->path)];
     }
 }
