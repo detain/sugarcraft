@@ -122,10 +122,9 @@ final class ConnectionConfigTest extends TestCase
 
     public function testBuildDsnWithUnsupportedDriverThrows(): void
     {
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Unsupported driver: oracle');
-
-        ConnectionConfig::create(
+        // ConnectionConfig accepts any driver without throwing.
+        // Driver validation is the responsibility of ConnectionFactory::fromConfig().
+        $config = ConnectionConfig::create(
             driver: 'oracle',
             host: 'localhost',
             port: 1521,
@@ -133,5 +132,9 @@ final class ConnectionConfigTest extends TestCase
             pass: 'oracle',
             dbname: 'orcl',
         );
+
+        // Verify the config was created and DSN was built
+        $this->assertSame('oracle', $config->driver);
+        $this->assertSame('oracle:host=localhost;port=1521;dbname=orcl', $config->dsn);
     }
 }

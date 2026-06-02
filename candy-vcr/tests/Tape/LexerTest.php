@@ -307,4 +307,58 @@ TAPE;
         $this->assertSame(Lexer::TOKEN_OUTPUT, $tokens[1]->type);
         $this->assertSame('.vhs/counter.gif', $tokens[1]->value);
     }
+
+    /**
+     * Regression: upstream VHS lets several directives share one line
+     * (e.g. `Down  Sleep 200ms`). The old line-based lexer classified the
+     * whole line as UNKNOWN and silently dropped the keystroke, which
+     * gutted every interactive demo tape under candy-vcr.
+     */
+    public function testArrowFollowedByInlineSleepOnSameLine(): void
+    {
+        $tokens = $this->lexer->tokenize('Down  Sleep 200ms');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Lexer::TOKEN_ARROW, $tokens[0]->type);
+        $this->assertSame('Down', $tokens[0]->value);
+        $this->assertSame(Lexer::TOKEN_SLEEP, $tokens[1]->type);
+        $this->assertSame('0.2', $tokens[1]->value);
+    }
+
+    public function testSpaceFollowedByInlineSleep(): void
+    {
+        $tokens = $this->lexer->tokenize('Space Sleep 1s');
+        $this->assertCount(2, $tokens);
+        $this->assertSame(Lexer::TOKEN_SPACE, $tokens[0]->type);
+        $this->assertSame(Lexer::TOKEN_SLEEP, $tokens[1]->type);
+        $this->assertSame('1', $tokens[1]->value);
+    }
+
+    public function testTypeThenSleepThenTrailingComment(): void
+    {
+        $tokens = $this->lexer->tokenize('Type "f"  Sleep 300ms  # place flag');
+        $this->assertCount(3, $tokens);
+        $this->assertSame(Lexer::TOKEN_TYPE, $tokens[0]->type);
+        $this->assertSame('f', $tokens[0]->value);
+        $this->assertSame(Lexer::TOKEN_SLEEP, $tokens[1]->type);
+        $this->assertSame('0.3', $tokens[1]->value);
+        $this->assertSame(Lexer::TOKEN_COMMENT, $tokens[2]->type);
+    }
+
+    public function testMultipleKeysOnOneLine(): void
+    {
+        $tokens = $this->lexer->tokenize('Up Down Left Right');
+        $this->assertCount(4, $tokens);
+        foreach ($tokens as $t) {
+            $this->assertSame(Lexer::TOKEN_ARROW, $t->type);
+        }
+        $this->assertSame(['Up', 'Down', 'Left', 'Right'], array_map(fn ($t) => $t->value, $tokens));
+    }
+
+    public function testBareKeywordIsNotMatchedAsPrefixOfLongerToken(): void
+    {
+        // "Spacebar" is not the Space directive — must not split into Space + "bar".
+        $tokens = $this->lexer->tokenize('Spacebar');
+        $this->assertCount(1, $tokens);
+        $this->assertSame(Lexer::TOKEN_UNKNOWN, $tokens[0]->type);
+    }
 }

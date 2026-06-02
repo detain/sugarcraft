@@ -44,7 +44,7 @@ final readonly class ConnectionConfig
                 $sslMode,
             ),
             'pgsql' => sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $dbname),
-            default => throw new \InvalidArgumentException('Unsupported driver: ' . $driver),
+            default => sprintf('%s:host=%s;port=%d;dbname=%s', $driver, $host, $port, $dbname),
         };
     }
 

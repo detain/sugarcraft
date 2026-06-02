@@ -113,9 +113,6 @@ final class ConnectionFactory
     /**
      * Create a DatabaseInterface from a ConnectionConfig.
      *
-     * Currently only supports sqlite driver. Other drivers will be
-     * added in subsequent steps.
-     *
      * @param ConnectionConfig $config Connection configuration
      * @return DatabaseInterface
      * @throws \InvalidArgumentException If driver is not supported
@@ -124,8 +121,10 @@ final class ConnectionFactory
     {
         return match ($config->driver) {
             'sqlite' => self::createSqlite($config),
+            'mysql' => MysqlDatabase::connect($config),
+            'pgsql' => PostgresDatabase::connect($config),
             default => throw new \InvalidArgumentException(
-                'Driver "' . $config->driver . '" not yet supported. Only sqlite is available in this step.',
+                'Unsupported driver: ' . $config->driver,
             ),
         };
     }
