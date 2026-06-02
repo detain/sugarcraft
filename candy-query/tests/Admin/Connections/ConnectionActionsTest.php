@@ -223,6 +223,10 @@ final class FakeDb implements DatabaseInterface
     {
         return new FakeStmt($this);
     }
+
+    public function dsn(): string { return ''; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }
 
 final class FakeStmt

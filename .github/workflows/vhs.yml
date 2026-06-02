@@ -145,7 +145,7 @@ jobs:
             sugar-bits sugar-charts sugar-prompt
             candy-shell candy-shine candy-kit candy-freeze
             sugar-glow sugar-spark sugar-wishlist
-            candy-mold candy-tetris super-candy sugar-crush
+            candy-mold candy-tetris candy-files sugar-crush
             candy-vt
             sugar-stash candy-query sugar-tick
             candy-mines candy-mosaic candy-flip sugar-reel honey-flap
@@ -222,7 +222,7 @@ jobs:
         # sugar-dash is excluded here and rendered by the dedicated
         # render-sugar-dash job below; it has 153 tapes (~10× the next
         # biggest lib) and gets parallelized into 4 batches.
-        lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, super-candy, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, sugar-reel, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
+        lib: [candy-core, candy-sprinkles, candy-pty, candy-vcr, honey-bounce, sugar-bits, sugar-charts, sugar-prompt, candy-shell, candy-shine, candy-kit, candy-freeze, sugar-glow, sugar-spark, sugar-wishlist, candy-mold, candy-tetris, candy-files, sugar-crush, candy-vt, sugar-stash, candy-query, sugar-tick, candy-mines, candy-mosaic, candy-flip, sugar-reel, honey-flap, candy-hermit, candy-lister, candy-log, candy-metrics, candy-palette, candy-serve, candy-wish, candy-zone, sugar-boxer, sugar-calendar, sugar-crumbs, sugar-post, sugar-readline, sugar-skate, sugar-stickers, sugar-table, sugar-toast, sugar-veil]
     steps:
       - uses: actions/checkout@v5
 

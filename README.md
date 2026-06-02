@@ -78,7 +78,7 @@ Fifty libraries grouped by layer:
 | <img src="media/icons/sugar-post.png" width="48" alt=""> | **[SugarPost](sugar-post/)** | Email sending library — SMTP + Resend API transports, attachments, HTML + plain-text multipart, fluent interface. Port of [skate](https://github.com/charmbracelet/skate) |
 | <img src="media/icons/candy-serve.png" width="48" alt=""> | **[CandyServe](candy-serve/)** | Self-hostable Git server over SSH (authorized keys), Git daemon, and HTTP. Users, repos, access control, optional LFS. Port of [soft-serve](https://github.com/charmbracelet/soft-serve) |
 | <img src="media/icons/candy-tetris.png" width="48" alt=""> | **[CandyTetris](candy-tetris/)** | Tetris clone — SRS rules, 7-bag, ghost piece, NES scoring, level-driven gravity. Port of [tetrigo](https://github.com/Broderick-Westrope/tetrigo). |
-| <img src="media/icons/super-candy.png" width="48" alt=""> | **[SuperCandy](super-candy/)** | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm. Port of [superfile](https://github.com/yorukot/superfile). |
+| <img src="media/icons/candy-files.png" width="48" alt=""> | **[CandyFiles](candy-files/)** | Dual-pane file manager — Midnight Commander style, multi-select, sort, delete-with-confirm. Port of [superfile](https://github.com/yorukot/superfile). |
 | <img src="media/icons/sugar-crush.png" width="48" alt=""> | **[SugarCrush](sugar-crush/)** | AI coding-assistant chat shell — pluggable backend (EchoBackend offline; CommandBackend for Anthropic / OpenAI / Ollama via a wrapper script). Port of [crush](https://github.com/charmbracelet/crush). |
 | <img src="media/icons/sugar-stash.png" width="48" alt=""> | **[SugarStash](sugar-stash/)** | Three-pane git TUI — status / branches / log, single-key stage / unstage; shells out to `git` for every mutation. Port of [lazygit](https://github.com/jesseduffield/lazygit). |
 | <img src="media/icons/candy-query.png" width="48" alt=""> | **[CandyQuery](candy-query/)** | Terminal SQLite browser — list tables, browse rows, run ad-hoc queries (PDO + `:memory:` test fixtures). Port of [lazysql](https://github.com/jorgerojas26/lazysql). |
@@ -162,7 +162,7 @@ for d in candy-core candy-ansi candy-buffer candy-layout candy-async candy-testi
          sugar-bits sugar-charts sugar-dash sugar-prompt candy-shell candy-shine candy-kit \
          candy-freeze sugar-glow sugar-spark \
          candy-wish sugar-wishlist candy-metrics \
-         candy-mold candy-tetris super-candy sugar-crush \
+         candy-mold candy-tetris candy-files sugar-crush \
          sugar-stash candy-query sugar-tick candy-mines candy-flip honey-flap; do
      (cd "$d" && composer install --quiet && vendor/bin/phpunit) || exit 1
 done

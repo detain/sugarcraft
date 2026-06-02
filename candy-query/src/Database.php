@@ -167,4 +167,8 @@ final class Database implements DatabaseInterface
     {
         $this->sqlExporter()->exportSql($path);
     }
+
+    public function dsn(): string { return ''; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }

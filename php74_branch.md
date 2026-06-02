@@ -437,7 +437,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
   deps incl. mosaic/flip). ⚠️ **`sugar-reel` is in active development** (working‑tree changes to
   `Player.php`/`AudioPlayer.php` at audit time) — schedule **last**, re‑audit the lib immediately
   before its step, and coordinate so the backport rebases on the finished feature.
-- **5.8** `super-candy`(14,med, core+mosaic+sprinkles).
+- **5.8** `candy-files`(14,med, core+mosaic+sprinkles).
 
 ### Phase 6 — Finalisation
 - **6.1** Root `composer.json` closure + `php tools/check-path-repos.php --fix`; full
@@ -520,7 +520,7 @@ Ordered so each lib's deps are already done. One step each unless split noted.
 | sugar-spark | medium | 8 | ctor-promotion, match, php8-strfn, readonly |
 | sugar-stickers | medium | 7 | enum, first-class-callable, match, php8-strfn, readonly-class |
 | sugar-wishlist | medium | 6 | ctor-promotion, first-class-callable, match, mixed, named-args; pcntl |
-| super-candy | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |
+| candy-files | medium | 14 | backed-enum, ctor-promotion, enum-with-methods, match, named-args |
 | candy-ansi | low | 11 | attribute, backed-enum, ctor-promotion, enum-with-methods, fiber*, first-class-callable |
 | candy-fuzzy | low | 6 | ctor-promotion, named-args, readonly |
 | candy-layout | low | 13 | ctor-promotion, enum, readonly-class, readonly |

@@ -25,12 +25,12 @@ concurrency:
 
 jobs:
   sync-libs:
-    name: Subtree-push affected libs to sugarcraft/<lib>
+    name: Split-push affected libs to sugarcraft/<lib>
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0   # git subtree split needs full history
+          fetch-depth: 0   # splitsh-lite needs full history to compute the subtree split
 
       - name: Compute affected libs
         id: affected
@@ -53,7 +53,31 @@ jobs:
           git config user.email 'detain@interserver.net'
           git config --local --unset-all http.https://github.com/.extraheader || true
 
-      - name: Subtree-split + force-push each affected lib
+      # splitsh-lite is ~2x faster cold than `git subtree split` and keeps a
+      # per-repo commit cache (.git/splitsh.db) shared across prefixes, so the
+      # first lib pays the history walk and the rest are near-instant. It emits
+      # the IDENTICAL split SHA as `git subtree split`, so the pushed history is
+      # byte-for-byte the same — no divergence for existing sugarcraft/* clones.
+      - name: Cache splitsh commit cache
+        uses: actions/cache@v4
+        with:
+          path: .git/splitsh.db
+          key: splitsh-db-${{ github.sha }}
+          restore-keys: |
+            splitsh-db-
+
+      - name: Install splitsh-lite
+        run: |
+          set -euo pipefail
+          url="https://github.com/splitsh/lite/releases/download/v1.0.1/lite_linux_amd64.tar.gz"
+          expected="ec46c5a409422bf55b26f7de1faab67c2320362934947f984872b3aedc4a9d99"
+          curl -fsSL "$url" -o /tmp/splitsh.tar.gz
+          tar -xzf /tmp/splitsh.tar.gz -C /tmp ./splitsh-lite
+          echo "$expected  /tmp/splitsh-lite" | sha256sum -c -
+          chmod +x /tmp/splitsh-lite
+          /tmp/splitsh-lite --version
+
+      - name: Split + force-push each affected lib
         env:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
           FORCE_ALL: ${{ steps.affected.outputs.force_all }}
@@ -95,14 +119,12 @@ jobs:
 
           for lib in "${libs[@]}"; do
             [ -d "$lib" ] || { echo "skip $lib (no dir)"; continue; }
-            br="sync-$lib"
-            git branch -D "$br" 2>/dev/null || true
-            git subtree split --prefix="$lib" --branch="$br" --quiet
+            # splitsh-lite prints the split-commit SHA for the prefix on stdout.
+            sha=$(/tmp/splitsh-lite --prefix="$lib")
             retry_git_push git push --force \
               "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
-              "$br:master"
-            git branch -D "$br" >/dev/null
-            echo "✓ synced $lib"
+              "$sha:refs/heads/master"
+            echo "✓ synced $lib ($sha)"
           done
           echo "Done — ${#libs[@]} libs pushed"
 

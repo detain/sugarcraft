@@ -194,4 +194,8 @@ final class FakePostgresDatabase implements DatabaseInterface
 
         return 'unknown';
     }
+
+    public function dsn(): string { return ''; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }

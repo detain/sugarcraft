@@ -134,7 +134,7 @@ single-purpose lib.
 | **SugarSkate** | "Skate" comes from upstream; doesn't say KV store | `CaramelStore`, `HoneyStore` |
 | **CandyWish** | "Wish" comes from upstream; doesn't say SSH | `HoneyTunnel`, `MochiTunnel` |
 | **SugarWishlist** | piggybacks on Wish; doesn't say SSH launcher | `BentoLauncher`, `PicnicPicker` |
-| **SuperCandy** | "Super" is hype; doesn't say file manager | `PantryFile`, `BentoFile`, `CookieFile` |
+| **CandyFiles** | "Files" describes the app | `FilePane`, `DualPane`, `FileMan` |
 
 > The names in the right column are sketches, not commitments — see the
 > proposals section in PRs to pick what gets adopted.
@@ -191,6 +191,5 @@ vocabulary above — these three remain reserved as the safe defaults.
 | **Sugar-** | components / data / forms / apps | components (SugarBits), forms (SugarPrompt), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (HoneyFlap) |
 
-`Super-` was a one-shot for the file manager (SuperCandy) — the file
-manager is now flagged for rename. Don't mint new prefixes without a
-discussion in this file.
+`Candy-` (Files) is the naming for the file manager (formerly SuperCandy).
+Don't mint new prefixes without a discussion in this file.

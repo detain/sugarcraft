@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CandyFiles — SugarCraft</title>
+  <meta name="description" content="CandyFiles: Dual-pane terminal file manager. PHP port of superfile.">
+  <meta property="og:title" content="CandyFiles — SugarCraft">
+  <meta property="og:description" content="Dual-pane terminal file manager. Port of superfile.">
+  <meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-files.png">
+  <link rel="canonical" href="https://sugarcraft.github.io/lib/candy-files.html">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://sugarcraft.github.io/lib/candy-files.html">
+<meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="../img/icons/candy-files.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-files.png" alt="CandyFiles">
+      <div>
+        <h2>📂 CandyFiles</h2>
+        <p class="detail-sub">Dual-pane terminal file manager</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">port of <a href="https://github.com/yorukot/superfile" style="color: inherit;">superfile</a></span>
+          <span class="tag-chip">file-manager</span>
+          <span class="tag-chip">midnight-commander</span>
+          <span class="tag-chip">dual-pane</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Two panes side-by-side, Midnight Commander style. Tab to swap focus, multi-select, sort cycling, hidden-file toggle, delete-with-confirm. Pure-state transition layer — filesystem is injected, every transition is unit-testable.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-files</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>composer install
+./bin/candyfiles [LEFT_DIR] [RIGHT_DIR]
+
+# Default: left = cwd, right = $HOME
+
+# Keys
+# Tab        Swap focus
+# ↑ / k      Move up
+# ↓ / j      Move down
+# Home / g   Top
+# End / G    Bottom
+# Enter / →  Open directory
+# ← / h      Up one directory
+# Space      Toggle selection + advance
+# s          Cycle sort order (6 modes)
+# .          Toggle hidden files
+# c          Copy selection or cursor → inactive pane (y confirm)
+# m          Move selection or cursor → inactive pane (y confirm)
+# R          Rename cursor entry with prompt (y confirm)
+# d          Delete (selection or cursor) — y to confirm
+# r          Refresh active pane
+# q          Quit
+# /          Search mode (type to filter, Enter to open)
+# Escape     Exit search mode
+# t          Duplicate current tab
+# Ctrl+w     Close current tab
+# Ctrl+Tab   Cycle to next tab
+# u / Ctrl+z Undo last operation</code></pre>
+
+    <h3 style="margin-top: 32px;">What's in the box</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Dual panes</strong><span>Left + right; Tab swaps focus. Each pane has its own cwd, cursor, selection, sort, hidden-flag.</span></div>
+      <div class="feature"><strong>Multi-select</strong><span>Space toggles + advances. Selection survives sort / cwd-change.</span></div>
+      <div class="feature"><strong>Six sort modes</strong><span>name / mtime / size, asc / desc — <code>s</code> cycles.</span></div>
+      <div class="feature"><strong>Hidden-file toggle</strong><span><code>.</code> hides / shows dotfiles.</span></div>
+      <div class="feature"><strong>Copy / Move / Rename</strong><span><code>c</code>/<code>m</code>/<code>R</code> stage to inactive pane / cursor target; <code>y</code> commits. Undo available for move and rename.</span></div>
+      <div class="feature"><strong>Delete-with-confirm</strong><span><code>d</code> stages, <code>y</code> commits — protects against fat-finger deletes.</span></div>
+      <div class="feature"><strong>Injectable FS</strong><span><code>FsLister</code> closure — swap for a fixture lister in unit tests with no tmp dirs.</span></div>
+      <div class="feature"><strong>Live search</strong><span><code>/</code> enters search mode; type to filter, <code>↑↓</code> navigate, Enter opens.</span></div>
+      <div class="feature"><strong>Tab management</strong><span><code>t</code> duplicates tab, <code>Ctrl+Tab</code> cycles, <code>Ctrl+w</code> closes.</span></div>
+      <div class="feature"><strong>Undo</strong><span><code>u</code> or <code>Ctrl+z</code> restores last delete / move / rename.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+       <li><a href="https://github.com/sugarcraft/candy-files">Source on GitHub</a></li>
+       <li><a href="https://github.com/sugarcraft/candy-files/blob/main/README.md">Full README</a></li>
+       <li><a href="https://github.com/sugarcraft/candy-files/tree/main/examples">Runnable examples</a></li>
+      <li>Port of <a href="https://github.com/yorukot/superfile">superfile</a> (Go upstream)</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">Key Classes</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>Manager</td><td>start(leftCwd, rightCwd, ?lister)</td><td>Factory — initialises two panes + first tab</td></tr>
+<tr><td>Manager</td><td>update(Msg): [Model, ?Cmd]</td><td>Main event loop — key dispatch, confirm gate</td></tr>
+<tr><td>Manager</td><td>view(): string</td><td>Renders two panes + tab bar + status line</td></tr>
+<tr><td>Manager</td><td>copy(src, dst), move(src, dst), rename(src, newName)</td><td>File-manager ops — used by confirm-gate handlers</td></tr>
+<tr><td>Manager</td><td>search(query), exitSearch(), openSearchResult()</td><td>Live search mode</td></tr>
+<tr><td>Manager</td><td>undo(), canUndo(), canRedo()</td><td>Delete / move / rename undo/redo stack</td></tr>
+<tr><td>Manager</td><td>duplicateTab(), closeTab(), switchTab()</td><td>Tab management</td></tr>
+<tr><td>Pane</td><td>open(cwd, lister, sort, showHidden): self</td><td>Factory — reads and sorts directory</td></tr>
+<tr><td>Pane</td><td>navigate(lister): self</td><td>Enter directory under cursor (no-op on files)</td></tr>
+<tr><td>Pane</td><td>toggleSelection(): self</td><td>Add/remove cursor entry from selection set</td></tr>
+<tr><td>Sort</td><td>apply(entries): list&lt;Entry&gt;</td><td>Sort entries (parent sentinel stays at index 0)</td></tr>
+<tr><td>Sort</td><td>cycle(): self</td><td>Cycles: name-asc → name-desc → mtime-asc → mtime-desc → size-asc → size-desc → name-asc</td></tr>
+<tr><td>Entry</td><td>displaySize(): string</td><td>Returns "DIR" / "LINK" / compacted bytes</td></tr>
+</table>
+  </div>
+</section>
+
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/navigate.gif" alt="Navigate">
+                <h3>Navigate</h3>
+                <span class="demo-caption">Tab-swap, multi-select, sort cycle, delete-with-confirm.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/search.gif" alt="Search">
+                <h3>Search</h3>
+                <span class="demo-caption">Type "/" to search, navigate results, Enter to open.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/multi-select.gif" alt="Multi-select">
+                <h3>Multi-select</h3>
+                <span class="demo-caption">Space toggles selection, d+y deletes all selected.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/tabs.gif" alt="Tabs">
+                <h3>Tab management</h3>
+                <span class="demo-caption">t duplicates, Ctrl+Tab cycles, Ctrl+w closes.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/sort-cycle.gif" alt="Sort cycle">
+                <h3>Sort cycle</h3>
+                <span class="demo-caption">s cycles through all 6 sort modes: name/mtime/size × asc/desc.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/undo.gif" alt="Undo">
+                <h3>Undo delete</h3>
+                <span class="demo-caption">u or Ctrl+z restores the last deleted entry.</span>
+            </div>
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/candy-files/.vhs/hidden-files.gif" alt="Hidden files">
+                <h3>Hidden-file toggle</h3>
+                <span class="demo-caption">. reveals and hides dotfiles.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-files">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/detain/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-files/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>

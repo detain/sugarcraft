@@ -134,4 +134,8 @@ final class SqliteDatabase implements DatabaseInterface
         }
         return $this->pdo->prepare($sql);
     }
+
+    public function dsn(): string { return 'sqlite:' . $this->path; }
+    public function username(): string { return ''; }
+    public function password(): string { return ''; }
 }

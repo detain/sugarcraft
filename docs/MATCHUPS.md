@@ -78,7 +78,7 @@ Status legend:
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `sugarcraft/candy-serve` | `SugarCraft\Serve` | 🟢 |
 | [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` | `sugarcraft/sugar-crush` | `SugarCraft\Crush` | 🟢 | Chat-shell TUI for AI coding assistants |
 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` | `sugarcraft/candy-tetris` | `SugarCraft\Tetris` | 🟢 | Tetris clone — SRS / 7-bag / NES scoring |
-| [yorukot/superfile](https://github.com/yorukot/superfile) | **SuperCandy** | `super-candy/` | `sugarcraft/super-candy` | `SugarCraft\SuperCandy` | 🟢 | Dual-pane file manager |
+| [yorukot/superfile](https://github.com/yorukot/superfile) | **CandyFiles** | `candy-files/` | `sugarcraft/candy-files` | `SugarCraft\Files` | 🟢 | Dual-pane file manager |
 | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit) | **SugarStash** | `sugar-stash/` | `sugarcraft/sugar-stash` | `SugarCraft\Stash` | 🟢 | Three-pane git TUI — shells out to `git` |
 | [jorgerojas26/lazysql](https://github.com/jorgerojas26/lazysql) | **CandyQuery** | `candy-query/` | `sugarcraft/candy-query` | `SugarCraft\Query` | 🟢 | SQLite/MySQL/PostgreSQL browser TUI — schema introspection, query editor, EXPLAIN plans, server status, alerting, query history |
 | [Rtarun3606k/TakaTime](https://github.com/Rtarun3606k/TakaTime) | **SugarTick** | `sugar-tick/` | `sugarcraft/sugar-tick` | `SugarCraft\Tick` | 🟢 | Privacy-first coding-time tracker — JSONL on disk |
@@ -106,8 +106,7 @@ port. Suffixes are short, technical, and describe the role.
 | **Sugar-** | components / data / forms / apps | components (SugarBits), forms (SugarPrompt), charts (SugarCharts) |
 | **Honey-** | math / physics / motion | spring physics (HoneyBounce), Flappy clone (HoneyFlap) |
 
-`Super-` is reserved for the file manager port (SuperCandy) and stays
-opt-in. Don't mint new prefixes without a discussion in
+`Candy-` (Files) is the file manager naming. Don't mint new prefixes without a discussion in
 [`PROJECT_NAMES.md`](./PROJECT_NAMES.md).
 
 ---
