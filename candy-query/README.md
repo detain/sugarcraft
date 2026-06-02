@@ -45,7 +45,11 @@ candy-query path/to/db.sqlite
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
 | `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
-| `SchemaBrowser`   | PRAGMA-based schema introspection (tables, columns, indexes, foreign keys). Returns immutable schema objects. |
+| `SchemaBrowser`   | Schema introspection via strategy pattern — delegates to driver-specific `SchemaProviderInterface` implementation based on `Flavor`. |
+| `SchemaProviderInterface` | Interface for driver-specific schema introspection. Implement `tables()`, `columns()`, `indexes()`, `foreignKeys()`. |
+| `SqliteSchemaProvider` | `SchemaProviderInterface` via PRAGMA queries (tables, columns, indexes, foreign keys). |
+| `MysqlSchemaProvider` | `SchemaProviderInterface` via `INFORMATION_SCHEMA` queries. |
+| `PostgresSchemaProvider` | `SchemaProviderInterface` via `pg_catalog` + `information_schema` queries. |
 | `ResultPager`     | Cursor-based pagination for SQL result sets. Immutable + fluent `nextPage()`/`prevPage()`. |
 | `CellEditor`       | Cell-level UPDATE by primary-key identity. `updateCell()`, `updateRow()`, `readCell()`.     |
 | `SnippetStore`   | File-backed JSON store for named SQL snippets. Immutable + fluent `add()`/`delete()`/`find()`/`search()`. Persists to `/tmp/candy-query-snippets.json`. |
@@ -103,10 +107,20 @@ driver://user:pass@host:port/dbname?ssl-mode=MODE
 
 ## Schema introspection
 
-`SchemaBrowser` exposes SQLite schema via three PRAGMA queries:
+`SchemaBrowser` uses a strategy pattern based on `Flavor` to delegate schema introspection to the appropriate `SchemaProviderInterface` implementation:
 
 ```php
+use SugarCraft\Query\Schema\SchemaBrowser;
+use SugarCraft\Query\Db\Flavor;
+
+// Auto-detect flavor from PDO driver and use correct provider
 $browser = (new SchemaBrowser($pdo))->refresh();
+
+// Or specify explicitly
+$browser = SchemaBrowser::forFlavor(Flavor::Sqlite, $pdo);
+$browser = SchemaBrowser::forFlavor(Flavor::MySQL, $pdo);
+$browser = SchemaBrowser::forFlavor(Flavor::Postgres, $pdo);
+
 foreach ($browser->tables as $table) {
     echo $table->name;
     foreach ($table->columns as $col) {
@@ -114,6 +128,11 @@ foreach ($browser->tables as $table) {
     }
 }
 ```
+
+Available providers:
+- **`SqliteSchemaProvider`** — PRAGMA queries (`table_info`, `index_list`, `foreign_key_list`)
+- **`MysqlSchemaProvider`** — `INFORMATION_SCHEMA` queries
+- **`PostgresSchemaProvider`** — `pg_catalog` + `information_schema` queries
 
 Schema value objects (`SchemaTable`, `SchemaColumn`, `SchemaIndex`, `SchemaForeignKey`) are all `readonly` classes with bare accessors.
 
