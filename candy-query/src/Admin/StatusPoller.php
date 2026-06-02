@@ -25,10 +25,23 @@ final class StatusPoller implements StatusSnapshotProviderInterface
     /** @var array<string, string>|null */
     private ?array $currentSnapshot = null;
 
+    /** @var Sampler|null */
+    private ?Sampler $sampler = null;
+
+    private ?float $lastUptime = null;
+
     public function __construct(
         private readonly ServerContextInterface $context,
         private readonly float $cadenceSeconds = 3.0,
     ) {}
+
+    /**
+     * Set the sampler for uptime tracking and restart detection.
+     */
+    public function setSampler(Sampler $sampler): void
+    {
+        $this->sampler = $sampler;
+    }
 
     /**
      * Poll if enough time has elapsed since the last poll.
@@ -59,6 +72,9 @@ final class StatusPoller implements StatusSnapshotProviderInterface
             $this->lastPollTs = $this->context->statusVariablesTs();
             $this->pollInFlight = false;
             $this->hasPolled = true;
+
+            $this->trackUptimeFromSnapshot();
+
             if ($firstPoll) {
                 return null;
             }
@@ -68,6 +84,30 @@ final class StatusPoller implements StatusSnapshotProviderInterface
             $this->pollInFlight = false;
             return null;
         }
+    }
+
+    /**
+     * Extract Uptime from the current snapshot and register it with the sampler.
+     */
+    private function trackUptimeFromSnapshot(): void
+    {
+        if ($this->sampler === null) {
+            return;
+        }
+
+        $uptimeStr = $this->currentSnapshot['Uptime'] ?? null;
+        if ($uptimeStr === null || !is_numeric($uptimeStr)) {
+            return;
+        }
+
+        $uptime = (float) $uptimeStr;
+
+        if ($this->lastUptime !== null && $uptime < $this->lastUptime) {
+            $this->sampler->resetAll();
+        }
+
+        $this->lastUptime = $uptime;
+        $this->sampler->registerUptime($uptime);
     }
 
     /**

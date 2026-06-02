@@ -89,6 +89,9 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
       <div class="feature"><strong>ServerStatusPage</strong><span>Admin page displaying server info (host, socket, port, version, uptime + running-since), Features panel (tristate Yes/No/Unknown), Directories, SSL, Replication (<code>SHOW REPLICA STATUS</code> for MySQL 8+ / <code>SHOW SLAVE STATUS</code> for MySQL 5.x/MariaDB, graceful 1227 handling), and Firewall (AWS RDS).</span></div>
+      <div class="feature"><strong>ReconnectManager</strong><span>Detects MySQL errors 2002/2003/2013 (connection lost). Stores <code>ConnectionConfig</code>, retries via <code>attemptReconnect()</code>, throws <code>ReconnectException</code> on failure.</span></div>
+      <div class="feature"><strong>StatementTimeout</strong><span>Wall-clock timeout on <code>PDOStatement::execute()</code> via <code>pcntl_alarm()</code>. Gracefully degrades when pcntl is unavailable. Cancels query via <code>KILL CONNECTION_ID()</code> on timeout, throws <code>StatementTimeoutException</code>.</span></div>
+      <div class="feature"><strong>Restart detection</strong><span><code>Sampler::registerUptime()</code> records uptime at construction; <code>StatusPoller</code> compares uptime snapshots to detect MySQL restarts and reset stale cached state.</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
@@ -159,6 +162,13 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>ResultTable</td><td>render() / renderPlain()</td><td>Render ANSI string or plain text</td></tr>
 <tr><td>CsvExporter</td><td>export(table)</td><td>Export table rows to CSV string</td></tr>
 <tr><td>SqlExporter</td><td>export(table)</td><td>Export table rows to SQL INSERT statements</td></tr>
+<tr><td>ReconnectManager</td><td>shouldReconnect(pdoException)</td><td>Check if error code is 2002/2003/2013</td></tr>
+<tr><td>ReconnectManager</td><td>attemptReconnect(callable)</td><td>Retry connection using stored ConnectionConfig</td></tr>
+<tr><td>ReconnectManager</td><td>setConnectionConfig(config) / lastConnectionConfig()</td><td>Store/retrieve connection config for reconnection</td></tr>
+<tr><td>ReconnectException</td><td>—</td><td>Thrown when reconnection fails after MySQL connection error</td></tr>
+<tr><td>StatementTimeout</td><td>execute(stmt, values)</td><td>Execute with wall-clock timeout via pcntl_alarm()</td></tr>
+<tr><td>StatementTimeout</td><td>didTimeout()</td><td>Check if last execution timed out</td></tr>
+<tr><td>StatementTimeoutException</td><td>—</td><td>Thrown when statement exceeds timeout and is cancelled</td></tr>
 </table>
   </div>
 </section>
