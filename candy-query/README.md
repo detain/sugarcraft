@@ -38,6 +38,7 @@ candy-query path/to/db.sqlite
 | `ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
 | `ConnectionFactory`| Static factory: `fromDsn()`, `fromConfig()`, `fromArgv()`. Builds configured connections.       |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
+| `MysqlDatabase`   | `DatabaseInterface` implementation via PDO `mysql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
 | `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
