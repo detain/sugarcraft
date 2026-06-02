@@ -84,6 +84,38 @@ final class ProcesslistResult
     }
 
     /**
+     * Create from a normalized Postgres processlist row.
+     *
+     * Accepts the normalized array format returned by AdminProviderInterface::fetchProcesslist()
+     * for PostgreSQL connections (already transformed from pg_stat_activity columns).
+     *
+     * @param array<string, mixed> $row Normalized row with keys:
+     *   processId, user, host, database, command, time, state, info, connectionAttr
+     */
+    public static function fromPostgresRow(array $row): self
+    {
+        $connectionAttr = '';
+        if (isset($row['connectionAttr']) && is_array($row['connectionAttr'])) {
+            $connectionAttr = implode(' ', $row['connectionAttr']);
+        } elseif (isset($row['connectionAttr']) && is_string($row['connectionAttr'])) {
+            $connectionAttr = $row['connectionAttr'];
+        }
+
+        return new self(
+            processId: self::parseInt($row['processId'] ?? 0),
+            user: (string) ($row['user'] ?? ''),
+            host: (string) ($row['host'] ?? ''),
+            database: (string) ($row['database'] ?? ''),
+            command: (string) ($row['command'] ?? 'unknown'),
+            time: (int) ($row['time'] ?? 0),
+            state: ($row['state'] ?? null) !== null ? (string) $row['state'] : '',
+            info: self::truncateInfo((string) ($row['info'] ?? '')),
+            connectionAttr: $connectionAttr,
+            isPS: false,
+        );
+    }
+
+    /**
      * True when this is a background/system thread (user is NULL or empty).
      */
     public function isBackground(): bool
