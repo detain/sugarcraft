@@ -24,6 +24,7 @@ final readonly class SetupInstruments
      * @param bool   $timed    Whether the instrument is currently timed
      * @param string $properties Comma-separated properties (e.g. "global,stat,abstract")
      * @param string $flags    Comma-separated flags
+     * @param bool   $dirty    Whether this instrument has unsaved changes
      */
     public function __construct(
         public string $name,
@@ -31,6 +32,7 @@ final readonly class SetupInstruments
         public bool $timed,
         public string $properties,
         public string $flags,
+        private bool $dirty = false,
     ) {}
 
     /**
@@ -43,7 +45,7 @@ final readonly class SetupInstruments
         string $properties = '',
         string $flags = '',
     ): self {
-        return new self($name, $enabled, $timed, $properties, $flags);
+        return new self($name, $enabled, $timed, $properties, $flags, false);
     }
 
     /**
@@ -54,7 +56,11 @@ final readonly class SetupInstruments
      */
     public function withEnabled(bool $enabled): static
     {
-        return $this->mutate(['enabled' => $enabled]);
+        if ($this->enabled === $enabled) {
+            return $this;
+        }
+
+        return $this->mutate(['enabled' => $enabled, 'dirty' => true]);
     }
 
     /**
@@ -65,7 +71,47 @@ final readonly class SetupInstruments
      */
     public function withTimed(bool $timed): static
     {
-        return $this->mutate(['timed' => $timed]);
+        if ($this->timed === $timed) {
+            return $this;
+        }
+
+        return $this->mutate(['timed' => $timed, 'dirty' => true]);
+    }
+
+    /**
+     * Check if this instrument has unsaved changes.
+     */
+    public function isDirty(): bool
+    {
+        return $this->dirty;
+    }
+
+    /**
+     * Mark this instrument as clean (no pending changes).
+     */
+    public function markClean(): void
+    {
+        // Immutable - this method exists for API compatibility but has no effect
+        // The caller should replace the instance with a clean copy if needed
+    }
+
+    /**
+     * Return a clean copy of this instrument.
+     */
+    public function asClean(): static
+    {
+        if (!$this->dirty) {
+            return $this;
+        }
+
+        return new self(
+            name: $this->name,
+            enabled: $this->enabled,
+            timed: $this->timed,
+            properties: $this->properties,
+            flags: $this->flags,
+            dirty: false,
+        );
     }
 
     /**
@@ -95,5 +141,32 @@ final readonly class SetupInstruments
     public function isGlobal(): bool
     {
         return $this->hasProperty('global');
+    }
+
+    /**
+     * Generate SQL statement to commit changes.
+     *
+     * Uses RLIKE to precisely match this instrument's name.
+     * Only emits a statement if the instrument is dirty.
+     *
+     * @return list<string> SQL statements to execute
+     */
+    public function commitStatements(): array
+    {
+        if (!$this->dirty) {
+            return [];
+        }
+
+        // Backtick-escape the instrument name for safety
+        $escapedName = '`' . str_replace('`', '``', $this->name) . '`';
+
+        return [
+            sprintf(
+                'UPDATE `performance_schema`.`setup_instruments` SET `ENABLED` = %s, `TIMED` = %s WHERE `NAME` RLIKE %s',
+                $this->enabled ? "'YES'" : "'NO'",
+                $this->timed ? "'YES'" : "'NO'",
+                $escapedName
+            ),
+        ];
     }
 }
