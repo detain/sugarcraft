@@ -74,6 +74,9 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
 | `MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
 | `PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
+| `AdminProviderInterface` | Flavor-agnostic interface for admin operations: `dashboard()`, `connections()`, `serverInfo()`. Bridges to `ServerContextInterface` and `ServerContext`. |
+| `MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW PROCESSLIST`, and `SHOW REPLICA STATUS`. |
+| `PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Stub dashboard/connections return `"coming soon"`. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 | `ServerStatusPage` | Admin page displaying server info, features, directories, SSL, replication, and firewall panels. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
@@ -247,6 +250,27 @@ Available providers:
 - **`SqliteExplainProvider`** — `EXPLAIN QUERY PLAN`, parses tree prefixes (`|--`, `` `-- ``) for depth
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
 - **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
+
+## Admin providers
+
+`AdminProviderInterface` is the flavor-agnostic entry point for admin panel data, exposing three methods: `dashboard()`, `connections()`, and `serverInfo()`. Each method returns structured data that the admin UI renders — whether that UI targets MySQL or Postgres.
+
+```php
+use SugarCraft\Query\Admin\AdminProviderInterface;
+use SugarCraft\Query\Db\Flavor;
+
+// Auto-detect flavor from PDO and use correct provider
+$provider = AdminProviderInterface::forFlavor(Flavor::MySQL, $serverContext);
+$provider = AdminProviderInterface::forFlavor(Flavor::Postgres, $serverContext);
+
+$dashboard = $provider->dashboard();
+$connections = $provider->connections();
+$serverInfo = $provider->serverInfo();
+```
+
+Available providers:
+- **`MysqlAdminProvider`** — `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW PROCESSLIST`, `SHOW REPLICA STATUS` (graceful 1227 handling)
+- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard and connections are stubs returning `"coming soon"`; `serverInfo()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`, `max_connections`, `shared_buffers`).
 
 ## Result table
 
