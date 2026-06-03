@@ -21,6 +21,7 @@ final class AdminPaneTest extends TestCase
         $this->assertSame('Query Stats', AdminPane::QueryStats->label());
         $this->assertSame('Connection Stats', AdminPane::ConnStats->label());
         $this->assertSame('Table Stats', AdminPane::TableStats->label());
+        $this->assertSame('Performance Schema', AdminPane::PerfSchema->label());
     }
 
     public function testAdminPaneSections(): void
@@ -31,6 +32,7 @@ final class AdminPaneTest extends TestCase
         $this->assertSame(AdminSection::Performance, AdminPane::QueryStats->section());
         $this->assertSame(AdminSection::Performance, AdminPane::ConnStats->section());
         $this->assertSame(AdminSection::Performance, AdminPane::TableStats->section());
+        $this->assertSame(AdminSection::Performance, AdminPane::PerfSchema->section());
     }
 
     public function testAdminPaneNextCycles(): void
@@ -40,13 +42,14 @@ final class AdminPaneTest extends TestCase
         $this->assertSame(AdminPane::QueryStats, AdminPane::Status->next());
         $this->assertSame(AdminPane::ConnStats, AdminPane::QueryStats->next());
         $this->assertSame(AdminPane::TableStats, AdminPane::ConnStats->next());
-        $this->assertSame(AdminPane::ProcessList, AdminPane::TableStats->next());
+        $this->assertSame(AdminPane::PerfSchema, AdminPane::TableStats->next());
+        $this->assertSame(AdminPane::ProcessList, AdminPane::PerfSchema->next());
     }
 
     public function testAdminPaneAllReturnsAllPanes(): void
     {
         $all = AdminPane::all();
-        $this->assertCount(6, $all);
+        $this->assertCount(7, $all);
         $this->assertContainsOnly(AdminPane::class, $all);
     }
 

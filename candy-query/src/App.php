@@ -24,6 +24,7 @@ use SugarCraft\Query\Admin\ReactMysqlConnection;
 use SugarCraft\Query\Admin\ReactPostgresConnection;
 use SugarCraft\Query\Admin\Reports\ReportsPage;
 use SugarCraft\Query\Admin\Providers\PostgresAdminProvider;
+use SugarCraft\Query\Admin\PerfSchema\PerfSchemaPage;
 use SugarCraft\Query\Admin\ServerContext;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
@@ -431,6 +432,7 @@ final class App implements Model
             AdminPane::Variables => VariablesPage::new($context),
             AdminPane::Status => ServerStatusPage::new($context),
             AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
+            AdminPane::PerfSchema => PerfSchemaPage::new($context),
         };
     }
 
