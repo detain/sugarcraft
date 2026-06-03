@@ -4,34 +4,55 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query;
 
+use SugarCraft\Bits\Paginator\Paginator;
 use SugarCraft\Query\Lang;
 
 /**
  * Cursor-based result-set pager for SQL row sets.
  *
- * Immutable — all navigation returns a new Pager instance.  Page size
- * defaults to 25 rows and is configurable via constructor or
+ * Immutable — all navigation returns a new pager instance. Page size
+ * defaults to 25 rows and is configurable via the constructor or
  * {@see withPageSize()}.
+ *
+ * The page-index arithmetic (page count, slice bounds, range clamping,
+ * next/prev) is delegated to the shared {@see Paginator} primitive from
+ * sugar-bits rather than hand-rolled here; this class adds the row-set
+ * slicing and the offset-based, 1-based public surface candy-query's UI
+ * is built on. Because the cursor is page-indexed underneath, {@see $offset}
+ * is always snapped to its enclosing page boundary.
  *
  * @template T of array<string, mixed>
  */
 final class ResultPager
 {
+    /** Current offset (0-based), aligned to a page boundary. */
+    public readonly int $offset;
+
+    private readonly Paginator $paginator;
+
     /**
-     * @param list<T> $rows       Full result-set
-     * @param int     $pageSize    Rows per page
-     * @param int     $offset      Current offset (0-based)
+     * @param list<T> $rows     Full result-set
+     * @param int     $pageSize Rows per page
+     * @param int     $offset   Desired offset (0-based); snapped to the
+     *                          enclosing page boundary and clamped in range
      */
     public function __construct(
         public readonly array $rows,
         public readonly int $pageSize = 25,
-        public readonly int $offset = 0,
+        int $offset = 0,
     ) {
         if ($pageSize < 1) {
             throw new \InvalidArgumentException(
                 Lang::t('pager.invalid_page_size', ['size' => (string) $pageSize]),
             );
         }
+
+        $this->paginator = Paginator::new()
+            ->withPerPage($pageSize)
+            ->withTotalItems(count($rows))
+            ->withPage(intdiv(max(0, $offset), $pageSize));
+
+        $this->offset = $this->paginator->page * $pageSize;
     }
 
     /**
@@ -47,20 +68,15 @@ final class ResultPager
      */
     public function totalPages(): int
     {
-        return $this->pageSize > 0
-            ? (int) ceil($this->totalRows() / $this->pageSize)
-            : 0;
+        return $this->paginator->totalPages();
     }
 
     /**
-     * Current 1-based page number.
+     * Current 1-based page number (0 when the result-set is empty).
      */
     public function currentPage(): int
     {
-        if ($this->totalPages() === 0) {
-            return 0;
-        }
-        return (int) floor($this->offset / $this->pageSize) + 1;
+        return $this->totalRows() > 0 ? $this->paginator->page + 1 : 0;
     }
 
     /**
@@ -68,7 +84,7 @@ final class ResultPager
      */
     public function hasNextPage(): bool
     {
-        return ($this->offset + $this->pageSize) < $this->totalRows();
+        return $this->totalPages() > 0 && !$this->paginator->onLastPage();
     }
 
     /**
@@ -76,7 +92,7 @@ final class ResultPager
      */
     public function hasPrevPage(): bool
     {
-        return $this->offset > 0;
+        return !$this->paginator->onFirstPage();
     }
 
     /**
@@ -86,65 +102,52 @@ final class ResultPager
      */
     public function page(): array
     {
-        return array_slice($this->rows, $this->offset, $this->pageSize);
+        [$start, $end] = $this->paginator->sliceBounds();
+
+        return array_slice($this->rows, $start, $end - $start);
     }
 
     /**
-     * Advance to the next page.
+     * Advance to the next page (clamped at the last page).
      */
     public function nextPage(): self
     {
-        $next = $this->offset + $this->pageSize;
-        return new self(
-            rows: $this->rows,
-            pageSize: $this->pageSize,
-            offset: min($next, max(0, $this->totalRows() - 1)),
-        );
+        return $this->atPage($this->paginator->nextPage()->page);
     }
 
     /**
-     * Go back to the previous page.
+     * Go back to the previous page (clamped at the first page).
      */
     public function prevPage(): self
     {
-        return new self(
-            rows: $this->rows,
-            pageSize: $this->pageSize,
-            offset: max(0, $this->offset - $this->pageSize),
-        );
+        return $this->atPage($this->paginator->prevPage()->page);
     }
 
     /**
-     * Jump to a specific page number (1-based).
+     * Jump to a specific page number (1-based; clamped into range).
      */
     public function goToPage(int $page): self
     {
-        if ($page < 1) {
-            $page = 1;
-        }
-        $total = $this->totalPages();
-        if ($total > 0 && $page > $total) {
-            $page = $total;
-        }
-        $offset = ($page - 1) * $this->pageSize;
-        return new self(
-            rows: $this->rows,
-            pageSize: $this->pageSize,
-            offset: max(0, min($offset, max(0, $this->totalRows() - 1))),
-        );
+        // Public API is 1-based; Paginator is 0-based internally.
+        return $this->atPage(max(0, $page - 1));
     }
 
     /**
-     * Return a new pager with a different page size.
+     * Return a new pager with a different page size, keeping the cursor
+     * on the row that currently heads the page.
      */
     public function withPageSize(int $size): self
     {
-        if ($size < 1) {
-            $size = 1;
-        }
-        $rows = $this->rows;
-        $offset = $this->offset;
-        $maxOffset = max(0, count($rows) - 1);
-        return new self(rows: $rows, pageSize: $size, offset: min($offset, $maxOffset));
+        return new self($this->rows, max(1, $size), $this->offset);
+    }
+
+    /**
+     * Rebuild the pager positioned at a 0-based page index. The
+     * constructor re-clamps the resulting offset, so out-of-range
+     * indices are safe.
+     */
+    private function atPage(int $page): self
+    {
+        return new self($this->rows, $this->pageSize, $page * $this->pageSize);
     }
 }
