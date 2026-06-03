@@ -62,8 +62,13 @@ Each entry should have:
   - Frozen columns always render, non-frozen columns skip first scrollX columns
   - All 177 tests pass
   - Verified: frozen col 0 shows when scrolling, multiple frozen cols work, all-frozen edge case handled
-- Step 2.2 (review): Pending
-- Step 2.3 (fix): Pending
+- Step 2.2 (review): **ISSUES_FOUND** 🔴
+  - See detailed review below
+- Step 2.3 (fix): **COMPLETED** ✅
+  - Issue 1 (buffer position): Fixed in fillHeaderRow and fillDataRow - now increments $col for skipped columns
+  - Issue 2 (missing separator): Fixed - separator drawn after each column's right edge, not based on next column's visibility
+  - Issue 3 (separator width): Added computeVisibleContentWidth helper that accounts for column widths + separators between consecutive visible columns
+  - All 177 tests pass
 - Step 2.4 (tests): Pending
 - Step 2.5 (docs): Pending
 
