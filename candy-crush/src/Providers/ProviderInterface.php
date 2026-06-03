@@ -54,6 +54,8 @@ final readonly class CompleteResponse
         public ?array $toolCalls = null,
         public int $tokensUsed = 0,
         public float $costUsd = 0.0,
+        public bool $isError = false,
+        public ?string $errorMessage = null,
     ) {}
 }
 

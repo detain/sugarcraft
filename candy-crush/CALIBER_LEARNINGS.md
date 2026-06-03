@@ -1672,6 +1672,8 @@ The four providers demonstrate different transport mechanisms:
 | SglangProvider | Guzzle HTTP | Optional Bearer | OpenAI-compatible |
 | ClaudeCodeProvider | proc_open() | Environment vars | CLI args |
 | BedrockProvider | AWS SDK | AWS SigV4 | AWS native |
+| VertexProvider | Google Cloud SDK | GCP credentials | Google Cloud AI Platform |
+| CustomProvider | Guzzle HTTP | Optional Bearer | OpenAI-compatible REST API |
 
 Each transport requires different:
 - Client construction patterns
@@ -1680,3 +1682,2227 @@ Each transport requires different:
 - Authentication mechanisms
 
 The `ProviderInterface` abstracts these differences, allowing `App` to remain provider-agnostic.
+
+## Step 3.5: Vertex and Custom Providers Implementation
+
+### Google Cloud AI Platform SDK Namespace Requirements
+
+`VertexProvider` uses the Google Cloud AI Platform SDK:
+
+```php
+use Google\Cloud\AIPlatform\V1\PredictionServiceClient;
+```
+
+**Important**: The correct package name on Packagist is `google/cloud-ai-platform` (with hyphens), not `google/cloud-aiplatform` (with underscores). The namespace uses underscores (`AIPlatform\V1`) while the package name uses hyphens.
+
+**Composer dependency**:
+```json
+"google/cloud-ai-platform": "^1.0"
+```
+
+### Vertex AI Endpoint Format
+
+Vertex AI uses a specific endpoint format for model requests:
+
+```php
+$endpoint = "projects/{$this->projectId}/locations/{$this->location}/publishers/anthropic/models/{$request->model}";
+```
+
+**Format**: `projects/{project}/locations/{location}/publishers/{publisher}/models/{model}`
+
+- `project`: GCP project ID
+- `location`: GCP region (e.g., `us-central1`)
+- `publisher`: Model publisher (`anthropic` for Claude models)
+- `model`: Model identifier (e.g., `claude-3-sonnet@20240229`)
+
+### OpenAI-Compatible Provider Factory Pattern
+
+`CustomProvider::openAiCompatible()` demonstrates a factory pattern for OpenAI-compatible providers:
+
+```php
+public static function openAiCompatible(
+    string $name,
+    string $baseUrl,
+    string $model,
+    ?string $apiKey = null,
+    bool $supportsStreaming = true,
+    bool $supportsFunctionCalling = true,
+): self {
+    $headers = [
+        'Content-Type' => 'application/json',
+    ];
+
+    if ($apiKey !== null) {
+        $headers['Authorization'] = 'Bearer ' . $apiKey;
+    }
+
+    $client = new Client([
+        'base_uri' => $baseUrl,
+        'headers' => $headers,
+    ]);
+
+    return new self(
+        name: $name,
+        baseUrl: $baseUrl,
+        model: $model,
+        apiKey: $apiKey,
+        httpClient: $client,
+        supportsStreaming: $supportsStreaming,
+        supportsFunctionCalling: $supportsFunctionCalling,
+    );
+}
+```
+
+**Design rationale**: The factory encapsulates all HTTP client setup, including header configuration for authentication. Consumers don't need to understand Guzzle to create a provider.
+
+### Feature Flag Configuration
+
+`CustomProvider` uses boolean flags to indicate capability support:
+
+```php
+private bool $supportsStreaming,
+private bool $supportsFunctionCalling,
+```
+
+**Why flags?** Different OpenAI-compatible endpoints (Ollama, LM Studio, vLLM, etc.) support different features. The flags allow the provider to:
+- Skip sending unsupported features to the API
+- Fall back to non-streaming when streaming isn't available
+
+```php
+if ($request->tools !== null && $this->supportsFunctionCalling) {
+    $params['tools'] = $this->formatTools($request->tools);
+}
+```
+
+### Buffer-Based SSE Line Reading
+
+The `completeStream()` implementation uses a buffer-based approach for reading SSE streams:
+
+```php
+$stream = $response->getBody();
+$buffer = '';
+
+while (!$stream->eof()) {
+    $chunk = $stream->read(8192);
+    $buffer .= $chunk;
+
+    // Process complete lines in buffer
+    while (($newlinePos = strpos($buffer, "\n")) !== false) {
+        $line = substr($buffer, 0, $newlinePos);
+        $buffer = substr($buffer, $newlinePos + 1);
+
+        $line = trim($line);
+        if (str_starts_with($line, 'data: ')) {
+            $data = json_decode(substr($line, 6), true);
+            if ($data === null) {
+                continue;
+            }
+            if (isset($data['choices'][0]['delta'])) {
+                yield $this->parseChunk($data);
+            }
+            if (isset($data['choices'][0]['finish_reason'])) {
+                return;
+            }
+        }
+    }
+}
+```
+
+**Key techniques**:
+- `read(8192)` reads up to 8KB chunks from the stream
+- Buffer accumulates bytes until a newline is found
+- `strpos()` finds newline positions for line splitting
+- `str_starts_with()` filters to SSE `data: ` lines only
+- `substr($line, 6)` strips the `data: ` prefix
+- `trim()` handles any whitespace around lines
+
+**Why buffer?** Network chunks don't align with lines. A single `read()` may contain partial lines, and lines may span multiple reads. The buffer ensures complete lines are processed.
+
+### Stream End Detection
+
+SSE streams end when `finish_reason` appears in the data:
+
+```php
+if (isset($data['choices'][0]['finish_reason'])) {
+    return;  // Stream complete
+}
+```
+
+**Why `finish_reason`?** The last chunk in an SSE stream typically contains `finish_reason: 'stop'` indicating normal completion. Other finish reasons include `'length'` (max tokens reached) or `'tool_calls'` (stopped for function calling).
+
+### Non-Streaming Fallback
+
+When streaming is disabled, `completeStream()` falls back to synchronous completion:
+
+```php
+public function completeStream(CompleteRequest $request): \Generator
+{
+    if (!$this->supportsStreaming) {
+        yield $this->complete($request);
+        return;
+    }
+    // ... streaming implementation
+}
+```
+
+**Rationale**: The interface requires `completeStream()` to return a Generator. When streaming isn't supported, yielding the result of `complete()` provides a simple fallback while maintaining the Generator contract.
+
+### Dual-Format Argument Parsing
+
+Tool call arguments may be returned as either a JSON string or already-decoded array:
+
+```php
+'arguments' => is_string($tc['function']['arguments'] ?? '')
+    ? json_decode($tc['function']['arguments'], true) ?? []
+    : ($tc['function']['arguments'] ?? [])
+```
+
+**Why both?** Different API versions or configurations may vary. The code handles both defensively.
+
+### Error Response with isError Flag
+
+`CustomProvider` returns error responses using the `isError` flag:
+
+```php
+return new CompleteResponse(
+    content: '',
+    isError: true,
+    errorMessage: $e->getMessage(),
+);
+```
+
+**Design**: Rather than throwing exceptions, error responses are returned as `CompleteResponse` objects with `isError: true`. This allows callers to handle errors uniformly with successful responses.
+
+### Embeddings Failure as Empty Array
+
+`embeddings()` returns empty results on failure rather than throwing:
+
+```php
+} catch (GuzzleException $e) {
+    return new EmbeddingsResponse(embeddings: []);
+}
+```
+
+**Rationale**: Embeddings are optional functionality. A failure to get embeddings should not halt the application — empty results are gracefully handled downstream.
+
+### Provider Naming Flexibility
+
+`CustomProvider` accepts a custom name, allowing providers to identify themselves:
+
+```php
+private string $name,
+
+public function name(): string
+{
+    return $this->name;
+}
+```
+
+**Use cases**:
+- `'ollama'` for local Ollama instances
+- `'lm-studio'` for LM Studio
+- `'vllm'` for vLLM endpoints
+- Any descriptive identifier for debugging
+
+### Provider Feature Comparison
+
+| Feature | VertexProvider | CustomProvider |
+|---------|----------------|-----------------|
+| Streaming | Placeholder (not implemented) | Full support |
+| Function Calling | Not supported | Configurable (default on) |
+| Vision | Not supported | Not supported |
+| Embeddings | Empty stub | Full support via `/embeddings` |
+| Authentication | GCP credentials | Optional API key |
+| Transport | Google Cloud SDK | Guzzle HTTP |
+
+This comparison helps when selecting which provider to use for a given use case.
+
+## Step 3.6: ProviderFactory Implementation
+
+### Factory Dispatch Pattern for Multiple Provider Types
+
+`ProviderFactory` uses a `match` expression to dispatch to provider-specific creation methods:
+
+```php
+private function instantiateProvider(string $type, array $config): ProviderInterface
+{
+    return match ($type) {
+        'openai' => $this->createOpenAI($config),
+        'anthropic' => $this->createAnthropic($config),
+        'claude-code' => $this->createClaudeCode($config),
+        'sglang' => $this->createSglang($config),
+        'bedrock' => $this->createBedrock($config),
+        'vertex' => $this->createVertex($config),
+        'custom' => $this->createCustom($config),
+        default => throw new \RuntimeException("Unsupported provider type: {$type}"),
+    };
+}
+```
+
+**Design rationale**: The `match` expression provides exhaustive type checking — adding a new provider type requires adding a new arm, and PHP will warn if the `default` case is removed. This is safer than a series of `if/elseif` chains.
+
+**Alternative considered**: A registry pattern (`$registry[$type]()`) — more flexible but adds indirection. For a fixed set of known provider types, `match` is simpler and equally extensible.
+
+### Environment Variable Resolution Patterns
+
+`resolveEnv()` handles two shell-style variable patterns:
+
+```php
+public function resolveEnv(?string $value): ?string
+{
+    // Pattern: ${VAR} or ${VAR:-default}
+    return preg_replace_callback(
+        '/\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}/',
+        function (array $matches): string {
+            $varName = $matches[1];
+            $default = $matches[2] ?? null;
+
+            $envValue = getenv($varName);
+
+            if ($envValue === false || $envValue === '') {
+                return $default ?? '';
+            }
+
+            return $envValue;
+        },
+        $value
+    );
+}
+```
+
+**Why regex-based?**
+- Single pass through the string replaces all occurrences
+- Captures both forms `${VAR}` and `${VAR:-default}` in one pattern
+- The `(?::-([^}]*))?` optional group handles defaults cleanly
+
+**Pattern breakdown:**
+- `[A-Z_][A-Z0-9_]*` — matches valid env var names (uppercase, underscore, digits)
+- `(?::-([^}]*))?` — optionally matches `:-default` where `[^}]*` captures default value
+- Env var name restriction to uppercase is correct — Linux environment variables are conventionally uppercase
+
+**Edge case handling:**
+- Unset env (`getenv()` returns `false`) → returns default
+- Empty env (`''`) → also returns default (shell semantics for credential-like values)
+- Empty default (`${VAR:-}`) → returns `''`
+
+### Recursive Environment Variable Resolution
+
+`resolveEnvVars()` recursively processes config arrays:
+
+```php
+private function resolveEnvVars(array $config): array
+{
+    foreach ($config as $key => $value) {
+        if (is_string($value)) {
+            $config[$key] = $this->resolveEnv($value);
+        } elseif (is_array($value)) {
+            $config[$key] = $this->resolveEnvVars($value);
+        }
+    }
+
+    return $config;
+}
+```
+
+**Why recursive?** Config may contain nested arrays (e.g., tool configurations with base URLs). Each string value is processed individually.
+
+### Factory Method vs Constructor Injection Comparison
+
+Provider creation can happen via factory or direct constructor:
+
+**Factory approach (`ProviderFactory::create()`):**
+```php
+$config = ['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}'];
+$provider = $factory->create($config);
+```
+
+**Constructor approach (direct instantiation):**
+```php
+$client = OpenAI::client(apiKey: getenv('OPENAI_API_KEY'));
+$provider = new OpenAIProvider($client, 'gpt-4o');
+```
+
+**Trade-offs:**
+
+| Aspect | Factory | Constructor |
+|--------|---------|-------------|
+| Env resolution | Built-in | Manual |
+| Validation | Centralized at boundary | Per-method |
+| Type checking | Runtime string matching | Compile-time class |
+| Extensibility | Add arms to match | Add classes to switch |
+| Testing | Easier to mock factory | Must mock each provider |
+
+**When to use factory:**
+- Configuration comes from external sources (files, env vars, APIs)
+- Provider type is determined at runtime
+- Want centralized validation
+
+**When to use constructor:**
+- Provider is known at development time
+- Maximum type safety desired
+- Simple case with no env substitution needed
+
+### Config Validation at Factory Boundary
+
+The factory validates configuration at the boundary before creating providers:
+
+```php
+public function create(array|string $config): ProviderInterface
+{
+    // Parse JSON string to array if needed
+    if (is_string($config)) {
+        $config = $this->parseJson($config);
+    }
+
+    // Validate config is now an array
+    if (!is_array($config)) {
+        throw new \InvalidArgumentException('Config must be an array or valid JSON string');
+    }
+
+    // Early Exit - must have 'type' key
+    if (!isset($config['type'])) {
+        throw new \InvalidArgumentException('Config must have a "type" key');
+    }
+
+    $type = $config['type'];
+
+    // Early Exit - validate provider type
+    if (!$this->isValidType($type)) {
+        throw new \InvalidArgumentException("Unknown provider type: {$type}");
+    }
+
+    // Resolve environment variables in all string values
+    $config = $this->resolveEnvVars($config);
+
+    // Validate required keys for this type
+    $this->validateRequiredKeys($type, $config);
+
+    // Create the appropriate provider
+    return $this->instantiateProvider($type, $config);
+}
+```
+
+**Validation order rationale:**
+1. Parse early — fail fast on invalid JSON before type validation
+2. Type presence — without `type`, nothing else makes sense
+3. Type validity — unknown types should fail before env resolution
+4. Env resolution — transforms values before checking required fields
+5. Required keys — final check that all needed values are present
+
+**Why validate at boundary?**
+- Fail fast before any provider instantiation
+- Single place to check all validation rules
+- Provider constructors remain simple
+- Error messages are user-friendly (config-level, not provider-level)
+
+### TYPE_SCHEMAS as Single Source of Truth
+
+The `TYPE_SCHEMAS` constant drives both validation and documentation:
+
+```php
+private const TYPE_SCHEMAS = [
+    'openai' => [
+        'required' => ['apiKey'],
+        'optional' => ['organization', 'model'],
+    ],
+    'anthropic' => [
+        'required' => ['apiKey'],
+        'optional' => ['baseUrl', 'model'],
+    ],
+    // ...
+];
+```
+
+**Benefits:**
+- One definition covers both validation logic and documentation
+- Adding a provider type requires updating only this constant
+- The schema is self-documenting — required vs optional is explicit
+- Can be introspected for dynamic UIs (e.g., provider configuration forms)
+
+### Empty String Validation for Required Keys
+
+`validateRequiredKeys()` rejects both missing and whitespace-only values:
+
+```php
+private function validateRequiredKeys(string $type, array $config): void
+{
+    $schema = self::TYPE_SCHEMAS[$type];
+    $required = $schema['required'];
+
+    foreach ($required as $key) {
+        if (!isset($config[$key]) || (is_string($config[$key]) && trim($config[$key]) === '')) {
+            throw new \RuntimeException("Provider type '{$type}' requires '{$key}' to be set");
+        }
+    }
+}
+```
+
+**Why `trim()` check?** A value of `'   '` (spaces) for `apiKey` is functionally empty and should fail. The `trim()` ensures whitespace-only credentials are rejected.
+
+### JSON String Parsing at Factory Boundary
+
+`parseJson()` handles JSON config strings with proper error handling:
+
+```php
+private function parseJson(string $json): array
+{
+    // Early exit on empty string
+    if (trim($json) === '') {
+        throw new \InvalidArgumentException('JSON string cannot be empty');
+    }
+
+    $data = json_decode($json, true);
+
+    if (json_last_error() !== JSON_ERROR_NONE) {
+        throw new \InvalidArgumentException('Invalid JSON: ' . json_last_error_msg());
+    }
+
+    if (!is_array($data)) {
+        throw new \InvalidArgumentException('JSON must decode to an array');
+    }
+
+    return $data;
+}
+```
+
+**Why check `!is_array()`?** `json_decode()` can return `null` for invalid JSON (detected via `json_last_error()`) but also for valid JSON that isn't an array (e.g., `"hello"` decodes to a string). Both cases should be errors.
+
+### Guard Clauses Throughout ProviderFactory
+
+The factory uses guard clauses at function tops for early exit:
+
+```php
+// In create():
+if (is_string($config)) { ... }     // Handle JSON string
+if (!is_array($config)) { ... }      // Validate array
+if (!isset($config['type'])) { ... } // Must have type
+if (!$this->isValidType($type)) { ... } // Known type
+
+// In resolveEnv():
+if ($value === null) { return null; }   // Nothing to resolve
+```
+
+**Benefits:**
+- Reduces nesting — main logic isn't indented under early conditions
+- Documents preconditions at the top of each method
+- Fail-fast ensures invalid states don't propagate
+
+### Anthropic via CustomProvider Pattern
+
+`createAnthropic()` reuses `CustomProvider::openAiCompatible()`:
+
+```php
+private function createAnthropic(array $config): ProviderInterface
+{
+    $baseUrl = $config['baseUrl'] ?? 'https://api.anthropic.com';
+    $apiKey = $config['apiKey'];
+    $model = $config['model'] ?? 'claude-sonnet-4-6';
+
+    $headers = [
+        'Content-Type' => 'application/json',
+        'x-api-key' => $apiKey,
+        'anthropic-version' => '2023-06-01',
+    ];
+
+    if ($baseUrl !== 'https://api.anthropic.com') {
+        $headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    }
+
+    // Use CustomProvider as Anthropic implementation
+    return CustomProvider::openAiCompatible(
+        name: 'anthropic',
+        baseUrl: $baseUrl . '/v1',
+        model: $model,
+        apiKey: $apiKey,
+        supportsStreaming: true,
+        supportsFunctionCalling: false,
+    );
+}
+```
+
+**Why reuse CustomProvider?** Anthropic's API is OpenAI-compatible at the `/v1` endpoint. Using `CustomProvider` avoids duplicating HTTP client setup while adding Anthropic-specific headers. This is a **composition over duplication** pattern.
+
+## Step 4.1: Skill Value Object
+
+### Frontmatter Parsing with Regex Split
+
+The `Skill::parse()` method uses a regex to split YAML frontmatter from markdown content:
+
+```php
+if (preg_match('/^---\s*\n(.*?)\n---\s*\n/s', $content, $matches)) {
+    $frontmatter = $matches[1];
+    $body = substr($content, strlen($matches[0]));
+    $meta = Yaml::parse($frontmatter);
+} else {
+    $meta = [];
+    $body = $content;
+}
+```
+
+**Regex breakdown:**
+- `^---\s*\n` — matches opening `---` followed by optional whitespace and newline
+- `(.*?)` — non-greedy capture of frontmatter content (the `/s` flag makes `.` match newlines)
+- `\n---\s*\n` — matches closing `---` with optional whitespace and trailing newline
+
+**Why non-greedy (`*?`)?** Ensures we capture only the first `---...---` block, allowing content after the frontmatter to contain `---` markers.
+
+### YAML vs JSON for Configuration
+
+SKILL.md uses YAML frontmatter rather than JSON:
+
+```yaml
+# YAML — human-readable, supports comments, multi-line strings
+---
+name: payment-gateway
+paths:
+  - 'include/**/*.php'
+---
+```
+
+**YAML advantages for skill metadata:**
+- Comments allowed (e.g., `# Optional`)
+- Trailing commas tolerated
+- Multi-line strings with `|` or `>` fold
+- More natural to read and write
+
+**JSON alternatives considered:**
+- `SKILL.json` — cleaner parsing (`json_decode`) but no comments, noisier syntax
+- `SKILL.yaml` — equivalent to frontmatter approach but requires separate file
+
+The frontmatter approach keeps the skill definition in a single file with clear separation between metadata (top) and content (bottom).
+
+### Immutable Value Object Pattern
+
+`Skill` uses `final readonly class` for immutability:
+
+```php
+final readonly class Skill
+{
+    public function __construct(
+        public string $name,
+        public string $description,
+        // ...
+    ) {}
+}
+```
+
+**Benefits:**
+- `final` prevents extension that might add mutable state
+- `readonly` makes all properties immutable after construction
+- Promoted parameters eliminate boilerplate property declarations and getters
+
+**Alternative considered:** Getter methods (`getName()`, `getDescription()`). Rejected because:
+- More verbose
+- Direct property access (`$skill->name`) is clearer
+- PHP 8.1+ readonly semantics are well-understood
+
+### with*() Builder for Immutable Updates
+
+The `withName()` method provides immutable updates:
+
+```php
+public function withName(string $name): self
+{
+    return new self(
+        name: $name,
+        description: $this->description,
+        userInvocable: $this->userInvocable,
+        disableModelInvocation: $this->disableModelInvocation,
+        allowedTools: $this->allowedTools,
+        disallowedTools: $this->disallowedTools,
+        model: $this->model,
+        effort: $this->effort,
+        context: $this->context,
+        paths: $this->paths,
+        content: $this->content,
+        sourcePath: $this->sourcePath,
+    );
+}
+```
+
+**Why return `self` with new instance?**
+- Caller can chain: `$newSkill = $skill->withName('new-name')`
+- Original `$skill` remains unchanged
+- Follows TEA immutable state transition pattern
+
+**Trade-off:** Manual property copying is verbose. A `mutate()` helper (as used in `App`) would reduce boilerplate but would work differently here since `Skill` uses readonly properties.
+
+### Keyword Matching for Skill Selection
+
+`matchesPrompt()` uses a simple keyword extraction and matching algorithm:
+
+```php
+public function matchesPrompt(string $prompt): bool
+{
+    $keywords = array_filter(explode(' ', strtolower($this->description)));
+
+    foreach ($keywords as $keyword) {
+        if (strlen($keyword) > 3 && stripos($prompt, $keyword) !== false) {
+            return true;
+        }
+    }
+
+    return false;
+}
+```
+
+**Design choices:**
+- `strtolower()` on description before splitting — ensures consistent comparison
+- `strlen($keyword) > 3` filter — excludes common articles/prepositions that always match
+- `stripos()` — case-insensitive matching
+
+**Limitation:** Short but meaningful terms (PHP, SQL, API, LLM) won't match the 3-character threshold. These are typically in the skill `name`, not `description`. Acceptable trade-off for a simple heuristic.
+
+**Alternative considered:** TF-IDF or embedding similarity. Rejected for simplicity — this is a first-pass filter, not a ranking system.
+
+### System Prompt Contribution Pattern
+
+`systemPromptContribution()` formats skill content for LLM injection:
+
+```php
+public function systemPromptContribution(): string
+{
+    return "\n\n## Skill: {$this->name}\n\n{$this->content}";
+}
+```
+
+**Why format as markdown section?**
+- `## Skill:` header creates a visually distinct section in multi-skill prompts
+- Preserves skill markdown formatting (lists, code blocks, headers)
+- Double newline prefix ensures separation from preceding content
+
+**Usage:** Appended to system prompts when the skill is matched:
+
+```php
+$systemPrompt = "You are a helpful coding assistant.";
+foreach ($matchedSkills as $skill) {
+    $systemPrompt .= $skill->systemPromptContribution();
+}
+```
+
+### Convention: camelCase Properties, kebab-case YAML, snake_case Serialization
+
+`Skill` uses three naming conventions for three different contexts:
+
+| Context | Example | Rationale |
+|---------|---------|-----------|
+| PHP Properties | `userInvocable` | PHP convention (camelCase) |
+| YAML Keys | `user-invocable` | YAML convention (kebab-case) |
+| Serialized Keys | `user_invokable` | API/JSON convention (snake_case) |
+
+The translation happens at parse time (YAML → PHP) and serialization time (PHP → snake_case):
+
+```php
+// Parsing: YAML kebab-case → PHP camelCase
+userInvocable: $meta['user-invocable'] ?? true
+
+// Serialization: PHP camelCase → array snake_case
+'user_invokable' => $this->userInvocable
+```
+
+This layering maintains convention-appropriate naming at each boundary.
+
+## Step 4.2: SkillLoader and SkillRegistry
+
+### Recursive Directory Scanning with SKIP_DOTS
+
+`loadFromDirectory()` uses `RecursiveDirectoryIterator` with `SKIP_DOTS`:
+
+```php
+$iterator = new \RecursiveIteratorIterator(
+    new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+);
+```
+
+**Why SKIP_DOTS?** Without it, the iterator would yield `.` and `..` entries in addition to real files and directories. The `SKIP_DOTS` flag tells the iterator to skip these special directory entries automatically.
+
+**Alternative considered:** Checking `$file->getBasename() !== '.' && $file->getBasename() !== '..'`. Rejected in favor of `SKIP_DOTS` — it's the built-in, semantically clear solution.
+
+### Priority-Based array_merge Pattern
+
+`loadAll()` uses chained `array_merge()` for priority handling:
+
+```php
+$skills = array_merge($builtin, $user);   // user overrides builtin
+$skills = array_merge($skills, $project); // project overrides both
+```
+
+**Why array_merge with string keys?** When keys are strings and duplicate, `array_merge()` keeps the last value. This provides a clean priority system:
+- Built-in skills loaded first (lowest priority)
+- User skills merged second (override builtins with same name)
+- Project skills merged last (override both with same name)
+
+**Alternative considered:** Nested arrays with manual priority checking. Rejected — `array_merge()` is idiomatic PHP and the intent is clear.
+
+### fnmatch for Path Pattern Matching
+
+`getForPaths()` uses `fnmatch()` for glob-style path matching:
+
+```php
+if (fnmatch($pattern, $path)) {
+    $matches[] = $skill;
+    break 2;
+}
+```
+
+**fnmatch() patterns:**
+- `*.php` — matches any `.php` file in the current directory
+- `**/*.php` — matches any `.php` file recursively (globstar)
+- `include/**/*.tpl` — matches `.tpl` files within `include/`
+- `src/*/Tests/*.php` — matches in nested directories
+
+**break 2 pattern:** Once a skill matches, `break 2` exits both the path loop and pattern loop, preventing duplicate skill entries in the results array.
+
+### Disabled Skills Tracking Pattern
+
+Disabled skills use a separate tracking array:
+
+```php
+private array $disabledSkills = [];
+
+public function disable(string $name): void
+{
+    $this->disabledSkills[$name] = true;
+}
+
+public function isDisabled(string $name): bool
+{
+    return isset($this->disabledSkills[$name]);
+}
+```
+
+**Why separate array?**
+- `isset()` on the tracking array is O(1) lookup
+- Doesn't require modifying the skill object itself
+- Allows disable/enable without removing from `all()` results (filtered at query time)
+
+**Type annotation `array<string, true>`:** The array values are always `true` (the presence of the key indicates disabled status). This is more precise than `array<string, Skill>` which the spec incorrectly showed.
+
+### Skill Relevance Sorting
+
+`findForPrompt()` sorts matches by relevance using substring counting:
+
+```php
+usort($matches, function (Skill $a, Skill $b) use ($prompt) {
+    $aMatches = substr_count(strtolower($a->description), strtolower($prompt));
+    $bMatches = substr_count(strtolower($b->description), strtolower($prompt));
+    return $bMatches <=> $aMatches;
+});
+```
+
+**Why substring count?** Simple heuristic that prioritizes skills whose descriptions mention the prompt terms more frequently. A description containing "PHP" 3 times ranks higher than one containing "PHP" once.
+
+**Spaceship operator (`<=>`):** Returns -1, 0, or 1 directly, providing correct 3-way sorting:
+- `$bMatches <=> $aMatches` puts higher counts first (descending order)
+
+**Limitation:** This counts substring occurrences, not word boundaries. A description containing "PHPPHP" would count as 3 "PHP" occurrences. Acceptable for a first-pass heuristic.
+
+### Early Exit Guard Clauses
+
+Both classes use guard clauses for fail-fast behavior:
+
+```php
+// In loadFromDirectory()
+if (!is_dir($dir)) {
+    return [];
+}
+
+// In get()
+if ($this->isDisabled($name)) {
+    return null;
+}
+```
+
+**Benefits:**
+- Reduces nesting in main logic
+- Documents preconditions explicitly
+- Fails immediately rather than propagating invalid state
+
+### Fail-Safe Loading with Error Logging
+
+Invalid skills are logged and skipped rather than aborting:
+
+```php
+try {
+    $skill = Skill::fromFile($file->getPathname());
+    $skills[$skill->name] = $skill;
+} catch (\Throwable $e) {
+    error_log("Failed to load skill from {$file->getPathname()}: {$e->getMessage()}");
+}
+```
+
+**Why catch `\Throwable`?** Catches all errors and exceptions, including `Error` subclasses (which `Exception` doesn't catch). Ensures one malformed skill doesn't prevent loading other valid skills.
+
+**Why `error_log` instead of throwing?** Loading should be resilient — a single broken skill shouldn't prevent the entire skill system from initializing. Errors are logged for debugging but don't halt execution.
+
+### Reflection for Relative Path Discovery
+
+`loadBuiltInSkills()` uses reflection to find its own source file:
+
+```php
+$reflection = new \ReflectionClass($this);
+$dir = dirname($reflection->getFileName()) . '/BuiltIn';
+```
+
+**Why reflection?** The built-in skills directory is co-located with `SkillLoader.php` (`src/Skills/BuiltIn/`). Using reflection finds this path relative to the actual source file, regardless of where the package is installed or how autoloading works.
+
+**Alternative:** Hardcoded path. Rejected — would break if the package is installed in a non-standard location or if the directory structure changes.
+
+### ARRAY_FILTER_USE_KEY for Filter-by-Name
+
+The `all()` method uses `ARRAY_FILTER_USE_KEY` to filter:
+
+```php
+return array_filter(
+    $this->skills,
+    fn($name) => !$this->isDisabled($name),
+    ARRAY_FILTER_USE_KEY
+);
+```
+
+**Why ARRAY_FILTER_USE_KEY?**
+- The callback receives the key (skill name), not the value
+- Avoids iterating over skill objects when only names are needed for the check
+- More idiomatic than a `foreach` loop with manual filtering
+
+**Alternative:** `foreach` with `if (!$this->isDisabled($name))`. Works but more verbose.
+
+## Step 4.3: Built-in Skills
+
+### SKILL.md Frontmatter Specification
+
+Built-in skills use YAML frontmatter with a specific schema:
+
+```yaml
+---
+description: Brief description of what this skill does. Use when user mentions X or works with Y.
+user-invocable: true
+disable-model-invocation: false
+allowed-tools: "Read,Grep,Bash,Composer"
+effort: high
+paths:
+  - "**/*.php"
+  - "composer.json"
+---
+# Skill Title
+
+Content goes here as markdown...
+```
+
+**Required frontmatter fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `description` | `string` | Human-readable description used for prompt matching — should include trigger phrases ("Use when...") |
+| `paths` | `array` | Glob patterns for automatic skill triggering |
+
+**Optional frontmatter fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `user-invocable` | `bool` | `true` | Whether skill appears in user-facing skill list |
+| `disable-model-invocation` | `bool` | `false` | Skip LLM context injection when matched |
+| `allowed-tools` | `?string` | `null` | Comma-separated tool names to suggest |
+| `disallowed-tools` | `?string` | `null` | Comma-separated tools to disable |
+| `model` | `?string` | `null` | Specific model to use for this skill |
+| `effort` | `string` | `"medium"` | Complexity: `planning`, `medium`, or `high` |
+| `context` | `string` | `"thread"` | `thread` (per conversation) or `global` |
+
+**Frontmatter key naming:**
+- YAML keys use kebab-case (`user-invocable`, `disable-model-invocation`)
+- PHP properties use camelCase (`userInvocable`, `disableModelInvocation`)
+- Serialized keys use snake_case (`user_invokable`, `disable_model_invocation`)
+
+### Skill Triggering by File Path Patterns
+
+Skills are automatically triggered when file paths match their `paths` patterns:
+
+```php
+public function getForPaths(array $paths): array
+{
+    $matches = [];
+
+    foreach ($this->all() as $skill) {
+        foreach ($skill->paths as $pattern) {
+            foreach ($paths as $path) {
+                if (fnmatch($pattern, $path)) {
+                    $matches[] = $skill;
+                    break 2;  // Exit both loops once matched
+                }
+            }
+        }
+    }
+
+    return $matches;
+}
+```
+
+**fnmatch() glob patterns:**
+
+| Pattern | Meaning | Example Matches |
+|---------|---------|-----------------|
+| `*.php` | Single directory, specific extension | `foo.php`, `bar.php` |
+| `**/*.php` | Recursive — any depth | `foo/bar.php`, `foo/bar/baz.php` |
+| `**/*Test.php` | Recursive test files | `tests/Unit/FooTest.php` |
+| `composer.json` | Exact filename match | `composer.json` |
+| `include/**/*.tpl` | Specific subdirectory tree | `include/foo/bar.tpl` |
+
+**Path triggering priority:**
+1. Skills with matching path patterns are included via `getForPaths()`
+2. Skills are deduplicated via `break 2` — matching once is sufficient
+3. Multiple skills can match the same file
+4. Skills are NOT automatically disabled by path matching — `getForPaths()` and `findForPrompt()` are separate queries
+
+**Common path patterns for built-in skills:**
+
+```yaml
+# PHP-focused skills
+paths:
+  - "**/*.php"
+
+# Test-focused skills
+paths:
+  - "**/*Test.php"
+  - "**/tests/**/*.php"
+
+# Composer-related skills
+paths:
+  - "composer.json"
+  - "composer.lock"
+
+# Frontend skills
+paths:
+  - "**/*.js"
+  - "**/*.mjs"
+  - "**/public_html/js/**"
+
+# Template skills
+paths:
+  - "**/*.tpl"
+  - "**/*.blade.php"
+```
+
+### Skill Content Structure for LLM Guidance
+
+Skill content is markdown that provides specialized guidance to LLMs. The content is injected via `systemPromptContribution()`:
+
+```php
+public function systemPromptContribution(): string
+{
+    return "\n\n## Skill: {$this->name}\n\n{$this->content}";
+}
+```
+
+**Effective skill content structure:**
+
+```markdown
+# Skill Name
+
+Brief introduction explaining when this skill applies.
+
+## Key Principles
+
+1. First principle
+2. Second principle
+3. Third principle
+
+## Common Patterns
+
+Describe established patterns with code examples:
+
+```php
+// Good example
+$result = $obj->method();
+
+// Bad example (and why)
+$result = $obj->{"method"}();
+```
+
+## Anti-Patterns
+
+What to avoid and why:
+
+```php
+// Never do this because...
+```
+
+## Decision Tree
+
+How to choose between approaches:
+
+- If X → use A
+- If Y → use B
+- Otherwise → use C
+```
+
+**Skill content guidelines:**
+
+1. **Lead with "when to use"** — The first sentence should explain when this skill is relevant
+2. **Use concrete examples** — Show both good and bad code patterns
+3. **Be prescriptive** — Don't hedge with "might consider" — say "do X" or "avoid Y"
+4. **Include code blocks** — LLM can reference specific syntax
+5. **Keep it scannable** — Use headers, lists, and short paragraphs
+6. **Match trigger phrases** — The description should include phrases users might type
+
+**Example — complete php-best-practices SKILL.md:**
+
+```yaml
+---
+description: PHP best practices, PSR-12 compliance, type safety, and modern PHP patterns. Use when reviewing or writing PHP code.
+user-invocable: true
+disable-model-invocation: false
+allowed-tools: "Read,Grep,Bash"
+effort: high
+paths:
+  - "**/*.php"
+---
+# PHP Best Practices Skill
+
+When working with PHP code, enforce these standards:
+
+## Type Safety
+- Always use `declare(strict_types=1);` at the top of every file
+- Prefer union types and nullable types over docblocks
+- Use `never`, `void`, `true` return types when appropriate
+
+## PSR-12 Compliance
+- Namespaces use uppercase
+- Classes use PascalCase
+- Methods and functions use camelCase
+- Constants use UPPER_SNAKE_CASE
+- Opening braces on same line, closing on new line
+- 4 spaces for indentation
+
+## Modern PHP Patterns
+- Use readonly properties for immutable data
+- Use constructor property promotion
+- Use match expressions instead of switch
+- Use nullsafe operator (?->) when appropriate
+- Use anonymous classes for simple wrappers
+
+## Error Handling
+- Throw exceptions with meaningful messages
+- Use specific exception types
+- Always catch and handle or re-throw
+- Never suppress errors with @
+
+## Performance
+- Use isset() over array_key_exists() for performance
+- Prefer preallocation in loops
+- Use yield for large iterables
+- Cache require/include results
+```
+
+### Reflection-Based Path Discovery for Built-in Skills
+
+Built-in skills use reflection to find their own source location:
+
+```php
+public function loadBuiltInSkills(): array
+{
+    $reflection = new \ReflectionClass($this);
+    $dir = dirname($reflection->getFileName()) . '/BuiltIn';
+
+    return $this->loadFromDirectory($dir);
+}
+```
+
+**Why reflection instead of hardcoded path?**
+- Works regardless of where the package is installed (Composer, git clone, phar)
+- Works regardless of autoloading configuration
+- Survives directory structure changes during refactoring
+- The built-in skills directory stays co-located with `SkillLoader.php`
+
+**Alternative considered — hardcoded path:**
+```php
+$dir = __DIR__ . '/BuiltIn';  // Breaks if package is installed elsewhere
+```
+
+**Alternative considered — config-based:**
+```php
+$dir = $config['builtinSkillsPath'];  // Requires consumer configuration
+```
+
+Reflection is the most robust solution — it discovers the path relative to the actual source file.
+
+### Skill Override Pattern with Priority Chain
+
+The `loadAll()` method implements a priority chain for skill overrides:
+
+```php
+public function loadAll(string $projectRoot = '.'): array
+{
+    $skills = [];
+
+    // Built-in first (lowest priority)
+    $builtin = $this->loadBuiltInSkills();
+
+    // User skills override builtins
+    $user = $this->loadUserSkills();
+    $skills = array_merge($builtin, $user);
+
+    // Project skills override both
+    $project = $this->loadProjectSkills($projectRoot);
+    $skills = array_merge($skills, $project);
+
+    return $skills;
+}
+```
+
+**Why array_merge with string keys?**
+- When duplicate string keys exist, `array_merge()` keeps the **last** value
+- This means later arrays override earlier ones with the same skill name
+- Priority: project > user > built-in
+
+**Practical use cases:**
+1. **Override built-in** — Create `~/.candy-crush/skills/php-best-practices/SKILL.md` with custom content
+2. **Disable built-in** — Create a skill with the same name that documents "this skill is deprecated"
+3. **Project-specific** — Add skills in `.candy-crush/skills/` that only apply to a specific project
+
+**Implementation note:** `array_merge()` re-indexes numeric keys. For skills with string keys (skill names), the behavior is exactly what we want — later definitions win.
+
+## Step 4.4: Skill Integration
+
+### SkillManager as Composition Root
+
+`SkillManager` coordinates `SkillLoader` and `SkillRegistry` as internal components:
+
+```php
+final class SkillManager
+{
+    public function __construct(
+        private SkillLoader $loader,
+        private SkillRegistry $registry,
+    ) {}
+}
+```
+
+**Benefits of composition root pattern:**
+- `SkillLoader` and `SkillRegistry` are internal implementation details
+- Consumers interact only with `SkillManager`'s public interface
+- Easy to mock for testing (inject mock loader/registry)
+- Single place to change if skill loading changes
+
+**Alternative considered:** Static factory methods on `App`. Rejected because:
+- Static coupling makes testing harder
+- `App` should remain focused on state management
+- Separate `SkillManager` follows single responsibility
+
+### Immutable App with Skills Pattern
+
+The `App` class maintains two skill-related properties:
+
+```php
+public readonly array $enabledSkills;           // Skill[] - currently active
+public readonly SkillRegistry $availableSkills;  // All loadable skills
+```
+
+**Immutable state transitions:**
+
+```php
+// Enable returns NEW App instance
+$app = $manager->enable($app, 'phpunit-master');
+
+// Disable returns NEW App instance
+$app = $manager->disable($app, 'php-best-practices');
+```
+
+**Why immutable skill state?**
+- TEA pattern consistency — `update()` returns `[newModel, command]`
+- Enables undo/rollback — keep reference to old `App`
+- Supports concurrent sessions — each session has own `App` with different skills
+- Thread-safe for async operations
+
+**with*() method pattern:**
+
+```php
+public function withEnabledSkills(array $v): self
+{
+    return $this->mutate(enabledSkills: $v);
+}
+
+public function withAvailableSkills(SkillRegistry $registry): self
+{
+    return $this->mutate(availableSkills: $registry);
+}
+```
+
+**Note:** `availableSkills` type changed from `array` to `SkillRegistry` to match the actual usage in `findSkillsForTask()`.
+
+### Skill Contribution to System Prompts
+
+`applySkillsToSystemPrompt()` injects skill content into LLM context:
+
+```php
+public function applySkillsToSystemPrompt(string $baseSystemPrompt): string
+{
+    $result = $baseSystemPrompt;
+
+    foreach ($this->enabledSkills as $skill) {
+        if ($skill instanceof Skill) {
+            $result .= $skill->systemPromptContribution();
+        }
+    }
+
+    return $result;
+}
+```
+
+**Output structure:**
+
+```
+You are a helpful coding assistant.
+
+## Skill: php-best-practices
+
+[Skill markdown content here]
+
+## Skill: security-audit
+
+[Security audit guidance here]
+```
+
+**Design rationale:**
+- Skills are appended, not prepended — base prompt sets context first
+- Each skill uses `## Skill:` header for visual distinction
+- `instanceof Skill` check handles edge case of non-Skill entries in array
+- Skills contribute in order they appear in `enabledSkills` array
+
+**Why append rather than merge?**
+- Base prompt provides core identity
+- Skills add specialized guidance
+- Later skills can override earlier guidance if needed
+- Order matters — first skill's advice may be overridden by later skills
+
+### Runtime Skill Enable/Disable Pattern
+
+`SkillManager` provides runtime skill management that works with immutable `App`:
+
+```php
+public function enable(App $app, string $skillName): App
+{
+    $current = $app->enabledSkills;
+    $skill = $this->registry->get($skillName);
+
+    if ($skill === null) {
+        return $app;  // Early exit: skill not found
+    }
+
+    foreach ($current as $s) {
+        if ($s->name === $skillName) {
+            return $app;  // Early exit: already enabled
+        }
+    }
+
+    return $app->withEnabledSkills([...$current, $skill]);
+}
+
+public function disable(App $app, string $skillName): App
+{
+    $current = $app->enabledSkills;
+
+    return $app->withEnabledSkills(
+        array_filter($current, fn($s) => $s->name !== $skillName)
+    );
+}
+```
+
+**Key techniques:**
+- **Early exit guards** — return original `App` if no change needed
+- **Already-enabled check** — prevents duplicate entries
+- **array_filter for disable** — removes by name without manual loop
+- **Spread operator `[...$current, $skill]`** — creates new array with added skill
+
+**applyToApp() for bulk operations:**
+
+```php
+public function applyToApp(App $app, array $skillNames): App
+{
+    $skills = [];
+
+    foreach ($skillNames as $name) {
+        $skill = $this->registry->get($name);
+        if ($skill !== null) {
+            $skills[] = $skill;
+        }
+    }
+
+    return $app->withEnabledSkills($skills);
+}
+```
+
+**Why resolve names to Skill objects?**
+- `skillNames` are strings from config/CLI
+- `registry->get()` handles disabled-state checking
+- Returns `null` if skill doesn't exist or is disabled
+- Bulk operation applies multiple skills at once
+
+### Skill Discovery via findSkillsForTask()
+
+`findSkillsForTask()` queries available skills by prompt matching:
+
+```php
+public function findSkillsForTask(string $task): array
+{
+    return $this->availableSkills->findForPrompt($task);
+}
+```
+
+**Delegation pattern:**
+- `App` delegates to `availableSkills` (which is a `SkillRegistry`)
+- `SkillRegistry::findForPrompt()` does the actual matching
+- `App` provides a convenient facade on top of the registry
+
+**Usage pattern:**
+
+```php
+// In the TUI runtime loop
+$taskSkills = $app->findSkillsForTask($userInput);
+foreach ($taskSkills as $skill) {
+    $app = $skillManager->enable($app, $skill->name);
+}
+
+// Or show user what skills matched
+$matchCount = count($taskSkills);
+```
+
+**Why separate find from enable?**
+- Discovery is query-only — doesn't modify state
+- User confirms before enabling (or auto-enable based on config)
+- Enables "preview" functionality in UI
+
+### getUserInvocable() for Command Palette
+
+`getUserInvocable()` filters skills that users can invoke directly:
+
+```php
+public function getUserInvocable(): array
+{
+    return $this->registry->getUserInvocable();
+}
+```
+
+**Used for:**
+- Command palette listings
+- `/skills` command output
+- User preference UI for skill selection
+
+**Filtering logic in `SkillRegistry`:**
+
+```php
+public function getUserInvocable(): array
+{
+    return array_values(array_filter(
+        $this->all(),
+        fn($skill) => $skill->userInvocable
+    ));
+}
+```
+
+**Why `array_values()`?** Re-indexes the array so JSON serialization produces a clean array `[{...}, {...}]` rather than `{"0": {...}, "1": {...}}`.
+
+### disableFromConfig() for Configuration-Based Disabling
+
+`disableFromConfig()` bulk-disables skills from configuration:
+
+```php
+public function disableFromConfig(array $disabled): void
+{
+    $this->registry->disableMultiple($disabled);
+}
+```
+
+**Usage:**
+
+```php
+// candy-crush.json
+// {
+//     "disabledSkills": ["php-best-practices", "security-audit"]
+// }
+
+$config = json_decode(file_get_contents('candy-crush.json'), true);
+$manager->disableFromConfig($config['disabledSkills'] ?? []);
+```
+
+**Why `void` return?** Disabling is a mutation of the registry state, not of an `App` instance. The registry is internal to `SkillManager` and can be modified directly.
+
+**Alternative:** Could return a new `SkillManager` with modified registry. Not done because:
+- Registry is internal
+- Config loading happens once at startup
+- Simpler to just mutate
+
+### SkillManager Method Return Types
+
+All mutation methods follow a consistent pattern:
+
+| Method | Input | Output |
+|--------|-------|--------|
+| `loadAll()` | `string $projectRoot` | `void` (mutates registry internally) |
+| `applyToApp()` | `App $app, array $skillNames` | `App` (new instance) |
+| `enable()` | `App $app, string $skillName` | `App` (new instance) |
+| `disable()` | `App $app, string $skillName` | `App` (new instance) |
+| `disableFromConfig()` | `array $disabled` | `void` (mutates registry) |
+
+**Pattern rationale:**
+- Methods that modify `App` return new `App` (immutable)
+- Methods that modify registry return `void` or `self` (internal mutation)
+- This distinction is clear from method signatures
+
+### Dependency Injection in SkillManager
+
+`SkillManager` uses constructor injection for its dependencies:
+
+```php
+public function __construct(
+    private SkillLoader $loader,
+    private SkillRegistry $registry,
+) {}
+```
+
+**Benefits:**
+- Dependencies are explicit and required
+- Easy to mock for unit testing
+- Can swap implementations (e.g., cached registry, remote loader)
+
+**Usage with manual wiring:**
+
+```php
+$manager = new SkillManager(
+    new SkillLoader(),
+    new SkillRegistry()
+);
+```
+
+**Usage with dependency injection container:**
+
+```php
+// If using a DI container...
+$manager = $container->get(SkillManager::class);
+// Container injects SkillLoader and SkillRegistry automatically
+```
+
+## Step 5.1: Hook Interface and Registry
+
+### HookEvent as Backed Enum
+
+`HookEvent` uses a PHP 8.1 backed enum with `string` backing type:
+
+```php
+enum HookEvent: string
+{
+    case PreToolUse = 'PreToolUse';
+    case PostToolUse = 'PostToolUse';
+}
+```
+
+**Why an enum rather than string constants?** Backed enums provide:
+- Compile-time exhaustiveness checking in `match` expressions
+- IDE autocompletion for valid values
+- Self-documenting intent — `HookEvent::PreToolUse` is clearer than `'PreToolUse'`
+- Type safety — `HookEvent` as a parameter type rejects arbitrary strings
+
+### Context Immutability with with*() Builders
+
+`HookContext` is `final readonly` — once constructed, it cannot be modified. Hooks that need to communicate changes downstream use the `with*()` builder pattern:
+
+```php
+public function withToolInput(string $input): self
+{
+    return new self(
+        sessionId: $this->sessionId,
+        toolName: $this->toolName,
+        toolArgs: $this->toolArgs,
+        toolInput: $input,
+        toolOutput: $this->toolOutput,
+        model: $this->model,
+        provider: $this->provider,
+        projectRoot: $this->projectRoot,
+    );
+}
+```
+
+**Why manual property copying?** Unlike the `mutate()` helper used in `App`, `HookContext` uses `readonly` properties which cannot be modified even via `clone`. Each `with*()` method must construct a new instance by copying all other fields explicitly.
+
+**Alternative considered — `with()` accepting an array:**
+```php
+public function with(array $changes): self
+{
+    return new self(...array_merge([
+        'sessionId' => $this->sessionId,
+        // ...
+    ], $changes));
+}
+```
+Rejected because it loses named parameter clarity and makes refactoring harder (changing a property name breaks array keys silently).
+
+### Regex-Based Hook Matching
+
+`findMatches()` uses `preg_match()` with hook-supplied regex patterns:
+
+```php
+if (preg_match('/' . $hook->matcher() . '/i', $toolName)) {
+    $matches[] = $hook;
+}
+```
+
+**The `/i` flag** makes matching case-insensitive, so a `matcher()` of `'Bash'` matches both `'Bash'` and `'bash'`.
+
+**Regex injection risk:** Since the `matcher()` pattern is injected directly into the regex, hooks must be trusted code. If hooks came from untrusted user configuration, the pattern should be validated or a simpler `fnmatch()` glob approach would be safer.
+
+**Common patterns:**
+
+```php
+// Exact tool name
+'matcher()' => 'Bash'
+
+// Any of several tools
+'matcher()' => 'Read|Edit|Grep'
+
+// Tool name prefix
+'matcher()' => 'Read.*'
+
+// All tools (wildcard)
+'matcher()' => '.*'
+```
+
+### ALLOW/DENY/MODIFY Result Pattern
+
+`HookResult` uses a three-action pattern that maps cleanly to execution flow decisions:
+
+```php
+public const ALLOW = 'allow';
+public const DENY = 'deny';
+public const MODIFY = 'modify';
+```
+
+**Why three actions rather than two (allow/deny)?** The `MODIFY` action allows hooks to participate in input transformation without stopping the chain. This enables:
+- Sanitization hooks that clean dangerous commands but still allow execution
+- Logging hooks that observe without interfering
+- Rewriting hooks that redirect intent (e.g., translating `delete` to `trash`)
+
+**Factory methods over constructors:**
+```php
+HookResult::allow()       // message defaults to ''
+HookResult::deny($msg)   // message required — why the action was denied
+HookResult::modify($in, $msg)  // new input + optional reason
+```
+
+Requiring a message for `deny()` forces hooks to explain why they blocked execution — important for debugging and user feedback.
+
+### Hook Chain Execution Pattern
+
+`executeHooks()` implements a **first-result-wins** chain with modification tracking:
+
+```php
+$firstModifyResult = null;
+foreach ($matches as $hook) {
+    $result = $hook->execute($context);
+
+    if ($result->isDenied()) {
+        return $result;  // DENY stops everything
+    }
+
+    if ($result->isModified()) {
+        $context = $context->withToolInput($result->modifiedInput);
+        $firstModifyResult ??= $result;  // capture first MODIFY
+    }
+}
+return $firstModifyResult ?? HookResult::allow();
+```
+
+**Why track `$firstModifyResult`?** If multiple hooks return MODIFY, the final return value should be the first MODIFY (not ALLOW). This ensures:
+- The most semantic modification wins
+- The chain preserves the "intent" of the first rewriting hook
+- Later ALLOW hooks don't erase earlier modifications
+
+**Why not return last MODIFY?** Returning the last MODIFY would mean later hooks could "undo" earlier modifications. Returning the first preserves the earliest intent in the chain.
+
+### Regex vs Glob Pattern Matching
+
+Hooks use PCRE regex (`preg_match`) rather than glob (`fnmatch`):
+
+| Aspect | Regex (`preg_match`) | Glob (`fnmatch`) |
+|--------|---------------------|-----------------|
+| Pattern | `/Bash/i` | `*Bash*` |
+| Alternation | `Read\|Edit\|Grep` | Not supported |
+| Anchors | `^Bash$` | Implicit |
+| Modifiers | `/i`, `/s`, `/m` | Not supported |
+| Use case | Complex matching | Simple wildcards |
+
+For the hook use case, regex provides more expressiveness (alternation, character classes) while glob would be simpler but less powerful.
+
+### Disabled Hooks Tracking Pattern
+
+`HookRegistry` tracks disabled hooks in a separate array:
+
+```php
+private array $disabled = [];
+
+public function disable(string $name): void
+{
+    $this->disabled[$name] = true;
+}
+
+public function isDisabled(string $name): bool
+{
+    return $this->disabled[$name] ?? false;
+}
+```
+
+**Why a separate array rather than removing from `$hooks`?**
+- `unregister()` removes the hook entirely (user requested removal)
+- `disable()` temporarily pauses the hook (user wants to re-enable later)
+- The distinction matters for debugging — `disabled` hooks can be listed and re-enabled
+- Querying `isDisabled()` is O(1) via `isset()` on the tracking array
+
+**Type annotation `array<string, true>`:** Values are always `true` — the presence of the key indicates disabled status. This is more precise than `array<string, HookInterface>`.
+
+## Step 5.2: Built-in Hooks Patterns
+
+### Built-in Hook Pattern
+
+Built-in hooks are `final readonly` classes in `Hooks\BuiltIn` namespace implementing `HookInterface`:
+
+```php
+namespace SugarCraft\Crush\Hooks\BuiltIn;
+
+final readonly class MyHook implements HookInterface
+{
+    public function name(): string
+    {
+        return 'my-hook';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return '^ToolName$';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        // Check conditions and return HookResult::allow() or HookResult::deny()
+    }
+}
+```
+
+**Benefits of this pattern:**
+- `final` prevents extension that might break the hook contract
+- `readonly` ensures the hook instance is immutable after construction
+- Built-in namespace groups safety-critical hooks separately from custom hooks
+- Constructor can accept configuration (e.g., `AuditHook` accepts optional `$logFile`)
+
+### Regex-Based Tool Matching
+
+Hooks use `preg_match()` with case-insensitive matching (`/i` flag applied in `HookRegistry::findMatches()`):
+
+```php
+// Exact match - tool name must be 'rm' exactly
+public function matcher(): string
+{
+    return '^rm$';
+}
+
+// Match multiple tools
+public function matcher(): string
+{
+    return '^(bash|Edit)$';
+}
+
+// Match all tools (audit pattern)
+public function matcher(): string
+{
+    return '.*';
+}
+```
+
+**Matcher semantics:**
+- Anchors `^` and `$` are implicit in `preg_match()` calls within `findMatches()`
+- The `/i` flag makes matching case-insensitive, so `'^rm$'` matches `rm`, `RM`, `Rm`
+- Pattern `.*` matches any tool name (catch-all for post-execution hooks)
+
+**Common matcher patterns:**
+
+| Pattern | Matches |
+|---------|---------|
+| `^rm$` | Only the `rm` tool |
+| `^bash$` | Only the `bash` tool |
+| `^(bash\|Edit\|Write)$` | bash, Edit, or Write tools |
+| `.*` | All tools |
+
+### PreToolUse vs PostToolUse Event Types
+
+`PreToolUse` and `PostToolUse` serve different purposes:
+
+| Aspect | PreToolUse | PostToolUse |
+|--------|------------|-------------|
+| Timing | Before tool execution | After tool execution |
+| Access to output | No (`toolOutput` is empty) | Yes (full output available) |
+| Typical use | Validation, modification | Audit logging, response transformation |
+| Can deny? | Yes | Yes |
+| Can modify input? | Yes | No (tool already executed) |
+
+**PreToolUse is for prevention:**
+```php
+public function execute(HookContext $context): HookResult
+{
+    if ($this->isDangerous($context->toolInput)) {
+        return HookResult::deny('Operation not allowed');
+    }
+    return HookResult::allow();
+}
+```
+
+**PostToolUse is for observation:**
+```php
+public function execute(HookContext $context): HookResult
+{
+    $this->log($context->toolName, $context->toolInput, $context->toolOutput);
+    return HookResult::allow();  // Always allow - tool already executed
+}
+```
+
+### Hook Safety Patterns (Deny vs Allow)
+
+Hooks should follow these safety patterns:
+
+**Deny pattern for dangerous operations:**
+```php
+public function execute(HookContext $context): HookResult
+{
+    if ($this->isDangerous($context->toolInput)) {
+        return HookResult::deny('This operation is not allowed');
+    }
+    return HookResult::allow();
+}
+```
+
+**Deny-first with clear messages:**
+```php
+if (preg_match('/rm\s+-[rf]+\s+/', $input)) {
+    return HookResult::deny(
+        'This hook prevents recursive/force rm. Use interactive rm instead.'
+    );
+}
+```
+
+**PostToolUse should always allow:**
+```php
+public function execute(HookContext $context): HookResult
+{
+    // Log the execution for audit purposes
+    $this->logToFile($context);
+
+    // Tool already executed - cannot deny at this point
+    return HookResult::allow();
+}
+```
+
+**Why always allow in PostToolUse?** By definition, the tool has already executed when a `PostToolUse` hook runs. Denying has no effect on the already-completed operation. PostToolUse hooks should use `DENY` only in exceptional cases where the output reveals a problem that should halt further processing.
+
+**Constructor injection for testability:**
+```php
+public function __construct(?string $logFile = null)
+{
+    $this->logFile = $logFile ?? sys_get_temp_dir() . '/default.log';
+}
+```
+
+Accepting optional constructor parameters allows:
+- Injecting test doubles for unit testing
+- Customizing file paths in production
+- Changing behavior without modifying the hook class
+
+## Step 5.3: Hook Configuration Patterns
+
+### YAML Configuration Loading Pattern
+
+`HookConfig::loadFromFile()` demonstrates safe YAML configuration loading with graceful degradation:
+
+```php
+public static function loadFromFile(string $path): array
+{
+    if (!file_exists($path)) {
+        return [];
+    }
+
+    $content = file_get_contents($path);
+    if ($content === false) {
+        return [];
+    }
+
+    return self::parse($content);
+}
+
+public static function parse(string $content): array
+{
+    try {
+        $data = Yaml::parse($content);
+    } catch (\Exception $e) {
+        return [];
+    }
+
+    $hooks = [];
+    $hooksData = $data['hooks'] ?? [];
+
+    foreach ($hooksData as $event => $configs) {
+        foreach ($configs as $config) {
+            $hooks[] = [
+                'event' => $event,
+                'matcher' => $config['matcher'] ?? '.*',
+                'command' => $config['command'] ?? '',
+                'description' => $config['description'] ?? '',
+            ];
+        }
+    }
+
+    return $hooks;
+}
+```
+
+**Key patterns:**
+- **Early exit guards** — `file_exists()` and `file_get_contents()` false check return empty arrays immediately
+- **Exception handling at boundary** — YAML parse exceptions are caught and converted to empty results
+- **Defensive defaults** — `?? '.*'` and `?? ''` provide sensible fallbacks for missing keys
+- **Silent failure** — No logging or exceptions on config errors (acceptable for optional configuration)
+
+**Why return `[]` on all failures?** The philosophy is "configuration is optional" — if the config file is missing, malformed, or empty, the system should proceed with defaults rather than crashing. This differs from required configuration which should throw.
+
+### External Script Execution via proc_open
+
+`ScriptHook::execute()` uses `proc_open()` for subprocess management:
+
+```php
+public function execute(HookContext $context): HookResult
+{
+    $descriptors = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $process = proc_open(
+        $this->command,
+        $descriptors,
+        $pipes,
+        $context->projectRoot,
+        $env
+    );
+
+    if (!is_resource($process)) {
+        return HookResult::allow();
+    }
+
+    fclose($pipes[0]);
+
+    $output = stream_get_contents($pipes[1]);
+    $errors = stream_get_contents($pipes[2]);
+
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+
+    $exitCode = proc_close($process);
+
+    if ($exitCode === 0) {
+        return HookResult::allow(trim($output));
+    }
+
+    return HookResult::deny(trim($errors) ?: "Hook exited with code $exitCode");
+}
+```
+
+**Why `proc_open()` over `exec()` or `shell_exec()`?**
+- Full control over stdin/stdout/stderr pipes
+- Environment variables can be explicitly passed
+- Exit code is available for error handling
+- Supports streaming input/output if needed
+
+**Descriptor array format:**
+- `0 => ['pipe', 'r']` — stdin is a readable pipe (we close it immediately since no input needed)
+- `1 => ['pipe', 'w']` — stdout is a writable pipe (we read from it)
+- `2 => ['pipe', 'w']` — stderr is a writable pipe (we read from it)
+
+**Pipe management discipline:**
+- `fclose($pipes[0])` immediately after `proc_open` since we don't write to stdin
+- `stream_get_contents()` reads entire output before closing
+- All pipes closed before `proc_close()` to avoid hanging
+
+### Environment Variable Passing to Child Processes
+
+Environment variables are passed as an associative array to `proc_open()`:
+
+```php
+$env = [
+    'CRUSH_SESSION_ID' => $context->sessionId,
+    'CRUSH_TOOL_NAME' => $context->toolName,
+    'CRUSH_TOOL_INPUT' => $context->toolInput,
+    'CRUSH_TOOL_OUTPUT' => $context->toolOutput,
+    'CRUSH_MODEL' => $context->model,
+    'CRUSH_PROVIDER' => $context->provider,
+];
+```
+
+**Key principles:**
+
+1. **Explicit is better than implicit** — Child processes don't inherit PHP's environment by default. Variables must be explicitly passed.
+
+2. **Prefix convention** — `CRUSH_` prefix prevents collisions with system environment variables and clearly identifies the source.
+
+3. **Working directory** — Passed as the 4th argument to `proc_open()` (`$context->projectRoot`), not via environment.
+
+4. **Null for no inheritance** — When `proc_open()` receives an array (not null) for the environment, only those variables are passed. If the child needs system variables (PATH, etc.), they must be explicitly included:
+
+```php
+// If you need to preserve system environment:
+$env = array_merge(getenv(), [
+    'CRUSH_SESSION_ID' => $context->sessionId,
+    // ...
+]);
+```
+
+**Security consideration:** Passing user-controlled data as environment variables is safer than command-line arguments (which could be parsed by shells) or string concatenation (which risks injection). The script receives data through established channels without interpretation.
+
+### Hook Manager Composition Pattern
+
+`HookManager` demonstrates composition over inheritance — it coordinates existing components rather than duplicating their logic:
+
+```php
+final class HookManager
+{
+    public function __construct(
+        private HookRegistry $registry,
+    ) {}
+
+    public function loadFromFile(string $path): void
+    {
+        $configs = HookConfig::loadFromFile($path);
+
+        foreach ($configs as $config) {
+            $hook = ScriptHook::fromConfig($config);
+            $this->registry->register($hook);
+        }
+    }
+
+    public function registerBuiltIns(): void
+    {
+        $this->registry->register(new BuiltIn\ProtectFilesHook());
+        $this->registry->register(new BuiltIn\ConfirmRemoveHook());
+        $this->registry->register(new BuiltIn\AuditHook());
+    }
+
+    public function preToolUse(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::PreToolUse->value, $context);
+    }
+
+    public function postToolUse(HookContext $context): HookResult
+    {
+        return $this->registry->executeHooks(HookEvent::PostToolUse->value, $context);
+    }
+}
+```
+
+**Benefits of composition:**
+- **Delegation not duplication** — `HookManager` doesn't reimplement registration or execution logic
+- **Single responsibility** — It orchestrates; `HookRegistry` manages; `HookConfig` parses
+- **Testability** — Each component can be mocked independently
+- **Flexibility** — Consumers can use `HookRegistry` directly if they don't need `HookManager`'s convenience methods
+
+**Factory method pattern for configuration:**
+```php
+$hook = ScriptHook::fromConfig($config);
+```
+
+The `fromConfig()` static factory accepts an array (from YAML parsing) and constructs the appropriate `ScriptHook` instance. This isolates the construction logic from the configuration format — changing the YAML schema doesn't require changing the hook classes.
+
+**Local namespace reference:**
+```php
+$this->registry->register(new BuiltIn\ProtectFilesHook());
+```
+
+Within `SugarCraft\Crush\Hooks` namespace, `BuiltIn\X` resolves to `SugarCraft\Crush\Hooks\BuiltIn\X` via PHP's namespace resolution rules.
+
+## Step 6.1: Agent Value Object Implementation
+
+### Immutable Value Object Pattern
+
+`Agent` uses the immutable value object pattern with `final readonly class`:
+
+```php
+final readonly class Agent
+{
+    public function __construct(
+        public string $name,
+        public string $description,
+        public string $prompt,
+        public string $model,
+        public string $provider,
+        public array $tools,
+        public array $skillNames,
+        public array $hooks,
+        public bool $isActive,
+    ) {}
+}
+```
+
+**Why `final readonly`?**
+- `final` prevents extension that might add mutable state
+- `readonly` enforces immutability after construction
+- Constructor property promotion exposes fields as public without separate property declarations
+
+**Immutability benefits:**
+- Safe to pass across components without defensive copying
+- No need to track which code might modify state
+- Enables functional update patterns: `newAgent = $agent->withName('new')`
+
+### with*() Immutable Builder Pattern
+
+Each `with*()` method creates a clone with one modified field:
+
+```php
+public function withName(string $name): self
+{
+    return new self(
+        name: $name,
+        description: $this->description,
+        prompt: $this->prompt,
+        model: $this->model,
+        provider: $this->provider,
+        tools: $this->tools,
+        skillNames: $this->skillNames,
+        hooks: $this->hooks,
+        isActive: $this->isActive,
+    );
+}
+```
+
+**Design rationale:**
+- Returns a **new instance**, leaving the original unchanged
+- All other fields are copied verbatim from `$this`
+- The return type `self` ensures the method returns the correct type
+- This pattern supports the TEA architecture's immutable state transitions
+
+**Alternative considered:** A separate `AgentBuilder` class. Rejected because:
+- `Agent` is already constructed with all fields
+- Only two fields need modification (`name`, `isActive`)
+- A full builder would be overkill for this use case
+
+### fromArray/toArray Serialization Pattern
+
+`Agent` provides bidirectional serialization:
+
+```php
+public static function fromArray(array $data): self
+{
+    return new self(
+        name: $data['name'] ?? '',
+        description: $data['description'] ?? '',
+        prompt: $data['prompt'] ?? '',
+        model: $data['model'] ?? 'claude-sonnet-4-6',
+        provider: $data['provider'] ?? 'anthropic',
+        tools: $data['tools'] ?? [],
+        skillNames: $data['skills'] ?? [],
+        hooks: $data['hooks'] ?? [],
+        isActive: $data['is_active'] ?? false,
+    );
+}
+
+public function toArray(): array
+{
+    return [
+        'name' => $this->name,
+        'description' => $this->description,
+        'prompt' => $this->prompt,
+        'model' => $this->model,
+        'provider' => $this->provider,
+        'tools' => $this->tools,
+        'skills' => $this->skillNames,
+        'hooks' => $this->hooks,
+        'is_active' => $this->isActive,
+    ];
+}
+```
+
+**Key design decisions:**
+- `fromArray()` uses null coalescing (`??`) for safe defaults
+- `toArray()` uses `snake_case` keys (`is_active`, `skillNames` → `skills`)
+- The `'skills'` key in output differs from `skillNames` internal name — this mismatch requires explicit mapping
+- Round-trip: `Agent::fromArray($agent->toArray())` produces an equivalent instance
+
+### Type Constant Pattern for Enum-like Strings
+
+`AgentDefinition` uses string constants instead of PHP enums:
+
+```php
+public const TYPE_CODER = 'coder';
+public const TYPE_REVIEWER = 'reviewer';
+public const TYPE_DEBUGGER = 'debugger';
+public const TYPE_ARCHITECT = 'architect';
+public const TYPE_TESTER = 'tester';
+public const TYPE_DEVOPS = 'devops';
+```
+
+**Why constants instead of backed enums?**
+- String constants serialize cleanly to JSON/YAML configuration files
+- Backs enums require `->value` access when serializing
+- Configuration-driven code often reads strings directly from config
+
+**Trade-off:** No exhaustive type checking at compile time. Adding a new type requires updating `match` expressions manually. For more safety, consider a hybrid: string constants for serialization, backed enums for internal handling.
+
+### Factory Method Pattern for Type Instantiation
+
+`AgentDefinition` provides named factory methods for each agent type:
+
+```php
+public static function coder(string $name = 'coder'): self
+{
+    return new self(
+        type: self::TYPE_CODER,
+        name: $name,
+        description: 'General coding assistant',
+        prompt: 'You are a coding assistant. Help write, modify, and understand code.',
+        defaultTools: ['Read', 'Edit', 'Bash'],
+        defaultSkills: [],
+    );
+}
+```
+
+**Benefits of factory methods:**
+- Self-documenting: `AgentDefinition::reviewer()` clearly creates a reviewer agent
+- Default parameter values reduce boilerplate for common cases
+- Each factory encapsulates the specific tools/skills for that agent type
+- Consumers don't need to know the internal structure of each definition
+
+**Factory method naming:** Uses the type string as the method name (`coder`, `reviewer`, etc.) rather than `createCoder()`. This is shorter and matches the type constant names.
+
+### fromType() Match Dispatch Pattern
+
+```php
+public static function fromType(string $type, string $name): ?self
+{
+    return match ($type) {
+        self::TYPE_CODER => self::coder($name),
+        self::TYPE_REVIEWER => self::reviewer($name),
+        self::TYPE_DEBUGGER => self::debugger($name),
+        self::TYPE_ARCHITECT => self::architect($name),
+        self::TYPE_TESTER => self::tester($name),
+        self::TYPE_DEVOPS => self::devops($name),
+        default => null,
+    };
+}
+```
+
+**Design rationale:**
+- `match` expression provides exhaustive type checking
+- `default => null` handles unknown types gracefully
+- Returns `?self` (nullable) — callers must handle the `null` case
+- Enables configuration-driven agent creation from YAML/JSON
+
+**Alternative:** Throwing an exception for unknown types. `null` was chosen to allow consumers to:
+- Log a warning and skip unknown types
+- Provide a fallback default type
+- Differentiate between "invalid type" and "valid but unhandled"

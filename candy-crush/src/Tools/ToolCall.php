@@ -1,3 +1,5 @@
+<?php
+
 declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tools;
@@ -10,9 +12,20 @@ final readonly class ToolCall
         private array $arguments,
     ) {}
 
-    public function id(): string => $this->id;
-    public function name(): string => $this->name;
-    public function arguments(): array => $this->arguments;
+    public function id(): string
+    {
+        return $this->id;
+    }
+
+    public function name(): string
+    {
+        return $this->name;
+    }
+
+    public function arguments(): array
+    {
+        return $this->arguments;
+    }
 
     public static function fromArray(array $data): self
     {
@@ -23,9 +36,12 @@ final readonly class ToolCall
         );
     }
 
-    public function toArray(): array => [
-        'id' => $this->id,
-        'name' => $this->name,
-        'arguments' => $this->arguments,
-    ];
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'arguments' => $this->arguments,
+        ];
+    }
 }
