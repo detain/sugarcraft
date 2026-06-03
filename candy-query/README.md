@@ -289,7 +289,7 @@ $serverInfo = $provider->serverInfo();
 
 Available providers:
 - **`MysqlAdminProvider`** — `SHOW GLOBAL STATUS`, `SHOW GLOBAL VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW PROCESSLIST`, `SHOW REPLICA STATUS` (graceful 1227 handling)
-- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard and connections are stubs returning `"coming soon"`; `serverInfo()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`, `max_connections`, `shared_buffers`).
+- **`PostgresAdminProvider`** — `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Implements `checkAllMetrics()` with computed PostgreSQL metrics (connection usage, cache hit rate, transaction rates, throughput) and `checkConnectionUsage()` with threshold alerts. `serverInfo()` maps `pg_stat_database` fields (`numbackends`, `xact_commit`, `xact_rollback`, `blks_read`, `blks_hit`, `tup_returned`, `tup_fetched`, `tup_inserted`, `tup_updated`, `tup_deleted`, `max_connections`, `shared_buffers`).
 
 ## Result table
 
