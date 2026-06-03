@@ -33,6 +33,7 @@
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-forms": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
+        "sugarcraft/sugar-bits": "dev-master",
         "sugarcraft/sugar-charts": "dev-master",
         "sugarcraft/sugar-dash": "dev-master",
         "sugarcraft/sugar-table": "dev-master",
@@ -153,6 +154,13 @@
         {
             "type": "path",
             "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../sugar-bits",
             "options": {
                 "symlink": true
             }
