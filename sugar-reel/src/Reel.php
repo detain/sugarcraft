@@ -37,6 +37,7 @@ final class Reel
      * @param int          $rows  Terminal cell height
      * @param float|null   $fps   FPS override (null = auto from probe)
      * @param bool         $loop  When true, playback restarts at end instead of stopping
+     * @param string       $ramp  Luma ramp name: 'minimal', 'standard', or 'dense'
      */
     private function __construct(
         private readonly string $path,
@@ -45,6 +46,7 @@ final class Reel
         private readonly int $rows,
         private readonly ?float $fps,
         private readonly bool $loop = false,
+        private readonly string $ramp = 'standard',
     ) {
     }
 
@@ -55,7 +57,7 @@ final class Reel
      */
     public static function new(): self
     {
-        return new self('', null, 80, 24, null);
+        return new self('', null, 80, 24, null, false, 'standard');
     }
 
     /**
@@ -64,7 +66,7 @@ final class Reel
      */
     public static function open(string $path): self
     {
-        return new self($path, null, 80, 24, null);
+        return new self($path, null, 80, 24, null, false, 'standard');
     }
 
     /**
@@ -116,6 +118,14 @@ final class Reel
     }
 
     /**
+     * The configured luminance ramp name ('minimal', 'standard', 'dense').
+     */
+    public function ramp(): string
+    {
+        return $this->ramp;
+    }
+
+    /**
      * Set the rendering mode. Returns a new Reel (immutable).
      */
     public function withMode(Mode $mode): self
@@ -139,6 +149,20 @@ final class Reel
     public function withLoop(bool $loop = true): self
     {
         return $this->with(loop: $loop);
+    }
+
+    /**
+     * Set the luminance ramp. Returns a new Reel (immutable).
+     *
+     * @param string $name Ramp name: 'minimal', 'standard', 'dense'
+     * @throws \InvalidArgumentException If the ramp name is unknown
+     */
+    public function withRamp(string $name): self
+    {
+        if (!\SugarCraft\Reel\Render\LumaRamp::isValidRamp($name)) {
+            throw new \InvalidArgumentException("Unknown ramp name: {$name}");
+        }
+        return $this->with(ramp: $name);
     }
 
     /**
@@ -178,8 +202,8 @@ final class Reel
         // Resolve auto-mode to the best available mode at runtime (F3).
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
-        // Create the Player with the configured dimensions, fps, render mode and loop flag.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop);
+        // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp.
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -198,6 +222,7 @@ final class Reel
      * @param int                $rows  Leave null to keep current
      * @param float|null         $fps   Leave null to keep current
      * @param bool|null          $loop  Leave null to keep current
+     * @param string|null        $ramp  Leave null to keep current
      */
     private function with(
         ?string $path = null,
@@ -206,6 +231,7 @@ final class Reel
         ?int $rows = null,
         ?float $fps = null,
         ?bool $loop = null,
+        ?string $ramp = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -217,6 +243,7 @@ final class Reel
             $rows ?? $this->rows,
             $fps ?? $this->fps,
             $loop ?? $this->loop,
+            $ramp ?? $this->ramp,
         );
     }
 }

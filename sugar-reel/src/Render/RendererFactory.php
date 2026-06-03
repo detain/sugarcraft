@@ -86,13 +86,15 @@ final class RendererFactory
 
     /**
      * Return the renderer for the given explicit mode.
+     *
+     * @param string $ramp Luma ramp name: 'minimal', 'standard', 'dense'
      */
-    public static function create(Mode $mode): FrameRenderer
+    public static function create(Mode $mode, string $ramp = 'standard'): FrameRenderer
     {
         return match ($mode) {
-            Mode::Ascii     => new AsciiRenderer(),
-            Mode::Ansi256   => new AsciiRenderer(),
-            Mode::TrueColor => new AsciiRenderer(),
+            Mode::Ascii     => new AsciiRenderer($ramp),
+            Mode::Ansi256   => new AsciiRenderer($ramp),
+            Mode::TrueColor => new AsciiRenderer($ramp),
             Mode::HalfBlock => new HalfBlockRenderer(),
             Mode::Sixel     => new GraphicsRenderer(Mode::Sixel),
             Mode::Kitty     => new GraphicsRenderer(Mode::Kitty),

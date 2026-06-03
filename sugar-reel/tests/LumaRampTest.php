@@ -152,7 +152,7 @@ final class LumaRampTest extends TestCase
     }
 
     /**
-     * @testdox compute() returns BT.709 luminance in 0-255 range
+     * @testdox compute() returns BT.601 luminance in 0-255 range
      */
     public function testComputeReturnsLuminanceInRange(): void
     {
@@ -167,9 +167,9 @@ final class LumaRampTest extends TestCase
     }
 
     /**
-     * @testdox compute() correctly applies BT.709 weights (77R + 150G + 29B) >> 8
+     * @testdox compute() correctly applies BT.601 weights (77R + 150G + 29B) >> 8
      */
-    public function testComputeBt709Weights(): void
+    public function testComputeBt601Weights(): void
     {
         // Red: (77*255 + 150*0 + 29*0) >> 8 = 19659 >> 8 = 76
         $this->assertSame(76, LumaRamp::compute(255, 0, 0));
@@ -249,5 +249,45 @@ final class LumaRampTest extends TestCase
         $char = LumaRamp::char(128.0, 'minimal');
         $this->assertIsString($char);
         $this->assertSame(1, strlen($char));
+    }
+
+    /**
+     * @testdox isValidRamp() returns true for known ramp names
+     */
+    public function testIsValidRampKnownNames(): void
+    {
+        $this->assertTrue(LumaRamp::isValidRamp('minimal'));
+        $this->assertTrue(LumaRamp::isValidRamp('standard'));
+        $this->assertTrue(LumaRamp::isValidRamp('dense'));
+    }
+
+    /**
+     * @testdox isValidRamp() returns false for unknown ramp names
+     */
+    public function testIsValidRampUnknownNames(): void
+    {
+        $this->assertFalse(LumaRamp::isValidRamp('nonexistent'));
+        $this->assertFalse(LumaRamp::isValidRamp(''));
+        $this->assertFalse(LumaRamp::isValidRamp('BT709'));
+    }
+
+    /**
+     * @testdox LumaRamp source must not contain any BT.709 mislabel after J2.3 fix
+     *
+     * The (77,150,29) weights used throughout are BT.601/SMPTE-C, NOT BT.709.
+     * This test guards against docblock regression where BT.709 was incorrectly
+     * used to describe BT.601 weights.
+     */
+    public function testNoBt709MislabelInLumaRampSource(): void
+    {
+        $file = __DIR__ . '/../src/Render/LumaRamp.php';
+        $content = file_get_contents($file);
+
+        // After J2.3 fix, "BT.709" should not appear in this file at all.
+        $this->assertStringNotContainsString(
+            'BT.709',
+            $content,
+            'LumaRamp source must not contain BT.709 — the (77,150,29) weights are BT.601'
+        );
     }
 }

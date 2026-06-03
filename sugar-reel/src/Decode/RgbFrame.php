@@ -8,8 +8,7 @@ namespace SugarCraft\Reel\Decode;
  * A readonly value object holding one raw RGB frame.
  *
  * The frame stores raw rgb24 bytes where each pixel is 3 bytes (R, G, B).
- * Luminance for the frame is computed as BT.709:
- *   Y = 0.2126R + 0.7152G + 0.0722B
+ * Luminance (BT.601) is computed by callers via LumaRamp::compute().
  *
  * @see video_plan.md lines 79-82
  */

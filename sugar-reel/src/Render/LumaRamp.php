@@ -7,11 +7,8 @@ namespace SugarCraft\Reel\Render;
 /**
  * 256-entry luminance-to-character lookup table.
  *
- * Uses the BT.601 luma formula (77R + 150G + 29B) >> 8 — the same weights
- * used by tplay and other video-to-ascii tools. (This is the SMPTE-C
- * coefficients; the BT.709 integer approximation (54R + 183G + 19B) >> 8
- * is visually indistinguishable and the 77/150/29 coefficients are used
- * by upstream tplay.)
+ * Uses the BT.601 (SMPTE-C) luma formula (77R + 150G + 29B) >> 8 — the same
+ * weights used by tplay and other video-to-ascii tools.
  *
  * No single upstream — the luma-ramp technique is drawn from maxcurzi/tplay,
  * seatedro/glyph, and joelibaceta/video-to-ascii.
@@ -75,6 +72,14 @@ final class LumaRamp
     }
 
     /**
+     * Return true if the named ramp is a valid known ramp.
+     */
+    public static function isValidRamp(string $name): bool
+    {
+        return isset(self::RAMPS[$name]);
+    }
+
+    /**
      * Return the character for a given 0-255 luminance value.
      *
      * @param float  $luma Luminance value 0.0 - 255.0
@@ -88,9 +93,9 @@ final class LumaRamp
     }
 
     /**
-     * Compute BT.709 luminance from RGB components.
+     * Compute BT.601 (SMPTE-C) luminance from RGB components.
      *
-     * Y = 0.2126R + 0.7152G + 0.0722B
+     * Y = 0.299R + 0.587G + 0.114B
      * Integer approximation: (77*R + 150*G + 29*B) >> 8
      *
      * @param int $r Red component 0-255
