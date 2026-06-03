@@ -213,6 +213,83 @@ final class SubscriptionsReconcileTest extends TestCase
     }
 
     /**
+     * The Model interface REQUIRES subscriptions(), so the Program must honor a
+     * model's declared subscriptions even when no `subscriptions:` closure is
+     * passed to ProgramOptions. Otherwise every consumer has to remember to wire
+     * `subscriptions: fn($m) => $m->subscriptions()` by hand or their ticks
+     * silently never fire (regression: candy-query admin polling).
+     */
+    public function testProgramStartsSubscriptionWithoutExplicitOptionClosure(): void
+    {
+        [$in, $out, $writer] = $this->pipes();
+        $loop = new StreamSelectLoop();
+
+        $receivedTicks = [];
+
+        // A unique marker message so the startup WindowSizeMsg can't be mistaken
+        // for a tick — only the subscription's produce() emits this type.
+        $tickMsg = new class () implements \SugarCraft\Core\Msg {};
+
+        $model = new class ($receivedTicks, $tickMsg) implements \SugarCraft\Core\Model {
+            use SubscriptionCapable;
+            public const TICK_ID = 'default-tick';
+
+            /** @var list<object> */
+            private array $ticks;
+            private \SugarCraft\Core\Msg $tickMsg;
+
+            public function __construct(array &$ticks, \SugarCraft\Core\Msg $tickMsg)
+            {
+                $this->ticks = &$ticks;
+                $this->tickMsg = $tickMsg;
+            }
+
+            public function init(): ?\Closure
+            {
+                return null;
+            }
+
+            public function update(\SugarCraft\Core\Msg $msg): array
+            {
+                if ($msg === $this->tickMsg) {
+                    $this->ticks[] = $msg;
+                }
+                return [$this, null];
+            }
+
+            public function view(): string
+            {
+                return '';
+            }
+
+            public function subscriptions(): ?Subscriptions
+            {
+                $tick = $this->tickMsg;
+                return (new Subscriptions())->withTick(self::TICK_ID, 0.1, static fn () => $tick);
+            }
+        };
+
+        // NOTE: no `subscriptions:` argument — the Program must default to
+        // calling $model->subscriptions() on its own.
+        $program = new Program($model, new ProgramOptions(
+            useAltScreen: false,
+            catchInterrupts: false,
+            hideCursor: false,
+            framerate: 60.0,
+            input: $in,
+            output: $out,
+            loop: $loop,
+        ));
+
+        $loop->addTimer(0.3, static fn () => $loop->stop());
+        $program->run();
+
+        $this->assertNotEmpty($receivedTicks, 'Model-declared tick should fire without an explicit subscriptions closure');
+        fclose($writer);
+        fclose($in);
+    }
+
+    /**
      * @group slow
      * @group subscription-timing
      *
