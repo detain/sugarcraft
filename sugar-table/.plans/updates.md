@@ -159,7 +159,18 @@ Each entry should have:
 - Step 5.4 (tests): **COMPLETED** ✅
   - TableGlobalSearchTest: 30 tests, 51 assertions - all passing
   - Tests cover: search in all columns, case-insensitive, empty search, ClearSearch, search+Filter combos, immutability, selectedIndex reset
-- Step 5.5 (docs): Pending
+- Step 5.5 (docs): **COMPLETED** ✅
+  - Added Global Search section to README.md with:
+    - Usage examples showing search() and ClearSearch()
+    - How it works (case-insensitive, OR logic, combines with filters)
+    - Interaction with Filter() table showing AND+OR logic
+  - Added pattern:global-search to CALIBER_LEARNINGS.md documenting:
+    - OR vs AND logic distinction between search() and Filter()
+    - The stacking behavior in filteredSortedRows()
+  - Enhanced docblocks for search() and ClearSearch() with:
+    - Full description of behavior
+    - @param and @return annotations
+    - @see references to related methods
 
 ### Phase 6: Row Expansion
 - Step 6.1 (impl): Pending

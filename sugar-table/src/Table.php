@@ -474,8 +474,18 @@ final class Table
     /**
      * Search across ALL columns (case-insensitive).
      *
-     * When $text is empty, clears the global search.
-     * Combines with existing column filters — row must match both.
+     * Applies a global full-text search across every column in the table.
+     * Matching is case-insensitive and uses OR logic: a row is included if
+     * ANY column's value contains the search text.
+     *
+     * Combines with column filters (Filter()) via AND logic — a row must
+     * satisfy both the global search and all active column filters.
+     *
+     * @param string $text The search string. Empty string clears the search.
+     * @return self A new Table instance with the search applied.
+     *
+     * @see Filter()   For per-column filtering with AND logic
+     * @see ClearSearch()  For explicitly clearing the global search
      */
     public function search(string $text): self
     {
@@ -487,6 +497,14 @@ final class Table
 
     /**
      * Clear the global search.
+     *
+     * Removes the active global search filter, showing all rows (subject to
+     * any remaining column filters from Filter()).
+     *
+     * @return self A new Table instance with global search cleared.
+     *
+     * @see search()  For setting a global search
+     * @see Filter()  For per-column filtering
      */
     public function ClearSearch(): self
     {
