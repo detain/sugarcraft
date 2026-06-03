@@ -24,6 +24,24 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   [0.0, 100.0]` validated at `Column::withColumnWidth()`. See `ColumnWidth.php`
   and `Table.php` lines 468–527.
 
+- **[pattern:column-width-rendering]** `computeColumnWidths()` is called at the
+  start of `renderToBuffer()` and the resulting widths are passed to
+  `fillHeaderRow()` and `fillDataRow()`. This ensures computed widths — not raw
+  `Column.width` values — are used consistently across the entire render pass
+  (header, separators, data cells). The widths are cached in
+  `$this->computedColumnWidths` for the duration of the render. See
+  `Table.php` lines 661–722 and `computeTotalWidth()` which also calls
+  `computeColumnWidths()` to maintain consistency between total width calculation
+  and actual rendering (lines 1304–1326).
+
+- **[pattern:computeTotalWidth-single-pass]** `computeTotalWidth()` uses a
+  single-pass approximation that may not converge when mixing
+  `ColumnWidth::Percent` with `ColumnWidth::Dynamic`/`Content`. The method
+  should iterate until the result stabilizes (the iteration converges in 3–6
+  steps for typical tables). Until fixed, avoid combinations that trigger
+  non-convergence, or use all-Fixed widths for predictable sizing. See
+  `Table.php` lines 1304–1326.
+
 - **[pattern:cell-wrap-return-list-string]** renderCell returns list for wrapping;
   callers use `$cell[0]`. `Column::renderCell()` always returns `list<string>` (one
   per line after wrapping). Single-line callers (e.g. `renderHeader()`) use only

@@ -46,7 +46,13 @@ Each entry should have:
     - `testDynamicColumnMinimumWidthInNarrowTable` - Dynamic min-width in tiny tables
     - `testPercentColumnInNarrowTable` - Percent columns in narrow tables
   - All 177 tests pass (363 assertions)
-- Step 1.5 (docs): Pending
+- Step 1.5 (docs): **COMPLETED** ✅
+  - Updated README.md ColumnWidth section with computed widths clarification
+  - Added Dynamic+Content example to README
+  - Added pattern:column-width-rendering to CALIBER_LEARNINGS.md
+  - Added pattern:computeTotalWidth-single-pass (known limitation) to CALIBER_LEARNINGS.md
+  - Updated renderToBuffer docblock to mention computed widths usage
+  - Example file removed (triggers pre-existing computeTotalWidth bug)
 
 ### Phase 2: Frozen Columns
 - Step 2.1 (impl): Pending
