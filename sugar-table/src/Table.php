@@ -73,10 +73,21 @@ final class Table
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
     private int $scrollY = 0;
 
-    // Zebra stripes
+    // Zebra stripes.
+    // The stripe MUST carry a foreground as well as a background: a background
+    // alone leaves the text at the terminal's default foreground, which has no
+    // guaranteed contrast against the stripe (near-white default fg over a light
+    // stripe renders as invisible text). Pair the light background with a black
+    // foreground so striped rows stay readable on any theme — the same way the
+    // selected row stays readable via reverse video.
+    //
+    // The stripe falls on EVEN row indices (0, 2, 4…) so it begins on the first
+    // row. The default cursor sits on row 0, whose reverse-video highlight already
+    // reads as a light bar; starting the stripe on row 0 lets the two coincide
+    // instead of stacking two light rows (selected row + first stripe) at the top.
     private bool $zebraEnabled = false;
-    private string $zebraStyleOdd  = '100';  // bright black (dim)
-    private string $zebraStyleEven = '';
+    private string $zebraStyleEven = '30;47';  // even rows: black on light-gray
+    private string $zebraStyleOdd  = '';
 
     // Per-cell style callback: (int $row, int $col, string $value): Style|string
     /** @var callable|null */
