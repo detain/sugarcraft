@@ -888,9 +888,9 @@ CREATE TABLE tool_calls (
 
 ---
 
-## RESUME CHECKPOINT (June 3, 2026 - After Phase 6.1)
+## RESUME CHECKPOINT (June 3, 2026 - ALL PHASES COMPLETE)
 
-### Completed Phases
+### Completed Phases - ALL 8 PHASES DONE
 
 | Phase | Status | Steps | Notes |
 |-------|--------|-------|-------|
@@ -899,64 +899,144 @@ CREATE TABLE tool_calls (
 | Phase 3: Provider Integration | ✅ Complete | 3.1-3.6 | OpenAI, SGLANG, Claude Code, Bedrock, Vertex, Custom, ProviderFactory |
 | Phase 4: Skills System | ✅ Complete | 4.1-4.4 | Skill, SkillLoader, SkillRegistry, BuiltIn skills, SkillManager |
 | Phase 5: Hooks System | ✅ Complete | 5.1-5.3 | HookInterface, HookContext, HookResult, HookRegistry, BuiltIn hooks, HookConfig, HookManager |
-| Phase 6: Agents | 🔄 In Progress | 6.1 ✅ | Agent, AgentDefinition - Step 6.2 next |
+| Phase 6: Agents | ✅ Complete | 6.1-6.2 | Agent, AgentManager, SubAgent with streaming support |
+| Phase 7: MCP Integration | ✅ Complete | 7.1 | McpClient, McpTool, StdioMcpServer, HttpMcpServer |
+| Phase 8: Polish | ✅ Complete | 8.1-8.5 | Runtime, SessionStore, TokenTracker, StatusBar, Exporter |
 
-### Next Step: Step 6.2 - Agent Manager
+### ALL STEPS COMPLETE - CandyCrush Implementation Finished
 
-**File:** `.candy-crush-plan/steps/6.2_agent_manager.md`
+**Date:** June 3, 2026
 
-Step 6.2 implements AgentManager for managing subagents.
+The CandyCrush AI coding assistant TUI implementation is complete through all 8 phases.
 
 ### What Was Committed (June 3, 2026)
 
 ```
-feat(candy-crush): Phase 4-6 completion - Skills, Hooks, Agents systems
-
-Phase 4 (Skills System):
-- Skill value object with frontmatter parsing
-- SkillLoader and SkillRegistry with priority chain
-- 4 built-in skills (php-best-practices, security-audit, phpunit-master, composer-wizard)
-- SkillManager integration with App
-
-Phase 5 (Hooks System):
-- HookInterface, HookContext, HookResult, HookEvent enum
-- HookRegistry with regex-based matching
-- 3 built-in hooks (ProtectFilesHook, ConfirmRemoveHook, AuditHook)
-- HookConfig YAML loading, ScriptHook, HookManager
+feat(candy-crush): Phase 6-8 completion - Agents, MCP, Runtime, Session, Polish
 
 Phase 6 (Agents):
 - Agent value object with immutable builders
-- AgentDefinition with 6 built-in types
+- AgentManager for subagent lifecycle (create, execute, stop, remove)
+- SubAgent state machine with 6 status constants
+- 39 tests
 
-Tests: 250+ tests across all new systems
-Docs: README.md and CALIBER_LEARNINGS.md updated
+Phase 7 (MCP Integration):
+- McpClient with config loading and server management
+- McpTool, StdioMcpServer, HttpMcpServer
+- JSON-RPC 2.0 protocol compliance
+- 15 tests
+
+Phase 8.1 (Streaming Runtime):
+- Runtime class orchestrating provider interactions
+- runStreaming() and runBatch() with tool call handling
+- Pre/post hook integration with duration tracking
+- 15 tests
+
+Phase 8.2 (Session Persistence):
+- SessionStore with SQLite WAL mode
+- Sessions, messages, tool_calls schema
+- 16 tests
+
+Phase 8.3-8.5 (Polish):
+- TokenTracker for token counting and cost tracking
+- StatusBar TUI component with TokyoNight colors
+- Exporter for markdown/json/text formats
+- 42 tests
+
+112+ tests total across all phases
+All PHP syntax checks pass
+PSR-12 compliance verified
 ```
 
-### How to Resume
+### How to Resume (Next Session)
 
 1. Read `.candy-crush-plan/supervisor/SUPERVISOR.md` for supervisor instructions
 2. Read `.candy-crush-plan/updates.md` for detailed progress notes
-3. Read `.candy-crush-plan/steps/6.2_agent_manager.md` for next step
-4. Start Supervisor with: Spawn Coder agent using step file path
+3. Read `crush_ai.md` for full project documentation
+4. Implementation is complete - next steps would be:
+   - Integration testing
+   - CLI entry point (bin/candy-crush)
+   - Example scripts
+   - User documentation
 
-### Project Structure (Current)
+### Project Structure (Final)
 
 ```
 candy-crush/
 ├── src/
-│   ├── Agents/           # ✅ Agent.php, AgentDefinition.php
-│   ├── App/              # ✅ App.php (skill integration added)
-│   ├── Hooks/            # ✅ Full hooks system
-│   │   └── BuiltIn/      # ✅ ProtectFilesHook, ConfirmRemoveHook, AuditHook
+│   ├── Agents/           # ✅ Agent.php, AgentDefinition.php, AgentManager.php, SubAgent.php
+│   ├── App/              # ✅ App.php, AppBuilder.php
+│   ├── Hooks/            # ✅ Full hooks system with BuiltIn/
+│   ├── MCP/              # ✅ McpClient.php, McpTool.php, McpServer.php, StdioMcpServer.php, HttpMcpServer.php
+│   ├── Messages/         # ✅ Message.php, UserMessage, AssistantMessage, SystemMessage, ToolResultMessage
 │   ├── Providers/        # ✅ All 7 providers + ProviderFactory
-│   ├── Skills/           # ✅ Full skills system
-│   │   └── BuiltIn/      # ✅ 4 built-in skills
-│   ├── Tui/              # ✅ Components, Renderer, Pane, Menu
-│   ├── Tools/            # ✅ Tool.php, ToolCall.php, ToolResult.php
-│   ├── Messages/         # ✅ Messages system
-│   └── Config/           # 📋 To be implemented
+│   ├── Session/          # ✅ SessionStore.php (SQLite WAL)
+│   ├── Skills/           # ✅ Full skills system with BuiltIn/
+│   ├── Tools/            # ✅ Tool.php, ToolCall.php, ToolResult.php, BuiltIn/
+│   ├── Tui/              # ✅ Components/, Renderer.php, Pane.php, Menu/, BorderFrame.php, StatusBar.php
+│   ├── Util/             # ✅ TokenTracker.php, Exporter.php
+│   ├── Runtime.php       # ✅ Main runtime with streaming support
+│   └── Config/           # 📋 Hooks config
 ├── tests/                # ✅ 250+ tests
-└── examples/             # 📋 To be implemented
+├── examples/             # 📋 To be implemented
+└── bin/                  # 📋 CLI entry point
 ```
 
 Legend: ✅ = Implemented | 📋 = Not yet implemented
+
+---
+
+## Implementation Phases - ALL COMPLETE ✓
+
+### Phase 1: Core Foundation
+- [x] Project scaffold with composer.json, phpunit.xml
+- [x] Provider interface and basic providers (OpenAI, Anthropic)
+- [x] Message and Tool classes
+- [x] Basic App state (immutable, with* builders)
+- [x] AppBuilder
+
+### Phase 2: TUI
+- [x] Pane enum and Renderer framework
+- [x] Multi-pane layout (Chat, Input, Files, Tools)
+- [x] Menu bar system
+- [x] Keyboard handling (bubbling, pane focus)
+- [x] Basic styling (TokyoNight colors)
+
+### Phase 3: Provider Integration
+- [x] OpenAI provider (openai-php/client)
+- [x] SGLANG provider (OpenAI-compatible)
+- [x] Claude Code provider (CLI wrapper)
+- [x] Bedrock provider
+- [x] Vertex provider
+- [x] Custom provider (generic OpenAI-compatible)
+
+### Phase 4: Skills System
+- [x] Skill value object and loader
+- [x] Skill registry
+- [x] Built-in PHP-focused skills
+- [x] Skill auto-discovery and matching
+
+### Phase 5: Hooks System
+- [x] Hook interface and registry
+- [x] PreToolUse and PostToolUse hooks
+- [x] Built-in hooks (protect-files, confirm-rm, etc.)
+- [x] Hook configuration YAML parsing
+
+### Phase 6: Agents
+- [x] Agent value object
+- [x] Agent manager with subagent lifecycle
+- [x] Built-in agent types (coder, reviewer, debugger, architect, tester, devops)
+- [x] Subagent execution with streaming
+
+### Phase 7: MCP Integration
+- [x] MCP client wrapper
+- [x] MCP server manager
+- [x] STDIO and HTTP server implementations
+- [x] MCP tool discovery
+
+### Phase 8: Polish
+- [x] Streaming output rendering via Runtime
+- [x] Session persistence (SQLite WAL)
+- [x] Token tracking and cost calculation
+- [x] Status bar component
+- [x] Export functionality (Markdown, JSON, Text)
