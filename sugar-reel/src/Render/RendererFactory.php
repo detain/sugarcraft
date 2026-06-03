@@ -43,6 +43,8 @@ final class RendererFactory
             return Mode::Sixel;
         }
         if ($report->has(Capability::KittyKeyboard)) {
+            // Note: Kitty image mode is gated on Capability::KittyKeyboard because
+            // candy-palette exposes no standalone KittyGraphics capability.
             return Mode::Kitty;
         }
         if ($report->has(Capability::ITerm2)) {

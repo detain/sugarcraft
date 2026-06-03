@@ -38,6 +38,11 @@ final class HalfBlockRenderer implements FrameRenderer
         imagedestroy($gd);
 
         // Delegate to candy-mosaic's HalfBlockRenderer (HalfBlockRenderer.php:33).
+        // NOTE: This renderer is the "Mosaic" path — it is NEVER used by Player::view()
+        // at runtime (Player uses the inline Buffer path in frameToBuffer instead).
+        // This class exists for direct RendererFactory::create(Mode::HalfBlock) callers
+        // and is guarded by testHalfBlockInlineMatchesMosaicRenderer, which asserts
+        // that both paths produce identical colored half-block cells.
         $renderer = new MosaicHalfBlockRenderer();
 
         // Half-block uses full width in cells, double height density.
