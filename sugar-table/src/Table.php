@@ -858,11 +858,18 @@ final class Table
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator - drawn after current column's right edge
+            // Column separator - only drawn between actual visible columns.
+            // A separator is needed after ci if:
+            // - ci is frozen (always marks boundary even when next is hidden), OR
+            // - ci is visible AND the next column (ci+1) is also visible
             if ($ci < \count($this->columns) - 1) {
-                $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-                $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                $col++;
+                $ciFrozen = \in_array($ci, $this->frozenCols, true);
+                $nextVisible = $this->isColumnVisible($ci + 1);
+                if ($ciFrozen || $nextVisible) {
+                    $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+                    $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                    $col++;
+                }
             }
         }
 
@@ -960,11 +967,18 @@ final class Table
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator - drawn after current column's right edge
+            // Column separator - only drawn between actual visible columns.
+            // A separator is needed after ci if:
+            // - ci is frozen (always marks boundary even when next is hidden), OR
+            // - ci is visible AND the next column (ci+1) is also visible
             if ($ci < \count($this->columns) - 1) {
-                $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-                $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                $col++;
+                $ciFrozen = \in_array($ci, $this->frozenCols, true);
+                $nextVisible = $this->isColumnVisible($ci + 1);
+                if ($ciFrozen || $nextVisible) {
+                    $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+                    $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                    $col++;
+                }
             }
         }
 
@@ -1111,10 +1125,17 @@ final class Table
                 $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
                 $col += $colWidth;
 
-                // Column separator
+                // Column separator - only drawn between actual visible columns.
+                // A separator is needed after ci if:
+                // - ci is frozen (always marks boundary even when next is hidden), OR
+                // - ci is visible AND the next column (ci+1) is also visible
                 if ($ci < \count($this->columns) - 1) {
-                    $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                    $col++;
+                    $ciFrozen = \in_array($ci, $this->frozenCols, true);
+                    $nextVisible = $this->isColumnVisible($ci + 1);
+                    if ($ciFrozen || $nextVisible) {
+                        $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                        $col++;
+                    }
                 }
             }
 
