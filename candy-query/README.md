@@ -90,7 +90,7 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `MysqlExplainProvider` | `ExplainProviderInterface` via `EXPLAIN`. Returns `EXPLAIN` formatted rows with tag/parent/detail/indent. |
 | `PostgresExplainProvider` | `ExplainProviderInterface` via `EXPLAIN (ANALYZE, FORMAT JSON)`. Parses JSON structure for tree hierarchy. |
 | `AdminProviderInterface` | Flavor-agnostic interface for admin operations: `dashboard()`, `connections()`, `serverInfo()`. Bridges to `ServerContextInterface` and `ServerContext`. |
-| `MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW PROCESSLIST`, and `SHOW REPLICA STATUS`. |
+| `MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW REPLICA STATUS`, and `fetchProcesslist()` (prefers Performance Schema `performance_schema.threads` with graceful fallback to `SHOW FULL PROCESSLIST` on permission errors). |
 | `PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
 | `PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. Includes `parseSharedBuffers()` for byte conversion. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
