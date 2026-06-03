@@ -391,6 +391,12 @@ final class Table
 
     /**
      * Check if a specific row object is expanded (internal helper for rendering).
+     *
+     * Mirrors charmbracelet/bubbletea.Table.isExpandedByRow.
+     * Uses object identity to check if the row is in the expandedRows list.
+     *
+     * @param Row $row The row object to check (identity-based, not index-based)
+     * @return bool True if the row is currently expanded
      */
     private function isExpandedByRow(Row $row): bool
     {

@@ -467,6 +467,81 @@ Column::new('code', 'Code', 5)->withWrapMode(WrapMode::Character);
 // "ABCDEFGHIJ" → "ABCDE", "FGHIJ" (2 lines)
 ```
 
+## Row Expansion
+
+Expand rows to display full content without column width truncation:
+
+```php
+use SugarCraft\Table\{Table, Column, Row, RowData};
+
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('desc', 'Desc',  15),   // truncated at 15 chars normally
+])
+    ->withRows([
+        Row::new(RowData::from([
+            'id'   => '1',
+            'name' => 'Alice',
+            'desc' => 'This is a very long description that would normally be truncated',
+        ])),
+        Row::new(RowData::from([
+            'id'   => '2',
+            'name' => 'Bob',
+            'desc' => 'Short',
+        ])),
+    ])
+    ->withExpandedRows([0]);              // expand row 0 (Alice)
+
+echo $t->View();
+// Row 0 (Alice): full description visible — not truncated to 15 chars
+// Row 1 (Bob):   normal truncation applies
+```
+
+### Toggle Expansion
+
+Use `toggleExpanded()` to interactively expand/collapse rows:
+
+```php
+$t = $t->toggleExpanded(0);   // expand row 0 (Alice)
+$t = $t->toggleExpanded(0);   // collapse row 0 (back to truncated)
+$t = $t->toggleExpanded(1);   // expand row 1 (Bob)
+```
+
+### Check Expansion State
+
+Use `isExpanded()` to query whether a row is currently expanded:
+
+```php
+$t = $t->withExpandedRows([0]);
+$t->isExpanded(0);   // true — row 0 is expanded
+$t->isExpanded(1);   // false — row 1 is not expanded
+```
+
+### How It Works
+
+- **Row identity**: Expanded rows are tracked by object identity (`Row` instance),
+  not by index — this is stable across page navigation
+- **Pagination**: All expansion methods (`withExpandedRows`, `toggleExpanded`,
+  `isExpanded`) use page-relative indices via `pagedRows()`
+- **Multiline mode**: In `multilineMode=true`, expanded rows also bypass column
+  width constraints so all wrapped content is visible
+- **No content filtering**: Expansion does not filter or transform row data;
+  it only controls rendering behavior (truncation vs full display)
+- **Fail fast**: Invalid indices throw `OutOfBoundsException`
+
+```php
+// Combined with pagination — page 1
+$t = $t->withPageSize(10)->withPage(1)->withExpandedRows([0]);
+
+// Row index 0 refers to the first row on page 1, not the first row overall
+$t->isExpanded(0);   // true — row 0 on page 1 is expanded
+
+// Row index 5 on page 2 might be a different Row object
+$t = $t->withPage(2);
+$t->isExpanded(5);   // depends on whether that row was expanded on page 2
+```
+
 ## Shared foundations
 
 sugar-table adopts `candy-buffer` for all buffer-based rendering. The table's internal
