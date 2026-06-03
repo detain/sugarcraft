@@ -95,13 +95,13 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
 | `PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. Includes `parseSharedBuffers()` for byte conversion. |
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
-| `ServerStatusPage` | Admin page displaying server info, features, directories, SSL, replication, and firewall panels. `r` refresh, `q` quit. |
+| `ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for rate calculations. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. Mirrors `charmbracelet/lazysql` VariablesPage. |
 | `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET GLOBAL PERSIST`. Uses prepared statements, handles errors 1142/1227/3680. Mirrors `mysql-workbench wb_admin_variable_editor`. |
 | `ReplicaStatusProvider` | Fetches replica status via `SHOW REPLICA STATUS` (MySQL 8+) or `SHOW SLAVE STATUS` (MySQL 5.x/MariaDB), graceful 1227 handling. |
 | `SidebarGauge` | Single metric gauge with threshold coloring (green/yellow/red). CPU uses circular GaugeCircle; others use horizontal Gauge. |
-| `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional Sampler. |
+| `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional `Sampler` for rate calculations. Traffic gauge uses Sampler delta for baseline-corrected ratio. |
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, group memberships. Single MySQL system variable. |
 | `Catalog` | Loads `data/variable_metadata.json` (73 variables, 16 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`. |
 | `Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. |
