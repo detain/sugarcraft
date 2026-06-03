@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Connections;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\StatusSnapshot;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Table\{Column, Row, RowData, Table};
 
 /**
@@ -159,17 +161,42 @@ final class ConnectionsPage extends PageBase
      */
     protected function build(): string
     {
-        $lines = [];
+        return implode("\n", [
+            Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Connections'),
+            '',
+            $this->renderCounters(),
+            '',
+            $this->getTable()->View(),
+        ]);
+    }
 
-        // Render counters bar
-        $counters = $this->counters;
-        $lines[] = "Connections: {$counters->threadsConnected} / {$counters->maxConnections}";
+    /**
+     * Render the connection counters as a single styled summary line. The
+     * usage figure colours itself green/red at the critical-usage threshold.
+     *
+     * (Dash\Stat / Metric were considered but fit poorly here: Stat's align is
+     * inverted and Metric is float-only, so neither renders the mixed integer +
+     * "%" counters cleanly — a Sprinkles\Style line reads better.)
+     */
+    private function renderCounters(): string
+    {
+        $c = $this->counters;
+        $label = Style::new()->foreground(Color::hex('#6b7280'));
+        $value = Style::new()->foreground(Color::hex('#cdd6f4'));
+        $usageStyle = Style::new()->foreground(
+            $c->isConnectionUsageCritical() ? Color::hex('#f38ba8') : Color::hex('#a6e3a1'),
+        );
 
-        // Render table
-        $table = $this->getTable();
-        $lines[] = $table->View();
+        $pairs = [
+            $label->render('Connected ') . $value->render((string) $c->threadsConnected),
+            $label->render('Running ') . $value->render((string) $c->threadsRunning),
+            $label->render('Cached ') . $value->render((string) $c->threadsCached),
+            $label->render('Max ') . $value->render((string) $c->maxConnections),
+            $label->render('Usage ') . $usageStyle->render(number_format($c->connectionUsageRatio() * 100.0, 1) . '%'),
+            $label->render('Aborted ') . $value->render((string) $c->abortedConnects),
+        ];
 
-        return implode("\n", $lines);
+        return implode($label->render('  ·  '), $pairs);
     }
 
     /**
