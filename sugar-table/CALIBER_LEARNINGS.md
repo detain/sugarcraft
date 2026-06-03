@@ -17,6 +17,17 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   window is rendered. Callers drive `withScrollY()` to scroll. See `Table.php` lines
   566–573.
 
+- **[pattern:frozen-columns]** pin columns from the left via `withFrozenCols([$idx, ...])`.
+  `isColumnVisible(int $colIndex)` determines visibility: frozen columns (in
+  `$this->frozenCols`) are always visible; non-frozen columns are visible starting
+  at index `count($this->frozenCols) + $this->scrollX`. `computeVisibleContentWidth()`
+  sums widths of visible columns plus 1-char separators between consecutive visible
+  columns — used by `fillHeaderSeparatorRow()` for correct border sizing. When
+  rendering, skipped columns still increment the buffer column position (`$col += $colWidth`)
+  so subsequent visible columns align correctly. See `Table.php` lines 194–206
+  (withFrozenCols/withScrollX), 740–747 (isColumnVisible), 752–768
+  (computeVisibleContentWidth), and 807–827 (fillHeaderRow visibility skip).
+
 - **[pattern:column-width-enum]** Fixed/Percent/Dynamic/Content with multi-pass
   computation. `Table::computeColumnWidths()` runs two passes: first collects
   explicit widths and counts flex slots, then distributes remaining space to

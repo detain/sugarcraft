@@ -182,6 +182,65 @@ $currentScroll = $t->scrollY();        // get current scroll offset
 The table automatically slices the visible row range from the filtered+sorted view.
 `scrollY()` returns the current vertical scroll offset.
 
+## Frozen Columns
+
+Pin columns from the left so they remain visible when scrolling horizontally:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+    Column::new('note', 'Note',  40),
+])->withRows([...])
+  ->withFrozenCols([0, 1]);           // freeze ID and Name columns
+
+echo $t->View();                       // ID and Name always visible
+```
+
+### How It Works
+
+- **Frozen columns** (specified by index) are always rendered, regardless of scroll position
+- **Non-frozen columns** scroll horizontally: they become visible starting at index `count(frozenCols) + scrollX`
+- Use `withScrollX($offset)` to scroll the non-frozen columns
+
+### Frozen Columns with Horizontal Scroll
+
+Combine frozen columns with `scrollX` for a spreadsheet-like experience:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+    Column::new('note', 'Note',  40),
+    Column::new('tags', 'Tags',  20),
+])->withRows([...])
+  ->withFrozenCols([0, 1])            // freeze ID and Name
+  ->withScrollX(2);                   // skip 2 non-frozen columns (City, Note)
+
+echo $t->View();
+// Visible columns: ID, Name, Tags
+// City and Note columns are hidden (scrolled out of view)
+```
+
+### Visibility Logic
+
+A column is visible when:
+
+1. Its index is in the `frozenCols` array (always visible), OR
+2. Its index >= `count(frozenCols) + scrollX` (in the scrollable region)
+
+```php
+// Given: frozenCols = [0, 2], scrollX = 1
+// Non-frozen columns start at index: 2 + 1 = 3
+// Column 0 (frozen):  visible
+// Column 1 (index 1): NOT visible (1 < 3)
+// Column 2 (frozen):  visible
+// Column 3 (index 3): visible (3 >= 3)
+// Column 4 (index 4): visible (4 >= 3)
+```
+
 ## Column Width Computation
 
 Compute actual column widths from `ColumnWidth` enum values:
