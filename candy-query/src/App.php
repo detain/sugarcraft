@@ -401,7 +401,7 @@ final class App implements Model
      * instantiate the appropriate PageBase subclass. Cache is invalidated
      * when adminPane changes (via withAdminPane resetting adminPage to null).
      *
-     * Note: ProcessList and ConnStats currently use DashboardPage as placeholder
+      * Note: ProcessList and Dashboard currently use DashboardPage as placeholder
      * since ConnectionsPage does not extend PageBase. Full ConnectionsPage
      * integration will come in a later phase.
      */
@@ -428,7 +428,7 @@ final class App implements Model
 
         return match ($this->adminPane) {
             AdminPane::ProcessList => ConnectionsPage::new($context),
-            AdminPane::ConnStats => new DashboardPage($context),
+            AdminPane::Dashboard => new DashboardPage($context),
             AdminPane::Variables => VariablesPage::new($context),
             AdminPane::Status => ServerStatusPage::new($context),
             AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
