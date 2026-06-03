@@ -135,4 +135,41 @@ final class ReelTest extends TestCase
         $this->assertSame(30, $reel->rows());
         $this->assertSame(25.0, $reel->fps());
     }
+
+    // -------------------------------------------------------------------------
+    // loop() / withLoop()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox loop() defaults to false
+     */
+    public function testLoopDefaultsToFalse(): void
+    {
+        $this->assertFalse(Reel::new()->loop());
+        $this->assertFalse(Reel::open('/tmp/x.mp4')->loop());
+    }
+
+    /**
+     * @testdox withLoop() enables looping (defaults to true) immutably
+     */
+    public function testWithLoopEnablesLoopImmutably(): void
+    {
+        $original = Reel::open('/tmp/x.mp4');
+        $looping = $original->withLoop();
+
+        $this->assertNotSame($original, $looping);
+        $this->assertFalse($original->loop());
+        $this->assertTrue($looping->loop());
+        // Other fields are preserved across the with*() call.
+        $this->assertSame('/tmp/x.mp4', $looping->path());
+    }
+
+    /**
+     * @testdox withLoop(false) explicitly disables looping
+     */
+    public function testWithLoopFalseDisablesLoop(): void
+    {
+        $reel = Reel::open('/tmp/x.mp4')->withLoop()->withLoop(false);
+        $this->assertFalse($reel->loop());
+    }
 }
