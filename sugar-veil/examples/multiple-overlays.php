@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use SugarCraft\Veil\Position;
 use SugarCraft\Veil\Veil;
 
 // Simulated base terminal content
@@ -49,25 +50,70 @@ $modal = [
 ];
 
 // Stack: base → tooltip → modal
-// The Veil::composite() method takes base and an array of overlays
-// Overlays are drawn in order, so put tooltip first (below modal)
-$veil = new Veil();
-$rendered = $veil->composite($base, [$tooltip, $modal]);
+// Veil::composite() composites one foreground over one background.
+// For multiple overlays, composite from bottom to top: base → tooltip → modal
+//
+// Note: Veil uses diff encoding for subsequent composites to optimize SSH bandwidth.
+// For demos, we create fresh instances to show full output each time.
 
-echo "With tooltip (top-right) + modal (centered) composited:\n";
-echo $rendered . "\n";
+$veil = Veil::new();
 
-// Composite just the modal
-$renderedModal = $veil->composite($base, [$modal]);
+// Tooltip at top-right with RIGHT anchor
+// xOffset/yOffset allow fine-tuning from the anchor position
+$withTooltip = $veil->composite(
+    $tooltip['content'],
+    $base,
+    Position::TOP,
+    Position::RIGHT,
+    0,
+    3,
+);
+
+echo "With tooltip (top-right) composited:\n";
+echo $withTooltip . "\n\n";
+
+// Reset to get full frame output (diff encoding is for SSH optimization)
+$veil->resetPreviousFrame();
+
+// Modal centered - composite tooltip result over modal
+$withBoth = $veil->composite(
+    $modal['content'],
+    $withTooltip,
+    Position::CENTER,
+    Position::CENTER,
+    0,
+    0,
+);
+
+echo "With tooltip + modal (centered) composited:\n";
+echo $withBoth . "\n\n";
+
+// Fresh instance for clean full output
+$veil2 = Veil::new();
+
+$renderedModal = $veil2->composite(
+    $modal['content'],
+    $base,
+    Position::CENTER,
+    Position::CENTER,
+);
 echo "Modal only:\n";
-echo $renderedModal . "\n";
+echo $renderedModal . "\n\n";
 
-// Composite just the tooltip
-$renderedTooltip = $veil->composite($base, [$tooltip]);
+// Fresh instance for clean full output
+$veil3 = Veil::new();
+
+$renderedTooltip = $veil3->composite(
+    $tooltip['content'],
+    $base,
+    Position::TOP,
+    Position::RIGHT,
+    0,
+    3,
+);
 echo "Tooltip only:\n";
-echo $renderedTooltip . "\n";
+echo $renderedTooltip . "\n\n";
 
-// Empty overlay = base only
-$renderedBase = $veil->composite($base, []);
+// Base only (no overlay)
 echo "Base only (no overlay):\n";
-echo $renderedBase . "\n";
+echo $base . "\n";

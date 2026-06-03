@@ -69,7 +69,7 @@ Each entry should have:
   - Issue 2 (missing separator): Fixed - separator drawn after each column's right edge, not based on next column's visibility
   - Issue 3 (separator width): Added computeVisibleContentWidth helper that accounts for column widths + separators between consecutive visible columns
   - All 177 tests pass
-- Step 2.4 (tests): Pending
+- Step 2.4 (tests): **IN_PROGRESS**
 - Step 2.5 (docs): Pending
 
 ### Phase 3: Multiline Mode

@@ -54,7 +54,9 @@ final class Detect
 
         // Env vars gave a definite answer — no DA1 needed.
         if ($cap->kitty || $cap->iterm2) {
-            return $cap->withCellSize(self::probeFontSize());
+            $result = $cap->withCellSize(self::probeFontSize());
+            self::drainStdin(50, self::stdinFd());
+            return $result;
         }
 
         // Run DA1 sixel probing BEFORE font-size probing so that in tests
@@ -62,10 +64,16 @@ final class Detect
         // by probeFontSize() before probeDa1() gets to read them.
         $sixelViaDa1 = self::probeDa1();
         if ($sixelViaDa1 === true) {
-            return Capability::sixel(self::probeFontSize(), $inTmux);
+            $result = Capability::sixel(self::probeFontSize(), $inTmux);
+            self::drainStdin(50, self::stdinFd());
+            return $result;
         }
 
-        return $cap->withCellSize(self::probeFontSize());
+        $result = $cap->withCellSize(self::probeFontSize());
+        // Drain any remaining probe-response bytes so they don't appear
+        // as stray output before the image render.
+        self::drainStdin(50, self::stdinFd());
+        return $result;
     }
 
     /**
