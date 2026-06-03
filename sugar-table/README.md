@@ -241,6 +241,55 @@ A column is visible when:
 // Column 4 (index 4): visible (4 >= 3)
 ```
 
+## Horizontal Scroll
+
+Scroll horizontally through columns that exceed the table width:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+    Column::new('note', 'Note',  40),
+])->withRows([...])
+  ->withScrollX(2);                 // skip first 2 non-frozen columns
+
+echo $t->View();
+// Columns 0 and 1 are hidden from view
+```
+
+### How It Works
+
+- **scrollX** skips `$offset` non-frozen columns from the left of the scrollable region
+- **Frozen columns** (if any) are always visible regardless of scrollX
+- **Negative values** are clamped to 0 automatically
+- **Excessive scroll** values are tolerated — extra columns simply don't render
+
+### Interaction with Frozen Columns
+
+When combining `withScrollX()` with `withFrozenCols()`:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+    Column::new('note', 'Note',  40),
+    Column::new('tags', 'Tags',  20),
+])->withRows([...])
+  ->withFrozenCols([0])             // freeze ID column
+  ->withScrollX(2);                 // skip 2 non-frozen columns
+
+echo $t->View();
+// Column 0 (ID, frozen):  visible
+// Column 1 (Name):        skipped (index 1 < 1 + 2 = 3)
+// Column 2 (City):        skipped (index 2 < 3)
+// Column 3 (Note):        visible (index 3 >= 3)
+// Column 4 (Tags):        visible (index 4 >= 3)
+```
+
+The visibility formula: a column is visible when its index is in `frozenCols` OR `index >= count(frozenCols) + scrollX`.
+
 ## Column Width Computation
 
 Compute actual column widths from `ColumnWidth` enum values:
