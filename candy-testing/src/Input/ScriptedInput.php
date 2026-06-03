@@ -139,7 +139,7 @@ final readonly class ScriptedInput
             'down' => KeyType::Down,
             'left' => KeyType::Left,
             'right' => KeyType::Right,
-            default => throw new \InvalidArgumentException("Invalid arrow direction: {$dir}"),
+            default => throw new \InvalidArgumentException("Invalid arrow direction: " . htmlspecialchars($dir, ENT_QUOTES, 'UTF-8')),
         };
         return $this->namedKey($type);
     }

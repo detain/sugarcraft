@@ -36,7 +36,7 @@ final readonly class RgbFrame
      */
     public function toGd(): \GdImage
     {
-        $img = imagecreatetruecolor($this->w, $this->h);
+        $img = \imagecreatetruecolor($this->w, $this->h);
         if ($img === false) {
             throw new \RuntimeException('Failed to create GD image');
         }

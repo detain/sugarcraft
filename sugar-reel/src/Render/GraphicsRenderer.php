@@ -42,7 +42,7 @@ final class GraphicsRenderer implements FrameRenderer
         // Bridge: RgbFrame (raw rgb24) → GD image → ImageSource.
         $gd = $frame->toGd();
         $imageSource = ImageSource::fromGd($gd, 'image/png');
-        imagedestroy($gd);
+        \imagedestroy($gd);
 
         // Delegate to candy-mosaic's Mosaic facade for protocol encoding.
         // Pass frame pixel dimensions as cell dimensions — the graphics

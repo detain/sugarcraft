@@ -27,7 +27,7 @@ final class GoldenFile
             return null;
         }
 
-        $contents = file_get_contents($path);
+        $contents = \file_get_contents($path);
 
         return $contents === false ? null : $contents;
     }
@@ -43,9 +43,9 @@ final class GoldenFile
      */
     public static function save(string $path, string $content): void
     {
-        $dir = dirname($path);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            \mkdir($dir, 0755, true);
         }
 
         $result = file_put_contents($path, $content);

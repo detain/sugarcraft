@@ -77,7 +77,7 @@ final class PreviewPane
      */
     public function isDirectory(): bool
     {
-        return $this->filePath !== '' && is_dir($this->filePath);
+        return $this->filePath !== '' && \is_dir($this->filePath);
     }
 
     /**

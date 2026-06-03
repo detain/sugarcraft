@@ -152,13 +152,13 @@ final class TapeRecorder
      */
     public function save(): void
     {
-        $dir = dirname($this->outputPath);
-        if (!is_dir($dir)) {
-            mkdir($dir, 0755, true);
+        $dir = \dirname($this->outputPath);
+        if (!\is_dir($dir)) {
+            \mkdir($dir, 0755, true);
         }
 
         $content = implode("\n", $this->lines) . "\n";
-        $result = file_put_contents($this->outputPath, $content);
+        $result = \file_put_contents($this->outputPath, $content);
 
         if ($result === false) {
             throw new \RuntimeException("Failed to write tape file: {$this->outputPath}");

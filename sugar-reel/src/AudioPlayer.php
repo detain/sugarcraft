@@ -70,7 +70,7 @@ class AudioPlayer
             // Clean up any partially-created pipe FDs on failure.
             foreach ($pipes as $pipe) {
                 if (is_resource($pipe)) {
-                    fclose($pipe);
+                    \fclose($pipe);
                 }
             }
             $this->processHandle = null;
@@ -79,9 +79,9 @@ class AudioPlayer
         }
 
         // Close unused stdin/stdout/stderr to avoid deadlock.
-        fclose($pipes[0]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
+        \fclose($pipes[0]);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
     }
 
     /**

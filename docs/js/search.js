@@ -56,13 +56,20 @@
     });
   }
 
+  /* ── Escape HTML ────────────────────────────────────────────────── */
+  function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
   /* ── Highlight match ────────────────────────────────────────────── */
   function highlight(text, query) {
     if (!query.trim()) {
-      return text;
+      return escapeHtml(text);
     }
     var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return text.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+    return escapeHtml(text).replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
   }
 
   /* ── Render results ─────────────────────────────────────────────── */
@@ -96,7 +103,7 @@
         highlight(item.name, query) +
         '</span>' +
         '<span class="search-result-category">' +
-        item.category +
+        escapeHtml(item.category) +
         '</span>' +
         '</div>' +
         '<p class="search-result-description">' +

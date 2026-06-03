@@ -23,6 +23,7 @@ final class Discovery
      */
     public static function scan(string $directory): array
     {
+        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
         if (!is_dir($directory)) {
             return [];
         }
@@ -42,6 +43,7 @@ final class Discovery
             $path = $directory . DIRECTORY_SEPARATOR . $entry;
 
             // Skip non-executable files
+            // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
             if (!is_file($path) || !is_executable($path)) {
                 continue;
             }

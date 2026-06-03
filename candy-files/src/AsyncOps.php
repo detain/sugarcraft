@@ -78,7 +78,7 @@ final class AsyncOps
         \React\EventLoop\Loop::futureTick(static function () use ($src, $newName, $deferred): void {
             try {
                 $dir = dirname($src);
-                $dst = Pane::join($dir, $newName);
+                $dst = $dir . DIRECTORY_SEPARATOR . $newName;
                 $result = @rename($src, $dst);
                 $deferred->resolve($result);
             } catch (\Throwable $e) {
@@ -161,7 +161,7 @@ final class AsyncOps
      */
     private static function doCopy(string $src, string $dst): bool
     {
-        if (is_dir($src)) {
+        if (\is_dir($src)) {
             return self::copyDir($src, $dst);
         }
         return @copy($src, $dst);
@@ -176,23 +176,23 @@ final class AsyncOps
      */
     private static function copyDir(string $src, string $dst): bool
     {
-        if (!@mkdir($dst, 0755, true) && !is_dir($dst)) {
+        if (!@\mkdir($dst, 0755, true) && !\is_dir($dst)) {
             return false;
         }
 
-        $items = @scandir($src) ?: [];
+        $items = @\scandir($src) ?: [];
         foreach ($items as $item) {
             if ($item === '.' || $item === '..') {
                 continue;
             }
             $srcPath = Pane::join($src, $item);
             $dstPath = Pane::join($dst, $item);
-            if (is_dir($srcPath)) {
+            if (\is_dir($srcPath)) {
                 if (!self::copyDir($srcPath, $dstPath)) {
                     return false;
                 }
             } else {
-                if (!@copy($srcPath, $dstPath)) {
+                if (!@\copy($srcPath, $dstPath)) {
                     return false;
                 }
             }

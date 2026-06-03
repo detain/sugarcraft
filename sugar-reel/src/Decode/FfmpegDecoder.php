@@ -87,7 +87,7 @@ final class FfmpegDecoder implements Decoder
         $this->stderr = $pipes[2];
         // Close stdin as we don't write to it
         if (is_resource($pipes[0])) {
-            fclose($pipes[0]);
+            \fclose($pipes[0]);
         }
     }
 
@@ -146,12 +146,12 @@ final class FfmpegDecoder implements Decoder
     public function close(): void
     {
         if ($this->stdout !== null && is_resource($this->stdout)) {
-            fclose($this->stdout);
+            \fclose($this->stdout);
             $this->stdout = null;
         }
 
         if ($this->stderr !== null && is_resource($this->stderr)) {
-            fclose($this->stderr);
+            \fclose($this->stderr);
             $this->stderr = null;
         }
 

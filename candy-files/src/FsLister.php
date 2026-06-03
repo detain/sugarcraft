@@ -15,10 +15,10 @@ final class FsLister
     public static function lister(): \Closure
     {
         return static function (string $path): array {
-            if (!is_dir($path)) {
+            if (!\is_dir($path)) {
                 return [];
             }
-            $names = @scandir($path) ?: [];
+            $names = @\scandir($path) ?: [];
             $out = [];
             foreach ($names as $name) {
                 if ($name === '.' || $name === '..') {
@@ -29,8 +29,8 @@ final class FsLister
                 if ($stat === false) {
                     continue;
                 }
-                $isLink = is_link($full);
-                $isDir  = is_dir($full);
+                $isLink = \is_link($full);
+                $isDir  = \is_dir($full);
                 $out[] = new Entry(
                     name:     $name,
                     isDir:    $isDir,
