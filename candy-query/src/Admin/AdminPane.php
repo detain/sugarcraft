@@ -15,7 +15,7 @@ enum AdminPane: string
     case Variables   = 'variables';
     case Status      = 'status';
     case QueryStats  = 'query_stats';
-    case ConnStats   = 'conn_stats';
+    case Dashboard   = 'dashboard';
     case TableStats  = 'table_stats';
     case PerfSchema  = 'perf_schema';
 
@@ -26,7 +26,7 @@ enum AdminPane: string
             self::Variables   => 'Variables',
             self::Status      => 'Status',
             self::QueryStats  => 'Query Stats',
-            self::ConnStats   => 'Connection Stats',
+            self::Dashboard   => 'Dashboard',
             self::TableStats  => 'Table Stats',
             self::PerfSchema  => 'Performance Schema',
         };
@@ -36,7 +36,7 @@ enum AdminPane: string
     {
         return match ($this) {
             self::ProcessList, self::Variables, self::Status => AdminSection::Management,
-            self::QueryStats, self::ConnStats, self::TableStats, self::PerfSchema => AdminSection::Performance,
+            self::QueryStats, self::Dashboard, self::TableStats, self::PerfSchema => AdminSection::Performance,
         };
     }
 
@@ -46,8 +46,8 @@ enum AdminPane: string
             self::ProcessList => self::Variables,
             self::Variables   => self::Status,
             self::Status      => self::QueryStats,
-            self::QueryStats  => self::ConnStats,
-            self::ConnStats   => self::TableStats,
+            self::QueryStats  => self::Dashboard,
+            self::Dashboard   => self::TableStats,
             self::TableStats  => self::PerfSchema,
             self::PerfSchema  => self::ProcessList,
         };
@@ -65,7 +65,7 @@ enum AdminPane: string
             self::Variables,
             self::Status,
             self::QueryStats,
-            self::ConnStats,
+            self::Dashboard,
             self::TableStats,
             self::PerfSchema,
         ];

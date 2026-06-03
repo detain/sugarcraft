@@ -19,7 +19,7 @@ final class AdminPaneTest extends TestCase
         $this->assertSame('Variables', AdminPane::Variables->label());
         $this->assertSame('Status', AdminPane::Status->label());
         $this->assertSame('Query Stats', AdminPane::QueryStats->label());
-        $this->assertSame('Connection Stats', AdminPane::ConnStats->label());
+        $this->assertSame('Dashboard', AdminPane::Dashboard->label());
         $this->assertSame('Table Stats', AdminPane::TableStats->label());
         $this->assertSame('Performance Schema', AdminPane::PerfSchema->label());
     }
@@ -30,7 +30,7 @@ final class AdminPaneTest extends TestCase
         $this->assertSame(AdminSection::Management, AdminPane::Variables->section());
         $this->assertSame(AdminSection::Management, AdminPane::Status->section());
         $this->assertSame(AdminSection::Performance, AdminPane::QueryStats->section());
-        $this->assertSame(AdminSection::Performance, AdminPane::ConnStats->section());
+        $this->assertSame(AdminSection::Performance, AdminPane::Dashboard->section());
         $this->assertSame(AdminSection::Performance, AdminPane::TableStats->section());
         $this->assertSame(AdminSection::Performance, AdminPane::PerfSchema->section());
     }
@@ -40,8 +40,8 @@ final class AdminPaneTest extends TestCase
         $this->assertSame(AdminPane::Variables, AdminPane::ProcessList->next());
         $this->assertSame(AdminPane::Status, AdminPane::Variables->next());
         $this->assertSame(AdminPane::QueryStats, AdminPane::Status->next());
-        $this->assertSame(AdminPane::ConnStats, AdminPane::QueryStats->next());
-        $this->assertSame(AdminPane::TableStats, AdminPane::ConnStats->next());
+        $this->assertSame(AdminPane::Dashboard, AdminPane::QueryStats->next());
+        $this->assertSame(AdminPane::TableStats, AdminPane::Dashboard->next());
         $this->assertSame(AdminPane::PerfSchema, AdminPane::TableStats->next());
         $this->assertSame(AdminPane::ProcessList, AdminPane::PerfSchema->next());
     }
