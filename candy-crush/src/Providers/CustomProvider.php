@@ -58,6 +58,26 @@ final readonly class CustomProvider implements ProviderInterface
         );
     }
 
+    public static function openAiCompatibleFromEnv(
+        string $name,
+        string $baseUrl,
+        string $model,
+        string $apiKeyEnvVar = 'CUSTOM_PROVIDER_API_KEY',
+        bool $supportsStreaming = true,
+        bool $supportsFunctionCalling = true,
+    ): self {
+        $apiKey = getenv($apiKeyEnvVar) ?: null;
+
+        return self::openAiCompatible(
+            name: $name,
+            baseUrl: $baseUrl,
+            model: $model,
+            apiKey: $apiKey,
+            supportsStreaming: $supportsStreaming,
+            supportsFunctionCalling: $supportsFunctionCalling,
+        );
+    }
+
     public function name(): string
     {
         return $this->name;

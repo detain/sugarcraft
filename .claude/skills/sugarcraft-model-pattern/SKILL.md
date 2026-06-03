@@ -2,7 +2,7 @@
 name: sugarcraft-model-pattern
 description: Scaffolds a new immutable+fluent SugarCraft class — `final`, `declare(strict_types=1)`, private constructor with public `readonly` promoted props, `::new()` factory, `with*()` setters returning new instances, bare accessors, and (for TUI roots) the candy-core `Model::init/update/view/subscriptions` contract. Mirror `candy-sprinkles/src/Style.php` (value object) or `sugar-bits/src/Stopwatch/Stopwatch.php` (Model). Use when user says 'add a Model', 'new TUI widget', 'scaffold a SugarCraft class', 'port from charmbracelet/<x>', or creates files under `<slug>/src/`. Do NOT use for editing existing classes (use direct Edit), tests-only changes (use write-phpunit-test), the lib skeleton itself (use scaffold-library), or non-SugarCraft repos.
 paths:
-  - */src/**/*.php
+  - '*/src/**/*.php'
 ---
 # SugarCraft Model / value-object pattern
 

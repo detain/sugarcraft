@@ -82,21 +82,19 @@ final class HookRegistry
     public function executeHooks(string $event, HookContext $context): HookResult
     {
         $matches = $this->findMatches($event, $context->toolName);
-        $firstModifyResult = null;
 
         foreach ($matches as $hook) {
             $result = $hook->execute($context);
 
-            if ($result->isDenied()) {
+            if (!$result->isAllowed()) {
                 return $result;
             }
 
             if ($result->isModified()) {
                 $context = $context->withToolInput($result->modifiedInput);
-                $firstModifyResult ??= $result;
             }
         }
 
-        return $firstModifyResult ?? HookResult::allow();
+        return HookResult::allow();
     }
 }

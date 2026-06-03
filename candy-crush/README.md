@@ -272,6 +272,8 @@ enum HookEvent: string
 }
 ```
 
+**PHP 8.3 compatibility note:** String literal union types (`'PreToolUse'|'PostToolUse'`) require PHP 8.4+. A backed enum was chosen to maintain PHP 8.3 compatibility while providing type-safe event identification with IDE autocompletion and exhaustive matching support.
+
 | Event | When fired |
 |-------|------------|
 | `PreToolUse` | Before a tool is executed — can allow, deny, or modify the tool input |
@@ -2555,6 +2557,44 @@ public static function openAiCompatible(
 - `apiKey` is optional — many local endpoints don't require authentication
 - `supportsStreaming` and `supportsFunctionCalling` flags allow disabling features not supported by the endpoint
 
+### Factory Method: openAiCompatibleFromEnv()
+
+The `openAiCompatibleFromEnv()` factory loads API keys from environment variables for secure deployment:
+
+```php
+public static function openAiCompatibleFromEnv(
+    string $name,
+    string $baseUrl,
+    string $model,
+    string $apiKeyEnvVar = 'CUSTOM_PROVIDER_API_KEY',
+    bool $supportsStreaming = true,
+    bool $supportsFunctionCalling = true,
+): self
+```
+
+**Key behaviors:**
+- Loads the API key from the specified environment variable at runtime
+- Defaults to `CUSTOM_PROVIDER_API_KEY` if no variable name is provided
+- Returns `null` for the API key if the environment variable is not set
+- Delegates to `openAiCompatible()` once the key is resolved
+
+**Usage example:**
+```php
+// Set the environment variable before running
+// export CUSTOM_PROVIDER_API_KEY="sk-12345..."
+
+$provider = CustomProvider::openAiCompatibleFromEnv(
+    name: 'production-ollama',
+    baseUrl: 'https://api.example.com/v1',
+    model: 'llama3',
+    apiKeyEnvVar: 'CUSTOM_PROVIDER_API_KEY',
+);
+```
+
+**When to use:**
+- Use `openAiCompatible()` directly when the API key is known at construction time (tests, scripts)
+- Use `openAiCompatibleFromEnv()` when deploying to production where keys should not be in source code
+
 ### complete() Method
 
 The `complete()` method handles synchronous chat completions:
@@ -3567,6 +3607,192 @@ $forPaths = $registry->getForPaths(['src/Api/Test.php']);         // By file pat
 $registry->disable('php-best-practices');
 $registry->isDisabled('php-best-practices'); // true
 $registry->enable('php-best-practices');
+```
+
+## Step 4.3: Built-in Skills
+
+Step 4.3 ships four built-in skills that provide specialized guidance for common development tasks. These skills are loaded automatically via `SkillLoader::loadBuiltInSkills()` and can be overridden by user or project skills with the same name.
+
+### Built-in Skills Overview
+
+| Skill | Description | Effort | Paths |
+|-------|-------------|--------|-------|
+| `php-best-practices` | PHP best practices, PSR-12 compliance, type safety, and modern PHP patterns | high | `**/*.php` |
+| `security-audit` | Security audit for SQL injection, XSS, CSRF, authentication issues, and other vulnerabilities | high | `**/*.php` |
+| `phpunit-master` | PHPUnit testing best practices, mocking, data providers, and test organization | high | `**/*Test.php` |
+| `composer-wizard` | Composer dependency management, version constraints, and autoloading configuration | medium | `composer.json`, `composer.lock` |
+
+### Built-in Skills Directory Structure
+
+Built-in skills are co-located with the `SkillLoader` class in `src/Skills/BuiltIn/<skill-name>/SKILL.md`:
+
+```
+src/Skills/BuiltIn/
+├── php-best-practices/
+│   └── SKILL.md
+├── security-audit/
+│   └── SKILL.md
+├── phpunit-master/
+│   └── SKILL.md
+└── composer-wizard/
+    └── SKILL.md
+```
+
+**Why co-located?** Using `dirname($reflection->getFileName()) . '/BuiltIn'` keeps the skills directory relative to the `SkillLoader` source file. This works regardless of where the package is installed or how autoloading is configured.
+
+### SkillLoader::loadBuiltInSkills() Implementation
+
+```php
+public function loadBuiltInSkills(): array
+{
+    $reflection = new \ReflectionClass($this);
+    $dir = dirname($reflection->getFileName()) . '/BuiltIn';
+
+    return $this->loadFromDirectory($dir);
+}
+```
+
+**Reflection-based path discovery:**
+- `new \ReflectionClass($this)` creates a reflection of the `SkillLoader` class
+- `getFileName()` returns the absolute path to `SkillLoader.php`
+- `dirname(...) . '/BuiltIn'` constructs the path to the built-in skills directory
+- The result is passed to `loadFromDirectory()` for recursive skill loading
+
+### SKILL.md Frontmatter for Built-in Skills
+
+Each built-in skill uses YAML frontmatter with specific fields:
+
+```yaml
+---
+description: PHP best practices, PSR-12 compliance, type safety, and modern PHP patterns. Use when reviewing or writing PHP code.
+user-invocable: true
+disable-model-invocation: false
+allowed-tools: "Read,Grep,Bash"
+effort: high
+paths:
+  - "**/*.php"
+---
+# PHP Best Practices Skill
+
+Content goes here...
+```
+
+**Frontmatter fields used by built-in skills:**
+
+| Field | Purpose | Example |
+|-------|---------|---------|
+| `description` | Trigger phrase matching | `"Use when user says 'PHP code review'"` |
+| `user-invocable` | Show in user skill list | `true` |
+| `allowed-tools` | Tool suggestions | `"Read,Grep,Bash"` |
+| `effort` | Complexity hint | `high`, `medium`, `planning` |
+| `paths` | Auto-trigger patterns | `**/*.php`, `**/*Test.php` |
+
+### Skill Triggering by Path
+
+Skills with `paths` patterns are automatically triggered when file paths match:
+
+```php
+public function getForPaths(array $paths): array
+{
+    $matches = [];
+
+    foreach ($this->all() as $skill) {
+        foreach ($skill->paths as $pattern) {
+            foreach ($paths as $path) {
+                if (fnmatch($pattern, $path)) {
+                    $matches[] = $skill;
+                    break 2;
+                }
+            }
+        }
+    }
+
+    return $matches;
+}
+```
+
+**Pattern examples:**
+
+| Pattern | Matches |
+|---------|---------|
+| `**/*.php` | Any PHP file at any depth |
+| `**/*Test.php` | PHPUnit test files |
+| `composer.json` | Composer configuration |
+| `composer.lock` | Composer lock file |
+
+**Real-world triggering:**
+- Editing `src/Api/Users.php` → triggers `php-best-practices` and `security-audit`
+- Editing `tests/Unit/UsersTest.php` → triggers `phpunit-master`
+- Running `composer require` → triggers `composer-wizard`
+
+### Loading Built-in Skills
+
+```php
+use SugarCraft\Crush\Skills\SkillLoader;
+
+// Create loader and load built-in skills
+$loader = new SkillLoader();
+$builtinSkills = $loader->loadBuiltInSkills();
+
+echo count($builtinSkills);  // 4
+```
+
+**Loading verification output:**
+```
+Loaded 4 built-in skills:
+- security-audit: Security audit for PHP code. Check for SQL injection, XSS, CSRF...
+- php-best-practices: PHP best practices, PSR-12 compliance, type safety...
+- composer-wizard: Composer dependency management, version constraints...
+- phpunit-master: PHPUnit testing best practices, mocking, data providers...
+```
+
+### Override Precedence
+
+Built-in skills can be overridden by user or project skills with the same name:
+
+```php
+public function loadAll(string $projectRoot = '.'): array
+{
+    // Built-in first (lowest priority)
+    $builtin = $this->loadBuiltInSkills();
+
+    // User skills override builtins
+    $user = $this->loadUserSkills();
+    $skills = array_merge($builtin, $user);
+
+    // Project skills override both
+    $project = $this->loadProjectSkills($projectRoot);
+    $skills = array_merge($skills, $project);
+
+    return $skills;
+}
+```
+
+**Override use cases:**
+- **Customize** — Create `~/.candy-crush/skills/php-best-practices/SKILL.md` with project-specific rules
+- **Deprecate** — Create a skill with the same name that documents "this skill is deprecated"
+- **Extend** — Add project-specific guidance to existing skills
+
+### Architecture
+
+```
+SkillLoader
+├── loadFromDirectory($dir) — core recursive loader
+├── loadUserSkills() — ~/.candy-crush/skills/
+├── loadProjectSkills($root) — <root>/.candy-crush/skills/
+├── loadBuiltInSkills() — src/Skills/BuiltIn/ (via reflection)
+└── loadAll($root) — merges all with priority (builtin < user < project)
+
+SkillRegistry
+├── skills: array<string, Skill>
+├── disabledSkills: array<string, true>
+├── register() — bulk registration
+├── get() — lookup by name (respects disabled)
+├── all() — all enabled skills
+├── findForPrompt() — keyword matching
+├── getUserInvocable() — user-facing skills only
+├── getForPaths() — path pattern matching
+└── disable()/enable() — runtime state
 ```
 
 ## Step 4.4: Skill Integration
