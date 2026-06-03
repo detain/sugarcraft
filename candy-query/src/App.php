@@ -178,19 +178,17 @@ final class App implements Model
 
     private function handleTablesKey(KeyMsg $msg): self
     {
-        // Navigation only moves the cursor — it must NOT load rows. loadTable()
-        // runs a synchronous `SELECT * ... LIMIT 100`; auto-loading on every
-        // Up/Down froze the UI for minutes when browsing a remote database
-        // (each keypress = a blocking network round-trip, and holding the key
-        // queued one query per table). Rows load on Enter/Space, as the help
-        // text ("enter load table") and the class docstring already promise.
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
-            return $this->withTableCursor($this->tableCursor - 1);
+            $newApp = $this->withTableCursor($this->tableCursor - 1);
+            $name = $newApp->tables[$newApp->tableCursor] ?? null;
+            return $name === null ? $newApp : $newApp->loadTable($name);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
-            return $this->withTableCursor($this->tableCursor + 1);
+            $newApp = $this->withTableCursor($this->tableCursor + 1);
+            $name = $newApp->tables[$newApp->tableCursor] ?? null;
+            return $name === null ? $newApp : $newApp->loadTable($name);
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {

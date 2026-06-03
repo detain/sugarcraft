@@ -143,13 +143,17 @@ Each entry should have:
 
 ### Phase 5: Global Search
 - Step 5.1 (impl): **COMPLETED** ✅
-  - Branch: ai/table-global-search
-  - Added `$searchText` property for global search state
-  - Added `search(string $text): self` method (case-insensitive, resets selectedIndex)
-  - Added `ClearSearch(): self` method (calls search(''))
-  - Modified `filteredSortedRows()` to apply global search across all columns (OR logic)
+  - Added search() and ClearSearch() methods
+  - Modified filteredSortedRows() to include global search filter
+  - All 195 tests pass
+- Step 5.2 (review): **PASSED** ✅
   - All 195 tests pass (399 assertions)
-- Step 5.2 (review): Pending
+  - search() finds any column containing text: VERIFIED (line 530: foreach iterates all $row->data)
+  - Case-insensitive matching: VERIFIED (line 527+532: strtolower on both search and cell)
+  - search('') doesn't filter: VERIFIED (line 526: checks !== '')
+  - ClearSearch() works: VERIFIED (line 491-494: delegates to search(''))
+  - Combined search + Filter works: VERIFIED (filters ANDed together in sequence)
+  - selectedIndex resets to 0 on search change: VERIFIED (line 484: $clone->selectedIndex = 0)
 - Step 5.3 (fix): Pending
 - Step 5.4 (tests): Pending
 - Step 5.5 (docs): Pending

@@ -1272,7 +1272,11 @@ final class Style
             $rightPad = $available - $cw - $leftPad;
             $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
         } elseif ($available > 0) {
-            $centerTitle2 = str_repeat(' ', $available);
+            // No center title: only subtract 1 for the right corner if the right
+            // border side is enabled AND there is no right title. When there IS a
+            // right title the corner is already part of $rightSection and its
+            // width was already subtracted from $available.
+            $centerTitle2 = str_repeat(' ', $available - ($right && $rightTitle === '' ? 1 : 0));
         }
 
         return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
@@ -1341,7 +1345,11 @@ final class Style
             $rightPad = $available - $cw - $leftPad;
             $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
         } elseif ($available > 0) {
-            $centerTitle2 = str_repeat(' ', $available);
+            // No center title: only subtract 1 for the right corner if the right
+            // border side is enabled AND there is no right title. When there IS a
+            // right title the corner is already part of $rightSection and its
+            // width was already subtracted from $available.
+            $centerTitle2 = str_repeat(' ', $available - ($right && $rightTitle === '' ? 1 : 0));
         }
 
         return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
