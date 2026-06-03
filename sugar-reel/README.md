@@ -92,6 +92,8 @@ iTerm2) and falls back to `ColorProfile::detect()` for ANSI modes.
 | `0`–`9` | Seek to 0–90% of video duration |
 | `m` | Cycle to next rendering mode |
 | `q` / `Esc` | Quit |
+| `resize` | Terminal resize (SIGWINCH) re-scales video automatically |
+| `loop` | Loop is set at open time via `Reel::new()->withLoop(true)->play()` (no keyboard shortcut) |
 
 ## Architecture
 
@@ -149,3 +151,11 @@ The rendering stack is reused from the SugarCraft ecosystem rather than
 reinvented: [candy-mosaic](../candy-mosaic) (image → cell renderers),
 [candy-flip](../candy-flip) (downsampling / dithering), [candy-palette](../candy-palette)
 (color mapping), and [candy-core](../candy-core) (TEA runtime + frame pacing).
+
+## Known limitations
+
+- **Audio plays at 1.0× regardless of playback speed.** Changing speed with `[`/`]` only affects video pacing. The audio companion (ffplay/mpv) always plays at normal speed. A/V will diverge noticeably when using speeds other than 1.0×.
+
+- **Seeking repositions audio but not frame-exactly.** A seek creates a new AudioPlayer at the correct offset, but the video frame timing and audio timing are only approximately synchronized (frame-skip resync keeps them close at 1.0×).
+
+- **GIF playback fills the terminal in HalfBlock mode** (each cell = 2 source rows). In text modes (ascii/ansi256/truecolor) the GIF renders at its native pixel dimensions without 2× vertical scaling.
