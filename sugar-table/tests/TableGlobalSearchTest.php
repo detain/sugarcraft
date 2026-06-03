@@ -30,7 +30,7 @@ final class TableGlobalSearchTest extends TestCase
             Column::new('city', 'City',  15),
         ])->withRows([
             Row::new(RowData::from(['id' => '1', 'name' => 'Alice',   'city' => 'New York'])),
-            Row::new(RowData::from(['id' => '2', 'name' => 'Bob',     'city' => 'Los Angeles'])),
+            Row::new(RowData::from(['id' => '2', 'name' => 'Bob',     'city' => 'Denver'])),
             Row::new(RowData::from(['id' => '3', 'name' => 'Charlie', 'city' => 'Chicago'])),
         ]);
     }
@@ -77,9 +77,9 @@ final class TableGlobalSearchTest extends TestCase
      */
     public function testSearchFindsTermInMultipleRows(): void
     {
-        // "New" appears in "New York" and "Los Angeles" does NOT contain "New"
-        // So search "Los" should find only Los Angeles
-        $t = $this->makeSearchTable()->search('Los');
+        // "Den" appears in "Denver" only
+        // Search for "Den" should find only Bob
+        $t = $this->makeSearchTable()->search('Den');
 
         $this->assertSame(1, $t->TotalRows());
         $this->assertSame('Bob', $t->CurrentRowData()?->get('name'));
