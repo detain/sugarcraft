@@ -184,9 +184,17 @@ Each entry should have:
   - Modified `fillDataRow` to show full content without truncation for expanded rows
   - Modified `fillDataRowLines` (multiline mode) to show full content for expanded rows
   - All 225 tests pass (451 assertions)
-- Step 6.2 (review): Pending
-- Step 6.3 (fix): Pending
-- Step 6.4 (tests): Pending
+- Step 6.2 (review): **ISSUES_FOUND** ⚠️
+  - Major: Pagination API inconsistency - index is global, not page-relative
+  - Major: No test coverage for expansion functionality
+  - Minor: Silent failure on invalid index
+- Step 6.3 (fix): **COMPLETED** ✅
+  - Fixed pagination API: changed to use pagedRows() for page-relative indexing
+  - Fixed Fail Fast: now throws OutOfBoundsException for invalid indices
+  - All 249 tests pass (516 assertions)
+- Step 6.4 (tests): **COMPLETED** ✅
+  - Added TableExpansionTest.php with 24 comprehensive tests
+  - Tests cover: toggle, isExpanded, withExpandedRows, pagination integration, edge cases
 - Step 6.5 (docs): Pending
 
 ### Phase 7: Showing Rows Footer
