@@ -238,4 +238,140 @@ final class ReportsPageTest extends TestCase
 
         $this->assertNotNull($runner);
     }
+
+    public function testExportToCsvReturnsEmptyStringWhenNoReport(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        $csv = $page->exportToCsv();
+
+        $this->assertSame('', $csv);
+    }
+
+    public function testLastExportCsvIsNullInitially(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        $this->assertNull($page->lastExportCsv());
+    }
+
+    public function testWithExportReturnsNewInstance(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        $exported = $page->withExport();
+
+        // withExport should return a new instance
+        $this->assertNotSame($page, $exported);
+    }
+
+    public function testWithExportSetsLastExportCsv(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        // Without a loaded report, lastExportCsv should be empty string
+        $exported = $page->withExport();
+
+        $this->assertNotNull($exported->lastExportCsv());
+        $this->assertSame('', $exported->lastExportCsv());
+    }
+
+    public function testExportToCsvWithData(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        // Force load the x$statement_analysis report (using the actual report name from catalog)
+        $page = $page->withSelectReport('x$statement_analysis');
+        $csv = $page->exportToCsv();
+
+        $this->assertNotSame('', $csv);
+
+        $lines = explode("\n", $csv);
+        $this->assertGreaterThanOrEqual(2, count($lines));
+
+        // Verify header row contains expected column names
+        $header = $lines[0];
+        $this->assertStringContainsString('query', $header);
+        $this->assertStringContainsString('db', $header);
+        $this->assertStringContainsString('exec_count', $header);
+    }
+
+    public function testExportToCsvEscapesFormulaInjection(): void
+    {
+        // Create a fake database that returns formula injection data
+        $injectionDb = new class implements DatabaseInterface {
+            public function tables(): array { return []; }
+            public function rows(string $table, int $limit = 100): array { return []; }
+            public function query(string $sql): array {
+                if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
+                    return [['Tables_in_sys' => 'x$statement_analysis']];
+                }
+                if (str_contains($sql, 'x$statement_analysis')) {
+                    // Formula injection payloads that must be escaped
+                    return [
+                        ['query' => "=CMD|'/C calc'!A0", 'db' => 'test', 'exec_count' => 100, 'total_latency' => 1500000000, 'rows_sent' => 500],
+                        ['query' => '+A1+A2', 'db' => 'test', 'exec_count' => 50, 'total_latency' => 750000000, 'rows_sent' => 200],
+                        ['query' => '-SUM(B1:B100)', 'db' => 'test', 'exec_count' => 25, 'total_latency' => 500000000, 'rows_sent' => 100],
+                        ['query' => '@HYPERLINK("http://evil.com")', 'db' => 'test', 'exec_count' => 10, 'total_latency' => 100000000, 'rows_sent' => 50],
+                        ['query' => '=2+2', 'db' => 'test', 'exec_count' => 5, 'total_latency' => 50000000, 'rows_sent' => 10],
+                    ];
+                }
+                return [];
+            }
+            public function lastInsertId(): string|int { return 0; }
+            public function quote(string $value): string { return "'" . addslashes($value) . "'"; }
+            public function exec(string $sql): int { return 0; }
+            public function close(): void {}
+            public function serverVersion(): string { return '8.0.32'; }
+            public function driverName(): string { return 'mysql'; }
+            public function ping(): bool { return true; }
+            public function databases(): array { return ['test']; }
+            public function prepare(string $sql): mixed { return false; }
+            public function dsn(): string { return ''; }
+            public function username(): string { return ''; }
+            public function password(): string { return ''; }
+        };
+
+        $this->context->method('connection')->willReturn($injectionDb);
+
+        $page = ReportsPage::new($this->context, $injectionDb);
+        $page->view();
+        $page = $page->withSelectReport('x$statement_analysis');
+
+        $csv = $page->exportToCsv();
+
+        $this->assertNotSame('', $csv);
+
+        $lines = explode("\n", $csv);
+        $this->assertGreaterThanOrEqual(2, count($lines));
+
+        // The CSV should contain escaped formula values with leading single quote preserved
+        // When a value starts with =, +, -, or @, it gets prefixed with '
+        // When exported to CSV, this appears as: "'=CMD|'/C calc'!A0"
+        $this->assertStringContainsString("'=CMD|'/C calc'!A0", $csv);
+        $this->assertStringContainsString("'+A1+A2", $csv);
+        $this->assertStringContainsString("'-SUM(B1:B100)", $csv);
+        $this->assertStringContainsString("'@HYPERLINK", $csv);
+        $this->assertStringContainsString("'=2+2", $csv);
+
+        // Verify unescaped formula characters do not appear at start of unquoted cells
+        foreach ($lines as $line) {
+            // Skip header line
+            if (str_contains($line, 'query') && str_contains($line, 'db')) {
+                continue;
+            }
+            // Data lines should have all formula prefixes escaped
+            $cells = str_getcsv($line);
+            foreach ($cells as $cell) {
+                $firstChar = $cell[0] ?? '';
+                $this->assertFalse(
+                    in_array($firstChar, ['=', '+', '-', '@'], true),
+                    "CSV cell starts with formula-injection character: " . substr($cell, 0, 20)
+                );
+            }
+        }
+    }
 }

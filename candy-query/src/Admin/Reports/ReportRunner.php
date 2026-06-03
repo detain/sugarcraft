@@ -65,7 +65,9 @@ final class ReportRunner
 
         $limit ??= $this->defaultLimit;
 
-        $query = "SELECT * FROM `sys`.`{$viewName}` LIMIT " . (int) $limit;
+        // Use the report's actual view name (from catalog) for the query,
+        // not the lookup key, since they may differ (e.g. 'statement_analysis' vs 'x$statement_analysis')
+        $query = "SELECT * FROM `sys`.`{$report->name}` LIMIT " . (int) $limit;
         $rows = $this->db->query($query);
 
         $formattedRows = $this->formatRows($rows, $report);
@@ -98,7 +100,9 @@ final class ReportRunner
 
         $limit ??= $this->defaultLimit;
 
-        $query = "SELECT * FROM `sys`.`{$viewName}` LIMIT " . (int) $limit;
+        // Use the report's actual view name (from catalog) for the query,
+        // not the lookup key, since they may differ (e.g. 'statement_analysis' vs 'x$statement_analysis')
+        $query = "SELECT * FROM `sys`.`{$report->name}` LIMIT " . (int) $limit;
         $rows = $this->db->query($query);
 
         return new ReportResult(
