@@ -16,8 +16,9 @@ use SugarCraft\Reel\Render\Mode;
  *   - FlipFrame::$cells is list<list<array{0:int,1:int,2:int}|null>>
  *   - null cells become black [0, 0, 0]
  *   - Each row is left-to-right, top-to-bottom scanning
- *   - RgbFrame stores cellsW x cellsH pixels (not cellsH * 2, since
- *     the 2x vertical packing is handled by the HalfBlockRenderer)
+ *   - The decode height is cellsH * $mode->rowsPerCell() so a GIF frame has the
+ *     same pixel resolution as FfmpegDecoder for the given mode (HalfBlock packs
+ *     2 source rows per cell → cellsH * 2; the 1-row modes → cellsH).
  *
  * @see video_plan.md lines 175-180
  * @implements Decoder
@@ -34,9 +35,10 @@ final class GifDecoder implements Decoder
     /**
      * @inheritDoc
      *
-     * The $mode parameter is accepted for interface compatibility but ignored:
-     * GIF decoding via candy-flip always outputs at cell resolution regardless
-     * of the rendering mode.
+     * The decode height is cellsH * $mode->rowsPerCell() so GIF output matches
+     * FfmpegDecoder per mode (HalfBlock packs 2 source rows per cell → cellsH*2;
+     * the 1-row modes → cellsH). $mode === null defaults to 2 (HalfBlock),
+     * matching DecoderFactory's documented null-default.
      */
     public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
     {
@@ -44,8 +46,9 @@ final class GifDecoder implements Decoder
         $this->cellsH = $cellsH;
         $this->frameIndex = 0;
 
-        // Decode the GIF using candy-flip's pure-PHP decoder
-        $this->frames = FlipDecoder::decode($source, $cellsW, $cellsH);
+        // Decode the GIF using candy-flip's pure-PHP decoder. Scale the cell-grid
+        // height by rowsPerCell so the frame pixel resolution matches the mode.
+        $this->frames = FlipDecoder::decode($source, $cellsW, $cellsH * ($mode?->rowsPerCell() ?? 2));
     }
 
     /**
