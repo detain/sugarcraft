@@ -89,6 +89,67 @@ final class Width
     }
 
     /**
+     * Truncate $s to display width $max by removing the MIDDLE and
+     * inserting $ellipsis, keeping both ends visible. ANSI sequences are
+     * dropped. Returns $s (ANSI-stripped) unchanged when it already fits.
+     *
+     * Useful for long identifiers/paths where both ends carry meaning —
+     * e.g. `wait/synch/mutex/…/THR_LOCK_myisam` or `/var/lib/…/data.db` —
+     * which the plain end-truncating {@see truncate()} would mangle.
+     */
+    public static function truncateMiddle(string $s, int $max, string $ellipsis = '…'): string
+    {
+        if ($max <= 0) {
+            return '';
+        }
+        $clean = Ansi::strip($s);
+        if (self::string($clean) <= $max) {
+            return $clean;
+        }
+        $ellipsisWidth = self::string($ellipsis);
+        if ($ellipsisWidth >= $max) {
+            // No room for any context around the ellipsis — fall back to a
+            // plain head-truncation so the result still fits $max cells.
+            return self::truncate($clean, $max);
+        }
+
+        $budget = $max - $ellipsisWidth;
+        $headBudget = intdiv($budget, 2);
+        $tailBudget = $budget - $headBudget;
+
+        $clusters = self::graphemes($clean);
+        $n = count($clusters);
+
+        // Head: consume clusters from the front up to $headBudget cells.
+        $head = '';
+        $hw = 0;
+        $i = 0;
+        for (; $i < $n; $i++) {
+            $gw = self::graphemeWidth($clusters[$i]);
+            if ($hw + $gw > $headBudget) {
+                break;
+            }
+            $head .= $clusters[$i];
+            $hw += $gw;
+        }
+
+        // Tail: consume clusters from the back up to $tailBudget cells, never
+        // crossing into the clusters already taken by the head.
+        $tail = '';
+        $tw = 0;
+        for ($j = $n - 1; $j >= $i; $j--) {
+            $gw = self::graphemeWidth($clusters[$j]);
+            if ($tw + $gw > $tailBudget) {
+                break;
+            }
+            $tail = $clusters[$j] . $tail;
+            $tw += $gw;
+        }
+
+        return $head . $ellipsis . $tail;
+    }
+
+    /**
      * Pad `$s` on the right with spaces so its visible width reaches
      * `$width`. ANSI sequences in `$s` are skipped when measuring. If
      * `$s` already meets or exceeds `$width`, it's returned as-is.

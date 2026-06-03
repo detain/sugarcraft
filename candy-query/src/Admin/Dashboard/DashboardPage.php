@@ -4,16 +4,23 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Dashboard;
 
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Forms\Spinner\Spinner;
+use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\Version;
+use SugarCraft\Query\Renderer;
 use SugarCraft\Layout\Region;
 use SugarCraft\Layout\Direction;
 use SugarCraft\Layout\GreedySolver;
 use SugarCraft\Layout\Constraint\Constraint;
+use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Sprinkles\Position;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Performance Dashboard page with 3-column layout.
@@ -88,23 +95,34 @@ final class DashboardPage extends PageBase
 
     private function renderLoadingScreen(): string
     {
-        $out = [];
-        $out[] = "\x1b[1;36m  Performance Dashboard\x1b[0m";
-        $out[] = "";
-        $out[] = "\x1b[33m    ◌ Fetching server metrics...\x1b[0m";
-        $out[] = "";
-        $out[] = "  \x1b[90mSHOW GLOBAL STATUS / pg_stat_database\x1b[0m";
-        $out[] = "";
-        $out[] = "  \x1b[90mPress \x1b[33m[q]\x1b[90m to return to browse mode\x1b[0m";
-        return implode("\n", $out);
+        $glyph = Spinner::new(SpinnerStyle::dot())->view();
+        $muted = Style::new()->foreground(Color::hex('#6b7280'));
+
+        return implode("\n", [
+            Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('  Performance Dashboard'),
+            '',
+            Style::new()->foreground(Color::hex('#fbbf24'))->render("    {$glyph} Fetching server metrics..."),
+            '',
+            '  ' . $muted->render('SHOW GLOBAL STATUS / pg_stat_database'),
+            '',
+            '  ' . $muted->render('Press [q] to return to browse mode'),
+        ]);
     }
 
     protected function build(): string
     {
         $this->pollAndUpdateCells();
 
-        $width = 80;
-        $height = 24;
+        // C3: size the dashboard from the live terminal (the Program's
+        // WindowSizeMsg, forwarded into Renderer::setSize) instead of a fixed
+        // 80×24. The dashboard fills the admin pane's content column, so mirror
+        // Renderer::adminPane()'s budget (sidebar = cols/4, frame+padding+gap ≈ 8)
+        // — otherwise a real 80-col terminal overflows the frame and a wide one
+        // wastes space. Keep this in sync with Renderer::adminPane().
+        $size = Renderer::getTerminalSize();
+        $sidebarWidth = max(20, (int) floor($size['cols'] / 4));
+        $width = max(10, ($size['cols'] - 6) - $sidebarWidth - 2);
+        $height = max(12, $size['rows'] - 4);
 
         $region = Region::fromSize($width, $height);
 
@@ -205,13 +223,12 @@ final class DashboardPage extends PageBase
     private function renderPanel(string $title, Region $region, string $section): string
     {
         $lines = [];
-        $lines[] = "\x1b[1;36m" . $title . "\x1b[0m";
+        $lines[] = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render($title);
 
         $widgets = $this->getWidgetsForSection($section);
 
         foreach ($widgets as $widget) {
             $id = $this->widgetId($widget);
-            $kind = $widget->kind;
 
             $value = match (true) {
                 isset($this->timelineCells[$id]) => $this->timelineCells[$id]->view(),
@@ -221,9 +238,11 @@ final class DashboardPage extends PageBase
             };
 
             $color = $widget->color;
-            $colorCode = sprintf("\x1b[38;2;%d;%d;%dm", $color['r'], $color['g'], $color['b']);
+            $caption = Style::new()
+                ->foreground(Color::rgb($color['r'], $color['g'], $color['b']))
+                ->render($widget->caption);
 
-            $lines[] = $colorCode . $widget->caption . "\x1b[0m: " . $value;
+            $lines[] = $caption . ': ' . $value;
         }
 
         $padding = $region->height - count($lines);
@@ -286,7 +305,7 @@ final class DashboardPage extends PageBase
 
     private function renderFooter(): string
     {
-        return "[p] pause  [r] reset";
+        return Style::new()->foreground(Color::hex('#6b7280'))->render('[p] pause  [r] reset');
     }
 
     private function assembleLayout(
@@ -296,31 +315,26 @@ final class DashboardPage extends PageBase
         string $innodb,
         string $footer,
     ): string {
-        $headerLines = explode("\n", $header);
-        $footerLines = explode("\n", $footer);
+        // renderPanel pads every column to the region height, so a separator
+        // sized to the tallest column spans the whole body. Sprinkles\Layout
+        // joins the columns ANSI-width-aware (and aligns the dividers into a
+        // straight vertical rule, which the old per-row concat did not).
+        $contentHeight = max(
+            substr_count($network, "\n"),
+            substr_count($mysql, "\n"),
+            substr_count($innodb, "\n"),
+        ) + 1;
 
-        $networkLines = explode("\n", $network);
-        $mysqlLines = explode("\n", $mysql);
-        $innodbLines = explode("\n", $innodb);
+        $sepLine = ' ' . Style::new()->foreground(Color::hex('#22d3ee'))->render('│') . ' ';
+        $separator = implode("\n", array_fill(0, $contentHeight, $sepLine));
 
-        $contentHeight = max(count($networkLines), count($mysqlLines), count($innodbLines));
+        $body = Layout::joinHorizontal(Position::TOP, $network, $separator, $mysql, $separator, $innodb);
 
-        $networkPad = array_fill(0, $contentHeight - count($networkLines), '');
-        $mysqlPad = array_fill(0, $contentHeight - count($mysqlLines), '');
-        $innodbPad = array_fill(0, $contentHeight - count($innodbLines), '');
-
-        $networkLines = array_merge($networkLines, $networkPad);
-        $mysqlLines = array_merge($mysqlLines, $mysqlPad);
-        $innodbLines = array_merge($innodbLines, $innodbPad);
-
-        $separator = "\x1b[36m│\x1b[0m";
-
-        $bodyLines = [];
-        for ($i = 0; $i < $contentHeight; $i++) {
-            $bodyLines[] = $networkLines[$i] . ' ' . $separator . ' ' . $mysqlLines[$i] . ' ' . $separator . ' ' . $innodbLines[$i];
-        }
-
-        return implode("\n", array_merge($headerLines, $bodyLines, $footerLines));
+        return implode("\n", array_merge(
+            explode("\n", $header),
+            explode("\n", $body),
+            explode("\n", $footer),
+        ));
     }
 
     public function withTogglePause(): self

@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\App;
 
+use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
+use SugarCraft\Query\ResultTable;
 
 /**
  * Fluent builder for App.
@@ -18,14 +20,13 @@ use SugarCraft\Query\Pane;
  * @method self withSelectedTable(?string $selectedTable)
  * @method self withRows(array $rows)
  * @method self withRowCursor(int $rowCursor)
- * @method self withQueryBuf(string $queryBuf)
+ * @method self withResultTable(?ResultTable $resultTable)
+ * @method self withQueryEditor(?TextArea $queryEditor)
  * @method self withPane(Pane $pane)
  * @method self withError(?string $error)
  * @method self withStatus(?string $status)
  * @method self withQueryHistory(array $queryHistory)
  * @method self withQueryFavorites(array $queryFavorites)
- * @method self withHistoryIndex(int $historyIndex)
- * @method self withSavedBuf(?string $savedBuf)
  */
 final class AppBuilder
 {
@@ -36,14 +37,13 @@ final class AppBuilder
     private ?string $selectedTable = null;
     private array $rows = [];
     private int $rowCursor = 0;
-    private string $queryBuf = '';
+    private ?ResultTable $resultTable = null;
+    private ?TextArea $queryEditor = null;
     private Pane $pane = Pane::Tables;
     private ?string $error = null;
     private ?string $status = null;
     private array $queryHistory = [];
     private array $queryFavorites = [];
-    private int $historyIndex = -1;
-    private ?string $savedBuf = null;
 
     public function withDb(DatabaseInterface $db): self
     {
@@ -94,10 +94,17 @@ final class AppBuilder
         return $clone;
     }
 
-    public function withQueryBuf(string $queryBuf): self
+    public function withResultTable(?ResultTable $resultTable): self
     {
         $clone = clone $this;
-        $clone->queryBuf = $queryBuf;
+        $clone->resultTable = $resultTable;
+        return $clone;
+    }
+
+    public function withQueryEditor(?TextArea $queryEditor): self
+    {
+        $clone = clone $this;
+        $clone->queryEditor = $queryEditor;
         return $clone;
     }
 
@@ -136,20 +143,6 @@ final class AppBuilder
         return $clone;
     }
 
-    public function withHistoryIndex(int $historyIndex): self
-    {
-        $clone = clone $this;
-        $clone->historyIndex = $historyIndex;
-        return $clone;
-    }
-
-    public function withSavedBuf(?string $savedBuf): self
-    {
-        $clone = clone $this;
-        $clone->savedBuf = $savedBuf;
-        return $clone;
-    }
-
     public function build(): \SugarCraft\Query\App
     {
         if ($this->db === null) {
@@ -164,14 +157,13 @@ final class AppBuilder
             $this->selectedTable,
             $this->rows,
             $this->rowCursor,
-            $this->queryBuf,
+            $this->resultTable,
+            $this->queryEditor,
             $this->pane,
             $this->error,
             $this->status,
             $this->queryHistory,
             $this->queryFavorites,
-            $this->historyIndex,
-            $this->savedBuf,
         );
     }
 }

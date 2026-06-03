@@ -4,11 +4,19 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Variables;
 
+use SugarCraft\Bits\Tabs\Tabs;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
+use SugarCraft\Forms\TextInput\TextInput;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Sprinkles\Position;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
@@ -425,160 +433,114 @@ final class VariablesPage extends PageBase
             ? " [{$this->activeCategory}]"
             : '';
 
-        return "\x1b[1;36mVariables\x1b[0m | {$tabLabel}{$rwIndicator}{$categoryIndicator}";
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Variables');
+
+        return "{$title} | {$tabLabel}{$rwIndicator}{$categoryIndicator}";
     }
 
     private function renderTabBar(): string
     {
-        $statusActive = $this->activeTab === self::TAB_STATUS;
-        $systemActive = $this->activeTab === self::TAB_SYSTEM;
+        // Bits\Tabs owns the active/inactive styling; the labels keep their
+        // bracketed form so they read as toggles. A wide track avoids the
+        // widget's ANSI-length truncation guard clipping the second tab.
+        $tabs = Tabs::new(['[Status]', '[System]'], 200)
+            ->withActive($this->activeTab === self::TAB_SYSTEM ? 1 : 0)
+            ->withActiveStyle(Style::new()->bold()->foreground(Color::hex('#fde047')))
+            ->withInactiveStyle(Style::new()->foreground(Color::hex('#6b7280')));
 
-        $statusTab = $statusActive
-            ? "\x1b[1;33m[Status]\x1b[0m"
-            : "\x1b[90m[Status]\x1b[0m";
-
-        $systemTab = $systemActive
-            ? "\x1b[1;33m[System]\x1b[0m"
-            : "\x1b[90m[System]\x1b[0m";
-
-        $searchDisplay = $this->searchQuery === ''
-            ? "\x1b[90m[search]\x1b[0m"
-            : "\x1b[1;37m[{$this->searchQuery}]\x1b[0m";
-
+        // The search box is a Forms\TextInput driven from page state; when
+        // empty + unfocused it shows the "[search]" placeholder.
+        $search = TextInput::new()
+            ->withPlaceholder('[search]')
+            ->withPrompt('')
+            ->setValue($this->searchQuery);
         if ($this->searchFocused) {
-            $searchDisplay = "\x1b[1;32m[{$this->searchQuery}_\x1b[0m";
+            [$search] = $search->focus();
         }
 
-        return "  {$statusTab} {$systemTab}     {$searchDisplay}";
+        return '  ' . $tabs->view() . '     ' . $search->view();
     }
 
     private function renderLayout(): string
     {
-        $leftWidth = 25;
-        $rightWidth = 80;
+        $leftPanel = $this->renderCategoryTree(25);
+        $rightPanel = $this->renderVariableGrid(80);
 
-        $leftPanel = $this->renderCategoryTree($leftWidth);
-        $rightPanel = $this->renderVariableGrid($rightWidth);
-
-        return $this->renderSideBySide($leftPanel, $rightPanel);
+        return Layout::joinHorizontal(Position::TOP, $leftPanel, '  ', $rightPanel);
     }
 
     private function renderCategoryTree(int $width): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mCategories\x1b[0m";
+        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render('Categories');
 
         if ($this->categories === []) {
-            $lines[] = "\x1b[90m  (no data)\x1b[0m";
-            return \implode("\n", $lines);
+            return $header . "\n" . Style::new()->faint()->render('  (no data)');
         }
 
-        // Add "All" option
-        $allSelected = $this->activeCategory === null;
-        $allDisplay = $allSelected
-            ? "\x1b[1;32m> All\x1b[0m"
-            : "\x1b[90m  All\x1b[0m";
-        $lines[] = $allDisplay;
-
-        // Add each category
-        foreach ($this->categories as $category) {
-            $selected = $this->activeCategory === $category;
-            $display = $selected
-                ? "\x1b[1;32m> {$category}\x1b[0m"
-                : "\x1b[90m  {$category}\x1b[0m";
-            $lines[] = $display;
+        // "All" plus each catalog group, rendered through Forms\ItemList so the
+        // selection styling and scroll window are the widget's job.
+        $entries = ['All', ...$this->categories];
+        $items = [];
+        foreach ($entries as $entry) {
+            $active = ($entry === 'All' && $this->activeCategory === null)
+                || $entry === $this->activeCategory;
+            $items[] = new StringItem(
+                $active
+                    ? Style::new()->bold()->foreground(Color::hex('#4ade80'))->render($entry)
+                    : Style::new()->foreground(Color::hex('#6b7280'))->render($entry)
+            );
         }
 
-        return \implode("\n", $lines);
+        $list = ItemList::new($items, $width, max(3, \count($items)))
+            ->withTitle('')
+            ->withShowStatusBar(false)
+            ->withShowHelp(false)
+            ->withShowFilter(false)
+            ->withCursorPrefix('')
+            ->withUnselectedPrefix('');
+
+        return $header . "\n" . $list->view();
     }
 
     private function renderVariableGrid(int $width): string
     {
         $filteredNames = $this->getFilteredVariableNames();
 
-        // Build columns for sugar-table
         $columns = [
             Column::new('name', 'Name', 30)->withAlignLeft(true),
             Column::new('value', 'Value', 25)->withAlignLeft(true),
             Column::new('editable', 'Edit', 8),
         ];
 
-        // Build rows
         $rows = [];
-        foreach ($filteredNames as $index => $varName) {
+        foreach ($filteredNames as $varName) {
             $value = $this->variables[$varName] ?? '';
-            $editable = $this->isEditable($varName) ? 'rw' : '';
 
             // Truncate long values for display
             if (\strlen($value) > 23) {
                 $value = \substr($value, 0, 20) . '...';
             }
 
-            $rowData = RowData::from([
+            $rows[] = Row::new(RowData::from([
                 'name' => $varName,
                 'value' => $value,
-                'editable' => $editable,
-            ]);
-
-            $row = Row::new($rowData);
-
-            // Highlight selected row
-            if ($index === $this->selectedRowIndex) {
-                $row = $row->withStyle('7'); // reverse video
-            }
-
-            $rows[] = $row;
+                'editable' => $this->isEditable($varName) ? 'rw' : '',
+            ]));
         }
 
-        // Create and configure table
-        $table = Table::withColumns($columns)
+        // sugar-table owns the grid; withSelectedIndex highlights the cursor row.
+        return Table::withColumns($columns)
             ->withRows($rows)
             ->withSelectable(true)
-            ->withShowFooter(false);
-
-        // Note: we're using raw table rendering since we're building a composite view
-        return $this->renderTableSimple($columns, $rows, $width);
-    }
-
-    /**
-     * Render a simple table without the full Table::View() border treatment.
-     *
-     * @param list<Column> $columns
-     * @param list<Row> $rows
-     */
-    private function renderTableSimple(array $columns, array $rows, int $totalWidth): string
-    {
-        $table = Table::withColumns($columns)->withRows($rows);
-
-        // Note: footer with count is handled separately in renderVariableGrid
-        // since we're using a custom composite layout
-        return $table->View();
-    }
-
-    private function renderSideBySide(string $left, string $right): string
-    {
-        $leftLines = \explode("\n", $left);
-        $rightLines = \explode("\n", $right);
-
-        $maxLines = \max(\count($leftLines), \count($rightLines));
-        $result = [];
-
-        for ($i = 0; $i < $maxLines; $i++) {
-            $leftLine = $leftLines[$i] ?? '';
-            $rightLine = $rightLines[$i] ?? '';
-
-            $leftLine = \str_pad($leftLine, 25, ' ');
-            $rightLine = \str_pad($rightLine, 80, ' ');
-
-            $result[] = $leftLine . '  ' . $rightLine;
-        }
-
-        return \implode("\n", $result);
+            ->withSelectedIndex($this->selectedRowIndex)
+            ->withShowFooter(false)
+            ->View();
     }
 
     private function renderFooter(): string
     {
-        return "\x1b[90m[tab] toggle  [w] rw filter  [s] search  [j/k] nav  [e] edit  [q] quit\x1b[0m";
+        return Style::new()->foreground(Color::hex('#6b7280'))
+            ->render('[tab] toggle  [w] rw filter  [s] search  [j/k] nav  [e] edit  [q] quit');
     }
 
     // ─── Accessors ───────────────────────────────────────────────────────────

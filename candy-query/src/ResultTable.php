@@ -80,7 +80,11 @@ final class ResultTable
         $this->nullToken = $nullToken;
         $this->colSpacing = $colSpacing;
 
-        $this->columns = $rows === [] ? [] : array_keys($rows[0]);
+        // Stringify column names: a numeric column label (e.g. `SELECT 1`)
+        // becomes an integer PHP array key, which would break the string ops
+        // below. Casting keeps width/pad/lookup uniform ($row["1"] still hits
+        // the int key 1 thanks to PHP key normalization).
+        $this->columns = $rows === [] ? [] : array_map('strval', array_keys($rows[0]));
         $this->colWidths = $this->computeColWidths();
     }
 
@@ -358,12 +362,11 @@ final class ResultTable
         }
 
         if (is_scalar($val)) {
-            $str = (string) $val;
-            return $this->maybeTruncate($str);
+            return $this->maybeTruncate(CellValue::sanitize((string) $val));
         }
 
         // Array / object → JSON.
-        $encoded = $this->encodeJson($val);
+        $encoded = CellValue::sanitize($this->encodeJson($val));
         return Style::new()->foreground(Color::hex('#6ee7b7'))
             ->render($this->maybeTruncate($encoded));
     }
@@ -378,10 +381,10 @@ final class ResultTable
         }
 
         if (is_scalar($val)) {
-            return $this->maybeTruncate((string) $val);
+            return $this->maybeTruncate(CellValue::sanitize((string) $val));
         }
 
-        return $this->maybeTruncate($this->encodeJson($val));
+        return $this->maybeTruncate(CellValue::sanitize($this->encodeJson($val)));
     }
 
     /**

@@ -51,6 +51,12 @@ echo StatusLine::error('connection refused'), "\n";
 - **`Section`** — styled section with title and body content, themeable.
 - **`Stage`** — multi-section presentation container.
 - **`HelpText`** — formatted help output.
+- **`Frame`** — full-screen application chrome: a double-line box that
+  fills the terminal exactly (`Frame::new()->withTitle($bar)
+  ->withStatus($bar)->render($body, $cols, $rows)`), with a centred title
+  bar, dividers, and a status bar. Normalises the body to a constant line
+  count and pads ANSI-width-aware so it never overflows the terminal —
+  safe for a TEA program whose frame-diff renderer owns the screen.
 
 ## Demos
 

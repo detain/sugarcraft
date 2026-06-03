@@ -138,6 +138,59 @@ final class Badge implements \SugarCraft\Dash\Foundation\Sizer, Drawable
     }
 
     /**
+     * Create a boolean badge: true → success (Yes), false → error (No),
+     * null → a subtle "Unknown" badge.
+     *
+     * Replaces the Yes/No/Unknown tristate text duplicated across the
+     * candy-query admin panels (ServerStatusPage, PerfSchema toggles).
+     */
+    public static function bool(
+        ?bool $value,
+        string $yes = 'Yes',
+        string $no = 'No',
+        string $unknown = 'Unknown',
+    ): self {
+        return match ($value) {
+            true => self::success($yes),
+            false => self::error($no),
+            null => new self(
+                text: $unknown,
+                bgColor: Color::hex('#313244'),
+                textColor: Color::hex('#6C7086'),
+                style: self::StyleSubtle,
+                size: self::SizeMd,
+                icon: null,
+            ),
+        };
+    }
+
+    /**
+     * Create a tri-state checkbox glyph badge: true → "[x]" (green),
+     * false → "[ ]" (subdued), null → "[~]" (amber). Rendered as the bare
+     * glyph (subtle style) so it can sit inline in a toggle list.
+     *
+     * Replaces the `[x]`/`[ ]`/`[~]` glyph rendering in
+     * PerfSchemaPage::renderTristate.
+     */
+    public static function tristate(?bool $value): self
+    {
+        [$glyph, $color] = match ($value) {
+            true => ['[x]', Color::hex('#A6E3A1')],
+            false => ['[ ]', Color::hex('#6C7086')],
+            null => ['[~]', Color::hex('#F9E2AF')],
+        };
+
+        return new self(
+            text: $glyph,
+            bgColor: null,
+            textColor: $color,
+            style: self::StyleSubtle,
+            size: self::SizeSm,
+            icon: null,
+        );
+    }
+
+    /**
      * Set the allocated dimensions for this badge.
      */
     public function setSize(int $width, int $height): \SugarCraft\Dash\Foundation\Sizer

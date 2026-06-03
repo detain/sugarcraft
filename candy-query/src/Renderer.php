@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace SugarCraft\Query;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
+use SugarCraft\Table\{Column, Row, RowData, Table};
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminSection;
 use SugarCraft\Query\Terminal\BorderFrame;
@@ -48,12 +51,11 @@ final class Renderer
 
     /**
      * Get the terminal size. Once {@see setSize()} has been called with the
-     * framework's WindowSizeMsg, that value is authoritative. Otherwise fall
-     * back to detection, trying backends in order:
-     *   1. FFI ioctl(TIOCGWINSZ) via PosixBackend — live kernel size
-     *   2. Environment variables (COLUMNS/LINES) — often stale, last resort
-     *   3. Shell-out to `stty size`
-     *   4. Hard default of 60 rows × 200 cols
+     * framework's WindowSizeMsg, that value is authoritative. Otherwise detection
+     * is delegated to candy-core's {@see Tty} façade, which selects the
+     * Posix/Windows backend and runs the full size ladder internally (FFI
+     * TIOCGWINSZ → COLUMNS/LINES → /dev/tty → stty → default). A hard default
+     * guards the unlikely case where the façade itself is unavailable.
      *
      * @return array{rows:int, cols:int}
      */
@@ -63,41 +65,24 @@ final class Renderer
             return self::$terminalSize;
         }
 
-        // 1. FFI ioctl via PosixBackend (candy-core/candy-pty). The kernel
-        // TIOCGWINSZ is the ground truth and tracks resizes live; prefer it
-        // over the COLUMNS/LINES env vars, which are frequently stale under
-        // SSH/tmux and produced frames sized to the wrong (half) height.
+        // Delegate detection to candy-core's Tty façade rather than re-rolling
+        // the FFI/env/stty ladder here — it tracks live resizes (kernel
+        // TIOCGWINSZ) and falls back through /dev/tty + stty internally, picking
+        // the right backend per platform. The WindowSizeMsg cache above stays
+        // the single source of truth; this path only runs before the first
+        // WindowSizeMsg arrives (e.g. tests, the very first frame).
         try {
-            $backend = new PosixBackend(STDOUT);
-            $size = $backend->size();
+            $size = (new Tty(STDOUT))->size();
             if ($size['cols'] > 0 && $size['rows'] > 0) {
-                self::$terminalSize = $size;
+                self::$terminalSize = ['rows' => $size['rows'], 'cols' => $size['cols']];
                 return self::$terminalSize;
             }
         } catch (\Throwable) {
-            // FFI not available or ioctl failed — fall through
+            // Detection unavailable — fall through to the hard default.
         }
 
-        // 2. Environment variables (fallback when there is no live tty).
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES') ?: 0);
-        if ($cols > 0 && $rows > 0) {
-            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
-            return self::$terminalSize;
-        }
-
-        // 3. Shell fallback: `stty size` ( POSIX-compatible )
-        $stty = trim((string) shell_exec('stty size 2>/dev/null'));
-        if ($stty !== '' && str_contains($stty, ' ')) {
-            [$r, $c] = explode(' ', $stty, 2);
-            if ((int) $r > 0 && (int) $c > 0) {
-                self::$terminalSize = ['rows' => (int) $r, 'cols' => (int) $c];
-                return self::$terminalSize;
-            }
-        }
-
-        // 4. Hard default for modern wide/tall terminals (60 rows accommodates
-        // large table lists + rows pane + query pane + help + status without cutting)
+        // Hard default for modern wide/tall terminals (accommodates the table
+        // list + rows + query + help + status panes without cutting).
         self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;
     }
@@ -165,8 +150,6 @@ final class Renderer
 
     private static function tablesPane(App $a, int $terminalRows, int $terminalCols): string
     {
-        $body = [];
-
         // Calculate width: expand to use up to half the terminal (minus 3-char gap).
         // Use max(24, ...) to keep at least 24 chars for readability.
         // Formula: width = max(24, min(max_table_name_length, floor(terminalCols/2) - 3))
@@ -178,10 +161,8 @@ final class Renderer
         $width = max(24, min($maxTableLen, (int) floor($terminalCols / 2) - 6));
 
         if ($a->tables === []) {
-            $body[] = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('(no tables)');
-            $bodyText = implode("\n", $body);
-        return self::frame($a, Pane::Tables, ' tables ', $bodyText, $width);
+            $body = Style::new()->foreground(Color::hex('#7d6e98'))->render('(no tables)');
+            return self::frame($a, Pane::Tables, ' tables ', $body, $width);
         }
 
         // Layout: title(1) + gap(1) + [tablesPane | rowsPane joined horizontally] +
@@ -194,85 +175,28 @@ final class Renderer
         //           → available ≤ terminalRows - 18. Use max(3, terminalRows - 18).
         $available = max(3, $terminalRows - 18);
 
-        $count = count($a->tables);
-
-        if ($count <= $available) {
-            // Everything fits — render the full list without scroll indicators.
-            // Pass available=count so array_slice only processes O(available) items.
-            // The frame's height follows the body line count automatically; the
-            // last arg is the column WIDTH (must be $width — passing $count here
-            // mistook a row count for a width and could overflow the layout).
-            return self::frame($a, Pane::Tables, ' tables ', self::renderTableList($a, 0, $count, $count, 0, $count), $width);
+        // candy-forms ItemList owns the cursor, selection styling and scroll
+        // window — no more hand-rolled centering/slice/`↑ N–M of T ↑` indicators.
+        // Pre-style each name (gold+bold for the loaded table, muted otherwise);
+        // the cursor row is rendered reverse-video by the widget.
+        $items = [];
+        foreach ($a->tables as $name) {
+            $items[] = new StringItem(
+                $name === $a->selectedTable
+                    ? Style::new()->foreground(Color::hex('#fde68a'))->bold()->render($name)
+                    : Style::new()->foreground(Color::hex('#c5b6dd'))->render($name)
+            );
         }
+        $list = ItemList::new($items, $width, $available)
+            ->withTitle('')
+            ->withShowStatusBar(false)
+            ->withShowHelp(false)
+            ->withShowFilter(false)
+            ->withCursorPrefix('')
+            ->withUnselectedPrefix('')
+            ->select($a->tableCursor);
 
-        // Need to scroll: determine the visible window around the cursor
-        $cursor = $a->tableCursor;
-
-        // Center the cursor in the visible window when possible
-        $halfWindow = (int) floor(($available - 1) / 2);
-        $start = $cursor - $halfWindow;
-
-        // Clamp to keep the window within bounds
-        $start = max(0, min($start, $count - $available));
-
-        $visibleTables = array_slice($a->tables, $start, $available);
-        $bodyText = self::renderTableList($a, $start, $count, $count, $start, $available);
-
-        return self::frame($a, Pane::Tables, ' tables ', $bodyText, $width);
-    }
-
-    /**
-     * Render the table list items for a window.
-     *
-     * @param App $a
-     * @param int $start Start index in the full tables array
-     * @param int $count Total table count
-     * @param int $total Total table count (alias for readability)
-     * @param int $visibleStart Start index of the visible window (for scroll indicator logic)
-     * @param int $available Height of the visible window
-     * @return string
-     */
-    private static function renderTableList(
-        App $a,
-        int $start,
-        int $count,
-        int $total,
-        ?int $visibleStart = null,
-        ?int $available = null,
-    ): string {
-        $lines = [];
-        $visibleStart ??= 0;
-        $available ??= $count;
-
-        // Top scroll indicator if not showing from the beginning
-        if ($visibleStart > 0) {
-            $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↑ ' . ($visibleStart + 1) . '–' . min($visibleStart + $available - 1, $count - 1) . ' of ' . $count . ' ↑');
-        }
-
-        // Only iterate the visible slice — O(visible) not O(total)
-        $visibleItems = array_slice($a->tables, $start, $available);
-        foreach ($visibleItems as $i => $name) {
-            $idx = $start + $i; // absolute index in the full tables array
-
-            $st = Style::new()->foreground(Color::hex('#c5b6dd'));
-            if ($name === $a->selectedTable) {
-                $st = $st->foreground(Color::hex('#fde68a'))->bold();
-            }
-            if ($a->pane === Pane::Tables && $idx === $a->tableCursor) {
-                $st = $st->reverse();
-            }
-            $lines[] = $st->render($name);
-        }
-
-        // Bottom scroll indicator if not showing through the end
-        $endIndex = min($visibleStart + $available - 1, $count - 1);
-        if ($endIndex < $count - 1) {
-            $lines[] = Style::new()->foreground(Color::hex('#6ee7b7'))->bold()
-                ->render('↓ ' . ($endIndex + 1) . '–' . $count . ' of ' . $count . ' ↓');
-        }
-
-        return implode("\n", $lines);
+        return self::frame($a, Pane::Tables, ' tables ', $list->view(), $width);
     }
 
     /**
@@ -300,92 +224,60 @@ final class Renderer
             );
         }
 
-        // Phase 1: Measure actual content width per field (header + all row values).
-        $colWidths = array_fill(0, $numFields, 0);
-        foreach ($cols as $j => $col) {
-            $colWidths[$j] = Width::string((string) $col);
-            foreach ($a->rows as $row) {
-                $val = self::cellString($row[$col] ?? '');
-                $valLen = Width::string($val);
-                if ($valLen > $colWidths[$j]) {
-                    $colWidths[$j] = $valLen;
-                }
-            }
-            // Ensure minimum of 1 for legibility even if content is empty.
-            if ($colWidths[$j] === 0) {
-                $colWidths[$j] = 1;
-            }
+        // Executed-query results render through ResultTable (its horizontal-
+        // scroll grid with JSON pretty-printing + a styled NULL token); regular
+        // table browsing renders through sugar-table.
+        if ($a->resultTable !== null) {
+            $body = $a->resultTable->withVisibleWidth($width)->render();
+            return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
-        // Phase 2: Proportional expansion to fill available width.
-        // Constraint: sum(fieldWidths) + (numFields - 1) * 2 <= availableWidth
-        // Each field takes fieldWidth + 2 for separator (2 spaces), except last.
-        $totalActual = array_sum($colWidths);
-        $totalWithSeparators = $totalActual + ($numFields - 1) * 2;
-        if ($totalWithSeparators < $width) {
-            // Content fits — expand proportionally to fill available space.
-            $excess = $width - $totalWithSeparators;
-            $expansionRatio = ($totalActual + $excess) / $totalActual;
-            $expansionRatio = max(1.0, $expansionRatio);
-            foreach ($colWidths as $j => $w) {
-                $colWidths[$j] = max($w, (int) floor($w * $expansionRatio));
-            }
-        } else {
-            // Content exceeds available width — use measured widths but ensure minimum 12.
-            foreach ($colWidths as $j => $w) {
-                $colWidths[$j] = max($w, 12);
-            }
+        // Keep panes balanced: show at most ~11 rows from the top (the bottom
+        // overhead is header + frame). The active row is highlighted via
+        // sugar-table's own selection, driven by our rowCursor.
+        $maxRows = max(1, min(11, $available - 2));
+
+        // Size each column to share the pane width (minus the table's own
+        // border); sugar-table truncates cell content to the column maxWidth.
+        $colBudget = max(6, (int) floor(($width - 1 - ($numFields - 1)) / max(1, $numFields)));
+        $columns = [];
+        foreach ($cols as $col) {
+            $columns[] = Column::new((string) $col, (string) $col, $colBudget)
+                ->withAlignLeft()
+                ->withMaxWidth($colBudget);
         }
 
-        // Phase 3: Build output with computed widths.
-        $headerCells = [];
-        foreach ($cols as $j => $col) {
-            $headerCells[] = str_pad($col, $colWidths[$j]);
+        $tableRows = [];
+        foreach ($a->rows as $row) {
+            $data = [];
+            foreach ($cols as $col) {
+                $data[(string) $col] = CellValue::display($row[$col] ?? null);
+            }
+            $tableRows[] = Row::new(RowData::from($data));
         }
-        $headerLine = Style::new()->bold()->foreground(Color::hex('#fde68a'))
-            ->render(implode('  ', $headerCells));
-        $bodyLines = [$headerLine];
 
-        // Limit visible data rows to min(11, available - 2) to keep panes balanced.
-        // available - 2 accounts for rowsPane header + bottom border overhead.
-        $maxRows = max(0, min(11, $available - 2));
-        foreach ($a->rows as $i => $row) {
-            $cells = [];
-            foreach ($cols as $j => $c) {
-                $val = self::cellString($row[$c] ?? '');
-                $cellWidth = $colWidths[$j];
-                if (Width::string($val) > $cellWidth) {
-                    // Truncate by display width, leaving a cell for the ellipsis.
-                    $val = Width::truncate($val, max(0, $cellWidth - 1)) . '…';
-                }
-                // Pad by display width, not byte/codepoint count, so wide
-                // characters don't misalign columns.
-                $pad = $cellWidth - Width::string($val);
-                if ($pad > 0) {
-                    $val .= str_repeat(' ', $pad);
-                }
-                $cells[] = $val;
-            }
-            $line = implode('  ', $cells);
-            if ($a->pane === Pane::Rows && $i === $a->rowCursor) {
-                $line = Style::new()->reverse()->render($line);
-            }
-            $bodyLines[] = $line;
-            if ($i >= $maxRows) break;
-        }
-        return self::frame($a, Pane::Rows, $title, implode("\n", $bodyLines), $width);
+        $table = Table::withColumns($columns)
+            ->withRows($tableRows)
+            ->withSelectable()
+            ->withZebra()
+            ->withViewportHeight($maxRows)
+            ->withSelectedIndex($a->rowCursor);
+
+        return self::frame($a, Pane::Rows, $title, $table->View(), $width);
     }
 
     private static function queryPane(App $a, int $terminalCols): string
     {
-        $cursorMark = $a->pane === Pane::Query ? '▮' : ' ';
-        $body = ($a->queryBuf === '' ? '-- type SQL, ctrl+r to run --' : $a->queryBuf) . $cursorMark;
         // This pane spans the full width. The outer BorderFrame gives each line
         // a content area of (cols - 2); a bordered+padded Style adds 4 (2 border
         // + 2 padding), so the inner CONTENT width must be (cols - 2) - 4 = cols - 6.
         // Using cols - 4 (the old value) overflowed the outer frame by 2 cells,
         // wrapping the query box and dropping its right border.
         $width = max(20, $terminalCols - 6);
+        // The candy-forms TextArea owns the cursor + placeholder; it renders the
+        // cursor only while focused (Query pane). Size it to the pane at render
+        // time without mutating App state.
+        $body = $a->editor()->withWidth($width)->view();
         return self::frame($a, Pane::Query, ' query ', $body, $width);
     }
 
@@ -447,68 +339,23 @@ final class Renderer
         // Layout::joinHorizontal takes strings and pads shorter one with blank lines at the bottom
         $combined = Layout::joinHorizontal(Position::TOP, $sidebarText, '  ', $pageContent);
 
-        // Wrap the combined output in a single frame
-        $title = ' admin ';
-        $st = Style::new()->border(Border::rounded())->padding(0, 1)->width($innerWidth);
+        // Wrap the combined output in a single frame; the title rides in the border.
+        $st = Style::new()->border(Border::rounded()->withTitle(' admin '))->padding(0, 1)->width($innerWidth);
         $st = $a->pane === Pane::Admin
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
 
-        return $st->render(Style::new()->bold()->render($title) . "\n" . $combined);
-    }
-
-    /**
-     * Turn an arbitrary DB cell value into a safe, single-line display string.
-     *
-     * Database columns can hold binary BLOBs (geometry, encrypted payloads,
-     * etc.). Rendering those bytes verbatim is catastrophic in a TUI: a raw
-     * ESC (0x1b) injects a bogus escape sequence that desyncs the frame-diff
-     * renderer's line model, NUL/control bytes garble the terminal, and BEL
-     * makes it beep on every repaint. We:
-     *   1. stringify (scalars cast, NULL labelled, arrays/objects JSON-encoded),
-     *   2. repair invalid UTF-8 so width measurement / truncation stay sane,
-     *   3. collapse newlines to a visible marker, and
-     *   4. replace every other control byte (C0, DEL, C1) with a middle dot.
-     */
-    private static function cellString(mixed $val): string
-    {
-        if ($val === null) {
-            return 'NULL';
-        }
-        if (is_scalar($val)) {
-            $s = (string) $val;
-        } else {
-            $s = json_encode($val);
-            if ($s === false) {
-                $s = '';
-            }
-        }
-
-        // Repair invalid UTF-8 (binary data) before any mb_*/Width work.
-        if (!mb_check_encoding($s, 'UTF-8')) {
-            $prev = mb_substitute_character();
-            mb_substitute_character(0xFFFD); // U+FFFD REPLACEMENT CHARACTER
-            $s = mb_convert_encoding($s, 'UTF-8', 'UTF-8');
-            mb_substitute_character($prev);
-        }
-
-        // Visualize newlines so they can't break the pane into extra rows.
-        $s = str_replace(["\r\n", "\r", "\n"], '↵', $s);
-        // Strip dangerous control bytes: C0 (0x00-0x1F) + DEL (0x7F)…
-        $s = preg_replace('/[\x00-\x1F\x7F]/', '·', $s) ?? $s;
-        // …and the C1 control range (U+0080-U+009F), now valid UTF-8.
-        $s = preg_replace('/[\x{0080}-\x{009F}]/u', '·', $s) ?? $s;
-
-        return $s;
+        return $st->render($combined);
     }
 
     private static function frame(App $a, Pane $p, string $title, string $body, int $width): string
     {
-        $border = Border::rounded();
-        $st = Style::new()->border($border)->padding(0, 1)->width($width);
+        // The pane title rides in the rounded border itself (a first-class
+        // Sprinkles\Border feature) instead of a hand-drawn bold line inside it.
+        $st = Style::new()->border(Border::rounded()->withTitle($title))->padding(0, 1)->width($width);
         $st = $a->pane === $p
             ? $st->borderForeground(Color::hex('#00ffaa'))
             : $st->borderForeground(Color::hex('#ff66aa'));
-        return $st->render(Style::new()->bold()->render($title) . "\n" . $body);
+        return $st->render($body);
     }
 }
