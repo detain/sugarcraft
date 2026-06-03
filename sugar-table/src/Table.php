@@ -191,6 +191,14 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Pin columns by index so they remain visible during horizontal scroll.
+     *
+     * Frozen columns are always rendered, regardless of scrollX offset.
+     * Non-frozen columns become visible starting at index count(frozenCols) + scrollX.
+     *
+     * @param list<int> $indices Column indices to freeze (pin to the left)
+     */
     public function withFrozenCols(array $indices): self
     {
         $clone = clone $this;
@@ -198,6 +206,14 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Set the horizontal scroll offset for non-frozen columns.
+     *
+     * Only affects non-frozen columns. Frozen columns (set via withFrozenCols)
+     * are always visible regardless of scrollX.
+     *
+     * @param int $offset Number of non-frozen columns to skip in rendering
+     */
     public function withScrollX(int $offset): self
     {
         $clone = clone $this;
@@ -748,6 +764,10 @@ final class Table
 
     /**
      * Compute the total width of visible columns plus separators between them.
+     *
+     * Iterates columns in order, summing widths of visible columns and adding
+     * a 1-character separator after each column that has a visible column after it.
+     * Uses isColumnVisible() to determine which columns to include.
      */
     private function computeVisibleContentWidth(array $computedWidths): int
     {
