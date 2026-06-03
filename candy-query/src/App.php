@@ -32,6 +32,8 @@ use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
+use SugarCraft\Query\Admin\History\HistoryRecorder;
+use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
 
@@ -89,6 +91,7 @@ final class App implements Model
         public readonly ?array $adminCachedServerVars = null,
         public readonly float $adminCacheTs = 0.0,
         public readonly bool $adminLoading = false,
+        public readonly ?HistoryRecorder $historyRecorder = null,
     ) {}
 
     /**
@@ -151,7 +154,7 @@ final class App implements Model
                 // First time entering admin - set loading immediately and trigger fetch
                 return [
                     $this->withPane($nextPane)->withAdminLoading(true),
-                    Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                    Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder)),
                 ];
             }
             return [$this->withPane($nextPane), null];
@@ -233,7 +236,7 @@ final class App implements Model
             $index = (int) $msg->rune - 1;
             if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
             }
             if (isset($allPanes[$index])) {
                 return [$this->withAdminCursor($index), null];
@@ -249,7 +252,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -258,7 +261,7 @@ final class App implements Model
             $newPane = $allPanes[$newCursor];
             if ($newPane !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($newCursor)->withAdminPane($newPane)->withAdminLoading(true);
-                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise())];
+                return [$newApp, Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder))];
             }
             return [$this->withAdminCursor($newCursor), null];
         }
@@ -517,12 +520,12 @@ final class App implements Model
         return Subscriptions::withTick('admin-fetch', 1.0, function(): \SugarCraft\Core\Msg {
             return Cmd::batch(
                 fn() => new AdminFetchStartedMsg(),
-                Cmd::promise(fn() => $this->createAdminFetchPromise()),
+                Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder)),
             )();
         });
     }
 
-    private function createAdminFetchPromise(): \React\Promise\PromiseInterface
+    private function createAdminFetchPromise(?HistoryRecorder $recorder = null): \React\Promise\PromiseInterface
     {
         try {
             $context = $this->serverContext ?? $this->createContext();
@@ -600,7 +603,14 @@ final class App implements Model
             );
         }
 
-        return \React\Promise\all($promises)->then(function(array $results): AdminDataLoadedMsg {
+        return \React\Promise\all($promises)->then(function(array $results) use ($recorder): AdminDataLoadedMsg {
+            // Record status snapshot to history if recorder is configured
+            if ($recorder !== null && isset($results['status'])) {
+                $ts = microtime(true);
+                $snapshot = new StatusSnapshot($results['status'], $ts);
+                $recorder->record($snapshot);
+            }
+
             return new AdminDataLoadedMsg(
                 statusVars: $results['status'] ?? [],
                 serverVars: $results['server'] ?? [],
