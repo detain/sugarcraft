@@ -95,6 +95,28 @@ final class Renderer
         self::$terminalSize = null;
     }
 
+    /**
+     * Width of the admin page's content column — the region a full-screen
+     * admin page (e.g. the Performance Dashboard) renders into, to the right
+     * of the sidebar.
+     *
+     * The outer {@see BorderFrame} border (−2) plus the admin pane's own
+     * rounded border + padding (−4) leave an inner width of `cols − 6`;
+     * subtract the sidebar column (`max(20, cols/4)`) and the 2-col gap, with
+     * a floor of 10 so a tiny terminal still renders. Single source of truth
+     * shared by {@see adminPane()} and
+     * {@see \SugarCraft\Query\Admin\Dashboard\DashboardPage::build()} so the
+     * page sizes itself to exactly the column it is dropped into — the two
+     * can no longer drift out of sync.
+     */
+    public static function adminContentWidth(int $cols): int
+    {
+        $innerWidth = max(20, $cols - 6);
+        $sidebarWidth = max(20, (int) floor($cols / 4));
+
+        return max(10, $innerWidth - $sidebarWidth - 2);
+    }
+
     public static function render(App $a): string
     {
         $size = self::getTerminalSize();
@@ -328,12 +350,10 @@ final class Renderer
         // This pane spans the full width. The outer BorderFrame content area is
         // (cols - 2); a bordered+padded Style adds 4, so the inner content width
         // must be (cols - 6). Using cols - 2 (the old value) overflowed by 4.
+        // The admin page has already sized its own content column via
+        // self::adminContentWidth(); here we just frame the sidebar + page
+        // side-by-side and let joinHorizontal align them within $innerWidth.
         $innerWidth = max(20, $terminalCols - 6);
-
-        // Calculate widths within the inner content region.
-        $sidebarWidth = (int) floor($terminalCols / 4);
-        $sidebarWidth = max(20, $sidebarWidth);  // minimum 20 chars
-        $contentWidth = max(10, $innerWidth - $sidebarWidth - 2);  // 2 for gap
 
         // Join sidebar and content horizontally — use raw strings, NOT pre-styled frames
         // Layout::joinHorizontal takes strings and pads shorter one with blank lines at the bottom
