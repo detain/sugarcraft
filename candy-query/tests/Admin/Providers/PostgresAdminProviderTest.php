@@ -217,4 +217,203 @@ final class PostgresAdminProviderTest extends TestCase
         $this->assertInstanceOf(PostgresAdminProvider::class, $provider);
         $this->assertInstanceOf(AdminProviderInterface::class, $provider);
     }
+
+    public function testCheckAllMetricsReturnsNonEmpty(): void
+    {
+        $this->db->setQueryResult('current_database', [
+            ['dbname' => 'testdb'],
+        ]);
+        $this->db->setQueryResult('pg_stat_database', [
+            [
+                'numbackends' => '2',
+                'xact_commit' => '1000',
+                'xact_rollback' => '5',
+                'blks_read' => '200',
+                'blks_hit' => '5000',
+                'tup_returned' => '10000',
+                'tup_fetched' => '500',
+                'tup_inserted' => '100',
+                'tup_updated' => '50',
+                'tup_deleted' => '10',
+                'conflicts' => '0',
+                'temp_files' => '2',
+                'temp_bytes' => '1024',
+                'deadlocks' => '0',
+                'stats_reset' => '2024-01-01 00:00:00',
+            ],
+        ]);
+        $this->db->setQueryResult('pg_settings', [
+            ['name' => 'shared_buffers', 'setting' => '16384', 'unit' => 'MB'],
+        ]);
+
+        $result = $this->provider->checkAllMetrics();
+
+        $this->assertNotEmpty($result);
+        $this->assertArrayHasKey('cache_hit_ratio', $result);
+        $this->assertArrayHasKey('tuples_returned_rate', $result);
+        $this->assertArrayHasKey('tuples_fetched_rate', $result);
+        $this->assertArrayHasKey('writes_rate', $result);
+    }
+
+    public function testCheckAllMetricsFirstCallReturnsZeroRates(): void
+    {
+        $this->db->setQueryResult('current_database', [
+            ['dbname' => 'testdb'],
+        ]);
+        $this->db->setQueryResult('pg_stat_database', [
+            [
+                'numbackends' => '1',
+                'xact_commit' => '500',
+                'xact_rollback' => '2',
+                'blks_read' => '100',
+                'blks_hit' => '2500',
+                'tup_returned' => '5000',
+                'tup_fetched' => '250',
+                'tup_inserted' => '50',
+                'tup_updated' => '25',
+                'tup_deleted' => '5',
+                'conflicts' => '0',
+                'temp_files' => '0',
+                'temp_bytes' => '0',
+                'deadlocks' => '0',
+                'stats_reset' => '2024-01-01 00:00:00',
+            ],
+        ]);
+        $this->db->setQueryResult('pg_settings', [
+            ['name' => 'shared_buffers', 'setting' => '128', 'unit' => 'MB'],
+        ]);
+
+        $result = $this->provider->checkAllMetrics();
+
+        // First call should have zero rates (no previous snapshot)
+        $this->assertSame(0.0, $result['tuples_returned_rate']);
+        $this->assertSame(0.0, $result['tuples_fetched_rate']);
+        $this->assertSame(0.0, $result['tuples_inserted_rate']);
+        $this->assertSame(0.0, $result['tuples_updated_rate']);
+        $this->assertSame(0.0, $result['tuples_deleted_rate']);
+        $this->assertSame(0.0, $result['writes_rate']);
+        $this->assertSame(0.0, $result['blocks_read_rate']);
+        $this->assertSame(0.0, $result['blocks_hit_rate']);
+        $this->assertSame(0.0, $result['xact_commit_rate']);
+        $this->assertSame(0.0, $result['xact_rollback_rate']);
+
+        // Cache hit ratio should still be computed
+        $this->assertGreaterThan(0.0, $result['cache_hit_ratio']);
+    }
+
+    public function testCheckConnectionUsageNoAlertBelow60Percent(): void
+    {
+        $this->db->setQueryResult('current_database', [
+            ['dbname' => 'testdb'],
+        ]);
+        // 30 connections out of 100 = 30% usage (below 60% threshold)
+        $this->db->setQueryResult('pg_stat_database', [
+            [
+                'numbackends' => '30',
+                'xact_commit' => '100',
+                'xact_rollback' => '0',
+                'blks_read' => '10',
+                'blks_hit' => '100',
+                'tup_returned' => '1000',
+                'tup_fetched' => '50',
+                'tup_inserted' => '10',
+                'tup_updated' => '5',
+                'tup_deleted' => '1',
+                'conflicts' => '0',
+                'temp_files' => '0',
+                'temp_bytes' => '0',
+                'deadlocks' => '0',
+                'stats_reset' => null,
+            ],
+        ]);
+        $this->db->setQueryResult('pg_settings', [
+            ['name' => 'max_connections', 'setting' => '100'],
+        ]);
+
+        $result = $this->provider->checkConnectionUsage();
+
+        $this->assertSame(30, $result['numbackends']);
+        $this->assertSame(100, $result['max_connections']);
+        $this->assertSame(0.3, $result['connection_usage']);
+        $this->assertNull($result['alert']);
+        $this->assertNull($result['alert_message']);
+    }
+
+    public function testCheckConnectionUsageWarningAt60Percent(): void
+    {
+        $this->db->setQueryResult('current_database', [
+            ['dbname' => 'testdb'],
+        ]);
+        // 60 connections out of 100 = 60% usage (exactly at warning threshold)
+        $this->db->setQueryResult('pg_stat_database', [
+            [
+                'numbackends' => '60',
+                'xact_commit' => '100',
+                'xact_rollback' => '0',
+                'blks_read' => '10',
+                'blks_hit' => '100',
+                'tup_returned' => '1000',
+                'tup_fetched' => '50',
+                'tup_inserted' => '10',
+                'tup_updated' => '5',
+                'tup_deleted' => '1',
+                'conflicts' => '0',
+                'temp_files' => '0',
+                'temp_bytes' => '0',
+                'deadlocks' => '0',
+                'stats_reset' => null,
+            ],
+        ]);
+        $this->db->setQueryResult('pg_settings', [
+            ['name' => 'max_connections', 'setting' => '100'],
+        ]);
+
+        $result = $this->provider->checkConnectionUsage();
+
+        $this->assertSame(60, $result['numbackends']);
+        $this->assertSame(100, $result['max_connections']);
+        $this->assertSame(0.6, $result['connection_usage']);
+        $this->assertSame('warning', $result['alert']);
+        $this->assertStringContainsString('elevated', $result['alert_message']);
+        $this->assertStringContainsString('60.0%', $result['alert_message']);
+    }
+
+    public function testCheckConnectionUsageCriticalAt80Percent(): void
+    {
+        $this->db->setQueryResult('current_database', [
+            ['dbname' => 'testdb'],
+        ]);
+        // 80 connections out of 100 = 80% usage (at critical threshold)
+        $this->db->setQueryResult('pg_stat_database', [
+            [
+                'numbackends' => '80',
+                'xact_commit' => '100',
+                'xact_rollback' => '0',
+                'blks_read' => '10',
+                'blks_hit' => '100',
+                'tup_returned' => '1000',
+                'tup_fetched' => '50',
+                'tup_inserted' => '10',
+                'tup_updated' => '5',
+                'tup_deleted' => '1',
+                'conflicts' => '0',
+                'temp_files' => '0',
+                'temp_bytes' => '0',
+                'deadlocks' => '0',
+                'stats_reset' => null,
+            ],
+        ]);
+        $this->db->setQueryResult('pg_settings', [
+            ['name' => 'max_connections', 'setting' => '100'],
+        ]);
+
+        $result = $this->provider->checkConnectionUsage();
+
+        $this->assertSame(80, $result['numbackends']);
+        $this->assertSame(100, $result['max_connections']);
+        $this->assertSame(0.8, $result['connection_usage']);
+        $this->assertSame('critical', $result['alert']);
+        $this->assertStringContainsString('critically high', $result['alert_message']);
+        $this->assertStringContainsString('80.0%', $result['alert_message']);
+    }
 }
