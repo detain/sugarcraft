@@ -183,10 +183,7 @@ final class Program
         $this->drainPending();
 
         // Initial subscription reconciliation — start whatever the model wants.
-        if ($this->options->subscriptions !== null) {
-            $wanted = ($this->options->subscriptions)($this->model);
-            $this->reconcileSubscriptions($wanted ?? new Subscriptions());
-        }
+        $this->reconcileWantedSubscriptions();
 
         // Pending dispatch may have already requested quit. Skip the loop.
         if (!$this->running) {
@@ -519,10 +516,7 @@ final class Program
         }
 
         // Reconcile subscriptions after every update cycle.
-        if ($this->options->subscriptions !== null) {
-            $wanted = ($this->options->subscriptions)($this->model);
-            $this->reconcileSubscriptions($wanted ?? new Subscriptions());
-        }
+        $this->reconcileWantedSubscriptions();
 
         // Reconcile component lifecycle hooks after every update cycle.
         // Composite models accumulate mount/unmount Cmds during update();
@@ -950,6 +944,39 @@ final class Program
                 $this->send(new ResumeMsg());
             });
         }
+    }
+
+    /**
+     * Resolve the subscription set the model currently wants.
+     *
+     * An explicit `subscriptions:` closure on ProgramOptions wins (it can wrap
+     * or override the model's own declaration). Otherwise we honor the model
+     * directly — {@see Model::subscriptions()} is a required interface method,
+     * so a model that declares a tick must get it started without every
+     * consumer having to hand-wire the closure. Models that don't subscribe
+     * use the {@see SubscriptionCapable} trait and return null → empty set.
+     */
+    private function wantedSubscriptions(): ?Subscriptions
+    {
+        return $this->options->subscriptions !== null
+            ? ($this->options->subscriptions)($this->model)
+            : $this->model->subscriptions();
+    }
+
+    /**
+     * Re-evaluate the model's wanted subscriptions and reconcile against the
+     * active set. Called every update cycle, so the hot path — a model that
+     * wants no subscriptions and has none active — must stay allocation-free:
+     * skip entirely rather than building an empty {@see Subscriptions} just to
+     * diff it against nothing.
+     */
+    private function reconcileWantedSubscriptions(): void
+    {
+        $wanted = $this->wantedSubscriptions();
+        if ($wanted === null && $this->activeSubscriptions === []) {
+            return;
+        }
+        $this->reconcileSubscriptions($wanted ?? new Subscriptions());
     }
 
     /**

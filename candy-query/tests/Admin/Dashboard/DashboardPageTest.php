@@ -163,6 +163,60 @@ final class DashboardPageTest extends TestCase
         $this->assertStringContainsString('[a] dismiss', $view);
     }
 
+    /**
+     * The dashboard surfaces a compact, live query-log strip (fed by
+     * QueryLogger) so the queries actually hitting the server are visible
+     * without navigating to the standalone Debug pane.
+     */
+    public function testQueryLogStripRendersRecentQueries(): void
+    {
+        \SugarCraft\Query\Admin\QueryLogger::clear();
+        \SugarCraft\Query\Admin\QueryLogger::log('query', 'SELECT * FROM processlist', 7);
+
+        $context = $this->createMock(ServerContextInterface::class);
+        $context->method('flavor')->willReturn(Flavor::MySQL);
+        $context->method('statusVariables')->willReturn([
+            'Bytes_received' => '1000',
+            'Bytes_sent' => '500',
+            'Threads_connected' => '10',
+            'Com_select' => '100',
+            'Uptime' => '3600',
+        ]);
+        $context->method('serverVariables')->willReturn(['max_connections' => '100']);
+        $context->method('statusVariablesTs')->willReturn(microtime(true));
+        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('versionString')->willReturn('8.0.36');
+
+        $view = (new DashboardPage($context))->view();
+
+        $this->assertStringContainsString('Recent Queries', $view);
+        $this->assertStringContainsString('SELECT * FROM processlist', $view);
+        $this->assertStringContainsString('7 rows', $view);
+
+        \SugarCraft\Query\Admin\QueryLogger::clear();
+    }
+
+    public function testQueryLogStripShowsPlaceholderWhenEmpty(): void
+    {
+        \SugarCraft\Query\Admin\QueryLogger::clear();
+
+        $context = $this->createMock(ServerContextInterface::class);
+        $context->method('flavor')->willReturn(Flavor::MySQL);
+        $context->method('statusVariables')->willReturn([
+            'Bytes_received' => '1000',
+            'Uptime' => '3600',
+        ]);
+        $context->method('serverVariables')->willReturn(['max_connections' => '100']);
+        $context->method('statusVariablesTs')->willReturn(microtime(true));
+        $context->method('version')->willReturn(Version::parse('8.0.36'));
+        $context->method('versionString')->willReturn('8.0.36');
+
+        $view = (new DashboardPage($context))->view();
+
+        $this->assertStringContainsString('Recent Queries', $view);
+        $this->assertStringContainsString('(no queries yet)', $view);
+    }
+
     public function testKeyboardShortcutADismissesAlerts(): void
     {
         $context = $this->createMock(ServerContextInterface::class);
