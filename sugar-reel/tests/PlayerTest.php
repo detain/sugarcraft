@@ -25,6 +25,20 @@ use SugarCraft\Testing\Input\ScriptedInput;
  */
 final class PlayerTest extends TestCase
 {
+    /** @var list<string> Temp files to remove in tearDown. */
+    private array $tempFiles = [];
+
+    protected function tearDown(): void
+    {
+        foreach ($this->tempFiles as $path) {
+            if (file_exists($path)) {
+                unlink($path);
+            }
+        }
+        $this->tempFiles = [];
+        parent::tearDown();
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -35,6 +49,29 @@ final class PlayerTest extends TestCase
     private function makeFrame(string $rgb, int $w = 1, int $h = 1): RgbFrame
     {
         return new RgbFrame($rgb, $w, $h);
+    }
+
+    /**
+     * Create a small multi-color GIF on disk so DecoderFactory builds a real
+     * GifDecoder (no ffmpeg) and rebuildDecoderAt() takes its real branch.
+     * Registered for cleanup in tearDown.
+     */
+    private function createTempGif(int $w = 8, int $h = 6): string
+    {
+        $img = imagecreatetruecolor($w, $h);
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $color = imagecolorallocate($img, ($x * 31) % 256, ($y * 47) % 256, (($x + $y) * 17) % 256);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        $path = sys_get_temp_dir() . '/sugar-reel-player-gif-' . uniqid('', true) . '.gif';
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        $this->tempFiles[] = $path;
+        return $path;
     }
 
     /**
@@ -379,6 +416,64 @@ final class PlayerTest extends TestCase
         $this->assertNotSame($initialMode, $nextMode);
     }
 
+    /**
+     * Regression for F2. Switching mode must rebuild the decoder so the decoded
+     * frame resolution tracks the new mode: HalfBlock packs 2 source rows per
+     * cell (height 48 for 24 cells), the 1-row modes use 1 (height 24).
+     *
+     * On master 'm' only swapped the Mode enum and left currentFrame untouched,
+     * so after switching from the initial HalfBlock frame (h=48) to a 1-row mode
+     * the height stayed 48 — the assert fails.
+     *
+     * @testdox mode switch rebuilds the decoder so frame height matches the mode (F2)
+     */
+    public function testModeSwitchRebuildsDecoderToMatchGeometry(): void
+    {
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 80, 24, '/fake');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+
+        // Cycle through every mode once (7 presses) and confirm the decoded
+        // frame height tracks the mode each time.
+        for ($i = 0; $i < count(Mode::cases()); $i++) {
+            [$player,] = $player->update($m);
+
+            $mode = $this->getPlayerProperty($player, 'mode');
+            $frame = $player->currentFrame;
+
+            $this->assertNotNull($frame, 'mode switch must rebuild and decode a frame');
+            $this->assertSame(
+                24 * $mode->rowsPerCell(),
+                $frame->h,
+                "frame height must match mode {$mode->name} (rowsPerCell {$mode->rowsPerCell()})",
+            );
+            $this->assertSame(80, $frame->w, 'frame width must equal cellsW');
+        }
+    }
+
+    /**
+     * Regression for F2. The mode cycle must visit ALL implemented modes,
+     * including the graphics protocols Sixel/Kitty/Iterm2. On master a skip-loop
+     * jumped over those three, so they were never reachable via 'm'.
+     *
+     * @testdox mode cycle reaches the graphics modes (Sixel/Kitty/Iterm2)
+     */
+    public function testModeCycleReachesGraphicsModes(): void
+    {
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 80, 24, '/fake');
+
+        $m = new KeyMsg(KeyType::Char, 'm');
+        $visited = [];
+        for ($i = 0; $i < count(Mode::cases()); $i++) {
+            [$player,] = $player->update($m);
+            $visited[] = $this->getPlayerProperty($player, 'mode');
+        }
+
+        $this->assertContains(Mode::Sixel, $visited, 'cycle must reach Sixel');
+        $this->assertContains(Mode::Kitty, $visited, 'cycle must reach Kitty');
+        $this->assertContains(Mode::Iterm2, $visited, 'cycle must reach Iterm2');
+    }
+
     // -------------------------------------------------------------------------
     // Quit keys
     // -------------------------------------------------------------------------
@@ -655,6 +750,43 @@ final class PlayerTest extends TestCase
 
         // After close(), subsequent next() calls should return null
         $this->assertNull($decoder->next());
+    }
+
+    // -------------------------------------------------------------------------
+    // F21: backward seek closes the old decoder (no process leak)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F21. A backward seek must CLOSE the current decoder before
+     * building a fresh one — otherwise the old ffmpeg process (or GIF buffer) is
+     * leaked. We drive it through a SpyDecoder + a real .gif path: because
+     * videoPath is a real .gif, rebuildDecoderAt() takes the real branch and
+     * closes the injected spy, then builds a GifDecoder via DecoderFactory.
+     *
+     * On master the backward branch called DecoderFactory::create() but NEVER
+     * closed the old decoder → closeCount stays 0.
+     *
+     * @testdox backward seek closes the old decoder before rebuilding (F21)
+     */
+    public function testBackwardSeekClosesOldDecoder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $gifPath = $this->createTempGif();
+
+        // Spy yields enough frames that the rebuild's skip-to-target loop has data.
+        $frames = array_fill(0, 20, $this->makeFrame("\x10\x20\x30"));
+        $spy = new SpyDecoder($frames);
+
+        $player = Player::openForTest($spy, 30.0, 8, 6, $gifPath);
+        $player = $this->setFrameIndex($player, 12);
+
+        // Left = seek backward 10 frames → target 2 < 12 → backward rebuild path.
+        [$player] = $player->update(new KeyMsg(KeyType::Left));
+
+        $this->assertSame(1, $spy->closeCount, 'backward seek must close the old decoder exactly once');
     }
 
     // -------------------------------------------------------------------------

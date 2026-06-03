@@ -45,10 +45,10 @@ final class FfmpegDecoder implements Decoder
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
 
-        // HalfBlock mode: 2 rows per cell, so ffmpeg scales to cellsH*2.
-        // Other modes: ffmpeg scales to cellsH.
-        $isHalfBlock = $mode === null || $mode === Mode::HalfBlock;
-        $this->frameH = $isHalfBlock ? $cellsH * 2 : $cellsH;
+        // Scale the frame height by rowsPerCell: HalfBlock packs 2 source rows
+        // per cell (cellsH*2); the 1-row modes scale to cellsH. $mode === null
+        // defaults to 2 (HalfBlock), matching DecoderFactory's null-default.
+        $this->frameH = $cellsH * ($mode?->rowsPerCell() ?? 2);
         $this->frameBytes = $cellsW * $this->frameH * 3;
 
         $ffmpegPath = Probe::ffmpeg();
