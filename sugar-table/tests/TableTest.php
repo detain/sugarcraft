@@ -697,4 +697,136 @@ final class TableTest extends TestCase
 
         $this->assertSame(0, $t->TotalRows());
     }
+
+    public function testRowsFooterFirstPage(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 100)
+                )
+            )
+            ->withPageSize(25)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $this->assertSame('Showing 1 to 25 of 100 rows', $t->RowsFooter());
+    }
+
+    public function testRowsFooterSecondPage(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 100)
+                )
+            )
+            ->withPageSize(25)
+            ->withPage(1)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $this->assertSame('Showing 26 to 50 of 100 rows', $t->RowsFooter());
+    }
+
+    public function testRowsFooterLastPagePartial(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 100)
+                )
+            )
+            ->withPageSize(25)
+            ->withPage(3)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        // Page 3: rows 76-100
+        $this->assertSame('Showing 76 to 100 of 100 rows', $t->RowsFooter());
+    }
+
+    public function testRowsFooterEmptyTable(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows([])
+            ->withPageSize(25)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $this->assertSame('Showing 0 to 0 of 0 rows', $t->RowsFooter());
+    }
+
+    public function testRowsFooterSinglePage(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 10)
+                )
+            )
+            ->withPageSize(25)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $this->assertSame('Showing 1 to 10 of 10 rows', $t->RowsFooter());
+    }
+
+    public function testFooterTypePageMode(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows([Row::new(RowData::from(['n' => '1']))])
+            ->withPageSize(10)
+            ->withFooterType(\SugarCraft\Table\FooterType::Page);
+
+        $this->assertSame('Page 1 of 1', $t->PageFooter());
+        $this->assertSame('Showing 1 to 1 of 1 rows', $t->RowsFooter());
+    }
+
+    public function testFooterTypeImmutability(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 5)])
+            ->withRows([Row::new(RowData::from(['n' => '1']))])
+            ->withPageSize(10);
+
+        $t2 = $t->withFooterType(\SugarCraft\Table\FooterType::Rows);
+        $this->assertNotSame($t, $t2);
+        // Original should still have default Page footer type
+        $this->assertStringContainsString('Page', $t->View());
+    }
+
+    public function testFooterTypeBothRendersCombined(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 50)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 100)
+                )
+            )
+            ->withPageSize(25)
+            ->withPage(1)
+            ->withFooterType(\SugarCraft\Table\FooterType::Both);
+
+        $view = $t->View();
+        $this->assertStringContainsString('Page 2 of 4', $view);
+        $this->assertStringContainsString('Showing 26 to 50 of 100 rows', $view);
+    }
+
+    public function testFooterTypeRowsRendersCorrectly(): void
+    {
+        $t = Table::withColumns([Column::new('n', 'N', 30)])
+            ->withRows(
+                \array_map(
+                    fn($i) => Row::new(RowData::from(['n' => (string) $i])),
+                    \range(1, 25)
+                )
+            )
+            ->withPageSize(25)
+            ->withFooterType(\SugarCraft\Table\FooterType::Rows);
+
+        $view = $t->View();
+        $this->assertStringContainsString('Showing 1 to 25 of 25 rows', $view);
+        // Should not contain "Page" style footer
+        $this->assertStringNotContainsString('Page 1 of 1', $view);
+    }
 }

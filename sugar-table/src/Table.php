@@ -114,6 +114,7 @@ final class Table
 
     private bool $showHeader = true;
     private bool $showFooter = true;
+    private FooterType $footerType = FooterType::Page;
 
     /** When set, border characters are sourced from this Border object. */
     private ?Border $border = null;
@@ -271,6 +272,13 @@ final class Table
     {
         $clone = clone $this;
         $clone->showFooter = $v;
+        return $clone;
+    }
+
+    public function withFooterType(FooterType $type): self
+    {
+        $clone = clone $this;
+        $clone->footerType = $type;
         return $clone;
     }
 
@@ -708,6 +716,25 @@ final class Table
     public function PageFooter(): string
     {
         return Lang::t('page_of', ['page' => $this->page + 1, 'total' => $this->TotalPages()]);
+    }
+
+    /**
+     * Return a "Showing X to Y of Z rows" footer string.
+     *
+     * Uses the 'showing_rows' i18n key. Row range is computed from the
+     * current page, page size, and total filtered row count.
+     */
+    public function RowsFooter(): string
+    {
+        $total = $this->TotalRows();
+        if ($total === 0) {
+            return Lang::t('showing_rows', ['from' => 0, 'to' => 0, 'total' => 0]);
+        }
+
+        $from = ($this->page * $this->pageSize) + 1;
+        $to = \min(($this->page + 1) * $this->pageSize, $total);
+
+        return Lang::t('showing_rows', ['from' => $from, 'to' => $to, 'total' => $total]);
     }
 
     /**
@@ -1309,10 +1336,34 @@ final class Table
     private function fillFooterRow(Buffer $buffer, int $row, int $contentWidth): Buffer
     {
         $style = $this->parseAnsiToStyle($this->footerStyle);
-        $label = $this->PageFooter();
-        $padLeft = (int) \floor(($contentWidth - \strlen($label)) / 2);
-        $padRight = $contentWidth - $padLeft - \strlen($label);
-        $content = \str_repeat(' ', $padLeft) . $label . \str_repeat(' ', $padRight);
+
+        $label = match ($this->footerType) {
+            FooterType::Page => $this->PageFooter(),
+            FooterType::Rows => $this->RowsFooter(),
+            FooterType::Both => $this->PageFooter() . '  |  ' . $this->RowsFooter(),
+        };
+
+        $labelLen = \strlen($label);
+
+        // Handle narrow tables where label exceeds content width
+        if ($labelLen >= $contentWidth) {
+            // Truncate label to fit, ensuring at least 1 char
+            $displayLabel = \substr($label, 0, \max(1, $contentWidth));
+            $displayLen = \strlen($displayLabel);
+            $remaining = $contentWidth - $displayLen;
+            $padLeft = (int) \floor($remaining / 2);
+            $padRight = $remaining - $padLeft;
+            $padLeft = \max(0, $padLeft);
+            $padRight = \max(0, $padRight);
+        } else {
+            $padLeft = (int) \floor(($contentWidth - $labelLen) / 2);
+            $padRight = $contentWidth - $padLeft - $labelLen;
+            $padLeft = \max(0, $padLeft);
+            $padRight = \max(0, $padRight);
+            $displayLabel = $label;
+        }
+
+        $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
 
         $col = 0;
         $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
