@@ -95,7 +95,6 @@ final class VideoSource
      *
      * If ffprobe is not available, returns a sensible empty/default object
      * (path unchanged, w=0, h=0, duration=0.0, fps=0.0, hasAudio=false).
-     * All CLI arguments are safely escaped with escapeshellarg().
      *
      * @param string $path Absolute or relative path to the video file
      */
@@ -117,17 +116,14 @@ final class VideoSource
             $path,
         ];
 
-        // Escape every argument to prevent shell injection.
-        // array_map is safe here — each element is already a string from the array above.
-        $cmd = array_map(escapeshellarg(...), $cmd);
-
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
         $descriptorSpec = [
-            0 => ['pipe', 'r'],  // stdin
-            1 => ['pipe', 'w'],  // stdout
-            2 => ['pipe', 'w'],  // stderr
+            0 => ['file', $devNull, 'r'],  // stdin — unused
+            1 => ['pipe', 'w'],             // stdout — read result
+            2 => ['file', $devNull, 'w'],  // stderr — discard
         ];
 
-        $process = proc_open(implode(' ', $cmd), $descriptorSpec, $pipes);
+        $process = proc_open($cmd, $descriptorSpec, $pipes);
         if (!is_resource($process)) {
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
