@@ -96,6 +96,16 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
   render via upstream widgets (0 `\x1b` literals in any page); chart autoscale lives in
   sugar-charts (`Chart\NiceScale`); `BorderFrame` lives in candy-kit as `Kit\Frame`; size
   detection delegates to candy-core `Tty`. All suites green; `git diff master` net-smaller.
+- **FOLLOW-UP (post-merge audit, branch `ai/candy-query-ansi-pager`):** the "0 `\x1b`
+  literals" claim had 4 stragglers OUTSIDE the 6 page classes — `Admin/PageBase.php`
+  (no-data/loading helpers) and `Admin/ServerStatus/SidebarGaugeSet.php` (header/divider) —
+  now route through `Sprinkles\Style`. NB `Color::ansi()` emits **truecolor, not 4-bit**:
+  map raw SGR fg `30–37 → ansi(c−30)`, `90–97 → ansi(c−82)` (so `33→ansi(3)`, `90→ansi(8)`,
+  `36→ansi(6)`); `1;` prefix → `->bold()`. Zero raw `\x1b` now remains in `src/` outside
+  `CellValue.php`. Also adopted the optional B-item: `ResultPager` delegates page arithmetic
+  (count/bounds/clamp/next-prev) to `Bits\Paginator`; public surface kept, but paging past
+  the last page is now a page-aligned no-op (was: slid to the final row) — +1 regression
+  test. candy-query **1093** green.
 
 ## Where we are
 
