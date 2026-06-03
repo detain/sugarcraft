@@ -727,18 +727,25 @@ final class Table
         $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $footerRows + $bottomBorderRows;
         $bufferWidth = $totalWidth + 2; // +2 for left/right border chars
 
+        // When scrollX > 0, compute visible width for border rows
+        // so borders align with visible content rather than extending beyond it
+        if ($this->scrollX > 0) {
+            $visibleWidth = $this->computeVisibleContentWidth($this->computedColumnWidths);
+        } else {
+            $visibleWidth = $totalWidth;
+        }
+
         $buffer = Buffer::new($bufferWidth, $bufferHeight);
         $bufferRow = 0;
 
-        // Top border
-        $buffer = $this->fillBorderRow($buffer, $bufferRow, $totalWidth, 'top');
+        // Top border - use visibleWidth so border spans only visible content when scrolled
+        $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'top');
         $bufferRow++;
 
         // Header
         if ($this->showHeader) {
             $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth, $this->computedColumnWidths);
             $bufferRow++;
-            $visibleWidth = $this->computeVisibleContentWidth($this->computedColumnWidths);
             $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
@@ -762,7 +769,7 @@ final class Table
         }
 
         // Bottom border
-        $buffer = $this->fillBorderRow($buffer, $bufferRow, $totalWidth, 'bottom');
+        $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'bottom');
 
         return $buffer;
     }

@@ -121,20 +121,18 @@ Each entry should have:
   - Separator logic: draw after ci if ci is frozen OR ci and ci+1 are both visible
   - All 195 tests pass
   - Verified: scrollX=1 with no frozen correctly hides first column, proper separator counts, frozen cols unaffected
-- Step 4.2 (review): **PASSED** ✅
-  - Manual verification shows scrollX works correctly for all cases:
-    - scrollX=0: all columns visible
-    - scrollX=1: first column hidden (no leading separator before visible content)
-    - scrollX with frozen cols: frozen cols always visible, scrollX affects only non-frozen
-    - Excessive scrollX: graceful clamping (empty scrollable area, no crash)
-    - Negative scrollX: clamped to 0 by withScrollX()
-  - All 195 tests pass (399 assertions)
-- Step 4.3 (fix): Not needed - no issues found after implementation
-- Step 4.4 (tests): **COMPLETED** ✅
-  - Existing 18 TableFrozenColsTest tests verify scrollX behavior
-  - Existing TableTest::testHorizontalScroll smoke test passes
-  - Separator count tests verify correct behavior
+- Step 4.2 (review): **ISSUES_FOUND** 🟠
+  - Found minor issue: Border rows (top/bottom) use totalWidth while visible content uses visibleWidth
+  - See detailed review below
+- Step 4.3 (fix): **COMPLETED** ✅
+  - Fixed border/content width mismatch when scrollX > 0
+  - Added visibleWidth computation before buffer creation (line 732-736)
+  - Changed fillBorderRow() calls to use visibleWidth instead of totalWidth (lines 742, 772)
+  - Header separator already used visibleWidth (line 749)
+  - Data rows continue to use totalWidth as before for correct positioning
   - All 195 tests pass
+- Step 4.4 (tests): **COMPLETED** ✅
+  - All 195 tests pass (399 assertions)
 - Step 4.5 (docs): Pending
 
 ### Phase 5: Global Search
