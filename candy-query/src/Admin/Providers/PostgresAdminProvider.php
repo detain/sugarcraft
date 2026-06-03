@@ -108,6 +108,9 @@ final class PostgresAdminProvider implements AdminProviderInterface
                 return [];
             }
 
+            // Parse shared_buffers from pg_settings (unit may be kB, MB, GB)
+            $sharedBuffersBytes = $this->parseSharedBuffers();
+
             $this->statusVariablesCache = [
                 'pg_stat_database.numbackends' => (string) ($row['numbackends'] ?? 0),
                 'pg_stat_database.xact_commit' => (string) ($row['xact_commit'] ?? 0),
@@ -123,6 +126,8 @@ final class PostgresAdminProvider implements AdminProviderInterface
                 'pg_stat_database.temp_files' => (string) ($row['temp_files'] ?? 0),
                 'pg_stat_database.temp_bytes' => (string) ($row['temp_bytes'] ?? 0),
                 'pg_stat_database.deadlocks' => (string) ($row['deadlocks'] ?? 0),
+                // Derived: shared_buffers in bytes (mirrors InnoDB buffer pool config)
+                'pg_settings.shared_buffers' => (string) $sharedBuffersBytes,
             ];
 
             return $this->statusVariablesCache;
@@ -294,6 +299,52 @@ final class PostgresAdminProvider implements AdminProviderInterface
             return (string) ($rows[0]['dbname'] ?? 'postgres');
         } catch (\PDOException) {
             return 'postgres';
+        }
+    }
+
+    /**
+     * Parse shared_buffers setting into bytes.
+     *
+     * pg_settings stores shared_buffers with units (e.g. "128MB", "4GB").
+     * This converts to bytes for consistent display.
+     *
+     * @return int Bytes value of shared_buffers, defaults to 0 on parse failure
+     */
+    private function parseSharedBuffers(): int
+    {
+        try {
+            $rows = $this->connection->query(
+                "SELECT setting, unit FROM pg_settings WHERE name = 'shared_buffers'",
+            );
+
+            if (!isset($rows[0])) {
+                return 0;
+            }
+
+            $value = (string) ($rows[0]['setting'] ?? '0');
+            $unit = $rows[0]['unit'] ?? null;
+
+            // Value is already in bytes if unit is NULL (postgres default is 8kB = 8192 bytes pages)
+            if ($unit === null) {
+                return (int) $value;
+            }
+
+            // Parse unit suffixes: 8kB, 64MB, 1GB, etc.
+            $multipliers = [
+                'B' => 1,
+                'kB' => 1024,
+                'MB' => 1024 * 1024,
+                'GB' => 1024 * 1024 * 1024,
+                'TB' => 1024 * 1024 * 1024 * 1024,
+            ];
+
+            if (!isset($multipliers[$unit])) {
+                return (int) $value;
+            }
+
+            return (int) ((float) $value * $multipliers[$unit]);
+        } catch (\PDOException) {
+            return 0;
         }
     }
 }

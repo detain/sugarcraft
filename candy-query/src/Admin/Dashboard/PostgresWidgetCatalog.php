@@ -23,15 +23,52 @@ use SugarCraft\Query\Admin\Calc\MakeTuple;
 final class PostgresWidgetCatalog
 {
     /**
-     * I/O panel widgets (6 widgets).
+     * I/O panel widgets (10 widgets).
      *
-     * Covers block-level I/O metrics and connection count.
+     * Covers block-level I/O metrics, tuple traffic, and connection count.
+     * Mirrors MySQL Network panel (Bytes In/Out) via tup_fetched/tup_returned.
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
     public static function io(): array
     {
         return [
+            [
+                'Tuples Fetched',
+                'timeline',
+                new RatePerSecond('pg_stat_database.tup_fetched'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'Rows fetched from DB: %(pg_stat_database.tup_fetched)s total',
+                null,
+            ],
+            [
+                'Tuples Fetched',
+                'counter',
+                new RatePerSecond('pg_stat_database.tup_fetched'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'Row fetch rate',
+                null,
+            ],
+            [
+                'Tuples Returned',
+                'timeline',
+                new RatePerSecond('pg_stat_database.tup_returned'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'Rows returned to client: %(pg_stat_database.tup_returned)s total',
+                null,
+            ],
+            [
+                'Tuples Returned',
+                'counter',
+                new RatePerSecond('pg_stat_database.tup_returned'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'Row return rate',
+                null,
+            ],
             [
                 'Blocks Read',
                 'timeline',
@@ -168,15 +205,34 @@ final class PostgresWidgetCatalog
     }
 
     /**
-     * Cache panel widgets (3 widgets).
+     * Cache panel widgets (4 widgets).
      *
-     * Covers temporary file usage and buffer cache efficiency.
+     * Covers temporary file usage, buffer cache efficiency, and shared buffers config.
+     * Mirrors MySQL InnoDB panel (buffer pool usage) via shared_buffers from pg_settings.
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
     public static function cache(): array
     {
         return [
+            [
+                'Shared Buffers',
+                'counter',
+                new StatusVar('pg_settings.shared_buffers'),
+                '%.0f B',
+                ['r' => 124, 'g' => 193, 'b' => 80],
+                'PostgreSQL shared_buffers configuration (buffer pool size)',
+                null,
+            ],
+            [
+                'Cache Hit Rate',
+                'round',
+                new CacheHitRate('pg_stat_database.blks_hit', 'pg_stat_database.blks_read'),
+                '%.1f%%',
+                ['r' => 124, 'g' => 193, 'b' => 80],
+                'Buffer cache hit ratio: blks_hit / (blks_hit + blks_read)',
+                null,
+            ],
             [
                 'Temp Files',
                 'counter',
@@ -193,15 +249,6 @@ final class PostgresWidgetCatalog
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
                 'Bytes written to temp files per second',
-                null,
-            ],
-            [
-                'Cache Hit Rate',
-                'round',
-                new CacheHitRate('pg_stat_database.blks_hit', 'pg_stat_database.blks_read'),
-                '%.1f%%',
-                ['r' => 124, 'g' => 193, 'b' => 80],
-                'Buffer cache hit ratio: blks_hit / (blks_hit + blks_read)',
                 null,
             ],
         ];
