@@ -173,4 +173,52 @@ final class ReelTest extends TestCase
         $reel = Reel::open('/tmp/x.mp4')->withLoop()->withLoop(false);
         $this->assertFalse($reel->loop());
     }
+
+    // -------------------------------------------------------------------------
+    // ramp() / withRamp()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox ramp() defaults to 'standard'
+     */
+    public function testRampDefaultsToStandard(): void
+    {
+        $this->assertSame('standard', Reel::new()->ramp());
+        $this->assertSame('standard', Reel::open('/tmp/x.mp4')->ramp());
+    }
+
+    /**
+     * @testdox withRamp() sets the ramp immutably
+     */
+    public function testWithRampSetsRampImmutably(): void
+    {
+        $original = Reel::new();
+        $dense = $original->withRamp('dense');
+
+        $this->assertNotSame($original, $dense);
+        $this->assertSame('standard', $original->ramp());
+        $this->assertSame('dense', $dense->ramp());
+    }
+
+    /**
+     * @testdox withRamp('unknown') throws InvalidArgumentException
+     */
+    public function testWithRampUnknownThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Reel::new()->withRamp('nonexistent');
+    }
+
+    /**
+     * @testdox withRamp('minimal') and withRamp('dense') set different ramps
+     */
+    public function testWithRampMinimalAndDenseAreDistinct(): void
+    {
+        $minimal = Reel::open('/tmp/x.mp4')->withRamp('minimal');
+        $dense = Reel::open('/tmp/x.mp4')->withRamp('dense');
+
+        $this->assertNotSame($minimal->ramp(), $dense->ramp());
+        $this->assertSame('minimal', $minimal->ramp());
+        $this->assertSame('dense', $dense->ramp());
+    }
 }

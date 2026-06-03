@@ -67,6 +67,7 @@ final class Player implements Model
      * @param AudioPlayer|null            $audioPlayer  Audio subprocess handle (null when no audio)
      * @param bool                        $ended        True once the decoder is exhausted (playback stopped at end)
      * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
+     * @param string                      $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -85,6 +86,7 @@ final class Player implements Model
         private readonly ?AudioPlayer $audioPlayer,
         public readonly bool $ended,
         private readonly bool $loop,
+        private readonly string $ramp = 'standard',
     ) {
     }
 
@@ -100,8 +102,9 @@ final class Player implements Model
      * @param float|null $fpsOverride FPS override (null = auto from probe)
      * @param Mode       $mode         Rendering mode (decoder resolution matches it)
      * @param bool       $loop         Restart from the beginning at end-of-stream instead of stopping
+     * @param string     $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard'): self
     {
         $source = VideoSource::probe($videoPath);
 
@@ -139,6 +142,7 @@ final class Player implements Model
             audioPlayer: $audioPlayer,
             ended: false,
             loop: $loop,
+            ramp: $ramp,
         );
     }
 
@@ -156,6 +160,7 @@ final class Player implements Model
      * @param int      $cellsH        Terminal cell height
      * @param string   $videoPath     Fake path for seeking (default '/fake')
      * @param bool     $loop          Restart from frame 0 at end-of-stream instead of stopping
+     * @param string   $ramp          Luma ramp name: 'minimal', 'standard', 'dense'
      */
     public static function openForTest(
         Decoder $decoder,
@@ -165,6 +170,7 @@ final class Player implements Model
         int $cellsH = 24,
         string $videoPath = '/fake',
         bool $loop = false,
+        string $ramp = 'standard',
     ): self {
         return new self(
             decoder: $decoder,
@@ -183,6 +189,7 @@ final class Player implements Model
             audioPlayer: null,
             ended: false,
             loop: $loop,
+            ramp: $ramp,
         );
     }
 
@@ -611,7 +618,7 @@ final class Player implements Model
                     [$r, $g, $b] = $rgb;
 
                     $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
-                    $ch = LumaRamp::char((float)$luma);
+                    $ch = LumaRamp::char((float)$luma, $this->ramp);
 
                     $fg = $this->rgbToStyleColor($r, $g, $b, $mode);
                     $style = $fg !== null ? new Style($fg) : null;
@@ -671,7 +678,7 @@ final class Player implements Model
      */
     private function renderDirect(RgbFrame $frame): string
     {
-        $renderer = RendererFactory::create($this->mode);
+        $renderer = RendererFactory::create($this->mode, $this->ramp);
         return $renderer->render($frame, $this->mode);
     }
 
@@ -778,6 +785,7 @@ final class Player implements Model
                 audioPlayer: $newAudio,
                 ended: false,
                 loop: $this->loop,
+                ramp: $this->ramp,
             );
         }
 
@@ -816,6 +824,7 @@ final class Player implements Model
             audioPlayer: $newAudio,
             ended: false, // a seek clears the ended state
             loop: $this->loop,
+            ramp: $this->ramp,
         );
     }
 
@@ -847,6 +856,7 @@ final class Player implements Model
             // Normal tick advance: ended stays as-is (false during play).
             ended: $this->ended,
             loop: $this->loop,
+            ramp: $this->ramp,
         );
     }
 
@@ -876,6 +886,7 @@ final class Player implements Model
             // through mutate() is honourée (false/0 are not null).
             ended: $changes['ended'] ?? $this->ended,
             loop: $changes['loop'] ?? $this->loop,
+            ramp: $this->ramp,
         );
     }
 

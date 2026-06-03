@@ -15,12 +15,16 @@ use SugarCraft\Reel\Decode\RgbFrame;
  * For Ansi256 mode:   grayscale char + 38;5;N foreground (Color::toAnsi256Index).
  * For Ascii mode:     grayscale char only, no color.
  *
- * Luminance formula: BT.709 Y = (77*R + 150*G + 29*B) >> 8
+ * Luminance formula: BT.601 (SMPTE-C) Y = (77*R + 150*G + 29*B) >> 8
  *
  * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph, joelibaceta/video-to-ascii.
  */
 final class AsciiRenderer implements FrameRenderer
 {
+    public function __construct(private readonly string $ramp = 'standard')
+    {
+    }
+
     /**
      * @inheritDoc
      */
@@ -53,7 +57,7 @@ final class AsciiRenderer implements FrameRenderer
                     $b = \ord($bytes[$idx + 2]);
                 }
                 $luma = (($r * 77) + ($g * 150) + ($b * 29)) >> 8;
-                $ch = LumaRamp::char((float)$luma);
+                $ch = LumaRamp::char((float)$luma, $this->ramp);
 
                 $line .= match ($mode) {
                     Mode::TrueColor => $this->emitColorCode($r, $g, $b, $lastFg) . $ch,
