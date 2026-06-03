@@ -10,6 +10,7 @@ use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
+use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\Version;
@@ -156,8 +157,76 @@ final class DashboardPage extends PageBase
 
         $header = $this->renderHeader();
         $footer = $this->renderFooter();
+        $queryLog = $this->renderQueryLog($width);
 
-        return $this->assembleLayout($header, $networkContent, $mysqlContent, $innodbContent, $footer);
+        return $this->assembleLayout($header, $networkContent, $mysqlContent, $innodbContent, $queryLog, $footer);
+    }
+
+    /** Newest-first query-log rows shown in the dashboard strip. */
+    private const QUERY_LOG_ROWS = 5;
+
+    /**
+     * Compact live view of the most recent admin queries, drawn straight from
+     * {@see QueryLogger}. Mirrors the standalone Debug pane but trimmed to a
+     * few newest-first rows so the dashboard can show what's actually hitting
+     * the server without leaving the page.
+     */
+    private function renderQueryLog(int $width): string
+    {
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Recent Queries');
+
+        $entries = QueryLogger::getEntries();
+        if ($entries === []) {
+            $muted = Style::new()->foreground(Color::ansi(8))->render('  (no queries yet)');
+            return $title . "\n" . $muted;
+        }
+
+        // Newest first, capped to the strip height.
+        $recent = array_slice(array_reverse($entries), 0, self::QUERY_LOG_ROWS);
+
+        $lines = [$title];
+        foreach ($recent as $entry) {
+            $lines[] = $this->renderQueryLogRow($entry, $width);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * @param array{timestamp: float, type: string, sql: string, rows: int, error: string|null} $entry
+     */
+    private function renderQueryLogRow(array $entry, int $width): string
+    {
+        $ts = date('H:i:s', (int) $entry['timestamp']);
+        $ms = (int) (($entry['timestamp'] - floor($entry['timestamp'])) * 1000);
+        $time = Style::new()->foreground(Color::hex('#6b7280'))->render(sprintf('%s.%03d', $ts, $ms));
+
+        $typeColor = match ($entry['type']) {
+            'error' => Color::hex('#f38ba8'),
+            'status', 'server' => Color::hex('#89b4fa'),
+            default => Color::hex('#a6e3a1'),
+        };
+        $type = Style::new()->foreground($typeColor)->render(str_pad($entry['type'], 8));
+
+        // Budget the SQL column from the strip width: 12 (time) + 9 (type) +
+        // ~14 (rows/err) + separators. Clamp so a wide query can't overflow the
+        // dashboard's content column (the diff renderer is 1 line per row).
+        $sqlBudget = max(10, $width - 40);
+        $sql = $entry['sql'];
+        if (strlen($sql) > $sqlBudget) {
+            $sql = substr($sql, 0, $sqlBudget - 1) . '…';
+        }
+        $sqlStyled = Style::new()->foreground(Color::hex('#cdd6f4'))->render($sql);
+
+        $rows = $entry['rows'] > 0
+            ? Style::new()->foreground(Color::hex('#6b7280'))->render(" [{$entry['rows']} rows]")
+            : '';
+
+        $err = $entry['error'] !== null
+            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('⚠ ' . $entry['error'])
+            : '';
+
+        return "  {$time} {$type} {$sqlStyled}{$rows}{$err}";
     }
 
     public function update(\SugarCraft\Core\Msg $msg): array
@@ -364,6 +433,7 @@ final class DashboardPage extends PageBase
         string $network,
         string $mysql,
         string $innodb,
+        string $queryLog,
         string $footer,
     ): string {
         // renderPanel pads every column to the region height, so a separator
@@ -384,6 +454,8 @@ final class DashboardPage extends PageBase
         return implode("\n", array_merge(
             explode("\n", $header),
             explode("\n", $body),
+            [''],
+            explode("\n", $queryLog),
             explode("\n", $footer),
         ));
     }
