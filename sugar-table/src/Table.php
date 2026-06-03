@@ -327,41 +327,43 @@ final class Table
     // -------------------------------------------------------------------------
 
     /**
-     * Set which rows are expanded.
+     * Set which rows are expanded on the current page.
      *
      * Expanded rows display their full content without truncation,
      * overriding the normal column width constraints.
      *
-     * @param list<int> $indices Row indices to mark as expanded
+     * @param list<int> $indices 0-based row indices relative to the current page
+     * @throws \OutOfBoundsException If any index is invalid for the current page
      */
     public function withExpandedRows(array $indices): self
     {
         $clone = clone $this;
-        // Convert indices to Row objects for identity-based tracking
-        $filtered = $clone->filteredSortedRows();
+        $paged = $clone->pagedRows();
         $clone->expandedRows = [];
         foreach ($indices as $idx) {
-            $row = $filtered[$idx] ?? null;
-            if ($row !== null) {
-                $clone->expandedRows[] = $row;
+            $row = $paged[$idx] ?? null;
+            if ($row === null) {
+                throw new \OutOfBoundsException("Invalid row index {$idx} for current page");
             }
+            $clone->expandedRows[] = $row;
         }
         return $clone;
     }
 
     /**
-     * Toggle the expanded state of a specific row.
+     * Toggle the expanded state of a row on the current page.
      *
-     * @param int $rowIndex The 0-based row index (in the filtered+sorted view) to toggle
+     * @param int $rowIndex The 0-based row index relative to the current page
+     * @throws \OutOfBoundsException If the index is invalid for the current page
      */
     public function toggleExpanded(int $rowIndex): self
     {
-        $clone = clone $this;
-        $filtered = $clone->filteredSortedRows();
-        $row = $filtered[$rowIndex] ?? null;
+        $paged = $this->pagedRows();
+        $row = $paged[$rowIndex] ?? null;
         if ($row === null) {
-            return $clone; // Invalid index, do nothing
+            throw new \OutOfBoundsException("Invalid row index {$rowIndex} for current page");
         }
+        $clone = clone $this;
         $idx = \array_search($row, $clone->expandedRows, true);
         if ($idx === false) {
             $clone->expandedRows[] = $row;
@@ -372,15 +374,17 @@ final class Table
     }
 
     /**
-     * Check if a row is currently expanded.
+     * Check if a row on the current page is currently expanded.
      *
-     * @param int $rowIndex The 0-based row index to check (in the filtered+sorted view)
+     * @param int $rowIndex The 0-based row index relative to the current page
+     * @throws \OutOfBoundsException If the index is invalid for the current page
      */
     public function isExpanded(int $rowIndex): bool
     {
-        $row = $this->filteredSortedRows()[$rowIndex] ?? null;
+        $paged = $this->pagedRows();
+        $row = $paged[$rowIndex] ?? null;
         if ($row === null) {
-            return false;
+            throw new \OutOfBoundsException("Invalid row index {$rowIndex} for current page");
         }
         return \in_array($row, $this->expandedRows, true);
     }
