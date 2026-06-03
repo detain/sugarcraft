@@ -73,7 +73,6 @@ final class AgentManager
             id: uniqid('subagent_'),
             agent: $agent,
             task: $task,
-            status: SubAgent::STATUS_PENDING,
         );
 
         $this->subAgents[$subAgent->id] = $subAgent;
@@ -91,50 +90,58 @@ final class AgentManager
 
     /**
      * Execute a subagent task.
+     *
+     * @throws \RuntimeException When subagent is not found
      */
     public function executeSubAgent(string $id): \Generator
     {
         $subAgent = $this->getSubAgent($id);
         if ($subAgent === null) {
-            return;
+            throw new \RuntimeException("SubAgent not found: $id");
         }
 
-        $subAgent->status = SubAgent::STATUS_RUNNING;
+        try {
+            $subAgent->status = SubAgent::STATUS_RUNNING;
 
-        // Build system prompt from agent config
-        $systemPrompt = $subAgent->agent->systemPrompt();
+            // Build system prompt from agent config
+            $systemPrompt = $subAgent->agent->systemPrompt();
 
-        // Apply skills
-        foreach ($subAgent->agent->skillNames as $skillName) {
-            $skill = $this->skillRegistry->get($skillName);
-            if ($skill !== null) {
-                $systemPrompt .= $skill->systemPromptContribution();
+            // Apply skills
+            foreach ($subAgent->agent->skillNames as $skillName) {
+                $skill = $this->skillRegistry->get($skillName);
+                if ($skill !== null) {
+                    $systemPrompt .= $skill->systemPromptContribution();
+                }
             }
-        }
 
-        // Run completion
-        $request = new \SugarCraft\Crush\Providers\CompleteRequest(
-            model: $subAgent->agent->model,
-            messages: [
-                new \SugarCraft\Crush\Messages\UserMessage($subAgent->task),
-            ],
-            systemPrompt: $systemPrompt,
-        );
+            // Run completion
+            $request = new \SugarCraft\Crush\Providers\CompleteRequest(
+                model: $subAgent->agent->model,
+                messages: [
+                    new \SugarCraft\Crush\Messages\UserMessage($subAgent->task),
+                ],
+                systemPrompt: $systemPrompt,
+            );
 
-        if ($this->provider->supportsStreaming()) {
-            $subAgent->status = SubAgent::STATUS_STREAMING;
+            if ($this->provider->supportsStreaming()) {
+                $subAgent->status = SubAgent::STATUS_STREAMING;
 
-            foreach ($this->provider->completeStream($request) as $response) {
-                $subAgent->output .= $response->content;
-                yield $subAgent;
+                foreach ($this->provider->completeStream($request) as $response) {
+                    $subAgent->output .= $response->content;
+                    yield $subAgent;
+                }
+            } else {
+                $response = $this->provider->complete($request);
+                $subAgent->output = $response->content;
             }
-        } else {
-            $response = $this->provider->complete($request);
-            $subAgent->output = $response->content;
-        }
 
-        $subAgent->status = SubAgent::STATUS_COMPLETE;
-        $subAgent->completedAt = new \DateTimeImmutable();
+            $subAgent->status = SubAgent::STATUS_COMPLETE;
+            $subAgent->completedAt = new \DateTimeImmutable();
+        } catch (\Throwable $e) {
+            $subAgent->status = SubAgent::STATUS_FAILED;
+            $subAgent->error = $e->getMessage();
+            throw $e;
+        }
     }
 
     /**
@@ -143,9 +150,11 @@ final class AgentManager
     public function stopSubAgent(string $id): void
     {
         $subAgent = $this->getSubAgent($id);
-        if ($subAgent !== null) {
-            $subAgent->status = SubAgent::STATUS_STOPPED;
+        if ($subAgent === null) {
+            return;
         }
+
+        $subAgent->status = SubAgent::STATUS_STOPPED;
     }
 
     /**
