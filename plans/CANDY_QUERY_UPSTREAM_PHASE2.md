@@ -62,9 +62,17 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
   - ⚠️ Test gotcha: `tests/Admin/Variables/VariableEditorTest` fails (~7) when that *subdir*
     is run in isolation (FakeDatabase ordering artifact) — GREEN in the full suite. Trust the
     full `vendor/bin/phpunit` run.
-- **REMAINING:** B5 (chart autoscale → sugar-charts), B1 (`Kit\Frame` extraction — DO LAST,
-  preserve frame-diff invariants), C4 (size detection — low priority). All 6 admin pages +
-  the 3-pane browser now render via upstream widgets; no page has any `\x1b` literal left.
+- **DONE (this session, 2 commits, all suites green):**
+  - **B5 — chart axis auto-scale** (`dde3d5c7` + `3e12358f`): new
+    `SugarCraft\Charts\Chart\NiceScale::ceiling(float): float` static helper in sugar-charts
+    (leading-digit-increment + zero-rest, 9xxx carries to 10xxx, floor 100; +12 tests →
+    sugar-charts 381). `TimeSeriesCell` deletes its private `niceCeiling()` and calls
+    `NiceScale::ceiling()`; the two `100.0` floor literals now ref `NiceScale::FLOOR`.
+    candy-query 1092 green. No composer change (sugar-charts already a dep; symlinked
+    path-repo picked up the new class with no `composer update`).
+- **REMAINING:** B1 (`Kit\Frame` extraction — DO LAST, preserve frame-diff invariants),
+  C4 (size detection — low priority). All 6 admin pages + the 3-pane browser now render via
+  upstream widgets; no page has any `\x1b` literal left.
 
 ## Where we are
 
