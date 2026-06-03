@@ -54,12 +54,7 @@ final readonly class RgbFrame
                     $g = ord($this->bytes[$offset++]);
                     $b = ord($this->bytes[$offset++]);
                 }
-                $color = imagecolorallocate($img, $r, $g, $b);
-                if ($color === false) {
-                    // Fall back to imagecolorclosest if allocation fails
-                    $color = imagecolorclosest($img, $r, $g, $b);
-                }
-                imagesetpixel($img, $x, $y, $color);
+                \imagesetpixel($img, $x, $y, ($r << 16) | ($g << 8) | $b);
             }
         }
 
