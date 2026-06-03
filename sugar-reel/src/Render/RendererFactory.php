@@ -16,10 +16,51 @@ use SugarCraft\Palette\Probe\Capability;
  * capabilities (sixel > kitty > iterm2) then falling back to
  * color-profile detection (TrueColor > Ansi256 > Ascii).
  *
- * Mirrors charmbracelet/sugar-reel Render.RendererFactory.
+ * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph,
+ * and joelibaceta/video-to-ascii.
  */
 final class RendererFactory
 {
+    /**
+     * Return the best Mode enum case for the current terminal.
+     *
+     * Precedence:
+     *  1. Sixel if Mosaic::diagnose() reports sixel support
+     *  2. Kitty if Mosaic::diagnose() reports kitty support
+     *  3. Iterm2 if Mosaic::diagnose() reports iterm2 support
+     *  4. TrueColor profile → HalfBlock
+     *  5. Ansi256 profile → Ansi256
+     *  6. Default → Ascii
+     *
+     * This is the mode-picking logic extracted so Reel::play() can resolve
+     * the auto-detected Mode and pass it to Player::open() (F3).
+     */
+    public static function autoMode(): Mode
+    {
+        $report = Mosaic::diagnose();
+
+        if ($report->has(Capability::Sixel)) {
+            return Mode::Sixel;
+        }
+        if ($report->has(Capability::KittyKeyboard)) {
+            return Mode::Kitty;
+        }
+        if ($report->has(Capability::ITerm2)) {
+            return Mode::Iterm2;
+        }
+
+        $profile = Probe::colorProfile();
+
+        if ($profile === ColorProfile::TrueColor) {
+            return Mode::HalfBlock;
+        }
+        if ($profile === ColorProfile::Ansi256) {
+            return Mode::Ansi256;
+        }
+
+        return Mode::Ascii;
+    }
+
     /**
      * Pick the best renderer by probing terminal capabilities.
      *
@@ -40,32 +81,7 @@ final class RendererFactory
             return self::create($preferred);
         }
 
-        // Probe terminal for sixel/kitty/iterm2 capabilities
-        // via Mosaic::diagnose() (candy-mosaic Mosaic.php:124).
-        $report = Mosaic::diagnose();
-
-        if ($report->has(Capability::Sixel)) {
-            return self::create(Mode::Sixel);
-        }
-        if ($report->has(Capability::KittyKeyboard)) {
-            return self::create(Mode::Kitty);
-        }
-        if ($report->has(Capability::ITerm2)) {
-            return self::create(Mode::Iterm2);
-        }
-
-        // Fall back to color-profile detection
-        // via Probe::colorProfile() (candy-palette Probe.php:31).
-        $profile = Probe::colorProfile();
-
-        if ($profile === ColorProfile::TrueColor) {
-            return self::create(Mode::HalfBlock);
-        }
-        if ($profile === ColorProfile::Ansi256) {
-            return self::create(Mode::Ansi256);
-        }
-
-        return self::create(Mode::Ascii);
+        return self::create(self::autoMode());
     }
 
     /**

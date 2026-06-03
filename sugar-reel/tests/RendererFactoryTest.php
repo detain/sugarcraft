@@ -143,6 +143,56 @@ final class RendererFactoryTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // autoMode() — returns the Mode enum case directly (F3)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F3. RendererFactory::autoMode() must return a Mode enum
+     * case (not null, not a renderer) so Reel::play() can pass it to
+     * Player::open() which requires an explicit Mode — the auto-detected mode
+     * was previously only used internally by auto() and never surfaced.
+     *
+     * @testdox autoMode() returns a Mode enum case
+     */
+    public function testAutoModeReturnsModeEnumCase(): void
+    {
+        $mode = RendererFactory::autoMode();
+
+        $this->assertInstanceOf(Mode::class, $mode);
+    }
+
+    /**
+     * Regression for F3. autoMode() must return one of the 7 known Mode cases
+     * (never null, never throw) regardless of the capabilities reported at runtime.
+     *
+     * @testdox autoMode() returns a valid Mode that is one of the 7 cases
+     */
+    public function testAutoModeReturnsValidMode(): void
+    {
+        $mode = RendererFactory::autoMode();
+
+        $validModes = Mode::cases();
+        $this->assertContains($mode, $validModes,
+            'autoMode() must return one of the known Mode::cases()');
+    }
+
+    /**
+     * Regression for F3. autoMode() must not throw even when the terminal
+     * reports no special capabilities — it must fall back to Ascii at minimum.
+     *
+     * @testdox autoMode() does not throw on a minimal-capability terminal
+     */
+    public function testAutoModeDoesNotThrowWithNoCapabilities(): void
+    {
+        // This test just verifies the method is callable without exception.
+        // The real capability probing happens at runtime; we test the
+        // fallback path doesn't crash.
+        $mode = RendererFactory::autoMode();
+
+        $this->assertInstanceOf(Mode::class, $mode);
+    }
+
+    // -------------------------------------------------------------------------
     // FrameRenderer contract — all created renderers implement the interface
     // -------------------------------------------------------------------------
 

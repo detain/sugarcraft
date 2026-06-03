@@ -6,7 +6,9 @@ namespace SugarCraft\Reel;
 
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
+use SugarCraft\Reel\Render\AutoMode;
 use SugarCraft\Reel\Render\Mode;
+use SugarCraft\Reel\Render\RendererFactory;
 
 /**
  * Terminal video player facade — plays a video file by decoding frames on the
@@ -30,7 +32,7 @@ final class Reel
 {
     /**
      * @param string      $path  Video file path ('' for synthetic/unbound)
-     * @param Mode        $mode  Rendering mode
+     * @param Mode|null   $mode  Rendering mode (null = auto-detect)
      * @param int          $cols  Terminal cell width
      * @param int          $rows  Terminal cell height
      * @param float|null   $fps   FPS override (null = auto from probe)
@@ -38,7 +40,7 @@ final class Reel
      */
     private function __construct(
         private readonly string $path,
-        private readonly Mode $mode,
+        private readonly ?Mode $mode,
         private readonly int $cols,
         private readonly int $rows,
         private readonly ?float $fps,
@@ -53,7 +55,7 @@ final class Reel
      */
     public static function new(): self
     {
-        return new self('', Mode::HalfBlock, 80, 24, null);
+        return new self('', null, 80, 24, null);
     }
 
     /**
@@ -62,7 +64,7 @@ final class Reel
      */
     public static function open(string $path): self
     {
-        return new self($path, Mode::HalfBlock, 80, 24, null);
+        return new self($path, null, 80, 24, null);
     }
 
     /**
@@ -74,9 +76,9 @@ final class Reel
     }
 
     /**
-     * The configured rendering mode.
+     * The configured rendering mode (null means auto-detect).
      */
-    public function mode(): Mode
+    public function mode(): ?Mode
     {
         return $this->mode;
     }
@@ -122,6 +124,15 @@ final class Reel
     }
 
     /**
+     * Set the rendering mode to auto-detect (probed at play time).
+     * Returns a new Reel (immutable).
+     */
+    public function withAutoMode(): self
+    {
+        return $this->with(mode: new AutoMode());
+    }
+
+    /**
      * Enable (or disable) looping: replay from the start at end-of-stream
      * instead of stopping. Returns a new Reel (immutable).
      */
@@ -162,8 +173,11 @@ final class Reel
             $path = $this->buildSyntheticGif();
         }
 
+        // Resolve auto-mode to the best available mode at runtime (F3).
+        $resolvedMode = $this->mode ?? RendererFactory::autoMode();
+
         // Create the Player with the configured dimensions, fps, render mode and loop flag.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $this->mode, $this->loop);
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $this->loop);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -209,24 +223,27 @@ final class Reel
     /**
      * Generic immutable-update helper: create a new Reel with changed fields.
      *
-     * @param string      $path  Leave null to keep current
-     * @param Mode        $mode  Leave null to keep current
-     * @param int         $cols  Leave null to keep current
-     * @param int         $rows  Leave null to keep current
-     * @param float|null   $fps   Leave null to keep current
-     * @param bool|null    $loop  Leave null to keep current
+     * @param string             $path  Leave null to keep current
+     * @param Mode|AutoMode|null $mode  Leave null to keep current; AutoMode sets null (auto-detect)
+     * @param int                $cols  Leave null to keep current
+     * @param int                $rows  Leave null to keep current
+     * @param float|null         $fps   Leave null to keep current
+     * @param bool|null          $loop  Leave null to keep current
      */
     private function with(
         ?string $path = null,
-        ?Mode $mode = null,
+        Mode|AutoMode|null $mode = null,
         ?int $cols = null,
         ?int $rows = null,
         ?float $fps = null,
         ?bool $loop = null,
     ): self {
+        // AutoMode sentinel → null (play() will resolve to auto-detected mode).
+        $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
+
         return new self(
             $path ?? $this->path,
-            $mode ?? $this->mode,
+            $resolvedMode,
             $cols ?? $this->cols,
             $rows ?? $this->rows,
             $fps ?? $this->fps,
