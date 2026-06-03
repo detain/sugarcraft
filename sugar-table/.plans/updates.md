@@ -69,8 +69,21 @@ Each entry should have:
   - Issue 2 (missing separator): Fixed - separator drawn after each column's right edge, not based on next column's visibility
   - Issue 3 (separator width): Added computeVisibleContentWidth helper that accounts for column widths + separators between consecutive visible columns
   - All 177 tests pass
-- Step 2.4 (tests): **IN_PROGRESS**
-- Step 2.5 (docs): Pending
+- Step 2.4 (tests): **COMPLETED** ✅
+  - TableFrozenColsTest: 18 tests, 36 assertions - all passing
+- Step 2.5 (docs): **COMPLETED** ✅
+  - Added Frozen Columns section to README.md with:
+    - Basic usage of withFrozenCols()
+    - How it works explanation
+    - Combined frozen + scrollX example
+    - Visibility logic with concrete example
+  - Added pattern:frozen-columns to CALIBER_LEARNINGS.md documenting:
+    - isColumnVisible() logic
+    - computeVisibleContentWidth() purpose
+    - Buffer column position handling for skipped columns
+  - Added docblocks to withFrozenCols() and withScrollX()
+  - Enhanced docblock for computeVisibleContentWidth()
+  - All 195 tests pass
 
 ### Phase 3: Multiline Mode
 - Step 3.1 (impl): Pending
