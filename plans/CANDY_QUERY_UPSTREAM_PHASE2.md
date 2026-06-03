@@ -21,14 +21,26 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
     KEPT and wired** for executed-query results (App `resultTable` state, h/l + ←/→ scroll,
     loadTable clears it). New shared `CellValue` helper (display()+sanitize()) for binary/ANSI
     safety in BOTH grids. Fixed latent ResultTable numeric-column-name bug.
-- **Baselines after this session:** candy-core 637, candy-query **1092**, sugar-table 169,
-  sugar-dash Badge/DefinitionList green. `git diff master --stat candy-query/src` ≈ −777 net.
-- **REMAINING:** A5–A11 (6 admin pages — see section below; ServerStatusPage first),
-  B5 (chart autoscale), B1 (`Kit\Frame`), C4 (size detection).
-  - A5 note: `ServerStatusPage::tristate(bool|string|null): string` is a **public, directly-
-    tested** method — adopting `Badge::bool()` changes its byte output, so update
-    `ServerStatusPageTest` accordingly. ServerInfoCard + the 6 panels map cleanly onto
-    `Card` + `DefinitionList` (+ `withPlaceholder('Unknown')`).
+- **DONE (next session, 2 commits, all suites green):**
+  - **A5 — ServerStatusPage** (`95a521db`): `ServerInfoCard` + the 6 panels → `Card` +
+    `DefinitionList` (`->withPlaceholder('Unknown')`); `tristate()` delegates to
+    `Badge::bool()`. No `ServerStatusPageTest` edits needed after all — its assertions are
+    substring-based (Yes/No/Unknown) and `Badge::bool()` still emits those words. Header/
+    footer → `Sprinkles\Style`; zero ANSI literals left. −90 net LOC.
+  - **A6 — VariablesPage** (`58d64641`): tab bar → `Bits\Tabs` (labels keep `[Status]`/
+    `[System]` bracket form; wide track to avoid the widget's ANSI-length truncation guard),
+    search box → `Forms\TextInput` (`[search]` placeholder, driven from page state — no
+    `update()` rewrite), category tree → `Forms\ItemList`, side-by-side →
+    `Layout::joinHorizontal`, grid stays sugar-table via `Table::withSelectedIndex()`
+    (dead `renderTableSimple` removed). **Wired sugar-bits as a candy-query dep** (require +
+    `../sugar-bits` path-repo, added by hand — `--strict-closure` is too broad). −30 net LOC.
+- **Baselines after A5/A6:** candy-core 637, candy-query **1092**, sugar-table 169,
+  sugar-dash Badge/DefinitionList green.
+  - ⚠️ Test gotcha: `tests/Admin/Variables/VariableEditorTest` fails (~7) when that *subdir*
+    is run in isolation (FakeDatabase ordering artifact) — GREEN in the full suite. Trust the
+    full `vendor/bin/phpunit` run.
+- **REMAINING:** A7–A11 (4 admin pages — Reports → PerfSchema → Dashboard → Connections;
+  ReportsPage first), B5 (chart autoscale), B1 (`Kit\Frame`), C4 (size detection).
 
 ## Where we are
 
