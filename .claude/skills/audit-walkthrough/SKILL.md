@@ -2,9 +2,9 @@
 name: audit-walkthrough
 description: Processes docs/plans/AUDIT_*.md files by marking items ✅/⏭️ inline where they live (never moving them — readers see history in place), skipping 'credit upstream author' and UPGRADE_GUIDE items (out of scope pre-1.0), and splitting multi-lib audits into one PR per lib sequenced by dependency order (candy-core → candy-sprinkles → honey-bounce → leaf libs). Use when the user says 'work through audit', 'process AUDIT_*.md', 'fix audit findings', or names a docs/plans/AUDIT_*.md file. Do NOT bundle multiple libs into one PR, do NOT use for net-new feature work, and do NOT retroactively rewrite or force-push already-merged audit PRs.
 paths:
-  - docs/plans/AUDIT_*.md
-  - plans/AUDIT_*.md
-  - **/AUDIT_*.md
+  - 'docs/plans/AUDIT_*.md'
+  - 'plans/AUDIT_*.md'
+  - '**/AUDIT_*.md'
 ---
 # Audit Walkthrough
 
