@@ -77,6 +77,9 @@ final class ReportsPage extends PageBase
     /** @var bool */
     private bool $showRawValues = false;
 
+    /** @var string|null */
+    private ?string $lastExportCsv = null;
+
     /** @var string */
     private string $sortColumn = '';
 
@@ -299,7 +302,56 @@ final class ReportsPage extends PageBase
 
     public function withExport(): self
     {
-        return $this;
+        $clone = clone $this;
+        $clone->lastExportCsv = $this->exportToCsv();
+
+        return $clone;
+    }
+
+    /**
+     * Export the current report result to CSV format.
+     *
+     * Returns a CSV string with column headers and all rows (not just the
+     * current page). Returns empty string if no report is loaded.
+     */
+    public function exportToCsv(): string
+    {
+        if ($this->currentResult === null) {
+            return '';
+        }
+
+        $rows = $this->currentResult->rows;
+        if (count($rows) === 0) {
+            return '';
+        }
+
+        // Get column names from first row
+        $columns = array_keys($rows[0]);
+
+        $lines = [];
+        // Header row
+        $lines[] = implode(',', $columns);
+
+        // Data rows - escape values that contain commas or quotes
+        foreach ($rows as $row) {
+            $values = [];
+            foreach ($columns as $col) {
+                $value = (string) ($row[$col] ?? '');
+                // Prevent CSV formula injection by prefixing dangerous characters
+                $firstChar = $value[0] ?? '';
+                if ($firstChar === '=' || $firstChar === '+' || $firstChar === '-' || $firstChar === '@') {
+                    $value = "'" . $value;
+                }
+                // Escape quotes and wrap in quotes if contains comma, quote, or newline
+                if (str_contains($value, ',') || str_contains($value, '"') || str_contains($value, "\n")) {
+                    $value = '"' . str_replace('"', '""', $value) . '"';
+                }
+                $values[] = $value;
+            }
+            $lines[] = implode(',', $values);
+        }
+
+        return implode("\n", $lines);
     }
 
     // ─── Rendering Methods ────────────────────────────────────────────────────
@@ -490,9 +542,27 @@ final class ReportsPage extends PageBase
         }
 
         try {
+            // Look up the catalog key (view name) for this report.
+            // The catalog is keyed by view name (e.g. 'x$statement_analysis'),
+            // but selectedReport is the report name (e.g. 'statement_analysis').
+            $viewName = null;
+            foreach ($this->catalog?->all() ?? [] as $key => $report) {
+                if ($report->name === $this->selectedReport) {
+                    $viewName = $key;
+                    break;
+                }
+            }
+
+            if ($viewName === null) {
+                $this->currentResult = null;
+                $this->errorMessage = "Report not found in catalog: {$this->selectedReport}";
+
+                return;
+            }
+
             $result = $this->showRawValues
-                ? $this->runner->runRaw($this->selectedReport)
-                : $this->runner->run($this->selectedReport);
+                ? $this->runner->runRaw($viewName)
+                : $this->runner->run($viewName);
 
             $this->currentResult = $result;
             $this->errorMessage = '';
@@ -537,5 +607,13 @@ final class ReportsPage extends PageBase
     public function runner(): ?ReportRunner
     {
         return $this->runner;
+    }
+
+    /**
+     * Get the CSV from the most recent export.
+     */
+    public function lastExportCsv(): ?string
+    {
+        return $this->lastExportCsv;
     }
 }
