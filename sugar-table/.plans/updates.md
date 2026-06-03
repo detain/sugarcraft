@@ -142,7 +142,13 @@ Each entry should have:
   - Updated CALIBER_LEARNINGS.md pattern:frozen-columns to include scrollX details
 
 ### Phase 5: Global Search
-- Step 5.1 (impl): Pending
+- Step 5.1 (impl): **COMPLETED** ✅
+  - Branch: ai/table-global-search
+  - Added `$searchText` property for global search state
+  - Added `search(string $text): self` method (case-insensitive, resets selectedIndex)
+  - Added `ClearSearch(): self` method (calls search(''))
+  - Modified `filteredSortedRows()` to apply global search across all columns (OR logic)
+  - All 195 tests pass (399 assertions)
 - Step 5.2 (review): Pending
 - Step 5.3 (fix): Pending
 - Step 5.4 (tests): Pending
