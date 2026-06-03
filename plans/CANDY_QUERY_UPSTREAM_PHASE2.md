@@ -83,10 +83,19 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
     **zero raw `\x1b` remains in `Terminal/`**. candy-kit wired by hand (require +
     path-repo; runtime closure candy-core+candy-sprinkles already present). Frame-diff
     invariants verified live: full Renderer render is exactly rows×cols. candy-query 1092.
-- **REMAINING:** C4 (size detection thinning — LOW PRIORITY, optional; not in DoD).
-  `Renderer::getTerminalSize()`'s env/stty/default rungs may duplicate candy-core
-  `PosixBackend`/`Tty`; touches load-bearing size detection (C3 coupling). All 6 admin
-  pages + the 3-pane browser render via upstream widgets; no page has any `\x1b` literal.
+- **DONE (this session, 1 commit, all suites green):**
+  - **C4 — size detection thinned** (`ebacb2a7`): `Renderer::getTerminalSize()` re-rolled
+    the FFI→env→stty→default ladder, but candy-core `PosixBackend::size()` already runs a
+    fuller ladder and never returns a non-positive size — so the env/stty/default rungs
+    were unreachable dead code. Now delegates to the `Tty` façade (picks Posix/Windows
+    backend; identical to the old `PosixBackend(STDOUT)` path on Linux). WindowSizeMsg via
+    `setSize()` stays the authoritative source of truth; hard default guards façade
+    unavailability. −18 LOC. candy-query 1092. (Did NOT do the optional DashboardPage
+    admin-content-width helper — left the C3 budget duplication as-is, intentionally.)
+- **REMAINING:** none — B5, B1, C4 all complete. The 3-pane browser + all 6 admin pages
+  render via upstream widgets (0 `\x1b` literals in any page); chart autoscale lives in
+  sugar-charts (`Chart\NiceScale`); `BorderFrame` lives in candy-kit as `Kit\Frame`; size
+  detection delegates to candy-core `Tty`. All suites green; `git diff master` net-smaller.
 
 ## Where we are
 
