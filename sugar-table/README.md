@@ -457,6 +457,56 @@ echo $t->View();
 
 The visibility formula: a column is visible when its index is in `frozenCols` OR `index >= count(frozenCols) + scrollX`.
 
+## Column Visibility Toggle
+
+Hide columns by index without removing them from the table:
+
+```php
+use SugarCraft\Table\Table;
+
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+    Column::new('note', 'Note',  40),   // this column can be hidden
+])->withRows([...])
+  ->withHiddenCols([3]);                 // hide the Note column (index 3)
+
+echo $t->View();
+// Only ID, Name, City columns are rendered; Note column is hidden
+```
+
+### How It Works
+
+- **Hidden columns are excluded from rendering** but still exist in the table
+- **Data, filters, and sorting still work** on hidden columns — you can filter by a hidden column's data
+- **Useful for optional columns** that can be toggled visible/invisible via UI
+- **Column indices refer to the original column order** — not affected by scroll position
+
+```php
+// Hide multiple columns
+$t = $t->withHiddenCols([2, 3]);         // hide columns at indices 2 and 3
+
+// Show all columns (empty array)
+$t = $t->withHiddenCols([]);             // no columns hidden
+
+// Combine with frozen columns - hide a frozen column
+$t = $t->withFrozenCols([0])
+        ->withHiddenCols([0]);           // freeze and hide are independent
+```
+
+### Interaction with Frozen Columns and Scroll
+
+Hidden columns are **never rendered**, regardless of frozen status or scroll position:
+
+```php
+// Given: frozenCols = [0], hiddenCols = [2], scrollX = 0
+// Column 0 (frozen):   visible
+// Column 1 (index 1):   visible (>= 1 + 0 = 1)
+// Column 2 (index 2):   NEVER visible (in hiddenCols)
+// Column 3 (index 3):   visible (>= 1 + 0 = 1)
+```
+
 ## Column Width Computation
 
 Compute actual column widths from `ColumnWidth` enum values:
@@ -523,6 +573,44 @@ $t = $t->withBorderStyle('1;32');       // bold green
 ```
 
 Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double()`, `block()`, `ascii()`, `hidden()`, `markdownBorder()`.
+
+## Cell Padding Control
+
+Add inner spacing inside each cell for better visual breathing room:
+
+```php
+use SugarCraft\Table\Table;
+
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+])->withRows([
+    Row::new(RowData::from(['id' => '1', 'name' => 'Alice',   'city' => 'NYC'])),
+    Row::new(RowData::from(['id' => '2', 'name' => 'Bob',     'city' => 'LA'])),
+    Row::new(RowData::from(['id' => '3', 'name' => 'Carol',   'city' => 'CHI'])),
+])->withCellPadding(1);                // 1 space on each side
+    // ->withCellPadding(2);            // 2 spaces for more breathing room
+    // ->withCellPadding(0);            // no padding (flush with borders)
+
+echo $t->View();
+// With padding 1: "│  1  │  Alice              │  NYC   │"
+// Without padding:  "│ 1 │ Alice │ NYC │"
+```
+
+### How It Works
+
+- **Padding** adds whitespace on the left and right sides of each cell's content
+- **Does not affect column width calculations** — the column width remains the same; padding is subtracted from the effective content width
+- **Applied to header and data cells** — both headers and row data benefit from consistent inner padding
+- **Combined with other features** — works with frozen columns, horizontal scroll, multiline mode, and row expansion
+
+```php
+// Combine padding with other features
+$t = $t->withCellPadding(2)
+        ->withFrozenCols([0])
+        ->withMultilineMode(true);
+```
 
 ## Multi-line Rows
 
