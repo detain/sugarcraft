@@ -143,13 +143,8 @@ final class Reel
             $path = $this->buildSyntheticGif();
         }
 
-        // Create the Player with the configured dimensions and fps override.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps);
-
-        // Apply the configured mode override via mutate.
-        if ($this->mode !== Mode::HalfBlock) {
-            $player = $player->mutate(['mode' => $this->mode]);
-        }
+        // Create the Player with the configured dimensions, fps and render mode.
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $this->mode);
 
         $options = new ProgramOptions(
             useAltScreen: true,

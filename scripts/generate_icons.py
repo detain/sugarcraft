@@ -127,6 +127,7 @@ SUBJECTS: dict[str, str] = {
     "sugar-spark":     "a glossy yellow five-point candy star surrounded by bright sparkles",
     "sugar-glow":      "a chubby glossy yellow gummy bear with bright sun rays radiating behind it",
     "sugar-crush":     "a chubby glossy red candy heart with smaller floating heart shards around it",
+    "sugar-reel":      "a glossy candy film reel disc in pink and cream with a striped filmstrip ribbon unspooling from it and a small white play-triangle button on the front",
     "sugar-stash":     "a chubby glossy candy treasure chest with the lid open and colorful gumdrops spilling out",
     "sugar-tick":      "a chubby glossy candy pocket watch with a small swinging chain",
     "sugar-wishlist":  "a small glossy candy scroll partly unrolled with three tiny check marks",
