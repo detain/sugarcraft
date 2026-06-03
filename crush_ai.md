@@ -885,3 +885,78 @@ CREATE TABLE tool_calls (
 | **Session** | A persistent conversation with message history |
 | **Pane** | A region of the TUI dedicated to specific functionality |
 | **MCP** | Model Context Protocol - standardized way to expose tools to LLMs |
+
+---
+
+## RESUME CHECKPOINT (June 3, 2026 - After Phase 6.1)
+
+### Completed Phases
+
+| Phase | Status | Steps | Notes |
+|-------|--------|-------|-------|
+| Phase 1: Core Foundation | ✅ Complete | 1.1-1.5 | Scaffold, ProviderInterface, Tools, App state, AppBuilder |
+| Phase 2: TUI | ✅ Complete | 2.1-2.5 | Pane enum, Renderer, Components, Menu system, Keyboard handling |
+| Phase 3: Provider Integration | ✅ Complete | 3.1-3.6 | OpenAI, SGLANG, Claude Code, Bedrock, Vertex, Custom, ProviderFactory |
+| Phase 4: Skills System | ✅ Complete | 4.1-4.4 | Skill, SkillLoader, SkillRegistry, BuiltIn skills, SkillManager |
+| Phase 5: Hooks System | ✅ Complete | 5.1-5.3 | HookInterface, HookContext, HookResult, HookRegistry, BuiltIn hooks, HookConfig, HookManager |
+| Phase 6: Agents | 🔄 In Progress | 6.1 ✅ | Agent, AgentDefinition - Step 6.2 next |
+
+### Next Step: Step 6.2 - Agent Manager
+
+**File:** `.candy-crush-plan/steps/6.2_agent_manager.md`
+
+Step 6.2 implements AgentManager for managing subagents.
+
+### What Was Committed (June 3, 2026)
+
+```
+feat(candy-crush): Phase 4-6 completion - Skills, Hooks, Agents systems
+
+Phase 4 (Skills System):
+- Skill value object with frontmatter parsing
+- SkillLoader and SkillRegistry with priority chain
+- 4 built-in skills (php-best-practices, security-audit, phpunit-master, composer-wizard)
+- SkillManager integration with App
+
+Phase 5 (Hooks System):
+- HookInterface, HookContext, HookResult, HookEvent enum
+- HookRegistry with regex-based matching
+- 3 built-in hooks (ProtectFilesHook, ConfirmRemoveHook, AuditHook)
+- HookConfig YAML loading, ScriptHook, HookManager
+
+Phase 6 (Agents):
+- Agent value object with immutable builders
+- AgentDefinition with 6 built-in types
+
+Tests: 250+ tests across all new systems
+Docs: README.md and CALIBER_LEARNINGS.md updated
+```
+
+### How to Resume
+
+1. Read `.candy-crush-plan/supervisor/SUPERVISOR.md` for supervisor instructions
+2. Read `.candy-crush-plan/updates.md` for detailed progress notes
+3. Read `.candy-crush-plan/steps/6.2_agent_manager.md` for next step
+4. Start Supervisor with: Spawn Coder agent using step file path
+
+### Project Structure (Current)
+
+```
+candy-crush/
+├── src/
+│   ├── Agents/           # ✅ Agent.php, AgentDefinition.php
+│   ├── App/              # ✅ App.php (skill integration added)
+│   ├── Hooks/            # ✅ Full hooks system
+│   │   └── BuiltIn/      # ✅ ProtectFilesHook, ConfirmRemoveHook, AuditHook
+│   ├── Providers/        # ✅ All 7 providers + ProviderFactory
+│   ├── Skills/           # ✅ Full skills system
+│   │   └── BuiltIn/      # ✅ 4 built-in skills
+│   ├── Tui/              # ✅ Components, Renderer, Pane, Menu
+│   ├── Tools/            # ✅ Tool.php, ToolCall.php, ToolResult.php
+│   ├── Messages/         # ✅ Messages system
+│   └── Config/           # 📋 To be implemented
+├── tests/                # ✅ 250+ tests
+└── examples/             # 📋 To be implemented
+```
+
+Legend: ✅ = Implemented | 📋 = Not yet implemented
