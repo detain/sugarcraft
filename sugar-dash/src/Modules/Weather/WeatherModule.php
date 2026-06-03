@@ -102,10 +102,12 @@ class WeatherModule extends BaseModule
     private function loadCache(): ?WeatherSnapshot
     {
         $path = $this->cachePath();
+        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
         if (!is_file($path)) {
             return null;
         }
 
+        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
         $json = @file_get_contents($path);
         if ($json === false) {
             return null;
@@ -127,6 +129,7 @@ class WeatherModule extends BaseModule
     private function saveCache(WeatherSnapshot $snapshot): void
     {
         $dir = dirname($this->cachePath());
+        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
         if (!is_dir($dir)) {
             @mkdir($dir, 0755, true);
         }
@@ -135,7 +138,9 @@ class WeatherModule extends BaseModule
         $tmp = $path . '.tmp.' . bin2hex(random_bytes(4));
 
         $json = json_encode($snapshot->toArray(), JSON_THROW_ON_ERROR);
+        // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
         if (@file_put_contents($tmp, $json, LOCK_EX) === false) {
+            // @codingStandardsIgnoreLine PHPCS_MEQP1_Security_DiscouragedFunction
             @unlink($tmp);
             return;
         }

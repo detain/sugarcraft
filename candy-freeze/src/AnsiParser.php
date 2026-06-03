@@ -150,7 +150,7 @@ final class AnsiParser
                     if ($p === 38 && isset($params[$i + 1])) {
                         $mode = $params[$i + 1];
                         if ($mode === 5 && isset($params[$i + 2])) {
-                            $fg = $this->xterm256ToHex($params[$i + 2]);
+                            $fg = AnsiParser::xterm256ToHex($params[$i + 2]);
                             $i += 2;
                             continue;
                         }
@@ -163,7 +163,7 @@ final class AnsiParser
                     if ($p === 48 && isset($params[$i + 1])) {
                         $mode = $params[$i + 1];
                         if ($mode === 5 && isset($params[$i + 2])) {
-                            $bg = $this->xterm256ToHex($params[$i + 2]);
+                            $bg = AnsiParser::xterm256ToHex($params[$i + 2]);
                             $i += 2;
                             continue;
                         }
@@ -175,11 +175,6 @@ final class AnsiParser
                     }
                 }
                 return new SgrState($fg, $bg, $bold, $italic, $underline);
-            }
-
-            private function xterm256ToHex(int $i): string
-            {
-                return AnsiParser::xterm256ToHex($i);
             }
         };
 

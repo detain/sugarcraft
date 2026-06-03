@@ -53,13 +53,13 @@ final class ReportRunner
         $report = $this->catalog->get($viewName);
         if ($report === null) {
             throw new \InvalidArgumentException(
-                "Report not found in catalog: {$viewName}"
+                "Report not found in catalog: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
             );
         }
 
         if (!$this->availability->isViewAvailable($viewName)) {
             throw new \RuntimeException(
-                "View not available on this server: {$viewName}"
+                "View not available on this server: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
             );
         }
 
@@ -92,7 +92,7 @@ final class ReportRunner
         $report = $this->catalog->get($viewName);
         if ($report === null) {
             throw new \InvalidArgumentException(
-                "Report not found in catalog: {$viewName}"
+                "Report not found in catalog: " . htmlspecialchars($viewName, ENT_QUOTES, 'UTF-8')
             );
         }
 

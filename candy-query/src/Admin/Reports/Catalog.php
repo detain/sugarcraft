@@ -49,14 +49,14 @@ final class Catalog
 
         if (!is_readable($filePath)) {
             throw new \RuntimeException(
-                "Report metadata file not found: {$filePath}"
+                "Report metadata file not found: " . htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')
             );
         }
 
         $json = file_get_contents($filePath);
         if ($json === false) {
             throw new \RuntimeException(
-                "Failed to read report metadata file: {$filePath}"
+                "Failed to read report metadata file: " . htmlspecialchars($filePath, ENT_QUOTES, 'UTF-8')
             );
         }
 

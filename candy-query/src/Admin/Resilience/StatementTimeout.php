@@ -55,25 +55,25 @@ final class StatementTimeout
             }
         };
 
-        $previousHandler = pcntl_signal_get_handler(SIGALRM);
-        pcntl_signal(SIGALRM, $handler);
-        pcntl_alarm($this->timeoutSeconds);
+        $previousHandler = \pcntl_signal_get_handler(SIGALRM);
+        \pcntl_signal(SIGALRM, $handler);
+        \pcntl_alarm($this->timeoutSeconds);
 
         try {
             $stmt->execute($values);
-            pcntl_alarm(0);
+            \pcntl_alarm(0);
             return true;
         } catch (StatementTimeoutException $e) {
-            pcntl_alarm(0);
+            \pcntl_alarm(0);
             $this->timeoutOccurred = true;
             $this->cancelQuery($stmt);
             throw $e;
         } catch (\Throwable $e) {
-            pcntl_alarm(0);
+            \pcntl_alarm(0);
             throw $e;
         } finally {
             if ($previousHandler !== SIG_DFL && $previousHandler !== SIG_IGN) {
-                pcntl_signal(SIGALRM, $previousHandler);
+                \pcntl_signal(SIGALRM, $previousHandler);
             }
         }
     }

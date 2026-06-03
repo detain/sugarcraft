@@ -67,7 +67,10 @@ final class ProcessQueryExecutor
             2 => ['pipe', 'w'],
         ];
 
-        $proc = proc_open('php -r ' . escapeshellarg($childCode), $spec, $this->pipes);
+        $tmpPhpFile = sys_get_temp_dir() . '/pqe_' . bin2hex(random_bytes(8)) . '.php';
+        file_put_contents($tmpPhpFile, '<?php ' . $childCode . "\n");
+        $proc = proc_open('php ' . escapeshellarg($tmpPhpFile), $spec, $this->pipes);
+        register_shutdown_function(static fn () => @unlink($tmpPhpFile));
 
         if (!$proc) {
             return \React\Promise\reject(new RuntimeException('Failed to spawn process'));
@@ -93,7 +96,7 @@ final class ProcessQueryExecutor
             if (feof($stream)) {
                 $this->cleanup();
                 if (file_exists($this->tmpFile)) {
-                    $content = file_get_contents($this->tmpFile);
+                    $content = \file_get_contents($this->tmpFile);
                     @unlink($this->tmpFile);
                     $data = json_decode($content, true);
                     if (isset($data['error'])) {

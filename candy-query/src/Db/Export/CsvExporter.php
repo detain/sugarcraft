@@ -34,24 +34,24 @@ final class CsvExporter
     public function importCsv(string $path, string $table): void
     {
         if (!is_file($path)) {
-            throw new \RuntimeException("CSV file not found: {$path}");
+            throw new \RuntimeException("CSV file not found: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
         }
 
         $handle = fopen($path, 'r');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open CSV file: {$path}");
+            throw new \RuntimeException("Cannot open CSV file: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
         }
 
         try {
             $headers = fgetcsv($handle);
             if ($headers === false || $headers === null) {
-                throw new \RuntimeException("Cannot read CSV headers from: {$path}");
+                throw new \RuntimeException("Cannot read CSV headers from: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
             }
 
             $headers = array_map('trim', $headers);
             $columnCount = count($headers);
             if ($columnCount === 0) {
-                throw new \RuntimeException("CSV file has no columns: {$path}");
+                throw new \RuntimeException("CSV file has no columns: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
             }
 
             // Build column list with backtick quoting (SQLite standard)
@@ -96,7 +96,7 @@ final class CsvExporter
     {
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: {$path}");
+            throw new \RuntimeException("Cannot open file for writing: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
         }
 
         try {
@@ -156,13 +156,13 @@ final class CsvExporter
             try {
                 $this->db->query("SELECT 1 FROM `{$table}` LIMIT 1");
             } catch (\PDOException) {
-                throw new \RuntimeException("Table not found: {$table}");
+                throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));
             }
         }
 
         $handle = fopen($path, 'w');
         if ($handle === false) {
-            throw new \RuntimeException("Cannot open file for writing: {$path}");
+            throw new \RuntimeException("Cannot open file for writing: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
         }
 
         try {
