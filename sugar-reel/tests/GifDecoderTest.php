@@ -9,6 +9,7 @@ use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\GifDecoder;
 use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
 
 /**
@@ -57,6 +58,9 @@ final class GifDecoderTest extends TestCase
 
     /**
      * @testdox open() followed by next() returns an RgbFrame with correct dimensions
+     *
+     * With no $mode the decoder defaults to HalfBlock semantics (2 source rows
+     * per cell), so a 1×1 cell GIF decodes to 1 col × 2 pixel-rows.
      */
     public function testOpenAndNextReturnsRgbFrame(): void
     {
@@ -69,9 +73,10 @@ final class GifDecoderTest extends TestCase
 
         $this->assertInstanceOf(RgbFrame::class, $frame);
         $this->assertSame(1, $frame->w);
-        $this->assertSame(1, $frame->h);
-        // RgbFrame bytes length = w * h * 3 = 1 * 1 * 3 = 3
-        $this->assertSame(3, strlen($frame->bytes));
+        // $mode === null defaults to HalfBlock (rowsPerCell 2): cellsH 1 → 2 rows.
+        $this->assertSame(2, $frame->h);
+        // RgbFrame bytes length = w * h * 3 = 1 * 2 * 3 = 6
+        $this->assertSame(6, strlen($frame->bytes));
 
         $decoder->close();
     }
@@ -175,5 +180,72 @@ final class GifDecoderTest extends TestCase
 
         imagedestroy($img);
         $decoder->close();
+    }
+
+    // -------------------------------------------------------------------------
+    // F5: GIF decode height honors the rendering mode
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create a small multi-color truecolor GIF and return its path.
+     */
+    private function createTempColorGif(int $w, int $h): string
+    {
+        $img = imagecreatetruecolor($w, $h);
+        // Paint a deterministic gradient so the frame is non-trivial.
+        for ($y = 0; $y < $h; $y++) {
+            for ($x = 0; $x < $w; $x++) {
+                $color = imagecolorallocate($img, ($x * 31) % 256, ($y * 47) % 256, (($x + $y) * 17) % 256);
+                imagesetpixel($img, $x, $y, $color);
+            }
+        }
+
+        $path = sys_get_temp_dir() . '/sugar-reel-mode-gif-' . uniqid('', true) . '.gif';
+        imagegif($img, $path);
+        imagedestroy($img);
+
+        $this->tempGifPath = $path;
+        return $path;
+    }
+
+    /**
+     * Regression for F5. GifDecoder must scale the decoded frame height to
+     * cellsH * mode->rowsPerCell() so it matches FfmpegDecoder per mode:
+     *   - HalfBlock packs 2 source rows per cell → frame->h == cellsH * 2
+     *   - Ascii (and the other 1-row modes) → frame->h == cellsH
+     *
+     * On master GifDecoder always decoded at cellsH (mode ignored), so the
+     * HalfBlock frame came out at h == cellsH (6) instead of 12 — the assert
+     * `$frame->h === 12` fails.
+     *
+     * @testdox GifDecoder frame height tracks the mode (HalfBlock 2x, Ascii 1x)
+     */
+    public function testGifDecodeHeightHonorsMode(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(8, 6);
+
+        // HalfBlock: 2 source rows per cell → height doubled.
+        $hb = new GifDecoder();
+        $hb->open($path, 8, 6, 10.0, Mode::HalfBlock);
+        $hbFrame = $hb->next();
+        $hb->close();
+
+        $this->assertNotNull($hbFrame);
+        $this->assertSame(8, $hbFrame->w, 'width must equal cellsW');
+        $this->assertSame(6 * 2, $hbFrame->h, 'HalfBlock height must be cellsH * 2 == 12');
+
+        // Ascii: 1 source row per cell → height equals cellsH.
+        $ascii = new GifDecoder();
+        $ascii->open($path, 8, 6, 10.0, Mode::Ascii);
+        $asciiFrame = $ascii->next();
+        $ascii->close();
+
+        $this->assertNotNull($asciiFrame);
+        $this->assertSame(8, $asciiFrame->w, 'width must equal cellsW');
+        $this->assertSame(6, $asciiFrame->h, 'Ascii height must equal cellsH == 6');
     }
 }

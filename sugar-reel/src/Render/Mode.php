@@ -32,6 +32,18 @@ enum Mode: string
     /** iTerm2 inline image protocol. */
     case Iterm2 = 'iterm2';
 
+    /** Source pixel-rows consumed per terminal cell. HalfBlock packs 2; graphics modes resolve in the renderer (treated as 1 here). */
+    public function rowsPerCell(): int
+    {
+        return $this === self::HalfBlock ? 2 : 1;
+    }
+
+    /** Source pixel-cols per terminal cell. */
+    public function colsPerCell(): int
+    {
+        return 1;
+    }
+
     /**
      * Human-readable description of the rendering mode.
      */

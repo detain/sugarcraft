@@ -91,4 +91,30 @@ final class ModeTest extends TestCase
     {
         $this->assertStringContainsString('TrueColor', Mode::TrueColor->label());
     }
+
+    /**
+     * @testdox Mode::HalfBlock packs 2 source pixel-rows per cell, all others 1
+     */
+    public function testRowsPerCell(): void
+    {
+        $this->assertSame(2, Mode::HalfBlock->rowsPerCell());
+
+        // Every non-HalfBlock case consumes a single source pixel-row per cell.
+        foreach (Mode::cases() as $case) {
+            if ($case === Mode::HalfBlock) {
+                continue;
+            }
+            $this->assertSame(1, $case->rowsPerCell(), "Mode::{$case->name} should consume 1 row per cell");
+        }
+    }
+
+    /**
+     * @testdox Mode::colsPerCell is 1 for every case
+     */
+    public function testColsPerCell(): void
+    {
+        foreach (Mode::cases() as $case) {
+            $this->assertSame(1, $case->colsPerCell(), "Mode::{$case->name} should consume 1 col per cell");
+        }
+    }
 }
