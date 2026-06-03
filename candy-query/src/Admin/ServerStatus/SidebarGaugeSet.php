@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\ServerStatus;
 
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\StatusSnapshotProviderInterface;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Collection of all sidebar gauges for the Server Status page.
@@ -94,8 +96,8 @@ final class SidebarGaugeSet
     {
         $lines = [];
 
-        $lines[] = "\x1b[1;36mServer Metrics\x1b[0m";
-        $lines[] = "\x1b[36m" . str_repeat('─', 18) . "\x1b[0m";
+        $lines[] = Style::new()->bold()->foreground(Color::ansi(6))->render('Server Metrics');
+        $lines[] = Style::new()->foreground(Color::ansi(6))->render(str_repeat('─', 18));
 
         if ($this->cpuGauge !== null) {
             $lines[] = '';
