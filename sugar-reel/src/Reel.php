@@ -153,7 +153,7 @@ final class Reel
      * Set a target FPS override. Pass null to use auto-detect from video probe.
      * Returns a new Reel (immutable).
      */
-    public function withFps(float $fps): self
+    public function withFps(?float $fps): self
     {
         return $this->with(fps: $fps);
     }

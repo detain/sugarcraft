@@ -18,7 +18,7 @@ use SugarCraft\Reel\Decode\RgbFrame;
  *
  * Renders as: 38;2;TR;TG;TB;48;2;BR;BG;BB ▀
  *
- * Mirrors charmbracelet/sugar-reel Render.HalfBlockRenderer.
+ * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph, joelibaceta/video-to-ascii.
  */
 final class HalfBlockRenderer implements FrameRenderer
 {
