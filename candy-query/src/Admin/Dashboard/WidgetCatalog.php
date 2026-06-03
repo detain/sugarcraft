@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Admin\Dashboard;
 
 use SugarCraft\Query\Admin\Calc\RatePerSecond;
 use SugarCraft\Query\Admin\Calc\StatusVar;
+use SugarCraft\Query\Admin\Calc\StatusVarRatio;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
 
 /**
@@ -406,6 +407,72 @@ final class WidgetCatalog
                 '%s B/s',
                 ['r' => 60, 'g' => 178, 'b' => 191],
                 '',
+                null,
+            ],
+            // ── Row Lock Metrics ─────────────────────────────────────────────
+            [
+                'Row Lock Waits',
+                'counter',
+                new RatePerSecond('Innodb_row_lock_waits'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB row lock waits per second',
+                null,
+            ],
+            [
+                'Row Lock Time Avg',
+                'counter',
+                new StatusVarRatio('Innodb_row_lock_time', 'Innodb_row_lock_waits'),
+                '%.0fms',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'Average time (ms) to acquire an InnoDB row lock',
+                null,
+            ],
+            // ── Page Operations ───────────────────────────────────────────────
+            [
+                'Pages Flushed',
+                'counter',
+                new RatePerSecond('Innodb_pages_flushed'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB pages flushed to disk per second',
+                null,
+            ],
+            [
+                'Pages Created',
+                'counter',
+                new RatePerSecond('Innodb_pages_created'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB pages created per second',
+                null,
+            ],
+            [
+                'Pages Read',
+                'counter',
+                new RatePerSecond('Innodb_pages_read'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB pages read from disk per second',
+                null,
+            ],
+            // ── Insert Buffer ─────────────────────────────────────────────────
+            [
+                'Insert Buffer Hits',
+                'counter',
+                new RatePerSecond('Innodb_ibuf_discards'),
+                '%s/s',
+                ['r' => 124, 'g' => 193, 'b' => 80],
+                'InnoDB insert buffer discards per second',
+                null,
+            ],
+            [
+                'Insert Buffer Size',
+                'counter',
+                new StatusVar('Innodb_ibuf_pool_size'),
+                '%s',
+                ['r' => 30, 'g' => 144, 'b' => 255],
+                'InnoDB insert buffer pool size in bytes',
                 null,
             ],
         ];

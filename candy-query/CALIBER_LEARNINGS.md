@@ -79,3 +79,8 @@ Source: step-7.4 ai/postgres-admin
 Pattern: `pg_stat_database`, `pg_stat_activity`, and `pg_settings` require varying privilege levels. When a query fails due to insufficient permissions, catch the PDOException and return a safe stub (`null` or an empty array) rather than propagating the error. This allows the admin UI to render the panels it can access even when others are restricted.
 Canonical: `PostgresAdminProvider` wraps each stat query in try/catch and falls back to `null` for the affected panel, preserving `serverInfo()` availability for the broader admin flow.
 Source: step-7.4 ai/postgres-admin
+
+### 2026-06-03 — StatusVarRatio for computed InnoDB metrics
+Pattern: Some metrics (e.g., row lock time average, buffer hit ratios) are derived from two raw status variables rather than read directly. A dedicated `StatusVarRatio` calc class accepts numerator and denominator status var names, fetches both via `StatusVariables`, and returns the ratio (or `null` when the denominator is zero). This keeps the computation encapsulated and testable.
+Canonical: `StatusVarRatio` used in `WidgetCatalog` for InnoDB widgets like `Innodb_rows_locked_avg` and `Innodb_buffer_pool_hit_ratio`.
+Source: step-B1 ai/innodb-widgets
