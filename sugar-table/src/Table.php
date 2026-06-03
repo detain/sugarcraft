@@ -118,6 +118,9 @@ final class Table
     /** When true, renderRowLines outputs all wrapped cell lines (multi-line rows). */
     private bool $multilineMode = false;
 
+    /** Cached computed column widths from the last render pass. @var array<int, int>|null */
+    private ?array $computedColumnWidths = null;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -661,6 +664,9 @@ final class Table
         $totalWidth = $this->computeTotalWidth();
         $rows = $this->pagedRows();
 
+        // Compute and cache column widths for this render pass
+        $this->computedColumnWidths = $this->computeColumnWidths($totalWidth);
+
         // Apply viewport virtualization — scrollY offset into the paged view
         if ($this->viewportHeight > 0) {
             if ($this->scrollY >= \count($rows)) {
@@ -690,7 +696,7 @@ final class Table
 
         // Header
         if ($this->showHeader) {
-            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth);
+            $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth, $this->computedColumnWidths);
             $bufferRow++;
             $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $totalWidth);
             $bufferRow++;
@@ -699,7 +705,7 @@ final class Table
         // Data rows
         foreach ($rows as $ri => $row) {
             $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
-            $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected);
+            $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
             $bufferRow++;
         }
 
@@ -743,7 +749,7 @@ final class Table
         return $buffer;
     }
 
-    private function fillHeaderRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    private function fillHeaderRow(Buffer $buffer, int $row, int $contentWidth, array $computedWidths): Buffer
     {
         $style = $this->parseAnsiToStyle($this->headerStyle);
         $col = 0;
@@ -754,8 +760,8 @@ final class Table
 
         // Header cells
         foreach ($this->columns as $ci => $column) {
-            $headerText = $column->renderHeader($column->width);
-            $colWidth = $column->width;
+            $colWidth = $computedWidths[$ci] ?? $column->width;
+            $headerText = $column->renderHeader($colWidth);
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
@@ -793,7 +799,7 @@ final class Table
         return $buffer;
     }
 
-    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected): Buffer
+    private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths): Buffer
     {
         $col = 0;
 
@@ -846,7 +852,7 @@ final class Table
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            $colWidth = $column->width;
+            $colWidth = $computedWidths[$ci] ?? $column->width;
             $displayText = $column->alignLeft
                 ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
                 : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
@@ -1297,18 +1303,26 @@ final class Table
 
     private function computeTotalWidth(): int
     {
+        // Sum raw column widths as initial estimate
         $total = 0;
-        $flexSum = 0;
-
         foreach ($this->columns as $col) {
             $total += $col->width;
-            $flexSum += $col->flexibleWidth;
         }
 
         // Borders: one char between each column
         $total += \count($this->columns) - 1;
 
-        return $total;
+        // Use computeColumnWidths to get accurate widths (accounts for Percent/Dynamic/Content)
+        // This ensures consistency between total width and actual column rendering widths
+        $computedWidths = $this->computeColumnWidths($total);
+        $computedTotal = 0;
+        foreach ($computedWidths as $w) {
+            $computedTotal += $w;
+        }
+        // Add border count to match rendering
+        $computedTotal += \count($this->columns) - 1;
+
+        return $computedTotal;
     }
 
 }
