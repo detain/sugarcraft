@@ -12,7 +12,7 @@ Each entry should have:
 ## Current Status
 
 ### Overall Progress
-- Phase 1: Pending
+- Phase 1: In Progress (Step 1.5 docs pending)
 - Phase 2: Pending
 - Phase 3: Pending
 - Phase 4: Pending
