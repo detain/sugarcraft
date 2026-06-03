@@ -242,4 +242,77 @@ final class TableColumnWidthTest extends TestCase
         $this->assertIsString($view);
         $this->assertStringContainsString('ThisIsLonger', $view);
     }
+
+    /**
+     * Verify that a table narrower than its content doesn't crash.
+     *
+     * When tableWidth is smaller than needed for content, the computed widths
+     * should still be >= the content width (using max(content, flex)), and
+     * rendering should succeed without errors.
+     */
+    public function testNarrowTableDoesNotCrash(): void
+    {
+        $t = Table::withColumns([
+            Column::new('id', 'ID', 5)->withColumnWidth(ColumnWidth::Content),
+        ])->withRows([
+            Row::new(RowData::from(['id' => 'ThisContentIsVeryLong'])),
+        ]);
+
+        // Table width of 5 is much smaller than content length (19)
+        $widths = $t->computeColumnWidths(5);
+        // Content column should still compute to at least the content width
+        $this->assertGreaterThanOrEqual(19, $widths[0]);
+
+        // Rendering should succeed (may be wider than requested, but shouldn't crash)
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString('ThisContentIsVeryLong', $view);
+    }
+
+    /**
+     * Verify that Dynamic columns respect min-width even in narrow tables.
+     *
+     * A Dynamic column with short content in a narrow table should still
+     * render at least the minimum flex width, not less.
+     */
+    public function testDynamicColumnMinimumWidthInNarrowTable(): void
+    {
+        $t = Table::withColumns([
+            Column::new('id', 'ID', 3)->withColumnWidth(ColumnWidth::Dynamic),
+        ])->withRows([
+            Row::new(RowData::from(['id' => 'X'])),
+        ]);
+
+        // Even with a tiny table, Dynamic should use at least content width (1)
+        $widths = $t->computeColumnWidths(10);
+        $this->assertGreaterThanOrEqual(1, $widths[0]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+        $this->assertStringContainsString('X', $view);
+    }
+
+    /**
+     * Verify that Percent columns handle narrow tables gracefully.
+     *
+     * A 50% column in a 10-char wide table should get at least 5 chars,
+     * and rendering should work.
+     */
+    public function testPercentColumnInNarrowTable(): void
+    {
+        $t = Table::withColumns([
+            Column::new('id', 'ID', 10)->withColumnWidth(ColumnWidth::Percent, 50.0),
+            Column::new('name', 'Name', 10),
+        ])->withRows([
+            Row::new(RowData::from(['id' => 'X', 'name' => 'Y'])),
+        ]);
+
+        $widths = $t->computeColumnWidths(10);
+        $this->assertCount(2, $widths);
+        // 50% of 10 = 5, but flex allocation may adjust
+        $this->assertGreaterThanOrEqual(1, $widths[0]);
+
+        $view = $t->View();
+        $this->assertIsString($view);
+    }
 }

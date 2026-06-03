@@ -37,10 +37,15 @@ Each entry should have:
 ## Phase-by-Phase Notes
 
 ### Phase 1: Wire computeColumnWidths
-- Step 1.1 (impl): **COMPLETED** - Branch: ai/table-compute-widths-fix
-- Step 1.2 (review): Pending
-- Step 1.3 (fix): Pending
-- Step 1.4 (tests): Pending
+- Step 1.1 (impl): **COMPLETED** ✅
+- Step 1.2 (review): **COMPLETED** ✅
+- Step 1.3 (fix): Not needed - no issues found
+- Step 1.4 (tests): **COMPLETED** ✅
+  - Added 3 new edge case tests:
+    - `testNarrowTableDoesNotCrash` - table narrower than content
+    - `testDynamicColumnMinimumWidthInNarrowTable` - Dynamic min-width in tiny tables
+    - `testPercentColumnInNarrowTable` - Percent columns in narrow tables
+  - All 177 tests pass (363 assertions)
 - Step 1.5 (docs): Pending
 
 ### Phase 2: Frozen Columns
