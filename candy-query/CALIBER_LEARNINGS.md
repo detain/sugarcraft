@@ -89,3 +89,8 @@ Source: step-b3 ai/postgres-widget-catalog
 Pattern: `PostgresAdminProvider` implements `checkAllMetrics()` returning computed PostgreSQL metrics (connection_usage, cache_hit_rate, xact_rate, tup_rate) and `checkConnectionUsage()` with threshold alerts. A `computeRate()` helper calculates per-second rates from cumulative counters using elapsed time, avoiding division-by-zero with a minimum time denominator.
 Canonical: `PostgresAdminProvider::checkAllMetrics()` / `checkConnectionUsage()` / `computeRate()`.
 Source: step-c1 ai/postgres-metrics
+
+### 2026-06-03 — CSV formula injection mitigation in ReportsPage (Step D1)
+Pattern: CSV export must escape formula-injection characters (`=`, `+`, `-`, `@`) by prefixing them with a single quote. This prevents malicious data in cells from being interpreted as formulas when the CSV is opened in spreadsheet applications like Excel. Also escape values containing commas, quotes, or newlines by wrapping in double-quotes and doubling internal quotes.
+Canonical: `ReportsPage::exportToCsv()` — checks `$value[0]` for dangerous prefixes and prepends `'` before the value, then wraps in quotes if needed.
+Source: step-d1 ai/csv-export
