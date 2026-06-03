@@ -843,6 +843,42 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * Regression for F14. The inline Player::frameToBuffer HalfBlock path
+     * and the standalone HalfBlockRenderer (candy-mosaic via sugar-reel's
+     * HalfBlockRenderer) must both emit the same ▀ cell with fg/bg SGR.
+     * This guards against the two paths drifting after geometry changes.
+     */
+    public function testHalfBlockViewOutputHasCorrectSgrAndChar(): void
+    {
+        // 2 cols × 4 rows = 4 cells (each cell = 2 pixel rows)
+        $bytes =
+            "\xff\x00\x00"  // R0C0 upper: red
+            . "\x00\x00\xff"  // R0C0 lower: blue
+            . "\x00\xff\x00"  // R0C1 upper: green
+            . "\xff\xff\x00"  // R0C1 lower: yellow
+            . "\x00\xff\xff"  // R1C0 upper: cyan
+            . "\xff\xff\xff"  // R1C0 lower: white
+            . "\x40\x40\x40"  // R1C1 upper: dark grey
+            . "\xff\x00\xff"; // R1C1 lower: magenta
+        $frame = new RgbFrame($bytes, 2, 4);
+
+        $player = Player::openForTest(new FakeDecoder([$frame]), 30.0, 0, 2, 2, '/fake');
+        $player = $this->setCurrentFrame($player, $frame, 0);
+
+        $view = $player->view();
+
+        // Must contain half-block character.
+        $this->assertStringContainsString("\u{2580}", $view,
+            'HalfBlock output must contain ▀');
+        // Must have TrueColor foreground SGR (may be combined with reset: [0;38;2;).
+        $this->assertStringContainsString('38;2;', $view,
+            'HalfBlock must use 38;2;R;G;B foreground');
+        // Must have TrueColor background SGR (may be combined with reset: [0;48;2;).
+        $this->assertStringContainsString('48;2;', $view,
+            'HalfBlock must use 48;2;R;G;B background');
+    }
+
+    /**
      * Regression (tick path): after a tick advances the frame, view() must
      * still emit the full frame. The old implementation set the diff baseline
      * to the just-advanced frame inside updateTick(), so view() diffed the
