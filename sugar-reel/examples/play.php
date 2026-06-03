@@ -25,8 +25,7 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use SugarCraft\Reel\Reel;
 use SugarCraft\Reel\Render\Mode;
-
-const SYNTHETIC_GIF_PATH = '/tmp/sugar-reel-synthetic.gif';
+use SugarCraft\Reel\Synthetic;
 
 function help(string $prog): void
 {
@@ -70,50 +69,20 @@ HELP
     );
 }
 
-/**
- * Build a 120×60 rainbow gradient GIF in /tmp and return its path.
- * The GifDecoder fans this single frame out so the player loops over
- * it repeatedly — enough to show all the rendering modes working.
- */
-function buildSyntheticGif(): string
-{
-    if (!extension_loaded('gd')) {
-        fwrite(STDERR, "synthetic test pattern requires ext-gd\n");
-        exit(1);
-    }
-
-    $w = 120;
-    $h = 60;
-    $im = imagecreatetruecolor($w, $h);
-    for ($y = 0; $y < $h; $y++) {
-        for ($x = 0; $x < $w; $x++) {
-            // Smooth rainbow: R sweeps left→right, G sweeps top→bottom,
-            // B counter-modulates to produce a full color wheel.
-            $r = (int) min(255, 255 * $x / $w);
-            $g = (int) min(255, 255 * $y / $h);
-            $b = (int) min(255, 255 * (($x + $y) % $w) / $w);
-            $col = imagecolorallocate($im, $r, $g, $b);
-            imagesetpixel($im, $x, $y, $col);
-        }
-    }
-    imagegif($im, SYNTHETIC_GIF_PATH);
-    imagedestroy($im);
-
-    return SYNTHETIC_GIF_PATH;
-}
-
 // ── CLI argument parsing ──────────────────────────────────────────────────────
 
 $argv = $GLOBALS['argv'] ?? [];
 $prog = $argv[0] ?? 'play.php';
+$arg1 = $argv[1] ?? '';
+$arg2 = $argv[2] ?? '';
 
-if (($argv[1] ?? '') === '--help' || $argv[1] === '-h' || $argv[1] === '') {
+if ($arg1 === '--help' || $arg1 === '-h' || $arg1 === '') {
     help($prog);
     exit(1);
 }
 
-$pathArg = $argv[1] ?? 'synthetic';
-$modeArg = $argv[2] ?? 'auto';
+$pathArg = $arg1 === '' ? 'synthetic' : $arg1;
+$modeArg = $arg2 === '' ? 'auto' : $arg2;
 
 if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', 'sixel', 'kitty', 'iterm2'], true)) {
     help($prog);
@@ -134,7 +103,7 @@ $rows = max(5, min($rows, 80));
 // ── Resolve video source ─────────────────────────────────────────────────────
 
 if ($pathArg === 'synthetic') {
-    $path = buildSyntheticGif();
+    $path = Synthetic::generate();
     fwrite(STDERR, "[synthetic test pattern: {$path}]\n");
 } else {
     if (!is_file($pathArg)) {
@@ -148,8 +117,10 @@ if ($pathArg === 'synthetic') {
 
 fwrite(STDERR, "SugarReel — Space=play  q=quit  m=mode  ? for help\n");
 
+// The synthetic source is an animated GIF that should loop by default.
 $reel = Reel::open($path)
-    ->withSize($cols, $rows);
+    ->withSize($cols, $rows)
+    ->withLoop($pathArg === 'synthetic');
 
 // Apply mode override if explicitly requested via CLI.
 if ($mode !== null) {
