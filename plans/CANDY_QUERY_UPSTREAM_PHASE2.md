@@ -70,9 +70,23 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
     `NiceScale::ceiling()`; the two `100.0` floor literals now ref `NiceScale::FLOOR`.
     candy-query 1092 green. No composer change (sugar-charts already a dep; symlinked
     path-repo picked up the new class with no `composer update`).
-- **REMAINING:** B1 (`Kit\Frame` extraction — DO LAST, preserve frame-diff invariants),
-  C4 (size detection — low priority). All 6 admin pages + the 3-pane browser now render via
-  upstream widgets; no page has any `\x1b` literal left.
+- **DONE (this session, 2 commits, all suites green):**
+  - **B1 — `Kit\Frame` extraction** (`a72cfe9f` + `e18352aa`): new `SugarCraft\Kit\Frame`
+    in candy-kit holds the generic full-screen chrome — double-line box, exact-height
+    normalisation, ANSI-width-aware `padRight`/`padCenter`, constant line count, no
+    `\x1b[2J`; slate box border via `Sprinkles\Style` (overridable `withBorderStyle()`),
+    app-specific title/status passed in pre-rendered. `Frame::new()->withTitle()
+    ->withStatus()->render($body,$cols,$rows)`. +17 tests → candy-kit 60. candy-query's
+    `BorderFrame` is now a thin adapter (measure terminal → build title/status →
+    delegate); Renderer call sites unchanged; dead `terminalWidth/Height()` + ported
+    box/pad helpers deleted (~230 LOC); title/sep/info colours → `Sprinkles\Style` so
+    **zero raw `\x1b` remains in `Terminal/`**. candy-kit wired by hand (require +
+    path-repo; runtime closure candy-core+candy-sprinkles already present). Frame-diff
+    invariants verified live: full Renderer render is exactly rows×cols. candy-query 1092.
+- **REMAINING:** C4 (size detection thinning — LOW PRIORITY, optional; not in DoD).
+  `Renderer::getTerminalSize()`'s env/stty/default rungs may duplicate candy-core
+  `PosixBackend`/`Tty`; touches load-bearing size detection (C3 coupling). All 6 admin
+  pages + the 3-pane browser render via upstream widgets; no page has any `\x1b` literal.
 
 ## Where we are
 
