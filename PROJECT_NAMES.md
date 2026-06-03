@@ -121,6 +121,7 @@ single-purpose lib.
 | **CandyMines** | candy + mines = Minesweeper. clear. |
 | **CandyQuery** | candy + query = terminal SQL browser. multi-driver: SQLite, MySQL, PostgreSQL — schema browser, query editor, EXPLAIN plan viewer, server status page, alerting, and query history. |
 | **SugarReel** | sugar + reel = film reel = terminal video player. reel is the literal video metaphor; sits beside CandyFlip (GIF) and CandyMosaic (images) as the video member of the family. |
+| **CandyCrush** | candy + crush = candy crush = TUI AI coding assistant. Multi-provider (OpenAI, SGLANG, Claude Code, etc.), multi-agent, skill-aware. Pioneering — no direct upstream. |
 
 ## ⚠️ Functional half is weak / vague
 

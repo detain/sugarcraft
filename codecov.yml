@@ -36,6 +36,9 @@ flag_management:
     - name: candy-core
       paths: ["candy-core/src/**"]
       carryforward: true
+    - name: candy-crush
+      paths: ["candy-crush/src/**"]
+      carryforward: true
     - name: candy-ansi
       paths: ["candy-ansi/src/**"]
       carryforward: true
@@ -209,6 +212,12 @@ component_management:
         - "candy-core/src/**"
       flag_regexes:
         - "^candy-core$"
+    - component_id: candy-crush
+      name: candy-crush
+      paths:
+        - "candy-crush/src/**"
+      flag_regexes:
+        - "^candy-crush$"
     - component_id: candy-ansi
       name: candy-ansi
       paths:
