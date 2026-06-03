@@ -35,10 +35,8 @@ final class CachingServerContext implements ServerContextInterface
     /** @return array<string, string> */
     public function statusVariables(): array
     {
-        // If loading and no cached data, return empty to trigger loading screen
-        if ($this->isLoading && $this->cachedStatusVars === null) {
-            return [];
-        }
+        // Prefer cached data if available; otherwise delegate to inner context
+        // which may have its own sync cache (e.g., ServerContext caches for 3s).
         return $this->cachedStatusVars ?? $this->inner->statusVariables();
     }
 

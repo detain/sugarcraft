@@ -66,27 +66,32 @@ final class AppTest extends TestCase
     }
 
     /**
-     * Regression: moving the table cursor must NOT trigger a DB load. Auto-
-     * loading on every Up/Down ran a synchronous query per keystroke, which
-     * froze the UI for minutes when browsing a remote database.
+     * Moving the cursor through the tables list loads the highlighted table's
+     * rows immediately, giving the user a live preview as they navigate.
+     * Enter/Space still works as before for explicit selection.
      */
-    public function testNavigationDoesNotLoadRows(): void
+    public function testNavigationLoadsRows(): void
     {
         $a = App::start($this->db());
         // App::start loads the first table ('posts', 2 rows).
         $this->assertSame('posts', $a->selectedTable);
         $this->assertCount(2, $a->rows);
 
-        // Move the cursor down to 'users' — selection/rows must stay put.
+        // Move the cursor down to 'users' — rows should update to 'users' table.
         [$a, ] = $a->update(new KeyMsg(KeyType::Down, ''));
         $this->assertSame(1, $a->tableCursor);
-        $this->assertSame('posts', $a->selectedTable, 'cursor move must not change the loaded table');
-        $this->assertCount(2, $a->rows, 'cursor move must not re-query rows');
+        $this->assertSame('users', $a->selectedTable, 'cursor move must load the highlighted table');
+        $this->assertCount(3, $a->rows, 'cursor move must load rows for highlighted table');
 
-        // Only Enter loads the cursored table.
+        // Move back up to 'posts' — rows should update back.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+        $this->assertSame(0, $a->tableCursor);
+        $this->assertSame('posts', $a->selectedTable);
+        $this->assertCount(2, $a->rows);
+
+        // Enter also loads (confirming it still works).
         [$a, ] = $a->update(new KeyMsg(KeyType::Enter, ''));
-        $this->assertSame('users', $a->selectedTable);
-        $this->assertCount(3, $a->rows);
+        $this->assertSame('posts', $a->selectedTable);
     }
 
     /**
