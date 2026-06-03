@@ -70,33 +70,52 @@ Column::new($key, $title, $width)       // key, display title, fixed width
 
 ### ColumnWidth Enum
 
-`ColumnWidth` specifies how a column's width is computed:
+`ColumnWidth` specifies how a column's width is computed at render time.
+The table computes actual widths in `computeColumnWidths($tableWidth)` and uses
+them consistently throughout rendering (header, data cells, separators).
 
 | Case        | Description                                              |
 |-------------|----------------------------------------------------------|
 | `Fixed`     | Fixed character count (uses `Column.width`)                |
 | `Percent`   | Percentage of total table width (uses `Column.percentValue`, 0–100) |
-| `Dynamic`   | Min-width from content, max from table                     |
-| `Content`   | Exactly fit content, compress if needed                    |
+| `Dynamic`   | Min-width from content, flex share of remaining space     |
+| `Content`   | Exactly fit content (min 1 char)                           |
 
 ```php
 use SugarCraft\Table\ColumnWidth;
 
 // Fixed 10-character column
-col = Column::new('id', 'ID', 10)
+$col = Column::new('id', 'ID', 10)
     ->withColumnWidth(ColumnWidth::Fixed, 0);
 
 // 25% of table width
-col = Column::new('name', 'Name', 20)
+$col = Column::new('name', 'Name', 20)
     ->withColumnWidth(ColumnWidth::Percent, 25.0);
 
-// Dynamic (content or flex share, whichever is larger)
-col = Column::new('city', 'City', 15)
+// Dynamic (content width or flex share, whichever is larger)
+$col = Column::new('city', 'City', 15)
     ->withColumnWidth(ColumnWidth::Dynamic, 0);
 
-// Content-based (exact fit)
-col = Column::new('email', 'Email', 30)
+// Content-based (exact fit to widest cell)
+$col = Column::new('email', 'Email', 30)
     ->withColumnWidth(ColumnWidth::Content, 0);
+```
+
+**Dynamic + Content example** — auto-size two columns while a third takes 25%:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5)
+        ->withColumnWidth(ColumnWidth::Fixed, 0),
+    Column::new('name', 'Name',  20)
+        ->withColumnWidth(ColumnWidth::Dynamic, 0),   // auto-size to content
+    Column::new('note', 'Note',  10)
+        ->withColumnWidth(ColumnWidth::Content, 0),  // exact content fit
+    Column::new('pct',  'Pct',    0)
+        ->withColumnWidth(ColumnWidth::Percent, 25.0), // always 25% of table
+])->withRows([...]);
+
+echo $t->View();  // columns 1+2 sized by content; column 3 fills remaining 75%
 ```
 
 ### WrapMode Enum

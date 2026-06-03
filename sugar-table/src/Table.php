@@ -657,6 +657,11 @@ final class Table
 
     /**
      * Render the entire table into a Buffer.
+     *
+     * Computes column widths via computeColumnWidths() once at the start of
+     * the render pass and uses those widths throughout (header, separators,
+     * data cells). Widths are cached in $this->computedColumnWidths for the
+     * duration of this render.
      */
     private function renderToBuffer(): Buffer
     {
