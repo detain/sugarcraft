@@ -240,11 +240,22 @@ Each entry should have:
   - All 279 tests pass
 - Step 8.2 (review): **COMPLETED** ✅ (no issues)
 - Step 8.3 (fix): **SKIPPED** (no issues found)
-- Step 8.4 (tests): **COMPLETED** ✅ (tests added in 8.1)
-- Step 8.5 (docs): **IN_PROGRESS**
-- Step 8.3 (fix): Pending
-- Step 8.4 (tests): Pending
-- Step 8.5 (docs): Pending
+- Step 8.4 (tests): **COMPLETED** ✅
+- Step 8.5 (docs): **COMPLETED** ✅
+  - Added "Keyboard Navigation" section to README.md with:
+    - KEY_* constants documentation
+    - scrollYForKey() raw scroll calculation
+    - handleKey() convenience wrapper
+    - Integration example with viewport virtualization
+    - How it works explanation
+  - Added pattern:keyboard-navigation to CALIBER_LEARNINGS.md documenting:
+    - scrollYForKey() + handleKey() implementation
+    - KEY_* constant usage
+    - maxScrollY() bounds clamping
+    - Unrecognized keys as no-ops
+  - PHP docblocks verified complete and accurate
+  - All 279 tests pass (564 assertions)
+  - PR #1009 merged to master
 
 ### Phase 9: Remaining Polish
 - Step 9.1 (impl): Pending
