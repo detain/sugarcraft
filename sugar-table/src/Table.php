@@ -59,6 +59,9 @@ final class Table
     /** @var array<string, string>  colKey => filterText */
     private array $filterText = [];
 
+    // Global search across all columns
+    private string $searchText = '';
+
     // Frozen columns (indices)
     /** @var list<int> */
     private array $frozenCols = [];
@@ -468,6 +471,28 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Search across ALL columns (case-insensitive).
+     *
+     * When $text is empty, clears the global search.
+     * Combines with existing column filters — row must match both.
+     */
+    public function search(string $text): self
+    {
+        $clone = clone $this;
+        $clone->searchText = $text;
+        $clone->selectedIndex = 0;
+        return $clone;
+    }
+
+    /**
+     * Clear the global search.
+     */
+    public function ClearSearch(): self
+    {
+        return $this->search('');
+    }
+
     // -------------------------------------------------------------------------
     // Queries
     // -------------------------------------------------------------------------
@@ -483,16 +508,30 @@ final class Table
     {
         $rows = $this->rows;
 
-        // Filter
+        // Per-column filters (AND logic — row must match ALL column filters)
         if ($this->filterText !== []) {
             $rows = \array_values(
-                \array_filter($rows, function (Row $row) use (&$filters): bool {
+                \array_filter($rows, function (Row $row): bool {
                     foreach ($this->filterText as $key => $text) {
                         $val = $row->data->get($key);
                         $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
                         if (\stripos($str, $text) === false) return false;
                     }
                     return true;
+                })
+            );
+        }
+
+        // Global search across all columns (OR logic — row matches if ANY column contains search text)
+        if ($this->searchText !== '') {
+            $searchLower = \strtolower($this->searchText);
+            $rows = \array_values(
+                \array_filter($rows, function (Row $row) use ($searchLower): bool {
+                    foreach ($row->data as $key => $val) {
+                        $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
+                        if (\stripos(\strtolower($str), $searchLower) !== false) return true;
+                    }
+                    return false;
                 })
             );
         }
