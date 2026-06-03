@@ -12,6 +12,9 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Mosaic\Mosaic;
+use SugarCraft\Palette\Probe;
+use SugarCraft\Palette\Probe\Capability;
 use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
@@ -211,6 +214,12 @@ final class Player implements Model
             return $this->updateKey($msg);
         }
 
+        // F10: WindowSizeMsg — resize the player cell dimensions and rebuild
+        // the decoder so frames are decoded at the correct resolution.
+        if ($msg instanceof \SugarCraft\Core\Msg\WindowSizeMsg) {
+            return $this->updateResize($msg->cols, $msg->rows);
+        }
+
         // FrameMsg: a newly decoded frame is available.
         if ($msg instanceof FrameMsg) {
             // Current frame is already stored in $this->currentFrame;
@@ -280,6 +289,38 @@ final class Player implements Model
         }
 
         $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newVideoTime, $now);
+
+        $cmd = $nextPlayer->paused
+            ? null
+            : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+
+        return [$nextPlayer, $cmd];
+    }
+
+    /**
+     * Handle a WindowSizeMsg: clamp, no-op if unchanged, otherwise rebuild
+     * the decoder at the new cell dimensions and reschedule ticks.
+     *
+     * @return array{0:Player, 1:?Closure}
+     */
+    private function updateResize(int $cols, int $rows): array
+    {
+        $cols = max(10, min($cols, 200));
+        $rows = max(5, min($rows, 80));
+
+        if ($cols === $this->cellsW && $rows === $this->cellsH) {
+            return [$this, null]; // no-op when unchanged
+        }
+
+        [$decoder, $frame] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
+
+        $nextPlayer = $this->mutate([
+            'cellsW' => $cols,
+            'cellsH' => $rows,
+            'decoder' => $decoder,
+            'currentFrame' => $frame ?? $this->currentFrame,
+            'lastTickTime' => microtime(true),
+        ]);
 
         $cmd = $nextPlayer->paused
             ? null
@@ -432,11 +473,31 @@ final class Player implements Model
             return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
 
-        // m : cycle rendering mode through ALL implemented modes.
+        // m : cycle rendering mode through ONLY the modes the terminal supports.
+        // Build the cycle dynamically based on Mosaic::diagnose() capabilities (F2 tail).
         if ($msg->type === KeyType::Char && $msg->rune === 'm') {
-            $modes = Mode::cases();
-            $currentIdx = array_search($this->mode, $modes, true);
-            $nextMode = $modes[($currentIdx + 1) % count($modes)];
+            // Always present: text modes.
+            $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock];
+            // Graphics modes only if the terminal reports the capability.
+            $report = Mosaic::diagnose();
+            $graphicsModes = [];
+            if ($report->has(Capability::Sixel)) {
+                $graphicsModes[] = Mode::Sixel;
+            }
+            if ($report->has(Capability::KittyKeyboard)) {
+                $graphicsModes[] = Mode::Kitty;
+            }
+            if ($report->has(Capability::ITerm2)) {
+                $graphicsModes[] = Mode::Iterm2;
+            }
+            $allModes = array_merge($textModes, $graphicsModes);
+
+            // Guard: if current mode is somehow not in the cycle, start from first.
+            $currentIdx = array_search($this->mode, $allModes, true);
+            if ($currentIdx === false) {
+                $currentIdx = -1;
+            }
+            $nextMode = $allModes[($currentIdx + 1) % count($allModes)];
 
             // Rebuild the decoder so the decoded frame resolution matches the
             // new mode (HalfBlock decodes at 2× cell height). Keep position.
