@@ -84,3 +84,8 @@ Source: step-7.4 ai/postgres-admin
 Pattern: Postgres admin panels grew from stub to full implementation: `io()` expanded 6→10 widgets (tuple metrics: returned/fetched/inserted/updated/deleted), `cache()` expanded 3→4 widgets (added Shared Buffers). A `parseSharedBuffers()` helper converts byte strings (e.g. `"8GB"`) to numeric bytes for display.
 Canonical: `PostgresWidgetCatalog::io()` / `cache()` / `parseSharedBuffers()`.
 Source: step-b3 ai/postgres-widget-catalog
+
+### 2026-06-03 — PostgreSQL computed metrics and connection alerts (Step C1)
+Pattern: `PostgresAdminProvider` implements `checkAllMetrics()` returning computed PostgreSQL metrics (connection_usage, cache_hit_rate, xact_rate, tup_rate) and `checkConnectionUsage()` with threshold alerts. A `computeRate()` helper calculates per-second rates from cumulative counters using elapsed time, avoiding division-by-zero with a minimum time denominator.
+Canonical: `PostgresAdminProvider::checkAllMetrics()` / `checkConnectionUsage()` / `computeRate()`.
+Source: step-c1 ai/postgres-metrics
