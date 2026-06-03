@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SugarReel — SugarCraft</title>
-<meta name="description" content="SugarReel: terminal video player. Plays mp4 and more as ASCII / ANSI / half-block / sixel / kitty.">
+<meta name="description" content="SugarReel: Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2. PHP port of tplay/glyph/video-to-ascii.">
 <meta property="og:title" content="SugarReel — SugarCraft">
-<meta property="og:description" content="Terminal video player. Plays mp4 as ASCII / ANSI / half-block / sixel / kitty.">
+<meta property="og:description" content="Terminal video player — mp4/gif → ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2. PHP port of tplay/glyph/video-to-ascii.">
 <meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-reel.png">
 <link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-reel.html">
 <meta property="og:type" content="website">
@@ -35,73 +35,82 @@
     <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#apps">← All apps</a></p>
 
     <div class="detail-header">
-      <img class="detail-icon" src="../img/icons/sugar-reel.png" alt="SugarReel">
+      <img class="detail-icon" src="../img/icons/sugar-reel.png" alt="SugarReel" onerror="this.src='../img/icons/candy-flip.png'">
       <div>
         <h2>🎬 SugarReel</h2>
         <p class="detail-sub">Terminal video player</p>
         <div class="detail-meta">
-          <span class="tag-chip accent">prior art: <a href="https://github.com/maxcurzi/tplay" style="color: inherit;">tplay</a> · <a href="https://github.com/seatedro/glyph" style="color: inherit;">glyph</a> · <a href="https://github.com/joelibaceta/video-to-ascii" style="color: inherit;">video-to-ascii</a></span>
-          <span class="tag-chip">video</span>
-          <span class="tag-chip">ascii-art</span>
-          <span class="tag-chip">half-block</span>
+          <span class="tag-chip accent">no single upstream</span>
+          <span class="tag-chip">mp4</span>
+          <span class="tag-chip">gif</span>
+          <span class="tag-chip">ascii</span>
           <span class="tag-chip">sixel</span>
+          <span class="tag-chip">kitty</span>
+          <span class="tag-chip">iterm2</span>
           <span class="tag-chip">ffmpeg</span>
+          <span class="tag-chip">ext-gd</span>
         </div>
       </div>
     </div>
 
-    <p class="lede" style="margin-top: 28px;">Plays a video file — <code>mp4</code> and more — by decoding frames on the fly and rendering each one to the terminal as ASCII, ANSI 256-color, truecolor half-blocks, sixel, or kitty graphics. Like <code>mpv -vo tct</code>, but PHP, and reusing the SugarCraft rendering stack throughout.</p>
+    <p class="lede" style="margin-top: 28px;">Terminal video player — plays <code>mp4</code>, <code>gif</code>, <code>avi</code>, <code>webm</code> on the fly, rendering each frame as ASCII, ANSI 256-color, truecolor half-blocks, or via modern graphics protocols (sixel / kitty / iTerm2). PHP port of <code>tplay</code>, <code>glyph</code>, and <code>video-to-ascii</code>.</p>
 
     <h3 style="margin-top: 32px;">Install</h3>
     <pre class="code"><code>composer require sugarcraft/sugar-reel</code></pre>
 
     <h3 style="margin-top: 32px;">Quickstart</h3>
-    <pre class="code"><code>use SugarCraft\Reel\Player;
+    <pre class="code"><code>php examples/play.php video.mp4           # play a video
+php examples/play.php                    # synthetic test pattern (no file needed)
 
+# Programmatic:
+use SugarCraft\Reel\Player;
 $player = Player::open('clip.mp4', cols: 80, rows: 24);
-(new \SugarCraft\Core\Program($player))->run();</code></pre>
+(new \SugarCraft\Core\Program($player))-&gt;run();</code></pre>
 
-    <p class="lede" style="margin-top: 24px;"><strong>Status:</strong> Step 7 ✓ (final). Full implementation with ffmpeg decode pipe, pure-PHP GIF fallback via candy-flip, all rendering modes (ascii/ansi256/truecolor/half-block/sixel/kitty/iTerm2), delta repaint, seek, speed control, and a runnable example.</p>
-
-    <h3 style="margin-top: 28px;">Rendering modes</h3>
+    <h3 style="margin-top: 32px;">Rendering modes</h3>
     <table class="api-table">
-    <tr><th>Mode</th><th>Description</th><th>Terminal</th></tr>
+    <tr><th>Mode</th><th>Description</th><th>Terminal requirement</th></tr>
     <tr><td>ascii</td><td>Grayscale luminance ramp</td><td>Any</td></tr>
     <tr><td>ansi256</td><td>256-color cube + grey ramp</td><td>256-color</td></tr>
-    <tr><td>truecolor</td><td>24-bit RGB truecolor</td><td>24-bit</td></tr>
-    <tr><td>halfblock</td><td>24-bit half-block (▀), 2× vertical resolution</td><td>24-bit</td></tr>
-    <tr><td>sixel</td><td>Sixel graphics (DEC)</td><td>Sixel</td></tr>
-    <tr><td>kitty</td><td>Kitty graphics (DCS APC)</td><td>Kitty</td></tr>
-    <tr><td>iterm2</td><td>iTerm2 inline image (OSC 1337)</td><td>iTerm2/WezTerm</td></tr>
-    <tr><td>auto</td><td>Probe terminal, pick best available</td><td>—</td></tr>
+    <tr><td>truecolor</td><td>24-bit RGB truecolor</td><td>24-bit color</td></tr>
+    <tr><td>halfblock</td><td>24-bit &#x2580; half-blocks, 2x vertical resolution</td><td>24-bit color</td></tr>
+    <tr><td>sixel</td><td>Sixel raster graphics protocol (DEC)</td><td>Sixel-capable</td></tr>
+    <tr><td>kitty</td><td>Kitty graphics protocol (DCS APC)</td><td>Kitty-compatible</td></tr>
+    <tr><td>iterm2</td><td>iTerm2 inline image (OSC 1337)</td><td>iTerm2 / WezTerm</td></tr>
     </table>
 
-    <h3 style="margin-top: 28px;">Controls</h3>
+    <h3 style="margin-top: 32px;">Keyboard controls</h3>
     <table class="api-table">
     <tr><th>Key</th><th>Action</th></tr>
     <tr><td>Space</td><td>Pause / resume</td></tr>
-    <tr><td>← →</td><td>Seek ±10 frames</td></tr>
-    <tr><td>[ ]</td><td>Speed −/+ (0.25–4.0×)</td></tr>
-    <tr><td>0–9</td><td>Seek to 0–90% of duration</td></tr>
-    <tr><td>m</td><td>Cycle rendering mode</td></tr>
+    <tr><td>&#x2190;</td><td>Seek backward 10 frames</td></tr>
+    <tr><td>&#x2192;</td><td>Seek forward 10 frames</td></tr>
+    <tr><td>[</td><td>Decrease playback speed (-0.25x, min 0.25x)</td></tr>
+    <tr><td>]</td><td>Increase playback speed (+0.25x, max 4.0x)</td></tr>
+    <tr><td>0-9</td><td>Seek to 0-90% of video duration</td></tr>
+    <tr><td>m</td><td>Cycle to next rendering mode</td></tr>
     <tr><td>q / Esc</td><td>Quit</td></tr>
+    <tr><td>resize</td><td>Terminal resize (SIGWINCH) re-scales video automatically</td></tr>
     </table>
 
-    <h3 style="margin-top: 32px;">Design</h3>
+    <h3 style="margin-top: 32px;">What's in the box</h3>
     <div class="feature-grid">
-      <div class="feature"><strong>ffmpeg decode pipe</strong><span>Shells to the <code>ffmpeg</code> binary via <code>proc_open</code> for raw <code>rgb24</code> frames, pre-scaled and fps-decimated by ffmpeg so PHP never decodes a codec itself.</span></div>
-      <div class="feature"><strong>Pure-PHP GIF fallback</strong><span>When ffmpeg is absent, falls back to <a href="candy-flip.html">candy-flip</a>'s GD-based decoder for <code>.gif</code> sources.</span></div>
-      <div class="feature"><strong>Reused renderers</strong><span>Half-block / sixel / kitty / iTerm2 rendering delegates to <a href="candy-mosaic.html">candy-mosaic</a> rather than being re-implemented.</span></div>
-      <div class="feature"><strong>Color mapping</strong><span><a href="candy-palette.html">candy-palette</a> maps RGB to 256-color and truecolor SGR for non-truecolor TTYs.</span></div>
-      <div class="feature"><strong>TEA runtime</strong><span>Playback is a <a href="candy-core.html">candy-core</a> <code>Model</code> paced by <code>Cmd::tick()</code> — no busy-waiting.</span></div>
-      <div class="feature"><strong>Audio sync</strong><span>Audio subprocess (<code>ffplay</code> / <code>mpv --no-video</code>) is the master wall clock; video frame-skips to track it.</span></div>
+      <div class="feature"><strong>Multi-format decode</strong><span>ffmpeg for mp4/avi/webm, pure-PHP + ext-gd for GIF. No external deps beyond ffmpeg for video files.</span></div>
+      <div class="feature"><strong>7 rendering modes</strong><span>ascii, ansi256, truecolor, half-block, sixel, kitty, iTerm2 — auto-detects terminal capability and picks the best available.</span></div>
+      <div class="feature"><strong>Auto terminal resize</strong><span>SIGWINCH handler re-scales video to fit the new terminal dimensions without restarting playback.</span></div>
+      <div class="feature"><strong>Seek + speed control</strong><span>Keyboard-driven seek (arrows, 0-9) and speed control ([ / ]) with frame-skip resync.</span></div>
+      <div class="feature"><strong>Audio companion</strong><span>AudioPlayer shells out to ffplay or mpv as the audio master clock; degrades gracefully when no audio track is present.</span></div>
+      <div class="feature"><strong>Loop playback</strong><span>Reel::new()->withLoop(true)->play() loops from end back to start automatically.</span></div>
+      <div class="feature"><strong>Delta repaint</strong><span>Only changed cells are re-rendered each frame, dramatically reducing output for static scenes.</span></div>
+      <div class="feature"><strong>SGR run-length coalescing</strong><span>AsciiRenderer emits color SGR codes only on color transitions (~60% output reduction for typical frames).</span></div>
     </div>
 
     <h3 style="margin-top: 40px;">Source &amp; demos</h3>
     <ul>
       <li><a href="https://github.com/sugarcraft/sugar-reel">Source on GitHub</a></li>
-      <li><a href="https://github.com/sugarcraft/sugar-reel/blob/master/README.md">Full README</a></li>
-      <li>Prior art: <a href="https://github.com/maxcurzi/tplay">tplay</a> · <a href="https://github.com/seatedro/glyph">glyph</a> · <a href="https://github.com/joelibaceta/video-to-ascii">video-to-ascii</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-reel/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-reel/tree/main/examples">Runnable examples</a></li>
+      <li>Prior art: <a href="https://github.com/maxcurzi/tplay">maxcurzi/tplay</a>, <a href="https://github.com/seatedro/glyph">seatedro/glyph</a>, <a href="https://github.com/joelibaceta/video-to-ascii">joelibaceta/video-to-ascii</a></li>
     </ul>
 
     <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
@@ -109,20 +118,38 @@ $player = Player::open('clip.mp4', cols: 80, rows: 24);
     <h3 style="margin-top: 32px;">API</h3>
 <table class="api-table">
 <tr><th>Class</th><th>Method</th><th>Description</th></tr>
-<tr><td>Player</td><td>::open(path, cellsW, cellsH)</td><td>Open a video file and return a paused Player ready for Program::run()</td></tr>
-<tr><td>Player</td><td>::openForTest(decoder, fps, ...)</td><td>Open with an injected Decoder for testing (bypasses ffprobe)</td></tr>
-<tr><td>Decoder</td><td>::open(source, cellsW, cellsH, fps)</td><td>Open a source file for decoding</td></tr>
-<tr><td>Decoder</td><td>::next()</td><td>Return the next RgbFrame or null</td></tr>
-<tr><td>RgbFrame</td><td>bytes/w/h</td><td>Raw rgb24 bytes with pixel dimensions</td></tr>
-<tr><td>Mode</td><td>::cases()</td><td>All rendering modes (Ascii/Ansi256/TrueColor/HalfBlock/Sixel/Kitty/Iterm2)</td></tr>
-<tr><td>RendererFactory</td><td>::auto(?Mode)</td><td>Auto-detect or force rendering mode</td></tr>
+<tr><td>Reel</td><td>::open(path)</td><td>Open a video file</td></tr>
+<tr><td>Reel</td><td>::new()</td><td>Create unbound player (synthetic test pattern)</td></tr>
+<tr><td>Reel</td><td>withMode(Mode)</td><td>Set rendering mode</td></tr>
+<tr><td>Reel</td><td>withSize(cols, rows)</td><td>Set terminal cell dimensions</td></tr>
+<tr><td>Reel</td><td>withFps(?float)</td><td>FPS override (null = auto-detect)</td></tr>
+<tr><td>Reel</td><td>withLoop(bool)</td><td>Enable/disable loop</td></tr>
+<tr><td>Reel</td><td>play()</td><td>Run the player</td></tr>
+<tr><td>Player</td><td>::open(path, cols, rows, fps, mode, loop)</td><td>Open a video source</td></tr>
+<tr><td>Player</td><td>::openForTest(decoder, cols, rows, fps, mode, loop)</td><td>Open with injected decoder for testing</td></tr>
+<tr><td>LumaRamp</td><td>::char(luma, ramp)</td><td>Map 0-255 luminance to character</td></tr>
+<tr><td>LumaRamp</td><td>::compute(r, g, b)</td><td>Compute BT.601 luma from RGB</td></tr>
 </table>
   </div>
 </section>
 
+<section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
+    <div class="container">
+        <h2>Demos.</h2>
+        <p class="lede">VHS-recorded GIFs of every example shipped with the app. Regenerated automatically on every push that touches the source.</p>
+        <div class="demo-grid">
+            <div class="demo-card">
+                <img loading="lazy" src="https://raw.githubusercontent.com/detain/sugarcraft/master/sugar-reel/.vhs/play.gif" alt="Play">
+                <h3>Play</h3>
+                <span class="demo-caption">Synthetic rainbow-gradient GIF rendered in all modes.</span>
+            </div>
+        </div>
+    </div>
+</section>
+
 <footer class="footer">
     <div class="container">
-        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.1+</div>
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
         <div>
             <a href="https://github.com/sugarcraft">GitHub</a> ·
             <a href="https://packagist.org/packages/sugarcraft/sugar-reel">Packagist</a> ·
