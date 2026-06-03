@@ -2,7 +2,7 @@
 name: add-locale
 description: Adds a translation file at <slug>/lang/<code>.php for an existing SugarCraft library by copying en.php and translating values while preserving keys and {placeholder} names. Codes follow LOCALES.md recommended set (en, fr, de, es, pt, pt-br, zh-cn, zh-tw, ja, ru, it, ko, pl, nl, tr, cs, ar). Use when user says 'add <language> translation', 'translate <lib> to <code>', 'add ar locale', 'add Polish locale to sugar-bits', 'add Japanese locale for all libs'. Do NOT edit en.php (the source of truth) — translate FROM it; do NOT use to first-time-wire Lang::t() into a lib that has no lang/ dir (that is scaffold work).
 paths:
-  - **/lang/*.php
+  - '**/lang/*.php'
 ---
 # Add a translation locale
 
