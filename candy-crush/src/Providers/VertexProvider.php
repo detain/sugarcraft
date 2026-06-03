@@ -39,7 +39,7 @@ final readonly class VertexProvider implements ProviderInterface
 
     public function supportsStreaming(): bool
     {
-        return true;
+        return false;
     }
 
     public function supportsFunctionCalling(): bool

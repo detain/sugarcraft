@@ -14,26 +14,74 @@ use SugarCraft\Crush\Skills\SkillLoader;
 final class SkillLoaderTest extends TestCase
 {
     private string $tempDir;
+    private array $errorLogCalls = [];
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->tempDir = sys_get_temp_dir() . '/candy-crush-test-' . uniqid();
+        $this->errorLogCalls = [];
     }
 
     protected function tearDown(): void
     {
-        // Clean up temp directory
+        // Clean up temp directory - use recursive deletion
         if (is_dir($this->tempDir)) {
-            $iterator = new \RecursiveIteratorIterator(
-                new \RecursiveDirectoryIterator($this->tempDir, \RecursiveDirectoryIterator::SKIP_DOTS)
-            );
-            foreach ($iterator as $file) {
-                unlink($file->getPathname());
-            }
-            rmdir($this->tempDir);
+            $this->removeDirectory($this->tempDir);
         }
         parent::tearDown();
+    }
+
+    /**
+     * Recursively remove a directory and all its contents.
+     */
+    private function removeDirectory(string $dir): void
+    {
+        if (!is_dir($dir)) {
+            return;
+        }
+        $items = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST
+        );
+        foreach ($items as $item) {
+            if ($item->isDir()) {
+                rmdir($item->getPathname());
+            } else {
+                unlink($item->getPathname());
+            }
+        }
+        rmdir($dir);
+    }
+
+    /**
+     * Suppress error_log calls during test execution.
+     * Use this when testing code that intentionally calls error_log.
+     */
+    protected function suppressErrorLog(): void
+    {
+        $this->errorLogCalls = [];
+        $self = $this;
+        set_error_handler(function (int $errno, string $errstr) use ($self) {
+            if ($errno === E_USER_WARNING && str_starts_with($errstr, 'Failed to load skill')) {
+                $self->errorLogCalls[] = $errstr;
+                return true;
+            }
+            return false;
+        });
+    }
+
+    protected function restoreErrorHandler(): void
+    {
+        restore_error_handler();
+    }
+
+    /**
+     * Get captured error_log calls for verification.
+     */
+    protected function getErrorLogCalls(): array
+    {
+        return $this->errorLogCalls;
     }
 
     private function createSkillFile(string $name, string $description, string $content = ''): void
@@ -122,12 +170,15 @@ SKILL;
         // Empty/invalid file should be caught gracefully
         file_put_contents($invalidDir . '/SKILL.md', '');
 
-        // Act - should not throw, just log and skip
+        // Act - should not throw, just log and skip invalid files
+        // Note: error_log is called for invalid files but we cannot capture it in tests
         $result = $loader->loadFromDirectory($this->tempDir);
 
-        // Assert
+        // Assert - only valid skill should be loaded
         $this->assertCount(1, $result);
         $this->assertArrayHasKey('valid-skill', $result);
+        $this->assertArrayNotHasKey('invalid-skill', $result);
+        $this->assertSame('Valid skill', $result['valid-skill']->description);
     }
 
     // -------------------------------------------------------------------------
