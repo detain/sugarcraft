@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Admin\ServerStatus;
 
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Foundation\Threshold;
 use SugarCraft\Dash\Plot\Chart\Gauge;
 use SugarCraft\Dash\Plot\Chart\GaugeCircle;
 
@@ -91,23 +92,13 @@ final class SidebarGauge
      * Green:   0.0 ≤ ratio < 0.6
      * Yellow:  0.6 ≤ ratio < 0.8
      * Red:     0.8 ≤ ratio ≤ 1.0
+     *
+     * Delegates to the shared {@see Threshold::health()} ramp in sugar-dash so
+     * every gauge/indicator shares one definition of "healthy/warn/critical".
      */
     public static function thresholdColor(float $ratio): Color
     {
-        $ratio = self::clampRatio($ratio);
-
-        if ($ratio < 0.6) {
-            // Green - healthy
-            return Color::hex('#4ade80');
-        }
-
-        if ($ratio < 0.8) {
-            // Yellow - warning
-            return Color::hex('#facc15');
-        }
-
-        // Red - critical
-        return Color::hex('#f87171');
+        return Threshold::health()->colorFor(self::clampRatio($ratio));
     }
 
     /**

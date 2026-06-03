@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Dashboard;
 
+use SugarCraft\Charts\Chart\NiceScale;
 use SugarCraft\Charts\LineChart\Streamline;
 use SugarCraft\Query\Admin\StatusSnapshot;
 
@@ -28,7 +29,7 @@ final class TimeSeriesCell
     /** @var list<float> */
     private array $timestamps = [];
 
-    private float $ceiling = 100.0;
+    private float $ceiling = NiceScale::FLOOR;
 
     private float $minSeen = 0.0;
 
@@ -81,7 +82,7 @@ final class TimeSeriesCell
         }
 
         $this->maxSeen = max($this->maxSeen, $value);
-        $this->ceiling = $this->niceCeiling($this->maxSeen);
+        $this->ceiling = NiceScale::ceiling($this->maxSeen);
         $this->minSeen = count($this->values) > 0 ? min($this->values) : 0.0;
 
         return $this;
@@ -113,7 +114,7 @@ final class TimeSeriesCell
         $this->timestamps = [];
         $this->minSeen = 0.0;
         $this->maxSeen = 0.0;
-        $this->ceiling = 100.0;
+        $this->ceiling = NiceScale::FLOOR;
         $this->chart = $this->chart->clear();
         return $this;
     }
@@ -174,30 +175,6 @@ final class TimeSeriesCell
     public function __toString(): string
     {
         return $this->view();
-    }
-
-    /**
-     * Compute a "nice ceiling" for a given max value.
-     *
-     * Takes the max as a decimal string, increments the first digit,
-     * zeros the rest (e.g. 4500 → 5000), with a floor of 100.
-     *
-     * @see Mirrors mysql-workbench/charting.py DBTimeLineGraph.auto_scale ceiling logic
-     */
-    private function niceCeiling(float $max): float
-    {
-        if ($max <= 0) {
-            return 100.0;
-        }
-
-        $s = (string) (int) $max;
-        $firstDigit = (int) $s[0] + 1;
-        if ($firstDigit > 9) {
-            $firstDigit = 10;
-        }
-        $scale = (int) ($firstDigit . str_repeat('0', strlen($s) - 1));
-
-        return max($scale, 100);
     }
 
     /**

@@ -73,10 +73,21 @@ final class Table
     /** Vertical scroll offset — first visible row index in the filtered+sorted view. */
     private int $scrollY = 0;
 
-    // Zebra stripes
+    // Zebra stripes.
+    // The stripe MUST carry a foreground as well as a background: a background
+    // alone leaves the text at the terminal's default foreground, which has no
+    // guaranteed contrast against the stripe (near-white default fg over a light
+    // stripe renders as invisible text). Pair the light background with a black
+    // foreground so striped rows stay readable on any theme — the same way the
+    // selected row stays readable via reverse video.
+    //
+    // The stripe falls on EVEN row indices (0, 2, 4…) so it begins on the first
+    // row. The default cursor sits on row 0, whose reverse-video highlight already
+    // reads as a light bar; starting the stripe on row 0 lets the two coincide
+    // instead of stacking two light rows (selected row + first stripe) at the top.
     private bool $zebraEnabled = false;
-    private string $zebraStyleOdd  = '100';  // bright black (dim)
-    private string $zebraStyleEven = '';
+    private string $zebraStyleEven = '30;47';  // even rows: black on light-gray
+    private string $zebraStyleOdd  = '';
 
     // Per-cell style callback: (int $row, int $col, string $value): Style|string
     /** @var callable|null */
@@ -324,6 +335,23 @@ final class Table
     {
         $clone = clone $this;
         $clone->selectedIndex = \max(0, $clone->selectedIndex - 1);
+        return $clone;
+    }
+
+    /**
+     * Move the selection directly to a 0-based row index, clamped to the
+     * filtered/sorted view. Mirrors Bubbles' table.SetCursor — lets a caller
+     * that tracks its own cursor (e.g. an external Model) drive the highlight
+     * without looping SelectNext/SelectPrevious.
+     */
+    public function withSelectedIndex(int $index): self
+    {
+        $view = $this->filteredSortedRows();
+        if ($view === []) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->selectedIndex = \max(0, \min(\count($view) - 1, $index));
         return $clone;
     }
 

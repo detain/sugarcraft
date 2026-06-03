@@ -4,12 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Reports;
 
+use SugarCraft\Bits\Tree\Node;
+use SugarCraft\Bits\Tree\Tree;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Forms\Spinner\Spinner;
+use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Sprinkles\Position;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Table\Column;
 use SugarCraft\Table\Row;
 use SugarCraft\Table\RowData;
@@ -298,9 +306,7 @@ final class ReportsPage extends PageBase
 
     private function renderHeader(): string
     {
-        $title = 'Performance Reports';
-
-        return "\x1b[1m\x1b[36m{$title}\x1b[0m";
+        return Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Performance Reports');
     }
 
     private function renderLayout(): string
@@ -308,31 +314,46 @@ final class ReportsPage extends PageBase
         $left = $this->renderCategoryTree();
         $right = $this->renderReportGrid();
 
-        return $this->renderSideBySide($left, $right, 35, 90);
+        return Layout::joinHorizontal(Position::TOP, $left, '  ', $right);
     }
 
     private function renderCategoryTree(): string
     {
-        $lines = [];
+        $header = Style::new()->bold()->foreground(Color::hex('#c084fc'))->render('Categories');
 
-        $lines[] = "\x1b[1mCategories\x1b[0m";
-        $lines[] = '';
-
-        foreach ($this->categories as $category) {
-            $reports = $this->reportsByCategory[$category] ?? [];
-            $count = count($reports);
-            $marker = $category === $this->selectedCategory ? '>' : ' ';
-            $lines[] = "{$marker} {$category} ({$count})";
-
-            if ($category === $this->selectedCategory) {
-                foreach ($reports as $report) {
-                    $marker = $report->name === $this->selectedReport ? '*' : ' ';
-                    $lines[] = "  {$marker} {$report->caption}";
-                }
-            }
+        if ($this->categories === []) {
+            return $header . "\n" . Style::new()->faint()->render('  (no data)');
         }
 
-        return \implode("\n", $lines);
+        $activeStyle = Style::new()->bold()->foreground(Color::hex('#4ade80'));
+        $mutedStyle = Style::new()->foreground(Color::hex('#6b7280'));
+
+        // Each category is a Bits\Tree branch; only the selected category is
+        // expanded, so its reports show as indented leaves. The widget owns the
+        // indentation, expand/collapse glyphs and structure. Selection is baked
+        // into the label styling because the tree is display-only here (never
+        // focused — its single cursor can't express category + report at once).
+        $roots = [];
+        foreach ($this->categories as $category) {
+            $reports = $this->reportsByCategory[$category] ?? [];
+            $isSelectedCategory = $category === $this->selectedCategory;
+
+            $leaves = [];
+            foreach ($reports as $report) {
+                $style = $report->name === $this->selectedReport ? $activeStyle : $mutedStyle;
+                $leaves[] = new Node($style->render($report->caption), $report->name);
+            }
+
+            $count = count($reports);
+            $style = $isSelectedCategory ? $activeStyle : $mutedStyle;
+            // width 0 (set below) keeps these styled labels intact — Tree::view()
+            // truncates with the ANSI-stripping Width::truncate when width > 0.
+            $roots[] = new Node($style->render("{$category} ({$count})"), $category, $leaves, $isSelectedCategory);
+        }
+
+        $tree = Tree::fromList($roots)->withSize(0, 0);
+
+        return $header . "\n" . $tree->view();
     }
 
     private function renderReportGrid(): string
@@ -341,14 +362,16 @@ final class ReportsPage extends PageBase
             // The available-report list comes from the sys-schema availability
             // probe, which is fetched asynchronously; until it lands no report
             // is selected and we are still loading rather than awaiting input.
-            if ($this->selectedReport === null) {
-                return "\x1b[33m◌ Loading reports…\x1b[0m";
-            }
-            return "\x1b[33m◌ Loading {$this->currentReportCaption()}…\x1b[0m";
+            $glyph = Spinner::new(SpinnerStyle::dot())->view();
+            $label = $this->selectedReport === null
+                ? 'Loading reports…'
+                : "Loading {$this->currentReportCaption()}…";
+
+            return Style::new()->foreground(Color::hex('#fbbf24'))->render("{$glyph} {$label}");
         }
 
         if ($this->currentResult->isEmpty()) {
-            return "No data available for {$this->currentResult->report->caption}";
+            return Style::new()->faint()->render("No data available for {$this->currentResult->report->caption}");
         }
 
         $report = $this->currentResult->report;
@@ -356,8 +379,8 @@ final class ReportsPage extends PageBase
 
         $lines = [];
 
-        $lines[] = "\x1b[1m{$report->caption}\x1b[0m";
-        $lines[] = "\x1b[90m{$report->description}\x1b[0m";
+        $lines[] = Style::new()->bold()->render($report->caption);
+        $lines[] = Style::new()->foreground(Color::hex('#6b7280'))->render($report->description);
         $lines[] = '';
 
         $columns = $this->buildColumns($report);
@@ -371,7 +394,8 @@ final class ReportsPage extends PageBase
         $lines[] = $table->View();
 
         $lines[] = '';
-        $lines[] = "\x1b[90mShowing " . count($rows) . " rows" . ($this->currentResult->limited ? ' (limited)' : '') . "\x1b[0m";
+        $lines[] = Style::new()->foreground(Color::hex('#6b7280'))
+            ->render('Showing ' . count($rows) . ' rows' . ($this->currentResult->limited ? ' (limited)' : ''));
 
         return \implode("\n", $lines);
     }
@@ -421,43 +445,25 @@ final class ReportsPage extends PageBase
         return $tableRows;
     }
 
-    private function renderSideBySide(string $left, string $right, int $leftWidth, int $rightWidth): string
-    {
-        $leftLines = \explode("\n", $left);
-        $rightLines = \explode("\n", $right);
-
-        $maxLines = \max(\count($leftLines), \count($rightLines));
-        $result = [];
-
-        for ($i = 0; $i < $maxLines; $i++) {
-            $leftLine = ($leftLines[$i] ?? '');
-            $rightLine = ($rightLines[$i] ?? '');
-
-            $leftLine = \str_pad(\substr($leftLine, 0, $leftWidth), $leftWidth, ' ');
-            $rightLine = \str_pad(\substr($rightLine, 0, $rightWidth), $rightWidth, ' ');
-
-            $result[] = $leftLine . '  ' . $rightLine;
-        }
-
-        return \implode("\n", $result);
-    }
-
     private function renderFooter(): string
     {
-        return "\x1b[90m[j/k] nav  [r] refresh  [x] export  [c] unit toggle  [q] quit\x1b[0m";
+        return Style::new()->foreground(Color::hex('#6b7280'))
+            ->render('[j/k] nav  [r] refresh  [x] export  [c] unit toggle  [q] quit');
     }
 
     private function renderErrorScreen(): string
     {
+        $muted = Style::new()->foreground(Color::hex('#6b7280'));
+
         $lines = [];
-        $lines[] = "\x1b[1m\x1b[31mPerformance Reports Unavailable\x1b[0m";
+        $lines[] = Style::new()->bold()->foreground(Color::hex('#f87171'))->render('Performance Reports Unavailable');
         $lines[] = '';
         $lines[] = $this->errorMessage;
         $lines[] = '';
-        $lines[] = "\x1b[90mEnsure MySQL 5.6.6+ with performance_schema=enabled\x1b[0m";
-        $lines[] = "\x1b[90mand the sys schema installed.\x1b[0m";
+        $lines[] = $muted->render('Ensure MySQL 5.6.6+ with performance_schema=enabled');
+        $lines[] = $muted->render('and the sys schema installed.');
         $lines[] = '';
-        $lines[] = "\x1b[90m[q] quit\x1b[0m";
+        $lines[] = $muted->render('[q] quit');
 
         return \implode("\n", $lines);
     }
