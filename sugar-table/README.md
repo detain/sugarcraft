@@ -220,6 +220,37 @@ $t = $t->withPageSize(25)               // 25 rows per page
 echo $t->PageFooter();                  // 'Page 2 of 4' (i18n-aware)
 ```
 
+### Footer Types
+
+Control what the footer displays using the `FooterType` enum:
+
+```php
+use SugarCraft\Table\{Table, FooterType};
+
+$t = Table::withColumns([...])
+    ->withRows([...])
+    ->withPageSize(25)
+    ->withFooterType(FooterType::Page);  // Default: "Page 2 of 4"
+```
+
+| Case   | Footer Display                          | Method                   |
+|--------|----------------------------------------|--------------------------|
+| `Page` | `Page N of M`                          | `PageFooter()`           |
+| `Rows` | `Showing X to Y of Z rows`             | `RowsFooter()`           |
+| `Both` | `Page N of M  |  Showing X to Y of Z rows` | Combines both |
+
+```php
+// Show only row count footer
+$t = $t->withFooterType(FooterType::Rows);
+echo $t->View();  // Footer: "Showing 1 to 25 of 100 rows"
+
+// Show both page and row count
+$t = $t->withFooterType(FooterType::Both);
+echo $t->View();  // Footer: "Page 2 of 4  |  Showing 26 to 50 of 100 rows"
+```
+
+The row count footer uses the `showing_rows` i18n key and updates automatically based on the current page and any active filters/searches.
+
 ## Viewport Virtualization
 
 Render only a visible slice of rows for large datasets:
