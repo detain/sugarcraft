@@ -68,6 +68,7 @@ final class Player implements Model
      * @param bool                        $ended        True once the decoder is exhausted (playback stopped at end)
      * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
      * @param string                      $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs): AudioPlayer
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -87,6 +88,7 @@ final class Player implements Model
         public readonly bool $ended,
         private readonly bool $loop,
         private readonly string $ramp = 'standard',
+        private readonly ?\Closure $audioFactory = null,
     ) {
     }
 
@@ -119,10 +121,15 @@ final class Player implements Model
         // 2× cell height). Seek recreates the decoder with the current mode.
         $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode);
 
+        // Audio companion factory: creates AudioPlayer on demand. The factory
+        // is threaded through the Player so tests can inject a spy subclass.
+        $audioFactory = static fn(string $path, ?int $startMs = null): AudioPlayer
+            => new AudioPlayer($path, $startMs);
+
         // Audio companion is created when the source has audio but is NOT
         // started here — the Player starts it on first play (see updateKey)
         // so audio and the video wall clock share the same t0.
-        $audioPlayer = $source->hasAudio ? new AudioPlayer($videoPath) : null;
+        $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null) : null;
 
         // Player starts paused; the first tick is scheduled when playback begins.
         return new self(
@@ -143,6 +150,7 @@ final class Player implements Model
             ended: false,
             loop: $loop,
             ramp: $ramp,
+            audioFactory: $audioFactory,
         );
     }
 
@@ -153,14 +161,17 @@ final class Player implements Model
      * a FakeDecoder that yields canned RgbFrame objects without any
      * real video file or external process.
      *
-     * @param Decoder  $decoder      Frame source iterator (e.g. FakeDecoder)
-     * @param float    $fps           Frames per second
-     * @param int      $totalFrames   Total frame count (0 if unknown/stream)
-     * @param int      $cellsW        Terminal cell width
-     * @param int      $cellsH        Terminal cell height
-     * @param string   $videoPath     Fake path for seeking (default '/fake')
-     * @param bool     $loop          Restart from frame 0 at end-of-stream instead of stopping
-     * @param string   $ramp          Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param Decoder      $decoder       Frame source iterator (e.g. FakeDecoder)
+     * @param float        $fps            Frames per second
+     * @param int          $totalFrames    Total frame count (0 if unknown/stream)
+     * @param int          $cellsW         Terminal cell width
+     * @param int          $cellsH         Terminal cell height
+     * @param string       $videoPath      Fake path for seeking (default '/fake')
+     * @param bool         $loop           Restart from frame 0 at end-of-stream instead of stopping
+     * @param string       $ramp           Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param \Closure     $audioFactory   Factory fn(string $path, ?int $startMs): AudioPlayer
+     * @param AudioPlayer  $audioPlayer   Optional initial AudioPlayer instance (for spy injection)
+     * @param bool         $paused         Start paused (default true)
      */
     public static function openForTest(
         Decoder $decoder,
@@ -171,12 +182,20 @@ final class Player implements Model
         string $videoPath = '/fake',
         bool $loop = false,
         string $ramp = 'standard',
+        ?\Closure $audioFactory = null,
+        ?AudioPlayer $audioPlayer = null,
+        bool $paused = true,
     ): self {
+        // Default factory when none supplied (produces a real AudioPlayer — fine
+        // for openForTest since audio is not started in the paused initial state).
+        $factory = $audioFactory ?? static fn(string $path, ?int $startMs = null): AudioPlayer
+            => new AudioPlayer($path, $startMs);
+
         return new self(
             decoder: $decoder,
             mode: Mode::HalfBlock,
             speed: 1.0,
-            paused: true,
+            paused: $paused,
             videoTime: 0.0,
             frameIndex: 0,
             currentFrame: null,
@@ -186,10 +205,11 @@ final class Player implements Model
             cellsW: $cellsW,
             cellsH: $cellsH,
             videoPath: $videoPath,
-            audioPlayer: null,
+            audioPlayer: $audioPlayer,
             ended: false,
             loop: $loop,
             ramp: $ramp,
+            audioFactory: $factory,
         );
     }
 
@@ -367,7 +387,9 @@ final class Player implements Model
         $newAudio = $this->audioPlayer;
         if ($this->audioPlayer !== null) {
             $this->audioPlayer->stop();
-            $newAudio = new AudioPlayer($this->videoPath, 0);
+            // Use the audioFactory seam so tests can inject a spy AudioPlayer.
+            $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer => new AudioPlayer($path, $ms);
+            $newAudio = $factory($this->videoPath, 0);
             if (!$this->paused) {
                 $newAudio->start();
             }
@@ -484,6 +506,8 @@ final class Player implements Model
                 $graphicsModes[] = Mode::Sixel;
             }
             if ($report->has(Capability::KittyKeyboard)) {
+                // Note: Kitty image mode is gated on Capability::KittyKeyboard because
+                // candy-palette exposes no standalone KittyGraphics capability.
                 $graphicsModes[] = Mode::Kitty;
             }
             if ($report->has(Capability::ITerm2)) {
@@ -549,8 +573,11 @@ final class Player implements Model
         // At end-of-stream (non-loop) append a status line so the user can see
         // playback stopped and how to restart. Normal playback output is
         // unchanged, so this adds no per-frame snapshot churn.
+        // The digit restart hint ("0 restart") is only shown when totalFrames > 0
+        // because digit-seek is a no-op on streams of unknown length.
         if ($this->ended) {
-            return $out . "\r\n" . '[ended]  0 restart  q quit';
+            $hint = $this->totalFrames > 0 ? '0 restart  q quit' : 'q quit';
+            return $out . "\r\n" . '[ended]  ' . $hint;
         }
 
         return $out;
@@ -586,6 +613,14 @@ final class Player implements Model
         $byteLen = strlen($bytes);
 
         if ($mode === Mode::HalfBlock) {
+            // INLINE HalfBlock path: renders directly via Buffer → toAnsi().
+            // This is the runtime path used by Player::view() for HalfBlock.
+            // There is a SEPARATE HalfBlockRenderer (wired at RendererFactory:98)
+            // that is NEVER reached by the Player runtime — only by direct
+            // factory use / tests. The parity test testHalfBlockInlineMatchesMosaicRenderer
+            // guards that these two paths produce identical colored half-blocks,
+            // so they can't silently drift apart.
+            //
             // HalfBlock: each cell shows 2 vertically-stacked pixels.
             // Upper pixel = foreground, lower pixel = background.
             for ($cy = 0; $cy < $bufH; $cy++) {
@@ -745,7 +780,7 @@ final class Player implements Model
      * Seek to a specific frame index by re-creating the decoder
      * and advancing it to the target frame.
      */
-    private function withSeek(int $targetIndex): self
+    public function withSeek(int $targetIndex): self
     {
         // Clamp to valid range.
         $targetIndex = max(0, $targetIndex);
@@ -755,7 +790,9 @@ final class Player implements Model
         if ($this->audioPlayer !== null) {
             $this->audioPlayer->stop();
             $startMs = (int)round(($targetIndex / $this->fps) * 1000);
-            $newAudio = new AudioPlayer($this->videoPath, $startMs);
+            // Use the audioFactory seam so tests can intercept AudioPlayer creation.
+            $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer => new AudioPlayer($path, $ms);
+            $newAudio = $factory($this->videoPath, $startMs);
             if (!$this->paused) {
                 $newAudio->start();
             }
@@ -786,6 +823,7 @@ final class Player implements Model
                 ended: false,
                 loop: $this->loop,
                 ramp: $this->ramp,
+                audioFactory: $this->audioFactory,
             );
         }
 
@@ -825,6 +863,7 @@ final class Player implements Model
             ended: false, // a seek clears the ended state
             loop: $this->loop,
             ramp: $this->ramp,
+            audioFactory: $this->audioFactory,
         );
     }
 
@@ -857,6 +896,7 @@ final class Player implements Model
             ended: $this->ended,
             loop: $this->loop,
             ramp: $this->ramp,
+            audioFactory: $this->audioFactory,
         );
     }
 
@@ -887,6 +927,7 @@ final class Player implements Model
             ended: $changes['ended'] ?? $this->ended,
             loop: $changes['loop'] ?? $this->loop,
             ramp: $this->ramp,
+            audioFactory: $this->audioFactory,
         );
     }
 

@@ -68,3 +68,5 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
 - **[pattern:devnull-sinks]** All child subprocesses (ffmpeg, ffplay, ffprobe, mpv) must have stderr directed to `/dev/null` (or `NUL` on Windows) using `['file', $devNull, 'w']` descriptor spec. This prevents pipe buffer deadlocks (F7 — ffmpeg stderr blocking) and SIGPIPE when audio subprocess writes to a closed pipe end (F8).
 
 - **[pattern:sgr-coalescing]** `AsciiRenderer::render()` now emits color SGR codes only when the color changes between adjacent cells (run-length coalescing), with a single `\x1b[0m` at end-of-line. This reduces output size by ~60% for typical frames. Verified by `testTrueColorCoalescingEmitsColorOncePerRun` — adjacent same-color pixels share one SGR sequence.
+
+- **[pattern:kitty-image-gated-on-kittykeyboard]** The Kitty image protocol is exposed via `Capability::KittyKeyboard` in candy-palette, not a dedicated `KittyGraphics` capability. This means the terminal must support keyboard-based Kitty image rendering to use image output in sugar-reel. If candy-palette later adds a `KittyGraphics` capability, this gating can be revisited.
