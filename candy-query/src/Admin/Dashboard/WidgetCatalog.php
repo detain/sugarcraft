@@ -7,6 +7,8 @@ namespace SugarCraft\Query\Admin\Dashboard;
 use SugarCraft\Query\Admin\Calc\RatePerSecond;
 use SugarCraft\Query\Admin\Calc\StatusVar;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
+use SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate;
+use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsage;
 
 /**
  * Declarative widget tables for the Performance Dashboard.
@@ -126,7 +128,7 @@ final class WidgetCatalog
             [
                 'Table Open Cache',
                 'round',
-                new StatusVar('Table_open_cache_hits'),
+                new TableOpenCacheHitRate(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
                 'Table open cache hit ratio',
@@ -234,7 +236,7 @@ final class WidgetCatalog
             [
                 'Table Open Cache',
                 'round',
-                new StatusVar('Table_open_cache_hits'),
+                new TableOpenCacheHitRate(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
                 'Table open cache hit ratio',
@@ -330,7 +332,7 @@ final class WidgetCatalog
             [
                 'Buffer Pool Usage',
                 'round',
-                new StatusVar('Innodb_buffer_pool_pages_total'),
+                new InnoDBBufferPoolUsage(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
                 'InnoDB buffer pool usage percentage',
