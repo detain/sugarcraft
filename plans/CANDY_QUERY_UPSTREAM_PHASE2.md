@@ -34,13 +34,37 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
     `Layout::joinHorizontal`, grid stays sugar-table via `Table::withSelectedIndex()`
     (dead `renderTableSimple` removed). **Wired sugar-bits as a candy-query dep** (require +
     `../sugar-bits` path-repo, added by hand — `--strict-closure` is too broad). −30 net LOC.
-- **Baselines after A5/A6:** candy-core 637, candy-query **1092**, sugar-table 169,
-  sugar-dash Badge/DefinitionList green.
+- **DONE (this session, 4 commits, all suites green — completes the 6 admin pages):**
+  - **A7 — ReportsPage** (`6043f86a`): master-detail `renderCategoryTree` → `Bits\Tree`
+    (built with `withSize(0,0)` so `Tree::view()`'s ANSI-stripping `Width::truncate`
+    leaves the styled labels intact; the tree is display-only/unfocused, selection baked
+    into labels); `renderSideBySide` → `Layout::joinHorizontal`; loading `◌` →
+    `Forms\Spinner`; all `\x1b` literals → `Sprinkles\Style`. Grid stays sugar-table.
+  - **A8 — PerfSchemaPage** (`84788be8`): the worst offender, 52 `\x1b` literals gone.
+    7-tab bar → `Bits\Tabs` (`width 0` to dodge the ANSI-byte truncation guard; unbracketed
+    labels + `│` divider = 78 visible cells, fits 80); the 4 toggle lists → one
+    `renderToggleList()` over `Forms\ItemList` + `Badge::tristate()`; threads/timers tables →
+    `sugar-table`; header/easy-setup state → `Badge`/`Style`; separators → `Dash\Divider`;
+    names → `Width::truncateMiddle`. **Fixed a latent bug**: READ-ONLY/Pending indicators
+    were single-quoted `'\x1b…'` literals (backslash-x text, not escapes) printing garbage.
+  - **A9 — DashboardPage + C3** (`ebb510c7`): `assembleLayout` per-row concat + raw `│` →
+    `Layout::joinHorizontal` with a full-height separator (dividers now form a straight rule);
+    loading → `Forms\Spinner`; titles/widget truecolor/footer → `Style`+`Color`. **C3**:
+    hardcoded `width=80,height=24` → `Renderer::getTerminalSize()` (the WindowSizeMsg via
+    `setSize`), mirroring `Renderer::adminPane()`'s budget so it tracks resizes and the
+    footer stays visible on small terminals. (NB `renderPanel` only uses region height.)
+  - **A10 — ConnectionsPage** (`5794054b`): already sugar-table + zero ANSI; light polish —
+    cyan header title + a `Sprinkles\Style` counters line (Usage colours red/green at the
+    critical threshold). `Dash\Stat`/`Metric` skipped: Stat's HAlign is inverted and Metric
+    is float-only, so neither renders the mixed int+`%` bar cleanly.
+- **Baselines after A5/A6 (unchanged through A7–A10):** candy-core 637, candy-query **1092**,
+  sugar-table 169, sugar-dash Badge/DefinitionList green.
   - ⚠️ Test gotcha: `tests/Admin/Variables/VariableEditorTest` fails (~7) when that *subdir*
     is run in isolation (FakeDatabase ordering artifact) — GREEN in the full suite. Trust the
     full `vendor/bin/phpunit` run.
-- **REMAINING:** A7–A11 (4 admin pages — Reports → PerfSchema → Dashboard → Connections;
-  ReportsPage first), B5 (chart autoscale), B1 (`Kit\Frame`), C4 (size detection).
+- **REMAINING:** B5 (chart autoscale → sugar-charts), B1 (`Kit\Frame` extraction — DO LAST,
+  preserve frame-diff invariants), C4 (size detection — low priority). All 6 admin pages +
+  the 3-pane browser now render via upstream widgets; no page has any `\x1b` literal left.
 
 ## Where we are
 
