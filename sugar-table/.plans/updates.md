@@ -177,16 +177,24 @@ Each entry should have:
 
 ### Phase 6: Row Expansion
 - Step 6.1 (impl): **COMPLETED** ✅
-  - Added expandedRows state, toggleExpanded(), isExpanded(), withExpandedRows()
-  - Modified fillDataRow() and fillDataRowLines() to show full content for expanded rows
-  - All 225 tests pass
+  - Added `$expandedRows` state storing Row objects for identity-based tracking
+  - Added `withExpandedRows(array $indices)` to set expanded rows directly
+  - Added `toggleExpanded(int $rowIndex)` to toggle row expansion state
+  - Added `isExpanded(int $rowIndex)` to check if a row is expanded
+  - Modified `fillDataRow` to show full content without truncation for expanded rows
+  - Modified `fillDataRowLines` (multiline mode) to show full content for expanded rows
+  - All 225 tests pass (451 assertions)
 - Step 6.2 (review): **ISSUES_FOUND** ⚠️
   - Major: Pagination API inconsistency - index is global, not page-relative
   - Major: No test coverage for expansion functionality
   - Minor: Silent failure on invalid index
-- Step 6.3 (fix): **IN_PROGRESS**
-- Step 6.3 (fix): Pending
-- Step 6.4 (tests): Pending
+- Step 6.3 (fix): **COMPLETED** ✅
+  - Fixed pagination API: changed to use pagedRows() for page-relative indexing
+  - Fixed Fail Fast: now throws OutOfBoundsException for invalid indices
+  - All 249 tests pass (516 assertions)
+- Step 6.4 (tests): **COMPLETED** ✅
+  - Added TableExpansionTest.php with 24 comprehensive tests
+  - Tests cover: toggle, isExpanded, withExpandedRows, pagination integration, edge cases
 - Step 6.5 (docs): Pending
 
 ### Phase 7: Showing Rows Footer
