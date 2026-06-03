@@ -79,3 +79,8 @@ Source: step-7.4 ai/postgres-admin
 Pattern: `pg_stat_database`, `pg_stat_activity`, and `pg_settings` require varying privilege levels. When a query fails due to insufficient permissions, catch the PDOException and return a safe stub (`null` or an empty array) rather than propagating the error. This allows the admin UI to render the panels it can access even when others are restricted.
 Canonical: `PostgresAdminProvider` wraps each stat query in try/catch and falls back to `null` for the affected panel, preserving `serverInfo()` availability for the broader admin flow.
 Source: step-7.4 ai/postgres-admin
+
+### 2026-06-03 — PostgresWidgetCatalog panel expansion (Step B3)
+Pattern: Postgres admin panels grew from stub to full implementation: `io()` expanded 6→10 widgets (tuple metrics: returned/fetched/inserted/updated/deleted), `cache()` expanded 3→4 widgets (added Shared Buffers). A `parseSharedBuffers()` helper converts byte strings (e.g. `"8GB"`) to numeric bytes for display.
+Canonical: `PostgresWidgetCatalog::io()` / `cache()` / `parseSharedBuffers()`.
+Source: step-b3 ai/postgres-widget-catalog
