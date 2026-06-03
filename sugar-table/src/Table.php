@@ -707,7 +707,8 @@ final class Table
         if ($this->showHeader) {
             $buffer = $this->fillHeaderRow($buffer, $bufferRow, $totalWidth, $this->computedColumnWidths);
             $bufferRow++;
-            $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $totalWidth);
+            $visibleWidth = $this->computeVisibleContentWidth($this->computedColumnWidths);
+            $buffer = $this->fillHeaderSeparatorRow($buffer, $bufferRow, $visibleWidth);
             $bufferRow++;
         }
 
@@ -743,6 +744,27 @@ final class Table
         }
         $scrollableStartIndex = \count($this->frozenCols) + $this->scrollX;
         return $colIndex >= $scrollableStartIndex;
+    }
+
+    /**
+     * Compute the total width of visible columns plus separators between them.
+     */
+    private function computeVisibleContentWidth(array $computedWidths): int
+    {
+        $width = 0;
+        $lastVisibleCi = null;
+        foreach ($this->columns as $ci => $column) {
+            if (!$this->isColumnVisible($ci)) {
+                continue;
+            }
+            $width += $computedWidths[$ci] ?? $column->width;
+            // Add separator after this column if there's a visible column after it
+            if ($lastVisibleCi !== null) {
+                $width++; // separator between consecutive visible columns
+            }
+            $lastVisibleCi = $ci;
+        }
+        return $width;
     }
 
     private function fillBorderRow(Buffer $buffer, int $row, int $contentWidth, string $type): Buffer
@@ -784,19 +806,20 @@ final class Table
 
         // Header cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
+            $colWidth = $computedWidths[$ci] ?? $column->width;
+
             // Skip hidden columns (non-frozen before scrollX offset)
             if (!$this->isColumnVisible($ci)) {
+                $col += $colWidth;
                 continue;
             }
 
-            $colWidth = $computedWidths[$ci] ?? $column->width;
             $headerText = $column->renderHeader($colWidth);
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator: only if next column exists AND is visible
-            $nextCi = $ci + 1;
-            if ($nextCi < \count($this->columns) && $this->isColumnVisible($nextCi)) {
+            // Column separator - drawn after current column's right edge
+            if ($ci < \count($this->columns) - 1) {
                 $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
                 $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
                 $col++;
@@ -851,8 +874,11 @@ final class Table
 
         // Data cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
+            $colWidth = $computedWidths[$ci] ?? $column->width;
+
             // Skip hidden columns (non-frozen before scrollX offset)
             if (!$this->isColumnVisible($ci)) {
+                $col += $colWidth;
                 continue;
             }
 
@@ -887,7 +913,6 @@ final class Table
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            $colWidth = $computedWidths[$ci] ?? $column->width;
             $displayText = $column->alignLeft
                 ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
                 : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
@@ -895,9 +920,8 @@ final class Table
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator: only if next column exists AND is visible
-            $nextCi = $ci + 1;
-            if ($nextCi < \count($this->columns) && $this->isColumnVisible($nextCi)) {
+            // Column separator - drawn after current column's right edge
+            if ($ci < \count($this->columns) - 1) {
                 $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
                 $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
                 $col++;
