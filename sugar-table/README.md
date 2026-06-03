@@ -310,16 +310,57 @@ Available border factories: `Border::normal()`, `rounded()`, `thick()`, `double(
 
 ## Multi-line Rows
 
-Enable multi-line row rendering to display tall cell content:
+Enable multi-line row rendering to display tall cell content that wraps within its column width:
 
 ```php
-$t = Table::withColumns([...])
-    ->withRows([...])
+use SugarCraft\Table\{Table, Column, Row, RowData, WrapMode};
+
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20)->withWrapMode(WrapMode::WordWrap),
+    Column::new('city', 'City',  15)->withWrapMode(WrapMode::Character),
+])
+    ->withRows([
+        Row::new(RowData::from([
+            'id'   => '1',
+            'name' => 'Alice Johnson',
+            'city' => 'New York City',
+        ])),
+        Row::new(RowData::from([
+            'id'   => '2',
+            'name' => 'Bob Smith with a very long name',
+            'city' => 'Los\nAngeles',  // embedded newline
+        ])),
+    ])
     ->withMultilineMode(true);          // rows expand to max cell height
     // ->withMultilineMode(false);     // default, clamps to single line
+
+echo $t->View();
 ```
 
-When enabled, each row's height equals the maximum number of lines across all its cells after text wrapping. `renderRowLines()` iterates all cell lines to build the full row. When disabled (the default), cells are clamped to one line for backward compatibility.
+### How It Works
+
+When `withMultilineMode(true)` is enabled:
+- **Row height** equals the maximum number of lines across all visible cells after text wrapping
+- **Short cells** are vertically padded with empty space to match row height
+- **Borders** span the full row height on each line
+- **Cell wrapping** respects the column's `WrapMode`: `WordWrap` breaks at word boundaries, `Character` breaks at any character, `None` truncates
+
+When disabled (the default), cells are clamped to one line for backward compatibility.
+
+### Interaction with WrapMode
+
+Multiline mode requires `WrapMode::WordWrap` or `WrapMode::Character` on columns to produce multiple lines. Without wrapping enabled, cells remain single-line even in multiline mode.
+
+```php
+// Word wrap example — breaks at word boundaries within 8 characters
+Column::new('bio', 'Bio', 8)->withWrapMode(WrapMode::WordWrap);
+// "one two three four" → "one two", "three", "four" (3 lines)
+
+// Character wrap example — breaks at any character within 5 characters
+Column::new('code', 'Code', 5)->withWrapMode(WrapMode::Character);
+// "ABCDEFGHIJ" → "ABCDE", "FGHIJ" (2 lines)
+```
 
 ## Shared foundations
 
