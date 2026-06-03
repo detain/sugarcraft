@@ -232,7 +232,13 @@ Each entry should have:
 - Step 7.5 (docs): Pending
 
 ### Phase 8: Keyboard Navigation
-- Step 8.1 (impl): Pending
+- Step 8.1 (impl): **COMPLETED** ✅
+  - Added KEY_* constants (KEY_ARROW_UP, KEY_ARROW_DOWN, KEY_PAGE_UP, KEY_PAGE_DOWN, KEY_HOME, KEY_END)
+  - Added `scrollYForKey(string $key): int` method returning new scrollY based on key
+  - Added `handleKey(string $key): self` convenience method returning new Table with adjusted scrollY
+  - Added private `maxScrollY(): int` helper for computing max allowed scrollY
+  - All 279 tests pass (564 assertions)
+  - Added 21 new tests in TableViewportTest.php covering all key mappings, edge cases, and integration
 - Step 8.2 (review): Pending
 - Step 8.3 (fix): Pending
 - Step 8.4 (tests): Pending

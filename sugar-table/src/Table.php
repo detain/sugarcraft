@@ -501,6 +501,85 @@ final class Table
     }
 
     // -------------------------------------------------------------------------
+    // Keyboard scrolling helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Key constants for scrollYForKey() and handleKey().
+     *
+     * Use these constants when calling the keyboard navigation helpers to ensure
+     * correct key names.  These map to typical terminal arrow-key and navigation
+     * key sequences that input libraries (e.g. candy-pty, brick/console) emit.
+     */
+    public const KEY_ARROW_UP    = 'arrowUp';
+    public const KEY_ARROW_DOWN  = 'arrowDown';
+    public const KEY_PAGE_UP     = 'pageUp';
+    public const KEY_PAGE_DOWN   = 'pageDown';
+    public const KEY_HOME        = 'home';
+    public const KEY_END         = 'end';
+
+    /**
+     * Return the new scrollY value for a given keyboard key.
+     *
+     * Useful for integrating with an input library — call this on each keypress
+     * and then apply the result via withScrollY():
+     *
+     *   $table = $table->withScrollY($table->scrollYForKey($key));
+     *
+     * Keys that have no mapping return the current scrollY unchanged (no-op).
+     *
+     * @param string $key One of the KEY_* constants
+     * @return int The new scrollY value (already clamped to valid range)
+     */
+    public function scrollYForKey(string $key): int
+    {
+        $maxScroll = $this->maxScrollY();
+
+        return match ($key) {
+            self::KEY_ARROW_UP   => \max(0, $this->scrollY - 1),
+            self::KEY_ARROW_DOWN => \min($maxScroll, $this->scrollY + 1),
+            self::KEY_PAGE_UP    => \max(0, $this->scrollY - $this->viewportHeight),
+            self::KEY_PAGE_DOWN  => \min($maxScroll, $this->scrollY + $this->viewportHeight),
+            self::KEY_HOME       => 0,
+            self::KEY_END        => $maxScroll,
+            default              => $this->scrollY,
+        };
+    }
+
+    /**
+     * Return a new Table with scrollY adjusted for the given keyboard key.
+     *
+     * Convenience wrapper around scrollYForKey() + withScrollY() for easy
+     * keyboard navigation integration:
+     *
+     *   $table = $table->handleKey($key);
+     *
+     * @param string $key One of the KEY_* constants
+     * @return self New Table instance with adjusted scrollY
+     *
+     * @see scrollYForKey()  For the raw scrollY calculation
+     */
+    public function handleKey(string $key): self
+    {
+        return $this->withScrollY($this->scrollYForKey($key));
+    }
+
+    /**
+     * Compute the maximum allowed scrollY value.
+     *
+     * When viewportHeight is 0, no scrolling is possible so max is 0.
+     * Otherwise max is max(0, totalFilteredRows - viewportHeight).
+     */
+    private function maxScrollY(): int
+    {
+        if ($this->viewportHeight <= 0) {
+            return 0;
+        }
+        $total = $this->TotalRows();
+        return \max(0, $total - $this->viewportHeight);
+    }
+
+    // -------------------------------------------------------------------------
     // Sorting
     // -------------------------------------------------------------------------
 
