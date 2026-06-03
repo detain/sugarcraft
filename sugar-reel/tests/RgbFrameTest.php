@@ -104,6 +104,27 @@ final class RgbFrameTest extends TestCase
     }
 
     /**
+     * Regression for F17. toGd() round-trips pixel colors exactly using
+     * the packed 0xRRGGBB form — no imagecolorallocate palette overhead.
+     */
+    public function testToGdRoundTripExactRgb(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+        // 2×2 frame: red, green, blue, white
+        $bytes = "\xff\x00\x00\x00\xff\x00\x00\x00\xff\xff\xff\xff";
+        $frame = new RgbFrame($bytes, 2, 2);
+        $img = $frame->toGd();
+        // imagecolorat on truecolor returns 0xRRGGBB
+        $this->assertSame(0x00ff0000, \imagecolorat($img, 0, 0)); // red
+        $this->assertSame(0x0000ff00, \imagecolorat($img, 1, 0)); // green
+        $this->assertSame(0x000000ff, \imagecolorat($img, 0, 1)); // blue
+        $this->assertSame(0x00ffffff, \imagecolorat($img, 1, 1)); // white
+        imagedestroy($img);
+    }
+
+    /**
      * @testdox constructor does not validate byte length — caller is responsible
      *
      * RgbFrame is a readonly value object. It accepts any byte string and

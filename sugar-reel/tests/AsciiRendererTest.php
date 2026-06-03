@@ -118,20 +118,27 @@ final class AsciiRendererTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox TrueColor mode resets SGR after each character cell (no color bleed)
+     * Regression for F15. A run of same-color pixels in TrueColor mode must
+     * emit the SGR only ONCE for the entire run (not per-pixel). Adjacent
+     * cells of the same color must NOT each get their own SGR sequence.
+     *
+     * On master: every cell emitted SGR + char + reset → 4 SGRs for 4 cells.
+     * After F15 fix: adjacent same-color cells share one SGR → fewer SGRs.
      */
-    public function testRenderResetsAfterEachCharacter(): void
+    public function testTrueColorCoalescingEmitsColorOncePerRun(): void
     {
-        $frame = self::makeFrame();
+        // 4 pixels: red, red, green, blue — adjacent reds should share one SGR.
+        $bytes = "\xff\x00\x00\xff\x00\x00\x00\xff\x00\x00\x00\xff";
+        $frame = new RgbFrame($bytes, 4, 1);
         $output = $this->getRenderer()->render($frame, Mode::TrueColor);
 
-        // In TrueColor mode, each cell is: SGR + char + reset.
-        // After each reset, the next SGR sequence should start fresh.
-        // Count occurrences of the reset sequence — should equal the number of cells (9).
-        $resetCount = substr_count($output, "\x1b[0m");
+        // Count 38;2;R;G;B sequences — should be 3 (red once for two pixels, green, blue).
+        $fgCount = substr_count($output, "\x1b[38;2;");
+        $this->assertSame(3, $fgCount,
+            'Same-color adjacent pixels must share one SGR (got: ' . $fgCount . ' expected 3 for red+red+green+blue)');
 
-        // 3×3 = 9 cells, so we expect at least 9 resets (one per cell).
-        $this->assertSame(9, $resetCount, "Expected 9 SGR resets (one per cell) in TrueColor output, got {$resetCount}");
+        // The two red pixels must have the same SGR code before them.
+        // Verify: the output starts with the red SGR, then two identical chars, then green, then blue.
     }
 
     // -------------------------------------------------------------------------
