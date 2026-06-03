@@ -313,24 +313,11 @@ final class Player implements Model
             return [$nextPlayer, null];
         }
 
-        // Loop on the test/fake path: FakeDecoder can't replay without a
-        // rebuild, so just rewind the bookkeeping in place and keep ticking.
-        if ($this->videoPath === '/fake') {
-            $nextPlayer = $this->mutate([
-                'frameIndex' => 0,
-                'elapsed' => 0.0,
-                'lastTickTime' => $now,
-                'ended' => false,
-            ]);
-
-            return [$nextPlayer, $tick];
-        }
-
-        // Loop on a real source: recreate the decoder from the start and
-        // restart audio from t0 so A/V stay aligned on the new pass.
-        $this->decoder->close();
-        $newDecoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode);
-        $firstFrame = $newDecoder->next();
+        // Loop: rebuild the decoder from frame 0 and restart audio from t0 so
+        // A/V stay aligned on the new pass. rebuildDecoderAt() handles both the
+        // real path (close + DecoderFactory) and the '/fake' path (re-open the
+        // injected decoder, which resets it to frame 0) under one branch.
+        [$newDecoder, $firstFrame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, 0);
 
         $newAudio = $this->audioPlayer;
         if ($this->audioPlayer !== null) {
@@ -436,16 +423,21 @@ final class Player implements Model
             return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
 
-        // m : cycle rendering mode.
+        // m : cycle rendering mode through ALL implemented modes.
         if ($msg->type === KeyType::Char && $msg->rune === 'm') {
             $modes = Mode::cases();
             $currentIdx = array_search($this->mode, $modes, true);
-            $nextIdx = ($currentIdx + 1) % count($modes);
-            // Skip Sixel/Kitty/Iterm2 until Step 6.
-            while (in_array($modes[$nextIdx], [Mode::Sixel, Mode::Kitty, Mode::Iterm2], true)) {
-                $nextIdx = ($nextIdx + 1) % count($modes);
-            }
-            $nextPlayer = $this->mutate(['mode' => $modes[$nextIdx]]);
+            $nextMode = $modes[($currentIdx + 1) % count($modes)];
+
+            // Rebuild the decoder so the decoded frame resolution matches the
+            // new mode (HalfBlock decodes at 2× cell height). Keep position.
+            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $nextMode, $this->frameIndex);
+
+            $nextPlayer = $this->mutate([
+                'mode' => $nextMode,
+                'decoder' => $decoder,
+                'currentFrame' => $frame ?? $this->currentFrame,
+            ]);
             return [$nextPlayer, null];
         }
 
@@ -604,13 +596,12 @@ final class Player implements Model
 
     /**
      * Detect cell dimensions for a frame given the rendering mode.
+     *
+     * @return array{w: int, h: int}
      */
     private function detectCellDimensions(Mode $mode): array
     {
-        return match ($mode) {
-            Mode::HalfBlock => ['w' => 1, 'h' => 2],
-            default => ['w' => 1, 'h' => 1],
-        };
+        return ['w' => $mode->colsPerCell(), 'h' => $mode->rowsPerCell()];
     }
 
     /**
@@ -652,6 +643,36 @@ final class Player implements Model
     }
 
     /**
+     * Close-and-recreate the decoder at a given size+mode, advanced to $frameIndex.
+     * Real paths close the old decoder first (fixes the F21 leak) and build a fresh
+     * one via DecoderFactory. The '/fake' test path cannot go through DecoderFactory,
+     * so it RE-OPENS the injected decoder instead (a mode-aware fake regenerates its
+     * frames at the new mode/size) — this is the test equivalent of a rebuild, not a
+     * real-process spawn.
+     *
+     * @return array{0: Decoder, 1: ?RgbFrame}
+     */
+    private function rebuildDecoderAt(int $cellsW, int $cellsH, Mode $mode, int $frameIndex): array
+    {
+        if ($this->videoPath === '/fake') {
+            $this->decoder->open($this->videoPath, $cellsW, $cellsH, $this->fps, $mode);
+            $decoder = $this->decoder;
+        } else {
+            $this->decoder->close();                 // F21: never leak the old ffmpeg process
+            $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode);
+        }
+        $frame = null;
+        for ($i = 0; $i <= $frameIndex; $i++) {
+            $f = $decoder->next();
+            if ($f === null) {
+                break;
+            }
+            $frame = $f;
+        }
+        return [$decoder, $frame];
+    }
+
+    /**
      * Seek to a specific frame index by re-creating the decoder
      * and advancing it to the target frame.
      */
@@ -660,66 +681,21 @@ final class Player implements Model
         // Clamp to valid range.
         $targetIndex = max(0, $targetIndex);
 
-        // Backward seek: re-open the decoder and skip forward to target.
-        // This is O(n) but necessary since decoders are forward-only.
+        // Backward seek: decoders are forward-only, so close-and-rebuild the
+        // decoder and skip forward to the target. rebuildDecoderAt() closes the
+        // old decoder first (F21: no leaked ffmpeg process) on the real path.
         if ($targetIndex < $this->frameIndex) {
-            // When videoPath is '/fake' (test dummy path), DecoderFactory::create()
-            // would fail. In that case, fall back to direct index adjustment
-            // (same approach as forward seek) — the test just wants to verify
-            // the math max(0, frameIndex - 10), not actual decoder repositioning.
-            if ($this->videoPath === '/fake') {
-                // Use same approach as forward seek: direct index adjustment.
-                $frame = $this->currentFrame;
-                $idx = $this->frameIndex;
-                while ($idx > $targetIndex) {
-                    // For backward seek on fake path, we just decrement index
-                    // without actually repositioning decoder (can't go backwards).
-                    $idx--;
-                    if ($idx < 0) break;
-                }
-                $newElapsed = max(0, $idx) / ($this->fps * $this->speed);
-
-                return new self(
-                    decoder: $this->decoder,
-                    mode: $this->mode,
-                    speed: $this->speed,
-                    paused: $this->paused,
-                    elapsed: $newElapsed,
-                    frameIndex: max(0, $idx),
-                    currentFrame: $frame,
-                    lastTickTime: microtime(true),
-                    fps: $this->fps,
-                    totalFrames: $this->totalFrames,
-                    cellsW: $this->cellsW,
-                    cellsH: $this->cellsH,
-                    videoPath: $this->videoPath,
-                    audioPlayer: $this->audioPlayer,
-                    ended: false, // a seek clears the ended state
-                    loop: $this->loop,
-                );
-            }
-
-            // Pass current mode so decoder outputs at correct resolution.
-            $newDecoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode);
-
-            // Skip frames to reach target (decoder starts at frame 0).
-            for ($i = 0; $i < $targetIndex; $i++) {
-                $skipped = $newDecoder->next();
-                if ($skipped === null) break;
-            }
-
-            // Get first valid frame at target position.
-            $firstFrame = $newDecoder->next();
-            $newElapsed = $targetIndex / ($this->fps * $this->speed);
+            [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
+            $newElapsed = $targetIndex / ($this->fps * $this->speed);   // keep existing formula — elapsed semantics are Phase 3
 
             return new self(
-                decoder: $newDecoder,
+                decoder: $decoder,
                 mode: $this->mode,
                 speed: $this->speed,
                 paused: $this->paused,
                 elapsed: $newElapsed,
                 frameIndex: $targetIndex,
-                currentFrame: $firstFrame,
+                currentFrame: $frame,
                 lastTickTime: microtime(true),
                 fps: $this->fps,
                 totalFrames: $this->totalFrames,
@@ -727,7 +703,7 @@ final class Player implements Model
                 cellsH: $this->cellsH,
                 videoPath: $this->videoPath,
                 audioPlayer: $this->audioPlayer,
-                ended: false, // a seek clears the ended state
+                ended: false,
                 loop: $this->loop,
             );
         }
