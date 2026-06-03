@@ -104,3 +104,8 @@ Source: step-d1 ai/csv-export
 Pattern: `AlertManager` is composed into the `DashboardPage` poll loop via `StatusSnapshotProviderInterface` — `checkAlerts()` is called on each 3s cycle, dispatching toasts for threshold breaches and setting a `$showAlertBadge` flag for the footer indicator. The `[a]` key handler dismisses all alerts and clears the badge. This keeps alerting orthogonal to the gauge/update rendering with no shared mutable state.
 Canonical: `DashboardPage::checkAlerts()` → `AlertManager::checkAndDispatch()` → `$this->showAlertBadge = $notifier->hasAlerts()`.
 Source: step-f1 ai/alert-manager
+
+### 2026-06-03 — ServerStatusPage 2-column layout with SidebarGaugeSet (Step I1)
+Pattern: `ServerStatusPage` uses a 2-column layout — info panels (server info, features, directories, SSL, replication, firewall) on the left, `SidebarGaugeSet` on the right. Gauges poll `ServerContext` and an optional `Sampler` for rate calculations. The traffic gauge uses Sampler delta for a baseline-corrected ratio, fixing cases where cumulative counters reset or wrap.
+Canonical: `ServerStatusPage::render()` composes left panel stack + right `SidebarGaugeSet::view()`.
+Source: step-i1 ai/sidebar-gauges

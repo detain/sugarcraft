@@ -11,6 +11,8 @@ use SugarCraft\Dash\Components\Card\DefinitionList;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Sprinkles\Layout;
+use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -64,6 +66,22 @@ final class ServerStatusPage extends PageBase
      * Build the complete status page output.
      */
     protected function build(): string
+    {
+        // Left panel: existing info panels stacked vertically
+        $leftPanel = $this->buildLeftPanel();
+
+        // Right panel: live gauge sidebar
+        $gaugeSet = SidebarGaugeSet::new($this->context);
+        $rightPanel = $gaugeSet->view();
+
+        // 2-column layout: info panels on left, gauges on right
+        return Layout::joinHorizontal(Position::TOP, $leftPanel, '  ', $rightPanel);
+    }
+
+    /**
+     * Build the left panel content (existing single-column layout).
+     */
+    private function buildLeftPanel(): string
     {
         $lines = [];
 
