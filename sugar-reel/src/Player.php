@@ -18,7 +18,6 @@ use SugarCraft\Palette\Probe\Capability;
 use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
-use SugarCraft\Reel\Msg\FrameMsg;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
@@ -218,13 +217,6 @@ final class Player implements Model
         // the decoder so frames are decoded at the correct resolution.
         if ($msg instanceof \SugarCraft\Core\Msg\WindowSizeMsg) {
             return $this->updateResize($msg->cols, $msg->rows);
-        }
-
-        // FrameMsg: a newly decoded frame is available.
-        if ($msg instanceof FrameMsg) {
-            // Current frame is already stored in $this->currentFrame;
-            // nothing to do on FrameMsg itself.
-            return [$this, null];
         }
 
         return [$this, null];
