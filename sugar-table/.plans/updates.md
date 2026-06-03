@@ -133,7 +133,13 @@ Each entry should have:
   - All 195 tests pass
 - Step 4.4 (tests): **COMPLETED** ✅
   - All 195 tests pass (399 assertions)
-- Step 4.5 (docs): Pending
+- Step 4.5 (docs): **COMPLETED** ✅
+  - Added dedicated "Horizontal Scroll" section to README.md with:
+    - Basic scrollX usage example
+    - How it works explanation
+    - Interaction with frozen columns documented
+  - Reviewed withScrollX docblock - accurate
+  - Updated CALIBER_LEARNINGS.md pattern:frozen-columns to include scrollX details
 
 ### Phase 5: Global Search
 - Step 5.1 (impl): Pending
