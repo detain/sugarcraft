@@ -17,7 +17,7 @@ Each entry should have:
 - Phase 3: Pending
 - Phase 4: Pending
 - Phase 5: Pending
-- Phase 6: Pending
+- Phase 6: In Progress
 - Phase 7: Pending
 - Phase 8: Pending
 - Phase 9: Pending
@@ -32,7 +32,10 @@ Each entry should have:
 (None yet)
 
 ### Completed Items
-(None yet)
+- **2026-06-03**: Step 6.1 - Row Expansion/Collapse Feature
+  - PR #1004 merged to master
+  - Added expansion API: `toggleExpanded()`, `withExpandedRows()`, `isExpanded()`
+  - 225 tests pass, 451 assertions
 
 ## Phase-by-Phase Notes
 
@@ -173,7 +176,14 @@ Each entry should have:
     - @see references to related methods
 
 ### Phase 6: Row Expansion
-- Step 6.1 (impl): Pending
+- Step 6.1 (impl): **COMPLETED** ✅
+  - Added `$expandedRows` state storing Row objects for identity-based tracking
+  - Added `withExpandedRows(array $indices)` to set expanded rows directly
+  - Added `toggleExpanded(int $rowIndex)` to toggle row expansion state
+  - Added `isExpanded(int $rowIndex)` to check if a row is expanded
+  - Modified `fillDataRow` to show full content without truncation for expanded rows
+  - Modified `fillDataRowLines` (multiline mode) to show full content for expanded rows
+  - All 225 tests pass (451 assertions)
 - Step 6.2 (review): Pending
 - Step 6.3 (fix): Pending
 - Step 6.4 (tests): Pending
