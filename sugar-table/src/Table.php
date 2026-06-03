@@ -682,6 +682,10 @@ final class Table
      * Frozen columns are always rendered on the left. Non-frozen columns
      * scroll horizontally based on scrollX - when scrollX > 0, the first
      * scrollX non-frozen columns are hidden.
+     *
+     * When multilineMode is enabled, each row's height equals the maximum
+     * number of lines across all its cells after text wrapping. Row borders
+     * span the full row height.
      */
     private function renderToBuffer(): Buffer
     {
@@ -709,7 +713,18 @@ final class Table
         $bottomBorderRows = 1;
         $rowCount = \count($rows);
 
-        $bufferHeight = $topBorderRows + $headerRows + $rowCount + $footerRows + $bottomBorderRows;
+        // When multilineMode is enabled, pre-calculate row heights
+        $rowHeights = [];
+        if ($this->multilineMode) {
+            foreach ($rows as $ri => $row) {
+                $rowHeights[$ri] = $this->calculateRowHeight($row, $this->computedColumnWidths);
+            }
+            $totalRowHeight = \array_sum($rowHeights);
+        } else {
+            $totalRowHeight = $rowCount;
+        }
+
+        $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $footerRows + $bottomBorderRows;
         $bufferWidth = $totalWidth + 2; // +2 for left/right border chars
 
         $buffer = Buffer::new($bufferWidth, $bufferHeight);
@@ -731,8 +746,13 @@ final class Table
         // Data rows
         foreach ($rows as $ri => $row) {
             $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
-            $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
-            $bufferRow++;
+            if ($this->multilineMode) {
+                $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri]);
+                $bufferRow += $rowHeights[$ri];
+            } else {
+                $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
+                $bufferRow++;
+            }
         }
 
         // Footer
@@ -951,6 +971,156 @@ final class Table
         // Right border
         $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
         $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $sepStyle, null, 1));
+
+        return $buffer;
+    }
+
+    /**
+     * Calculate the height of a row in lines based on cell content after wrapping.
+     *
+     * When multilineMode is enabled, row height equals the maximum number of
+     * lines across all visible cells. This accounts for text wrapping in each cell.
+     */
+    private function calculateRowHeight(Row $row, array $computedWidths): int
+    {
+        $maxLines = 1;
+
+        foreach ($this->columns as $ci => $column) {
+            if (!$this->isColumnVisible($ci)) {
+                continue;
+            }
+
+            $colWidth = $computedWidths[$ci] ?? $column->width;
+            $val = $row->data->get($column->key);
+            $cellStr = '';
+            if ($val instanceof StyledCell) {
+                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
+                    ? (string) $val->value
+                    : (\is_scalar($val->value) ? (string) $val->value : '');
+            } else {
+                $cellStr = \is_object($val) && method_exists($val, '__toString')
+                    ? (string) $val
+                    : (\is_scalar($val) ? (string) $val : '');
+            }
+
+            $lines = $column->renderCell($cellStr, $colWidth);
+            $lineCount = \count($lines);
+            if ($lineCount > $maxLines) {
+                $maxLines = $lineCount;
+            }
+        }
+
+        return $maxLines;
+    }
+
+    /**
+     * Render a data row with multiple lines when multilineMode is enabled.
+     *
+     * Each cell's content is rendered across the row's height (max lines across
+     * all cells). Cells with fewer lines are padded vertically with empty space.
+     * Row borders span the full row height.
+     */
+    private function fillDataRowLines(Buffer $buffer, int $startRow, Row $row, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths, int $rowHeight): Buffer
+    {
+        // Determine row-level style
+        $rowStyle = '';
+        if ($row->style !== '') {
+            $rowStyle = $row->style;
+        }
+        if ($this->zebraEnabled) {
+            $zebra = ($rowIndex % 2 === 0) ? $this->zebraStyleEven : $this->zebraStyleOdd;
+            if ($zebra !== '') $rowStyle = $zebra;
+        }
+        if ($isSelected) $rowStyle = '7'; // reverse
+
+        $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+
+        // Collect cell lines for each column (only visible columns)
+        $cellLines = [];
+        $colWidths = [];
+        foreach ($this->columns as $ci => $column) {
+            if (!$this->isColumnVisible($ci)) {
+                continue;
+            }
+
+            $colWidth = $computedWidths[$ci] ?? $column->width;
+            $colWidths[$ci] = $colWidth;
+
+            $val = $row->data->get($column->key);
+            if ($val === null) {
+                $val = $this->missingIndicator;
+            }
+
+            // Determine cell-level style precedence: base < column < row < cell < selection
+            $cellStyle = $this->baseStyle;
+            if ($column->style !== '') $cellStyle = $column->style;
+            if ($rowStyle !== '') $cellStyle = $rowStyle;
+            if ($val instanceof StyledCell && $val->style !== '') $cellStyle = $val->style;
+
+            $cellStr = '';
+            if ($val instanceof StyledCell) {
+                $cellStr = \is_object($val->value) && method_exists($val->value, '__toString')
+                    ? (string) $val->value
+                    : (\is_scalar($val->value) ? (string) $val->value : '');
+            } else {
+                $cellStr = \is_object($val) && method_exists($val, '__toString')
+                    ? (string) $val
+                    : (\is_scalar($val) ? (string) $val : '');
+            }
+
+            if ($this->styleFunc !== null) {
+                $rawResult = ($this->styleFunc)($rowIndex, $ci, $cellStr);
+                $cellStyle = $this->normalizeStyleResult($rawResult, $cellStyle);
+            }
+
+            $parsedStyle = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
+            $lines = $column->renderCell($cellStr, $colWidth);
+            $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
+        }
+
+        // Render each line of the row
+        for ($lineIdx = 0; $lineIdx < $rowHeight; $lineIdx++) {
+            $bufferRow = $startRow + $lineIdx;
+            $col = 0;
+
+            // Left border (full height)
+            $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderLeft(), $style, null, 1));
+            $col++;
+
+            // Render each visible cell
+            foreach ($this->columns as $ci => $column) {
+                if (!$this->isColumnVisible($ci)) {
+                    $col += $computedWidths[$ci] ?? $column->width;
+                    continue;
+                }
+
+                $colWidth = $colWidths[$ci];
+                $cellData = $cellLines[$ci];
+                $lines = $cellData['lines'];
+                $cellStyle = $cellData['style'];
+
+                // Get the line to render at this row position
+                if ($lineIdx < \count($lines)) {
+                    $displayText = $lines[$lineIdx];
+                } else {
+                    // Pad with empty space for shorter cells
+                    $displayText = \str_repeat(' ', $colWidth);
+                }
+
+                $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
+                $col += $colWidth;
+
+                // Column separator
+                if ($ci < \count($this->columns) - 1) {
+                    $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderCenterV(), $sepStyle, null, 1));
+                    $col++;
+                }
+            }
+
+            // Right border (full height)
+            $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderRight(), $sepStyle, null, 1));
+        }
 
         return $buffer;
     }
