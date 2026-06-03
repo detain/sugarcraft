@@ -275,6 +275,18 @@ final class Table
         return $clone;
     }
 
+    /**
+     * Set the footer display type.
+     *
+     * Controls whether the table footer shows "Page N of M", "Showing X to Y of Z rows",
+     * or both combined. The footer is only visible when pagination is active
+     * (pageSize > 0) and showFooter is true.
+     *
+     * @param FooterType $type The footer type: Page (default), Rows, or Both
+     * @see FooterType::Page  For page-only footer
+     * @see FooterType::Rows  For row count footer only
+     * @see FooterType::Both  For combined footer
+     */
     public function withFooterType(FooterType $type): self
     {
         $clone = clone $this;
@@ -723,6 +735,12 @@ final class Table
      *
      * Uses the 'showing_rows' i18n key. Row range is computed from the
      * current page, page size, and total filtered row count.
+     *
+     * The count reflects filtered+sorted rows (via TotalRows()), not raw row count.
+     * When no rows match the filter/search, returns "Showing 0 to 0 of 0 rows".
+     *
+     * @return string The localized footer string, e.g. "Showing 1 to 25 of 100 rows"
+     * @see FooterType::Rows  For displaying this footer in the table
      */
     public function RowsFooter(): string
     {
