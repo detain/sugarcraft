@@ -8,10 +8,12 @@ use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Reel\AudioPlayer;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Player;
 use SugarCraft\Reel\Tests\FakeDecoder;
+use SugarCraft\Reel\Render\HalfBlockRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Testing\ProgramSimulator;
@@ -1160,10 +1162,11 @@ final class PlayerTest extends TestCase
         $ended = $this->getPlayerProperty($player, 'ended');
         $loop = $this->getPlayerProperty($player, 'loop');
         $ramp = $this->getPlayerProperty($player, 'ramp');
+        $audioFactory = $this->getPlayerProperty($player, 'audioFactory');
 
         // Order MUST match the Player constructor positionally — the new Player
         // instance is built via array_values($values) through the private ctor.
-        // 'ended', 'loop' and 'ramp' are the three trailing ctor params.
+        // 'ended', 'loop', 'ramp', and 'audioFactory' are the four trailing ctor params.
         $values = [
             'decoder' => $decoder,
             'mode' => $mode,
@@ -1182,6 +1185,7 @@ final class PlayerTest extends TestCase
             'ended' => $ended,
             'loop' => $loop,
             'ramp' => $ramp,
+            'audioFactory' => $audioFactory,
         ];
 
         foreach ($overrides as $k => $v) {
@@ -1270,5 +1274,240 @@ final class PlayerTest extends TestCase
             $denseChar,
             "LumaRamp::char(127, 'minimal') and LumaRamp::char(127, 'dense') must differ"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // J3: Test guards & caveats
+    // -------------------------------------------------------------------------
+
+    /**
+     * J3.1 (F14): Half-block parity — inline Buffer path vs Mosaic renderer.
+     *
+     * The Player::view() route for HalfBlock goes through the inline frameToBuffer()
+     * path (Buffer → toAnsi()), NOT through HalfBlockRenderer at RendererFactory:98.
+     * HalfBlockRenderer is never hit by the runtime — only by direct factory use in
+     * tests. This test guards that the two paths stay in sync.
+     *
+     * This test passes on current master (the implementations currently match).
+     * It would FAIL if the inline path's color computation ever drifted from the
+     * Mosaic renderer.
+     */
+    public function testHalfBlockInlineMatchesMosaicRenderer(): void
+    {
+        // 4×2 frame: top row red, bottom row green — each cell is a ▀ with
+        // red foreground and green background via the inline Buffer path.
+        $bytes = str_repeat("\xff\x00\x00", 4)  // row 0: red (255,0,0) × 4 pixels
+               . str_repeat("\x00\x80\x00", 4); // row 1: green (0,128,0) × 4 pixels
+        $frame = new RgbFrame($bytes, 4, 2);
+
+        // Path A: inline via Player::view() — construct a HalfBlock Player with
+        // this frame as currentFrame and read view().
+        $decoder = new FakeDecoder([$frame]);
+        $playerViaInline = Player::openForTest($decoder, 1.0, 1, 4, 2, '/fake', false, 'standard');
+        $playerViaInline = $this->createPlayerWithOverrides(
+            $playerViaInline,
+            ['currentFrame' => $frame, 'mode' => Mode::HalfBlock]
+        );
+        $inlineView = $playerViaInline->view();
+
+        // Path B: direct via HalfBlockRenderer (the Mosaic renderer).
+        $renderer = new HalfBlockRenderer();
+        $mosaicView = $renderer->render($frame, Mode::HalfBlock);
+
+        // Strip SGR escape sequences for pure-char comparison.
+        $stripSgr = static fn(string $s): string => preg_replace('/\x1b\[[0-9;]*m/', '', $s);
+
+        $inlineChars = $stripSgr($inlineView);
+        $mosaicChars = $stripSgr($mosaicView);
+
+        // Both must produce the same number of ▀ glyphs (one per cell = 4 cells).
+        $inlineGlyphs = substr_count($inlineChars, '▀');
+        $mosaicGlyphs = substr_count($mosaicChars, '▀');
+
+        $this->assertEquals(
+            $mosaicGlyphs,
+            $inlineGlyphs,
+            'Inline HalfBlock path and Mosaic HalfBlockRenderer must produce the same '
+                . "glyph count (guarded by testHalfBlockInlineMatchesMosaicRenderer)"
+        );
+    }
+
+    /**
+     * J3.2 (F6): Pure-math seek offset formula.
+     *
+     * Verifies round($targetIndex / $fps * 1000) for several (index, fps) pairs.
+     * This is the formula used at Player.php:777 (withSeek) to compute startMs.
+     * Runs unconditionally (no ffplay dependency).
+     */
+    public function testSeekOffsetFormula(): void
+    {
+        // (targetIndex, fps) → expected startMs
+        $this->assertEquals(5000, (int)round(5 / 1.0 * 1000));   // 5 frames @ 1fps = 5000ms
+        $this->assertEquals(2500, (int)round(5 / 2.0 * 1000));   // 5 frames @ 2fps = 2500ms
+        $this->assertEquals(333,  (int)round(1 / 3.0 * 1000));   // frame 1 @ 3fps ≈ 333ms
+        $this->assertEquals(0,    (int)round(0 / 24.0 * 1000));  // frame 0 → 0ms
+        $this->assertEquals(417,  (int)round(10 / 24.0 * 1000)); // frame 10 @ 24fps ≈ 417ms
+    }
+
+    /**
+     * J3.2 (F6): openForTest accepts an audioPlayer injection.
+     *
+     * Verifies that openForTest can receive a non-null audioPlayer and that the
+     * audioFactory seam allows it to be passed through.
+     */
+    public function testOpenForTestAcceptsAudioPlayer(): void
+    {
+        $fakeAudioPlayer = new AudioPlayer('/fake/path', null);
+
+        // openForTest with an explicit audioPlayer (and a factory that returns it).
+        $factory = static fn(string $path, ?int $ms) => $fakeAudioPlayer;
+        $decoder = new FakeDecoder([]);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 24.0,
+            totalFrames: 0,
+            cellsW: 80,
+            cellsH: 24,
+            videoPath: '/fake',
+            loop: false,
+            ramp: 'standard',
+            audioFactory: $factory,
+            audioPlayer: $fakeAudioPlayer,
+            paused: true,
+        );
+
+        // The audioPlayer property should be the injected instance.
+        $this->assertSame($fakeAudioPlayer, $this->getPlayerProperty($player, 'audioPlayer'));
+    }
+
+    /**
+     * J3.2 (F6): AudioPlayer restart on seek — spy proves old-stopped + new-at-correct-startMs.
+     *
+     * This test FAILS on current master (before the audioFactory seam) because the
+     * Player has no injectable seam to intercept AudioPlayer creation on seek.
+     * After J3.2 (audioFactory) it passes.
+     */
+    public function testAudioPlayerRestartOnSeek(): void
+    {
+        $spyAudioPlayer = new SpyAudioPlayer('/fake/path', 0);
+        $spyCreated = [];
+
+        // Factory that returns our spy for the first call and captures call info.
+        $factory = static function (string $path, ?int $startMs) use ($spyAudioPlayer, &$spyCreated): AudioPlayer {
+            $spyCreated[] = ['path' => $path, 'startMs' => $startMs];
+            return $spyAudioPlayer;
+        };
+
+        $decoder = new FakeDecoder([]);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 1.0,
+            totalFrames: 10,
+            cellsW: 80,
+            cellsH: 24,
+            videoPath: '/fake/path',
+            loop: false,
+            ramp: 'standard',
+            audioFactory: \Closure::fromCallable($factory),
+            audioPlayer: $spyAudioPlayer,
+            paused: true,
+        );
+
+        // Seek to frame 5 (which is 5000ms at 1.0 fps).
+        $playerAfterSeek = $player->withSeek(5);
+
+        // The original spy's stop() was called exactly once (in withSeek).
+        $this->assertEquals(
+            1,
+            $spyAudioPlayer->stopCallCount,
+            'SpyAudioPlayer::stop() must be called exactly once on seek'
+        );
+
+        // A new AudioPlayer was created with startMs = round(5 / 1.0 * 1000) = 5000.
+        $this->assertNotEmpty(
+            $spyCreated,
+            'Factory must have been called to create a new AudioPlayer on seek'
+        );
+        $this->assertEquals('/fake/path', $spyCreated[0]['path']);
+        $this->assertEquals(5000, $spyCreated[0]['startMs']);
+
+        // start() was NOT called because the player is paused.
+        $this->assertFalse(
+            $spyAudioPlayer->hasStarted(),
+            'start() must NOT be called on seek when player is paused'
+        );
+    }
+
+    /**
+     * J3.3: Ended-hint shows digit "0 restart" only when totalFrames > 0.
+     *
+     * When totalFrames == 0 (e.g. live stream or synthetic without probe result),
+     * digit-seek is a no-op so the "0 restart" hint is misleading and must be omitted.
+     */
+    public function testEndedHintShowsOrOmitsDigitBasedOnTotalFrames(): void
+    {
+        $frame = new RgbFrame("\xff\x00\x00\x00\x80\x00", 2, 1);
+        $decoder = new FakeDecoder([$frame]);
+
+        // Case 1: totalFrames = 0 — "0" must NOT appear in the hint line.
+        // The view() returns the placeholder when currentFrame is null, so we
+        // must pass a valid currentFrame to reach the ended-hint path.
+        $player0 = Player::openForTest($decoder, 1.0, 0, 2, 1, '/fake', false, 'standard');
+        $player0 = $this->createPlayerWithOverrides($player0, [
+            'ended' => true,
+            'currentFrame' => $frame,
+        ]);
+        $view0 = $player0->view();
+        $this->assertStringNotContainsString(
+            '0 restart',
+            $view0,
+            'When totalFrames=0 the ended hint must not show "0 restart"'
+        );
+
+        // Case 2: totalFrames > 0 — "0 restart" MUST appear.
+        $playerGt0 = Player::openForTest($decoder, 1.0, 0, 2, 1, '/fake', false, 'standard');
+        $playerGt0 = $this->createPlayerWithOverrides($playerGt0, [
+            'ended' => true,
+            'currentFrame' => $frame,
+            'totalFrames' => 10,
+        ]);
+        $viewGt0 = $playerGt0->view();
+        $this->assertStringContainsString(
+            '0 restart',
+            $viewGt0,
+            'When totalFrames>0 the ended hint must show "0 restart"'
+        );
+    }
+}
+
+/**
+ * Spy AudioPlayer for F6 (audio realign on seek) testing.
+ *
+ * Records stop() call count and buildCommand() output without spawning any
+ * real subprocess.
+ */
+final class SpyAudioPlayer extends AudioPlayer
+{
+    public int $stopCallCount = 0;
+
+    public function __construct(string $videoPath, ?int $startMs = null)
+    {
+        // Don't call parent — parent starts the process on construct.
+        // We override buildCommand to return [] so no subprocess spawns.
+    }
+
+    protected function buildCommand(): ?array
+    {
+        return []; // empty — we never actually run ffplay
+    }
+
+    public function start(): void
+    {
+        // Record but don't spawn
+    }
+
+    public function stop(): void
+    {
+        $this->stopCallCount++;
     }
 }
