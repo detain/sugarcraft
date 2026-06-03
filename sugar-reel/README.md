@@ -68,7 +68,7 @@ SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php
 
 | Mode | Description | Terminal requirement |
 |------|-------------|---------------------|
-| `ascii` | Grayscale luminance ramp (` .:-;+=*#@`) | Any |
+| `ascii` | Grayscale luminance ramp (` .,:;i1tfLCG08@`) | Any |
 | `ansi256` | 256-color cube + grey ramp | 256-color |
 | `truecolor` | 24-bit RGB truecolor | 24-bit color |
 | `halfblock` | 24-bit `▀` half-blocks, 2× vertical resolution | 24-bit color |
@@ -79,6 +79,22 @@ SUGAR_REEL_COLS=120 SUGAR_REEL_ROWS=40 php examples/play.php
 
 Auto mode probes the terminal using `Mosaic::diagnose()` (for sixel/kitty/
 iTerm2) and falls back to `ColorProfile::detect()` for ANSI modes.
+
+### Luminance ramp selection
+
+ASCII/ANSI256 text modes use a luminance ramp to map pixel brightness to characters.
+Three named ramps are available:
+
+| Ramp | Characters | Best for |
+|------|-------------|----------|
+| `minimal` | ` .:-=+*#%@` | Low-resolution / high contrast |
+| `standard` | ` .,:;i1tfLCG08@` | General use (default) |
+| `dense` | `` .`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$`` | High-fidelity ASCII art |
+
+```php
+// Use the dense ramp for more detailed ASCII output
+Reel::open('video.mp4')->withRamp('dense')->play();
+```
 
 ## Keyboard controls
 

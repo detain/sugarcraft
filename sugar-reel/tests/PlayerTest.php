@@ -11,6 +11,8 @@ use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Player;
+use SugarCraft\Reel\Tests\FakeDecoder;
+use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Testing\ProgramSimulator;
 use SugarCraft\Testing\Input\ScriptedInput;
@@ -1157,10 +1159,11 @@ final class PlayerTest extends TestCase
         // (e.g. across backdateLastTick), breaking the loop tests.
         $ended = $this->getPlayerProperty($player, 'ended');
         $loop = $this->getPlayerProperty($player, 'loop');
+        $ramp = $this->getPlayerProperty($player, 'ramp');
 
         // Order MUST match the Player constructor positionally — the new Player
         // instance is built via array_values($values) through the private ctor.
-        // 'ended' and 'loop' are the two trailing ctor params, after 'audioPlayer'.
+        // 'ended', 'loop' and 'ramp' are the three trailing ctor params.
         $values = [
             'decoder' => $decoder,
             'mode' => $mode,
@@ -1178,6 +1181,7 @@ final class PlayerTest extends TestCase
             'audioPlayer' => null,
             'ended' => $ended,
             'loop' => $loop,
+            'ramp' => $ramp,
         ];
 
         foreach ($overrides as $k => $v) {
@@ -1191,5 +1195,80 @@ final class PlayerTest extends TestCase
         $closure = \Closure::bind(fn (...$args) => new Player(...$args), null, Player::class);
         $newPlayer = $closure(...array_values($values));
         return $newPlayer;
+    }
+
+    // -------------------------------------------------------------------------
+    // J2: Ramp selection
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression test: minimal and dense ramps MUST produce different character
+     * sequences for the same frame content.
+     *
+     * This fails on master (before J2 wiring) because both call sites hardcode
+     * the default ramp, so the char sets are identical regardless of ramp param.
+     */
+    public function testRampSelectionProducesDifferentCharSets(): void
+    {
+        // 2×2 frame: TL=black, TR=gray(127), BL=gray, BR=white.
+        // Luma values: 0 → ' ' (space) in both ramps; 127 → distinct chars.
+        $bytes = "\x00\x00\x00"   // (0,0,0) luma=0
+                . "\x7f\x7f\x7f" // (127,127,127) luma=127
+                . "\x7f\x7f\x7f" // (1,0,0) luma=19 — ignored; row 2 same colors
+                . "\xff\xff\xff"; // (255,255,255) luma=255
+        $frame = new RgbFrame($bytes, 2, 2);
+
+        // Build a base Player via openForTest in Ascii mode (so ramp char is visible).
+        $basePlayer = Player::openForTest(new FakeDecoder([$frame]), 1.0, 1, 80, 24, '/fake', false, 'standard');
+        // Override to Ascii mode so we get luma→char mapping (not half-block glyph).
+        $basePlayer = $this->createPlayerWithOverrides($basePlayer, ['mode' => Mode::Ascii]);
+
+        // Player with minimal ramp.
+        $playerMinimal = $this->createPlayerWithOverrides(
+            $basePlayer,
+            [
+                'currentFrame' => $frame,
+                'ramp' => 'minimal',
+            ]
+        );
+
+        // Player with dense ramp (same base, different ramp).
+        $playerDense = $this->createPlayerWithOverrides(
+            $basePlayer,
+            [
+                'currentFrame' => $frame,
+                'ramp' => 'dense',
+            ]
+        );
+
+        $viewMinimal = $playerMinimal->view();
+        $viewDense = $playerDense->view();
+
+        // Strip SGR escape sequences for character-level comparison.
+        $charsMinimal = preg_replace('/\x1b\[[0-9;]*m/', '', $viewMinimal);
+        $charsDense = preg_replace('/\x1b\[[0-9;]*m/', '', $viewDense);
+
+        $this->assertNotEquals(
+            $charsMinimal,
+            $charsDense,
+            'minimal and dense ramps must produce different char sequences for the same frame'
+        );
+    }
+
+    /**
+     * Verify LumaRamp::char() returns different chars for different ramps at the
+     * same luminance (unit-level confirmation of ramp wiring).
+     */
+    public function testLumaRampCharDiffersByRampName(): void
+    {
+        $luma = 127;
+        $minimalChar = \SugarCraft\Reel\Render\LumaRamp::char((float)$luma, 'minimal');
+        $denseChar = \SugarCraft\Reel\Render\LumaRamp::char((float)$luma, 'dense');
+
+        $this->assertNotSame(
+            $minimalChar,
+            $denseChar,
+            "LumaRamp::char(127, 'minimal') and LumaRamp::char(127, 'dense') must differ"
+        );
     }
 }
