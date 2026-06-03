@@ -100,3 +100,15 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   applies column filters first, then global search. `search('')` and
   `ClearSearch()` both clear the global search. See `Table.php` lines 480–494
   (`search`/`ClearSearch`) and 525–537 (`filteredSortedRows` global search loop).
+
+- **[pattern:row-expansion]** rows are expanded by object identity (`Row` instance)
+  stored in `$this->expandedRows`. All expansion methods (`withExpandedRows`,
+  `toggleExpanded`, `isExpanded`) use page-relative indexing via `pagedRows()`
+  rather than global row indices. `isExpandedByRow(Row $row)` is the private
+  rendering helper that checks identity. This design ensures expansion state is
+  stable across sorting/filtering since Row objects maintain their identity.
+  Invalid indices throw `OutOfBoundsException` (fail fast). Expansion bypasses
+  column width truncation in both `fillDataRow` (single-line) and
+  `fillDataRowLines` (multiline). See `Table.php` lines 338–398
+  (`withExpandedRows`/`toggleExpanded`/`isExpanded`), 1106
+  (`fillDataRow` expansion check), and 1241 (`fillDataRowLines` expansion check).

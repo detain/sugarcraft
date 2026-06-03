@@ -195,7 +195,21 @@ Each entry should have:
 - Step 6.4 (tests): **COMPLETED** ✅
   - Added TableExpansionTest.php with 24 comprehensive tests
   - Tests cover: toggle, isExpanded, withExpandedRows, pagination integration, edge cases
-- Step 6.5 (docs): Pending
+- Step 6.5 (docs): **COMPLETED** ✅
+  - Added "Row Expansion" section to README.md with:
+    - Full usage example showing `withExpandedRows()`
+    - Toggle expansion example with `toggleExpanded()`
+    - State check example with `isExpanded()`
+    - "How It Works" section documenting row identity, pagination, multiline mode interaction
+  - Added pattern:row-expansion to CALIBER_LEARNINGS.md documenting:
+    - Object identity-based tracking via `$this->expandedRows`
+    - Page-relative indexing via `pagedRows()`
+    - Fail fast with `OutOfBoundsException`
+    - Rendering integration in `fillDataRow` and `fillDataRowLines`
+  - Enhanced `isExpandedByRow()` docblock with:
+    - Mirrors comment referencing upstream
+    - Full @param and @return annotations
+  - All 249 tests pass (516 assertions)
 
 ### Phase 7: Showing Rows Footer
 - Step 7.1 (impl): Pending
