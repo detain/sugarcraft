@@ -128,4 +128,20 @@ final class ResultPagerTest extends TestCase
         $this->assertSame(5, $pager->totalRows());
         $this->assertCount(5, $pager->page());
     }
+
+    public function testNextPageOnLastPageStaysPageAligned(): void
+    {
+        // 30 rows, 25/page -> 2 pages: [0..24] and [25..29]. Paging past the
+        // last page is a no-op; the cursor stays on the last page boundary
+        // rather than sliding forward to the final row.
+        $pager = new ResultPager($this->makeRows(30), pageSize: 25, offset: 25);
+        $this->assertSame(2, $pager->currentPage());
+        $this->assertCount(5, $pager->page());
+
+        $stay = $pager->nextPage();
+        $this->assertSame(25, $stay->offset);
+        $this->assertSame(2, $stay->currentPage());
+        $this->assertCount(5, $stay->page());
+        $this->assertFalse($stay->hasNextPage());
+    }
 }

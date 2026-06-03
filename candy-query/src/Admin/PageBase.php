@@ -6,6 +6,8 @@ namespace SugarCraft\Query\Admin;
 
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Base class for admin dashboard pages.
@@ -56,7 +58,7 @@ abstract class PageBase implements Model
     protected function errorScreen(): string
     {
         if ($this->errorMessage === '') {
-            return "\x1b[90m  No data available yet.\x1b[0m";
+            return Style::new()->foreground(Color::ansi(8))->render('  No data available yet.');
         }
         return 'Error: ' . $this->errorMessage;
     }
@@ -66,7 +68,9 @@ abstract class PageBase implements Model
      */
     protected function loadingScreen(): string
     {
-        return "\x1b[33m  ◌ Loading…\x1b[0m\n\n  \x1b[90mFetching data from the server.\x1b[0m";
+        return Style::new()->foreground(Color::ansi(3))->render('  ◌ Loading…')
+            . "\n\n  "
+            . Style::new()->foreground(Color::ansi(8))->render('Fetching data from the server.');
     }
 
     public function init(): ?\Closure
