@@ -7,12 +7,11 @@ namespace SugarCraft\Reel\Render;
 /**
  * 256-entry luminance-to-character lookup table.
  *
- * BT.709 luma is approximated with the integer formula
- * (77R + 150G + 29B) >> 8 — the same weights used by tplay and
- * other video-to-ascii tools for perceptual accuracy.
- * (This is the SMPTE-C / BT.601 weighting; the exact BT.709 integer
- * approximation (54R + 183G + 19B) >> 8 is visually indistinguishable
- * in practice and the 77/150/29 coefficients are used by upstream tplay.)
+ * Uses the BT.601 luma formula (77R + 150G + 29B) >> 8 — the same weights
+ * used by tplay and other video-to-ascii tools. (This is the SMPTE-C
+ * coefficients; the BT.709 integer approximation (54R + 183G + 19B) >> 8
+ * is visually indistinguishable and the 77/150/29 coefficients are used
+ * by upstream tplay.)
  *
  * No single upstream — the luma-ramp technique is drawn from maxcurzi/tplay,
  * seatedro/glyph, and joelibaceta/video-to-ascii.
@@ -78,16 +77,14 @@ final class LumaRamp
     /**
      * Return the character for a given 0-255 luminance value.
      *
-     * Uses the default ramp (standard) in the hot path — callers
-     * that need a specific ramp should use ramp() directly.
-     *
-     * @param float $luma Luminance value 0.0 - 255.0
+     * @param float  $luma Luminance value 0.0 - 255.0
+     * @param string $ramp Ramp name: 'minimal', 'standard', 'dense' (default: 'standard')
      * @return string Single character representing the luminance
      */
-    public static function char(float $luma): string
+    public static function char(float $luma, string $ramp = 'standard'): string
     {
         $index = (int)\min(255, \max(0, $luma));
-        return self::ramp(self::DEFAULT_RAMP)[$index];
+        return self::ramp($ramp)[$index];
     }
 
     /**
