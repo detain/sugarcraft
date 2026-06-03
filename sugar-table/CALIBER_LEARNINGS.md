@@ -92,3 +92,11 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `Style::fromAnsiString()` so existing callers work without modification. The
   wrapper is a single conditional — no interception layer — so the hot path is
   zero-overhead for `Style` returns. See `Table.php` lines 580–600.
+
+- **[pattern:global-search]** `search()` + `Filter()` are orthogonal concerns
+  that stack. `search()` scans ALL columns (OR logic — row matches if any column
+  contains the text); `Filter()` constrains specific columns (AND logic — row must
+  match all active column filters). They combine via `filteredSortedRows()` which
+  applies column filters first, then global search. `search('')` and
+  `ClearSearch()` both clear the global search. See `Table.php` lines 480–494
+  (`search`/`ClearSearch`) and 525–537 (`filteredSortedRows` global search loop).
