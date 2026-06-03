@@ -529,6 +529,116 @@ final class PlayerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // F9: end-of-stream handling + optional loop
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F9. When the decoder is exhausted and the player is NOT
+     * looping, playback must mark itself ended and STOP rescheduling ticks
+     * (null Cmd) — otherwise the tick chain spins forever at the end. On the
+     * un-fixed code there is no `ended` state and updateTick() always returns a
+     * non-null tick Cmd, so this fails on both the null-Cmd and ended asserts.
+     *
+     * @testdox exhausted non-looping decoder marks ended and stops ticking (null Cmd)
+     */
+    public function testExhaustedDecoderStopsTickingWhenNotLooping(): void
+    {
+        // Three real frames, loop defaults false.
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+            $this->makeFrame("\x00\x00\xff"),
+        ]), 30.0);
+
+        // Unpause so ticks advance.
+        [$player] = $player->update(new KeyMsg(KeyType::Space));
+
+        // Drive ticks to exhaustion. Each tick re-anchors lastTickTime to now,
+        // so to make wall-clock target outrun the frame index deterministically
+        // we push lastTickTime ~1s into the past before each tick (large delta →
+        // big target → skip path drains the decoder via next()). Ten passes far
+        // exceeds the three available frames.
+        $cmd = null;
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player, $cmd] = $player->update(new TickMsg());
+        }
+
+        $this->assertTrue($player->ended, 'player must be marked ended at end-of-stream');
+        $this->assertNull($cmd, 'tick chain must stop (null Cmd) once the decoder is exhausted');
+    }
+
+    /**
+     * Regression for F9. With looping enabled, exhausting the decoder must wrap
+     * back to frame 0 and KEEP ticking (non-null Cmd) rather than ending. On the
+     * un-fixed code there is no loop logic, so frameIndex would stay at the last
+     * frame and the player would never reset — failing both asserts.
+     *
+     * @testdox looping decoder wraps to frame 0 and keeps ticking at end-of-stream
+     */
+    public function testLoopWrapsToFrameZeroAndKeepsTicking(): void
+    {
+        $player = Player::openForTest(
+            new FakeDecoder([
+                $this->makeFrame("\xff\x00\x00"),
+                $this->makeFrame("\x00\xff\x00"),
+                $this->makeFrame("\x00\x00\xff"),
+            ]),
+            30.0,
+            80,
+            24,
+            '/fake',
+            loop: true,
+        );
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        $cmd = null;
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player, $cmd] = $player->update(new TickMsg());
+        }
+
+        $this->assertSame(0, $this->getPlayerProperty($player, 'frameIndex'), 'loop must wrap frameIndex back to 0');
+        $this->assertFalse($player->ended, 'looping player must not be marked ended');
+        $this->assertNotNull($cmd, 'looping player must keep ticking (non-null Cmd) after wrap');
+    }
+
+    /**
+     * Regression for F9. After playback has ENDED (non-loop), a seek must clear
+     * the ended state and — when not paused — re-arm the tick chain so playback
+     * can resume from the new position. On the un-fixed code there is no ended
+     * state to clear and seeks always returned a null Cmd.
+     *
+     * @testdox seek out of the ended state clears ended and reschedules a tick
+     */
+    public function testSeekClearsEndedAndReschedulesTick(): void
+    {
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+            $this->makeFrame("\x00\x00\xff"),
+        ]), 30.0, 80, 24, '/fake');
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // Drive to ended.
+        for ($i = 0; $i < 10; $i++) {
+            $player = $this->backdateLastTick($player, 1.0);
+            [$player] = $player->update(new TickMsg());
+        }
+        $this->assertTrue($player->ended, 'precondition: player is ended');
+        $this->assertFalse($this->getPlayerProperty($player, 'paused'), 'precondition: player is not paused');
+
+        // Seek back to the start (digit 0). totalFrames is 0 on the fake path so
+        // this clamps to frame 0 — what matters is the ended/Cmd transition.
+        [$player, $cmd] = $player->update(new KeyMsg(KeyType::Char, '0'));
+
+        $this->assertFalse($player->ended, 'seek must clear the ended state');
+        $this->assertNotNull($cmd, 'seek out of ended (and not paused) must reschedule a tick');
+    }
+
+    // -------------------------------------------------------------------------
     // close
     // -------------------------------------------------------------------------
 
@@ -594,6 +704,21 @@ final class PlayerTest extends TestCase
     }
 
     /**
+     * Push the player's lastTickTime $seconds into the past so the NEXT
+     * TickMsg sees a large wall-clock delta — making Sync's target frame
+     * outrun the current frame index and deterministically drive the
+     * skip/advance path to decoder exhaustion (instead of holding on the
+     * microsecond deltas of a tight test loop).
+     */
+    private function backdateLastTick(Player $player, float $seconds): Player
+    {
+        $current = $this->getPlayerProperty($player, 'lastTickTime');
+        return $this->createPlayerWithOverrides($player, [
+            'lastTickTime' => $current - $seconds,
+        ]);
+    }
+
+    /**
      * Create a new Player instance with some properties overridden.
      *
      * Uses the private constructor via reflection to produce a Player
@@ -616,7 +741,15 @@ final class PlayerTest extends TestCase
         $cellsW = $this->getPlayerProperty($player, 'cellsW');
         $cellsH = $this->getPlayerProperty($player, 'cellsH');
         $videoPath = $this->getPlayerProperty($player, 'videoPath');
+        // Read the live ended/loop so this faithfully COPIES the source player —
+        // hardcoding false here would silently drop the loop flag when rebuilding
+        // (e.g. across backdateLastTick), breaking the loop tests.
+        $ended = $this->getPlayerProperty($player, 'ended');
+        $loop = $this->getPlayerProperty($player, 'loop');
 
+        // Order MUST match the Player constructor positionally — the new Player
+        // instance is built via array_values($values) through the private ctor.
+        // 'ended' and 'loop' are the two trailing ctor params, after 'audioPlayer'.
         $values = [
             'decoder' => $decoder,
             'mode' => $mode,
@@ -632,6 +765,8 @@ final class PlayerTest extends TestCase
             'cellsH' => $cellsH,
             'videoPath' => $videoPath,
             'audioPlayer' => null,
+            'ended' => $ended,
+            'loop' => $loop,
         ];
 
         foreach ($overrides as $k => $v) {

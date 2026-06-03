@@ -61,32 +61,28 @@ class AudioPlayer
             return;
         }
 
+        // File sinks (the OS null device) rather than pipes: ffplay/mpv write
+        // status chatter to stderr, and a reader-less stderr PIPE that we close
+        // immediately can hand the child a SIGPIPE on its first write and kill
+        // it. A file sink opens no parent-side FD, so there is nothing to race
+        // against and nothing to clean up.
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
         $descriptorSpec = [
-            0 => ['pipe', 'r'],  // stdin — unused but required
-            1 => ['pipe', 'w'],  // stdout — discarded
-            2 => ['pipe', 'w'],  // stderr — discarded
+            0 => ['file', $devNull, 'r'],  // stdin — unused
+            1 => ['file', $devNull, 'w'],  // stdout — discarded
+            2 => ['file', $devNull, 'w'],  // stderr — discarded
         ];
 
         $pipes = [];
         $this->processHandle = @proc_open($cmd, $descriptorSpec, $pipes);
 
-        // Guard against proc_open failure (returns false/0 when binary missing).
-        if ($this->processHandle === false || $this->processHandle === 0) {
-            // Clean up any partially-created pipe FDs on failure.
-            foreach ($pipes as $pipe) {
-                if (is_resource($pipe)) {
-                    \fclose($pipe);
-                }
-            }
+        // Guard against proc_open failure (returns false when it cannot spawn).
+        if ($this->processHandle === false) {
             $this->processHandle = null;
 
             return;
         }
-
-        // Close unused stdin/stdout/stderr to avoid deadlock.
-        \fclose($pipes[0]);
-        \fclose($pipes[1]);
-        \fclose($pipes[2]);
+        // No pipe cleanup needed — file sinks open no parent-side pipes.
     }
 
     /**
