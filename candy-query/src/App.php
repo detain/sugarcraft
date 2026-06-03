@@ -18,6 +18,7 @@ use SugarCraft\Query\Admin\CachingServerContext;
 use SugarCraft\Query\Admin\EmptyServerContext;
 use SugarCraft\Query\Admin\Connections\ConnectionsPage;
 use SugarCraft\Query\Admin\Dashboard\DashboardPage;
+use SugarCraft\Query\Admin\Debug\DebugPage;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\PostgresServerContext;
 use SugarCraft\Query\Admin\ReactMysqlConnection;
@@ -33,6 +34,7 @@ use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\App\AppBuilder;
 use SugarCraft\Query\Admin\History\HistoryRecorder;
+use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
@@ -430,6 +432,7 @@ final class App implements Model
             AdminPane::Status => ServerStatusPage::new($context),
             AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
             AdminPane::PerfSchema => PerfSchemaPage::new($context),
+            AdminPane::Debug => DebugPage::new($context),
         };
     }
 
@@ -525,10 +528,14 @@ final class App implements Model
 
     private function createAdminFetchPromise(?HistoryRecorder $recorder = null): \React\Promise\PromiseInterface
     {
+        // Wrap entire async flow in try-catch to ensure we ALWAYS return a promise.
+        // This prevents synchronous exceptions from causing unhandled promise rejections.
         try {
             $context = $this->serverContext ?? $this->createContext();
-        } catch (\RuntimeException $e) {
-            // Unsupported flavor (e.g., SQLite) - return empty data immediately
+        } catch (\Throwable $e) {
+            // Any exception during context creation (not just RuntimeException)
+            $msg = $e->getMessage();
+            QueryLogger::log('error', 'createContext', 0, $msg);
             return \React\Promise\resolve(new AdminDataLoadedMsg([], [], microtime(true)));
         }
 
@@ -594,9 +601,11 @@ final class App implements Model
             $promises[] = $connection->query($sql)->then(
                 static function(array $rows) use ($cache, $sql): void {
                     $cache->store($sql, $rows);
+                    QueryLogger::log('query', $sql, count($rows));
                 },
                 static function(\Throwable $e) use ($cache, $sql): void {
                     $cache->store($sql, []);
+                    QueryLogger::log('error', $sql, 0, $e->getMessage());
                 },
             );
         }
@@ -609,12 +618,31 @@ final class App implements Model
                 $recorder->record($snapshot);
             }
 
+            // Store status and server variables in the shared cache so
+            // CachingServerContext can read them even before the App model
+            // is updated with the result.
+            if (isset($results['status'])) {
+                $cache->store('status', $results['status']);
+                QueryLogger::log('status', 'SHOW GLOBAL STATUS', count($results['status']));
+            }
+            if (isset($results['server'])) {
+                $cache->store('server', $results['server']);
+                QueryLogger::log('server', 'SHOW GLOBAL VARIABLES', count($results['server']));
+            }
+
             return new AdminDataLoadedMsg(
                 statusVars: $results['status'] ?? [],
                 serverVars: $results['server'] ?? [],
                 fetchedAt: microtime(true),
             );
         })->otherwise(function(\Throwable $e): AdminDataLoadedMsg {
+            // Defensively wrap QueryLogger in try-catch to prevent logging errors
+            // from creating new unhandled rejections
+            try {
+                QueryLogger::log('error', 'admin fetch', 0, $e->getMessage());
+            } catch (\Throwable $logError) {
+                // Swallow logging errors to preserve error recovery path
+            }
             return new AdminDataLoadedMsg([], [], microtime(true));
         });
     }

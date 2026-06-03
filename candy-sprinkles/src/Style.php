@@ -1272,11 +1272,11 @@ final class Style
             $rightPad = $available - $cw - $leftPad;
             $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
         } elseif ($available > 0) {
-            // No center title: only subtract 1 for the right corner if the right
-            // border side is enabled AND there is no right title. When there IS a
-            // right title the corner is already part of $rightSection and its
-            // width was already subtracted from $available.
-            $centerTitle2 = str_repeat(' ', $available - ($right && $rightTitle === '' ? 1 : 0));
+            // No center title: fill with the border TOP character.
+            // The available width already accounts for contentWidth which includes
+            // padding but NOT the corner characters. The right corner (if enabled)
+            // is added separately via $rightSection, so we do NOT subtract 1 here.
+            $centerTitle2 = str_repeat($b->top, $available);
         }
 
         return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;
@@ -1345,11 +1345,11 @@ final class Style
             $rightPad = $available - $cw - $leftPad;
             $centerTitle2 = str_repeat(' ', $leftPad) . $centerTitle2 . str_repeat(' ', $rightPad);
         } elseif ($available > 0) {
-            // No center title: only subtract 1 for the right corner if the right
-            // border side is enabled AND there is no right title. When there IS a
-            // right title the corner is already part of $rightSection and its
-            // width was already subtracted from $available.
-            $centerTitle2 = str_repeat(' ', $available - ($right && $rightTitle === '' ? 1 : 0));
+            // No center title: fill with the border BOTTOM character.
+            // Subtract 1 for the right corner if the right border side is enabled
+            // AND there is no right title. When there IS a right title the corner
+            // is already in $rightSection and its width was already subtracted.
+            $centerTitle2 = str_repeat($b->bottom, $available - ($right && $rightTitle === '' ? 1 : 0));
         }
 
         return $leftSection . $leftTitle . $centerTitle2 . $rightTitle . $rightSection;

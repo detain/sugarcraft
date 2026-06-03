@@ -18,6 +18,7 @@ enum AdminPane: string
     case Dashboard   = 'dashboard';
     case TableStats  = 'table_stats';
     case PerfSchema  = 'perf_schema';
+    case Debug       = 'debug';
 
     public function label(): string
     {
@@ -29,13 +30,14 @@ enum AdminPane: string
             self::Dashboard   => 'Dashboard',
             self::TableStats  => 'Table Stats',
             self::PerfSchema  => 'Performance Schema',
+            self::Debug       => 'Debug',
         };
     }
 
     public function section(): AdminSection
     {
         return match ($this) {
-            self::ProcessList, self::Variables, self::Status => AdminSection::Management,
+            self::ProcessList, self::Variables, self::Status, self::Debug => AdminSection::Management,
             self::QueryStats, self::Dashboard, self::TableStats, self::PerfSchema => AdminSection::Performance,
         };
     }
@@ -49,7 +51,8 @@ enum AdminPane: string
             self::QueryStats  => self::Dashboard,
             self::Dashboard   => self::TableStats,
             self::TableStats  => self::PerfSchema,
-            self::PerfSchema  => self::ProcessList,
+            self::PerfSchema  => self::Debug,
+            self::Debug       => self::ProcessList,
         };
     }
 
@@ -68,6 +71,7 @@ enum AdminPane: string
             self::Dashboard,
             self::TableStats,
             self::PerfSchema,
+            self::Debug,
         ];
     }
 }
