@@ -16,6 +16,11 @@ use SugarCraft\Reel\Source\Probe;
  * All CLI args are passed via array to proc_open (no shell injection).
  * Partial frames at end-of-stream are silently discarded.
  *
+ * ffmpeg's stderr is redirected straight to the OS null device (a file sink,
+ * not a pipe). A reader-less stderr pipe deadlocks once ffmpeg fills the ~64KB
+ * kernel buffer on noisy input — which then wedges our blocking fread(stdout) —
+ * so we never hold an unread stderr pipe.
+ *
  * @see video_plan.md lines 79-82
  * @implements Decoder
  */
@@ -26,9 +31,6 @@ final class FfmpegDecoder implements Decoder
 
     /** @var resource|null */
     private $stdout = null;
-
-    /** @var resource|null */
-    private $stderr = null;
 
     private int $cellsW = 0;
     private int $cellsH = 0;
@@ -72,10 +74,14 @@ final class FfmpegDecoder implements Decoder
             '-',
         ];
 
+        // stderr goes to a file sink (the OS null device), never a pipe — an
+        // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
+        $devNull = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+
         $descriptorSpec = [
-            ['pipe', 'r'],  // stdin
-            ['pipe', 'w'],  // stdout
-            ['pipe', 'w'],  // stderr
+            ['pipe', 'r'],            // stdin
+            ['pipe', 'w'],            // stdout
+            ['file', $devNull, 'w'],  // stderr → sink
         ];
 
         $this->process = proc_open($cmd, $descriptorSpec, $pipes);
@@ -84,7 +90,6 @@ final class FfmpegDecoder implements Decoder
         }
 
         $this->stdout = $pipes[1];
-        $this->stderr = $pipes[2];
         // Close stdin as we don't write to it
         if (is_resource($pipes[0])) {
             \fclose($pipes[0]);
@@ -148,11 +153,6 @@ final class FfmpegDecoder implements Decoder
         if ($this->stdout !== null && is_resource($this->stdout)) {
             \fclose($this->stdout);
             $this->stdout = null;
-        }
-
-        if ($this->stderr !== null && is_resource($this->stderr)) {
-            \fclose($this->stderr);
-            $this->stderr = null;
         }
 
         if ($this->process !== null && is_resource($this->process)) {

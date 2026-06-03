@@ -63,6 +63,8 @@ final class Player implements Model
      * @param int                         $cellsH       Terminal cell height
      * @param string                      $videoPath    Source video file path (for seek/restart)
      * @param AudioPlayer|null            $audioPlayer  Audio subprocess handle (null when no audio)
+     * @param bool                        $ended        True once the decoder is exhausted (playback stopped at end)
+     * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -79,6 +81,8 @@ final class Player implements Model
         public readonly int $cellsH,
         private readonly string $videoPath,
         private readonly ?AudioPlayer $audioPlayer,
+        public readonly bool $ended,
+        private readonly bool $loop,
     ) {
     }
 
@@ -93,8 +97,9 @@ final class Player implements Model
      * @param int       $cellsH       Target terminal cell height
      * @param float|null $fpsOverride FPS override (null = auto from probe)
      * @param Mode       $mode         Rendering mode (decoder resolution matches it)
+     * @param bool       $loop         Restart from the beginning at end-of-stream instead of stopping
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false): self
     {
         $source = VideoSource::probe($videoPath);
 
@@ -126,6 +131,8 @@ final class Player implements Model
             cellsH: $cellsH,
             videoPath: $videoPath,
             audioPlayer: $audioPlayer,
+            ended: false,
+            loop: $loop,
         );
     }
 
@@ -141,6 +148,7 @@ final class Player implements Model
      * @param int      $cellsW       Terminal cell width
      * @param int      $cellsH        Terminal cell height
      * @param string   $videoPath    Fake path for seeking (default '/fake')
+     * @param bool     $loop          Restart from frame 0 at end-of-stream instead of stopping
      */
     public static function openForTest(
         Decoder $decoder,
@@ -148,6 +156,7 @@ final class Player implements Model
         int $cellsW = 80,
         int $cellsH = 24,
         string $videoPath = '/fake',
+        bool $loop = false,
     ): self {
         return new self(
             decoder: $decoder,
@@ -164,6 +173,8 @@ final class Player implements Model
             cellsH: $cellsH,
             videoPath: $videoPath,
             audioPlayer: null,
+            ended: false,
+            loop: $loop,
         );
     }
 
@@ -228,6 +239,9 @@ final class Player implements Model
         // Decide skip / hold / advance using the tested Sync engine.
         $nextFrame = $this->currentFrame;
         $nextIndex = $this->frameIndex;
+        // Set when the decoder is exhausted this tick (null from next()), so we
+        // can stop ticking (or loop) rather than spinning forever at the end.
+        $reachedEnd = false;
 
         if (Sync::shouldSkip($this->frameIndex, $target)) {
             // Behind by more than the skip limit — discard intermediate frames,
@@ -236,6 +250,7 @@ final class Player implements Model
             for ($i = 0; $i < $skipCount; $i++) {
                 $frame = $this->decoder->next();
                 if ($frame === null) {
+                    $reachedEnd = true;
                     break;
                 }
                 $nextFrame = $frame;
@@ -243,13 +258,20 @@ final class Player implements Model
             }
         } elseif (Sync::shouldHold($this->frameIndex, $target)) {
             // Ahead of schedule — hold the current frame, advance nothing.
+            // (Holding never reaches end — we have not asked the decoder for more.)
         } else {
             // On schedule — advance by one frame.
             $frame = $this->decoder->next();
             if ($frame !== null) {
                 $nextFrame = $frame;
                 $nextIndex++;
+            } else {
+                $reachedEnd = true;
             }
+        }
+
+        if ($reachedEnd) {
+            return $this->onReachedEnd($nextFrame, $nextIndex, $newElapsed, $now);
         }
 
         $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newElapsed, $now);
@@ -259,6 +281,77 @@ final class Player implements Model
             : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
 
         return [$nextPlayer, $cmd];
+    }
+
+    /**
+     * Handle the decoder running out of frames during a tick.
+     *
+     * Non-loop: stop the audio, mark the player ended, and return a null Cmd so
+     * the tick chain halts (the player no longer reschedules itself). Loop:
+     * restart from frame 0 — for a real source by recreating the decoder (and
+     * restarting audio from t0); for the '/fake' test path by resetting indices
+     * in place (FakeDecoder cannot replay without a rebuild, which is fine for
+     * the unit path) — and keep ticking.
+     *
+     * @return array{0: Model, 1: ?\Closure}
+     */
+    private function onReachedEnd(?RgbFrame $nextFrame, int $nextIndex, float $newElapsed, float $now): array
+    {
+        $tick = Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
+
+        if (!$this->loop) {
+            // End of stream, no loop: stop audio and freeze on the last frame.
+            $this->audioPlayer?->stop();
+            $nextPlayer = $this->mutate([
+                'ended' => true,
+                'currentFrame' => $nextFrame ?? $this->currentFrame,
+                'frameIndex' => $nextIndex,
+                'elapsed' => $newElapsed,
+                'lastTickTime' => $now,
+            ]);
+
+            return [$nextPlayer, null];
+        }
+
+        // Loop on the test/fake path: FakeDecoder can't replay without a
+        // rebuild, so just rewind the bookkeeping in place and keep ticking.
+        if ($this->videoPath === '/fake') {
+            $nextPlayer = $this->mutate([
+                'frameIndex' => 0,
+                'elapsed' => 0.0,
+                'lastTickTime' => $now,
+                'ended' => false,
+            ]);
+
+            return [$nextPlayer, $tick];
+        }
+
+        // Loop on a real source: recreate the decoder from the start and
+        // restart audio from t0 so A/V stay aligned on the new pass.
+        $this->decoder->close();
+        $newDecoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode);
+        $firstFrame = $newDecoder->next();
+
+        $newAudio = $this->audioPlayer;
+        if ($this->audioPlayer !== null) {
+            $this->audioPlayer->stop();
+            $newAudio = new AudioPlayer($this->videoPath, 0);
+            if (!$this->paused) {
+                $newAudio->start();
+            }
+        }
+
+        $nextPlayer = $this->mutate([
+            'decoder' => $newDecoder,
+            'currentFrame' => $firstFrame ?? $this->currentFrame,
+            'frameIndex' => 0,
+            'elapsed' => 0.0,
+            'lastTickTime' => $now,
+            'ended' => false,
+            'audioPlayer' => $newAudio,
+        ]);
+
+        return [$nextPlayer, $tick];
     }
 
     /**
@@ -311,14 +404,14 @@ final class Player implements Model
         if ($msg->type === KeyType::Left) {
             $nextIndex = max(0, $this->frameIndex - 10);
             $nextPlayer = $this->withSeek($nextIndex);
-            return [$nextPlayer, null];
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
 
         // → : seek forward 10 frames.
         if ($msg->type === KeyType::Right) {
             $nextIndex = $this->frameIndex + 10;
             $nextPlayer = $this->withSeek($nextIndex);
-            return [$nextPlayer, null];
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
 
         // [ : decrease speed (min 0.25).
@@ -340,7 +433,7 @@ final class Player implements Model
             $percent = (int)$msg->rune * 10;
             $nextIndex = (int)(($percent / 100.0) * max(1, $this->totalFrames));
             $nextPlayer = $this->withSeek($nextIndex);
-            return [$nextPlayer, null];
+            return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
 
         // m : cycle rendering mode.
@@ -387,10 +480,19 @@ final class Player implements Model
         // Ansi256 (38;5;N) and the image protocols render directly — they are
         // not expressible through the truecolor-only Buffer cell grid.
         if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
-            return $this->renderDirect($frame);
+            $out = $this->renderDirect($frame);
+        } else {
+            $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
         }
 
-        return $this->frameToBuffer($frame, $this->mode)->toAnsi();
+        // At end-of-stream (non-loop) append a status line so the user can see
+        // playback stopped and how to restart. Normal playback output is
+        // unchanged, so this adds no per-frame snapshot churn.
+        if ($this->ended) {
+            return $out . "\r\n" . '[ended]  0 restart  q quit';
+        }
+
+        return $out;
     }
 
     /**
@@ -535,6 +637,21 @@ final class Player implements Model
     }
 
     /**
+     * Cmd to re-arm the tick chain after a seek.
+     *
+     * The live tick chain is self-perpetuating, so a seek during normal
+     * playback needs no new tick (returns null). But a seek out of the ENDED
+     * state (where ticking had stopped) must restart it — provided the
+     * post-seek player is not paused.
+     */
+    private function seekTickCmd(self $nextPlayer): ?\Closure
+    {
+        return ($this->ended && !$nextPlayer->paused)
+            ? Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg())
+            : null;
+    }
+
+    /**
      * Seek to a specific frame index by re-creating the decoder
      * and advancing it to the target frame.
      */
@@ -577,6 +694,8 @@ final class Player implements Model
                     cellsH: $this->cellsH,
                     videoPath: $this->videoPath,
                     audioPlayer: $this->audioPlayer,
+                    ended: false, // a seek clears the ended state
+                    loop: $this->loop,
                 );
             }
 
@@ -608,6 +727,8 @@ final class Player implements Model
                 cellsH: $this->cellsH,
                 videoPath: $this->videoPath,
                 audioPlayer: $this->audioPlayer,
+                ended: false, // a seek clears the ended state
+                loop: $this->loop,
             );
         }
 
@@ -644,6 +765,8 @@ final class Player implements Model
             cellsH: $this->cellsH,
             videoPath: $this->videoPath,
             audioPlayer: $this->audioPlayer,
+            ended: false, // a seek clears the ended state
+            loop: $this->loop,
         );
     }
 
@@ -672,6 +795,9 @@ final class Player implements Model
             cellsH: $this->cellsH,
             videoPath: $this->videoPath,
             audioPlayer: $this->audioPlayer,
+            // Normal tick advance: ended stays as-is (false during play).
+            ended: $this->ended,
+            loop: $this->loop,
         );
     }
 
@@ -697,6 +823,10 @@ final class Player implements Model
             cellsH: $changes['cellsH'] ?? $this->cellsH,
             videoPath: $this->videoPath,
             audioPlayer: $changes['audioPlayer'] ?? $this->audioPlayer,
+            // ?? is null-coalescing, so passing ended => false / frameIndex => 0
+            // through mutate() is honoured (false/0 are not null).
+            ended: $changes['ended'] ?? $this->ended,
+            loop: $changes['loop'] ?? $this->loop,
         );
     }
 

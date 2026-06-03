@@ -6,6 +6,8 @@ namespace SugarCraft\Reel\Tests;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Reel\Decode\FfmpegDecoder;
+use SugarCraft\Reel\Decode\RgbFrame;
+use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Source\Probe;
 
 /**
@@ -164,6 +166,95 @@ final class FfmpegDecoderTest extends TestCase
         // After close(), next() must return null (not throw)
         $result = $decoder->next();
         $this->assertNull($result);
+    }
+
+    // -------------------------------------------------------------------------
+    // F7: stderr sink — live decode of a real clip closes cleanly
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox open()/next()/close() decode a real ffmpeg-generated clip and close cleanly (stderr sink)
+     *
+     * Hardening / characterisation test for F7. A real stderr-flood deadlock
+     * (ffmpeg blocking once its ~64KB stderr buffer fills against a reader-less
+     * pipe) cannot be safely asserted in a unit test, so this proves the
+     * structural fix instead: with stderr redirected to a file sink the decoder
+     * still decodes frames and the subprocess closes without hanging. The
+     * structural proof is that FfmpegDecoder no longer holds an unread stderr
+     * pipe (the `$stderr` property is gone). Watchdog-guarded so a regression
+     * that DID deadlock can't wedge the suite.
+     */
+    public function testLiveDecodeWithStderrSinkClosesCleanly(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-' . getmypid() . '.mp4';
+
+        // Watchdog: timeout does NOT kill a proc_open/pipe deadlock, so spawn a
+        // backgrounded killer that SIGKILLs this test's ffmpeg children after
+        // 20s. Cancelled on a clean finish below.
+        $wd = proc_open(
+            ['sh', '-c', 'sleep 20; pkill -9 -f sugar-reel-test'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $wdPipes,
+        );
+
+        try {
+            // Generate a tiny clip via ffmpeg (arg-array — no shell string).
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(),
+                    '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi',
+                    '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) {
+                    \fclose($p);
+                }
+            }
+            proc_close($gen);
+            $this->assertFileExists($clip, 'ffmpeg must produce the test clip');
+
+            $decoder = new FfmpegDecoder();
+            $decoder->open($clip, 16, 12, 10.0, Mode::HalfBlock);
+
+            $frames = 0;
+            $first = null;
+            while (($frame = $decoder->next()) !== null) {
+                if ($first === null) {
+                    $first = $frame;
+                }
+                $frames++;
+                // Bound the loop; one second at 10fps is ~10 frames.
+                if ($frames >= 50) {
+                    break;
+                }
+            }
+
+            $this->assertGreaterThanOrEqual(1, $frames, 'decoder must yield at least one frame');
+            $this->assertInstanceOf(RgbFrame::class, $first);
+
+            // close() must return without hanging on a leftover stderr pipe.
+            $decoder->close();
+            // Stable EOF after close.
+            $this->assertNull($decoder->next());
+        } finally {
+            if (isset($wd) && is_resource($wd)) {
+                proc_terminate($wd);
+                proc_close($wd);
+            }
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
     }
 
     // -------------------------------------------------------------------------
