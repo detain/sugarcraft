@@ -118,7 +118,7 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
 | `HistoryStoreInterface` | Persistence interface for query history. Implement `save(entry)`, `query(from, to, limit)`, `prune(before)`, and `count()` to plug in any storage backend. |
 | `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `id INTEGER PRIMARY KEY`, `query TEXT`, `duration_ms INTEGER`, `rows_affected INTEGER`, `error TEXT`, `ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. |
-| `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no主动 recording, no coupling to the UI. |
+| `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no active recording, no coupling to the UI. Records StatusSnapshot metrics (not SQL query text — see Query History section for SQL text storage). |
 | `HistoryQuery` | Historical query helpers: `queriesPerSecond(from, to)`, `averageDuration(from, to)`, `errorRate(from, to)`, `topQueries(limit)`. All accept an optional `limit` to bound results. |
 
 The PDO connection is the only stateful dependency; tests use a `:memory:` SQLite to exercise the full transition surface (load tables, switch panes, run query, error handling) without fixture files.
@@ -457,7 +457,12 @@ When `pcntl` is unavailable, `StatementTimeout::execute()` degrades gracefully a
 
 ## Query History (optional)
 
-Query history is an opt-in SQLite-backed layer that records every executed query with its duration, rows affected, and error state:
+Query history is an opt-in SQLite-backed layer with two separate concerns:
+
+1. **StatusSnapshot metrics** — `HistoryRecorder` captures server metrics (connections, QPS, cache hit rates, etc.) via `StatusSnapshotProviderInterface` on each poll cycle and persists them to `SqliteHistoryStore`.
+2. **SQL query text** — Stored via `SqliteHistoryStore::save()` (schema includes `query TEXT`, `duration_ms`, `rows_affected`, `error`). This integration point is `App::runQuery()` — see future work in `CALIBER_LEARNINGS.md`.
+
+Both share the same `SqliteHistoryStore` (WAL mode) and `HistoryQuery` helpers.
 
 ```php
 use SugarCraft\Query\Admin\History\SqliteHistoryStore;
