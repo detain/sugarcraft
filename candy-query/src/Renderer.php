@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query;
 
 use SugarCraft\Core\Util\Color;
-use SugarCraft\Core\Util\Tty\PosixBackend;
+use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Forms\ItemList\ItemList;
 use SugarCraft\Forms\ItemList\StringItem;
@@ -51,12 +51,11 @@ final class Renderer
 
     /**
      * Get the terminal size. Once {@see setSize()} has been called with the
-     * framework's WindowSizeMsg, that value is authoritative. Otherwise fall
-     * back to detection, trying backends in order:
-     *   1. FFI ioctl(TIOCGWINSZ) via PosixBackend — live kernel size
-     *   2. Environment variables (COLUMNS/LINES) — often stale, last resort
-     *   3. Shell-out to `stty size`
-     *   4. Hard default of 60 rows × 200 cols
+     * framework's WindowSizeMsg, that value is authoritative. Otherwise detection
+     * is delegated to candy-core's {@see Tty} façade, which selects the
+     * Posix/Windows backend and runs the full size ladder internally (FFI
+     * TIOCGWINSZ → COLUMNS/LINES → /dev/tty → stty → default). A hard default
+     * guards the unlikely case where the façade itself is unavailable.
      *
      * @return array{rows:int, cols:int}
      */
@@ -66,41 +65,24 @@ final class Renderer
             return self::$terminalSize;
         }
 
-        // 1. FFI ioctl via PosixBackend (candy-core/candy-pty). The kernel
-        // TIOCGWINSZ is the ground truth and tracks resizes live; prefer it
-        // over the COLUMNS/LINES env vars, which are frequently stale under
-        // SSH/tmux and produced frames sized to the wrong (half) height.
+        // Delegate detection to candy-core's Tty façade rather than re-rolling
+        // the FFI/env/stty ladder here — it tracks live resizes (kernel
+        // TIOCGWINSZ) and falls back through /dev/tty + stty internally, picking
+        // the right backend per platform. The WindowSizeMsg cache above stays
+        // the single source of truth; this path only runs before the first
+        // WindowSizeMsg arrives (e.g. tests, the very first frame).
         try {
-            $backend = new PosixBackend(STDOUT);
-            $size = $backend->size();
+            $size = (new Tty(STDOUT))->size();
             if ($size['cols'] > 0 && $size['rows'] > 0) {
-                self::$terminalSize = $size;
+                self::$terminalSize = ['rows' => $size['rows'], 'cols' => $size['cols']];
                 return self::$terminalSize;
             }
         } catch (\Throwable) {
-            // FFI not available or ioctl failed — fall through
+            // Detection unavailable — fall through to the hard default.
         }
 
-        // 2. Environment variables (fallback when there is no live tty).
-        $cols = (int) (getenv('COLUMNS') ?: 0);
-        $rows = (int) (getenv('LINES') ?: 0);
-        if ($cols > 0 && $rows > 0) {
-            self::$terminalSize = ['rows' => $rows, 'cols' => $cols];
-            return self::$terminalSize;
-        }
-
-        // 3. Shell fallback: `stty size` ( POSIX-compatible )
-        $stty = trim((string) shell_exec('stty size 2>/dev/null'));
-        if ($stty !== '' && str_contains($stty, ' ')) {
-            [$r, $c] = explode(' ', $stty, 2);
-            if ((int) $r > 0 && (int) $c > 0) {
-                self::$terminalSize = ['rows' => (int) $r, 'cols' => (int) $c];
-                return self::$terminalSize;
-            }
-        }
-
-        // 4. Hard default for modern wide/tall terminals (60 rows accommodates
-        // large table lists + rows pane + query pane + help + status without cutting)
+        // Hard default for modern wide/tall terminals (accommodates the table
+        // list + rows + query + help + status panes without cutting).
         self::$terminalSize = ['rows' => 60, 'cols' => 200];
         return self::$terminalSize;
     }
