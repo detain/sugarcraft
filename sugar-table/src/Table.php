@@ -128,6 +128,12 @@ final class Table
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
     private ?array $computedColumnWidths = null;
 
+    /** Inner cell padding (characters on each side). Default 0 (flush). */
+    private int $cellPadding = 0;
+
+    /** Hidden column indices. Hidden columns are excluded from rendering but still affect data/filters. */
+    private array $hiddenCols = [];
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -339,6 +345,38 @@ final class Table
     {
         $clone = clone $this;
         $clone->styleFunc = $fn;
+        return $clone;
+    }
+
+    /**
+     * Set inner cell padding.
+     *
+     * Padding adds whitespace on the left and right sides of each cell's
+     * content, creating visual breathing room between content and borders.
+     * Padding does not affect column width calculations.
+     *
+     * @param int $padding Number of spaces on each side (0 = no padding)
+     */
+    public function withCellPadding(int $padding): self
+    {
+        $clone = clone $this;
+        $clone->cellPadding = \max(0, $padding);
+        return $clone;
+    }
+
+    /**
+     * Hide columns by index without removing them from the table.
+     *
+     * Hidden columns are excluded from rendering but still participate in
+     * data storage, filtering, sorting, and search operations. This is
+     * useful for optional columns that can be toggled visible/invisible.
+     *
+     * @param list<int> $indices Column indices to hide
+     */
+    public function withHiddenCols(array $indices): self
+    {
+        $clone = clone $this;
+        $clone->hiddenCols = $indices;
         return $clone;
     }
 
@@ -1044,9 +1082,14 @@ final class Table
      *
      * Frozen columns are always visible. Non-frozen columns are visible
      * starting at index = count(frozenCols) + scrollX.
+     * Hidden columns are never visible regardless of scroll or freeze state.
      */
     private function isColumnVisible(int $colIndex): bool
     {
+        // Hidden columns are never visible
+        if (\in_array($colIndex, $this->hiddenCols, true)) {
+            return false;
+        }
         if (\in_array($colIndex, $this->frozenCols, true)) {
             return true;
         }
@@ -1126,7 +1169,10 @@ final class Table
                 continue;
             }
 
-            $headerText = $column->renderHeader($colWidth);
+            // Account for cell padding in header width
+            $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+            $effectiveWidth = \max(1, $effectiveWidth);
+            $headerText = $column->renderHeader($effectiveWidth);
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
@@ -1236,9 +1282,12 @@ final class Table
             if ($this->isExpandedByRow($rowData)) {
                 $displayText = $cellStr;
             } else {
+                // Account for cell padding: effective content width = colWidth - 2*padding
+                $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+                $effectiveWidth = \max(1, $effectiveWidth); // At least 1 char for content
                 $displayText = $column->alignLeft
-                    ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
-                    : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
+                    ? \SugarCraft\Core\Util\Width::padRight($cellStr, $effectiveWidth)
+                    : \SugarCraft\Core\Util\Width::padLeft($cellStr, $effectiveWidth);
             }
 
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
@@ -1282,6 +1331,8 @@ final class Table
             }
 
             $colWidth = $computedWidths[$ci] ?? $column->width;
+            $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+            $effectiveWidth = \max(1, $effectiveWidth);
             $val = $row->data->get($column->key);
             $cellStr = '';
             if ($val instanceof StyledCell) {
@@ -1294,7 +1345,7 @@ final class Table
                     : (\is_scalar($val) ? (string) $val : '');
             }
 
-            $lines = $column->renderCell($cellStr, $colWidth);
+            $lines = $column->renderCell($cellStr, $effectiveWidth);
             $lineCount = \count($lines);
             if ($lineCount > $maxLines) {
                 $maxLines = $lineCount;
@@ -1372,7 +1423,10 @@ final class Table
                 // Split full content by newlines for multiline display
                 $lines = $cellStr === '' ? [''] : \explode("\n", $cellStr);
             } else {
-                $lines = $column->renderCell($cellStr, $colWidth);
+                // Account for cell padding in content width
+                $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+                $effectiveWidth = \max(1, $effectiveWidth);
+                $lines = $column->renderCell($cellStr, $effectiveWidth);
             }
             $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
         }
@@ -1402,8 +1456,10 @@ final class Table
                 if ($lineIdx < \count($lines)) {
                     $displayText = $lines[$lineIdx];
                 } else {
-                    // Pad with empty space for shorter cells
-                    $displayText = \str_repeat(' ', $colWidth);
+                    // Pad with empty space for shorter cells (use effective width for padding)
+                    $effectiveWidth = $colWidth - (2 * $this->cellPadding);
+                    $effectiveWidth = \max(1, $effectiveWidth);
+                    $displayText = \str_repeat(' ', $effectiveWidth);
                 }
 
                 $buffer = $this->fillCellContent($buffer, $bufferRow, $col, $displayText, $colWidth, $cellStyle);
