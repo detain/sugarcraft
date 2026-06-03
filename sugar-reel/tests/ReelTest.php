@@ -68,11 +68,12 @@ final class ReelTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox Reel::open()->mode() defaults to HalfBlock
+     * @testdox Reel::open()->mode() defaults to null (auto-detect)
      */
     public function testModeDefaultsToHalfBlock(): void
     {
-        $this->assertSame(Mode::HalfBlock, Reel::open('/tmp/x.mp4')->mode());
+        // null mode means auto-detect at play() time (F3).
+        $this->assertNull(Reel::open('/tmp/x.mp4')->mode());
     }
 
     /**
@@ -84,7 +85,7 @@ final class ReelTest extends TestCase
         $modified = $original->withMode(Mode::Ascii);
 
         $this->assertNotSame($original, $modified);
-        $this->assertSame(Mode::HalfBlock, $original->mode());
+        $this->assertNull($original->mode(), 'original keeps null (auto-detect)');
         $this->assertSame(Mode::Ascii, $modified->mode());
         // Other fields are preserved across the with*() call.
         $this->assertSame('/tmp/x.mp4', $modified->path());
