@@ -15,7 +15,8 @@ use SugarCraft\Reel\Decode\RgbFrame;
  * Player's $currentFrame state; this Msg signals that a new frame
  * is available for display.
  *
- * Mirrors the frame-ready event used in charmbracelet/sugar-reel.
+ * No single upstream — the decode→frame-ready event mirrors the pipeline
+ * shape in maxcurzi/tplay and joelibaceta/video-to-ascii.
  */
 final class FrameMsg implements Msg
 {

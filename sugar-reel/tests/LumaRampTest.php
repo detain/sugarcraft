@@ -202,4 +202,32 @@ final class LumaRampTest extends TestCase
         $this->assertIsString($result);
         $this->assertSame(1, strlen($result));
     }
+
+    /**
+     * @testdox char(l) indexes the precomputed default ramp for every 0-255 value
+     *
+     * Guards the precomputed-LUT contract: char() must be a plain lookup into
+     * the cached default ramp for all luminance values (an earlier version
+     * rebuilt the table per call and left the LUT field dead).
+     */
+    public function testCharMatchesPrecomputedRampForFullRange(): void
+    {
+        $ramp = LumaRamp::ramp(); // default (standard) ramp, precomputed
+        for ($luma = 0; $luma <= 255; $luma++) {
+            $this->assertSame(
+                $ramp[$luma],
+                LumaRamp::char((float) $luma),
+                "char({$luma}) must equal the precomputed ramp entry"
+            );
+        }
+    }
+
+    /**
+     * @testdox ramp() returns a stable (value-equal) table across repeated calls
+     */
+    public function testRampIsStableAcrossCalls(): void
+    {
+        $this->assertSame(LumaRamp::ramp('dense'), LumaRamp::ramp('dense'));
+        $this->assertSame(LumaRamp::ramp(), LumaRamp::ramp());
+    }
 }

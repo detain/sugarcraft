@@ -120,7 +120,7 @@ if (!in_array($modeArg, ['auto', 'ascii', 'ansi256', 'truecolor', 'halfblock', '
     exit(1);
 }
 
-$mode = $modeArg === 'auto' || $modeArg === 'auto'
+$mode = $modeArg === 'auto'
     ? null
     : Mode::from($modeArg);
 

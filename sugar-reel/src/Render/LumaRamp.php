@@ -14,7 +14,8 @@ namespace SugarCraft\Reel\Render;
  * approximation (54R + 183G + 19B) >> 8 is visually indistinguishable
  * in practice and the 77/150/29 coefficients are used by upstream tplay.)
  *
- * Mirrors charmbracelet/sugar-reel luma.Ramp.
+ * No single upstream — the luma-ramp technique is drawn from maxcurzi/tplay,
+ * seatedro/glyph, and joelibaceta/video-to-ascii.
  */
 final class LumaRamp
 {
@@ -50,37 +51,28 @@ final class LumaRamp
     ];
 
     /**
-     * The pre-built 256-entry character LUT.
+     * Pre-built 256-entry character LUTs, memoized per ramp name.
      *
-     * @var array<int, string>
+     * The hot path (one lookup per pixel, per frame) must be a plain array
+     * index, not arithmetic — see char(). Each ramp's table is built once on
+     * first use and reused for the life of the process.
+     *
+     * @var array<string, array<int, string>>
      */
-    private static array $lut = [];
+    private static array $lutByName = [];
 
     /**
      * Return the 256-entry character array for the named ramp.
+     *
+     * The table is built once per ramp name and cached; repeated calls return
+     * the same precomputed array rather than rebuilding it.
      *
      * @param string $name Ramp name: 'minimal', 'standard', 'dense'
      * @return array<int, string> 256-entry array indexed by luminance 0-255
      */
     public static function ramp(string $name = self::DEFAULT_RAMP): array
     {
-        $chars = self::RAMPS[$name] ?? self::RAMPS[self::DEFAULT_RAMP];
-        $len = \strlen($chars);
-
-        // Build LUT lazily — 256 bytes of storage, computed once.
-        if (self::$lut === []) {
-            self::buildLut($name);
-        }
-
-        $ramp = [];
-        for ($i = 0; $i < 256; $i++) {
-            // Map 0-255 luminance to ramp character index.
-            // Higher luminance → darker character (convention for ASCII art).
-            $index = (int)(($i * $len) / 256);
-            $ramp[$i] = $chars[\min($index, $len - 1)];
-        }
-
-        return $ramp;
+        return self::$lutByName[$name] ??= self::buildLut($name);
     }
 
     /**
@@ -95,8 +87,7 @@ final class LumaRamp
     public static function char(float $luma): string
     {
         $index = (int)\min(255, \max(0, $luma));
-        $ramp = self::ramp(self::DEFAULT_RAMP);
-        return $ramp[$index];
+        return self::ramp(self::DEFAULT_RAMP)[$index];
     }
 
     /**
@@ -119,15 +110,21 @@ final class LumaRamp
      * Pre-build the 256-entry LUT for a named ramp.
      *
      * @param string $name Ramp name
+     * @return array<int, string> 256-entry luma→char table
      */
-    private static function buildLut(string $name): void
+    private static function buildLut(string $name): array
     {
         $chars = self::RAMPS[$name] ?? self::RAMPS[self::DEFAULT_RAMP];
         $len = \strlen($chars);
 
+        $lut = [];
         for ($i = 0; $i < 256; $i++) {
+            // Map 0-255 luminance to ramp character index.
+            // Higher luminance → denser character (convention for ASCII art).
             $index = (int)(($i * $len) / 256);
-            self::$lut[$i] = $chars[\min($index, $len - 1)];
+            $lut[$i] = $chars[\min($index, $len - 1)];
         }
+
+        return $lut;
     }
 }

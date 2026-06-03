@@ -15,8 +15,9 @@ namespace SugarCraft\Reel;
  * The skip limit is hardcoded at 2 frames: if the decoder is behind by
  * more than 2 frames, those frames are discarded to catch up.
  *
- * Mirrors the clock-sync logic in charmbracelet/sugar-reel and the
- * audio-subprocess-as-master-clock approach from video_plan.md line 94-96.
+ * No single upstream — the wall-clock pacing + frame-skip-resync approach is
+ * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii (see video_plan.md
+ * lines 94-96).
  */
 final class Sync
 {

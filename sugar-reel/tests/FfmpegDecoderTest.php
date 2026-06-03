@@ -73,6 +73,69 @@ final class FfmpegDecoderTest extends TestCase
         $this->assertSame($expectedFrameBytes, $totalPixels * 3);
     }
 
+    /**
+     * @testdox next() frames a canned rawvideo byte stream and discards the partial tail
+     *
+     * Drives the real read/accumulate/partial-discard loop in next() by
+     * injecting an in-memory stream of two complete frames plus a short
+     * trailing frame — no ffmpeg required (plan Step 2, lines 179-181).
+     */
+    public function testNextFramesCannedRawvideoStream(): void
+    {
+        $cellsW = 2;
+        $frameH = 2;
+        $frameBytes = $cellsW * $frameH * 3; // 12 bytes per frame
+
+        $frame1 = str_repeat("\xAA", $frameBytes);
+        $frame2 = str_repeat("\xBB", $frameBytes);
+        $partial = str_repeat("\xCC", 5); // short trailing frame → discarded
+
+        $stream = fopen('php://temp', 'r+b');
+        fwrite($stream, $frame1 . $frame2 . $partial);
+        rewind($stream);
+
+        $decoder = new FfmpegDecoder();
+        $this->injectStreamState($decoder, $stream, $cellsW, $frameH, $frameBytes);
+
+        $first = $decoder->next();
+        $this->assertNotNull($first);
+        $this->assertSame($frame1, $first->bytes);
+        $this->assertSame($cellsW, $first->w);
+        $this->assertSame($frameH, $first->h);
+
+        $second = $decoder->next();
+        $this->assertNotNull($second);
+        $this->assertSame($frame2, $second->bytes);
+
+        // Partial trailing frame is silently discarded.
+        $this->assertNull($decoder->next());
+        // EOF is stable.
+        $this->assertNull($decoder->next());
+
+        fclose($stream);
+    }
+
+    /**
+     * Inject decoder framing state + a fake stdout stream via reflection so
+     * next() can be exercised without launching ffmpeg.
+     *
+     * @param resource $stream
+     */
+    private function injectStreamState(FfmpegDecoder $decoder, $stream, int $cellsW, int $frameH, int $frameBytes): void
+    {
+        $r = new \ReflectionClass($decoder);
+        foreach ([
+            'stdout' => $stream,
+            'cellsW' => $cellsW,
+            'frameH' => $frameH,
+            'frameBytes' => $frameBytes,
+        ] as $prop => $value) {
+            $p = $r->getProperty($prop);
+            $p->setAccessible(true);
+            $p->setValue($decoder, $value);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // State machine: close then next returns null
     // -------------------------------------------------------------------------
