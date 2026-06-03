@@ -74,4 +74,31 @@ final class Capability
             $this->inTmux,
         );
     }
+
+    /**
+     * Return a human-readable summary of which protocols were detected.
+     * Mirrors Charmbracelet's image.(Kitty|Sixel|Iterm2|HalfBlock)Protocol.Name().
+     *
+     * @return string e.g. "Kitty", "iTerm2", "Sixel", "HalfBlock", "Unknown"
+     */
+    public function detectSummary(): string
+    {
+        if ($this->kitty) {
+            return 'Kitty';
+        }
+        if ($this->iterm2) {
+            return 'iTerm2';
+        }
+        if ($this->sixel) {
+            return 'Sixel';
+        }
+        if ($this->chafa) {
+            return 'Chafa';
+        }
+        if ($this->halfblock) {
+            return 'HalfBlock';
+        }
+
+        return 'Unknown';
+    }
 }
