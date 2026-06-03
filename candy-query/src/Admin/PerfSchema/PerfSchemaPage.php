@@ -4,12 +4,24 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\PerfSchema;
 
+use SugarCraft\Bits\Tabs\Tabs;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Dash\Components\Card\Badge;
+use SugarCraft\Dash\Components\Card\Divider;
+use SugarCraft\Forms\ItemList\ItemList;
+use SugarCraft\Forms\ItemList\StringItem;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Sprinkles\Style;
+use SugarCraft\Table\Column;
+use SugarCraft\Table\Row;
+use SugarCraft\Table\RowData;
+use SugarCraft\Table\Table;
 
 /**
  * Performance Schema configuration page with tabbed interface.
@@ -784,35 +796,48 @@ final class PerfSchemaPage extends PageBase
 
     private function renderHeader(): string
     {
-        $stateLabel = match ($this->setupState) {
-            'fully' => "\x1b[32mFULLY\x1b[0m",
-            'default' => "\x1b[33mDEFAULT\x1b[0m",
-            'custom' => "\x1b[36mCUSTOM\x1b[0m",
-            'disabled' => "\x1b[31mDISABLED\x1b[0m",
-            default => "\x1b[90mUNKNOWN\x1b[0m",
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Performance Schema');
+
+        // NB: the old code built the READ-ONLY marker with a single-quoted
+        // escape sequence — i.e. a literal backslash-x string, not a real SGR —
+        // so it printed garbage. Routing through Style emits a proper sequence.
+        $readOnly = $this->readOnlyMode
+            ? ' ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('[READ ONLY]')
+            : '';
+
+        return "{$title} | {$this->stateBadge()}{$readOnly}";
+    }
+
+    /**
+     * The setup-state chip shown in the header — a sugar-dash Badge so the
+     * FULLY/DEFAULT/CUSTOM/DISABLED status colouring lives in the widget.
+     */
+    private function stateBadge(): string
+    {
+        return match ($this->setupState) {
+            'fully' => Badge::success('FULLY')->render(),
+            'default' => Badge::warning('DEFAULT')->render(),
+            'custom' => Badge::info('CUSTOM')->render(),
+            'disabled' => Badge::error('DISABLED')->render(),
+            default => Badge::new('UNKNOWN')->render(),
         };
-
-        $readOnlyLabel = $this->readOnlyMode ? ' \x1b[31m[READ ONLY]\x1b[0m' : '';
-
-        return "\x1b[1;36mPerformance Schema\x1b[0m | {$stateLabel}{$readOnlyLabel}";
     }
 
     private function renderTabBar(): string
     {
-        $tabs = [];
+        $activeIndex = array_search($this->activeTab, self::TABS, true);
 
-        foreach (self::TABS as $tab) {
-            $label = self::TAB_LABELS[$tab];
-            $isActive = $tab === $this->activeTab;
+        // Bits\Tabs owns the active/inactive styling and the divider. Width 0
+        // disables the widget's truncation guards (the final one clips on
+        // ANSI-inclusive byte length); the 7 labels + '│' dividers come to ~77
+        // visible cells, which fits an 80-column terminal like the old bar did.
+        $tabs = Tabs::new(array_values(self::TAB_LABELS), 0)
+            ->withActive($activeIndex === false ? 0 : $activeIndex)
+            ->withDivider('│')
+            ->withActiveStyle(Style::new()->bold()->foreground(Color::hex('#fde047')))
+            ->withInactiveStyle(Style::new()->foreground(Color::hex('#6b7280')));
 
-            $tabStr = $isActive
-                ? "\x1b[1;33m[{$label}]\x1b[0m"
-                : "\x1b[90m[{$label}]\x1b[0m";
-
-            $tabs[] = $tabStr;
-        }
-
-        return '  ' . implode(' ', $tabs);
+        return ' ' . $tabs->view();
     }
 
     private function renderContent(): string
@@ -831,23 +856,24 @@ final class PerfSchemaPage extends PageBase
 
     private function renderEasySetupTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mEasy Setup\x1b[0m";
-        $lines[] = $this->renderSeparator();
+        $muted = Style::new()->foreground(Color::hex('#6b7280'));
 
         $stateLabel = match ($this->setupState) {
-            'fully' => "\x1b[32mFully Enabled\x1b[0m",
-            'default' => "\x1b[33mDefault Setup\x1b[0m",
-            'custom' => "\x1b[36mCustom Setup\x1b[0m",
-            'disabled' => "\x1b[31mDisabled\x1b[0m",
-            default => "\x1b[90mUnknown\x1b[0m",
+            'fully' => Style::new()->foreground(Color::hex('#a6e3a1'))->render('Fully Enabled'),
+            'default' => Style::new()->foreground(Color::hex('#f9e2af'))->render('Default Setup'),
+            'custom' => Style::new()->foreground(Color::hex('#89b4fa'))->render('Custom Setup'),
+            'disabled' => Style::new()->foreground(Color::hex('#f38ba8'))->render('Disabled'),
+            default => $muted->render('Unknown'),
         };
 
+        $lines = [];
+        $lines[] = $this->tabTitle('Easy Setup');
+        $lines[] = Divider::h()->render();
         $lines[] = sprintf('  Current State: %s', $stateLabel);
         $lines[] = '';
 
         if ($this->readOnlyMode) {
-            $lines[] = "\x1b[90m  (Read-only mode - no privileges to modify)\x1b[0m";
+            $lines[] = $muted->render('  (Read-only mode - no privileges to modify)');
         } else {
             $lines[] = '  [1] Enable Full PS';
             $lines[] = '  [2] Disable PS';
@@ -855,257 +881,223 @@ final class PerfSchemaPage extends PageBase
         }
 
         $lines[] = '';
-        $lines[] = "\x1b[90m  Default instruments: stage/%, statement/%, wait/%\x1b[0m";
-        $lines[] = "\x1b[90m  Default consumers: events_statements_history, events_waits_history, etc.\x1b[0m";
+        $lines[] = $muted->render('  Default instruments: stage/%, statement/%, wait/%');
+        $lines[] = $muted->render('  Default consumers: events_statements_history, events_waits_history, etc.');
 
         return implode("\n", $lines);
     }
 
     private function renderInstrumentsTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mInstruments\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
-        if ($this->instruments === []) {
-            $lines[] = "\x1b[90m  (no instruments available)\x1b[0m";
-            return implode("\n", $lines);
-        }
-
-        // Build tree for hierarchical display
-        $tree = InstrumentTree::fromInstruments($this->instruments);
-        $flatList = $this->flattenTree($tree);
-
-        $maxDisplay = min(50, count($flatList));
-        for ($i = 0; $i < $maxDisplay; $i++) {
-            $instrument = $flatList[$i];
-            $isSelected = $i === $this->selectedRowIndex;
-            $stateIndicator = $this->renderTristate($instrument->enabled);
-
-            $displayName = $instrument->name;
-            if (strlen($displayName) > 50) {
-                $displayName = '...' . substr($displayName, -47);
+        // Instruments are ordered hierarchically via InstrumentTree, then
+        // flattened; ItemList owns the cursor highlight + scroll window, so the
+        // old 50-row cap and "… and N more" indicator are gone.
+        $rows = [];
+        if ($this->instruments !== []) {
+            foreach ($this->flattenTree(InstrumentTree::fromInstruments($this->instruments)) as $instrument) {
+                $rows[] = [$instrument->enabled, Width::truncateMiddle($instrument->name, 50)];
             }
-
-            $prefix = $isSelected ? "\x1b[7m> \x1b[0m" : '  ';
-            $line = sprintf('%s%s %s', $prefix, $stateIndicator, $displayName);
-
-            if ($isSelected) {
-                $line = "\x1b[1;37m" . substr($line, 0, 2) . "\x1b[0m" . substr($line, 2);
-            }
-
-            $lines[] = $line;
         }
 
-        if (count($flatList) > $maxDisplay) {
-            $lines[] = sprintf("\x1b[90m  ... and %d more instruments\x1b[0m", count($flatList) - $maxDisplay);
-        }
-
-        $lines[] = '';
-        $lines[] = sprintf("\x1b[90m  Total: %d instruments\x1b[0m", count($this->instruments));
-
-        return implode("\n", $lines);
+        return $this->renderToggleList(
+            'Instruments',
+            $rows,
+            '(no instruments available)',
+            sprintf('Total: %d instruments', count($this->instruments)),
+        );
     }
 
     private function renderConsumersTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mConsumers\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
-        if ($this->consumers === []) {
-            $lines[] = "\x1b[90m  (no consumers available)\x1b[0m";
-            return implode("\n", $lines);
+        $rows = [];
+        foreach ($this->consumers as $consumer) {
+            $rows[] = [$consumer->enabled, $consumer->name];
         }
 
-        foreach ($this->consumers as $index => $consumer) {
-            $isSelected = $index === $this->selectedRowIndex;
-            $stateIndicator = $this->renderTristate($consumer->enabled);
-
-            $prefix = $isSelected ? "\x1b[7m> \x1b[0m" : '  ';
-            $line = sprintf('%s%s %s', $prefix, $stateIndicator, $consumer->name);
-
-            $lines[] = $line;
-        }
-
-        $lines[] = '';
-        $lines[] = sprintf("\x1b[90m  Total: %d consumers\x1b[0m", count($this->consumers));
-
-        return implode("\n", $lines);
+        return $this->renderToggleList(
+            'Consumers',
+            $rows,
+            '(no consumers available)',
+            sprintf('Total: %d consumers', count($this->consumers)),
+        );
     }
 
     private function renderActorsTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mActors\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
-        if ($this->actors === []) {
-            $lines[] = "\x1b[90m  (no actors configured)\x1b[0m";
-            return implode("\n", $lines);
+        $rows = [];
+        foreach ($this->actors as $actor) {
+            $rows[] = [$actor->enabled, sprintf('%s/%s/%s', $actor->host, $actor->user, $actor->role)];
         }
 
-        foreach ($this->actors as $index => $actor) {
-            $isSelected = $index === $this->selectedRowIndex;
-            $stateIndicator = $this->renderTristate($actor->enabled);
-
-            $display = sprintf('%s/%s/%s', $actor->host, $actor->user, $actor->role);
-
-            $prefix = $isSelected ? "\x1b[7m> \x1b[0m" : '  ';
-            $line = sprintf('%s%s %s', $prefix, $stateIndicator, $display);
-
-            $lines[] = $line;
-        }
-
-        $lines[] = '';
-        $lines[] = sprintf("\x1b[90m  Total: %d actors\x1b[0m", count($this->actors));
-
-        return implode("\n", $lines);
+        return $this->renderToggleList(
+            'Actors',
+            $rows,
+            '(no actors configured)',
+            sprintf('Total: %d actors', count($this->actors)),
+        );
     }
 
     private function renderObjectsTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mObjects\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
-        if ($this->objects === []) {
-            $lines[] = "\x1b[90m  (no object rules configured)\x1b[0m";
-            return implode("\n", $lines);
+        $rows = [];
+        foreach ($this->objects as $object) {
+            $rows[] = [$object->enabled, sprintf('%s:%s.%s', $object->objectType, $object->objectSchema, $object->objectName)];
         }
 
-        foreach ($this->objects as $index => $object) {
-            $isSelected = $index === $this->selectedRowIndex;
-            $stateIndicator = $this->renderTristate($object->enabled);
-
-            $display = sprintf('%s:%s.%s', $object->objectType, $object->objectSchema, $object->objectName);
-
-            $prefix = $isSelected ? "\x1b[7m> \x1b[0m" : '  ';
-            $line = sprintf('%s%s %s', $prefix, $stateIndicator, $display);
-
-            $lines[] = $line;
-        }
-
-        $lines[] = '';
-        $lines[] = sprintf("\x1b[90m  Total: %d object rules\x1b[0m", count($this->objects));
-
-        return implode("\n", $lines);
+        return $this->renderToggleList(
+            'Objects',
+            $rows,
+            '(no object rules configured)',
+            sprintf('Total: %d object rules', count($this->objects)),
+        );
     }
 
     private function renderThreadsTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mThreads\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         if ($this->threads === []) {
-            $lines[] = "\x1b[90m  (no threads available)\x1b[0m";
-            return implode("\n", $lines);
+            return implode("\n", [
+                $this->tabTitle('Threads'),
+                Divider::h()->render(),
+                Style::new()->faint()->render('  (no threads available)'),
+            ]);
         }
 
-        $lines[] = sprintf(
-            "  \x1b[1;33m%-8s %-30s %-12s %-10s\x1b[0m",
-            'Thread ID',
-            'Name',
-            'Type',
-            'User'
-        );
-        $lines[] = $this->renderSeparator();
+        // sugar-table draws the column header + selectable highlight; the query
+        // already caps at 100 rows, so no hand-rolled "… and N more" needed.
+        $columns = [
+            Column::new('id', 'Thread ID', 10)->withAlignLeft(true),
+            Column::new('name', 'Name', 30)->withAlignLeft(true),
+            Column::new('type', 'Type', 12)->withAlignLeft(true),
+            Column::new('user', 'User', 12)->withAlignLeft(true),
+        ];
 
-        $maxDisplay = min(30, count($this->threads));
-        for ($i = 0; $i < $maxDisplay; $i++) {
-            $thread = $this->threads[$i];
-            $isSelected = $i === $this->selectedRowIndex;
-
-            $name = $thread->name;
-            if (strlen($name) > 28) {
-                $name = '...' . substr($name, -25);
-            }
-
-            $prefix = $isSelected ? "\x1b[7m>\x1b[0m" : ' ';
-            $lines[] = sprintf(
-                '%s %-8d %-30s %-12s %-10s',
-                $prefix,
-                $thread->threadId,
-                $name,
-                $thread->type,
-                $thread->processlistUser ?? '-'
-            );
+        $rows = [];
+        foreach ($this->threads as $thread) {
+            $rows[] = Row::new(RowData::from([
+                'id' => (string) $thread->threadId,
+                'name' => Width::truncateMiddle($thread->name, 30),
+                'type' => $thread->type,
+                'user' => $thread->processlistUser ?? '-',
+            ]));
         }
 
-        if (count($this->threads) > $maxDisplay) {
-            $lines[] = sprintf("\x1b[90m  ... and %d more threads\x1b[0m", count($this->threads) - $maxDisplay);
-        }
+        $table = Table::withColumns($columns)
+            ->withRows($rows)
+            ->withSelectable(true)
+            ->withSelectedIndex($this->selectedRowIndex)
+            ->withShowFooter(false)
+            ->View();
 
-        $lines[] = '';
-        $lines[] = sprintf("\x1b[90m  Total: %d threads\x1b[0m", count($this->threads));
-
-        return implode("\n", $lines);
+        return implode("\n", [
+            $this->tabTitle('Threads'),
+            Divider::h()->render(),
+            $table,
+            '',
+            Style::new()->foreground(Color::hex('#6b7280'))->render(sprintf('Total: %d threads', count($this->threads))),
+        ]);
     }
 
     private function renderOptionsTab(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mTimer Options\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         if ($this->timers === []) {
-            $lines[] = "\x1b[90m  (no timers available - read-only)\x1b[0m";
-            return implode("\n", $lines);
+            return implode("\n", [
+                $this->tabTitle('Timer Options'),
+                Divider::h()->render(),
+                Style::new()->faint()->render('  (no timers available - read-only)'),
+            ]);
         }
 
-        $lines[] = sprintf(
-            "  \x1b[1;33m%-12s %-20s %-15s\x1b[0m",
-            'Timer Name',
-            'Implementation',
-            'Scale Factor'
-        );
-        $lines[] = $this->renderSeparator();
+        $columns = [
+            Column::new('name', 'Timer Name', 14)->withAlignLeft(true),
+            Column::new('impl', 'Implementation', 22)->withAlignLeft(true),
+            Column::new('scale', 'Scale Factor', 14),
+        ];
 
+        $rows = [];
         foreach ($this->timers as $timer) {
-            $lines[] = sprintf(
-                '  %-12s %-20s %-15.2f',
-                $timer->name,
-                $timer->timerName,
-                $timer->scaleFactor
-            );
+            $rows[] = Row::new(RowData::from([
+                'name' => $timer->name,
+                'impl' => $timer->timerName,
+                'scale' => number_format($timer->scaleFactor, 2),
+            ]));
         }
 
-        $lines[] = '';
-        $lines[] = "\x1b[90m  Timer configuration is read-only (determined by server build)\x1b[0m";
+        $table = Table::withColumns($columns)->withRows($rows)->withShowFooter(false)->View();
 
-        return implode("\n", $lines);
+        return implode("\n", [
+            $this->tabTitle('Timer Options'),
+            Divider::h()->render(),
+            $table,
+            '',
+            Style::new()->foreground(Color::hex('#6b7280'))->render('Timer configuration is read-only (determined by server build)'),
+        ]);
     }
 
-    private function renderTristate(bool $enabled): string
+    /**
+     * The bold purple per-tab section title (was a hand-rolled bold-magenta SGR).
+     */
+    private function tabTitle(string $title): string
     {
-        return $enabled ? "\x1b[32m[x]\x1b[0m" : "\x1b[90m[ ]\x1b[0m";
+        return Style::new()->bold()->foreground(Color::hex('#c084fc'))->render($title);
     }
 
-    private function renderTristateMixed(): string
+    /**
+     * Render a selectable toggle list (instruments / consumers / actors /
+     * objects) through Forms\ItemList. Each row's tri-state is a
+     * Dash\Badge::tristate() glyph; ItemList owns the cursor highlight and the
+     * scroll window, so there is no hand-rolled selection prefix or row cap.
+     *
+     * @param list<array{0:bool,1:string}> $rows  [enabled, displayText] pairs
+     */
+    private function renderToggleList(string $title, array $rows, string $emptyMessage, string $totalLine): string
     {
-        return "\x1b[33m[~]\x1b[0m";
-    }
+        $header = $this->tabTitle($title);
+        $divider = Divider::h()->render();
 
-    private function renderSeparator(): string
-    {
-        return "\x1b[36m──\x1b[0m" . str_repeat('─', 20);
+        if ($rows === []) {
+            return implode("\n", [$header, $divider, Style::new()->faint()->render('  ' . $emptyMessage)]);
+        }
+
+        $items = [];
+        foreach ($rows as [$enabled, $text]) {
+            $items[] = new StringItem(Badge::tristate($enabled)->render() . ' ' . $text);
+        }
+
+        $list = ItemList::new($items, 80, min(20, max(1, count($items))))
+            ->withShowStatusBar(false)
+            ->withShowHelp(false)
+            ->withShowFilter(false)
+            ->select($this->selectedRowIndex);
+
+        return implode("\n", [
+            $header,
+            $divider,
+            $list->view(),
+            '',
+            Style::new()->foreground(Color::hex('#6b7280'))->render($totalLine),
+        ]);
     }
 
     private function renderFooter(): string
     {
-        $dirtyCount = $this->countDirty();
-        $dirtyIndicator = $dirtyCount > 0
-            ? sprintf(' \x1b[33mPending: %d change%s\x1b[0m', $dirtyCount, $dirtyCount === 1 ? '' : 's')
-            : '';
-
-        $readOnlyIndicator = $this->readOnlyMode ? ' \x1b[31m[READ ONLY]\x1b[0m' : '';
-
         $navHint = '[j/k] nav  [Space] toggle  [Tab] tabs';
         $actionHint = $this->isDirty() ? '  [c] commit  [r] revert' : '';
         $quitHint = '  [q] quit';
+        $base = Style::new()->foreground(Color::hex('#6b7280'))->render($navHint . $actionHint . $quitHint);
 
-        return "\x1b[90m{$navHint}{$actionHint}{$quitHint}{$dirtyIndicator}{$readOnlyIndicator}\x1b[0m";
+        // These two indicators used single-quoted escape literals before, i.e.
+        // literal backslash-x text rather than escapes — Style fixes the bug.
+        $dirtyCount = $this->countDirty();
+        $dirtyIndicator = $dirtyCount > 0
+            ? '  ' . Style::new()->foreground(Color::hex('#f9e2af'))
+                ->render(sprintf('Pending: %d change%s', $dirtyCount, $dirtyCount === 1 ? '' : 's'))
+            : '';
+
+        $readOnlyIndicator = $this->readOnlyMode
+            ? '  ' . Style::new()->foreground(Color::hex('#f38ba8'))->render('[READ ONLY]')
+            : '';
+
+        return $base . $dirtyIndicator . $readOnlyIndicator;
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
