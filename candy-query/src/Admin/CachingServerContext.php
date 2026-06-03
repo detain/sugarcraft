@@ -29,15 +29,31 @@ final class CachingServerContext implements ServerContextInterface
     /** @return array<string, string> */
     public function serverVariables(): array
     {
-        return $this->cachedServerVars ?? $this->inner->serverVariables();
+        // Return passed-in cached value if available (from async fetch).
+        if ($this->cachedServerVars !== null) {
+            return $this->cachedServerVars;
+        }
+        // Fall back to AdminQueryCache which holds fresh async-fetched data.
+        $cached = AdminQueryCache::instance()->getServerVariables();
+        if ($cached !== null) {
+            return $cached;
+        }
+        return $this->inner->serverVariables();
     }
 
     /** @return array<string, string> */
     public function statusVariables(): array
     {
-        // Prefer cached data if available; otherwise delegate to inner context
-        // which may have its own sync cache (e.g., ServerContext caches for 3s).
-        return $this->cachedStatusVars ?? $this->inner->statusVariables();
+        // Return passed-in cached value if available (from async fetch).
+        if ($this->cachedStatusVars !== null) {
+            return $this->cachedStatusVars;
+        }
+        // Fall back to AdminQueryCache which holds fresh async-fetched data.
+        $cached = AdminQueryCache::instance()->getStatusVariables();
+        if ($cached !== null) {
+            return $cached;
+        }
+        return $this->inner->statusVariables();
     }
 
     public function statusVariablesTs(): float
