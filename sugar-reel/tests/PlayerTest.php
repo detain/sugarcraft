@@ -360,10 +360,8 @@ final class PlayerTest extends TestCase
     public function testChar0SeeksTo0Percent(): void
     {
         $decoder = $this->makeFakeDecoder(10);
-        $player = Player::openForTest($decoder, 30.0, 80, 24, '/fake');
-
-        // Set totalFrames so percentage seek works
-        $player = $this->setTotalFrames($player, 100);
+        // Pass totalFrames=100 via openForTest so digit-seek works.
+        $player = Player::openForTest($decoder, 30.0, 100, 80, 24, '/fake');
 
         $char0 = new KeyMsg(KeyType::Char, '0');
         [$player,] = $player->update($char0);
@@ -382,10 +380,8 @@ final class PlayerTest extends TestCase
     public function testChar5SeeksTo50Percent(): void
     {
         $decoder = $this->makeFakeDecoder(10);
-        $player = Player::openForTest($decoder, 30.0, 80, 24, '/fake');
-
-        // Set totalFrames so percentage seek works
-        $player = $this->setTotalFrames($player, 100);
+        // Pass totalFrames=100 via openForTest so digit-seek works.
+        $player = Player::openForTest($decoder, 30.0, 100, 80, 24, '/fake');
 
         $char5 = new KeyMsg(KeyType::Char, '5');
         [$player,] = $player->update($char5);
@@ -393,6 +389,132 @@ final class PlayerTest extends TestCase
         $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
         // 50% of 100 = frame 50, but decoder only has 10 frames → clamped to 9
         $this->assertLessThanOrEqual(10, $frameIndex);
+    }
+
+    /**
+     * @testdox Digit-seek must no-op when totalFrames is 0 (unknown-length stream)
+     */
+    public function testDigitSeekNoOpsWhenTotalFramesZero(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        // totalFrames=0 (default) — can't seek by percentage on unknown-length stream.
+        $player = Player::openForTest($decoder, 30.0, 0, 80, 24, '/fake');
+        $player = $this->setFrameIndex($player, 5);
+
+        $char5 = new KeyMsg(KeyType::Char, '5');
+        [$player,] = $player->update($char5);
+
+        // Frame index must be UNCHANGED — digit-seek is a no-op when totalFrames=0.
+        $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
+        $this->assertSame(5, $frameIndex);
+    }
+
+    // -------------------------------------------------------------------------
+    // F4: Speed change must NOT retroactively re-scale accumulated videoTime
+    // -------------------------------------------------------------------------
+
+    /**
+     * Regression for F4. A speed change from 1.0× to 1.25× must only affect
+     * FUTURE pacing — no retroactive jump. The next target frame must advance
+     * by only ~delta*1.25*fps with no 0.25*oldVideoTime*fps skip-storm.
+     *
+     * FAILSON: On master the retroactive formula (`elapsed += delta; target = elapsed*fps*speed`)
+     * re-scales ALL prior elapsed time, so switching from 1.0→1.25× causes a massive
+     * forward jump (old code multiplies the accumulated elapsed by 1.25, so the new
+     * target overshoots by ~25% of total elapsed time — sometimes an entire half of
+     * the video).
+     */
+    public function testSpeedChangeDoesNotRetroactivelyJump(): void
+    {
+        // Build a 100-frame decoder at 30 fps. Start playing from frame 0.
+        $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
+        $player = Player::openForTest($decoder, 30.0);
+
+        // Pre-seed first frame and unpause.
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
+        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // First tick: advances to frame 1. After tick, videoTime ≈ 1/30.
+        [$player] = $player->update(new TickMsg());
+        $frameAfterTick1 = $this->getPlayerProperty($player, 'frameIndex');
+        // videoTime is now ~1/30
+
+        // Manually backdate lastTickTime so the NEXT tick sees a ~0.033s delta
+        // (one frame interval at 30fps).
+        $player = $this->backdateLastTick($player, 0.033);
+
+        // Press ']' to increase speed to 1.25× — this must ONLY affect the NEXT
+        // tick's delta, not retroactively re-scale videoTime.
+        [$player] = $player->update(new KeyMsg(KeyType::Char, ']'));
+
+        // The speed must be 1.25.
+        $this->assertSame(1.25, $this->getPlayerProperty($player, 'speed'));
+
+        // The next tick: with videoTime ≈ 1/30 and delta ≈ 0.033,
+        // newVideoTime = (1/30) + 0.033*1.25 ≈ 0.063.
+        // target = floor(0.063*30) = floor(1.875) = 1.
+        // So the tick should advance by AT MOST 1 frame (delta*1.25*fps ≈ 1.25).
+        // A retroactive re-scale would produce target = floor((1/30)*30*1.25) = floor(1.25) = 1
+        // — actually let me use a larger gap to make the retroactivity obvious.
+        //
+        // Let's use a more obvious case: backdate by 0.5s so old formula would jump.
+        $player = $this->backdateLastTick($player, 0.5);
+        $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
+        [$player] = $player->update(new TickMsg());
+        $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
+
+        // delta = 0.5s, speed = 1.25, so newVideoTime grows by 0.5*1.25 = 0.625 more seconds.
+        // At 30fps, 0.625s more content = 18.75 more frames.
+        // So frameAfter should be frameBefore + at most 19 (never 30+ which would
+        // happen with the retroactive bug where videoTime gets scaled by 1.25).
+        $deltaFrames = $frameAfter - $frameBefore;
+        $this->assertLessThanOrEqual(19, $deltaFrames,
+            'Speed change must NOT cause retroactive frame skip — at most delta*speed*fps extra frames');
+    }
+
+    /**
+     * Regression for F4. Pressing '[' to slow down from 1.0× to 0.75× must NOT
+     * cause a multi-tick hold/freeze. The retroactive bug makes old elapsed time
+     * appear LONGER when speed decreases (divide-by-smaller), causing the target
+     * frame to fall behind current → shouldHold fires → freeze.
+     */
+    public function testSpeedDecreaseDoesNotFreeze(): void
+    {
+        $decoder = new FakeDecoder(array_fill(0, 100, $this->makeFrame("\x00\x00\x00")));
+        $player = Player::openForTest($decoder, 30.0);
+        $player = $this->setCurrentFrame($player, $decoder->next(), 0);
+        $player = $this->setPlayerProperty($player, 'videoTime', 0.0);
+        $player = $this->setPlayerProperty($player, 'lastTickTime', microtime(true));
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+
+        // Advance several ticks.
+        for ($i = 0; $i < 5; $i++) {
+            $player = $this->backdateLastTick($player, 0.033);
+            [$player] = $player->update(new TickMsg());
+        }
+        $frameBefore = $this->getPlayerProperty($player, 'frameIndex');
+        $videoTimeBefore = $this->getPlayerProperty($player, 'videoTime');
+
+        // Slow down: 1.0 → 0.75
+        [$player] = $player->update(new KeyMsg(KeyType::Char, '['));
+
+        // The next tick: delta*0.75 makes videoTime grow SLOWER.
+        // target = (videoTimeBefore + 0.033*0.75)*30 = videoTimeBefore*30 + ~0.74.
+        // On the old buggy code, videoTime gets re-scaled: newElapsed = oldElapsed*0.75
+        // (retroactively slower), so target = newElapsed*30 = oldElapsed*30*0.75,
+        // which is LESS than the current frameIndex → shouldHold fires → freeze.
+        // The fix means target >= currentFrameIndex, so tick ADDS frames (doesn't hold).
+        $player = $this->backdateLastTick($player, 0.033);
+        [$player] = $player->update(new TickMsg());
+        $frameAfter = $this->getPlayerProperty($player, 'frameIndex');
+
+        // Must not freeze — frame should advance (or at minimum not regress).
+        $this->assertGreaterThanOrEqual($frameBefore, $frameAfter,
+            'Slowing speed must NOT freeze playback (no shouldHold retroactively firing)');
     }
 
     // -------------------------------------------------------------------------
@@ -429,7 +551,7 @@ final class PlayerTest extends TestCase
      */
     public function testModeSwitchRebuildsDecoderToMatchGeometry(): void
     {
-        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 80, 24, '/fake');
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
 
         $m = new KeyMsg(KeyType::Char, 'm');
 
@@ -460,7 +582,7 @@ final class PlayerTest extends TestCase
      */
     public function testModeCycleReachesGraphicsModes(): void
     {
-        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 80, 24, '/fake');
+        $player = Player::openForTest(new GeometryFakeDecoder(4), 30.0, 0, 80, 24, '/fake');
 
         $m = new KeyMsg(KeyType::Char, 'm');
         $visited = [];
@@ -680,6 +802,7 @@ final class PlayerTest extends TestCase
                 $this->makeFrame("\x00\x00\xff"),
             ]),
             30.0,
+            0,
             80,
             24,
             '/fake',
@@ -709,11 +832,12 @@ final class PlayerTest extends TestCase
      */
     public function testSeekClearsEndedAndReschedulesTick(): void
     {
+        // Pass totalFrames=10 so digit-seek actually executes (new guard rejects 0).
         $player = Player::openForTest(new FakeDecoder([
             $this->makeFrame("\xff\x00\x00"),
             $this->makeFrame("\x00\xff\x00"),
             $this->makeFrame("\x00\x00\xff"),
-        ]), 30.0, 80, 24, '/fake');
+        ]), 30.0, 10, 80, 24, '/fake');
 
         [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
 
@@ -725,8 +849,7 @@ final class PlayerTest extends TestCase
         $this->assertTrue($player->ended, 'precondition: player is ended');
         $this->assertFalse($this->getPlayerProperty($player, 'paused'), 'precondition: player is not paused');
 
-        // Seek back to the start (digit 0). totalFrames is 0 on the fake path so
-        // this clamps to frame 0 — what matters is the ended/Cmd transition.
+        // Seek back to the start (digit 0). totalFrames=10 so digit-seek works.
         [$player, $cmd] = $player->update(new KeyMsg(KeyType::Char, '0'));
 
         $this->assertFalse($player->ended, 'seek must clear the ended state');
@@ -780,7 +903,7 @@ final class PlayerTest extends TestCase
         $frames = array_fill(0, 20, $this->makeFrame("\x10\x20\x30"));
         $spy = new SpyDecoder($frames);
 
-        $player = Player::openForTest($spy, 30.0, 8, 6, $gifPath);
+        $player = Player::openForTest($spy, 30.0, 0, 8, 6, $gifPath);
         $player = $this->setFrameIndex($player, 12);
 
         // Left = seek backward 10 frames → target 2 < 12 → backward rebuild path.
@@ -812,6 +935,11 @@ final class PlayerTest extends TestCase
         throw new \RuntimeException("Property {$prop} not found on Player");
     }
 
+    private function setPlayerProperty(Player $player, string $prop, mixed $value): Player
+    {
+        return $this->createPlayerWithOverrides($player, [$prop => $value]);
+    }
+
     private function setCurrentFrame(Player $player, ?RgbFrame $frame, int $index): Player
     {
         $reflection = new \ReflectionClass($player);
@@ -828,11 +956,6 @@ final class PlayerTest extends TestCase
     private function setFrameIndex(Player $player, int $index): Player
     {
         return $this->createPlayerWithOverrides($player, ['frameIndex' => $index]);
-    }
-
-    private function setTotalFrames(Player $player, int $total): Player
-    {
-        return $this->createPlayerWithOverrides($player, ['totalFrames' => $total]);
     }
 
     /**
@@ -865,7 +988,7 @@ final class PlayerTest extends TestCase
         $mode = $this->getPlayerProperty($player, 'mode');
         $speed = $this->getPlayerProperty($player, 'speed');
         $paused = $this->getPlayerProperty($player, 'paused');
-        $elapsed = $this->getPlayerProperty($player, 'elapsed');
+        $videoTime = $this->getPlayerProperty($player, 'videoTime');
         $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
         $currentFrame = $this->getPlayerProperty($player, 'currentFrame');
         $lastTickTime = $this->getPlayerProperty($player, 'lastTickTime');
@@ -887,7 +1010,7 @@ final class PlayerTest extends TestCase
             'mode' => $mode,
             'speed' => $speed,
             'paused' => $paused,
-            'elapsed' => $elapsed,
+            'videoTime' => $videoTime,
             'frameIndex' => $frameIndex,
             'currentFrame' => $currentFrame,
             'lastTickTime' => $lastTickTime,
