@@ -682,12 +682,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-palette.git",
-                "reference": "7bf69efee1693cc6c9624e8c88f51b5b91a3ad44"
+                "reference": "690b257fb5670404ea6cb0ff969614693890c063"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/7bf69efee1693cc6c9624e8c88f51b5b91a3ad44",
-                "reference": "7bf69efee1693cc6c9624e8c88f51b5b91a3ad44",
+                "url": "https://api.github.com/repos/sugarcraft/candy-palette/zipball/690b257fb5670404ea6cb0ff969614693890c063",
+                "reference": "690b257fb5670404ea6cb0ff969614693890c063",
                 "shasum": ""
             },
             "require": {
@@ -731,7 +731,7 @@
                 "issues": "https://github.com/sugarcraft/candy-palette/issues",
                 "source": "https://github.com/sugarcraft/candy-palette"
             },
-            "time": "2026-06-01T22:54:34+00:00"
+            "time": "2026-06-02T17:39:06+00:00"
         },
         {
             "name": "sugarcraft/candy-pty",

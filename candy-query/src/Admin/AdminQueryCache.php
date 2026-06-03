@@ -124,4 +124,46 @@ final class AdminQueryCache
 
         return $this->connection;
     }
+
+    /**
+     * Get cached status variables from the last async fetch.
+     *
+     * @return array<string, string>|null
+     */
+    public function getStatusVariables(): ?array
+    {
+        $key = 'status';
+        if (!array_key_exists($key, $this->results)) {
+            return null;
+        }
+
+        if ((microtime(true) - ($this->storedAt[$key] ?? 0.0)) >= self::TTL) {
+            $this->pending[$key] = true;
+            return null;
+        }
+
+        $result = $this->results[$key];
+        return is_array($result) ? $result : null;
+    }
+
+    /**
+     * Get cached server variables from the last async fetch.
+     *
+     * @return array<string, string>|null
+     */
+    public function getServerVariables(): ?array
+    {
+        $key = 'server';
+        if (!array_key_exists($key, $this->results)) {
+            return null;
+        }
+
+        if ((microtime(true) - ($this->storedAt[$key] ?? 0.0)) >= self::TTL) {
+            $this->pending[$key] = true;
+            return null;
+        }
+
+        $result = $this->results[$key];
+        return is_array($result) ? $result : null;
+    }
 }
