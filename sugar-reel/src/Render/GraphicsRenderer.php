@@ -17,7 +17,7 @@ use SugarCraft\Reel\Decode\RgbFrame;
  * protocol encoding. Each graphics mode fills the terminal with the image
  * at its native pixel dimensions.
  *
- * Mirrors charmbracelet/sugar-reel Render.GraphicsRenderer.
+ * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph, joelibaceta/video-to-ascii.
  *
  * @see Mosaic::sixel()  For sixel protocol delegation.
  * @see Mosaic::iterm2()  For iTerm2 inline-image protocol delegation.

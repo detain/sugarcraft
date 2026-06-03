@@ -7,7 +7,7 @@ namespace SugarCraft\Reel\Render;
 /**
  * Rendering mode for terminal video output.
  *
- * Mirrors charmbracelet/sugar-reel rendering modes.
+ * No single upstream — drawn from maxcurzi/tplay, seatedro/glyph, joelibaceta/video-to-ascii.
  */
 enum Mode: string
 {

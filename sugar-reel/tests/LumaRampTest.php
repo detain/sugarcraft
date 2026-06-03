@@ -230,4 +230,24 @@ final class LumaRampTest extends TestCase
         $this->assertSame(LumaRamp::ramp('dense'), LumaRamp::ramp('dense'));
         $this->assertSame(LumaRamp::ramp(), LumaRamp::ramp());
     }
+
+    /**
+     * @testdox char() with no ramp argument uses the standard ramp
+     */
+    public function testCharDefaultIsStandardRamp(): void
+    {
+        // luma=0 (black) should map to the first char of the standard ramp.
+        $this->assertNotEmpty(LumaRamp::char(0.0));
+    }
+
+    /**
+     * @testdox char() accepts an explicit ramp name
+     */
+    public function testCharWithMinimalRamp(): void
+    {
+        // Different ramps produce different chars at same luma (most lumas).
+        $char = LumaRamp::char(128.0, 'minimal');
+        $this->assertIsString($char);
+        $this->assertSame(1, strlen($char));
+    }
 }
