@@ -75,10 +75,12 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `Table.php` lines 234–246 and `candy-sprinkles/src/Border.php`.
 
 - **[pattern:multilineMode-row-height]** when `multilineMode=true`, row height
-  equals the maximum cell height across all columns; `renderRowLines()` iterates
-  all cell lines to build the full row height. When `false` (the default), cells
-  are clamped to `maxLines = 1` preserving backward compatibility. See
-  `Table.php` lines 241–246.
+  equals the maximum cell height across all columns; `fillDataRowLines()` iterates
+  all cell lines to build the full row height. `calculateRowHeight()` computes the
+  max line count across all visible cells using each column's `renderCell()`. When
+  `false` (the default), cells are clamped to one line preserving backward
+  compatibility. See `Table.php` lines 118–119 (property), 984–1014
+  (`calculateRowHeight`), and 1023–1126 (`fillDataRowLines`).
 
 - Lang class now extends `SugarCraft\Core\I18n\Lang` — `t()` method inherited from base; NAMESPACE and DIR are the only per-lib constants.
 
