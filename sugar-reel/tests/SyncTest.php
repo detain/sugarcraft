@@ -19,52 +19,36 @@ final class SyncTest extends TestCase
     // -------------------------------------------------------------------------
 
     /**
-     * @testdox targetFrame(0.0, 30.0, 1.0) returns 0
+     * @testdox targetFrame(0.0, 30.0) returns 0
      */
     public function testTargetFrameAtTimeZero(): void
     {
-        $this->assertSame(0, Sync::targetFrame(0.0, 30.0, 1.0));
+        $this->assertSame(0, Sync::targetFrame(0.0, 30.0));
     }
 
     /**
-     * @testdox targetFrame(1.0, 30.0, 1.0) returns 30 (one second at 30 fps)
+     * @testdox targetFrame(1.0, 30.0) returns 30 (one second at 30 fps)
      */
     public function testTargetFrameAt1Second(): void
     {
-        $this->assertSame(30, Sync::targetFrame(1.0, 30.0, 1.0));
+        $this->assertSame(30, Sync::targetFrame(1.0, 30.0));
     }
 
     /**
-     * @testdox targetFrame(1.0, 30.0, 2.0) returns 60 (2× speed)
-     */
-    public function testTargetFrameWithSpeed2(): void
-    {
-        $this->assertSame(60, Sync::targetFrame(1.0, 30.0, 2.0));
-    }
-
-    /**
-     * @testdox targetFrame(1.0, 30.0, 0.5) returns 15 (0.5× speed)
-     */
-    public function testTargetFrameWithSpeed05(): void
-    {
-        $this->assertSame(15, Sync::targetFrame(1.0, 30.0, 0.5));
-    }
-
-    /**
-     * @testdox targetFrame(0.5, 29.97, 1.0) returns floor(0.5 * 29.97) = 14
+     * @testdox targetFrame(0.5, 29.97) returns floor(0.5 * 29.97) = 14
      */
     public function testTargetFrameAtFpsNonInteger(): void
     {
-        $this->assertSame(14, Sync::targetFrame(0.5, 29.97, 1.0));
+        $this->assertSame(14, Sync::targetFrame(0.5, 29.97));
     }
 
     /**
-     * @testdox targetFrame returns 0 for negative elapsed time (guard)
+     * @testdox targetFrame returns 0 for negative video time (guard)
      */
     public function testTargetFrameNegativeReturnsZero(): void
     {
-        $this->assertSame(0, Sync::targetFrame(-1.0, 30.0, 1.0));
-        $this->assertSame(0, Sync::targetFrame(-0.001, 30.0, 1.0));
+        $this->assertSame(0, Sync::targetFrame(-1.0, 30.0));
+        $this->assertSame(0, Sync::targetFrame(-0.001, 30.0));
     }
 
     // -------------------------------------------------------------------------

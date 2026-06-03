@@ -53,7 +53,7 @@ final class Player implements Model
      * @param Mode                         $mode         Rendering mode
      * @param float                       $speed        Playback speed multiplier
      * @param bool                        $paused       True when playback is paused
-     * @param float                       $elapsed      Wall-clock seconds since playback start
+     * @param float                       $videoTime    Content seconds since playback start (accumulates delta*speed, NOT retroactive)
      * @param int                         $frameIndex   Current frame number (0-based)
      * @param RgbFrame|null               $currentFrame Decoded frame ready for rendering
      * @param float                       $lastTickTime Wall-clock time at last tick (microtime)
@@ -71,7 +71,7 @@ final class Player implements Model
         public readonly Mode $mode,
         public readonly float $speed,
         public readonly bool $paused,
-        public readonly float $elapsed,
+        public readonly float $videoTime,
         public readonly int $frameIndex,
         public readonly ?RgbFrame $currentFrame,
         private readonly float $lastTickTime,
@@ -106,6 +106,10 @@ final class Player implements Model
         // FPS from probe, default 24 if not available. Use override when set.
         $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
 
+        // Compute totalFrames from duration and fps when both are known.
+        $totalFrames = ($source->duration > 0.0 && $fps > 0.0)
+            ? (int)round($source->duration * $fps) : 0;
+
         // Decoder resolution is keyed to the render mode (HalfBlock decodes at
         // 2× cell height). Seek recreates the decoder with the current mode.
         $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode);
@@ -121,12 +125,12 @@ final class Player implements Model
             mode: $mode,
             speed: 1.0,
             paused: true,
-            elapsed: 0.0,
+            videoTime: 0.0,
             frameIndex: 0,
             currentFrame: null,
             lastTickTime: microtime(true),
             fps: $fps,
-            totalFrames: 0,
+            totalFrames: $totalFrames,
             cellsW: $cellsW,
             cellsH: $cellsH,
             videoPath: $videoPath,
@@ -145,14 +149,16 @@ final class Player implements Model
      *
      * @param Decoder  $decoder      Frame source iterator (e.g. FakeDecoder)
      * @param float    $fps           Frames per second
-     * @param int      $cellsW       Terminal cell width
+     * @param int      $totalFrames   Total frame count (0 if unknown/stream)
+     * @param int      $cellsW        Terminal cell width
      * @param int      $cellsH        Terminal cell height
-     * @param string   $videoPath    Fake path for seeking (default '/fake')
+     * @param string   $videoPath     Fake path for seeking (default '/fake')
      * @param bool     $loop          Restart from frame 0 at end-of-stream instead of stopping
      */
     public static function openForTest(
         Decoder $decoder,
         float $fps,
+        int $totalFrames = 0,
         int $cellsW = 80,
         int $cellsH = 24,
         string $videoPath = '/fake',
@@ -163,12 +169,12 @@ final class Player implements Model
             mode: Mode::HalfBlock,
             speed: 1.0,
             paused: true,
-            elapsed: 0.0,
+            videoTime: 0.0,
             frameIndex: 0,
             currentFrame: null,
             lastTickTime: microtime(true),
             fps: $fps,
-            totalFrames: 0,
+            totalFrames: $totalFrames,
             cellsW: $cellsW,
             cellsH: $cellsH,
             videoPath: $videoPath,
@@ -230,11 +236,10 @@ final class Player implements Model
         $now = microtime(true);
         $delta = $now - $this->lastTickTime;
 
-        // $elapsed is RAW wall-clock play-time; Sync::targetFrame applies the
-        // speed multiplier. (Folding speed into $elapsed here too would square
-        // it — the original bug.)
-        $newElapsed = $this->elapsed + $delta;
-        $target = Sync::targetFrame($newElapsed, $this->fps, $this->speed);
+        // F4 fix: videoTime accumulates delta*speed — speed change only affects
+        // FUTURE pacing, never retroactively rescales prior content time.
+        $newVideoTime = $this->videoTime + $delta * $this->speed;
+        $target = Sync::targetFrame($newVideoTime, $this->fps);
 
         // Decide skip / hold / advance using the tested Sync engine.
         $nextFrame = $this->currentFrame;
@@ -271,10 +276,10 @@ final class Player implements Model
         }
 
         if ($reachedEnd) {
-            return $this->onReachedEnd($nextFrame, $nextIndex, $newElapsed, $now);
+            return $this->onReachedEnd($nextFrame, $nextIndex, $newVideoTime, $now);
         }
 
-        $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newElapsed, $now);
+        $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newVideoTime, $now);
 
         $cmd = $nextPlayer->paused
             ? null
@@ -295,7 +300,7 @@ final class Player implements Model
      *
      * @return array{0: Model, 1: ?\Closure}
      */
-    private function onReachedEnd(?RgbFrame $nextFrame, int $nextIndex, float $newElapsed, float $now): array
+    private function onReachedEnd(?RgbFrame $nextFrame, int $nextIndex, float $newVideoTime, float $now): array
     {
         $tick = Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
 
@@ -306,7 +311,7 @@ final class Player implements Model
                 'ended' => true,
                 'currentFrame' => $nextFrame ?? $this->currentFrame,
                 'frameIndex' => $nextIndex,
-                'elapsed' => $newElapsed,
+                'videoTime' => $newVideoTime,
                 'lastTickTime' => $now,
             ]);
 
@@ -332,7 +337,7 @@ final class Player implements Model
             'decoder' => $newDecoder,
             'currentFrame' => $firstFrame ?? $this->currentFrame,
             'frameIndex' => 0,
-            'elapsed' => 0.0,
+            'videoTime' => 0.0,
             'lastTickTime' => $now,
             'ended' => false,
             'audioPlayer' => $newAudio,
@@ -416,9 +421,13 @@ final class Player implements Model
         }
 
         // 0–9 : seek to percentage of duration (0=0%, 9=90%).
+        // Guard: can't percent-seek an unknown-length stream.
         if ($msg->type === KeyType::Char && ctype_digit($msg->rune)) {
+            if ($this->totalFrames <= 0) {
+                return [$this, null];
+            }
             $percent = (int)$msg->rune * 10;
-            $nextIndex = (int)(($percent / 100.0) * max(1, $this->totalFrames));
+            $nextIndex = (int)(($percent / 100.0) * $this->totalFrames);
             $nextPlayer = $this->withSeek($nextIndex);
             return [$nextPlayer, $this->seekTickCmd($nextPlayer)];
         }
@@ -681,19 +690,30 @@ final class Player implements Model
         // Clamp to valid range.
         $targetIndex = max(0, $targetIndex);
 
+        // F6: realign audio to the seek target position.
+        $newAudio = $this->audioPlayer;
+        if ($this->audioPlayer !== null) {
+            $this->audioPlayer->stop();
+            $startMs = (int)round(($targetIndex / $this->fps) * 1000);
+            $newAudio = new AudioPlayer($this->videoPath, $startMs);
+            if (!$this->paused) {
+                $newAudio->start();
+            }
+        }
+
         // Backward seek: decoders are forward-only, so close-and-rebuild the
         // decoder and skip forward to the target. rebuildDecoderAt() closes the
         // old decoder first (F21: no leaked ffmpeg process) on the real path.
         if ($targetIndex < $this->frameIndex) {
             [$decoder, $frame] = $this->rebuildDecoderAt($this->cellsW, $this->cellsH, $this->mode, $targetIndex);
-            $newElapsed = $targetIndex / ($this->fps * $this->speed);   // keep existing formula — elapsed semantics are Phase 3
+            $newVideoTime = $targetIndex / $this->fps; // videoTime = content time (not scaled)
 
             return new self(
                 decoder: $decoder,
                 mode: $this->mode,
                 speed: $this->speed,
                 paused: $this->paused,
-                elapsed: $newElapsed,
+                videoTime: $newVideoTime,
                 frameIndex: $targetIndex,
                 currentFrame: $frame,
                 lastTickTime: microtime(true),
@@ -702,7 +722,7 @@ final class Player implements Model
                 cellsW: $this->cellsW,
                 cellsH: $this->cellsH,
                 videoPath: $this->videoPath,
-                audioPlayer: $this->audioPlayer,
+                audioPlayer: $newAudio,
                 ended: false,
                 loop: $this->loop,
             );
@@ -723,15 +743,15 @@ final class Player implements Model
             $idx++;
         }
 
-        // Compute elapsed time based on the new frame position.
-        $newElapsed = $idx / ($this->fps * $this->speed);
+        // F4 fix: videoTime = content time (not scaled by speed).
+        $newVideoTime = $idx / $this->fps;
 
         return new self(
             decoder: $this->decoder,
             mode: $this->mode,
             speed: $this->speed,
             paused: $this->paused,
-            elapsed: $newElapsed,
+            videoTime: $newVideoTime,
             frameIndex: $idx,
             currentFrame: $frame,
             lastTickTime: microtime(true),
@@ -740,7 +760,7 @@ final class Player implements Model
             cellsW: $this->cellsW,
             cellsH: $this->cellsH,
             videoPath: $this->videoPath,
-            audioPlayer: $this->audioPlayer,
+            audioPlayer: $newAudio,
             ended: false, // a seek clears the ended state
             loop: $this->loop,
         );
@@ -753,7 +773,7 @@ final class Player implements Model
         ?RgbFrame $frame,
         int $frameIndex,
         Decoder $decoder,
-        float $elapsed,
+        float $videoTime,
         float $lastTickTime,
     ): self {
         return new self(
@@ -761,7 +781,7 @@ final class Player implements Model
             mode: $this->mode,
             speed: $this->speed,
             paused: $this->paused,
-            elapsed: $elapsed,
+            videoTime: $videoTime,
             frameIndex: $frameIndex,
             currentFrame: $frame ?? $this->currentFrame,
             lastTickTime: $lastTickTime,
@@ -789,7 +809,7 @@ final class Player implements Model
             mode: $changes['mode'] ?? $this->mode,
             speed: $changes['speed'] ?? $this->speed,
             paused: $changes['paused'] ?? $this->paused,
-            elapsed: $changes['elapsed'] ?? $this->elapsed,
+            videoTime: $changes['videoTime'] ?? $this->videoTime,
             frameIndex: $changes['frameIndex'] ?? $this->frameIndex,
             currentFrame: $changes['currentFrame'] ?? $this->currentFrame,
             lastTickTime: $changes['lastTickTime'] ?? $this->lastTickTime,
@@ -800,7 +820,7 @@ final class Player implements Model
             videoPath: $this->videoPath,
             audioPlayer: $changes['audioPlayer'] ?? $this->audioPlayer,
             // ?? is null-coalescing, so passing ended => false / frameIndex => 0
-            // through mutate() is honoured (false/0 are not null).
+            // through mutate() is honourée (false/0 are not null).
             ended: $changes['ended'] ?? $this->ended,
             loop: $changes['loop'] ?? $this->loop,
         );
