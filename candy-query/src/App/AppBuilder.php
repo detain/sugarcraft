@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Query\App;
 
 use SugarCraft\Forms\TextArea\TextArea;
+use SugarCraft\Query\Admin\History\HistoryRecorder;
+use SugarCraft\Query\Admin\History\SqliteHistoryStore;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
@@ -44,6 +46,7 @@ final class AppBuilder
     private ?string $status = null;
     private array $queryHistory = [];
     private array $queryFavorites = [];
+    private ?string $historyDbPath = null;
 
     public function withDb(DatabaseInterface $db): self
     {
@@ -143,10 +146,27 @@ final class AppBuilder
         return $clone;
     }
 
+    /**
+     * Enable history recording with the specified SQLite file path.
+     * When set, admin fetch results are persisted for later rate analysis.
+     */
+    public function withHistoryDbPath(?string $path): self
+    {
+        $clone = clone $this;
+        $clone->historyDbPath = $path;
+        return $clone;
+    }
+
     public function build(): \SugarCraft\Query\App
     {
         if ($this->db === null) {
             throw new \LogicException('db is required');
+        }
+
+        $historyRecorder = null;
+        if ($this->historyDbPath !== null) {
+            $store = new SqliteHistoryStore($this->historyDbPath);
+            $historyRecorder = new HistoryRecorder($store);
         }
 
         return new \SugarCraft\Query\App(
@@ -164,6 +184,7 @@ final class AppBuilder
             $this->status,
             $this->queryHistory,
             $this->queryFavorites,
+            historyRecorder: $historyRecorder,
         );
     }
 }
