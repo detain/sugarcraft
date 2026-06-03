@@ -17,7 +17,7 @@ Each entry should have:
 - Phase 3: Pending
 - Phase 4: Pending
 - Phase 5: Pending
-- Phase 6: Pending
+- Phase 6: In Progress
 - Phase 7: Pending
 - Phase 8: Pending
 - Phase 9: Pending
@@ -32,7 +32,10 @@ Each entry should have:
 (None yet)
 
 ### Completed Items
-(None yet)
+- **2026-06-03**: Step 6.1 - Row Expansion/Collapse Feature
+  - PR #1004 merged to master
+  - Added expansion API: `toggleExpanded()`, `withExpandedRows()`, `isExpanded()`
+  - 225 tests pass, 451 assertions
 
 ## Phase-by-Phase Notes
 
@@ -173,8 +176,15 @@ Each entry should have:
     - @see references to related methods
 
 ### Phase 6: Row Expansion
-- Step 6.1 (impl): Pending
-- Step 6.2 (review): Pending
+- Step 6.1 (impl): **COMPLETED** ✅
+  - Added expandedRows state, toggleExpanded(), isExpanded(), withExpandedRows()
+  - Modified fillDataRow() and fillDataRowLines() to show full content for expanded rows
+  - All 225 tests pass
+- Step 6.2 (review): **ISSUES_FOUND** ⚠️
+  - Major: Pagination API inconsistency - index is global, not page-relative
+  - Major: No test coverage for expansion functionality
+  - Minor: Silent failure on invalid index
+- Step 6.3 (fix): **IN_PROGRESS**
 - Step 6.3 (fix): Pending
 - Step 6.4 (tests): Pending
 - Step 6.5 (docs): Pending
