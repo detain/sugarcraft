@@ -112,3 +112,14 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   `fillDataRowLines` (multiline). See `Table.php` lines 338–398
   (`withExpandedRows`/`toggleExpanded`/`isExpanded`), 1106
   (`fillDataRow` expansion check), and 1241 (`fillDataRowLines` expansion check).
+
+- **[pattern:footer-type-enum]** `FooterType` enum controls footer content via
+  `withFooterType(FooterType $type)`. Three cases: `Page` (default, shows "Page N
+  of M"), `Rows` (shows "Showing X to Y of Z rows" via `RowsFooter()`), and
+  `Both` (combines both with " | " separator). The `fillFooterRow()` method
+  uses a `match` expression on `$this->footerType` to select which footer to
+  render. Row count calculation uses `TotalRows()` (filtered+sorted count) and
+  respects pagination via `page * pageSize` offset. The `showing_rows` i18n key
+  is used via `Lang::t()`. See `FooterType.php` and `Table.php` lines 117
+  (property), 278–283 (`withFooterType`), 727–738 (`RowsFooter`), and 1336–1376
+  (`fillFooterRow`).
