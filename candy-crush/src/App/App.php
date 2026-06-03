@@ -8,6 +8,8 @@ use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\ToolResultMessage;
 use SugarCraft\Crush\Providers\ProviderInterface;
+use SugarCraft\Crush\Skills\Skill;
+use SugarCraft\Crush\Skills\SkillRegistry;
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tui\Pane;
 
@@ -28,6 +30,7 @@ final class App
         public readonly ?string $sessionId,
         public readonly array $contextFiles,
         public readonly array $enabledSkills,
+        public readonly SkillRegistry $availableSkills,
         public readonly array $activeHooks,
     ) {}
 
@@ -44,6 +47,7 @@ final class App
             sessionId: null,
             contextFiles: [],
             enabledSkills: [],
+            availableSkills: new SkillRegistry(),
             activeHooks: [],
         );
     }
@@ -99,9 +103,40 @@ final class App
         return $this->mutate(enabledSkills: $v);
     }
 
+    public function withAvailableSkills(SkillRegistry $registry): self
+    {
+        return $this->mutate(availableSkills: $registry);
+    }
+
     public function withActiveHooks(array $v): self
     {
         return $this->mutate(activeHooks: $v);
+    }
+
+    /**
+     * Apply enabled skills to the base system prompt.
+     */
+    public function applySkillsToSystemPrompt(string $baseSystemPrompt): string
+    {
+        $result = $baseSystemPrompt;
+
+        foreach ($this->enabledSkills as $skill) {
+            if ($skill instanceof Skill) {
+                $result .= $skill->systemPromptContribution();
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Find skills that match a task description.
+     *
+     * @return array<Skill>
+     */
+    public function findSkillsForTask(string $task): array
+    {
+        return $this->availableSkills->findForPrompt($task);
     }
 
     /**

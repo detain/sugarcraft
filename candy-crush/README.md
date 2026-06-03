@@ -27,6 +27,924 @@ and MCP tool discovery.
 🟢 Step 3.2 complete — SGLANG Provider implementation.
 🟢 Step 3.3 complete — Claude Code Provider implementation.
 🟢 Step 3.4 complete — AWS Bedrock Provider implementation.
+🟢 Step 3.5 complete — Vertex and Custom Providers implementation.
+🟢 Step 3.6 complete — ProviderFactory for configuration-driven provider creation.
+🟢 Step 4.1 complete — Skill value object with frontmatter parsing.
+🟢 Step 4.2 complete — SkillLoader and SkillRegistry implementation.
+🟢 Step 4.3 complete — Built-in Skills implementation.
+🟢 Step 4.4 complete — Skill Integration (SkillManager + App methods).
+🟢 Step 5.1 complete — Hook Interface and Registry implementation.
+🟢 Step 5.2 complete — Built-in Hooks implementation.
+🟢 Step 5.3 complete — Hook Configuration (YAML loading, ScriptHook, HookManager).
+🟢 Step 6.1 complete — Agent value object and AgentDefinition built-in types.
+
+## Step 6.1: Agent Value Object
+
+Step 6.1 implements the `Agent` value object and `AgentDefinition` factory — the foundational types for representing AI agents in CandyCrush.
+
+### Agent Value Object
+
+`Agent` is an immutable data structure representing a configured AI agent:
+
+```php
+final readonly class Agent
+{
+    public function __construct(
+        public string $name,
+        public string $description,
+        public string $prompt,
+        public string $model,
+        public string $provider,
+        public array $tools,
+        public array $skillNames,
+        public array $hooks,
+        public bool $isActive,
+    ) {}
+}
+```
+
+**Key characteristics:**
+- `final readonly class` enforces immutability at the type level
+- Constructor property promotion exposes all fields as public
+- No setters — all modifications create new instances via `with*()` builders
+
+### fromArray() Deserialization
+
+Create an `Agent` from a configuration array:
+
+```php
+$agent = Agent::fromArray([
+    'name' => 'my-coder',
+    'description' => 'A coding assistant',
+    'prompt' => 'You are a helpful coder.',
+    'model' => 'claude-sonnet-4-6',
+    'provider' => 'anthropic',
+    'tools' => ['Read', 'Edit', 'Bash'],
+    'skills' => ['php-best-practices'],
+    'hooks' => ['safe-bash'],
+    'is_active' => true,
+]);
+```
+
+Missing keys use sensible defaults:
+- `model` defaults to `'claude-sonnet-4-6'`
+- `provider` defaults to `'anthropic'`
+- `tools`, `skills`, `hooks` default to `[]`
+- `is_active` defaults to `false`
+
+### toArray() Serialization
+
+Serialize an `Agent` back to an array:
+
+```php
+$data = $agent->toArray();
+// Returns:
+// [
+//     'name' => 'my-coder',
+//     'description' => 'A coding assistant',
+//     'prompt' => 'You are a helpful coder.',
+//     'model' => 'claude-sonnet-4-6',
+//     'provider' => 'anthropic',
+//     'tools' => ['Read', 'Edit', 'Bash'],
+//     'skills' => ['php-best-practices'],
+//     'hooks' => ['safe-bash'],
+//     'is_active' => true,
+// ]
+```
+
+The array format matches the `fromArray()` input format, enabling round-trip serialization.
+
+### Immutable Builders
+
+Use `with*()` methods to create modified copies without mutating the original:
+
+```php
+// Rename an agent
+$renamedAgent = $agent->withName('new-name');
+
+// Activate/deactivate an agent
+$activeAgent = $agent->withActive(true);
+$inactiveAgent = $agent->withActive(false);
+```
+
+Each builder returns a **new instance** — the original `Agent` is unchanged. This supports functional update patterns in the TEA architecture.
+
+### systemPrompt() Method
+
+Returns the agent's prompt for use as the system message:
+
+```php
+$systemPrompt = $agent->systemPrompt();
+```
+
+### AgentDefinition Built-in Types
+
+`AgentDefinition` provides factory methods for six common agent types:
+
+| Type | Description | Default Tools | Default Skills |
+|------|-------------|---------------|----------------|
+| `coder` | General coding assistant | `Read`, `Edit`, `Bash` | — |
+| `reviewer` | Code review specialist | `Read`, `Grep`, `Bash(git:*)` | `php-best-practices`, `security-audit` |
+| `debugger` | Bug investigation and fixing | `Read`, `Grep`, `Bash` | — |
+| `architect` | System design and architecture | `Read`, `Grep`, `Glob` | — |
+| `tester` | Test writing and coverage | `Read`, `Bash` | `phpunit-master` |
+| `devops` | CI/CD and deployment | `Read`, `Bash`, `Glob` | — |
+
+### Creating Built-in Agents
+
+```php
+use SugarCraft\Crush\Agents\AgentDefinition;
+
+// Create a coder agent with default name
+$coder = AgentDefinition::coder();
+
+// Create a reviewer with custom name
+$reviewer = AgentDefinition::reviewer('security-reviewer');
+
+// Create a tester agent
+$tester = AgentDefinition::tester();
+```
+
+### Type Constants
+
+The type is available as a string constant:
+
+```php
+AgentDefinition::TYPE_CODER     // 'coder'
+AgentDefinition::TYPE_REVIEWER  // 'reviewer'
+AgentDefinition::TYPE_DEBUGGER  // 'debugger'
+AgentDefinition::TYPE_ARCHITECT // 'architect'
+AgentDefinition::TYPE_TESTER    // 'tester'
+AgentDefinition::TYPE_DEVOPS     // 'devops'
+```
+
+### fromType() Factory
+
+Create an agent definition by type string:
+
+```php
+$definition = AgentDefinition::fromType('reviewer', 'my-reviewer');
+
+// Returns null for unknown types
+$unknown = AgentDefinition::fromType('invalid', 'name');  // null
+```
+
+This enables configuration-driven agent creation from YAML or JSON.
+
+### AgentDefinition Structure
+
+```php
+final readonly class AgentDefinition
+{
+    public function __construct(
+        public string $type,
+        public string $name,
+        public string $description,
+        public string $prompt,
+        public array $defaultTools,
+        public array $defaultSkills,
+    ) {}
+}
+```
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentDefinition;
+
+// Create a definition for a reviewer agent
+$def = AgentDefinition::reviewer('code-reviewer');
+
+// Convert to an actual agent with additional config
+$agent = Agent::fromArray([
+    'name' => $def->name,
+    'description' => $def->description,
+    'prompt' => $def->prompt,
+    'model' => 'claude-sonnet-4-6',
+    'provider' => 'anthropic',
+    'tools' => $def->defaultTools,
+    'skillNames' => $def->defaultSkills,
+    'hooks' => [],
+    'is_active' => true,
+]);
+
+// Use the agent
+$systemPrompt = $agent->systemPrompt();
+
+// Modify the agent (immutable)
+$inactiveAgent = $agent->withActive(false);
+```
+
+### Architecture
+
+```
+Agent (value object)
+  ├── name, description, prompt, model, provider
+  ├── tools, skillNames, hooks
+  ├── isActive
+  ├── fromArray() — static factory from config
+  ├── toArray() — serialize to config format
+  ├── withName() — immutable name change
+  ├── withActive() — immutable activation toggle
+  └── systemPrompt() — returns prompt string
+
+AgentDefinition (factory)
+  ├── TYPE_CODER, TYPE_REVIEWER, ...
+  ├── coder(), reviewer(), debugger(), ...
+  ├── fromType() — type string to definition
+  └── new() — constructor with type/name/description/prompt/tools/skills
+```
+
+## Step 5.1: Hook Interface and Registry
+
+Step 5.1 implements the hooks system — a pluggable interception layer that allows code to observe and modify tool execution at `PreToolUse` and `PostToolUse` events. Hooks are matched by regex against the tool name and return an action that controls execution flow.
+
+### HookEvent Enum
+
+Events are represented by a PHP 8.1 backed enum:
+
+```php
+enum HookEvent: string
+{
+    case PreToolUse = 'PreToolUse';
+    case PostToolUse = 'PostToolUse';
+}
+```
+
+| Event | When fired |
+|-------|------------|
+| `PreToolUse` | Before a tool is executed — can allow, deny, or modify the tool input |
+| `PostToolUse` | After a tool executes — can allow or deny based on the tool's output |
+
+### HookInterface Contract
+
+All hooks implement `HookInterface`:
+
+```php
+interface HookInterface
+{
+    public function name(): string;
+    public function event(): HookEvent;
+    public function matcher(): string;
+    public function execute(HookContext $context): HookResult;
+}
+```
+
+| Method | Purpose |
+|--------|---------|
+| `name()` | Unique identifier for this hook |
+| `event()` | Which event this hook subscribes to (`PreToolUse` or `PostToolUse`) |
+| `matcher()` | Regex pattern (PCRE) — the hook runs when this matches the tool name |
+| `execute(HookContext)` | Performs the hook logic and returns a `HookResult` |
+
+### HookContext
+
+`HookContext` is an immutable data bag passed to every hook:
+
+```php
+final readonly class HookContext
+{
+    public function __construct(
+        public string $sessionId,
+        public string $toolName,
+        public array $toolArgs,
+        public string $toolInput,
+        public string $toolOutput,
+        public string $model,
+        public string $provider,
+        public string $projectRoot,
+    ) {}
+}
+```
+
+Immutable builders allow hooks to propagate modifications downstream:
+
+```php
+// Modify tool input (used when a hook returns HookResult::modify())
+$newContext = $context->withToolInput($modifiedInput);
+
+// Modify tool output (used in PostToolUse to record or transform output)
+$newContext = $context->withToolOutput($modifiedOutput);
+```
+
+### HookResult Actions
+
+`HookResult` communicates the hook's decision:
+
+```php
+final readonly class HookResult
+{
+    public const ALLOW = 'allow';
+    public const DENY = 'deny';
+    public const MODIFY = 'modify';
+
+    // Factory methods
+    public static function allow(string $message = ''): self;
+    public static function deny(string $message): self;
+    public static function modify(string $newInput, string $message = ''): self;
+
+    // Predicates
+    public function isAllowed(): bool;
+    public function isDenied(): bool;
+    public function isModified(): bool;
+}
+```
+
+| Action | Meaning | Execution continues? |
+|--------|---------|---------------------|
+| `ALLOW` | Tool may proceed | Yes — to next matching hook |
+| `DENY` | Tool is blocked | No — chain stops, returns DENY immediately |
+| `MODIFY` | Tool proceeds with modified input | Yes — context updated, then next hook |
+
+### HookRegistry
+
+`HookRegistry` manages hook registration, lookup, and execution:
+
+```php
+final class HookRegistry
+{
+    public function register(HookInterface $hook): void;
+    public function unregister(string $name): void;
+    public function get(string $event, string $name): ?HookInterface;
+    public function getForEvent(string $event): array;
+    public function disable(string $name): void;
+    public function enable(string $name): void;
+    public function isDisabled(string $name): bool;
+
+    /** @return array<HookInterface> */
+    public function findMatches(string $event, string $toolName): array;
+
+    public function executeHooks(string $event, HookContext $context): HookResult;
+}
+```
+
+### Hook Chain Execution
+
+`executeHooks()` runs all matching hooks in sequence. The chain's behavior depends on the first non-ALLOW result:
+
+```php
+public function executeHooks(string $event, HookContext $context): HookResult
+{
+    $matches = $this->findMatches($event, $context->toolName);
+    $firstModifyResult = null;
+
+    foreach ($matches as $hook) {
+        $result = $hook->execute($context);
+
+        if ($result->isDenied()) {
+            return $result;  // DENY stops the chain immediately
+        }
+
+        if ($result->isModified()) {
+            // MODIFY updates context and continues
+            $context = $context->withToolInput($result->modifiedInput);
+            $firstModifyResult ??= $result;  // track first MODIFY
+        }
+    }
+
+    // If any MODIFY occurred, return the first one; otherwise ALLOW
+    return $firstModifyResult ?? HookResult::allow();
+}
+```
+
+**Chain semantics:**
+- **DENY** always stops execution immediately and returns DENY
+- **MODIFY** updates the context and continues to the next hook; the first MODIFY result is returned if no DENY occurs
+- **ALLOW** continues to the next hook; if all hooks return ALLOW, the final result is ALLOW
+
+### Regex-Based Hook Matching
+
+`findMatches()` uses `preg_match()` with the hook's `matcher()` pattern:
+
+```php
+if (preg_match('/' . $hook->matcher() . '/i', $toolName)) {
+    $matches[] = $hook;
+}
+```
+
+The regex is case-insensitive (`/i` flag). Patterns match anywhere in the tool name (implicit `.*` anchors on both sides).
+
+**Example matchers:**
+
+```php
+// Match any Bash tool call
+'matcher()' => 'Bash'
+
+// Match all Read/Edit/Grep tools
+'matcher()' => 'Read|Edit|Grep'
+
+// Match all file-related tools
+'matcher()' => 'File|Read|Edit|Write'
+
+// Match any tool name starting with a capital letter followed by lowercase
+'matcher()' => '[A-Z][a-z]+'
+```
+
+### Example Hook Implementation
+
+A hook that blocks `Bash` tool calls containing `rm -rf`:
+
+```php
+final readonly class SafeBashHook implements HookInterface
+{
+    public function name(): string
+    {
+        return 'safe-bash';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return 'Bash';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        if (str_contains($context->toolInput, 'rm -rf') ||
+            str_contains($context->toolInput, 'rm -rf /')) {
+            return HookResult::deny('rm -rf is not allowed');
+        }
+
+        if (str_contains($context->toolInput, 'sudo')) {
+            return HookResult::modify(
+                str_replace('sudo', '', $context->toolInput),
+                'sudo removed from command'
+            );
+        }
+
+        return HookResult::allow();
+    }
+}
+```
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookEvent;
+
+// Create registry
+$registry = new HookRegistry();
+
+// Register hooks
+$registry->register(new SafeBashHook());
+$registry->register(new ReadOnlyHook());
+
+// Build context for PreToolUse event
+$context = new HookContext(
+    sessionId: $app->sessionId,
+    toolName: 'Bash',
+    toolArgs: ['command' => 'rm -rf /tmp/cache'],
+    toolInput: 'rm -rf /tmp/cache',
+    toolOutput: '',
+    model: $app->model,
+    provider: $app->provider->name(),
+    projectRoot: '/path/to/project',
+);
+
+// Execute the hook chain
+$result = $registry->executeHooks('PreToolUse', $context);
+
+if ($result->isDenied()) {
+    echo "Blocked: " . $result->message;
+} elseif ($result->isModified()) {
+    echo "Modified: " . $result->message;
+    // Use $context->toolInput which now has the sanitized value
+} else {
+    // Proceed with tool execution
+}
+```
+
+### Architecture
+
+```
+HookRegistry
+  ├── hooks['PreToolUse']: HookInterface[]
+  ├── hooks['PostToolUse']: HookInterface[]
+  └── disabled: array<string, bool>
+
+HookInterface (contract)
+  ├── name(): string
+  ├── event(): HookEvent
+  ├── matcher(): string
+  └── execute(HookContext): HookResult
+
+HookContext (immutable)
+  ├── toolName, toolArgs, toolInput, toolOutput
+  ├── sessionId, model, provider, projectRoot
+  └── withToolInput(), withToolOutput()
+
+HookResult (immutable)
+  ├── ALLOW | DENY | MODIFY
+  └── message, modifiedInput
+```
+
+### Interaction with TEA Model
+
+Hooks integrate with the `App` state via `activeHooks`:
+
+```php
+final readonly class App
+{
+    public function __construct(
+        // ...
+        public readonly array $activeHooks,  // HookInterface[]
+        // ...
+    ) {}
+}
+```
+
+When the runtime is about to execute a tool, it calls `executeHooks()` with the appropriate `HookContext`. The result controls whether the tool call proceeds and what input it receives.
+
+## Step 5.2: Built-in Hooks
+
+Step 5.2 provides three built-in hook implementations that ship with CandyCrush for common safety and audit scenarios.
+
+### Built-in Hooks Overview
+
+| Hook | Event | Matcher | Purpose |
+|------|-------|---------|---------|
+| `ProtectFilesHook` | `PreToolUse` | `^(bash\|Edit)$` | Prevents modification of sensitive files |
+| `ConfirmRemoveHook` | `PreToolUse` | `^rm$` | Prevents recursive/force `rm` commands |
+| `AuditHook` | `PostToolUse` | `.*` | Logs all tool executions to a file |
+
+### ProtectFilesHook
+
+`ProtectFilesHook` prevents modification of files that match protected patterns:
+
+```php
+final readonly class ProtectFilesHook implements HookInterface
+{
+    private const PROTECTED_PATTERNS = [
+        '/\.env$/',
+        '/composer\.json$/',
+        '/composer\.lock$/',
+        '/\.git\/config$/',
+        '/config\/.*\.php$/',
+    ];
+
+    public function name(): string
+    {
+        return 'protect-files';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return '^(bash|Edit)$';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        $input = $context->toolInput;
+
+        foreach (self::PROTECTED_PATTERNS as $pattern) {
+            if (preg_match($pattern, $input)) {
+                return HookResult::deny(
+                    "This hook prevents modification of protected files matching the given pattern"
+                );
+            }
+        }
+
+        return HookResult::allow();
+    }
+}
+```
+
+**Protected patterns:**
+- `\.env$` — Environment files containing secrets
+- `composer\.json$` / `composer\.lock$` — Composer dependencies
+- `\.git\/config$` — Git repository configuration
+- `config\/.*\.php$` — PHP configuration files
+
+The hook uses `preg_match()` to test each pattern against the tool input. If any pattern matches, the operation is denied with a message indicating which pattern was matched.
+
+### ConfirmRemoveHook
+
+`ConfirmRemoveHook` prevents dangerous recursive or force remove operations:
+
+```php
+final readonly class ConfirmRemoveHook implements HookInterface
+{
+    public function name(): string
+    {
+        return 'confirm-rm';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PreToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return '^rm$';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        $input = $context->toolInput;
+
+        // Check for recursive or force remove
+        if (preg_match('/rm\s+-[rfRFs]+\s+/i', $input)) {
+            return HookResult::deny(
+                'This hook prevents recursive/force rm. Use interactive rm instead.'
+            );
+        }
+
+        return HookResult::allow();
+    }
+}
+```
+
+**Detection logic:**
+- Matches tool name `rm` exactly (case-insensitive via `/i` flag in `findMatches()`)
+- Checks tool input for `-r`, `-f`, `-R`, `-F` flags in any combination
+- Pattern `/rm\s+-[rfRFs]+\s+/i` catches `rm -rf`, `rm -r`, `rm -f /path`, etc.
+
+**Why prevent recursive removes?** Accidental `rm -rf` can delete entire directory trees. The hook requires users to remove files individually or use interactive deletion tools.
+
+### AuditHook
+
+`AuditHook` logs all tool executions for debugging and compliance:
+
+```php
+final readonly class AuditHook implements HookInterface
+{
+    private string $logFile;
+
+    public function __construct(?string $logFile = null)
+    {
+        $this->logFile = $logFile ?? sys_get_temp_dir() . '/candy-crush-audit.log';
+    }
+
+    public function name(): string
+    {
+        return 'audit';
+    }
+
+    public function event(): HookEvent
+    {
+        return HookEvent::PostToolUse;
+    }
+
+    public function matcher(): string
+    {
+        return '.*';
+    }
+
+    public function execute(HookContext $context): HookResult
+    {
+        $entry = sprintf(
+            "[%s] %s %s %s => %s\n",
+            date('Y-m-d H:i:s'),
+            $context->sessionId,
+            $context->toolName,
+            $context->toolInput,
+            substr($context->toolOutput, 0, 200)
+        );
+
+        file_put_contents($this->logFile, $entry, FILE_APPEND | LOCK_EX);
+
+        return HookResult::allow();
+    }
+}
+```
+
+**Design decisions:**
+- `PostToolUse` event captures both input and output
+- Logs to `sys_get_temp_dir() . '/candy-crush-audit.log'` by default
+- Output is truncated to 200 characters to prevent huge log entries
+- `FILE_APPEND | LOCK_EX` ensures atomic writes in concurrent scenarios
+- Constructor accepts optional `$logFile` for testability
+
+**Log entry format:**
+```
+[2026-06-03 14:32:01] abc123 Bash rm -rf /tmp/cache => File deleted successfully
+```
+
+### Registering Built-in Hooks
+
+Register built-in hooks with `HookRegistry`:
+
+```php
+use SugarCraft\Crush\Hooks\HookRegistry;
+use SugarCraft\Crush\Hooks\BuiltIn\ProtectFilesHook;
+use SugarCraft\Crush\Hooks\BuiltIn\ConfirmRemoveHook;
+use SugarCraft\Crush\Hooks\BuiltIn\AuditHook;
+
+$registry = new HookRegistry();
+$registry->register(new ProtectFilesHook());
+$registry->register(new ConfirmRemoveHook());
+$registry->register(new AuditHook('/var/log/candy-crush/audit.log'));
+```
+
+**Registration order matters:** Hooks execute in registration order. For deny-first semantics, register `ProtectFilesHook` and `ConfirmRemoveHook` before hooks that might modify input.
+
+**Selective enabling:** Use `disable()` to temporarily pause a hook without unregistering:
+
+```php
+$registry->disable('audit');  // Pause audit logging
+$registry->enable('audit');    // Resume audit logging
+```
+
+**Auto-registration consideration:** The `HookRegistry` does not auto-register built-in hooks. Applications that want built-in hooks enabled by default should create a `registerBuiltInHooks()` convenience method:
+
+```php
+public function registerBuiltInHooks(HookRegistry $registry): void
+{
+    $registry->register(new ProtectFilesHook());
+    $registry->register(new ConfirmRemoveHook());
+    $registry->register(new AuditHook());
+}
+```
+
+## Step 5.3: Hook Configuration
+
+Step 5.3 adds YAML-based hook configuration loading, external script execution support, and a centralized `HookManager` for lifecycle management.
+
+### HookConfig
+
+`HookConfig` loads and parses YAML hook configuration files:
+
+```php
+final class HookConfig
+{
+    /**
+     * @return array<array{event: string, matcher: string, command: string, description: string}>
+     */
+    public static function loadFromFile(string $path): array;
+
+    /**
+     * @return array<array{event: string, matcher: string, command: string, description: string}>
+     */
+    public static function parse(string $content): array;
+}
+```
+
+**File loading behavior:**
+- `loadFromFile()` returns `[]` if the file does not exist or cannot be read
+- `parse()` catches YAML parse exceptions and returns `[]` on failure
+
+**Parsed structure:** Each hook entry contains `event`, `matcher`, `command`, and `description` keys with sensible defaults (`matcher: '.*'`, `event: 'PreToolUse'`).
+
+### ScriptHook
+
+`ScriptHook` executes external scripts as hooks via `proc_open()`:
+
+```php
+final readonly class ScriptHook implements HookInterface
+{
+    public function __construct(
+        private string $name,
+        private HookEvent $event,
+        private string $matcher,
+        private string $command,
+        private string $description,
+    ) {}
+
+    public static function fromConfig(array $config): self;
+
+    public function execute(HookContext $context): HookResult;
+}
+```
+
+**Environment variables passed to script hooks:**
+
+| Variable | Source | Description |
+|----------|--------|-------------|
+| `CRUSH_SESSION_ID` | `$context->sessionId` | Current session identifier |
+| `CRUSH_TOOL_NAME` | `$context->toolName` | Name of the tool being executed |
+| `CRUSH_TOOL_INPUT` | `$context->toolInput` | Tool input/arguments |
+| `CRUSH_TOOL_OUTPUT` | `$context->toolOutput` | Tool output (PostToolUse only) |
+| `CRUSH_MODEL` | `$context->model` | Current model name |
+| `CRUSH_PROVIDER` | `$context->provider` | Current provider name |
+
+**Execution behavior:**
+- Exit code 0 → `HookResult::allow()` with trimmed stdout as message
+- Non-zero exit → `HookResult::deny()` with trimmed stderr or `"Hook exited with code X"`
+- `proc_open` failure → `HookResult::allow()` (fail open)
+
+### HookManager
+
+`HookManager` orchestrates hook loading and lifecycle:
+
+```php
+final class HookManager
+{
+    public function __construct(
+        private HookRegistry $registry,
+    ) {}
+
+    public function loadFromFile(string $path): void;
+    public function registerBuiltIns(): void;
+    public function preToolUse(HookContext $context): HookResult;
+    public function postToolUse(HookContext $context): HookResult;
+
+    public function applyPreHooks(
+        string $toolName,
+        string $input,
+        HookContext $baseContext,
+    ): HookResult;
+}
+```
+
+**Composition pattern:** `HookManager` delegates to `HookRegistry` rather than duplicating registration logic. It provides convenience methods that construct the appropriate context and invoke the registry.
+
+**Built-in hooks auto-registration:** `registerBuiltIns()` registers three safety hooks:
+- `ProtectFilesHook` — prevents modification of sensitive files
+- `ConfirmRemoveHook` — blocks recursive/force `rm` commands
+- `AuditHook` — logs all tool executions
+
+### Example hooks.yaml Configuration
+
+```yaml
+hooks:
+  PreToolUse:
+    - matcher: '^Bash$'
+      command: './hooks/validate-bash.sh'
+      description: 'Validate bash commands before execution'
+
+    - matcher: '^(Edit|Write)$'
+      command: './hooks/check-git-status.sh'
+      description: 'Check git status before file modifications'
+
+  PostToolUse:
+    - matcher: '.*'
+      command: './hooks/audit-tool.sh'
+      description: 'Audit all tool executions'
+```
+
+**Configuration structure:**
+- Top-level `hooks:` key contains event names as keys
+- Each event maps to a list of hook configurations
+- `matcher:` is a PCRE regex (case-insensitive, implicitly anchored)
+- `command:` is the shell command to execute
+- `description:` is optional documentation
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Hooks\HookManager;
+use SugarCraft\Crush\Hooks\HookContext;
+use SugarCraft\Crush\Hooks\HookRegistry;
+
+// Create manager with registry
+$registry = new HookRegistry();
+$manager = new HookManager($registry);
+
+// Load hooks from YAML
+$manager->loadFromFile('/path/to/hooks.yaml');
+
+// Register built-in safety hooks
+$manager->registerBuiltIns();
+
+// Create context for pre-tool execution
+$context = new HookContext(
+    sessionId: $app->sessionId,
+    toolName: 'Bash',
+    toolArgs: ['command' => 'rm -rf /tmp/cache'],
+    toolInput: 'rm -rf /tmp/cache',
+    toolOutput: '',
+    model: $app->model,
+    provider: $app->provider->name(),
+    projectRoot: '/path/to/project',
+);
+
+// Execute pre-tool hooks
+$result = $manager->preToolUse($context);
+
+if ($result->isDenied()) {
+    echo "Blocked: " . $result->message;
+}
+```
+
+### Architecture
+
+```
+HookManager
+  ├── HookRegistry (delegation target)
+  ├── loadFromFile() → HookConfig::loadFromFile() → ScriptHook::fromConfig()
+  └── registerBuiltIns() → BuiltIn\*Hook instances
+
+HookConfig
+  ├── loadFromFile(path) → file_get_contents + parse
+  └── parse(yaml) → Symfony\Component\Yaml\Yaml::parse()
+
+ScriptHook
+  ├── fromConfig(config) → factory method
+  └── execute(context) → proc_open + environment variables
+```
 
 ## Step 3.1: OpenAI Provider
 
@@ -1398,6 +2316,1501 @@ echo $response->tokensUsed;  // Token count (combined input + output)
 5. **Streaming**:
    - HTTP providers: SSE with `data: ` prefix
    - Bedrock: Binary frame with `chunk.bytes` containing JSON
+
+## Step 3.5: Vertex and Custom Providers
+
+Step 3.5 implements two additional `ProviderInterface` implementations: `VertexProvider` for Google Cloud AI Platform and `CustomProvider` for any OpenAI-compatible endpoint.
+
+### VertexProvider Class
+
+`VertexProvider` connects to Google Cloud's AI Platform using the official Google Cloud AI Platform SDK:
+
+```php
+final readonly class VertexProvider implements ProviderInterface
+{
+    public function __construct(
+        private string $projectId,
+        private string $location,
+        private string $defaultModel,
+        private PredictionServiceClient $client,
+    ) {}
+
+    public static function create(
+        string $projectId,
+        string $location = 'us-central1',
+        string $model = 'claude-3-sonnet@20240229',
+    ): self {
+        $client = new PredictionServiceClient([
+            'projectId' => $projectId,
+        ]);
+
+        return new self($projectId, $location, $model, $client);
+    }
+}
+```
+
+**Google Cloud SDK dependency**: The provider requires `google/cloud-ai-platform` package which provides the `PredictionServiceClient` for interacting with Vertex AI endpoints.
+
+### Provider Interface Implementation
+
+| Method | Implementation | Notes |
+|--------|----------------|-------|
+| `name()` | Returns `'vertex'` | Provider identifier |
+| `supportsStreaming()` | Returns `true` | Vertex supports streaming |
+| `supportsFunctionCalling()` | Returns `false` | Vertex AI doesn't support function calling |
+| `supportsVision()` | Returns `false` | Vision requires separate model |
+| `supportsJsonSchema()` | Returns `false` | Vertex uses native inference config |
+| `contextWindow()` | Returns `200_000` | Claude models on Vertex |
+| `costPer1kTokens()` | Returns `0.0` | Vertex pricing varies by region |
+
+### complete() Method
+
+The `complete()` method sends requests to the Vertex AI predict endpoint:
+
+```php
+public function complete(CompleteRequest $request): CompleteResponse
+{
+    $params = [
+        'endpoint' => "projects/{$this->projectId}/locations/{$this->location}/publishers/anthropic/models/{$request->model}",
+        'instances' => [
+            [
+                'messages' => $this->formatMessages($request->messages),
+                'temperature' => $request->temperature ?? 0.7,
+                'max_tokens' => $request->maxTokens ?? 4096,
+            ],
+        ],
+    ];
+
+    try {
+        $response = $this->client->predict($params);
+        $predictions = $response->getPredictions();
+        $data = $predictions[0]->getStruct() ?? [];
+
+        return $this->parseResponse($data);
+    } catch (\Exception $e) {
+        return new CompleteResponse(
+            content: '',
+            isError: true,
+            errorMessage: $e->getMessage(),
+        );
+    }
+}
+```
+
+**Key behaviors:**
+- Uses Google Cloud's `PredictionServiceClient` for API calls
+- Endpoint format: `projects/{project}/locations/{location}/publishers/anthropic/models/{model}`
+- Messages are formatted for Vertex AI's expected structure
+- Exceptions are caught and returned as error responses
+
+### Message Formatting
+
+The `formatMessages()` method translates CandyCrush messages to Vertex format:
+
+```php
+private function formatMessages(array $messages): array
+{
+    return array_map(function (Message $msg) {
+        return [
+            'role' => match (true) {
+                $msg instanceof UserMessage => 'user',
+                $msg instanceof AssistantMessage => 'assistant',
+                default => 'user',
+            ],
+            'content' => $msg->content(),
+        ];
+    }, $messages);
+}
+```
+
+**Note**: Vertex AI has limited role support. System messages are not explicitly handled and fall through to the default `'user'` role.
+
+### completeStream() Placeholder
+
+Streaming for Vertex AI is not yet implemented:
+
+```php
+public function completeStream(CompleteRequest $request): \Generator
+{
+    // Vertex streaming implementation placeholder
+    // Streaming not yet fully implemented for Vertex AI
+    yield new CompleteResponse(
+        content: '',
+        reasoning: null,
+        toolCalls: null,
+        tokensUsed: 0,
+        costUsd: 0.0
+    );
+}
+```
+
+**Limitation**: This yields a single empty response. Full streaming support requires implementation using Vertex AI's streaming endpoints.
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Providers\VertexProvider;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Messages\UserMessage;
+
+// Create provider via factory
+$provider = VertexProvider::create(
+    projectId: 'my-gcp-project',
+    location: 'us-central1',
+    model: 'claude-3-sonnet@20240229',
+);
+
+// Make a completion request
+$request = new CompleteRequest(
+    model: 'claude-3-sonnet@20240229',
+    messages: [new UserMessage('Hello, Vertex AI!')],
+    temperature: 0.7,
+);
+
+$response = $provider->complete($request);
+echo $response->content;  // AI response
+```
+
+### CustomProvider Class
+
+`CustomProvider` provides a generic OpenAI-compatible provider that can connect to any endpoint supporting the OpenAI Chat Completions API:
+
+```php
+final readonly class CustomProvider implements ProviderInterface
+{
+    public function __construct(
+        private string $name,
+        private string $baseUrl,
+        private string $model,
+        private ?string $apiKey,
+        private Client $httpClient,
+        private bool $supportsStreaming,
+        private bool $supportsFunctionCalling,
+    ) {}
+
+    public static function openAiCompatible(
+        string $name,
+        string $baseUrl,
+        string $model,
+        ?string $apiKey = null,
+        bool $supportsStreaming = true,
+        bool $supportsFunctionCalling = true,
+    ): self {
+        $headers = [
+            'Content-Type' => 'application/json',
+        ];
+
+        if ($apiKey !== null) {
+            $headers['Authorization'] = 'Bearer ' . $apiKey;
+        }
+
+        $client = new Client([
+            'base_uri' => $baseUrl,
+            'headers' => $headers,
+        ]);
+
+        return new self(
+            name: $name,
+            baseUrl: $baseUrl,
+            model: $model,
+            apiKey: $apiKey,
+            httpClient: $client,
+            supportsStreaming: $supportsStreaming,
+            supportsFunctionCalling: $supportsFunctionCalling,
+        );
+    }
+}
+```
+
+### Provider Interface Implementation
+
+| Method | Implementation | Notes |
+|--------|----------------|-------|
+| `name()` | Returns configured name | Dynamic provider identifier |
+| `supportsStreaming()` | Returns configured value | Defaults to `true` |
+| `supportsFunctionCalling()` | Returns configured value | Defaults to `true` |
+| `supportsVision()` | Returns `false` | Text-only provider |
+| `supportsJsonSchema()` | Returns `false` | OpenAI-compatible providers use additional properties |
+| `contextWindow()` | Returns `128_000` | Typical for OpenAI-compatible endpoints |
+| `costPer1kTokens()` | Returns `0.0` | Self-hosted, no cost |
+
+### Factory Method: openAiCompatible()
+
+The `openAiCompatible()` factory creates a provider configured for OpenAI-compatible endpoints:
+
+```php
+public static function openAiCompatible(
+    string $name,
+    string $baseUrl,
+    string $model,
+    ?string $apiKey = null,
+    bool $supportsStreaming = true,
+    bool $supportsFunctionCalling = true,
+): self
+```
+
+**Key design decisions:**
+- `name` allows custom provider identification (e.g., `'local-llama'`, `'ollama'`)
+- `baseUrl` is the base URI for the API (e.g., `'http://localhost:11434'`)
+- `apiKey` is optional — many local endpoints don't require authentication
+- `supportsStreaming` and `supportsFunctionCalling` flags allow disabling features not supported by the endpoint
+
+### complete() Method
+
+The `complete()` method handles synchronous chat completions:
+
+```php
+public function complete(CompleteRequest $request): CompleteResponse
+{
+    $params = [
+        'model' => $request->model,
+        'messages' => $this->formatMessages($request->messages),
+        'temperature' => $request->temperature ?? 0.7,
+        'max_tokens' => $request->maxTokens ?? 4096,
+    ];
+
+    if ($request->tools !== null && $this->supportsFunctionCalling) {
+        $params['tools'] = $this->formatTools($request->tools);
+    }
+
+    try {
+        $response = $this->httpClient->post('/chat/completions', [
+            'json' => $params,
+        ]);
+
+        $data = json_decode($response->getBody()->getContents(), true);
+        return $this->parseResponse($data);
+    } catch (GuzzleException $e) {
+        return new CompleteResponse(
+            content: '',
+            isError: true,
+            errorMessage: $e->getMessage(),
+        );
+    }
+}
+```
+
+**Key behaviors:**
+- Posts to `/chat/completions` endpoint (OpenAI-compatible)
+- Tools are only sent if both provided and function calling is supported
+- `GuzzleException` is caught and returned as an error response
+
+### completeStream() Method
+
+The `completeStream()` method handles streaming responses using a generator with proper SSE line parsing:
+
+```php
+public function completeStream(CompleteRequest $request): \Generator
+{
+    if (!$this->supportsStreaming) {
+        yield $this->complete($request);
+        return;
+    }
+
+    $params = [
+        'model' => $request->model,
+        'messages' => $this->formatMessages($request->messages),
+        'temperature' => $request->temperature ?? 0.7,
+        'max_tokens' => $request->maxTokens ?? 4096,
+        'stream' => true,
+    ];
+
+    if ($request->tools !== null && $this->supportsFunctionCalling) {
+        $params['tools'] = $this->formatTools($request->tools);
+    }
+
+    try {
+        $response = $this->httpClient->post('/chat/completions', [
+            'json' => $params,
+            'stream' => true,
+        ]);
+
+        $stream = $response->getBody();
+        $buffer = '';
+
+        while (!$stream->eof()) {
+            $chunk = $stream->read(8192);
+            $buffer .= $chunk;
+
+            // Process complete lines in buffer
+            while (($newlinePos = strpos($buffer, "\n")) !== false) {
+                $line = substr($buffer, 0, $newlinePos);
+                $buffer = substr($buffer, $newlinePos + 1);
+
+                $line = trim($line);
+                if (str_starts_with($line, 'data: ')) {
+                    $data = json_decode(substr($line, 6), true);
+                    if ($data === null) {
+                        continue;
+                    }
+                    if (isset($data['choices'][0]['delta'])) {
+                        yield $this->parseChunk($data);
+                    }
+                    if (isset($data['choices'][0]['finish_reason'])) {
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (GuzzleException $e) {
+        yield new CompleteResponse(
+            content: '',
+            isError: true,
+            errorMessage: $e->getMessage(),
+        );
+    }
+}
+```
+
+**SSE line parsing**: The streaming implementation uses a buffer-based approach:
+1. Reads chunks of up to 8192 bytes from the stream
+2. Accumulates bytes in a buffer until a newline is found
+3. Extracts complete lines and processes SSE `data: ` prefixed lines
+4. Parses JSON and yields chunks with `delta.content`
+5. Detects stream end via `finish_reason` in the data
+
+### Message Formatting
+
+The `formatMessages()` method handles all message types including tool results:
+
+```php
+private function formatMessages(array $messages): array
+{
+    return array_map(function (Message $msg) {
+        return match (true) {
+            $msg instanceof UserMessage => ['role' => 'user', 'content' => $msg->content()],
+            $msg instanceof AssistantMessage => array_filter([
+                'role' => 'assistant',
+                'content' => $msg->content(),
+                'tool_calls' => $msg->toolCalls(),
+            ]),
+            $msg instanceof SystemMessage => ['role' => 'system', 'content' => $msg->content()],
+            $msg instanceof ToolResultMessage => [
+                'role' => 'tool',
+                'tool_call_id' => $msg->toolCallId(),
+                'content' => $msg->content(),
+            ],
+            default => ['role' => 'user', 'content' => $msg->content()],
+        };
+    }, $messages);
+}
+```
+
+**Tool call handling**: Assistant messages with tool calls use `array_filter()` to remove null values, ensuring clean JSON output to the API.
+
+### Response Parsing
+
+The `parseResponse()` method extracts data from OpenAI-compatible responses:
+
+```php
+private function parseResponse(array $data): CompleteResponse
+{
+    $choice = $data['choices'][0] ?? [];
+    $message = $choice['message'] ?? [];
+
+    $toolCalls = null;
+    if (isset($message['tool_calls'])) {
+        $toolCalls = array_map(
+            fn($tc) => ToolCall::fromArray([
+                'id' => $tc['id'],
+                'name' => $tc['function']['name'],
+                'arguments' => is_string($tc['function']['arguments'] ?? '')
+                    ? json_decode($tc['function']['arguments'], true) ?? []
+                    : ($tc['function']['arguments'] ?? []),
+            ]),
+            $message['tool_calls']
+        );
+    }
+
+    return new CompleteResponse(
+        content: $message['content'] ?? '',
+        reasoning: null,
+        toolCalls: $toolCalls,
+        tokensUsed: $data['usage']['total_tokens'] ?? 0,
+        costUsd: 0.0,
+    );
+}
+```
+
+**Tool call argument handling**: Arguments may be a JSON string or already-decoded array. The code handles both cases defensively.
+
+### embeddings() Method
+
+```php
+public function embeddings(EmbeddingsRequest $request): EmbeddingsResponse
+{
+    try {
+        $response = $this->httpClient->post('/embeddings', [
+            'json' => [
+                'model' => $request->model,
+                'input' => $request->input,
+            ],
+        ]);
+
+        $data = json_decode($response->getBody()->getContents(), true);
+        return new EmbeddingsResponse(
+            embeddings: array_map(
+                fn($item) => $item['embedding'],
+                $data['data'] ?? []
+            )
+        );
+    } catch (GuzzleException $e) {
+        return new EmbeddingsResponse(embeddings: []);
+    }
+}
+```
+
+**Error handling**: Returns empty embeddings on failure rather than throwing, consistent with other HTTP-based providers.
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Providers\CustomProvider;
+use SugarCraft\Crush\Providers\CompleteRequest;
+use SugarCraft\Crush\Messages\UserMessage;
+
+// Create provider for Ollama
+$provider = CustomProvider::openAiCompatible(
+    name: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'llama3',
+    apiKey: null,  // No auth for local Ollama
+    supportsStreaming: true,
+    supportsFunctionCalling: false,
+);
+
+// Make a completion request
+$request = new CompleteRequest(
+    model: 'llama3',
+    messages: [new UserMessage('Hello, local Llama!')],
+    temperature: 0.7,
+);
+
+$response = $provider->complete($request);
+echo $response->content;  // AI response
+```
+
+### Usage with LM Studio
+
+```php
+// Connect to LM Studio running locally
+$provider = CustomProvider::openAiCompatible(
+    name: 'lm-studio',
+    baseUrl: 'http://localhost:1234/v1',
+    model: 'my-model',
+    apiKey: null,
+    supportsStreaming: true,
+    supportsFunctionCalling: true,
+);
+```
+
+### Provider Transport Comparison
+
+| Provider | Transport | Protocol |
+|----------|-----------|----------|
+| OpenAIProvider | HTTP | OpenAI REST API |
+| SglangProvider | HTTP | OpenAI-compatible REST API |
+| ClaudeCodeProvider | Subprocess | CLI stdin/stdout |
+| BedrockProvider | AWS SDK | AWS Bedrock API |
+| VertexProvider | Google Cloud SDK | Google Cloud AI Platform API |
+| CustomProvider | HTTP | OpenAI-compatible REST API |
+
+**CustomProvider vs SglangProvider**: Both use OpenAI-compatible APIs, but:
+- `SglangProvider` is specialized for SGLANG servers with specific defaults
+- `CustomProvider` is a generic wrapper for any OpenAI-compatible endpoint with configurable feature flags
+
+## Step 3.6: ProviderFactory
+
+Step 3.6 implements `ProviderFactory` — a factory class that creates providers from configuration arrays with environment variable resolution support. This enables configuration-driven provider instantiation rather than direct construction.
+
+### ProviderFactory Class
+
+```php
+final readonly class ProviderFactory
+{
+    public function create(array|string $config): ProviderInterface
+    public function resolveEnv(?string $value): ?string
+    public function availableTypes(): array
+    public function defaultConfig(string $type): array
+}
+```
+
+The factory acts as a central entry point for creating any provider type, handling JSON parsing, environment variable resolution, and validation.
+
+### create() Method
+
+The `create()` method accepts either an array or JSON string configuration:
+
+```php
+public function create(array|string $config): ProviderInterface
+```
+
+**Config array format:**
+```php
+$config = [
+    'type' => 'openai',
+    'apiKey' => '${OPENAI_API_KEY}',
+    'organization' => '${OPENAI_ORG_ID}',
+    'model' => 'gpt-4o',
+];
+
+$provider = $factory->create($config);
+```
+
+**JSON string format:**
+```php
+$json = '{"type": "anthropic", "apiKey": "${ANTHROPIC_API_KEY}"}';
+$provider = $factory->create($json);
+```
+
+**Processing pipeline:**
+1. Parse JSON string to array if needed
+2. Validate config structure (must have `type` key)
+3. Validate provider type is known
+4. Resolve environment variables in all string values
+5. Validate required keys for the provider type
+6. Instantiate the appropriate provider
+
+**Error handling:**
+- `InvalidArgumentException` for missing type, unknown type, or invalid JSON
+- `RuntimeException` for missing required configuration keys
+
+### resolveEnv() Environment Variable Resolution
+
+The `resolveEnv()` method resolves `${VAR}` and `${VAR:-default}` patterns:
+
+```php
+public function resolveEnv(?string $value): ?string
+```
+
+**Supported patterns:**
+
+| Pattern | Behavior |
+|---------|----------|
+| `${VAR}` | Replace with environment variable value |
+| `${VAR:-default}` | Replace with default if VAR is unset or empty |
+| `${VAR:-}` | Replace with empty string if VAR is unset or empty |
+
+**Examples:**
+```php
+$factory->resolveEnv('${OPENAI_API_KEY}');
+// Returns 'sk-xxx' if OPENAI_API_KEY is set, '' otherwise
+
+$factory->resolveEnv('${ANTHROPIC_BASE_URL:-https://api.anthropic.com}');
+// Returns the env value if set, otherwise 'https://api.anthropic.com'
+
+$factory->resolveEnv('${SGLANG_API_KEY:-}');
+// Returns env value if set, otherwise empty string ''
+```
+
+**Regex pattern:** `[A-Z_][A-Z0-9_]*` for env var names — restricts to safe characters only.
+
+**Edge cases:**
+- Unset env (`getenv()` returns `false`) → returns default or `''`
+- Empty env (`''`) → returns default or `''` (shell semantics treat empty as unset for credentials)
+- Whitespace-only value → passes through (not treated as empty)
+
+### availableTypes() Listing
+
+Returns all supported provider types:
+
+```php
+public function availableTypes(): array
+{
+    return ['openai', 'anthropic', 'claude-code', 'sglang', 'bedrock', 'vertex', 'custom'];
+}
+```
+
+**Supported types:**
+
+| Type | Required Keys | Optional Keys |
+|------|--------------|--------------|
+| `openai` | `apiKey` | `organization`, `model` |
+| `anthropic` | `apiKey` | `baseUrl`, `model` |
+| `claude-code` | `claudePath` | `model` |
+| `sglang` | `baseUrl`, `model` | `apiKey` |
+| `bedrock` | `region` | `model` |
+| `vertex` | `projectId` | `location`, `model` |
+| `custom` | `name`, `baseUrl`, `model` | `apiKey`, `supportsStreaming`, `supportsFunctionCalling` |
+
+### defaultConfig() Usage
+
+Returns sensible default configuration for each provider type:
+
+```php
+public function defaultConfig(string $type): array
+```
+
+**Example — OpenAI defaults:**
+```php
+$factory->defaultConfig('openai');
+// Returns:
+// [
+//     'type' => 'openai',
+//     'apiKey' => getenv('OPENAI_API_KEY') ?: '',
+//     'organization' => getenv('OPENAI_ORG_ID') ?: null,
+//     'model' => 'gpt-4o',
+// ]
+```
+
+**Example — SGLANG defaults:**
+```php
+$factory->defaultConfig('sglang');
+// Returns:
+// [
+//     'type' => 'sglang',
+//     'baseUrl' => 'http://localhost:30000',
+//     'model' => 'MiniMax-M2.7',
+//     'apiKey' => getenv('SGLANG_API_KEY') ?: null,
+// ]
+```
+
+**Design note**: Default configs pull values from environment variables where credentials are needed, avoiding hardcoded secrets. Optional fields default to sensible values appropriate for each provider.
+
+### Example: Creating Providers from Environment-Based Config
+
+The factory enables environment-driven configuration:
+
+```php
+use SugarCraft\Crush\Providers\ProviderFactory;
+
+// Create factory
+$factory = new ProviderFactory();
+
+// Build config from defaults, override with environment
+$config = $factory->defaultConfig('openai');
+$config['model'] = 'gpt-4o';  // Override default model
+
+// Create provider
+$provider = $factory->create($config);
+
+// Use with AppBuilder
+$app = (new AppBuilder())
+    ->withProvider($provider)
+    ->withModel($config['model'])
+    ->build();
+```
+
+**Environment-based creation from JSON:**
+```php
+// config.json
+// {
+//     "type": "anthropic",
+//     "apiKey": "${ANTHROPIC_API_KEY}",
+//     "model": "claude-sonnet-4-6"
+// }
+
+$json = file_get_contents('config.json');
+$provider = $factory->create($json);
+```
+
+The `${ANTHROPIC_API_KEY}` placeholder is resolved from the environment at creation time.
+
+### TYPE_SCHEMAS Constant
+
+The `TYPE_SCHEMAS` constant defines validation structure for each provider:
+
+```php
+private const TYPE_SCHEMAS = [
+    'openai' => [
+        'required' => ['apiKey'],
+        'optional' => ['organization', 'model'],
+    ],
+    // ...
+];
+```
+
+**Why a schema constant?**
+- Single source of truth for required/optional fields
+- Drives both validation (`validateRequiredKeys()`) and documentation
+- Adding a new provider type only requires adding to this constant
+
+### Factory Method vs Constructor Injection Comparison
+
+| Aspect | Factory (`ProviderFactory`) | Direct Constructor |
+|--------|---------------------------|-------------------|
+| Configuration source | Array/JSON (runtime) | Arguments (compile time) |
+| Env var resolution | Built-in | Manual |
+| Validation | Centralized | Per-constructor |
+| Coupling | Loose (only interface) | Tight (specific class) |
+| JSON config | Native support | Requires external parsing |
+
+**Use factory when:**
+- Provider is configured at runtime (files, env vars, APIs)
+- Multiple provider types need centralized creation
+- Environment variable resolution is needed
+
+**Use constructor when:**
+- Provider is known at compile time
+- Testing with mock providers
+- Minimal indirection preferred
+
+### Provider Transport Comparison (Updated)
+
+| Provider | Transport | Protocol | Creation |
+|----------|-----------|----------|----------|
+| OpenAIProvider | HTTP | OpenAI REST API | ProviderFactory |
+| SglangProvider | HTTP | OpenAI-compatible REST API | ProviderFactory |
+| ClaudeCodeProvider | Subprocess | CLI stdin/stdout | ProviderFactory |
+| BedrockProvider | AWS SDK | AWS Bedrock API | ProviderFactory |
+| VertexProvider | Google Cloud SDK | Google Cloud AI Platform API | ProviderFactory |
+| CustomProvider | HTTP | OpenAI-compatible REST API | ProviderFactory |
+
+**Why ProviderFactory?**
+- Uniform API for creating any provider type
+- Environment variable resolution across all providers
+- Config validation at factory boundary
+- Single place to modify if provider creation logic changes
+
+## Step 4.1: Skill Value Object
+
+Step 4.1 implements the `Skill` value object — a data structure representing a loaded skill from a SKILL.md file. Skills provide specialized instructions and workflows that agents can use during execution.
+
+### Skill Class
+
+```php
+final readonly class Skill
+{
+    public function __construct(
+        public string $name,
+        public string $description,
+        public bool $userInvocable,
+        public bool $disableModelInvocation,
+        public ?string $allowedTools,
+        public ?string $disallowedTools,
+        public ?string $model,
+        public string $effort,
+        public string $context,
+        public array $paths,
+        public string $content,
+        public string $sourcePath,
+    ) {}
+}
+```
+
+The `Skill` class uses PHP 8.3 `readonly` with promoted parameters for a clean, immutable value object.
+
+### SKILL.md Frontmatter Specification
+
+Skills are defined in SKILL.md files with YAML frontmatter. The frontmatter uses kebab-case keys:
+
+```yaml
+---
+name: skill-name
+description: Brief description of what this skill does
+user-invocable: true        # Whether users can invoke this skill directly
+disable-model-invocation: false  # Skip model for this skill's context
+allowed-tools: tool1,tool2  # Optional: comma-separated list
+disallowed-tools: tool3      # Optional: tools to disable
+model: claude-sonnet-4-6    # Optional: specific model to use
+effort: medium              # planning|medium|high — estimated complexity
+context: thread             # thread|global — how context is accumulated
+paths:                      # Optional: file patterns this skill applies to
+  - '**/*.php'
+  - '**/composer.json'
+---
+# Skill content (markdown) goes here
+```
+
+| Frontmatter Key | Type | Default | Description |
+|-----------------|------|---------|-------------|
+| `name` | `string` | filename | Skill identifier |
+| `description` | `string` | `"Skill: {name}"` | Human-readable description for skill matching |
+| `user-invocable` | `bool` | `true` | Whether skill appears in user-facing skill list |
+| `disable-model-invocation` | `bool` | `false` | Skip LLM call when this skill is matched |
+| `allowed-tools` | `?string` | `null` | Comma-separated allowed tool names |
+| `disallowed-tools` | `?string` | `null` | Comma-separated disallowed tool names |
+| `model` | `?string` | `null` | Override default model for this skill |
+| `effort` | `string` | `"medium"` | Planning level: `planning`, `medium`, or `high` |
+| `context` | `string` | `"thread"` | Context accumulation: `thread` (per conversation) or `global` |
+| `paths` | `array` | `[]` | Glob patterns for files this skill applies to |
+
+### fromFile() Method
+
+Load a skill from a filesystem path:
+
+```php
+public static function fromFile(string $path): self
+```
+
+```php
+use SugarCraft\Crush\Skills\Skill;
+
+$skill = Skill::fromFile('/path/to/skills/my-skill/SKILL.md');
+echo $skill->name;        // "my-skill"
+echo $skill->content;     // Raw markdown body after frontmatter
+echo $skill->sourcePath;  // "/path/to/skills/my-skill/SKILL.md"
+```
+
+**Error handling:** Throws `RuntimeException` if the file cannot be read.
+
+### parse() Method
+
+Parse skill content directly without file I/O:
+
+```php
+public static function parse(string $content, string $name, string $sourcePath = ''): self
+```
+
+```php
+$content = file_get_contents('SKILL.md');
+$skill = Skill::parse($content, 'my-skill', 'SKILL.md');
+```
+
+The `parse()` method:
+1. Extracts YAML frontmatter using regex `/^---\s*\n(.*?)\n---\s*\n/s`
+2. Parses frontmatter with `Symfony\Component\Yaml\Yaml::parse()`
+3. Returns remaining content as the `content` field
+
+### matchesPrompt() for Skill Selection
+
+Determine if a skill matches a user's prompt:
+
+```php
+public function matchesPrompt(string $prompt): bool
+```
+
+```php
+if ($skill->matchesPrompt('I need to add a new payment gateway')) {
+    // This skill handles payment integrations
+}
+```
+
+**Matching algorithm:**
+- Extracts keywords from the skill's `description` (space-separated, lowercase)
+- Filters out words with 3 or fewer characters
+- Returns `true` if any keyword appears in the prompt (case-insensitive)
+
+**Rationale:** The 3-character minimum avoids matching common articles ("the", "a", "for") while allowing meaningful short terms like "API", "PHP", "SQL" which typically appear in skill names rather than descriptions.
+
+### systemPromptContribution() for LLM Context
+
+Generate the skill content to inject into system prompts:
+
+```php
+public function systemPromptContribution(): string
+```
+
+```php
+$systemPrompt .= $skill->systemPromptContribution();
+```
+
+**Output format:**
+```
+## Skill: {skill-name}
+
+{skill-content}
+```
+
+The contribution appends the skill's markdown content under a header, allowing LLMs to incorporate skill instructions into their context.
+
+### toArray() for Serialization
+
+Convert a skill to an array for storage or transmission:
+
+```php
+public function toArray(): array
+```
+
+```php
+$data = $skill->toArray();
+// Keys: name, description, user_invokable, disable_model_invocation,
+//       allowed_tools, disallowed_tools, model, effort, context, paths, source_path
+```
+
+**Note:** The `content` field is intentionally excluded from serialization — it's reconstructable from the source file and can be large.
+
+### withName() for Immutable Updates
+
+Create a modified copy with a different name:
+
+```php
+public function withName(string $name): self
+```
+
+```php
+$renamedSkill = $skill->withName('new-skill-name');
+// Returns new instance, original unchanged
+```
+
+This follows the immutable value object pattern — `with*()` methods return new instances rather than mutating.
+
+### Example SKILL.md File
+
+```yaml
+---
+name: payment-gateway
+description: Adds a new payment method by extending PaymentMethodBase in include/Api/Billing/Pay/. Implements create() to set redirectUrl/items and return bool, and optionally confirm() for IPN/callback handling. Use when user says 'add payment method', 'integrate payment gateway', 'add payment provider', 'new payment option'. Do NOT use for modifying billing invoice logic, changing payment UI templates, or editing existing gateways unrelated to a new integration.
+paths:
+  - 'include/Api/Billing/Pay/**/*.php'
+  - 'include/templates/**/payment*.tpl'
+effort: medium
+context: thread
+user-invocable: true
+disable-model-invocation: false
+allowed-tools: Bash,Read,Edit,Grep
+---
+
+# Payment Gateway Integration
+
+When adding a new payment provider...
+
+## Steps
+
+1. Create a new class extending `PaymentMethodBase`
+2. Implement the `create()` method
+3. Add the redirect URL handling
+4. Optionally implement `confirm()` for IPN callbacks
+```
+
+## Step 4.2: SkillLoader and SkillRegistry
+
+Step 4.2 implements `SkillLoader` and `SkillRegistry` — the loading and registry classes for skills. `SkillLoader` discovers skills from the filesystem across multiple source directories with a priority chain. `SkillRegistry` provides query methods for finding skills by name, prompt, or file path.
+
+### SkillLoader Class
+
+```php
+final class SkillLoader
+{
+    public function loadFromDirectory(string $dir): array
+    public function loadUserSkills(): array
+    public function loadProjectSkills(string $projectRoot): array
+    public function loadBuiltInSkills(): array
+    public function loadAll(string $projectRoot = '.'): array
+}
+```
+
+### loadFromDirectory() Method
+
+The core loading method recursively discovers SKILL.md files:
+
+```php
+public function loadFromDirectory(string $dir): array
+{
+    if (!is_dir($dir)) {
+        return [];
+    }
+
+    $skills = [];
+    $iterator = new \RecursiveIteratorIterator(
+        new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)
+    );
+
+    foreach ($iterator as $file) {
+        if ($file->getBasename() === 'SKILL.md' && $file->isFile()) {
+            try {
+                $skill = Skill::fromFile($file->getPathname());
+                $skills[$skill->name] = $skill;
+            } catch (\Throwable $e) {
+                // Log and skip invalid skills
+                error_log("Failed to load skill from {$file->getPathname()}: {$e->getMessage()}");
+            }
+        }
+    }
+
+    return $skills;
+}
+```
+
+**Key behaviors:**
+- Uses `RecursiveDirectoryIterator::SKIP_DOTS` to skip `.` and `..` entries
+- Recursively traverses all subdirectories
+- Only processes files named `SKILL.md`
+- Catches exceptions per-file and logs failures — one bad skill doesn't abort loading
+- Returns skills keyed by name for O(1) lookup
+
+### Priority Chain (loadAll)
+
+The `loadAll()` method combines skills from three sources with override precedence:
+
+```php
+public function loadAll(string $projectRoot = '.'): array
+{
+    $skills = [];
+
+    // Built-in first (lowest priority)
+    $builtin = $this->loadBuiltInSkills();
+
+    // User skills override builtins
+    $user = $this->loadUserSkills();
+    $skills = array_merge($builtin, $user);
+
+    // Project skills override both
+    $project = $this->loadProjectSkills($projectRoot);
+    $skills = array_merge($skills, $project);
+
+    return $skills;
+}
+```
+
+**Priority order (lowest to highest):**
+1. **Built-in skills** — Ships with CandyCrush (`src/Skills/BuiltIn/`)
+2. **User skills** — User's personal skills (`~/.candy-crush/skills/`)
+3. **Project skills** — Project-specific skills (`<projectRoot>/.candy-crush/skills/`)
+
+**Why array_merge with string keys?** When duplicate keys exist, `array_merge()` keeps the last value. This means project skills with the same name override user skills, which override built-in skills.
+
+### loadUserSkills() and loadProjectSkills()
+
+```php
+public function loadUserSkills(): array
+{
+    $dir = $_SERVER['HOME'] ?? '/root';
+    $dir .= '/.candy-crush/skills';
+
+    return $this->loadFromDirectory($dir);
+}
+
+public function loadProjectSkills(string $projectRoot): array
+{
+    $dir = rtrim($projectRoot, '/') . '/.candy-crush/skills';
+
+    return $this->loadFromDirectory($dir);
+}
+```
+
+**Path conventions:**
+- User skills: `~/.candy-crush/skills/`
+- Project skills: `<projectRoot>/.candy-crush/skills/`
+
+### loadBuiltInSkills() with Reflection
+
+```php
+public function loadBuiltInSkills(): array
+{
+    $reflection = new \ReflectionClass($this);
+    $dir = dirname($reflection->getFileName()) . '/BuiltIn';
+
+    return $this->loadFromDirectory($dir);
+}
+```
+
+Uses reflection to find the directory containing `SkillLoader.php`, then loads from a sibling `BuiltIn` directory. This keeps built-in skills co-located with the loader code.
+
+### SkillRegistry Class
+
+```php
+final class SkillRegistry
+{
+    public function register(array $skills): void
+    public function get(string $name): ?Skill
+    public function all(): array
+    public function findForPrompt(string $prompt): array
+    public function getUserInvocable(): array
+    public function getForPaths(array $paths): array
+    public function disable(string $name): void
+    public function enable(string $name): void
+    public function isDisabled(string $name): bool
+    public function disableMultiple(array $names): void
+    public function names(): array
+}
+```
+
+### register() and get()
+
+Register skills and retrieve them by name:
+
+```php
+public function register(array $skills): void
+{
+    foreach ($skills as $name => $skill) {
+        $this->skills[$name] = $skill;
+    }
+}
+
+public function get(string $name): ?Skill
+{
+    if ($this->isDisabled($name)) {
+        return null;
+    }
+
+    return $this->skills[$name] ?? null;
+}
+```
+
+**Disabled check:** `get()` returns `null` for disabled skills even if they exist in the registry. This allows skills to be temporarily disabled without being removed.
+
+### all() — Get All Enabled Skills
+
+```php
+public function all(): array
+{
+    return array_filter(
+        $this->skills,
+        fn($name) => !$this->isDisabled($name),
+        ARRAY_FILTER_USE_KEY
+    );
+}
+```
+
+Uses `ARRAY_FILTER_USE_KEY` to filter by skill name, checking `isDisabled()` for each.
+
+### findForPrompt() — Skill Matching
+
+```php
+public function findForPrompt(string $prompt): array
+{
+    $matches = [];
+
+    foreach ($this->all() as $skill) {
+        if ($skill->matchesPrompt($prompt)) {
+            $matches[] = $skill;
+        }
+    }
+
+    // Sort by relevance (exact matches first)
+    usort($matches, function (Skill $a, Skill $b) use ($prompt) {
+        $aMatches = substr_count(strtolower($a->description), strtolower($prompt));
+        $bMatches = substr_count(strtolower($b->description), strtolower($prompt));
+        return $bMatches <=> $aMatches;
+    });
+
+    return $matches;
+}
+```
+
+**Sorting:** Uses substring count to rank — skills whose descriptions contain the prompt more frequently sort higher. The `<=>` (spaceship) operator provides a 3-way comparison result directly.
+
+### getForPaths() — Path Pattern Matching
+
+```php
+public function getForPaths(array $paths): array
+{
+    $matches = [];
+
+    foreach ($this->all() as $skill) {
+        foreach ($skill->paths as $pattern) {
+            foreach ($paths as $path) {
+                if (fnmatch($pattern, $path)) {
+                    $matches[] = $skill;
+                    break 2;
+                }
+            }
+        }
+    }
+
+    return $matches;
+}
+```
+
+**fnmatch()** supports glob patterns:
+- `*.php` — matches any PHP file in the current directory
+- `**/*.php` — matches any PHP file recursively
+- `include/**/*.tpl` — matches Smarty templates in include subdirectories
+
+**break 2:** Exits both inner loops once a skill matches — prevents adding the same skill multiple times.
+
+### getUserInvocable() — User-Facing Skills
+
+```php
+public function getUserInvocable(): array
+{
+    return array_values(array_filter(
+        $this->all(),
+        fn($skill) => $skill->userInvocable
+    ));
+}
+```
+
+Filters skills where `userInvocable` is `true`. Uses `array_values()` to re-index the returned array.
+
+### Disable/Enable Pattern
+
+```php
+public function disable(string $name): void
+{
+    $this->disabledSkills[$name] = true;
+}
+
+public function enable(string $name): void
+{
+    unset($this->disabledSkills[$name]);
+}
+
+public function isDisabled(string $name): bool
+{
+    return isset($this->disabledSkills[$name]);
+}
+
+public function disableMultiple(array $names): void
+{
+    foreach ($names as $name) {
+        $this->disable($name);
+    }
+}
+```
+
+Disabled skills use a separate `$disabledSkills` array with `true` values. The `isset()` check is O(1) for lookup.
+
+### Usage Example
+
+```php
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillRegistry;
+
+// Load all skills with priority chain
+$loader = new SkillLoader();
+$skills = $loader->loadAll('/path/to/project');
+
+// Register with registry
+$registry = new SkillRegistry();
+$registry->register($skills);
+
+// Query skills
+$skill = $registry->get('php-best-practices');                    // By name
+$allEnabled = $registry->all();                                   // All enabled
+$matching = $registry->findForPrompt('PHP code review');          // By prompt match
+$invocable = $registry->getUserInvocable();                       // User-invokable only
+$forPaths = $registry->getForPaths(['src/Api/Test.php']);         // By file path
+
+// Disable/enable
+$registry->disable('php-best-practices');
+$registry->isDisabled('php-best-practices'); // true
+$registry->enable('php-best-practices');
+```
+
+## Step 4.4: Skill Integration
+
+Step 4.4 integrates skills into the `App` state and introduces `SkillManager` as the central orchestrator for skill loading and runtime management.
+
+### SkillManager Class
+
+`SkillManager` acts as the composition root for the skill system, coordinating `SkillLoader` and `SkillRegistry`:
+
+```php
+final class SkillManager
+{
+    public function __construct(
+        private SkillLoader $loader,
+        private SkillRegistry $registry,
+    ) {}
+
+    public function loadAll(string $projectRoot = '.'): void
+    public function getSkillsForTask(string $task): array
+    public function getSkillsForPaths(array $paths): array
+    public function applyToApp(App $app, array $skillNames): App
+    public function enable(App $app, string $skillName): App
+    public function disable(App $app, string $skillName): App
+    public function getUserInvocable(): array
+    public function disableFromConfig(array $disabled): void
+}
+```
+
+### Loading Skills with loadAll()
+
+The `loadAll()` method discovers and registers skills from all three priority levels:
+
+```php
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillRegistry;
+
+// Create manager with loader and registry
+$manager = new SkillManager(new SkillLoader(), new SkillRegistry());
+
+// Load all skills (built-in + user + project)
+$manager->loadAll('/path/to/project');
+```
+
+**Loading order:**
+1. `SkillLoader::loadBuiltInSkills()` — Built-in skills from `src/Skills/BuiltIn/`
+2. `SkillLoader::loadUserSkills()` — User skills from `~/.candy-crush/skills/`
+3. `SkillLoader::loadProjectSkills($projectRoot)` — Project skills from `<projectRoot>/.candy-crush/skills/`
+
+Later sources override earlier ones with same name via `array_merge()` string-key behavior.
+
+### Applying Skills to App with applyToApp()
+
+The `applyToApp()` method resolves skill names and attaches them to the `App` state:
+
+```php
+// After loading skills...
+$manager->loadAll('/path/to/project');
+
+// Apply selected skills to app (returns NEW App instance)
+$app = $manager->applyToApp($app, ['php-best-practices', 'security-audit']);
+```
+
+**Note:** `applyToApp()` returns a new `App` instance — the original is unchanged (immutable pattern).
+
+### Enabling and Disabling Skills at Runtime
+
+Runtime skill management works through immutable state transitions:
+
+```php
+// Enable a skill (returns new App with skill added)
+$app = $manager->enable($app, 'phpunit-master');
+
+// Disable a skill (returns new App with skill removed)
+$app = $manager->disable($app, 'php-best-practices');
+
+// Check if skill is currently enabled
+$isEnabled = in_array('phpunit-master', array_column($app->enabledSkills, 'name'));
+```
+
+**Why immutable?** Each enable/disable returns a new `App` instance, preserving the TEA pattern. The original `App` remains valid for rollback, undo, or concurrent session handling.
+
+### App Skill State and Methods
+
+The `App` class maintains two skill-related properties:
+
+```php
+final readonly class App
+{
+    public function __construct(
+        // ...
+        public readonly array $enabledSkills,       // Skill[] - currently active
+        public readonly SkillRegistry $availableSkills, // All loadable skills
+        // ...
+    ) {}
+}
+```
+
+#### applySkillsToSystemPrompt()
+
+Combines enabled skills into the base system prompt for LLM context injection:
+
+```php
+$basePrompt = 'You are a helpful coding assistant.';
+
+$enrichedPrompt = $app->applySkillsToSystemPrompt($basePrompt);
+```
+
+**Output structure:**
+```
+You are a helpful coding assistant.
+
+## Skill: php-best-practices
+
+[Skill content markdown]
+
+## Skill: security-audit
+
+[Skill content markdown]
+```
+
+Each enabled skill's `systemPromptContribution()` is appended in order, allowing the LLM to incorporate specialized instructions.
+
+#### findSkillsForTask()
+
+Queries available skills for those matching a task description:
+
+```php
+// Find skills relevant to a PHP testing task
+$matchingSkills = $app->findSkillsForTask('write PHPUnit tests for my PHP code');
+
+// Returns array of Skill objects, sorted by relevance
+foreach ($matchingSkills as $skill) {
+    echo $skill->name;  // 'phpunit-master'
+}
+```
+
+**Matching algorithm:** Uses keyword overlap between skill `description` and the prompt. Skills whose descriptions contain prompt keywords more frequently rank higher.
+
+### App with*() Skill Methods
+
+Immutable setters for skill state:
+
+```php
+// Set enabled skills directly (array of Skill objects)
+$app = $app->withEnabledSkills([$skill1, $skill2]);
+
+// Set available skills registry
+$app = $app->withAvailableSkills($registry);
+```
+
+### SkillManager as Composition Root
+
+`SkillManager` centralizes skill lifecycle management:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  SkillManager                                                        │
+│  ├── SkillLoader (discovery)                                         │
+│  │   ├── loadBuiltInSkills()                                         │
+│  │   ├── loadUserSkills()                                            │
+│  │   └── loadProjectSkills()                                         │
+│  └── SkillRegistry (storage + query)                                 │
+│      ├── register()                                                  │
+│      ├── get() / all()                                               │
+│      ├── findForPrompt() / getForPaths()                             │
+│      └── disable() / enable()                                        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Benefits:**
+- Single entry point for all skill operations
+- Loader and registry are internal implementation details
+- Consumers interact only with `SkillManager` interface
+- Easy to swap implementations (e.g., mock for testing)
+
+### Usage Example
+
+Complete skill workflow from loading to application:
+
+```php
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\App\App;
+
+// 1. Create skill infrastructure
+$loader = new SkillLoader();
+$registry = new SkillRegistry();
+$manager = new SkillManager($loader, $registry);
+
+// 2. Load all skills from filesystem
+$manager->loadAll('/path/to/project');
+
+// 3. Populate App with available skills registry
+$app = $app->withAvailableSkills($registry);
+
+// 4. Enable specific skills for this session
+$app = $manager->applyToApp($app, ['php-best-practices', 'security-audit']);
+
+// 5. Build system prompt with skill contributions
+$systemPrompt = $app->applySkillsToSystemPrompt('You are a helpful assistant.');
+
+// 6. Find additional skills for a specific task
+$taskSkills = $app->findSkillsForTask('review my PHP code for SQL injection');
+foreach ($taskSkills as $skill) {
+    $app = $manager->enable($app, $skill->name);
+}
+
+// 7. Runtime disable if needed
+$app = $manager->disable($app, 'security-audit');
+```
+
+### Integration with Provider Factory
+
+`SkillManager` works with `ProviderFactory` for full application bootstrap:
+
+```php
+use SugarCraft\Crush\Providers\ProviderFactory;
+use SugarCraft\Crush\Skills\SkillManager;
+use SugarCraft\Crush\Skills\SkillLoader;
+use SugarCraft\Crush\Skills\SkillRegistry;
+
+// Create provider from config
+$factory = new ProviderFactory();
+$provider = $factory->create(['type' => 'openai', 'apiKey' => '...']);
+
+// Create app with provider
+$app = App::new($provider, 'gpt-4o');
+
+// Load skills
+$skillManager = new SkillManager(new SkillLoader(), new SkillRegistry());
+$skillManager->loadAll(getcwd());
+
+// Attach available skills
+$app = $app->withAvailableSkills($skillManager->getUserInvocable() ? $registry : new SkillRegistry());
+
+// Apply configured skills from config file
+$config = json_decode(file_get_contents('candy-crush.json'), true);
+if (!empty($config['enabledSkills'])) {
+    $app = $skillManager->applyToApp($app, $config['enabledSkills']);
+}
+```
 
 ## Step 2.5: Keyboard Handling System
 
