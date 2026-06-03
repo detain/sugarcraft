@@ -106,6 +106,14 @@ analysis in `plans/CANDY_QUERY_UPSTREAM.md` for the "why".
   (count/bounds/clamp/next-prev) to `Bits\Paginator`; public surface kept, but paging past
   the last page is now a page-aligned no-op (was: slid to the final row) — +1 regression
   test. candy-query **1093** green.
+- **FOLLOW-UP (C4 width-helper, branch `ai/candy-query-dash-width`):** did the optional
+  C4 dedup after all — extracted `Renderer::adminContentWidth(int $cols): int` as the single
+  source of truth for the admin page's content column (inner `cols−6` − sidebar
+  `max(20, cols/4)` − 2-col gap, floor 10). `DashboardPage::build()` now calls it instead of
+  re-deriving the budget; `adminPane()`'s `$sidebarWidth`/`$contentWidth` were
+  computed-but-unused dead code and are deleted (only `$innerWidth` is consumed). Output is
+  byte-identical (helper == old inline formula for all widths). +1 test
+  (`testAdminContentWidthBudget`); frame-fill invariants stay green. candy-query **1094**.
 
 ## Where we are
 

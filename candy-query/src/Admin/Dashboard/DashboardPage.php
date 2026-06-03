@@ -115,13 +115,12 @@ final class DashboardPage extends PageBase
 
         // C3: size the dashboard from the live terminal (the Program's
         // WindowSizeMsg, forwarded into Renderer::setSize) instead of a fixed
-        // 80×24. The dashboard fills the admin pane's content column, so mirror
-        // Renderer::adminPane()'s budget (sidebar = cols/4, frame+padding+gap ≈ 8)
-        // — otherwise a real 80-col terminal overflows the frame and a wide one
-        // wastes space. Keep this in sync with Renderer::adminPane().
+        // 80×24, so it tracks resizes. The dashboard fills the admin pane's
+        // content column; Renderer::adminContentWidth() is the single source of
+        // truth for that width (shared with Renderer::adminPane()), so the two
+        // can no longer drift apart.
         $size = Renderer::getTerminalSize();
-        $sidebarWidth = max(20, (int) floor($size['cols'] / 4));
-        $width = max(10, ($size['cols'] - 6) - $sidebarWidth - 2);
+        $width = Renderer::adminContentWidth($size['cols']);
         $height = max(12, $size['rows'] - 4);
 
         $region = Region::fromSize($width, $height);

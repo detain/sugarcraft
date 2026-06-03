@@ -191,4 +191,21 @@ final class RendererTest extends TestCase
         $out = Renderer::render($a);
         $this->assertStringContainsString('error', $out);
     }
+
+    /**
+     * adminContentWidth() is the single source of truth for the admin page
+     * content column (shared by adminPane() + DashboardPage::build()). Pure
+     * function of the terminal width: inner = max(20, cols-6), minus the
+     * sidebar max(20, cols/4) minus a 2-col gap, floored at 10 so a tiny
+     * terminal still renders.
+     */
+    public function testAdminContentWidthBudget(): void
+    {
+        $this->assertSame(142, Renderer::adminContentWidth(200));
+        $this->assertSame(52, Renderer::adminContentWidth(80));
+        $this->assertSame(12, Renderer::adminContentWidth(40));
+        // Every term clamps at a tiny width, so the result floors at 10.
+        $this->assertSame(10, Renderer::adminContentWidth(24));
+        $this->assertSame(10, Renderer::adminContentWidth(1));
+    }
 }
