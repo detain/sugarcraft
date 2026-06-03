@@ -268,6 +268,12 @@ Each entry should have:
     - Hidden columns still affect data/filters but don't render
     - Updated isColumnVisible() to check hiddenCols array
   - All 279 tests pass (564 assertions)
+- Step 9.5 (docs): **IN PROGRESS** 🔄
+  - README.md: Added "Cell Padding Control" section with usage example
+  - README.md: Added "Column Visibility Toggle" section with usage example
+  - CALIBER_LEARNINGS.md: Added pattern:cell-padding documenting implementation
+  - CALIBER_LEARNINGS.md: Added pattern:hidden-columns documenting implementation
+  - PHP DocBlocks: Already accurate (withCellPadding lines 351-365, withHiddenCols lines 367-381)
 
 ### Phase 10: Final Review
 - Step 10.1 (impl): Pending

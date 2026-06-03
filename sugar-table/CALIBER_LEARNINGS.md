@@ -135,3 +135,22 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   is used via `Lang::t()`. See `FooterType.php` and `Table.php` lines 117
   (property), 278–283 (`withFooterType`), 727–738 (`RowsFooter`), and 1336–1376
   (`fillFooterRow`).
+
+- **[pattern:cell-padding]** `withCellPadding(int $padding)` adds inner
+  whitespace on left and right sides of each cell's content. The padding value
+  is stored in `$this->cellPadding` and subtracted from effective content width
+  in rendering methods via `$colWidth - (2 * $this->cellPadding)`. Padding does
+  not affect column width calculations — the column width remains unchanged,
+  only the content area shrinks. Applied in `fillDataRow()` (line 1286),
+  `fillHeaderRow()` (line 1173), `fillDataRowLines()` (line 1426), and
+  `calculateRowHeight()` (line 1334) to ensure consistent treatment across all
+  rendering paths.
+
+- **[pattern:hidden-columns]** `withHiddenCols(array $indices)` stores hidden
+  column indices in `$this->hiddenCols`. `isColumnVisible()` checks hiddenCols
+  first (returns false immediately if in array) before checking frozen status
+  or scroll position. Hidden columns still participate in data storage, filtering,
+  sorting, and search operations — only rendering is affected. This enables
+  optional columns that can be toggled via UI without losing data. See
+  `Table.php` lines 134–135 (property), 367–381 (`withHiddenCols`), and 1087–1098
+  (`isColumnVisible` hidden check at line 1089–1092).
