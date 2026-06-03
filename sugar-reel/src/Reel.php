@@ -168,16 +168,18 @@ final class Reel
     {
         $path = $this->path;
 
-        // When unbound, generate synthetic test pattern.
+        // When unbound, generate synthetic test pattern via the single canonical
+        // source.  The synthetic demo always loops — it has no natural end.
+        $loop = ($path === '') ? true : $this->loop;
         if ($path === '') {
-            $path = $this->buildSyntheticGif();
+            $path = Synthetic::generate();
         }
 
         // Resolve auto-mode to the best available mode at runtime (F3).
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
         // Create the Player with the configured dimensions, fps, render mode and loop flag.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $this->loop);
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -185,39 +187,6 @@ final class Reel
         );
 
         (new Program($player, $options))->run();
-    }
-
-    /**
-     * Build a rainbow gradient GIF in /tmp as a synthetic test pattern.
-     * Used when play() is called on Reel::new() (no path bound).
-     */
-    private function buildSyntheticGif(): string
-    {
-        $path = '/tmp/sugar-reel-synthetic.gif';
-
-        if (!extension_loaded('gd')) {
-            // Fall back to a simple 1×1 transparent GIF if GD is absent.
-            $gif = "GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x01\x00;";
-            file_put_contents($path, $gif);
-            return $path;
-        }
-
-        $w = 120;
-        $h = 60;
-        $im = imagecreatetruecolor($w, $h);
-        for ($y = 0; $y < $h; $y++) {
-            for ($x = 0; $x < $w; $x++) {
-                $r = (int) min(255, 255 * $x / $w);
-                $g = (int) min(255, 255 * $y / $h);
-                $b = (int) min(255, 255 * (($x + $y) % $w) / $w);
-                $col = imagecolorallocate($im, $r, $g, $b);
-                imagesetpixel($im, $x, $y, $col);
-            }
-        }
-        imagegif($im, $path);
-        imagedestroy($im);
-
-        return $path;
     }
 
     /**
