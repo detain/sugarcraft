@@ -4,18 +4,22 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\ServerStatus;
 
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Dash\Components\Card\Badge;
+use SugarCraft\Dash\Components\Card\Card;
+use SugarCraft\Dash\Components\Card\DefinitionList;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
-use SugarCraft\Query\Db\Flavor;
-use SugarCraft\Query\Db\Version;
+use SugarCraft\Sprinkles\Style;
 
 /**
  * Server Status page displaying connection info, features, directories, SSL, replication, and firewall.
  *
  * Provides a comprehensive overview of the MySQL/MariaDB server configuration
- * and runtime state. Uses a card-based layout with distinct panels for each
- * category of information.
+ * and runtime state. Each category is a sugar-dash Card wrapping a
+ * DefinitionList; boolean features render as Badge::bool() instead of
+ * hand-rolled Yes/No ANSI.
  *
  * Keyboard shortcuts:
  *   [r] - refresh data
@@ -61,13 +65,11 @@ final class ServerStatusPage extends PageBase
      */
     protected function build(): string
     {
-        $infoCard = ServerInfoCard::new($this->context)->render();
-
         $lines = [];
 
         $lines[] = $this->renderHeader();
         $lines[] = '';
-        $lines[] = $infoCard;
+        $lines[] = ServerInfoCard::new($this->context)->render();
         $lines[] = '';
         $lines[] = $this->renderFeaturesPanel();
         $lines[] = '';
@@ -109,8 +111,11 @@ final class ServerStatusPage extends PageBase
         $version = $this->context->versionString();
         $flavor = $this->context->flavor();
 
+        $title = Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Server Status');
+
         return sprintf(
-            "\x1b[1;36mServer Status\x1b[0m | %s %s | %s",
+            '%s | %s %s | %s',
+            $title,
             $flavor->value,
             $version,
             date('Y-m-d H:i:s'),
@@ -119,166 +124,128 @@ final class ServerStatusPage extends PageBase
 
     private function renderFeaturesPanel(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mFeatures\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         $serverVars = $this->context->serverVariables();
 
-        $features = [
-            ' InnoDB' => $this->tristate($this->hasInnodb()),
-            ' SSL' => $this->tristate($this->hasSsl($serverVars)),
-            ' Fulltext' => $this->tristate($this->hasFulltext($serverVars)),
-            ' Events' => $this->tristate($this->hasEvents($serverVars)),
-            ' Stored Programs' => $this->tristate($this->hasStoredPrograms($serverVars)),
-            ' Partitioning' => $this->tristate($this->hasPartitioning($serverVars)),
-            ' X Plugin' => $this->tristate($this->hasXPlugin($serverVars)),
-        ];
+        $list = DefinitionList::new()->withRows([
+            ['InnoDB', $this->tristate($this->hasInnodb())],
+            ['SSL', $this->tristate($this->hasSsl($serverVars))],
+            ['Fulltext', $this->tristate($this->hasFulltext($serverVars))],
+            ['Events', $this->tristate($this->hasEvents($serverVars))],
+            ['Stored Programs', $this->tristate($this->hasStoredPrograms($serverVars))],
+            ['Partitioning', $this->tristate($this->hasPartitioning($serverVars))],
+            ['X Plugin', $this->tristate($this->hasXPlugin($serverVars))],
+        ]);
 
-        foreach ($features as $name => $status) {
-            $lines[] = sprintf("  %-20s %s", $name, $status);
-        }
-
-        return implode("\n", $lines);
+        return Card::titled($list, 'Features')->render();
     }
 
     private function renderDirectoryPanel(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mDirectories\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         $serverVars = $this->context->serverVariables();
 
-        $directories = [
-            'Data Directory' => $this->resolveDir($serverVars['datadir'] ?? null),
-            'Temp Directory' => $this->resolveDir($serverVars['tmpdir'] ?? null),
-            'Log Directory' => $this->resolveDir($serverVars['log_error'] ?? null),
-            'PID File' => $this->resolveDir($serverVars['pid_file'] ?? null),
-        ];
+        $list = DefinitionList::new()
+            ->withPlaceholder('-')
+            ->withRows([
+                ['Data Directory', $this->resolveDir($serverVars['datadir'] ?? null)],
+                ['Temp Directory', $this->resolveDir($serverVars['tmpdir'] ?? null)],
+                ['Log Directory', $this->resolveDir($serverVars['log_error'] ?? null)],
+                ['PID File', $this->resolveDir($serverVars['pid_file'] ?? null)],
+            ]);
 
-        foreach ($directories as $name => $value) {
-            $lines[] = sprintf("  %-20s \x1b[37m%s\x1b[0m", $name, $value);
-        }
-
-        return implode("\n", $lines);
+        return Card::titled($list, 'Directories')->render();
     }
 
     private function renderSslPanel(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mSSL / Secure Connection\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         $serverVars = $this->context->serverVariables();
-        $statusVars = $this->context->statusVariables();
 
-        $sslInfo = [
-            ' SSL Enabled' => $this->tristate($this->hasSsl($serverVars)),
-            ' SSL Cipher' => $this->resolveValue($serverVars['ssl_cipher'] ?? null),
-            ' TLS Version' => $this->resolveValue($serverVars['tls_version'] ?? null),
-            ' Have SSL' => $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null)),
-            ' SSL CA' => $this->resolveDir($serverVars['ssl_ca'] ?? null),
-            ' SSL Cert' => $this->resolveDir($serverVars['ssl_cert'] ?? null),
-            ' SSL Key' => $this->resolveDir($serverVars['ssl_key'] ?? null),
-        ];
+        $list = DefinitionList::new()
+            ->withPlaceholder('-')
+            ->withRows([
+                ['SSL Enabled', $this->tristate($this->hasSsl($serverVars))],
+                ['SSL Cipher', $this->resolveValue($serverVars['ssl_cipher'] ?? null)],
+                ['TLS Version', $this->resolveValue($serverVars['tls_version'] ?? null)],
+                ['Have SSL', $this->tristate($this->tristateValue($serverVars['have_ssl'] ?? null))],
+                ['SSL CA', $this->resolveDir($serverVars['ssl_ca'] ?? null)],
+                ['SSL Cert', $this->resolveDir($serverVars['ssl_cert'] ?? null)],
+                ['SSL Key', $this->resolveDir($serverVars['ssl_key'] ?? null)],
+            ]);
 
-        foreach ($sslInfo as $name => $value) {
-            $lines[] = sprintf("  %-20s %s", $name, $value);
-        }
-
-        return implode("\n", $lines);
+        return Card::titled($list, 'SSL / Secure Connection')->render();
     }
 
     private function renderReplicaPanel(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mReplication\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
         $replicaStatus = $this->replicaProvider->fetchStatus();
-        $flavor = $this->context->flavor();
 
         if ($replicaStatus === null || count($replicaStatus) === 0) {
-            $lines[] = "  \x1b[90mNot configured or not accessible\x1b[0m";
-            return implode("\n", $lines);
+            return Card::titled('Not configured or not accessible', 'Replication')->render();
         }
 
-        // Render replica status fields that are most commonly useful
-        $fields = [
-            ' Master Host' => $this->resolveValue($replicaStatus['Master_Host'] ?? $replicaStatus['Source_Host'] ?? null),
-            ' Master Port' => $this->resolveValue($replicaStatus['Master_Port'] ?? $replicaStatus['Source_Port'] ?? null),
-            ' Slave IO Running' => $this->renderReplicaState(
-                $replicaStatus['Slave_IO_Running'] ?? $replicaStatus['Replica_IO_Running'] ?? null
-            ),
-            ' Slave SQL Running' => $this->renderReplicaState(
-                $replicaStatus['Slave_SQL_Running'] ?? $replicaStatus['Replica_SQL_Running'] ?? null
-            ),
-            ' Seconds Behind' => $this->renderSecondsBehind(
-                $replicaStatus['Seconds_Behind_Master'] ?? $replicaStatus['Seconds_Behind_Source'] ?? null
-            ),
-            ' Relay Log File' => $this->resolveValue($replicaStatus['Relay_Log_File'] ?? null),
-            ' Relay Pos' => $this->resolveValue($replicaStatus['Relay_Log_Pos'] ?? null),
-        ];
+        $list = DefinitionList::new()
+            ->withPlaceholder('-')
+            ->withRows([
+                ['Master Host', $this->resolveValue($replicaStatus['Master_Host'] ?? $replicaStatus['Source_Host'] ?? null)],
+                ['Master Port', $this->resolveValue($replicaStatus['Master_Port'] ?? $replicaStatus['Source_Port'] ?? null)],
+                ['Slave IO Running', $this->replicaState($replicaStatus['Slave_IO_Running'] ?? $replicaStatus['Replica_IO_Running'] ?? null)],
+                ['Slave SQL Running', $this->replicaState($replicaStatus['Slave_SQL_Running'] ?? $replicaStatus['Replica_SQL_Running'] ?? null)],
+                ['Seconds Behind', $this->secondsBehind($replicaStatus['Seconds_Behind_Master'] ?? $replicaStatus['Seconds_Behind_Source'] ?? null)],
+                ['Relay Log File', $this->resolveValue($replicaStatus['Relay_Log_File'] ?? null)],
+                ['Relay Pos', $this->resolveValue($replicaStatus['Relay_Log_Pos'] ?? null)],
+            ]);
 
-        foreach ($fields as $name => $value) {
-            $lines[] = sprintf("  %-20s %s", $name, $value);
-        }
-
-        return implode("\n", $lines);
+        return Card::titled($list, 'Replication')->render();
     }
 
     private function renderFirewallPanel(): string
     {
-        $lines = [];
-        $lines[] = "\x1b[1;35mFirewall (AWS RDS compat.)\x1b[0m";
-        $lines[] = $this->renderSeparator();
-
-        // Firewall status is typically only available on managed cloud instances
-        // Attempt to read from status variables, degrade gracefully if unavailable
+        // Firewall status is typically only available on managed cloud instances;
+        // degrade gracefully when the Aurora marker variable is absent.
         $statusVars = $this->context->statusVariables();
-
         $hasFirewall = isset($statusVars['Aurora_lwm']);
-        $lines[] = sprintf(
-            "  %-20s %s",
-            ' AWS RDS Firewall',
-            $this->tristate($hasFirewall),
-        );
 
-        return implode("\n", $lines);
+        $list = DefinitionList::new()->withRows([
+            ['AWS RDS Firewall', $this->tristate($hasFirewall)],
+        ]);
+
+        return Card::titled($list, 'Firewall (AWS RDS compat.)')->render();
     }
 
     private function renderFooter(): string
     {
-        return "\x1b[90m[r] refresh  [q] quit\x1b[0m";
-    }
-
-    private function renderSeparator(): string
-    {
-        return "\x1b[36m──\x1b[0m" . str_repeat('─', 20);
+        return Style::new()->foreground(Color::hex('#6b7280'))->render('[r] refresh  [q] quit');
     }
 
     // ─── Tristate Helper ─────────────────────────────────────────────────
 
     /**
-     * Convert bool|string|null to styled Yes/No/Unknown.
+     * Convert bool|string|null to a Yes/No/Unknown badge.
      *
      * Used for features that may be present, absent, or unknown
-     * (e.g., from server variables that may not be set).
+     * (e.g., from server variables that may not be set). Delegates to
+     * Badge::bool() so the Yes/No/Unknown styling lives in sugar-dash.
      *
      * @param bool|string|null $value
      */
     public function tristate(bool|string|null $value): string
     {
+        return Badge::bool($this->toBool($value))->render();
+    }
+
+    /**
+     * Normalize the loose tristate input to a strict ?bool.
+     */
+    private function toBool(bool|string|null $value): ?bool
+    {
         if ($value === true || $value === 'YES' || $value === 'ON') {
-            return "\x1b[32mYes\x1b[0m";
+            return true;
         }
 
         if ($value === false || $value === 'NO' || $value === 'OFF') {
-            return "\x1b[31mNo\x1b[0m";
+            return false;
         }
 
-        return "\x1b[90mUnknown\x1b[0m";
+        return null;
     }
 
     /**
@@ -305,24 +272,22 @@ final class ServerStatusPage extends PageBase
     // ─── Value Resolution Helpers ────────────────────────────────────────
 
     /**
-     * Resolve a nullable string to displayable value or unknown.
+     * Resolve a nullable string to a displayable value, or null so the
+     * DefinitionList shows its placeholder.
      */
-    private function resolveValue(?string $value): string
+    private function resolveValue(?string $value): ?string
     {
-        if ($value === null || $value === '') {
-            return "\x1b[90m-\x1b[0m";
-        }
-
-        return "\x1b[37m" . $value . "\x1b[0m";
+        return ($value === null || $value === '') ? null : $value;
     }
 
     /**
-     * Resolve a directory path to displayable value or unknown.
+     * Resolve a directory path to a displayable value (abbreviating long
+     * paths), or null so the DefinitionList shows its placeholder.
      */
-    private function resolveDir(?string $value): string
+    private function resolveDir(?string $value): ?string
     {
         if ($value === null || $value === '') {
-            return "\x1b[90m-\x1b[0m";
+            return null;
         }
 
         // Abbreviate long paths while keeping them readable
@@ -330,45 +295,43 @@ final class ServerStatusPage extends PageBase
             $value = '...' . substr($value, -37);
         }
 
-        return "\x1b[37m" . $value . "\x1b[0m";
+        return $value;
     }
 
     /**
-     * Render replica IO/SQL running state with appropriate color.
+     * Render replica IO/SQL running state as a badge that keeps the raw
+     * state text (Yes/No/Connecting) as its label.
      */
-    private function renderReplicaState(?string $state): string
+    private function replicaState(?string $state): ?string
     {
         if ($state === null) {
-            return "\x1b[90mUnknown\x1b[0m";
+            return null;
         }
 
-        $lower = strtolower($state);
-        if ($lower === 'yes' || $lower === 'connecting') {
-            return "\x1b[32m" . $state . "\x1b[0m";
-        }
+        $bool = match (strtolower($state)) {
+            'yes', 'connecting' => true,
+            'no' => false,
+            default => null,
+        };
 
-        if ($lower === 'no') {
-            return "\x1b[31m" . $state . "\x1b[0m";
-        }
-
-        return "\x1b[90m" . $state . "\x1b[0m";
+        return Badge::bool($bool, yes: $state, no: $state, unknown: $state)->render();
     }
 
     /**
-     * Render seconds behind master with human-readable duration.
+     * Render seconds behind master with a human-readable duration.
      */
-    private function renderSecondsBehind(?string $value): string
+    private function secondsBehind(?string $value): ?string
     {
         if ($value === null) {
-            return "\x1b[90mUnknown\x1b[0m";
+            return null;
         }
 
         $seconds = (int) $value;
         if ($seconds === 0) {
-            return "\x1b[32m0s (caught up)\x1b[0m";
+            return '0s (caught up)';
         }
 
-        return "\x1b[33m" . Format::duration($seconds) . "\x1b[0m";
+        return Format::duration($seconds);
     }
 
     // ─── Feature Detection ──────────────────────────────────────────────
