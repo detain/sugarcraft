@@ -20,7 +20,7 @@ Each entry should have:
 - Phase 6: In Progress
 - Phase 7: Pending
 - Phase 8: Pending
-- Phase 9: Pending
+- Phase 9: In Progress
 - Phase 10: Pending
 
 ## Issue Log
@@ -258,11 +258,16 @@ Each entry should have:
   - PR #1009 merged to master
 
 ### Phase 9: Remaining Polish
-- Step 9.1 (impl): Pending
-- Step 9.2 (review): Pending
-- Step 9.3 (fix): Pending
-- Step 9.4 (tests): Pending
-- Step 9.5 (docs): Pending
+- Step 9.1 (impl): **COMPLETED** ✅
+  - Cell Padding Control: Added `withCellPadding(int $padding): self` method
+    - Adds inner spacing (left/right padding) inside each cell
+    - Does not affect column width calculations
+    - Updates applied to: fillDataRow, fillHeaderRow, fillDataRowLines, calculateRowHeight
+  - Column Visibility Toggle: Added `withHiddenCols(array $indices): self` method
+    - Hides columns by index without removing them from table
+    - Hidden columns still affect data/filters but don't render
+    - Updated isColumnVisible() to check hiddenCols array
+  - All 279 tests pass (564 assertions)
 
 ### Phase 10: Final Review
 - Step 10.1 (impl): Pending
