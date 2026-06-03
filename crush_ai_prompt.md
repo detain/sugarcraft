@@ -73,32 +73,53 @@ An AI coding assistant TUI with:
 
 ## Ready to Resume
 
-**CURRENT PROGRESS - Step 3.4 just completed (Bedrock Provider)**
+**CURRENT PROGRESS - Phase 5 just completed (Hooks System)**
 
-### Completed Steps:
+### Completed Phases:
 - **Phase 1 (Core Foundation)**: Steps 1.1-1.5 ✅
 - **Phase 2 (TUI)**: Steps 2.1-2.5 ✅
-- **Phase 3 (Provider Integration)**: Steps 3.1-3.4 ✅
+- **Phase 3 (Provider Integration)**: Steps 3.1-3.6 ✅
+- **Phase 4 (Skills System)**: Steps 4.1-4.4 ✅
+- **Phase 5 (Hooks System)**: Steps 5.1-5.3 ✅
 
-### Next Step: Step 3.5 - Vertex Provider
+### Next Step: Phase 6, Step 6.1 - Agent Manager
 
-Resume from Step 3.5 by spawning a Coder agent with the step file:
+Resume from Step 6.1 by spawning a Coder agent with the step file:
 
 ```
-Step 3.5: Vertex Custom Providers
-File: /home/sites/sugarcraft/.candy-crush-plan/steps/3.5_vertex_custom_providers.md
+Step 6.1: Agent Manager
+File: /home/sites/sugarcraft/.candy-crush-plan/steps/6.1_agent_value_object.md
 ```
 
-### Recent Changes (Step 3.4):
-- Added `aws/aws-sdk-php` dependency to composer.json
-- Created BedrockProvider.php with AWS SDK integration
-- 35 tests written and passing
+### Recent Changes (Phase 5 - Hooks System):
+- **Step 5.1**: Created HookInterface, HookContext, HookResult, HookRegistry
+- **Step 5.2**: Created built-in hooks (ProtectFilesHook, ConfirmRemoveHook, AuditHook)
+- **Step 5.3**: Created HookConfig YAML loading, ScriptHook, HookManager
+- 38 tests written and passing for hook system
 - Documentation updated in README.md and CALIBER_LEARNINGS.md
 
-### Completed Provider Steps:
+### Completed Steps by Phase:
+
+**Phase 3 - Provider Integration:**
 - 3.1 OpenAI Provider ✅
 - 3.2 SGLANG Provider ✅
 - 3.3 Claude Code Provider ✅
 - 3.4 Bedrock Provider ✅
-- 3.5 Vertex Provider → NEXT
-- 3.6 Custom Provider → remaining
+- 3.5 Vertex Custom Providers ✅
+- 3.6 Provider Factory ✅
+
+**Phase 4 - Skills System:**
+- 4.1 Skill Value Object ✅
+- 4.2 Skill Loader and Registry ✅
+- 4.3 Built-in Skills ✅
+- 4.4 Skill Integration ✅
+
+**Phase 5 - Hooks System:**
+- 5.1 Hook Interface and Registry ✅
+- 5.2 Built-in Hooks ✅
+- 5.3 Hook Configuration ✅
+
+### Remaining Phases:
+- **Phase 6 (Agents)**: Steps 6.1-6.2
+- **Phase 7 (MCP Integration)**: Step 7.1
+- **Phase 8 (Polish)**: Steps 8.1-8.5

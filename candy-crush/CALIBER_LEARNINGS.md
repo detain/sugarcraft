@@ -1755,6 +1755,59 @@ public static function openAiCompatible(
 
 **Design rationale**: The factory encapsulates all HTTP client setup, including header configuration for authentication. Consumers don't need to understand Guzzle to create a provider.
 
+### Environment Variable API Key Loading
+
+`CustomProvider::openAiCompatibleFromEnv()` provides a secure pattern for loading API keys from environment variables:
+
+```php
+public static function openAiCompatibleFromEnv(
+    string $name,
+    string $baseUrl,
+    string $model,
+    string $apiKeyEnvVar = 'CUSTOM_PROVIDER_API_KEY',
+    bool $supportsStreaming = true,
+    bool $supportsFunctionCalling = true,
+): self {
+    $apiKey = getenv($apiKeyEnvVar) ?: null;
+
+    return self::openAiCompatible(
+        name: $name,
+        baseUrl: $baseUrl,
+        model: $model,
+        apiKey: $apiKey,
+        supportsStreaming: $supportsStreaming,
+        supportsFunctionCalling: $supportsFunctionCalling,
+    );
+}
+```
+
+**Security rationale**:
+- API keys are never hardcoded in source code
+- Keys are loaded at runtime from environment variables
+- The pattern uses `getenv()` which reads from the process environment, not user input
+- Default env var name `CUSTOM_PROVIDER_API_KEY` follows convention
+
+**Usage pattern**:
+```php
+// Set environment before running
+// export CUSTOM_PROVIDER_API_KEY="sk-..."
+
+$provider = CustomProvider::openAiCompatibleFromEnv(
+    name: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    model: 'llama3',
+);
+```
+
+**Comparison**:
+
+| Method | API Key Source | Use Case |
+|--------|----------------|----------|
+| `openAiCompatible()` | Passed directly as argument | Tests, known keys |
+| `openAiCompatibleFromEnv()` | Environment variable | Production deployments |
+
+**Factory method delegation**: `openAiCompatibleFromEnv()` retrieves the env var and delegates to `openAiCompatible()`, keeping the core factory logic in one place.
+
 ### Feature Flag Configuration
 
 `CustomProvider` uses boolean flags to indicate capability support:
@@ -2567,6 +2620,43 @@ return array_filter(
 
 **Alternative:** `foreach` with `if (!$this->isDisabled($name))`. Works but more verbose.
 
+### Glob-to-fnmatch Conversion for ** Patterns
+
+`getForPaths()` converts globstar `**` patterns to fnmatch-compatible patterns:
+
+```php
+// If direct match failed, try converting glob ** to fnmatch patterns
+if (!$patternMatched && str_contains($pattern, '**')) {
+    // Convert /**/ to /*/ (matches one directory level)
+    $pattern1 = str_replace('/**/', '/*/', $pattern);
+    // Convert /** at end to /* (matches one directory or zero)
+    $pattern2 = str_replace('/**', '/*', $pattern);
+    // Also try without the ** entirely (matches zero directories)
+    $pattern3 = str_replace('/**', '', $pattern);
+
+    foreach ($paths as $path) {
+        if (fnmatch($pattern1, $path) || fnmatch($pattern2, $path) || fnmatch($pattern3, $path)) {
+            $patternMatched = true;
+            break;
+        }
+    }
+}
+```
+
+**Why convert?** PHP's `fnmatch()` doesn't support globstar `**` — only `*` for single-directory wildcards. The conversion handles three cases:
+
+| Glob Pattern | Conversion | fnmatch Equivalent | Matches |
+|-------------|------------|-------------------|---------|
+| `include/**/Tests/*.php` | Replace `/**/` → `/*/` | `include/*/Tests/*.php` | One intermediate directory |
+| `src/**` at end | Replace `/**` → `/*` | `src/*` | One subdirectory or none |
+| `src/**` anywhere | Remove `/**` entirely | `src/` | Zero directories (exact match) |
+
+**Why three variants?** A skill path like `src/**` could match:
+- `src/Tests/Example.php` (one directory level)
+- `src/Example.php` (zero directory levels)
+
+Testing all three conversion variants ensures the pattern matches regardless of how many intermediate directories exist.
+
 ## Step 4.3: Built-in Skills
 
 ### SKILL.md Frontmatter Specification
@@ -3194,6 +3284,8 @@ enum HookEvent: string
     case PostToolUse = 'PostToolUse';
 }
 ```
+
+**PHP 8.3 compatibility note:** String literal union types (`'PreToolUse'|'PostToolUse'`) require PHP 8.4+. A backed enum was chosen to maintain PHP 8.3 compatibility while providing type-safe event identification. This pattern is recommended when you need enum-like semantics but must support PHP 8.3.
 
 **Why an enum rather than string constants?** Backed enums provide:
 - Compile-time exhaustiveness checking in `match` expressions

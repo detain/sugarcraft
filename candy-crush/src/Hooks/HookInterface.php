@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Hooks;
 
+use SugarCraft\Crush\Hooks\HookEvent;
+
 interface HookInterface
 {
     public function name(): string;

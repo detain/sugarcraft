@@ -158,6 +158,76 @@ SKILL;
         Skill::fromFile($nonExistentPath);
     }
 
+    public function testFromFileParsesFrontmatter(): void
+    {
+        // Arrange - create a temporary SKILL.md file
+        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid();
+        mkdir($tmpDir, 0777, true);
+        $skillPath = $tmpDir . '/SKILL.md';
+
+        $content = <<<'SKILL'
+---
+description: A skill loaded from file
+user-invocable: false
+disable-model-invocation: true
+allowed-tools: read,write
+model: claude-3
+effort: high
+context: session
+paths:
+  - /src/**/*.php
+---
+Skill content loaded from file.
+SKILL;
+        file_put_contents($skillPath, $content);
+
+        try {
+            // Act
+            $skill = Skill::fromFile($skillPath);
+
+            // Assert
+            $this->assertSame('skill-test-' . substr(basename($tmpDir), 0, 13), $skill->name);
+            $this->assertSame('A skill loaded from file', $skill->description);
+            $this->assertFalse($skill->userInvocable);
+            $this->assertTrue($skill->disableModelInvocation);
+            $this->assertSame('read,write', $skill->allowedTools);
+            $this->assertNull($skill->disallowedTools);
+            $this->assertSame('claude-3', $skill->model);
+            $this->assertSame('high', $skill->effort);
+            $this->assertSame('session', $skill->context);
+            $this->assertSame(['/src/**/*.php'], $skill->paths);
+            $this->assertSame('Skill content loaded from file.', $skill->content);
+            $this->assertSame($skillPath, $skill->sourcePath);
+        } finally {
+            // Cleanup
+            unlink($skillPath);
+            rmdir($tmpDir);
+        }
+    }
+
+    public function testFromFileThrowsOnMissingFrontmatter(): void
+    {
+        // Arrange - create a temporary SKILL.md file without frontmatter
+        $tmpDir = sys_get_temp_dir() . '/skill-test-' . uniqid();
+        mkdir($tmpDir, 0777, true);
+        $skillPath = $tmpDir . '/SKILL.md';
+
+        $content = 'This file has no frontmatter block.';
+        file_put_contents($skillPath, $content);
+
+        try {
+            // Act & Assert
+            $this->expectException(\InvalidArgumentException::class);
+            $this->expectExceptionMessage("Skill file must have frontmatter: $skillPath");
+
+            Skill::fromFile($skillPath);
+        } finally {
+            // Cleanup
+            unlink($skillPath);
+            rmdir($tmpDir);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // matchesPrompt() - keyword matching
     // -------------------------------------------------------------------------
