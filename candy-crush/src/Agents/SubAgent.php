@@ -13,9 +13,13 @@ final class SubAgent
     public const STATUS_STOPPED = 'stopped';
     public const STATUS_FAILED = 'failed';
 
+    /** Status of the subagent task. */
     public string $status;
-    public string $output = '';
+    /** Output accumulated during execution. */
+    public string $output;
+    /** When the task completed. */
     public ?\DateTimeImmutable $completedAt = null;
+    /** Error message if the task failed. */
     public ?string $error = null;
 
     public function __construct(
@@ -25,6 +29,7 @@ final class SubAgent
         public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
     ) {
         $this->status = self::STATUS_PENDING;
+        $this->output = '';
     }
 
     public function isRunning(): bool

@@ -867,6 +867,212 @@ OK (38 tests, 81 assertions)
 
 ---
 
+## Phase 6 Complete - Agents (Steps 6.1-6.2)
+
+**Status:** COMPLETE (Steps 6.1-6.2)
+- 6.1 Agent Value Object ✅
+- 6.2 Agent Manager ✅
+
+---
+
+## Step 7.1: MCP Client Tests
+
+**Date:** 2026-06-03
+**Status:** COMPLETE
+
+### Test Files Created
+- `candy-crush/tests/McpToolTest.php` (5 tests, 15 assertions)
+- `candy-crush/tests/McpClientTest.php` (10 tests, 26 assertions)
+
+### Test Results
+
+```
+PHPUnit 10.5.63
+OK (15 tests, 41 assertions)
+```
+
+### Test Coverage
+
+| Test | Description |
+|------|-------------|
+| McpTool: fromArray | Creates tool from array |
+| McpTool: fromArrayWithDefaults | Uses defaults for missing keys |
+| McpTool: toArray | Serializes to array format |
+| McpTool: readonlyProperties | All properties are readonly |
+| McpClient: resolveEnvSimple | Resolves ${VAR} syntax |
+| McpClient: resolveEnvWithDefault | Resolves ${VAR:-default} syntax |
+| McpClient: resolveEnvWithEmptyDefault | Empty default when var unset |
+| McpClient: resolveEnvNotSet | Returns empty string when var not set |
+| McpClient: loadConfigNotFound | Returns empty array for missing file |
+| McpClient: loadConfigWithServers | Parses mcpServers from JSON |
+| McpClient: listToolsEmpty | Returns empty array when no servers |
+| McpClient: listToolsMerges | Merges tools from all servers |
+| McpClient: callToolNotFound | Throws RuntimeException for unknown server |
+| McpClient: callToolByNameNotFound | Throws RuntimeException for unknown tool |
+| McpClient: stopServers | Clears all servers |
+
+---
+
+## Step 7.1 Documentation Complete
+
+**Date:** 2026-06-03
+**Scribe:** Documentation updated
+
+### README.md Updates (Step 7.1)
+- Status entry present at line 41
+- Full "Step 7.1: MCP Client" section documented covering:
+  - MCP overview and purpose
+  - McpClient class with all methods
+  - .mcp.json configuration format
+  - StdioMcpServer and HttpMcpServer implementations
+  - JSON-RPC 2.0 protocol compliance
+  - Usage examples
+
+### CALIBER_LEARNINGS.md Updates (Step 7.1)
+- 12 new learning entries documenting MCP patterns
+
+---
+
+## Step 8.1: Streaming Runtime Tests
+
+**Date:** 2026-06-03
+**Status:** COMPLETE
+
+### Test File
+- `candy-crush/tests/RuntimeTest.php` (15 tests)
+
+### Test Results
+
+```
+PHPUnit 10.5.63
+OK (15 tests, 52 assertions)
+```
+
+### Test Coverage
+
+| Test | Description |
+|------|-------------|
+| testBuildSystemPromptReturnsBase | Base prompt when no skills |
+| testBuildSystemPromptWithSkills | Skills contributions appended |
+| testBuildSystemPromptWithSkillError | Handles non-skill objects in list |
+| testBuildMessagesReturnsMessageInstances | Filters and returns Message objects |
+| testBuildMessagesEmpty | Empty messages array returns empty |
+| testFindToolFound | Returns tool when found |
+| testFindToolNotFound | Returns null when not found |
+| testFindToolWithEmptyTools | Returns null with empty tools array |
+| testRuntimeRequiresProvider | Provider required in constructor |
+| testRuntimeRequiresHookManager | HookManager required in constructor |
+| testRuntimeCreatesWithDependencies | Both dependencies properly set |
+| testRunHandlesStreamingProviders | Sets up streaming correctly |
+| testRunHandlesBatchProviders | Sets up batch correctly |
+| testToolNotFoundHandling | Proper error message yielded |
+| testHookDenialHandling | Proper denial message yielded |
+
+---
+
+## Step 8.2: Session Persistence Tests
+
+**Date:** 2026-06-03
+**Status:** COMPLETE
+
+### Test File
+- `candy-crush/tests/SessionStoreTest.php` (16 tests)
+
+### Test Results
+
+```
+PHPUnit 10.5.63
+OK (16 tests, 47 assertions)
+```
+
+### Test Coverage
+
+| Test | Description |
+|------|-------------|
+| testConstructorCreatesTables | Tables created on init |
+| testCreateAndGetSession | Sessions stored and retrieved |
+| testListSessions | Sessions returned in order |
+| testUpdateSession | Timestamp updated |
+| testDeleteSessionCascades | All related data deleted |
+| testAddAndGetMessages | Messages stored with JSON encoding |
+| testAddToolCall | Tool calls tracked correctly |
+| testPruneSessionsRemovesOld | Old sessions removed |
+| testPruneSessionsKeepsRecent | Recent sessions preserved |
+| testGetSessionNotFound | Returns null for missing session |
+
+### Fix Applied During Review
+- `listSessions()` now uses proper parameter binding: `LIMIT ?` with `execute([$limit])` instead of string interpolation
+
+---
+
+## Step 8.2 Documentation Complete
+
+**Date:** 2026-06-03
+**Scribe:** Documentation updated
+
+### README.md Updates (Step 8.2)
+- Status entry present at line 42-43
+- Full "Step 8.2: Session Persistence" section documented covering:
+  - SessionStore with SQLite WAL mode
+  - Schema for sessions, messages, tool_calls tables
+  - CRUD and message management methods
+  - Pruning for cleanup
+
+### CALIBER_LEARNINGS.md Updates (Step 8.2)
+- 10 new pattern entries including:
+  - WAL mode for concurrent access
+  - PDO exception-based error handling
+  - Manual foreign key cascade pattern
+  - JSON encoding for flexible fields
+
+---
+
+## Step 6.2: Agent Manager Tests
+
+**Date:** 2026-06-03
+**Status:** COMPLETE
+
+### Test Files Created
+- `candy-crush/tests/AgentManagerTest.php` (18 tests)
+- `candy-crush/tests/SubAgentTest.php` (21 tests)
+
+### Test Results
+
+```
+PHPUnit 10.5.63
+OK (39 tests, 84 assertions)
+```
+
+### Test Coverage
+
+| Test | Description |
+|------|-------------|
+| AgentManager: register/get | Registers agent and retrieves by name |
+| AgentManager: all() | Returns all registered agents |
+| AgentManager: active() | Filters to only active agents |
+| AgentManager: createSubAgent | Creates subagent with pending status |
+| AgentManager: createSubAgent unknown | Throws RuntimeException for unknown agent |
+| AgentManager: getSubAgent | Retrieves running subagent by ID |
+| AgentManager: executeSubAgent not found | Throws RuntimeException |
+| AgentManager: executeSubAgent success | Non-streaming execution |
+| AgentManager: executeSubAgent streaming | Streaming execution via generator |
+| AgentManager: executeSubAgent exception | Sets STATUS_FAILED on provider error |
+| AgentManager: stopSubAgent | Sets status to STOPPED |
+| SubAgent: status constants | All 6 constants have correct values |
+| SubAgent: isRunning | Correctly identifies running states |
+| SubAgent: isComplete | Correctly identifies complete state |
+| SubAgent: isStopped | Correctly identifies stopped states |
+| SubAgent: durationMs | Calculates elapsed time correctly |
+| SubAgent: toArray | Serializes to array format |
+
+### Fixes Applied During Review
+1. executeSubAgent() now throws RuntimeException when subagent not found (Fail Fast)
+2. stopSubAgent() now uses early return guard clause (Early Exit)
+3. executeSubAgent() has try-catch for STATUS_FAILED handling
+4. SubAgent has proper docblocks on properties
+
+---
+
 ## Phase 5 Complete - Hook System (Steps 5.1-5.3)
 
 **Status:** COMPLETE (Steps 5.1-5.3)
