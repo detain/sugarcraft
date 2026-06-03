@@ -61,6 +61,7 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `[c]`              | Commit pending changes (PerfSchema page)        |
 | `[x]`              | Export report to CSV (Reports page)             |
 | `[t]`              | Toggle column unit formatting (Reports page)    |
+| `[a]`              | Dismiss all pending alerts (Dashboard)          |
 
 ## Architecture
 
@@ -383,6 +384,20 @@ foreach ($alerts as $alert) {
 | `slow_query` | `long_query_time` server variable |
 | `connection_errors` | `Connection_errors_total` status variable |
 | `max_connections` | `threads_connected / max_connections` (alias for connection_usage) |
+
+### DashboardPage integration
+
+`AlertManager` integrates into the `DashboardPage` polling loop via `checkAlerts()`:
+
+```php
+// In DashboardPage::update() — called every 3s
+['alerts' => $alerts, 'notifier' => $notifier] = $manager->checkAndDispatch($counters);
+if ($notifier->hasAlerts()) {
+    $this->showAlertBadge = true;  // displayed in footer
+}
+```
+
+The `[a]` key dismisses all pending alerts and clears the badge. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op.
 
 ### Toast degradation
 
