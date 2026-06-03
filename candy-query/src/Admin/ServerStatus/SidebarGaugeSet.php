@@ -205,7 +205,7 @@ final class SidebarGaugeSet
         $ratio = match ($gauge->type()) {
             GaugeType::Cpu          => $this->computeConnectionsRatio($statusVars, $serverVars),
             GaugeType::Connections  => $this->computeConnectionsRatio($statusVars, $serverVars),
-            GaugeType::Traffic      => $this->computeTrafficRatio($statusVars),
+            GaugeType::Traffic      => $this->computeTrafficRatio($statusVars, $rates),
             GaugeType::KeyEfficiency => $this->computeKeyEfficiencyRatio($statusVars),
             GaugeType::Qps          => $this->computeQpsRatio($statusVars),
             GaugeType::InnoDB       => $this->computeInnoDBRatio($statusVars),
@@ -231,25 +231,29 @@ final class SidebarGaugeSet
     /**
      * Compute traffic ratio from bytes received/sent rates.
      *
-     * Uses a simple baseline of 10MB/s as "100%" for normalization.
-     * This gives a sense of network saturation relative to a typical connection.
+     * Uses a baseline of 10MB/s as "100%" for normalization.
+     * When sampler rates are provided, computes per-second rate deltas;
+     * otherwise falls back to absolute bytes with the same 10MB/s baseline.
      */
-    private function computeTrafficRatio(array $statusVars): float
+    private function computeTrafficRatio(array $statusVars, ?array $rates = null): float
     {
         // Baseline: 10MB/s as 100% traffic
         $baselineBytesPerSec = 10 * 1024 * 1024;
 
-        $bytesReceived = (float) ($statusVars['Bytes_received'] ?? '0');
-        $bytesSent = (float) ($statusVars['Bytes_sent'] ?? '0');
+        $totalBytesPerSec = 0.0;
 
-        // Traffic ratio is total bytes / baseline
-        // This is a simplified view — in production you'd use rate deltas
-        $totalBytes = $bytesReceived + $bytesSent;
-        $ratio = $totalBytes / $baselineBytesPerSec;
+        if ($rates !== null) {
+            // Use sampler-provided per-second rates for accurate ratio
+            $totalBytesPerSec = ($rates['bytesReceived'] ?? 0.0) + ($rates['bytesSent'] ?? 0.0);
+        } else {
+            // Fallback: treat absolute bytes as a proxy for rate
+            // This is less accurate but works when sampler is unavailable
+            $bytesReceived = (float) ($statusVars['Bytes_received'] ?? '0');
+            $bytesSent = (float) ($statusVars['Bytes_sent'] ?? '0');
+            $totalBytesPerSec = $bytesReceived + $bytesSent;
+        }
 
-        // If we have a sampler, we could compute rate, but for now use absolute
-        // with a high baseline to keep ratios reasonable
-        return min(1.0, $ratio / 100); // Normalize: 100x baseline = 100% = 1.0
+        return min(1.0, $totalBytesPerSec / $baselineBytesPerSec);
     }
 
     /**
