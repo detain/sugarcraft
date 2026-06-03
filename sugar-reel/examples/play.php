@@ -126,8 +126,8 @@ $mode = $modeArg === 'auto'
 
 // ── Terminal dimensions ───────────────────────────────────────────────────────
 
-$cols = (int) ($_ENV['SUGAR_REEL_COLS'] ?? 80);
-$rows = (int) ($_ENV['SUGAR_REEL_ROWS'] ?? 24);
+$cols = (int) (getenv('SUGAR_REEL_COLS') ?: 80);
+$rows = (int) (getenv('SUGAR_REEL_ROWS') ?: 24);
 $cols = max(10, min($cols, 200));
 $rows = max(5, min($rows, 80));
 
