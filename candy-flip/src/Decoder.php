@@ -297,16 +297,19 @@ final class Decoder
                 $allTransparent = true;
                 for ($sy = $y0; $sy <= $y1; $sy++) {
                     for ($sx = $x0; $sx <= $x1; $sx++) {
-                        $rgb = imagecolorat($img, $sx, $sy);
-                        $idx = imagecolorat($img, $sx, $sy) >> 24;
+                        // GIFs decode to a PALETTE image, so imagecolorat()
+                        // returns the palette INDEX, not a packed RGB value —
+                        // it must be resolved through the color table.
+                        $index = imagecolorat($img, $sx, $sy);
                         // A pixel is transparent when it uses the transparent color index.
-                        if ($transparent && $idx === $transparentColor) {
+                        if ($transparent && $index === $transparentColor) {
                             continue; // Skip transparent pixel in average.
                         }
                         $allTransparent = false;
-                        $sumR += ($rgb >> 16) & 0xff;
-                        $sumG += ($rgb >>  8) & 0xff;
-                        $sumB += ($rgb)       & 0xff;
+                        $rgb = imagecolorsforindex($img, $index);
+                        $sumR += $rgb['red'];
+                        $sumG += $rgb['green'];
+                        $sumB += $rgb['blue'];
                         $count++;
                     }
                 }

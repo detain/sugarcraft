@@ -9,20 +9,20 @@ use SugarCraft\Reel\Source\Probe;
 /**
  * Audio playback subprocess wrapper for video files.
  *
- * Spawns ffplay or mpv as a silent audio-only companion to the video player.
- * The audio subprocess runs independently — it is started when playback begins
- * and stopped on quit. It does not currently drive timing for video pacing
- * (that is future Step 8 territory).
+ * Spawns ffplay (`-nodisp -autoexit`) or mpv (`--no-video`) as a video-less
+ * audio companion. Per the v1 design (video_plan.md lines 36-38) the audio
+ * is not a position-reporting master clock — ffplay exposes no playhead — so
+ * instead the Player starts audio and resets its own wall clock at the same
+ * instant, then paces video off that clock with frame-skip resync. pause()/
+ * resume() keep audio aligned with playback so A/V stay roughly in sync.
  *
  * Graceful degradation:
  * - If the audio subprocess exits immediately (no audio track), isPlaying()
  *   returns false without error.
  * - If neither ffplay nor mpv is available, start() is a silent no-op.
  *
- * Mirrors the audio-subprocess-as-master-clock approach from
- * video_plan.md lines 94-96, but implemented as a silent companion
- * rather than the timing driver in this step.
- * @see video_plan.md lines 36-38
+ * No single upstream — the audio-companion + wall-clock pacing approach is
+ * drawn from maxcurzi/tplay and joelibaceta/video-to-ascii.
  */
 class AudioPlayer
 {
@@ -50,6 +50,11 @@ class AudioPlayer
      */
     public function start(): void
     {
+        // Mark as started even when no binary is available, so callers can
+        // distinguish "playback has begun" from "never played" and avoid
+        // re-spawning on resume.
+        $this->started = true;
+
         $cmd = $this->buildCommand();
         if ($cmd === null) {
             // Neither audio binary is available — silent degradation.
@@ -101,6 +106,43 @@ class AudioPlayer
     }
 
     /**
+     * True once start() has been called (regardless of whether a binary was
+     * actually available). Lets the Player start audio on first play and
+     * resume() it on subsequent unpauses rather than re-spawning.
+     */
+    public function hasStarted(): bool
+    {
+        return $this->started;
+    }
+
+    /**
+     * Suspend audio output (SIGSTOP) so it stays aligned with a paused video.
+     *
+     * Safe no-op when no process is running. POSIX-only; on platforms without
+     * job-control signals this is a best-effort no-op.
+     */
+    public function pause(): void
+    {
+        if (!is_resource($this->processHandle) || !\defined('SIGSTOP')) {
+            return;
+        }
+        proc_terminate($this->processHandle, SIGSTOP);
+    }
+
+    /**
+     * Resume previously-paused audio output (SIGCONT).
+     *
+     * Safe no-op when no process is running.
+     */
+    public function resume(): void
+    {
+        if (!is_resource($this->processHandle) || !\defined('SIGCONT')) {
+            return;
+        }
+        proc_terminate($this->processHandle, SIGCONT);
+    }
+
+    /**
      * True when the audio subprocess is still running.
      *
      * Returns false when:
@@ -145,10 +187,11 @@ class AudioPlayer
             return $cmd;
         }
 
-        // Fall back to mpv.
+        // Fall back to mpv. --no-video keeps it audio-only (no window);
+        // --really-quiet suppresses its status output on our discarded pipes.
         $mpvPath = $this->findMpv();
         if ($mpvPath !== null) {
-            $cmd = [$mpvPath];
+            $cmd = [$mpvPath, '--no-video', '--really-quiet'];
             if ($this->startMs !== null) {
                 // Numeric string from division — safe, no shell-special chars.
                 $cmd[] = '--start=' . (string)($this->startMs / 1000.0) . 's';
@@ -180,4 +223,7 @@ class AudioPlayer
 
     /** @var resource|null */
     private $processHandle = null;
+
+    /** True once start() has been invoked. */
+    private bool $started = false;
 }

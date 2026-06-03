@@ -38,6 +38,53 @@ final class DecoderTest extends TestCase
         }
     }
 
+    /**
+     * Regression: a GIF decodes to a PALETTE image, so the sampler must
+     * resolve palette indices to real RGB (imagecolorsforindex) rather than
+     * treating the index as a packed truecolor int. The old code did the
+     * latter and returned (0,0,0) for every solid color / leaked the palette
+     * index into the blue channel for gradients.
+     *
+     * @dataProvider solidColorProvider
+     */
+    public function testDecoderResolvesPaletteColorsToRgb(int $r, int $g, int $b): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+
+        $path = sys_get_temp_dir() . '/flip-color-' . uniqid() . '.gif';
+        $im = imagecreatetruecolor(8, 4);
+        imagefill($im, 0, 0, imagecolorallocate($im, $r, $g, $b));
+        imagegif($im, $path);
+        imagedestroy($im);
+
+        try {
+            $cell = Decoder::decode($path, 4, 2)[0]->cells[0][0] ?? null;
+            $this->assertNotNull($cell, 'solid-color cell must not be null/transparent');
+            // ext-gd's GIF palette round-trip is near-exact; allow a small delta.
+            $this->assertEqualsWithDelta($r, $cell[0], 6, 'red channel');
+            $this->assertEqualsWithDelta($g, $cell[1], 6, 'green channel');
+            $this->assertEqualsWithDelta($b, $cell[2], 6, 'blue channel');
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * @return list<array{int,int,int}>
+     */
+    public static function solidColorProvider(): array
+    {
+        return [
+            'red'    => [255, 0, 0],
+            'green'  => [0, 255, 0],
+            'blue'   => [0, 0, 255],
+            'orange' => [200, 100, 50],
+            'white'  => [255, 255, 255],
+        ];
+    }
+
     public function testDecodeReturnsFrames(): void
     {
         if (!extension_loaded('gd')) {

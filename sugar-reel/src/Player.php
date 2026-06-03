@@ -6,20 +6,17 @@ namespace SugarCraft\Reel;
 
 use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Buffer\Style;
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
-use SugarCraft\Palette\Color;
 use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\FrameMsg;
 use SugarCraft\Reel\Msg\TickMsg;
-use SugarCraft\Reel\Render\FrameRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
@@ -30,12 +27,13 @@ use SugarCraft\Reel\Source\VideoSource;
  *
  * The Player implements the Elm Architecture (Model-View-Update) via
  * the TEA runtime in candy-core. It pulls frames from a Decoder iterator,
- * paces them using wall-clock time and a Sync engine, and renders via
+ * paces them using wall-clock time and the Sync engine, and renders via
  * FrameRenderer (ascii/ansi256/truecolor/half-block).
  *
- * Delta repaint: for modes that benefit from it (Ascii/Ansi256/TrueColor/
- * HalfBlock), the Player maintains a previous-frame Buffer and emits
- * only the cell-level diff via candy-buffer DiffEncoder.
+ * Repaint: view() returns the FULL current frame every call. candy-core's
+ * Renderer already diffs each frame against the previously rendered one and
+ * emits only the minimal terminal update, so the Player does not (and must
+ * not) diff inside view() — doing so would double-diff and corrupt output.
  *
  * Keys:
  *   Space       — pause / resume
@@ -60,8 +58,6 @@ final class Player implements Model
      * @param RgbFrame|null               $currentFrame Decoded frame ready for rendering
      * @param float                       $lastTickTime Wall-clock time at last tick (microtime)
      * @param float                       $fps          Frames per second from VideoSource
-     * @param Sync                        $sync         Wall-clock pacing engine
-     * @param Buffer|null                 $prevBuffer   Previous frame's cell buffer (for delta repaint)
      * @param int                         $totalFrames  Total frame count (0 if unknown/stream)
      * @param int                         $cellsW       Terminal cell width
      * @param int                         $cellsH       Terminal cell height
@@ -78,8 +74,6 @@ final class Player implements Model
         public readonly ?RgbFrame $currentFrame,
         private readonly float $lastTickTime,
         public readonly float $fps,
-        private readonly Sync $sync,
-        private readonly ?Buffer $prevBuffer,
         public readonly int $totalFrames,
         public readonly int $cellsW,
         public readonly int $cellsH,
@@ -98,31 +92,28 @@ final class Player implements Model
      * @param int       $cellsW       Target terminal cell width
      * @param int       $cellsH       Target terminal cell height
      * @param float|null $fpsOverride FPS override (null = auto from probe)
+     * @param Mode       $mode         Rendering mode (decoder resolution matches it)
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock): self
     {
         $source = VideoSource::probe($videoPath);
 
         // FPS from probe, default 24 if not available. Use override when set.
         $fps = $fpsOverride ?? ($source->fps > 0.0 ? $source->fps : 24.0);
 
-        // Create decoder for the source.
-        // Mode is HalfBlock at startup; seek recreates decoder with current mode.
-        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, Mode::HalfBlock);
+        // Decoder resolution is keyed to the render mode (HalfBlock decodes at
+        // 2× cell height). Seek recreates the decoder with the current mode.
+        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode);
 
-        $sync = new Sync($fps, 1.0);
+        // Audio companion is created when the source has audio but is NOT
+        // started here — the Player starts it on first play (see updateKey)
+        // so audio and the video wall clock share the same t0.
+        $audioPlayer = $source->hasAudio ? new AudioPlayer($videoPath) : null;
 
-        // Start audio subprocess if the video has an audio track.
-        $audioPlayer = null;
-        if ($source->hasAudio) {
-            $audioPlayer = new AudioPlayer($videoPath);
-            $audioPlayer->start();
-        }
-
-        // Player starts paused; the first tick is scheduled via init().
+        // Player starts paused; the first tick is scheduled when playback begins.
         return new self(
             decoder: $decoder,
-            mode: Mode::HalfBlock, // Default mode — auto() would pick better
+            mode: $mode,
             speed: 1.0,
             paused: true,
             elapsed: 0.0,
@@ -130,8 +121,6 @@ final class Player implements Model
             currentFrame: null,
             lastTickTime: microtime(true),
             fps: $fps,
-            sync: $sync,
-            prevBuffer: null,
             totalFrames: 0,
             cellsW: $cellsW,
             cellsH: $cellsH,
@@ -160,8 +149,6 @@ final class Player implements Model
         int $cellsH = 24,
         string $videoPath = '/fake',
     ): self {
-        $sync = new Sync($fps, 1.0);
-
         return new self(
             decoder: $decoder,
             mode: Mode::HalfBlock,
@@ -172,8 +159,6 @@ final class Player implements Model
             currentFrame: null,
             lastTickTime: microtime(true),
             fps: $fps,
-            sync: $sync,
-            prevBuffer: null,
             totalFrames: 0,
             cellsW: $cellsW,
             cellsH: $cellsH,
@@ -234,51 +219,41 @@ final class Player implements Model
         $now = microtime(true);
         $delta = $now - $this->lastTickTime;
 
-        // Accumulate elapsed time adjusted for playback speed.
-        $newElapsed = $this->elapsed + ($delta * $this->speed);
+        // $elapsed is RAW wall-clock play-time; Sync::targetFrame applies the
+        // speed multiplier. (Folding speed into $elapsed here too would square
+        // it — the original bug.)
+        $newElapsed = $this->elapsed + $delta;
+        $target = Sync::targetFrame($newElapsed, $this->fps, $this->speed);
 
-        // Target frame based on new elapsed time, fps, and speed.
-        $target = (int)floor($newElapsed * $this->fps * $this->speed);
-
-        // Decide skip / hold / advance.
-        $nextDecoder = $this->decoder;
+        // Decide skip / hold / advance using the tested Sync engine.
         $nextFrame = $this->currentFrame;
         $nextIndex = $this->frameIndex;
 
-        // shouldSkip: target is more than 2 frames ahead → skip ahead.
-        if ($target - $this->frameIndex > 2) {
+        if (Sync::shouldSkip($this->frameIndex, $target)) {
+            // Behind by more than the skip limit — discard intermediate frames,
+            // keeping only the last one decoded, to catch up without lag.
             $skipCount = $target - $this->frameIndex;
             for ($i = 0; $i < $skipCount; $i++) {
-                $nextFrame = $nextDecoder->next();
-                if ($nextFrame === null) {
+                $frame = $this->decoder->next();
+                if ($frame === null) {
                     break;
                 }
+                $nextFrame = $frame;
                 $nextIndex++;
             }
-        } elseif ($this->frameIndex > $target) {
-            // shouldHold: we're ahead of schedule, don't advance.
+        } elseif (Sync::shouldHold($this->frameIndex, $target)) {
+            // Ahead of schedule — hold the current frame, advance nothing.
         } else {
-            // Normal case: advance by one frame.
-            $nextFrame = $nextDecoder->next();
-            if ($nextFrame !== null) {
+            // On schedule — advance by one frame.
+            $frame = $this->decoder->next();
+            if ($frame !== null) {
+                $nextFrame = $frame;
                 $nextIndex++;
             }
         }
 
-        // Build the buffer for the new frame and pass it through withNewFrame.
-        if ($nextFrame !== null && $nextFrame !== $this->currentFrame) {
-            $newBuffer = $this->frameToBuffer($nextFrame, $this->mode);
-            $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $nextDecoder, $newElapsed, $now, $newBuffer);
-        } elseif ($nextFrame !== null) {
-            // Frame unchanged (hold or same) — keep existing prevBuffer.
-            $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $nextDecoder, $newElapsed, $now, $this->prevBuffer);
-        } else {
-            $nextPlayer = $this;
-        }
+        $nextPlayer = $this->withNewFrame($nextFrame, $nextIndex, $this->decoder, $newElapsed, $now);
 
-        // Always tick again for continuous pacing, even if paused became true
-        // via a concurrent message (impossible in single-threaded PHP, but
-        // the pattern is correct: tick drives playback when not paused).
         $cmd = $nextPlayer->paused
             ? null
             : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
@@ -304,9 +279,29 @@ final class Player implements Model
 
         // Space: toggle pause/resume.
         if ($msg->type === KeyType::Space) {
-            $nextPaused = !$this->paused;
-            $nextPlayer = $this->mutate(['paused' => $nextPaused]);
-            $cmd = $nextPaused
+            $resuming = $this->paused;
+            $changes = ['paused' => !$this->paused];
+
+            if ($resuming) {
+                // Re-anchor the wall clock to now so $elapsed accumulates
+                // play-time only — not time spent on the start screen or paused.
+                $changes['lastTickTime'] = microtime(true);
+                // Start audio on first play; resume it on later unpauses, so it
+                // shares the video's t0 and stays roughly in sync.
+                if ($this->audioPlayer !== null) {
+                    if ($this->audioPlayer->hasStarted()) {
+                        $this->audioPlayer->resume();
+                    } else {
+                        $this->audioPlayer->start();
+                    }
+                }
+            } else {
+                // Pause audio alongside video so they realign on resume.
+                $this->audioPlayer?->pause();
+            }
+
+            $nextPlayer = $this->mutate($changes);
+            $cmd = $nextPlayer->paused
                 ? null
                 : Cmd::tick(1.0 / $this->fps, static fn(): Msg => new TickMsg());
             return [$nextPlayer, $cmd];
@@ -365,16 +360,17 @@ final class Player implements Model
     }
 
     /**
-     * Render the current frame to an ANSI string.
+     * Render the current frame to a full ANSI string.
      *
-     * For Ascii/TrueColor/HalfBlock: uses candy-buffer Buffer::diff() +
-     * DiffEncoder to emit only changed cells (delta repaint).
+     * view() always emits the COMPLETE current frame. candy-core's Renderer
+     * diffs it against the previously rendered frame and writes only the
+     * minimal terminal update, so there is intentionally no cell-diff here —
+     * diffing inside view() would double-diff the framework's own diff and
+     * corrupt the screen.
      *
-     * For Ansi256: delegates directly to AsciiRenderer (bypasses buffer/diff
-     * path) because DiffEncoder can only emit truecolor SGR sequences
-     * (38;2;R;G;B) and we need ANSI 256 sequences (38;5;N).
-     *
-     * For Sixel/Kitty/Iterm2: delegates directly to renderer (no cell diff).
+     * Ascii/TrueColor/HalfBlock render through a candy-buffer Buffer (the
+     * cell grid the plan calls for); Ansi256/Sixel/Kitty/Iterm2 render
+     * directly through their FrameRenderer.
      *
      * @return string
      */
@@ -388,28 +384,13 @@ final class Player implements Model
             return $this->renderPlaceholder();
         }
 
-        // Modes that bypass buffer/diff path (delta repaint not possible
-        // or not beneficial):
-        // - Sixel/Kitty/Iterm2: image protocols, full-frame renders
-        // - Ansi256: DiffEncoder emits truecolor (38;2;), not ANSI 256 (38;5;)
+        // Ansi256 (38;5;N) and the image protocols render directly — they are
+        // not expressible through the truecolor-only Buffer cell grid.
         if ($this->mode === Mode::Sixel || $this->mode === Mode::Kitty || $this->mode === Mode::Iterm2 || $this->mode === Mode::Ansi256) {
             return $this->renderDirect($frame);
         }
 
-        // Build the current frame's Buffer for delta comparison.
-        $currentBuffer = $this->frameToBuffer($frame, $this->mode);
-
-        if ($this->prevBuffer === null) {
-            // First frame: emit full render.
-            return $currentBuffer->toAnsi();
-        }
-
-        // Compute diff between previous and current frame.
-        $ops = $currentBuffer->diff($this->prevBuffer);
-
-        // Encode diff ops to ANSI.
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return $this->frameToBuffer($frame, $this->mode)->toAnsi();
     }
 
     /**
@@ -505,30 +486,17 @@ final class Player implements Model
     /**
      * Convert RGB to a candy-buffer Style color (0xRRGGBB) based on mode.
      *
-     * @return int|null 0xRRGGBB color for TrueColor/Ansi256, null for Ascii
+     * Only the buffer-backed modes reach this — Ascii has no color, the rest
+     * (TrueColor/HalfBlock) pack the channels into a 0xRRGGBB int. Ansi256 and
+     * the image protocols never use the Buffer path (they renderDirect()).
+     *
+     * @return int|null 0xRRGGBB color for TrueColor/HalfBlock, null for Ascii
      */
     private function rgbToStyleColor(int $r, int $g, int $b, Mode $mode): ?int
     {
-        return match ($mode) {
-            Mode::Ascii => null,
-            Mode::Ansi256 => $this->toAnsi256Rgb($r, $g, $b),
-            Mode::TrueColor => (($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF),
-            default => (($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF),
-        };
-    }
-
-    /**
-     * Convert RGB to a 0xRRGGBB integer.
-     *
-     * Note: For Ansi256 mode, rendering bypasses the buffer/diff path
-     * entirely via renderDirect() → AsciiRenderer, which emits the
-     * correct 38;5;N SGR sequences using Color::toAnsi256Index().
-     * This method is no longer used for Ansi256 rendering output.
-     *
-     * @deprecated Ansi256 rendering uses renderDirect() path instead.
-     */
-    private function toAnsi256Rgb(int $r, int $g, int $b): int
-    {
+        if ($mode === Mode::Ascii) {
+            return null;
+        }
         return (($r & 0xFF) << 16) | (($g & 0xFF) << 8) | ($b & 0xFF);
     }
 
@@ -604,8 +572,6 @@ final class Player implements Model
                     currentFrame: $frame,
                     lastTickTime: microtime(true),
                     fps: $this->fps,
-                    sync: $this->sync,
-                    prevBuffer: null,
                     totalFrames: $this->totalFrames,
                     cellsW: $this->cellsW,
                     cellsH: $this->cellsH,
@@ -637,8 +603,6 @@ final class Player implements Model
                 currentFrame: $firstFrame,
                 lastTickTime: microtime(true),
                 fps: $this->fps,
-                sync: $this->sync,
-                prevBuffer: null,
                 totalFrames: $this->totalFrames,
                 cellsW: $this->cellsW,
                 cellsH: $this->cellsH,
@@ -675,8 +639,6 @@ final class Player implements Model
             currentFrame: $frame,
             lastTickTime: microtime(true),
             fps: $this->fps,
-            sync: $this->sync,
-            prevBuffer: null, // Reset buffer on seek to avoid stale diffs.
             totalFrames: $this->totalFrames,
             cellsW: $this->cellsW,
             cellsH: $this->cellsH,
@@ -694,7 +656,6 @@ final class Player implements Model
         Decoder $decoder,
         float $elapsed,
         float $lastTickTime,
-        ?Buffer $prevBuffer,
     ): self {
         return new self(
             decoder: $decoder,
@@ -706,8 +667,6 @@ final class Player implements Model
             currentFrame: $frame ?? $this->currentFrame,
             lastTickTime: $lastTickTime,
             fps: $this->fps,
-            sync: $this->sync,
-            prevBuffer: $prevBuffer,
             totalFrames: $this->totalFrames,
             cellsW: $this->cellsW,
             cellsH: $this->cellsH,
@@ -733,8 +692,6 @@ final class Player implements Model
             currentFrame: $changes['currentFrame'] ?? $this->currentFrame,
             lastTickTime: $changes['lastTickTime'] ?? $this->lastTickTime,
             fps: $changes['fps'] ?? $this->fps,
-            sync: $changes['sync'] ?? $this->sync,
-            prevBuffer: $changes['prevBuffer'] ?? $this->prevBuffer,
             totalFrames: $changes['totalFrames'] ?? $this->totalFrames,
             cellsW: $changes['cellsW'] ?? $this->cellsW,
             cellsH: $changes['cellsH'] ?? $this->cellsH,
