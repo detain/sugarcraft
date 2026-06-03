@@ -12,8 +12,8 @@ Each entry should have:
 ## Current Status
 
 ### Overall Progress
-- Phase 1: In Progress (Step 1.5 docs pending)
-- Phase 2: Pending
+- Phase 1: **COMPLETED** ✅
+- Phase 2: In Progress
 - Phase 3: Pending
 - Phase 4: Pending
 - Phase 5: Pending
@@ -55,7 +55,13 @@ Each entry should have:
   - Example file removed (triggers pre-existing computeTotalWidth bug)
 
 ### Phase 2: Frozen Columns
-- Step 2.1 (impl): Pending
+- Step 2.1 (impl): **COMPLETED** ✅
+  - Added `isColumnVisible(int $colIndex): bool` helper method
+  - Modified `fillHeaderRow()` to skip hidden columns and only draw separators between visible columns
+  - Modified `fillDataRow()` similarly
+  - Frozen columns always render, non-frozen columns skip first scrollX columns
+  - All 177 tests pass
+  - Verified: frozen col 0 shows when scrolling, multiple frozen cols work, all-frozen edge case handled
 - Step 2.2 (review): Pending
 - Step 2.3 (fix): Pending
 - Step 2.4 (tests): Pending

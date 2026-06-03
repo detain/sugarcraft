@@ -662,6 +662,10 @@ final class Table
      * the render pass and uses those widths throughout (header, separators,
      * data cells). Widths are cached in $this->computedColumnWidths for the
      * duration of this render.
+     *
+     * Frozen columns are always rendered on the left. Non-frozen columns
+     * scroll horizontally based on scrollX - when scrollX > 0, the first
+     * scrollX non-frozen columns are hidden.
      */
     private function renderToBuffer(): Buffer
     {
@@ -726,6 +730,21 @@ final class Table
         return $buffer;
     }
 
+    /**
+     * Determine if a column at the given index is visible.
+     *
+     * Frozen columns are always visible. Non-frozen columns are visible
+     * starting at index = count(frozenCols) + scrollX.
+     */
+    private function isColumnVisible(int $colIndex): bool
+    {
+        if (\in_array($colIndex, $this->frozenCols, true)) {
+            return true;
+        }
+        $scrollableStartIndex = \count($this->frozenCols) + $this->scrollX;
+        return $colIndex >= $scrollableStartIndex;
+    }
+
     private function fillBorderRow(Buffer $buffer, int $row, int $contentWidth, string $type): Buffer
     {
         $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -763,15 +782,21 @@ final class Table
         $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
         $col++;
 
-        // Header cells
+        // Header cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
+            // Skip hidden columns (non-frozen before scrollX offset)
+            if (!$this->isColumnVisible($ci)) {
+                continue;
+            }
+
             $colWidth = $computedWidths[$ci] ?? $column->width;
             $headerText = $column->renderHeader($colWidth);
             $buffer = $this->fillCellContent($buffer, $row, $col, $headerText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator (if not last column)
-            if ($ci < \count($this->columns) - 1) {
+            // Column separator: only if next column exists AND is visible
+            $nextCi = $ci + 1;
+            if ($nextCi < \count($this->columns) && $this->isColumnVisible($nextCi)) {
                 $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
                 $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
                 $col++;
@@ -824,8 +849,13 @@ final class Table
         $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
         $col++;
 
-        // Data cells
+        // Data cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
+            // Skip hidden columns (non-frozen before scrollX offset)
+            if (!$this->isColumnVisible($ci)) {
+                continue;
+            }
+
             $val = $rowData->data->get($column->key);
 
             if ($val === null) {
@@ -865,8 +895,9 @@ final class Table
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
 
-            // Column separator
-            if ($ci < \count($this->columns) - 1) {
+            // Column separator: only if next column exists AND is visible
+            $nextCi = $ci + 1;
+            if ($nextCi < \count($this->columns) && $this->isColumnVisible($nextCi)) {
                 $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
                 $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
                 $col++;
