@@ -99,3 +99,8 @@ Source: step-e1 ai/ps-processlist
 Pattern: CSV export must escape formula-injection characters (`=`, `+`, `-`, `@`) by prefixing them with a single quote. This prevents malicious data in cells from being interpreted as formulas when the CSV is opened in spreadsheet applications like Excel. Also escape values containing commas, quotes, or newlines by wrapping in double-quotes and doubling internal quotes.
 Canonical: `ReportsPage::exportToCsv()` — checks `$value[0]` for dangerous prefixes and prepends `'` before the value, then wraps in quotes if needed.
 Source: step-d1 ai/csv-export
+
+### 2026-06-03 — DashboardPage AlertManager polling integration (Step F1)
+Pattern: `AlertManager` is composed into the `DashboardPage` poll loop via `StatusSnapshotProviderInterface` — `checkAlerts()` is called on each 3s cycle, dispatching toasts for threshold breaches and setting a `$showAlertBadge` flag for the footer indicator. The `[a]` key handler dismisses all alerts and clears the badge. This keeps alerting orthogonal to the gauge/update rendering with no shared mutable state.
+Canonical: `DashboardPage::checkAlerts()` → `AlertManager::checkAndDispatch()` → `$this->showAlertBadge = $notifier->hasAlerts()`.
+Source: step-f1 ai/alert-manager
