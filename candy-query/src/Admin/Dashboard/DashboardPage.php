@@ -20,6 +20,10 @@ use SugarCraft\Layout\GreedySolver;
 use SugarCraft\Layout\Constraint\Constraint;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
+use SugarCraft\Query\Admin\Alerts\Alert;
+use SugarCraft\Query\Admin\Alerts\AlertManager;
+use SugarCraft\Query\Admin\Alerts\AlertNotifier;
+use SugarCraft\Query\Admin\Alerts\AlertThresholds;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -32,6 +36,7 @@ use SugarCraft\Sprinkles\Style;
  * Keyboard shortcuts:
  *   [p] - pause/resume auto-refresh
  *   [r] - reset all counters and graphs
+ *   [a] - dismiss pending alerts
  *
  * @see Mirrors mysql-workbench/wb_admin_performance_dashboard
  */
@@ -57,6 +62,11 @@ final class DashboardPage extends PageBase
 
     private bool $isPostgres = false;
 
+    /** @var array<string, Alert> */
+    private array $pendingAlerts = [];
+
+    private AlertNotifier $alertNotifier;
+
     public function __construct(
         ServerContextInterface $context,
         ?Version $version = null,
@@ -67,6 +77,8 @@ final class DashboardPage extends PageBase
             ? WidgetRegistry::buildForPostgres()
             : WidgetRegistry::build($version ?? $this->context->version());
         $this->initializeCells();
+        // Mute-safe by default — no toast factory means notify() is a no-op
+        $this->alertNotifier = AlertNotifier::withDefaults(muted: true);
     }
 
     protected function validate(): bool
@@ -159,6 +171,7 @@ final class DashboardPage extends PageBase
         return match (true) {
             $ch === 'p' => [$this->withTogglePause(), null],
             $ch === 'r' => [$this->withReset(), null],
+            $ch === 'a' => [$this->withClearAlerts(), null],
             default => [$this, null],
         };
     }
@@ -198,6 +211,34 @@ final class DashboardPage extends PageBase
         }
 
         $this->previousSnapshot = json_encode($current);
+
+        // Non-blocking alert check — failures here don't stall the dashboard
+        $this->checkAlerts($current, $serverVars);
+    }
+
+    /**
+     * Check metrics against alert thresholds and queue any violations.
+     *
+     * Uses a mute-safe notifier by default; provide a factory via
+     * withAlertNotifier() to enable toast notifications.
+     */
+    private function checkAlerts(array $statusVars, array $serverVars): void
+    {
+        $manager = AlertManager::new()
+            ->withThresholds(AlertThresholds::default())
+            ->withNotifier($this->alertNotifier);
+
+        $alerts = $manager->checkAllMetrics($statusVars, $serverVars);
+
+        if ($alerts !== []) {
+            // Merge new alerts, avoiding duplicates by key
+            $this->pendingAlerts = array_merge($this->pendingAlerts, $alerts);
+
+            // Dispatch to notifier (no-op if muted or no factory)
+            foreach ($alerts as $alert) {
+                $this->alertNotifier = $this->alertNotifier->notify($alert);
+            }
+        }
     }
 
     private function initializeCells(): void
@@ -304,7 +345,18 @@ final class DashboardPage extends PageBase
 
     private function renderFooter(): string
     {
-        return Style::new()->foreground(Color::hex('#6b7280'))->render('[p] pause  [r] reset');
+        $shortcuts = '[p] pause  [r] reset';
+
+        if ($this->pendingAlerts !== []) {
+            $count = count($this->pendingAlerts);
+            $alertLabel = Style::new()
+                ->foreground(Color::hex('#f59e0b'))
+                ->bold()
+                ->render("[!] {$count} alert" . ($count !== 1 ? 's' : ''));
+            $shortcuts .= '  ' . $alertLabel . '  [a] dismiss';
+        }
+
+        return Style::new()->foreground(Color::hex('#6b7280'))->render($shortcuts);
     }
 
     private function assembleLayout(
@@ -370,9 +422,50 @@ final class DashboardPage extends PageBase
         return $clone;
     }
 
+    public function withClearAlerts(): self
+    {
+        $clone = clone $this;
+        $clone->pendingAlerts = [];
+        return $clone;
+    }
+
+    /**
+     * Return a new DashboardPage with the given alert notifier.
+     *
+     * Use this to enable toast notifications by providing a notifier
+     * with a Toast factory:
+     *
+     *   $notifier = AlertNotifier::withDefaults(muted: false);
+     *   $page = $page->withAlertNotifier($notifier);
+     */
+    public function withAlertNotifier(AlertNotifier $notifier): self
+    {
+        $clone = clone $this;
+        $clone->alertNotifier = $notifier;
+        return $clone;
+    }
+
     public function isPaused(): bool
     {
         return $this->paused;
+    }
+
+    /**
+     * @return array<string, Alert>
+     */
+    public function pendingAlerts(): array
+    {
+        return $this->pendingAlerts;
+    }
+
+    public function alertCount(): int
+    {
+        return count($this->pendingAlerts);
+    }
+
+    public function alertNotifier(): AlertNotifier
+    {
+        return $this->alertNotifier;
     }
 
 }
