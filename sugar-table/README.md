@@ -156,6 +156,62 @@ $t = $t->SelectPrevious();              // move cursor up
 $t = $t->CurrentRow();                  // get selected RowData
 ```
 
+## Global Search
+
+Search across all columns simultaneously with `search()`:
+
+```php
+$t = Table::withColumns([
+    Column::new('id',   'ID',     5),
+    Column::new('name', 'Name',  20),
+    Column::new('city', 'City',  15),
+])->withRows([
+    Row::new(RowData::from(['id' => '1', 'name' => 'Alice',   'city' => 'NYC'])),
+    Row::new(RowData::from(['id' => '2', 'name' => 'Bob',     'city' => 'LA'])),
+    Row::new(RowData::from(['id' => '3', 'name' => 'Carol',   'city' => 'CHI'])),
+]);
+
+$t = $t->search('alice');    // finds row with "Alice" (case-insensitive)
+$t = $t->search('ny');       // finds row with "NYC"
+$t = $t->search('');         // clears search (shows all rows)
+$t = $t->ClearSearch();     // alias for search('')
+```
+
+### How It Works
+
+- **Case-insensitive**: `search('ALICE')` matches `"alice"`, `"Alice"`, `"ALICE"`
+- **OR logic**: A row matches if **any** column contains the search text
+- **Combines with filters**: Global search is ANDed with column filters — a row must match both
+- **Resets selection**: `search()` automatically resets `selectedIndex` to 0
+
+```php
+// Combined: Filter by name column AND search all columns for "ny"
+$t = $t->Filter('name', 'alice')  // name must contain "alice"
+        ->search('ny');           // some column must contain "ny"
+
+// Row 1 (Alice, NYC): passes Filter, passes search ✅
+// Row 2 (Bob, LA):    fails Filter ❌
+// Row 3 (Carol, CHI): fails both ❌
+```
+
+### Interaction with Filter()
+
+| Method     | Scope        | Logic   |
+|------------|--------------|---------|
+| `Filter()` | Single column | AND (row must match ALL column filters) |
+| `search()` | All columns  | OR (row matches if ANY column contains text) |
+
+Both can be active simultaneously:
+
+```php
+$t = $t->Filter('city', 'ny')     // city must contain "ny"
+        ->search('li');           // some column must contain "li"
+
+// Row 1 (Alice, NYC): city matches "ny", search matches "li" in "Alice" ✅
+// Row 2 (Bob, LA):    city matches "la"? No ❌
+// Row 3 (Carol, CHI): city fails, search matches "li" in "Carol" — fails Filter ❌
+```
+
 ## Pagination
 
 ```php
