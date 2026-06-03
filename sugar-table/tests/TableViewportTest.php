@@ -103,4 +103,176 @@ final class TableViewportTest extends TestCase
         $this->assertStringContainsString('User0', $view);
         $this->assertStringNotContainsString('User5', $view);
     }
+
+    // -------------------------------------------------------------------------
+    // Keyboard scrolling helpers
+    // -------------------------------------------------------------------------
+
+    public function testKeyConstantsExist(): void
+    {
+        $this->assertSame('arrowUp', Table::KEY_ARROW_UP);
+        $this->assertSame('arrowDown', Table::KEY_ARROW_DOWN);
+        $this->assertSame('pageUp', Table::KEY_PAGE_UP);
+        $this->assertSame('pageDown', Table::KEY_PAGE_DOWN);
+        $this->assertSame('home', Table::KEY_HOME);
+        $this->assertSame('end', Table::KEY_END);
+    }
+
+    public function testScrollYForKeyArrowUp(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $this->assertSame(4, $t->scrollYForKey(Table::KEY_ARROW_UP));
+    }
+
+    public function testScrollYForKeyArrowUpAtZero(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(0);
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_ARROW_UP));
+    }
+
+    public function testScrollYForKeyArrowDown(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        // maxScrollY = 100 - 10 = 90
+        $this->assertSame(6, $t->scrollYForKey(Table::KEY_ARROW_DOWN));
+    }
+
+    public function testScrollYForKeyArrowDownAtMax(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(90);
+        $this->assertSame(90, $t->scrollYForKey(Table::KEY_ARROW_DOWN));
+    }
+
+    public function testScrollYForKeyPageUp(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $this->assertSame(40, $t->scrollYForKey(Table::KEY_PAGE_UP));
+    }
+
+    public function testScrollYForKeyPageUpAtZero(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_PAGE_UP));
+    }
+
+    public function testScrollYForKeyPageDown(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $this->assertSame(60, $t->scrollYForKey(Table::KEY_PAGE_DOWN));
+    }
+
+    public function testScrollYForKeyPageDownAtMax(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(85);
+        // maxScrollY = 90, so pageDown should clamp to 90
+        $this->assertSame(90, $t->scrollYForKey(Table::KEY_PAGE_DOWN));
+    }
+
+    public function testScrollYForKeyHome(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_HOME));
+    }
+
+    public function testScrollYForKeyEnd(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        // maxScrollY = 100 - 10 = 90
+        $this->assertSame(90, $t->scrollYForKey(Table::KEY_END));
+    }
+
+    public function testScrollYForKeyUnknownKeyReturnsCurrent(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(25);
+        $this->assertSame(25, $t->scrollYForKey('unknownKey'));
+    }
+
+    public function testScrollYForKeyWithZeroViewportHeight(): void
+    {
+        // When viewportHeight is 0, maxScrollY is 0, so no scrolling possible
+        $t = $this->makeLargeTable()->withViewportHeight(0)->withScrollY(0);
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_ARROW_DOWN));
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_PAGE_DOWN));
+        $this->assertSame(0, $t->scrollYForKey(Table::KEY_END));
+    }
+
+    public function testHandleKeyReturnsNewInstance(): void
+    {
+        $a = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $b = $a->handleKey(Table::KEY_ARROW_UP);
+        $this->assertNotSame($a, $b);
+        $this->assertSame(5, $a->scrollY());
+        $this->assertSame(4, $b->scrollY());
+    }
+
+    public function testHandleKeyArrowDown(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(5);
+        $t2 = $t->handleKey(Table::KEY_ARROW_DOWN);
+        $this->assertSame(6, $t2->scrollY());
+    }
+
+    public function testHandleKeyPageDown(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t2 = $t->handleKey(Table::KEY_PAGE_DOWN);
+        $this->assertSame(60, $t2->scrollY());
+    }
+
+    public function testHandleKeyHome(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t2 = $t->handleKey(Table::KEY_HOME);
+        $this->assertSame(0, $t2->scrollY());
+    }
+
+    public function testHandleKeyEnd(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(50);
+        $t2 = $t->handleKey(Table::KEY_END);
+        $this->assertSame(90, $t2->scrollY());
+    }
+
+    public function testHandleKeyUnknownKeyReturnsUnchangedScrollY(): void
+    {
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(25);
+        $t2 = $t->handleKey('unknownKey');
+        $this->assertSame(25, $t2->scrollY());
+    }
+
+    public function testKeyboardScrollingIntegration(): void
+    {
+        // Simulate a user pressing keys to scroll through the table
+        $t = $this->makeLargeTable()->withViewportHeight(10)->withScrollY(0);
+
+        // Press arrow down a few times
+        $t = $t->handleKey(Table::KEY_ARROW_DOWN);
+        $this->assertSame(1, $t->scrollY());
+        $t = $t->handleKey(Table::KEY_ARROW_DOWN);
+        $this->assertSame(2, $t->scrollY());
+
+        // Press home to go back to top
+        $t = $t->handleKey(Table::KEY_HOME);
+        $this->assertSame(0, $t->scrollY());
+
+        // Press page down to jump ahead
+        $t = $t->handleKey(Table::KEY_PAGE_DOWN);
+        $this->assertSame(10, $t->scrollY());
+
+        // Press end to go to the bottom
+        $t = $t->handleKey(Table::KEY_END);
+        $this->assertSame(90, $t->scrollY());
+    }
+
+    public function testScrollYForKeyWithFilteredRows(): void
+    {
+        // Apply a filter that reduces rows: "User9" matches User9, User90-99 (11 rows)
+        $t = $this->makeLargeTable()
+            ->withViewportHeight(5)
+            ->withScrollY(0)
+            ->Filter('name', 'User9'); // Only User9* rows match
+
+        // maxScrollY should be max(0, 11 - 5) = 6
+        $this->assertSame(6, $t->scrollYForKey(Table::KEY_END));
+    }
 }
