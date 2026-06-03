@@ -121,6 +121,9 @@ final class Table
     /** When true, renderRowLines outputs all wrapped cell lines (multi-line rows). */
     private bool $multilineMode = false;
 
+    /** Indices of expanded rows (show full content without truncation). @var list<int> */
+    private array $expandedRows = [];
+
     /** Cached computed column widths from the last render pass. @var array<int, int>|null */
     private ?array $computedColumnWidths = null;
 
@@ -317,6 +320,77 @@ final class Table
         $clone = clone $this;
         $clone->styleFunc = $fn;
         return $clone;
+    }
+
+    // -------------------------------------------------------------------------
+    // Row expansion
+    // -------------------------------------------------------------------------
+
+    /**
+     * Set which rows are expanded.
+     *
+     * Expanded rows display their full content without truncation,
+     * overriding the normal column width constraints.
+     *
+     * @param list<int> $indices Row indices to mark as expanded
+     */
+    public function withExpandedRows(array $indices): self
+    {
+        $clone = clone $this;
+        // Convert indices to Row objects for identity-based tracking
+        $filtered = $clone->filteredSortedRows();
+        $clone->expandedRows = [];
+        foreach ($indices as $idx) {
+            $row = $filtered[$idx] ?? null;
+            if ($row !== null) {
+                $clone->expandedRows[] = $row;
+            }
+        }
+        return $clone;
+    }
+
+    /**
+     * Toggle the expanded state of a specific row.
+     *
+     * @param int $rowIndex The 0-based row index (in the filtered+sorted view) to toggle
+     */
+    public function toggleExpanded(int $rowIndex): self
+    {
+        $clone = clone $this;
+        $filtered = $clone->filteredSortedRows();
+        $row = $filtered[$rowIndex] ?? null;
+        if ($row === null) {
+            return $clone; // Invalid index, do nothing
+        }
+        $idx = \array_search($row, $clone->expandedRows, true);
+        if ($idx === false) {
+            $clone->expandedRows[] = $row;
+        } else {
+            \array_splice($clone->expandedRows, $idx, 1);
+        }
+        return $clone;
+    }
+
+    /**
+     * Check if a row is currently expanded.
+     *
+     * @param int $rowIndex The 0-based row index to check (in the filtered+sorted view)
+     */
+    public function isExpanded(int $rowIndex): bool
+    {
+        $row = $this->filteredSortedRows()[$rowIndex] ?? null;
+        if ($row === null) {
+            return false;
+        }
+        return \in_array($row, $this->expandedRows, true);
+    }
+
+    /**
+     * Check if a specific row object is expanded (internal helper for rendering).
+     */
+    private function isExpandedByRow(Row $row): bool
+    {
+        return \in_array($row, $this->expandedRows, true);
     }
 
     // -------------------------------------------------------------------------
@@ -1024,9 +1098,14 @@ final class Table
 
             $style = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
 
-            $displayText = $column->alignLeft
-                ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
-                : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
+            // For expanded rows, show full content without truncation
+            if ($this->isExpandedByRow($rowData)) {
+                $displayText = $cellStr;
+            } else {
+                $displayText = $column->alignLeft
+                    ? \SugarCraft\Core\Util\Width::padRight($cellStr, $colWidth)
+                    : \SugarCraft\Core\Util\Width::padLeft($cellStr, $colWidth);
+            }
 
             $buffer = $this->fillCellContent($buffer, $row, $col, $displayText, $colWidth, $style);
             $col += $colWidth;
@@ -1153,7 +1232,14 @@ final class Table
             }
 
             $parsedStyle = $cellStyle !== '' ? $this->parseAnsiToStyle($cellStyle) : null;
-            $lines = $column->renderCell($cellStr, $colWidth);
+
+            // For expanded rows, show full content without column-width truncation
+            if ($this->isExpandedByRow($row)) {
+                // Split full content by newlines for multiline display
+                $lines = $cellStr === '' ? [''] : \explode("\n", $cellStr);
+            } else {
+                $lines = $column->renderCell($cellStr, $colWidth);
+            }
             $cellLines[$ci] = ['lines' => $lines, 'style' => $parsedStyle, 'width' => $colWidth];
         }
 
