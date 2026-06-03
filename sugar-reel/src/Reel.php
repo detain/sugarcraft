@@ -34,6 +34,7 @@ final class Reel
      * @param int          $cols  Terminal cell width
      * @param int          $rows  Terminal cell height
      * @param float|null   $fps   FPS override (null = auto from probe)
+     * @param bool         $loop  When true, playback restarts at end instead of stopping
      */
     private function __construct(
         private readonly string $path,
@@ -41,6 +42,7 @@ final class Reel
         private readonly int $cols,
         private readonly int $rows,
         private readonly ?float $fps,
+        private readonly bool $loop = false,
     ) {
     }
 
@@ -104,11 +106,28 @@ final class Reel
     }
 
     /**
+     * Whether playback loops back to the start at end-of-stream.
+     */
+    public function loop(): bool
+    {
+        return $this->loop;
+    }
+
+    /**
      * Set the rendering mode. Returns a new Reel (immutable).
      */
     public function withMode(Mode $mode): self
     {
         return $this->with(mode: $mode);
+    }
+
+    /**
+     * Enable (or disable) looping: replay from the start at end-of-stream
+     * instead of stopping. Returns a new Reel (immutable).
+     */
+    public function withLoop(bool $loop = true): self
+    {
+        return $this->with(loop: $loop);
     }
 
     /**
@@ -143,8 +162,8 @@ final class Reel
             $path = $this->buildSyntheticGif();
         }
 
-        // Create the Player with the configured dimensions, fps and render mode.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $this->mode);
+        // Create the Player with the configured dimensions, fps, render mode and loop flag.
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $this->mode, $this->loop);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -195,6 +214,7 @@ final class Reel
      * @param int         $cols  Leave null to keep current
      * @param int         $rows  Leave null to keep current
      * @param float|null   $fps   Leave null to keep current
+     * @param bool|null    $loop  Leave null to keep current
      */
     private function with(
         ?string $path = null,
@@ -202,6 +222,7 @@ final class Reel
         ?int $cols = null,
         ?int $rows = null,
         ?float $fps = null,
+        ?bool $loop = null,
     ): self {
         return new self(
             $path ?? $this->path,
@@ -209,6 +230,7 @@ final class Reel
             $cols ?? $this->cols,
             $rows ?? $this->rows,
             $fps ?? $this->fps,
+            $loop ?? $this->loop,
         );
     }
 }
