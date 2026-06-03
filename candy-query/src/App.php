@@ -11,6 +11,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Core\Subscriptions;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\Admin\AdminQueryCache;
@@ -231,8 +232,11 @@ final class App implements Model
         $allPanes = AdminPane::cases();
         $count = count($allPanes);
 
-        // [1-6] keys directly select an admin pane
-        if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '6') {
+        // Number keys directly select an admin pane (1 = first pane). The range
+        // spans every pane — including PerfSchema and Debug, which sit past the
+        // old 1-6 cap and were otherwise reachable only by j/k scrolling. The
+        // isset() guard below ignores digits with no matching pane.
+        if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '9') {
             $index = (int) $msg->rune - 1;
             if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
                 $newApp = $this->withAdminCursor($index)->withAdminPane($allPanes[$index])->withAdminLoading(true);
@@ -518,7 +522,7 @@ final class App implements Model
         // discovered during render are drained promptly. The adminLoading gate
         // above prevents overlapping fetches, so a slow report in the batch
         // simply delays the next poll rather than piling up.
-        return Subscriptions::withTick('admin-fetch', 1.0, function(): \SugarCraft\Core\Msg {
+        return (new Subscriptions())->withTick('admin-fetch', 1.0, function(): \SugarCraft\Core\Msg {
             return Cmd::batch(
                 fn() => new AdminFetchStartedMsg(),
                 Cmd::promise(fn() => $this->createAdminFetchPromise($this->historyRecorder)),
