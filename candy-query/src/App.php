@@ -400,10 +400,6 @@ final class App implements Model
      * Uses ServerContext (MySQL) or PostgresServerContext (PostgreSQL) to
      * instantiate the appropriate PageBase subclass. Cache is invalidated
      * when adminPane changes (via withAdminPane resetting adminPage to null).
-     *
-      * Note: ProcessList and Dashboard currently use DashboardPage as placeholder
-     * since ConnectionsPage does not extend PageBase. Full ConnectionsPage
-     * integration will come in a later phase.
      */
     public function adminPage(): PageBase
     {
