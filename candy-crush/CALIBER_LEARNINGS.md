@@ -3998,3 +3998,1139 @@ public static function fromType(string $type, string $name): ?self
 - Log a warning and skip unknown types
 - Provide a fallback default type
 - Differentiate between "invalid type" and "valid but unhandled"
+
+## Step 6.2: Agent Manager and SubAgent Patterns
+
+### Manager-Registry Pattern for Agent Storage
+
+`AgentManager` stores agents in a simple array keyed by name:
+
+```php
+/** @var array<string, Agent> */
+private array $agents = [];
+
+public function register(Agent $agent): void
+{
+    $this->agents[$agent->name] = $agent;
+}
+
+public function get(string $name): ?Agent
+{
+    return $this->agents[$name] ?? null;
+}
+```
+
+**Why a simple array instead of a dedicated registry class?**
+- Agents are identified by unique names, not UUIDs
+- No need for the complexity of a full registry pattern
+- `?? null` provides clean nullable handling without exception throwing
+
+**Trade-off:** Agents are stored in memory. For persistent storage, a separate persistence layer would be needed.
+
+### Mutable SubAgent State During Execution
+
+Unlike the immutable `Agent` value object, `SubAgent` uses mutable properties:
+
+```php
+final class SubAgent
+{
+    /** Status of the subagent task. */
+    public string $status;
+    /** Output accumulated during execution. */
+    public string $output;
+    /** When the task completed. */
+    public ?\DateTimeImmutable $completedAt = null;
+    /** Error message if the task failed. */
+    public ?string $error = null;
+
+    public function __construct(
+        public readonly string $id,
+        public readonly Agent $agent,
+        public readonly string $task,
+        public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
+    ) {
+        $this->status = self::STATUS_PENDING;
+        $this->output = '';
+    }
+}
+```
+
+**Why mutable?**
+- `SubAgent` represents a running process that changes state over time
+- `status` transitions: PENDING → RUNNING → STREAMING → COMPLETE
+- `output` accumulates progressively during streaming
+- `completedAt` is set once when the task finishes
+
+**This differs from `Agent` (immutable value object)** which represents a static configuration.
+
+### Generator-Based Streaming with In-Place Mutation
+
+`executeSubAgent()` yields the same `SubAgent` instance as it updates:
+
+```php
+public function executeSubAgent(string $id): \Generator
+{
+    $subAgent = $this->getSubAgent($id);
+    // ...
+    $subAgent->status = SubAgent::STATUS_RUNNING;
+
+    foreach ($this->provider->completeStream($request) as $response) {
+        $subAgent->output .= $response->content;
+        yield $subAgent;  // Yield same instance, mutated
+    }
+
+    $subAgent->status = SubAgent::STATUS_COMPLETE;
+    $subAgent->completedAt = new \DateTimeImmutable();
+}
+```
+
+**Design rationale:**
+- Yielding the same instance (rather than a copy) allows consumers to see real-time updates
+- The generator pauses at `yield` until the caller iterates to the next value
+- Caller receives the object after each chunk, with `output` progressively accumulated
+
+**Memory efficiency:** Generators don't buffer the entire stream. Each chunk is yielded and processed before the next arrives.
+
+### Status Constants as String Literals
+
+`SubAgent` uses string constants rather than a backed enum:
+
+```php
+public const STATUS_PENDING = 'pending';
+public const STATUS_RUNNING = 'running';
+public const STATUS_STREAMING = 'streaming';
+public const STATUS_COMPLETE = 'complete';
+public const STATUS_STOPPED = 'stopped';
+public const STATUS_FAILED = 'failed';
+```
+
+**Why strings instead of PHP 8.1 enums?**
+- String constants serialize cleanly to JSON/database storage
+- `toArray()` returns the status as-is without `->value` access
+- Simple comparison: `$status === SubAgent::STATUS_COMPLETE`
+
+**Trade-off:** No exhaustive switch matching. Adding a new status requires updating `match` expressions manually. For more type safety, consider a backed enum internally with a `value` property for serialization.
+
+### Provider Capability Detection for Streaming Fallback
+
+`executeSubAgent()` checks provider capability:
+
+```php
+if ($this->provider->supportsStreaming()) {
+    $subAgent->status = SubAgent::STATUS_STREAMING;
+
+    foreach ($this->provider->completeStream($request) as $response) {
+        $subAgent->output .= $response->content;
+        yield $subAgent;
+    }
+} else {
+    $response = $this->provider->complete($request);
+    $subAgent->output = $response->content;
+}
+```
+
+**Design rationale:**
+- Streaming provides better UX for long tasks (progressive output)
+- Synchronous fallback ensures all providers work regardless of capability
+- The `STATUS_STREAMING` status distinguishes streaming from regular `STATUS_RUNNING`
+
+### Skill System Prompt Contribution Pattern
+
+Skills contribute to the system prompt during subagent execution:
+
+```php
+$systemPrompt = $subAgent->agent->systemPrompt();
+
+foreach ($subAgent->agent->skillNames as $skillName) {
+    $skill = $this->skillRegistry->get($skillName);
+    if ($skill !== null) {
+        $systemPrompt .= $skill->systemPromptContribution();
+    }
+}
+```
+
+**Design rationale:**
+- Each skill provides a snippet that gets appended to the system prompt
+- Skills are resolved by name from the registry
+- This avoids passing skill objects directly to the completion request
+
+**Null check:** If a skill isn't found, it's silently skipped. This allows partial configurations where some skills might not be available.
+
+### Duration Calculation from Timestamps
+
+`durationMs()` computes execution time from createdAt to completedAt:
+
+```php
+public function durationMs(): ?int
+{
+    if ($this->completedAt === null) {
+        return null;  // Still running
+    }
+
+    return (int) (($this->completedAt->getTimestamp() - $this->createdAt->getTimestamp()) * 1000);
+}
+```
+
+**Why return null for incomplete tasks?**
+- Task is still running — duration isn't final yet
+- Null indicates "not applicable" vs 0 which indicates "instant"
+
+**Precision:** Returns integer milliseconds. For sub-second tasks, the result is 0 — this is acceptable for most use cases.
+
+### SubAgent Lifecycle Management
+
+`AgentManager` provides full lifecycle control:
+
+```php
+// Create and track a subagent
+$subAgent = $manager->createSubAgent('coder', 'task description');
+
+// Execute (generates output progressively)
+foreach ($manager->executeSubAgent($subAgent->id) as $progress) {
+    // Handle progress
+}
+
+// Stop a running subagent
+$manager->stopSubAgent($subAgent->id);
+
+// Remove when done
+$manager->removeSubAgent($subAgent->id);
+```
+
+**Why separate stop and remove?**
+- `stopSubAgent()` sets status to STOPPED but keeps the instance for inspection
+- `removeSubAgent()` deletes the instance entirely
+- This allows checking `$subAgent->error` or `$subAgent->output` after stopping
+
+### Error Handling with Status Update
+
+Errors are captured and stored, then re-thrown:
+
+```php
+try {
+    // ... execution ...
+} catch (\Throwable $e) {
+    $subAgent->status = SubAgent::STATUS_FAILED;
+    $subAgent->error = $e->getMessage();
+    throw $e;  // Re-throw so caller knows execution failed
+}
+```
+
+**Pattern rationale:**
+- Error is stored on the subagent for later inspection
+- Exception is re-thrown so the generator iteration stops
+- Caller can catch and handle, but the subagent's failed status is preserved
+
+### No-Op Stop for Missing SubAgent
+
+`stopSubAgent()` silently returns if the subagent doesn't exist:
+
+```php
+public function stopSubAgent(string $id): void
+{
+    $subAgent = $this->getSubAgent($id);
+    if ($subAgent === null) {
+        return;  // No-op if already removed or never existed
+    }
+
+    $subAgent->status = SubAgent::STATUS_STOPPED;
+}
+```
+
+**Rationale:** Idempotent operations simplify consumer code. Callers don't need to check existence before stopping.
+
+## Step 7.1: MCP Client Implementation
+
+### Interface-Based Server Abstraction
+
+`McpServer` interface abstracts the transport mechanism for MCP servers:
+
+```php
+interface McpServer
+{
+    public function start(): void;
+    public function stop(): void;
+    public function listTools(): array;
+    public function callTool(string $toolName, array $args): array;
+}
+```
+
+**Benefits:**
+- `StdioMcpServer` and `HttpMcpServer` are interchangeable from the client's perspective
+- New server types (e.g., WebSocket) can be added without modifying `McpClient`
+- Testing can use mock servers that implement the interface
+
+**Design pattern:** This is the **Strategy pattern** — different algorithms (stdio, HTTP) implementing the same interface, selectable at runtime.
+
+### Subprocess Communication via proc_open()
+
+`StdioMcpServer` uses `proc_open()` for subprocess management:
+
+```php
+$this->process = proc_open(
+    $cmd,
+    [
+        0 => ['pipe', 'r'],  // stdin
+        1 => ['pipe', 'w'],  // stdout
+        2 => ['pipe', 'w'],  // stderr
+    ],
+    $this->pipes,
+    null,
+    $this->env
+);
+```
+
+**Why proc_open over exec() or shell_exec()?**
+- Full control over stdin/stdout/stderr pipes
+- Bidirectional communication (can send input, receive output)
+- Environment variables can be passed to subprocess
+- Exit code is available for error handling
+
+**Pipe modes:**
+- `['pipe', 'r']` — child reads, parent writes (stdin)
+- `['pipe', 'w']` — child writes, parent reads (stdout, stderr)
+
+### Line-Based JSON-RPC Communication
+
+Stdio servers use newline-delimited JSON (NDJSON) — each message is a single line:
+
+```php
+// Send: write JSON + newline to stdin
+fwrite($this->pipes[0], $json . "\n");
+fflush($this->pipes[0]);
+
+// Receive: read one line from stdout
+$line = fgets($this->pipes[1]);
+```
+
+**Why newline-delimited?**
+- Simple framing — no need for content-length headers
+- Each request-response pair is independent
+- Natural for line-oriented protocols
+
+**Why fgets() and not stream_read()?**
+- `fgets()` reads until newline, perfect for NDJSON
+- `stream_read()` would need manual line splitting
+- Buffered reading handles partial lines correctly
+
+### HTTP Server Initialization with Idempotent start()
+
+`HttpMcpServer::start()` checks an `initialized` flag:
+
+```php
+public function start(): void
+{
+    if ($this->initialized) {
+        return;  // Idempotent — no-op if already started
+    }
+
+    // ... initialization logic ...
+    $this->initialized = true;
+}
+```
+
+**Why idempotent?**
+- HTTP servers don't need persistent connections
+- Multiple calls to `start()` shouldn't cause multiple initializations
+- Consumer code can safely call `start()` without checking state
+
+**Contrast with StdioMcpServer:** Stdio servers spawn a new process, so `start()` cannot be idempotent — calling it twice would spawn two processes.
+
+### Error Handling Patterns in HTTP vs Stdio
+
+| Aspect | StdioMcpServer | HttpMcpServer |
+|--------|----------------|---------------|
+| Connection failure | `proc_open()` returns non-resource | Exception in HTTP request |
+| Tool call failure | Empty response array | Exception caught, returns error array |
+| Stop behavior | `proc_terminate()` + `proc_close()` | No-op (no persistent connection) |
+
+**Stdio error handling:**
+```php
+if (!is_resource($this->process)) {
+    throw new \RuntimeException("Failed to start MCP server: {$this->name}");
+}
+```
+
+**HTTP error handling:**
+```php
+try {
+    $response = $this->httpClient->post($this->url, [...]);
+} catch (\Exception $e) {
+    throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}");
+}
+```
+
+### Environment Variable Resolution Pattern
+
+The `resolveEnv()` method uses regex to handle two patterns:
+
+```php
+if (is_string($value) && preg_match('/^\$\{(.*?)(?::-(.*))?\}$/', $value, $matches)) {
+    $resolved[$key] = getenv($matches[1]) ?: ($matches[2] ?? '');
+}
+```
+
+**Pattern breakdown:**
+- `^\$\{(.*?)(?::-(.*))?\}$` — matches `${VAR}` or `${VAR:-default}`
+- `(.*?)` — captures VAR name (non-greedy)
+- `(?::-(.*))?` — optionally captures default value
+- `$resolved[$key] = getenv($matches[1]) ?: ($matches[2] ?? '')` — uses env value or default
+
+**Why check `is_string()` first?**
+- Some config values (like `args` array) are not strings
+- Only string values can contain `${VAR}` patterns
+- Avoids errors when applying regex to non-strings
+
+### Factory Method for Value Object Construction
+
+`McpTool::fromArray()` is a factory method that handles array-to-object conversion:
+
+```php
+public static function fromArray(array $data, string $serverName): self
+{
+    return new self(
+        name: $data['name'] ?? '',
+        description: $data['description'] ?? '',
+        inputSchema: $data['inputSchema'] ?? [],
+        serverName: $serverName,
+    );
+}
+```
+
+**Benefits:**
+- Centralizes construction logic in one place
+- Handles missing keys with sensible defaults
+- Provides a clear contract for parsing server responses
+- `serverName` is passed separately because it's derived from the server instance, not the response data
+
+### JSON-RPC 2.0 Request ID Generation
+
+Request IDs are generated differently in `StdioMcpServer` vs `HttpMcpServer`:
+
+```php
+// StdioMcpServer - uses sequential IDs (0, 1, 2...)
+$this->send(['jsonrpc' => '2.0', 'id' => 0, 'method' => 'initialize', ...]);
+$this->send(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'tools/list', ...]);
+
+// HttpMcpServer - uses time() for uniqueness
+$this->httpClient->post($this->url, [
+    'json' => ['jsonrpc' => '2.0', 'id' => time(), 'method' => 'tools/call', ...],
+]);
+```
+
+**Stdio uses sequential IDs:** Response order is deterministic since requests are synchronous (send request, read response, repeat).
+
+**HTTP uses time() for IDs:** Multiple concurrent requests can be in flight, so unique IDs are needed to match responses to requests. `time()` provides uniqueness at millisecond precision for single-threaded PHP.
+
+### Graceful Degradation on Parse Failure
+
+Both servers return empty arrays on JSON decode failure:
+
+```php
+// StdioMcpServer::send()
+$response = json_decode(trim($line), true);
+return is_array($response) ? $response : [];
+
+// HttpMcpServer::callTool()
+$data = json_decode($response->getBody()->getContents(), true);
+return is_array($data) ? ($data['result'] ?? ['error' => 'Tool call failed']) : ['error' => 'Invalid response'];
+```
+
+**Rationale:**
+- MCP tool calls return arrays, so returning `[]` or `['error' => '...']` maintains type consistency
+- Error messages are descriptive rather than throwing exceptions
+- Callers can handle errors uniformly with successful responses
+
+### Config File Path Flexibility
+
+`McpClient` accepts any path for the config file:
+
+```php
+public function __construct(
+    private string $configPath,
+) {}
+```
+
+**Why not a fixed path like `.mcp.json`?**
+- Different environments may have different config locations
+- Test fixtures can use temporary config files
+- Consumer can decide where config lives in their project
+
+**Graceful handling of missing files:**
+
+```php
+private function loadConfig(): array
+{
+    if (!file_exists($this->configPath)) {
+        return [];  // Return empty config, startServers() does nothing
+    }
+
+    $content = file_get_contents($this->configPath);
+    if ($content === false) {
+        return [];
+    }
+
+    return json_decode($content, true) ?? [];
+}
+```
+
+**Design decision:** Missing config is not an error — it simply means no servers are started. This allows `McpClient` to be instantiated without a config file for programmatic use.
+
+### No Constructor Property Promotion for Readonly
+
+`StdioMcpServer` does not use constructor property promotion for `name`:
+
+```php
+public function __construct(
+    public readonly string $name,
+    private string $command,
+    private array $args,
+    private array $env,
+) {}
+```
+
+**Why `public readonly string $name` but `private string $command`?**
+- `name` is part of the public API (`McpServer` interface exposes it for debugging/logging)
+- `command`, `args`, `env` are internal implementation details
+
+**Alternative considered:** All properties public readonly with promotion. Rejected because:
+- Interface contract only exposes `name`
+- Other properties would be accessible but unnecessary
+- Keeping them private documents the intended usage
+
+### callToolByName() First-Match Strategy
+
+`callToolByName()` searches servers in order and returns on first match:
+
+```php
+public function callToolByName(string $toolName, array $args): array
+{
+    foreach ($this->servers as $server) {
+        $tools = $server->listTools();
+        foreach ($tools as $tool) {
+            if ($tool->name === $toolName) {
+                return $server->callTool($toolName, $args);
+            }
+        }
+    }
+
+    throw new \RuntimeException("Tool not found: $toolName");
+}
+```
+
+**Design decision: First-match wins**
+- Multiple servers could theoretically expose tools with the same name
+- Without a disambiguation mechanism, first-match is deterministic
+- Consumer can use `callTool(serverName, ...)` for explicit server targeting
+
+**Limitation:** If two servers both have a tool named `read_file`, calling `callToolByName('read_file', ...)` will always use whichever server was started first.
+
+## Step 8.1: Streaming Runtime
+
+### Generator as Return Type for Mixed Streaming/Batch
+
+`Runtime::run()` returns `\Generator` for both streaming and batch modes:
+
+```php
+public function run(App $app): \Generator
+{
+    if ($this->provider->supportsStreaming()) {
+        yield from $this->runStreaming($request, $app);
+    } else {
+        yield from $this->runBatch($request, $app);
+    }
+}
+```
+
+**Why Generator for batch?** Even though batch completion is synchronous, returning `\Generator` provides a uniform interface. The caller can iterate identically regardless of mode. This is a **type-based polymorphism** pattern — the return type governs iteration, not the internal implementation.
+
+**Alternative considered:** Separate methods `runStream()` and `runBatch()`. Rejected because:
+- Caller must know which mode the provider supports
+- Different iteration patterns would be required
+- Uniform `\Generator` interface simplifies caller code
+
+### Yield From for Generator Delegation
+
+`yield from` delegates to another generator or iterable:
+
+```php
+yield from $this->runStreaming($request, $app);
+```
+
+**Why yield from instead of return?** `yield from` maintains the generator contract — the outer generator yields values from the inner generator as if they were its own. Using `return` would terminate the generator with a return value, not yield values.
+
+**Memory efficiency:** `yield from` doesn't buffer the inner generator's output; it passes values directly through. This maintains the streaming nature of the execution.
+
+### Buffer Accumulation Pattern for Streaming
+
+Streaming responses arrive in chunks that must be assembled:
+
+```php
+$buffer = '';
+$toolCalls = [];
+
+foreach ($this->provider->completeStream($request) as $response) {
+    $buffer .= $response->content;
+
+    if ($response->toolCalls !== null) {
+        $toolCalls = array_merge($toolCalls, $response->toolCalls);
+    }
+
+    if ($response->tokensUsed > 0) {  // Final chunk signal
+        // Yield assembled response
+        $assistantMsg = new AssistantMessage($buffer, $toolCalls ?: null);
+        yield $assistantMsg;
+
+        // Reset for potential next turn
+        $buffer = '';
+        $toolCalls = [];
+    }
+}
+```
+
+**Buffer accumulation:** `$buffer .= $response->content` appends each chunk's content. This is necessary because streaming delivers partial content — the complete response emerges over many chunks.
+
+**Tool call merging:** `array_merge()` combines tool calls from all chunks. This handles providers that emit tool calls incrementally across chunks.
+
+**Final chunk detection:** `tokensUsed > 0` signals the last chunk (which contains usage statistics not available in earlier chunks). This is provider-specific — some providers use `finish_reason` instead.
+
+### Error Continuation Pattern in Tool Execution
+
+Tool call errors don't stop the entire execution:
+
+```php
+foreach ($toolCalls as $toolCall) {
+    $tool = $this->findTool($toolCall->name(), $app);
+    if ($tool === null) {
+        yield new ToolResultMessage(..., isError: true);
+        continue;  // Continue to next tool call
+    }
+
+    $hookResult = $this->hookManager->preToolUse($context);
+    if (!$hookResult->isAllowed()) {
+        yield new ToolResultMessage(..., isError: true);
+        continue;  // Continue to next tool call
+    }
+    // ...
+}
+```
+
+**Why `continue` instead of throwing?** In multi-tool scenarios, one tool failure shouldn't prevent other tools from executing. The model may have requested multiple tools, and partial success is better than complete failure.
+
+**Error as first-class citizen:** `ToolResultMessage` with `isError: true` is returned instead of throwing. Callers handle errors uniformly with successful results.
+
+### microtime(true) for Duration Measurement
+
+```php
+$startTime = microtime(true);
+$result = $tool->execute($args);
+$durationMs = (int) ((microtime(true) - $startTime) * 1000);
+```
+
+**Why `microtime(true)`?** Returns a float representing seconds with microsecond precision. `time()` only provides second precision, which is insufficient for measuring fast tool executions.
+
+**Calculation:** `(microtime(true) - $startTime) * 1000` converts seconds to milliseconds, then `(int)` truncates to an integer. For a 1.5ms execution, this yields `1`.
+
+**Alternative considered:** `hrtime(true)` provides nanosecond precision but returns an integer. `microtime(true)` is sufficient for most tool execution timing needs.
+
+### HookContext Immutability with Immutable-Builder Pattern
+
+`HookContext` uses immutable builders for modification:
+
+```php
+// Created once with toolInput
+$context = new HookContext(
+    // ...
+    toolInput: json_encode($toolCall->arguments()),
+    toolOutput: '',
+    // ...
+);
+
+// Modified for post-hook (new instance with toolOutput)
+$postContext = $context->withToolOutput($result->content());
+```
+
+**Why immutable?** Hooks receive contexts but shouldn't mutate them for other hooks. Immutability ensures each hook sees the original context (except where explicitly modified by earlier hooks in the chain).
+
+**withToolOutput() pattern:** Returns a new `HookContext` with `toolOutput` set. The original `$context` remains unchanged for subsequent hooks that might inspect it.
+
+### System Prompt Building with Skill Aggregation
+
+```php
+private function buildSystemPrompt(App $app): string
+{
+    $base = 'You are CandyCrush, an AI coding assistant.';
+
+    if (!empty($app->enabledSkills)) {
+        foreach ($app->enabledSkills as $skill) {
+            if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
+                $base .= "\n\n" . $skill->systemPromptContribution();
+            }
+        }
+    }
+
+    return $base;
+}
+```
+
+**Why append with `\n\n`?** Double newline provides visual separation between skill contributions and the base prompt. Each skill's `systemPromptContribution()` already includes formatting (`## Skill: Name` header).
+
+**instanceof check:** Guards against non-Skill objects that might accidentally be in the `enabledSkills` array. This is defensive programming — if the array contains a non-Skill, it's silently skipped rather than causing a type error.
+
+**Empty skills check:** `!empty($app->enabledSkills)` avoids iterating an empty array, which is a minor optimization.
+
+### Null Coalescing for Session ID
+
+```php
+$context = new HookContext(
+    sessionId: $app->sessionId ?? '',
+    // ...
+);
+```
+
+**Why `?? ''`?** `App::$sessionId` may be nullable. Using `?? ''` provides a default empty string rather than allowing `null` to propagate into `HookContext`. This keeps `HookContext` simple (always a string) and defers the null handling to where the context is created.
+
+**Trade-off:** An empty session ID loses session context for hooks. If session tracking is critical, this should throw rather than default to empty string. The design choice here treats missing session as a no-op rather than an error.
+
+### Provider Capability Dispatch Pattern
+
+```php
+if ($this->provider->supportsStreaming()) {
+    yield from $this->runStreaming($request, $app);
+} else {
+    yield from $this->runBatch($request, $app);
+}
+```
+
+**Runtime dispatch:** The decision between streaming and batch is made at runtime based on provider capability, not at construction time. This allows the same `Runtime` instance to work with different providers.
+
+**Uniform interface:** Both paths return `Generator` so callers iterate identically. The capability check happens inside `run()`, not at the caller level.
+
+**Alternative considered:** Constructor injection of capability. Rejected because:
+- Provider capability could theoretically change
+- Dispatch inside `run()` keeps the decision localized
+- Both paths exist anyway — it's not adding complexity
+
+### Tool Finding by Name with Linear Search
+
+```php
+private function findTool(string $name, App $app): ?Tool
+{
+    foreach ($app->tools as $tool) {
+        if ($tool->name() === $name) {
+            return $tool;
+        }
+    }
+    return null;
+}
+```
+
+**Why linear search?** For the typical case where `App::$tools` has a small number of tools (< 20), a linear search is simple and performant. Adding a map/index would be over-engineering for marginal gain.
+
+**Return null on not found:** Rather than throwing, `null` is returned and the caller handles it by yielding an error message. This allows graceful degradation when tools are missing.
+
+**Alternative considered:** Hash map `$toolsByName`. Would require maintaining index on tool registration/deregistration. Not justified for small tool counts.
+
+## Step 8.2: SessionStore with SQLite WAL Persistence
+
+### SQLite WAL Mode for Concurrent Access
+
+`SessionStore` enables WAL (Write-Ahead Logging) mode for the SQLite database:
+
+```php
+$this->pdo->exec('PRAGMA journal_mode=WAL');
+```
+
+**Why WAL mode?**
+- Standard SQLite uses rollback journal which blocks writers exclusively
+- WAL allows concurrent readers during writes — critical for TUI apps where the UI may read while AI processing writes
+- Better performance for read-heavy workloads typical in conversation apps
+- More robust crash recovery than DELETE journal mode
+
+**Trade-off:** WAL mode creates additional `.db-wal` and `.db-shm` files alongside the main database. This is acceptable for desktop TUI use where file count isn't a concern.
+
+### PDO Exception-Based Error Handling
+
+Setting `PDO::ERRMODE_EXCEPTION` converts SQL errors to exceptions:
+
+```php
+$this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+```
+
+**Benefits:**
+- Errors can't be silently ignored
+- Callers can catch and handle appropriately
+- Stack traces for debugging
+- No need for `die()` or `echo` on failure
+
+**Alternative considered:** `PDO::ERRMODE_WARNING` — Would emit warnings but continue execution, potentially leading to inconsistent state. Exception mode is safer.
+
+### Manual Foreign Key Cascade
+
+SQLite's FK support requires `PRAGMA foreign_keys=ON` and has limitations. The implementation manually cascades deletes:
+
+```php
+public function deleteSession(string $id): void
+{
+    $this->pdo->prepare('DELETE FROM tool_calls WHERE session_id = ?')->execute([$id]);
+    $this->pdo->prepare('DELETE FROM messages WHERE session_id = ?')->execute([$id]);
+    $this->pdo->prepare('DELETE FROM sessions WHERE id = ?')->execute([$id]);
+}
+```
+
+**Why this order?** Foreign key constraints require child rows deleted before parents. tool_calls and messages are children of sessions, so they must be deleted first.
+
+**Alternative:** Enable `PRAGMA foreign_keys=ON` and use `ON DELETE CASCADE`. Rejected because:
+- Requires verifying FK mode is enabled at connection time
+- SQLite FK implementation has historical quirks
+- Manual deletion makes the dependency order explicit and auditable
+
+### JSON Encoding for Flexible Fields
+
+`tool_calls` and `tool_results` are stored as JSON strings:
+
+```php
+isset($message['tool_calls'])
+    ? json_encode($message['tool_calls'])
+    : null,
+```
+
+**Benefits:**
+- Schema flexibility — different messages have different tool call structures
+- Provider agnostic — OpenAI, Anthropic, and others have different tool call formats
+- Easy serialization/deserialization with `json_encode()`/`json_decode()`
+
+**Trade-off:**
+- Can't query inside JSON fields with SQL
+- Must decode entire field to access individual tool calls
+- For complex query needs, consider a normalized schema
+
+**Defensive `json_decode()`:** When retrieving, null is used as fallback:
+```php
+$msg['tool_calls'] = $msg['tool_calls'] ? json_decode($msg['tool_calls'], true) : null;
+```
+This handles cases where JSON decoding fails gracefully.
+
+### Auto-Increment ID Return Pattern
+
+`addMessage()` returns the inserted message ID for subsequent tool call association:
+
+```php
+public function addMessage(string $sessionId, array $message): int
+{
+    // ... INSERT ...
+    return (int) $this->pdo->lastInsertId();
+}
+```
+
+**Why return the ID?** Tool calls need a `message_id` foreign key to associate with their originating message:
+```php
+$messageId = $store->addMessage($sessionId, $assistantMessage);
+$store->addToolCall($sessionId, $messageId, $toolCall);
+```
+
+**Integer casting:** `lastInsertId()` returns a string in some PDO configurations. Casting to `(int)` ensures consistent type.
+
+### Nullable Fields with Null Coalescing
+
+Message arrays use `??` for optional fields:
+
+```php
+$message['model'] ?? null,
+$message['tokens_used'] ?? null,
+```
+
+**Why not isset()?** `??` distinguishes between `null` (explicitly set) and missing key (use default). This is important when `null` is a meaningful value.
+
+**Alternative:** Paired sentinel boolean pattern (from `candy-sprinkles/Style.php`). Not used here because:
+- Simpler message structure doesn't require distinguishing "not set" from "null"
+- PHP's nullable type hint `?string` handles the case adequately
+
+### Prune with Subquery Pattern
+
+Pruning uses subqueries to find sessions to delete:
+
+```php
+DELETE FROM tool_calls
+WHERE session_id IN (SELECT id FROM sessions WHERE updated_at < ?)
+```
+
+**Why subquery?** This ensures we only delete tool_calls for sessions that will actually be deleted, maintaining referential integrity even if FK enforcement isn't enabled.
+
+**Three-step deletion:**
+1. Delete tool_calls for old sessions
+2. Delete messages for old sessions
+3. Delete the sessions themselves
+
+This order is required for the manual cascade to work correctly.
+
+### Timestamp Management
+
+SQLite's `CURRENT_TIMESTAMP` provides server-side time:
+
+```sql
+created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+```
+
+**Benefits:**
+- No PHP-side time management needed
+- Consistent with SQLite's timezone (UTC)
+- Triggers automatically on insert
+
+**Updated_at touch pattern:**
+```php
+UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = ?
+```
+
+This is called after adding messages to track session activity for pruning.
+
+### Return Row Count for Audit
+
+`pruneSessions()` returns `rowCount()` for verification:
+
+```php
+return $stmt->rowCount();
+```
+
+**Use case:** Logging or user feedback on how many sessions were cleaned up:
+```php
+$deleted = $store->pruneSessions(30);
+echo "Cleaned up $deleted old sessions\n";
+```
+
+**Note:** `rowCount()` on DELETE returns the number of rows affected. If using subqueries, this only counts the sessions deleted, not total rows (tool_calls + messages).
+
+### SQLite vs PDO Compatibility
+
+Using raw PDO instead of a database abstraction layer:
+
+```php
+private PDO $pdo;
+
+$this->pdo = new PDO("sqlite:$dbPath");
+```
+
+**Rationale for SQLite:**
+- Zero-configuration file-based storage
+- Ideal for single-user desktop applications
+- No server process required
+- Portable session files
+
+**Why PDO over sqlite3 extension?**
+- PDO provides consistent API across databases
+- Easier to switch to MySQL/PostgreSQL if needed later
+- Prepared statements work identically
+
+**Trade-off:** SQLite-specific features (WAL pragma, CURRENT_TIMESTAMP) are not portable to other databases. If portability is critical, consider an abstraction layer.
+
+## Step 8.3: TokenTracker
+
+### Immutable Accumulation with with* Pattern
+
+TokenTracker uses the immutable `withUsage()` pattern to accumulate token counts:
+
+```php
+public function withUsage(int $input, int $output, float $cost): self
+{
+    return new self(
+        inputTokens: $this->inputTokens + $input,
+        outputTokens: $this->outputTokens + $output,
+        costUsd: $this->costUsd + $cost,
+    );
+}
+```
+
+**Why this pattern:**
+- Each API call adds to the cumulative total without mutating existing state
+- Previous snapshots remain accessible for comparison or rollback
+- Thread-safe for concurrent access (though PHP is single-threaded)
+- Follows the same `with*()` convention as App state updates in TEA
+
+### Final Readonly Value Objects
+
+TokenTracker uses `final readonly` for DTO-style immutable data:
+
+```php
+final readonly class TokenTracker
+{
+    public function __construct(
+        public int $inputTokens = 0,
+        public int $outputTokens = 0,
+        public float $costUsd = 0.0,
+    ) {}
+}
+```
+
+**Benefits of `final readonly`:**
+- No subclasses can add mutable state
+- Properties set once in constructor and never change
+- IDE autocompletion for all fields
+- No getter methods needed — direct property access
+
+### Zero Default Values
+
+TokenTracker initializes with zero values:
+
+```php
+public function __construct(
+    public int $inputTokens = 0,
+    public int $outputTokens = 0,
+    public float $costUsd = 0.0,
+) {}
+```
+
+**Rationale:** A new session has zero usage. This avoids null checks downstream and provides sensible defaults for display formatting.
+
+### Compound Computed Properties
+
+`totalTokens()` combines multiple fields:
+
+```php
+public function totalTokens(): int
+{
+    return $this->inputTokens + $this->outputTokens;
+}
+```
+
+**Design choice:** Providing a computed property keeps the API clean. Callers don't need to know the internal structure to get the total.
+
+## Step 8.4: StatusBar
+
+### Static Component Pattern
+
+StatusBar follows the same static rendering pattern as other TUI components:
+
+```php
+final class StatusBar
+{
+    public static function render(App $a, TokenTracker $tracker, int $width): string
+    {
+        // ... build and return rendered string
+    }
+}
+```
+
+**Consistency with other panes:**
+- Same static factory approach as `ChatPane`, `FilesPane`, etc.
+- Returns a string rather than writing to stdout
+- No side effects during rendering
+- Same theme integration (TokyoNight colors)
+
+### Dependency Injection via Parameters
+
+StatusBar receives `TokenTracker` as a parameter rather than accessing it from `App`:
+
+```php
+public static function render(App $a, TokenTracker $tracker, int $width): string
+```
+
+**Why not read from App?**
+- Token tracking is a cross-cutting concern
+- Not every view needs token info
+- Makes the component more testable (mock tracker)
+- Follows single responsibility — App holds state, StatusBar displays it
+
+### Single Row Output
+
+StatusBar renders to exactly one row:
+
+```php
+$statusBar = StatusBar::render($app, $tracker, $cols);
+```
+
+**Height constraint:** The status bar consumes exactly 1 row of terminal height. This is hardcoded in the renderer layout calculations (`$rows - 6` accounting for menu, input, status bar).
+
+### Pipe Separator Pattern
+
+Components use pipe separators for visual grouping:
+
+```php
+$parts = [
+    "Provider: {$provider}",
+    "Model: {$model}",
+    "Tokens: " . $tracker->format(),
+];
+return implode(' | ', $parts);
+```
+
+**Why pipes?** Natural English delimiter for key-value pairs in a compact space. Alternative separators (commas, colons) would be less readable in this context.
+
+## Step 8.5: Exporter
+
+### Static Factory Methods
+
+Exporter uses static methods for format-specific export:
+
+```php
+final class Exporter
+{
+    public static function toMarkdown(SessionStore $store, string $sessionId): string;
+    public static function toJson(SessionStore $store, string $sessionId): string;
+    public static function toText(SessionStore $store, string $sessionId): string;
+}
+```
+
+**Benefits of static methods:**
+- No instantiation required
+- Clear intent in call site (`Exporter::toMarkdown(...)`)
+- Easy to discover all export formats via IDE autocompletion
+- No shared mutable state between calls
+
+### Session Validation with Exceptions
+
+Exporter validates session existence and throws on missing data:
+
+```php
+$session = $store->getSession($sessionId);
+if ($session === null) {
+    throw new \InvalidArgumentException("Session not found: {$sessionId}");
+}
+```
+
+**Why exceptions rather than returning null?**
+- Export is typically a terminal operation (write to file)
+- The caller should handle missing sessions before calling export
+- Throwing early prevents partial/wrong output
+
+### Format-Specific Serialization
+
+Each export format has distinct serialization needs:
+
+**Markdown:** Human-readable with headers, emphasis, and code blocks
+**JSON:** Machine-parseable with full structure preservation
+**Text:** Simple line-based format with timestamps
+
+**Design:** Separate methods allow format-specific formatting without conditional logic inside a single method.
+
+### Metadata Preservation
+
+Exports include session metadata:
+
+```php
+$output = "# Session: {$session['id']}\n\n";
+$output .= "**Provider:** {$session['provider']}\n";
+$output .= "**Model:** {$session['model']}\n";
+$output .= "**Date:** {$session['created_at']}\n";
+```
+
+**Why include metadata?**
+- Exports are standalone — no external context needed
+- Useful for archival and search
+- Helps identify session when reviewing later
+
+### Tool Call Preservation
+
+Tool calls and results are preserved in exports:
+
+```php
+if ($message['tool_calls']) {
+    $output .= "\n**Tool Calls:**\n";
+    foreach ($message['tool_calls'] as $toolCall) {
+        $output .= "- `{$toolCall['name']}`: " . json_encode($toolCall['arguments']) . "\n";
+    }
+}
+```
+
+**Importance:** Tool calls are often the most valuable part of a session — they show exactly what the AI did. Stripping them would make exports much less useful.
+

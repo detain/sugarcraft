@@ -37,6 +37,1081 @@ and MCP tool discovery.
 🟢 Step 5.2 complete — Built-in Hooks implementation.
 🟢 Step 5.3 complete — Hook Configuration (YAML loading, ScriptHook, HookManager).
 🟢 Step 6.1 complete — Agent value object and AgentDefinition built-in types.
+🟢 Step 6.2 complete — AgentManager and SubAgent for subagent lifecycle management.
+🟢 Step 7.1 complete — MCP Client implementation with StdioMcpServer and HttpMcpServer.
+🟢 Step 8.1 complete — Streaming Runtime with tool call execution.
+🟢 Step 8.2 complete — SessionStore with SQLite WAL persistence.
+🟢 Step 8.3 complete — TokenTracker for token counting and cost tracking.
+🟢 Step 8.4 complete — StatusBar TUI status bar rendering.
+🟢 Step 8.5 complete — Exporter for markdown/json/text export.
+
+## Step 8.1: Streaming Runtime
+
+Step 8.1 implements the `Runtime` class — the orchestration layer that coordinates AI provider interactions, tool call execution, and hook management for both streaming and batch completion modes.
+
+### Runtime Class Overview
+
+`Runtime` is the central execution engine that drives AI completions with tool call support:
+
+```php
+final class Runtime
+{
+    public function __construct(
+        private ProviderInterface $provider,
+        private HookManager $hookManager,
+    ) {}
+
+    /**
+     * @return \Generator yields CompleteResponse chunks
+     */
+    public function run(App $app): \Generator
+    {
+        // ...
+    }
+}
+```
+
+**Key responsibilities:**
+- Dispatches to streaming or batch mode based on provider capability
+- Accumulates buffer content during streaming responses
+- Executes tool calls with pre/post hook integration
+- Tracks tool execution duration
+- Handles "tool not found" and "hook denial" errors gracefully
+
+### run() Method — Entry Point
+
+The `run()` method is the main entry point that orchestrates the completion flow:
+
+```php
+public function run(App $app): \Generator
+{
+    $messages = $this->buildMessages($app);
+
+    $systemPrompt = $this->buildSystemPrompt($app);
+
+    $request = new CompleteRequest(
+        model: $app->model,
+        messages: $messages,
+        tools: $app->tools ?: null,
+        systemPrompt: $systemPrompt,
+    );
+
+    if ($this->provider->supportsStreaming()) {
+        yield from $this->runStreaming($request, $app);
+    } else {
+        yield from $this->runBatch($request, $app);
+    }
+}
+```
+
+**Flow:**
+1. Builds message array from `App` state via `buildMessages()`
+2. Builds system prompt with skill contributions via `buildSystemPrompt()`
+3. Creates a `CompleteRequest` with model, messages, tools, and system prompt
+4. Dispatches to streaming or batch based on `provider->supportsStreaming()`
+
+### runStreaming() — Buffer Accumulation and Tool Call Handling
+
+`runStreaming()` handles streaming responses by accumulating content and collecting tool calls:
+
+```php
+private function runStreaming(CompleteRequest $request, App $app): \Generator
+{
+    $buffer = '';
+    $toolCalls = [];
+
+    foreach ($this->provider->completeStream($request) as $response) {
+        $buffer .= $response->content;
+
+        // Check for tool calls
+        if ($response->toolCalls !== null) {
+            $toolCalls = array_merge($toolCalls, $response->toolCalls);
+        }
+
+        // Check for complete response
+        if ($response->tokensUsed > 0) {
+            // Final response
+            $assistantMsg = new AssistantMessage($buffer, $toolCalls ?: null);
+            yield $assistantMsg;
+
+            // Execute any tool calls
+            if (!empty($toolCalls)) {
+                yield from $this->executeToolCalls($toolCalls, $app);
+            }
+
+            $buffer = '';
+            $toolCalls = [];
+        }
+    }
+}
+```
+
+**Key behaviors:**
+- `$buffer` accumulates content across streaming chunks
+- `$toolCalls` merges tool calls from all chunks (array_merge handles multiple tool calls per chunk)
+- `tokensUsed > 0` signals the final chunk with usage statistics
+- Tool calls are executed only after the complete response is received
+- Buffer and tool calls reset after each complete response to support multiple turns
+
+### runBatch() — Non-Streaming Response Handling
+
+`runBatch()` handles synchronous completion responses:
+
+```php
+private function runBatch(CompleteRequest $request, App $app): \Generator
+{
+    $response = $this->provider->complete($request);
+
+    $assistantMsg = new AssistantMessage(
+        $response->content,
+        $response->toolCalls,
+        $response->reasoning,
+    );
+
+    yield $assistantMsg;
+
+    if ($response->toolCalls !== null) {
+        yield from $this->executeToolCalls($response->toolCalls, $app);
+    }
+}
+```
+
+**Key differences from streaming:**
+- Response is complete in a single call (no buffering needed)
+- Tool calls are available immediately from `$response->toolCalls`
+- No need to wait for `tokensUsed > 0` signal
+
+### executeToolCalls() — Tool Execution with Pre/Post Hooks
+
+`executeToolCalls()` handles the full tool call lifecycle:
+
+```php
+private function executeToolCalls(array $toolCalls, App $app): \Generator
+{
+    foreach ($toolCalls as $toolCall) {
+        // Find the tool
+        $tool = $this->findTool($toolCall->name(), $app);
+        if ($tool === null) {
+            yield new ToolResultMessage(
+                $toolCall->id,
+                "Tool not found: {$toolCall->name()}",
+                isError: true,
+            );
+            continue;
+        }
+
+        // Create hook context
+        $context = new HookContext(
+            sessionId: $app->sessionId ?? '',
+            toolName: $tool->name(),
+            toolArgs: $toolCall->arguments(),
+            toolInput: json_encode($toolCall->arguments()),
+            toolOutput: '',
+            model: $app->model,
+            provider: $app->provider->name(),
+            projectRoot: getcwd(),
+        );
+
+        // Run pre-hook
+        $hookResult = $this->hookManager->preToolUse($context);
+        if (!$hookResult->isAllowed()) {
+            yield new ToolResultMessage(
+                $toolCall->id,
+                "Hook denied: {$hookResult->message}",
+                isError: true,
+            );
+            continue;
+        }
+
+        // Execute tool
+        $args = $hookResult->isModified()
+            ? json_decode($hookResult->modifiedInput, true) ?? $toolCall->arguments()
+            : $toolCall->arguments();
+
+        $startTime = microtime(true);
+        $result = $tool->execute($args);
+        $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+        // Run post-hook
+        $postContext = $context->withToolOutput($result->content());
+        $this->hookManager->postToolUse($postContext);
+
+        yield new ToolResultMessage(
+            $result->toolCallId(),
+            $result->content(),
+            $result->isError(),
+        );
+    }
+}
+```
+
+**Tool call lifecycle:**
+1. **Find tool** — `findTool()` looks up the tool by name in `App::$tools`
+2. **Tool not found** — Returns error `ToolResultMessage` and continues to next tool call
+3. **Pre-hook execution** — `HookManager::preToolUse()` runs matching hooks
+4. **Hook denial** — Returns error `ToolResultMessage` and continues to next tool call
+5. **Hook modification** — Uses modified input from hook if `isModified()` returns true
+6. **Tool execution** — Calls `$tool->execute($args)` and measures duration
+7. **Post-hook execution** — `HookManager::postToolUse()` runs matching hooks with tool output
+8. **Result yielding** — Returns `ToolResultMessage` with tool call ID, content, and error status
+
+### Duration Tracking for Tool Execution
+
+Tool execution duration is measured using `microtime(true)`:
+
+```php
+$startTime = microtime(true);
+$result = $tool->execute($args);
+$durationMs = (int) ((microtime(true) - $startTime) * 1000);
+```
+
+**Note:** The `durationMs` is calculated but currently not exposed in the `ToolResultMessage` returned to the caller. The result includes `durationMs` in an internal `ToolResult` but only the `toolCallId`, `content`, and `isError` are passed through. This could be enhanced by including duration in the tool result message for debugging or performance monitoring.
+
+### Error Handling
+
+The runtime handles two types of errors gracefully:
+
+**Tool not found:**
+```php
+if ($tool === null) {
+    yield new ToolResultMessage(
+        $toolCall->id,
+        "Tool not found: {$toolCall->name()}",
+        isError: true,
+    );
+    continue;
+}
+```
+
+**Hook denial:**
+```php
+$hookResult = $this->hookManager->preToolUse($context);
+if (!$hookResult->isAllowed()) {
+    yield new ToolResultMessage(
+        $toolCall->id,
+        "Hook denied: {$hookResult->message}",
+        isError: true,
+    );
+    continue;
+}
+```
+
+**Design philosophy:** Errors are returned as `ToolResultMessage` with `isError: true` rather than throwing exceptions. This allows the execution to continue processing remaining tool calls and keeps the flow predictable for callers.
+
+### buildMessages() and buildSystemPrompt()
+
+These helper methods prepare request data from `App` state:
+
+```php
+private function buildMessages(App $app): array
+{
+    $messages = [];
+
+    foreach ($app->messages as $msg) {
+        if ($msg instanceof Message) {
+            $messages[] = $msg;
+        }
+    }
+
+    return $messages;
+}
+
+private function buildSystemPrompt(App $app): string
+{
+    $base = 'You are CandyCrush, an AI coding assistant.';
+
+    if (!empty($app->enabledSkills)) {
+        foreach ($app->enabledSkills as $skill) {
+            if ($skill instanceof \SugarCraft\Crush\Skills\Skill) {
+                $base .= "\n\n" . $skill->systemPromptContribution();
+            }
+        }
+    }
+
+    return $base;
+}
+```
+
+**buildSystemPrompt() design:**
+- Base prompt provides the core identity
+- Each enabled skill contributes additional guidance via `systemPromptContribution()`
+- Skill contributions are appended with double newlines for separation
+- Skills are filtered with `instanceof Skill` for safety
+
+### Integration with HookManager, ProviderInterface, App
+
+`Runtime` composes three core dependencies:
+
+```php
+public function __construct(
+    private ProviderInterface $provider,
+    private HookManager $hookManager,
+) {}
+```
+
+| Dependency | Purpose |
+|------------|---------|
+| `ProviderInterface` | Issues completion requests (`complete()`, `completeStream()`) |
+| `HookManager` | Runs pre/post tool use hooks |
+| `App` | Provides model, messages, tools, skills, session context |
+
+**Data flow through `App`:**
+- `App::$model` — model name for completion requests
+- `App::$messages` — conversation history for completion
+- `App::$tools` — available tools to pass to the provider
+- `App::$enabledSkills` — skills contributing to system prompt
+- `App::$sessionId` — session context for hook execution
+- `App::$provider` — provider instance for capability checks
+
+### Architecture
+
+```
+Runtime
+  ├── provider: ProviderInterface
+  ├── hookManager: HookManager
+  ├── run(app) — entry point, builds request, dispatches to streaming/batch
+  ├── runStreaming(request, app) — buffers chunks, executes tools on complete
+  ├── runBatch(request, app) — single response, executes tools
+  ├── executeToolCalls(toolCalls, app) — tool lifecycle with hooks
+  │   ├── findTool(name, app) — lookup by name
+  │   ├── preToolUse(context) — run pre-hooks
+  │   ├── tool->execute(args) — tool execution with duration
+  │   └── postToolUse(context) — run post-hooks
+  ├── buildMessages(app) — extract Message objects
+  └── buildSystemPrompt(app) — base + skill contributions
+
+HookManager (delegated)
+  ├── preToolUse(context) — HookRegistry::executeHooks(PreToolUse)
+  └── postToolUse(context) — HookRegistry::executeHooks(PostToolUse)
+
+ProviderInterface (delegated)
+  ├── complete(request) — batch completion
+  └── completeStream(request) — streaming completion
+
+App (data source)
+  ├── model, messages, tools, enabledSkills
+  ├── sessionId, provider, projectRoot
+   └── messages: Message[]
+```
+
+## Step 8.2: Session Persistence
+
+Step 8.2 implements `SessionStore` — a SQLite-based persistence layer for conversation sessions, messages, and tool call tracking with WAL (Write-Ahead Logging) mode for concurrent access.
+
+### SessionStore Class Overview
+
+`SessionStore` provides persistent storage for AI conversation sessions:
+
+```php
+final class SessionStore
+{
+    public function __construct(string $dbPath)
+    {
+        $this->pdo = new PDO("sqlite:$dbPath");
+        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $this->pdo->exec('PRAGMA journal_mode=WAL');
+        $this->initSchema();
+    }
+}
+```
+
+**Key responsibilities:**
+- SQLite database with WAL mode for safe concurrent access
+- Schema initialization for sessions, messages, and tool_calls tables
+- CRUD operations for session lifecycle management
+- Message accumulation with JSON-encoded tool calls and results
+- Tool call tracking with duration and success metrics
+- Automatic pruning of old sessions
+
+### SQLite with WAL Mode
+
+WAL (Write-Ahead Logging) mode provides significant advantages for concurrent access:
+
+```php
+$this->pdo->exec('PRAGMA journal_mode=WAL');
+```
+
+**Benefits of WAL mode:**
+- **Concurrent reads during writes** — Readers don't block writers and vice versa
+- **Better performance** — Multiple readers can access the database simultaneously
+- **Crash recovery** — WAL provides more robust recovery than rollback journal
+- **No write locks** — Unlike DELETE mode, WAL allows simultaneous write transactions
+
+**Why SQLite?** SQLite provides zero-configuration, file-based persistence ideal for:
+- Desktop TUI applications
+- Single-user local storage
+- No server setup required
+- Portable session files that can be moved between machines
+
+### Database Schema
+
+The schema consists of three tables with foreign key relationships:
+
+**sessions table** — Core session metadata:
+```sql
+CREATE TABLE IF NOT EXISTS sessions (
+    id TEXT PRIMARY KEY,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL,
+    system_prompt TEXT,
+    metadata TEXT
+)
+```
+
+**messages table** — Conversation messages with optional tool data:
+```sql
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tool_calls TEXT,
+    tool_results TEXT,
+    model TEXT,
+    tokens_used INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id)
+)
+```
+
+**tool_calls table** — Individual tool invocations with timing:
+```sql
+CREATE TABLE IF NOT EXISTS tool_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    message_id INTEGER NOT NULL,
+    tool_name TEXT NOT NULL,
+    tool_args TEXT NOT NULL,
+    tool_result TEXT,
+    duration_ms INTEGER,
+    success INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(id),
+    FOREIGN KEY (message_id) REFERENCES messages(id)
+)
+```
+
+### CRUD Operations
+
+**Create session:**
+```php
+public function createSession(
+    string $id,
+    string $provider,
+    string $model,
+    ?string $systemPrompt = null
+): void
+```
+
+**Read session:**
+```php
+public function getSession(string $id): ?array
+// Returns associative array or null if not found
+```
+
+**Update session (updates `updated_at` timestamp):**
+```php
+public function updateSession(string $id): void
+```
+
+**Delete session (cascades to messages and tool_calls):**
+```php
+public function deleteSession(string $id): void
+// Deletes tool_calls first, then messages, then the session itself
+```
+
+**List sessions (ordered by last update):**
+```php
+public function listSessions(int $limit = 20): array
+// Returns most recently updated sessions first
+```
+
+### Message Management
+
+Messages are added with their associated metadata:
+
+```php
+public function addMessage(string $sessionId, array $message): int
+// Returns the inserted message ID
+```
+
+**Message structure:**
+```php
+$message = [
+    'role' => 'user',              // or 'assistant', 'system'
+    'content' => 'Hello, world!',
+    'tool_calls' => [              // optional, JSON-encoded
+        ['id' => 'call_123', 'name' => 'Bash', 'arguments' => ['command' => 'ls']]
+    ],
+    'tool_results' => [            // optional, JSON-encoded
+        ['id' => 'call_123', 'content' => 'file1.txt\nfile2.txt']
+    ],
+    'model' => 'claude-sonnet-4-6', // optional
+    'tokens_used' => 150,          // optional
+];
+```
+
+**Retrieving messages:**
+```php
+public function getMessages(string $sessionId): array
+// Returns messages ordered by creation time (ASC)
+// tool_calls and tool_results are auto-decoded from JSON
+```
+
+### Tool Call Tracking
+
+Tool calls are tracked independently for detailed analytics:
+
+```php
+public function addToolCall(string $sessionId, int $messageId, array $toolCall): void
+```
+
+**Tool call structure:**
+```php
+$toolCall = [
+    'name' => 'Bash',
+    'arguments' => ['command' => 'ls -la'],
+    'result' => 'total 8\ndrwxr-xr-x 2 user user 4096 Jun  3 10:00 .',
+    'duration_ms' => 45,
+    'success' => true,
+];
+```
+
+**Tracking metrics:**
+- `duration_ms` — Execution time in milliseconds
+- `success` — Boolean flag (1/0 for SQLite compatibility)
+- `tool_result` — The output from tool execution
+
+### Pruning Old Sessions
+
+Old sessions can be automatically cleaned up:
+
+```php
+public function pruneSessions(int $daysOld = 30): int
+// Returns count of deleted sessions
+```
+
+**Behavior:**
+- Deletes all `tool_calls` where session's `updated_at` is older than cutoff
+- Deletes all `messages` where session's `updated_at` is older than cutoff
+- Deletes the `sessions` themselves
+- Uses a subquery to find sessions past the cutoff date
+- Returns the number of **sessions** deleted (not rows)
+
+**Usage:**
+```php
+$store = new SessionStore('/path/to/sessions.db');
+$deleted = $store->pruneSessions(30); // Delete sessions older than 30 days
+echo "Pruned $deleted sessions\n";
+```
+
+### Foreign Key Constraints
+
+Foreign keys ensure referential integrity:
+
+```sql
+FOREIGN KEY (session_id) REFERENCES sessions(id)
+FOREIGN KEY (message_id) REFERENCES messages(id)
+```
+
+**Cascade behavior:**
+- When a session is deleted, associated tool_calls and messages must be deleted first (manual cascade in `deleteSession()`)
+- When a message is deleted, associated tool_calls must be deleted first
+
+**Note:** SQLite requires `PRAGMA foreign_keys=ON` for FK enforcement. The current implementation manually cascades deletes to ensure compatibility:
+
+```php
+public function deleteSession(string $id): void
+{
+    $this->pdo->prepare('DELETE FROM tool_calls WHERE session_id = ?')->execute([$id]);
+    $this->pdo->prepare('DELETE FROM messages WHERE session_id = ?')->execute([$id]);
+    $this->pdo->prepare('DELETE FROM sessions WHERE id = ?')->execute([$id]);
+}
+```
+
+### Usage Examples
+
+**Basic session persistence:**
+
+```php
+use SugarCraft\Crush\Session\SessionStore;
+
+$store = new SessionStore('/path/to/sessions.db');
+
+// Create a new session
+$store->createSession(
+    id: 'session-123',
+    provider: 'openai',
+    model: 'gpt-4o',
+    systemPrompt: 'You are a helpful coding assistant.'
+);
+
+// Add messages
+$store->addMessage('session-123', [
+    'role' => 'user',
+    'content' => 'How do I create a PHP class?',
+]);
+
+$store->addMessage('session-123', [
+    'role' => 'assistant',
+    'content' => 'You can create a class using the class keyword...',
+    'tool_calls' => [
+        ['id' => 'tc1', 'name' => 'Write', 'arguments' => ['path' => 'Example.php', 'content' => '<?php\nclass Example {}']]
+    ],
+]);
+
+// Add tool call tracking
+$messageId = $store->addMessage('session-123', [
+    'role' => 'assistant',
+    'content' => 'Let me write that file for you.',
+]);
+$store->addToolCall('session-123', $messageId, [
+    'name' => 'Write',
+    'arguments' => ['path' => 'Example.php', 'content' => '<?php'],
+    'result' => 'File written successfully',
+    'duration_ms' => 12,
+    'success' => true,
+]);
+
+// Retrieve session
+$session = $store->getSession('session-123');
+$messages = $store->getMessages('session-123');
+
+// List recent sessions
+$sessions = $store->listSessions(10);
+
+// Prune old sessions
+$deleted = $store->pruneSessions(30);
+```
+
+**Session resumption:**
+
+```php
+// Check if session exists
+$session = $store->getSession('session-123');
+if ($session !== null) {
+    // Resume existing session
+    $messages = $store->getMessages('session-123');
+    foreach ($messages as $msg) {
+        echo "[{$msg['role']}] {$msg['content']}\n";
+    }
+} else {
+    // Create new session
+    $store->createSession('session-123', 'anthropic', 'claude-sonnet-4-6');
+}
+```
+
+### Architecture
+
+```
+SessionStore
+  ├── pdo: PDO (SQLite connection with WAL mode)
+  ├── __construct(dbPath)
+  │   ├── Creates PDO connection
+  │   ├── Sets error mode to exceptions
+  │   ├── Enables WAL journal mode
+  │   └── Initializes schema
+  ├── initSchema()
+  │   ├── CREATE TABLE sessions
+  │   ├── CREATE TABLE messages
+  │   └── CREATE TABLE tool_calls
+  ├── Session CRUD
+  │   ├── createSession(id, provider, model, systemPrompt)
+  │   ├── getSession(id) → ?array
+  │   ├── updateSession(id) — touch updated_at
+  │   ├── deleteSession(id) — cascade delete
+  │   └── listSessions(limit) → array
+  ├── Message Management
+  │   ├── addMessage(sessionId, message) → int (message id)
+  │   └── getMessages(sessionId) → array
+  └── Tool Call Tracking
+      ├── addToolCall(sessionId, messageId, toolCall)
+      └── pruneSessions(daysOld) → int (deleted count)
+
+Schema Tables
+  sessions — id (PK), created_at, updated_at, provider, model, system_prompt, metadata
+  messages — id (PK, auto), session_id (FK→sessions), role, content, tool_calls (JSON), tool_results (JSON), model, tokens_used, created_at
+  tool_calls — id (PK, auto), session_id (FK→sessions), message_id (FK→messages), tool_name, tool_args (JSON), tool_result, duration_ms, success, created_at
+```
+
+## Step 8.3-8.5: Polish
+
+Steps 8.3 through 8.5 implement the final polish components: `TokenTracker` for usage monitoring, `StatusBar` for TUI rendering, and `Exporter` for session export capabilities.
+
+### Step 8.3: TokenTracker
+
+Step 8.3 implements `TokenTracker` — a value object for tracking token usage and calculating API costs across a session.
+
+#### TokenTracker Class Overview
+
+`TokenTracker` is a `final readonly` class that accumulates and reports token usage:
+
+```php
+final readonly class TokenTracker
+{
+    public function __construct(
+        public int $inputTokens = 0,
+        public int $outputTokens = 0,
+        public float $costUsd = 0.0,
+    ) {}
+
+    public function withUsage(int $input, int $output, float $cost): self;
+    public function totalTokens(): int;
+    public function toArray(): array;
+}
+```
+
+**Key responsibilities:**
+- Accumulate input and output token counts across multiple API calls
+- Calculate cumulative cost in USD based on provider pricing
+- Provide immutable `withUsage()` for adding usage data
+- Serialize to array for persistence or export
+
+#### Immutable Accumulation Pattern
+
+Token usage is accumulated using the immutable `withUsage()` pattern:
+
+```php
+public function withUsage(int $input, int $output, float $cost): self
+{
+    return new self(
+        inputTokens: $this->inputTokens + $input,
+        outputTokens: $this->outputTokens + $output,
+        costUsd: $this->costUsd + $cost,
+    );
+}
+```
+
+**Why immutable?** Each accumulation returns a new instance, preserving the previous state. This enables:
+- History tracking without mutation
+- Safe concurrent updates
+- Easy snapshot creation at any point
+
+#### Usage Tracking Integration
+
+The tracker integrates with `SessionStore` to persist usage data:
+
+```php
+// After a completion call
+$tracker = $tracker->withUsage(
+    input: $response->tokensUsed,
+    output: $response->tokensUsed,
+    cost: $response->costUsd,
+);
+
+// Persist to session
+$store->updateSessionUsage($sessionId, $tracker->toArray());
+```
+
+#### Cost Calculation
+
+Costs are calculated by providers based on their `costPer1kTokens()` method:
+
+```php
+$inputCost = ($inputTokens / 1000) * $provider->costPer1kTokens($model, 'input');
+$outputCost = ($outputTokens / 1000) * $provider->costPer1kTokens($model, 'output');
+$totalCost = $inputCost + $outputCost;
+```
+
+**Provider-specific pricing:**
+- OpenAI GPT-4o: ~$2.50/1M input, ~$10/1M output
+- Anthropic Claude: ~$3/1M input, ~$15/1M output
+- AWS Bedrock: Varies by model and region
+
+#### Display Formatting
+
+Token counts and costs are formatted for human readability:
+
+```php
+public function format(): string
+{
+    $total = $this->totalTokens();
+    $cost = number_format($this->costUsd, 4);
+
+    return "{$total} tokens (\${$cost})";
+}
+```
+
+**Example output:** `12,345 tokens ($0.0234)`
+
+#### Architecture
+
+```
+TokenTracker (value object)
+  ├── inputTokens: int (cumulative)
+  ├── outputTokens: int (cumulative)
+  ├── costUsd: float (cumulative)
+  ├── withUsage(input, output, cost) — immutable accumulation
+  ├── totalTokens() — sum of input + output
+  └── toArray() — serialize for storage
+```
+
+---
+
+### Step 8.4: StatusBar
+
+Step 8.4 implements `StatusBar` — the TUI component that renders provider, model, token count, and cost information in the application footer.
+
+#### StatusBar Class Overview
+
+`StatusBar` is a static rendering component:
+
+```php
+final class StatusBar
+{
+    public static function render(App $a, TokenTracker $tracker, int $width): string;
+}
+```
+
+**Key responsibilities:**
+- Display current provider and model name
+- Show accumulated token usage from `TokenTracker`
+- Render in a single footer row with provider context
+- Use theme-aware styling (TokyoNight colors)
+
+#### Rendering Output
+
+The status bar produces a single-line footer:
+
+```
+Provider: OpenAI | Model: gpt-4o | Tokens: 12,345 ($0.0234)
+```
+
+**Styling:**
+- Provider name: Yellow (`#fde68a`)
+- Separator pipes: Muted (`#7d6e98`)
+- Token info: Cyan (`#00ffaa`)
+
+#### Layout Calculation
+
+The status bar is rendered at the bottom of the TUI:
+
+```php
+$rows = Tty::size()->rows;
+$cols = Tty::size()->cols;
+
+// Status bar occupies the last row
+$statusBar = StatusBar::render($app, $tracker, $cols);
+```
+
+**Height:** 1 row, positioned below the main content area.
+
+#### Theme Integration
+
+Uses the established TokyoNight theme colors:
+
+```php
+$st = Style::new()
+    ->foreground(Color::hex('#7d6e98'))  // Muted text
+    ->padding(0, 1);
+
+$provider = Style::new()
+    ->foreground(Color::hex('#fde68a'))  // Yellow
+    ->bold();
+
+$tokens = Style::new()
+    ->foreground(Color::hex('#00ffaa'));  // Cyan
+```
+
+#### Empty State
+
+When no tokens have been used (new session):
+
+```
+Provider: OpenAI | Model: gpt-4o | Tokens: 0 ($0.0000)
+```
+
+#### Architecture
+
+```
+StatusBar (static renderer)
+  ├── render(App, TokenTracker, width) — single row output
+  ├── formatProvider(App) — yellow provider text
+  ├── formatModel(App) — model name display
+  ├── formatTokens(TokenTracker) — cyan token/cost display
+  └── join(parts) — pipe-separated composition
+```
+
+---
+
+### Step 8.5: Exporter
+
+Step 8.5 implements `Exporter` — a utility class for exporting conversation sessions to various formats (markdown, JSON, plain text).
+
+#### Exporter Class Overview
+
+`Exporter` provides static factory methods for different export formats:
+
+```php
+final class Exporter
+{
+    public static function toMarkdown(SessionStore $store, string $sessionId): string;
+    public static function toJson(SessionStore $store, string $sessionId): string;
+    public static function toText(SessionStore $store, string $sessionId): string;
+}
+```
+
+**Key responsibilities:**
+- Retrieve session data from `SessionStore`
+- Transform conversation messages into format-specific output
+- Preserve tool calls and results in export
+- Include metadata (provider, model, timestamps)
+
+#### Markdown Export
+
+Markdown format produces a human-readable transcript:
+
+```markdown
+# Session: session-123
+
+**Provider:** OpenAI
+**Model:** gpt-4o
+**Date:** 2024-06-03 10:00:00
+
+---
+
+## User
+
+Hello, how do I create a PHP class?
+
+## Assistant
+
+You can create a class using the `class` keyword...
+
+## Tool Result (Write)
+
+File written successfully
+
+---
+```
+
+**Features:**
+- Headers for session metadata
+- Role-labeled message blocks (User/Assistant/Tool Result)
+- Tool calls indented with results
+- Horizontal rules between turns
+
+#### JSON Export
+
+JSON format produces structured data:
+
+```json
+{
+    "sessionId": "session-123",
+    "provider": "openai",
+    "model": "gpt-4o",
+    "createdAt": "2024-06-03T10:00:00+00:00",
+    "updatedAt": "2024-06-03T10:05:00+00:00",
+    "messages": [
+        {
+            "role": "user",
+            "content": "Hello, how do I create a PHP class?",
+            "timestamp": "2024-06-03T10:00:00+00:00"
+        },
+        {
+            "role": "assistant",
+            "content": "You can create a class using the class keyword...",
+            "toolCalls": [...],
+            "timestamp": "2024-06-03T10:00:05+00:00"
+        }
+    ],
+    "usage": {
+        "inputTokens": 100,
+        "outputTokens": 250,
+        "costUsd": 0.0025
+    }
+}
+```
+
+**Features:**
+- Complete session metadata
+- Full message history with roles
+- Tool calls and results preserved
+- Usage summary when available
+
+#### Plain Text Export
+
+Text format produces a simple transcript:
+
+```
+Session: session-123
+Provider: OpenAI | Model: gpt-4o
+Date: 2024-06-03 10:00:00
+
+==================================================
+
+[User] 10:00:00
+Hello, how do I create a PHP class?
+
+[Assistant] 10:00:05
+You can create a class using the class keyword...
+
+[Tool: Write] 10:00:06
+File written successfully
+
+==================================================
+```
+
+**Features:**
+- Timestamps on each message
+- Role prefixes in brackets
+- Tool names shown for tool calls
+- Simple separator lines
+
+#### Session Lookup
+
+All export methods retrieve the session from `SessionStore`:
+
+```php
+public static function toMarkdown(SessionStore $store, string $sessionId): string
+{
+    $session = $store->getSession($sessionId);
+    if ($session === null) {
+        throw new \InvalidArgumentException("Session not found: {$sessionId}");
+    }
+
+    $messages = $store->getMessages($sessionId);
+    // ... format output
+}
+```
+
+**Error handling:** Throws `InvalidArgumentException` if session doesn't exist.
+
+#### File Output
+
+Export output can be written to files:
+
+```php
+$markdown = Exporter::toMarkdown($store, $sessionId);
+file_put_contents('session.md', $markdown);
+
+$json = Exporter::toJson($store, $sessionId);
+file_put_contents('session.json', $json);
+```
+
+**Common use cases:**
+- Archiving conversations
+- Sharing transcripts with teammates
+- Generating documentation from AI interactions
+- Backup and recovery
+
+#### Architecture
+
+```
+Exporter (static utility)
+  ├── toMarkdown(store, sessionId) — formatted transcript
+  ├── toJson(store, sessionId) — structured JSON
+  └── toText(store, sessionId) — plain transcript
+
+Shared behavior:
+  ├── getSession(store, sessionId) — fetch + validate
+  ├── formatMessages(messages, format) — per-format rendering
+  └── formatMetadata(session) — header info
+```
+
+---
 
 ## Step 6.1: Agent Value Object
 
@@ -254,6 +1329,689 @@ AgentDefinition (factory)
   ├── coder(), reviewer(), debugger(), ...
   ├── fromType() — type string to definition
   └── new() — constructor with type/name/description/prompt/tools/skills
+```
+
+## Step 6.2: Agent Manager and SubAgent
+
+Step 6.2 implements the `AgentManager` and `SubAgent` classes — managing agent registration, subagent lifecycle, and task execution with streaming support.
+
+### AgentManager Overview
+
+`AgentManager` handles agent registration and subagent lifecycle management:
+
+```php
+final class AgentManager
+{
+    /** @var array<string, Agent> */
+    private array $agents = [];
+
+    /** @var array<string, SubAgent> */
+    private array $subAgents = [];
+
+    public function __construct(
+        private ProviderInterface $provider,
+        private SkillRegistry $skillRegistry,
+    ) {}
+}
+```
+
+**Key responsibilities:**
+- Stores registered agents by name for lookup
+- Manages subagent instances with unique IDs
+- Delegates task execution to the configured provider
+- Applies skill system prompts to subagent tasks
+
+### AgentManager Methods
+
+| Method | Description |
+|--------|-------------|
+| `register(Agent $agent)` | Registers an agent by name |
+| `get(string $name): ?Agent` | Retrieves a registered agent |
+| `all(): array<Agent>` | Returns all registered agents |
+| `active(): array<Agent>` | Returns only active (isActive=true) agents |
+| `createSubAgent(string $agentName, string $task): SubAgent` | Creates and starts a subagent for a task |
+| `getSubAgent(string $id): ?SubAgent` | Retrieves a subagent by ID |
+| `executeSubAgent(string $id): \Generator` | Executes a subagent's task with streaming |
+| `stopSubAgent(string $id): void` | Stops a running subagent |
+| `removeSubAgent(string $id): void` | Removes a completed subagent |
+
+### Agent Registration
+
+Register agents to make them available for subagent creation:
+
+```php
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Providers\OpenAIProvider;
+use SugarCraft\Crush\Skills\SkillRegistry;
+
+$manager = new AgentManager($provider, $skillRegistry);
+
+// Register agents
+$manager->register(new Agent(
+    name: 'coder',
+    description: 'General coding assistant',
+    prompt: 'You are a coding assistant.',
+    model: 'gpt-4o',
+    provider: 'openai',
+    tools: ['Read', 'Edit', 'Bash'],
+    skillNames: ['php-best-practices'],
+    hooks: [],
+    isActive: true,
+));
+
+$manager->register(new Agent(
+    name: 'reviewer',
+    description: 'Code review specialist',
+    prompt: 'You review code for issues.',
+    model: 'gpt-4o',
+    provider: 'openai',
+    tools: ['Read', 'Grep', 'Bash'],
+    skillNames: ['security-audit'],
+    hooks: [],
+    isActive: true,
+));
+```
+
+### SubAgent Class
+
+`SubAgent` represents a running task with lifecycle tracking:
+
+```php
+final class SubAgent
+{
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_RUNNING = 'running';
+    public const STATUS_STREAMING = 'streaming';
+    public const STATUS_COMPLETE = 'complete';
+    public const STATUS_STOPPED = 'stopped';
+    public const STATUS_FAILED = 'failed';
+
+    /** Status of the subagent task. */
+    public string $status;
+    /** Output accumulated during execution. */
+    public string $output;
+    /** When the task completed. */
+    public ?\DateTimeImmutable $completedAt = null;
+    /** Error message if the task failed. */
+    public ?string $error = null;
+
+    public function __construct(
+        public readonly string $id,
+        public readonly Agent $agent,
+        public readonly string $task,
+        public readonly \DateTimeImmutable $createdAt = new \DateTimeImmutable(),
+    ) {
+        $this->status = self::STATUS_PENDING;
+        $this->output = '';
+    }
+}
+```
+
+**Status constants and transitions:**
+
+| Constant | Description |
+|----------|-------------|
+| `STATUS_PENDING` | Initial state when created |
+| `STATUS_RUNNING` | Task execution started |
+| `STATUS_STREAMING` | Receiving streaming response |
+| `STATUS_COMPLETE` | Task finished successfully |
+| `STATUS_STOPPED` | Task was stopped by user |
+| `STATUS_FAILED` | Task failed with error |
+
+**State machine flow:**
+```
+PENDING → RUNNING → STREAMING → COMPLETE
+                ↘         ↘
+                 STOPPED   FAILED
+```
+
+### SubAgent Methods
+
+| Method | Description |
+|--------|-------------|
+| `isRunning(): bool` | True if status is RUNNING or STREAMING |
+| `isComplete(): bool` | True if status is COMPLETE |
+| `isStopped(): bool` | True if status is STOPPED or FAILED |
+| `durationMs(): ?int` | Execution time in milliseconds, or null if incomplete |
+| `toArray(): array` | Serializes to array with id, agent, task, status, output, timestamps, error |
+
+### SubAgent Status Predicates
+
+```php
+$subAgent = $manager->createSubAgent('coder', 'Fix the authentication bug');
+
+// Check status predicates
+if ($subAgent->isRunning()) {
+    echo "Task is in progress...\n";
+}
+
+if ($subAgent->isComplete()) {
+    echo "Completed in {$subAgent->durationMs()}ms\n";
+    echo "Output: {$subAgent->output}\n";
+}
+
+if ($subAgent->isStopped()) {
+    echo "Task ended with status: {$subAgent->status}\n";
+    if ($subAgent->error !== null) {
+        echo "Error: {$subAgent->error}\n";
+    }
+}
+```
+
+### Streaming Execution
+
+`executeSubAgent()` returns a `\Generator` that yields the subagent state as it progresses:
+
+```php
+$subAgent = $manager->createSubAgent('coder', 'Write a hello world program');
+
+// Execute with streaming
+foreach ($manager->executeSubAgent($subAgent->id) as $progress) {
+    // $progress is the same SubAgent instance, updated in-place
+    echo "Status: {$progress->status}\n";
+    echo "Output so far: {$progress->output}\n";
+}
+
+// Final state
+echo "Final status: {$subAgent->status}\n";
+echo "Duration: {$subAgent->durationMs()}ms\n";
+```
+
+**Why a generator?**
+- Memory efficient — yields chunks as they arrive without buffering
+- Real-time progress updates during long-running tasks
+- Non-blocking iteration for UI updates
+
+**Provider support:** If the provider doesn't support streaming, execution falls back to synchronous completion:
+
+```php
+if ($this->provider->supportsStreaming()) {
+    foreach ($this->provider->completeStream($request) as $response) {
+        $subAgent->output .= $response->content;
+        yield $subAgent;  // Yield progress
+    }
+} else {
+    $response = $this->provider->complete($request);
+    $subAgent->output = $response->content;  // Synchronous
+}
+```
+
+### Skill Integration
+
+Subagent execution automatically applies skills from the agent's configuration:
+
+```php
+// When executing, AgentManager builds the system prompt by:
+// 1. Starting with the agent's base prompt
+$systemPrompt = $subAgent->agent->systemPrompt();
+
+// 2. Appending each skill's contribution
+foreach ($subAgent->agent->skillNames as $skillName) {
+    $skill = $this->skillRegistry->get($skillName);
+    if ($skill !== null) {
+        $systemPrompt .= $skill->systemPromptContribution();
+    }
+}
+
+// 3. Using the combined prompt in the completion request
+$request = new CompleteRequest(
+    model: $subAgent->agent->model,
+    messages: [new UserMessage($subAgent->task)],
+    systemPrompt: $systemPrompt,
+);
+```
+
+### Usage Example
+
+Complete workflow from agent registration to task completion:
+
+```php
+use SugarCraft\Crush\Agents\Agent;
+use SugarCraft\Crush\Agents\AgentManager;
+use SugarCraft\Crush\Agents\AgentDefinition;
+use SugarCraft\Crush\Providers\OpenAIProvider;
+use SugarCraft\Crush\Skills\SkillRegistry;
+use SugarCraft\Crush\Skills\SkillManager;
+
+// Setup
+$provider = new OpenAIProvider($client, 'gpt-4o');
+$skillRegistry = new SkillRegistry();
+$manager = new AgentManager($provider, $skillRegistry);
+
+// Register a built-in agent type
+$agent = Agent::fromArray([
+    'name' => 'my-coder',
+    'description' => 'Coding assistant',
+    'prompt' => 'You are a helpful coding assistant.',
+    'model' => 'gpt-4o',
+    'provider' => 'openai',
+    'tools' => ['Read', 'Edit', 'Bash'],
+    'skills' => ['php-best-practices'],
+    'hooks' => [],
+    'is_active' => true,
+]);
+$manager->register($agent);
+
+// Create and execute a subagent
+$task = 'Explain how the TEA architecture works';
+$subAgent = $manager->createSubAgent('my-coder', $task);
+
+// Stream results
+foreach ($manager->executeSubAgent($subAgent->id) as $progress) {
+    // Clear line and show progress
+    echo "\r[{$progress->status}] " . strlen($progress->output) . " chars...";
+}
+
+// Final output
+echo "\n\nResult:\n{$subAgent->output}\n";
+echo "Completed in {$subAgent->durationMs()}ms\n";
+
+// Cleanup completed subagent
+$manager->removeSubAgent($subAgent->id);
+```
+
+### Architecture
+
+```
+AgentManager
+  ├── agents: array<string, Agent>
+  ├── subAgents: array<string, SubAgent>
+  ├── register(Agent) — add to agents
+  ├── get(name) — lookup agent
+  ├── all() — list agents
+  ├── active() — filter active agents
+  ├── createSubAgent(name, task) — create + start subagent
+  ├── getSubAgent(id) — lookup subagent
+  ├── executeSubAgent(id) — generator for streaming execution
+  ├── stopSubAgent(id) — set status to STOPPED
+  └── removeSubAgent(id) — remove from subAgents
+
+SubAgent
+  ├── id, agent, task, createdAt (readonly)
+  ├── status, output, completedAt, error (mutable)
+  ├── STATUS_PENDING | RUNNING | STREAMING | COMPLETE | STOPPED | FAILED
+  ├── isRunning() — RUNNING or STREAMING
+  ├── isComplete() — COMPLETE
+  ├── isStopped() — STOPPED or FAILED
+  ├── durationMs() — ms between createdAt and completedAt
+  └── toArray() — serialize to array
+```
+
+## Step 7.1: MCP Client
+
+Step 7.1 implements the MCP (Model Context Protocol) client — a system for connecting to external MCP servers that provide AI tools via a standardized JSON-RPC 2.0 interface. The client supports both stdio-based subprocess servers and HTTP-based servers.
+
+### MCP Overview
+
+MCP (Model Context Protocol) is a standardized protocol for AI tool discovery and invocation. Rather than hardcoding tools, CandyCrush can connect to MCP servers that expose available tools with their descriptions and input schemas. This enables dynamic tool discovery from external services.
+
+**Key concepts:**
+- **MCP Server** — A process (stdio or HTTP) that exposes tools via JSON-RPC 2.0
+- **MCP Client** — The CandyCrush client that connects to servers and invokes tools
+- **MCP Tool** — A tool exposed by an MCP server with name, description, and input schema
+- **.mcp.json** — Configuration file specifying which MCP servers to connect
+
+### McpClient Class
+
+`McpClient` is the main entry point for MCP server management:
+
+```php
+final class McpClient
+{
+    public function __construct(
+        private string $configPath,
+    ) {}
+
+    public function startServers(): void;
+    public function stopServers(): void;
+    public function listTools(): array<McpTool>;
+    public function callTool(string $serverName, string $toolName, array $args): array;
+    public function callToolByName(string $toolName, array $args): array;
+}
+```
+
+**Key behaviors:**
+- `startServers()` reads `.mcp.json` and starts all configured servers
+- `listTools()` aggregates tools from all running servers
+- `callToolByName()` searches all servers for a tool by name (first match wins)
+
+### Config Loading and Environment Variable Resolution
+
+The client resolves environment variables in server configuration using `${VAR}` and `${VAR:-default}` patterns:
+
+```php
+private function resolveEnv(array $env): array
+{
+    $resolved = [];
+
+    foreach ($env as $key => $value) {
+        if (is_string($value) && preg_match('/^\$\{(.*?)(?::-(.*))?\}$/', $value, $matches)) {
+            $resolved[$key] = getenv($matches[1]) ?: ($matches[2] ?? '');
+        } else {
+            $resolved[$key] = $value;
+        }
+    }
+
+    return $resolved;
+}
+```
+
+**Supported patterns:**
+
+| Pattern | Behavior |
+|---------|----------|
+| `${VAR}` | Replace with environment variable value |
+| `${VAR:-default}` | Replace with default if VAR is unset or empty |
+| `${VAR:-}` | Replace with empty string if VAR is unset or empty |
+
+### .mcp.json Configuration File Format
+
+The client reads configuration from `.mcp.json`:
+
+```json
+{
+    "mcpServers": {
+        "filesystem": {
+            "type": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/directory"],
+            "env": {
+                "NODE_ENV": "production"
+            }
+        },
+        "github": {
+            "type": "http",
+            "url": "http://localhost:3000/mcp",
+            "headers": {
+                "Authorization": "Bearer ${GITHUB_TOKEN}"
+            }
+        }
+    }
+}
+```
+
+**Stdio server configuration:**
+- `type`: Must be `"stdio"`
+- `command`: The executable to run (e.g., `npx`, `node`, `python`)
+- `args`: Array of command-line arguments
+- `env`: Object of environment variables (supports `${VAR}` interpolation)
+
+**HTTP server configuration:**
+- `type`: Must be `"http"`
+- `url`: The MCP server endpoint URL
+- `headers`: Object of HTTP headers (supports `${VAR}` interpolation)
+
+### McpTool Value Object
+
+`McpTool` represents a tool exposed by an MCP server:
+
+```php
+final readonly class McpTool
+{
+    public function __construct(
+        public string $name,
+        public string $description,
+        public array $inputSchema,
+        public string $serverName,
+    ) {}
+
+    public static function fromArray(array $data, string $serverName): self;
+}
+```
+
+**Properties:**
+- `name` — Unique identifier for the tool within the server
+- `description` — Human-readable description of what the tool does
+- `inputSchema` — JSON Schema for tool arguments (OpenAI-compatible format)
+- `serverName` — Name of the MCP server that provides this tool
+
+### McpServer Interface
+
+Both `StdioMcpServer` and `HttpMcpServer` implement the `McpServer` interface:
+
+```php
+interface McpServer
+{
+    public function start(): void;
+    public function stop(): void;
+
+    /** @return array<McpTool> */
+    public function listTools(): array;
+
+    /** @return array<mixed> */
+    public function callTool(string $toolName, array $args): array;
+}
+```
+
+### StdioMcpServer — Subprocess-Based MCP Server
+
+`StdioMcpServer` spawns an MCP server as a subprocess and communicates via stdin/stdout:
+
+```php
+final class StdioMcpServer implements McpServer
+{
+    public function __construct(
+        public readonly string $name,
+        private string $command,
+        private array $args,
+        private array $env,
+    ) {}
+
+    public function start(): void;
+    public function stop(): void;
+    public function listTools(): array<McpTool>;
+    public function callTool(string $toolName, array $args): array;
+}
+```
+
+**Initialization protocol:**
+1. Spawns subprocess via `proc_open()` with stdin/stdout pipes
+2. Sends JSON-RPC 2.0 `initialize` request with protocol version `2024-11-05`
+3. Sends `tools/list` request to discover available tools
+4. Parses tool definitions into `McpTool` objects
+
+**Communication:**
+- Sends JSON-RPC requests as newline-delimited JSON on stdin
+- Reads responses from stdout using `fgets()`
+- Each request-response is a single newline-terminated JSON object
+
+### HttpMcpServer — HTTP-Based MCP Server
+
+`HttpMcpServer` connects to an MCP server over HTTP:
+
+```php
+final class HttpMcpServer implements McpServer
+{
+    public function __construct(
+        public readonly string $name,
+        private string $url,
+        private array $headers,
+        private Client $httpClient,
+    ) {}
+
+    public function start(): void;
+    public function stop(): void;
+    public function listTools(): array<McpTool>;
+    public function callTool(string $toolName, array $args): array;
+}
+```
+
+**Initialization protocol:**
+1. Sends JSON-RPC 2.0 `initialize` request via HTTP POST
+2. Sends `tools/list` request to discover available tools
+3. Parses tool definitions into `McpTool` objects
+
+**Key difference from StdioMcpServer:**
+- HTTP servers don't need `stop()` since there's no persistent process
+- Requests use Guzzle HTTP client with configurable headers
+- Supports custom headers (e.g., authentication tokens)
+
+### JSON-RPC 2.0 Protocol Compliance
+
+All MCP communication uses JSON-RPC 2.0 format:
+
+**Request:**
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/list",
+    "params": {}
+}
+```
+
+**Response:**
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": {
+        "tools": [
+            {
+                "name": "read_file",
+                "description": "Read contents of a file",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"}
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+**Error response:**
+```json
+{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+        "code": -32600,
+        "message": "Invalid Request"
+    }
+}
+```
+
+### Usage Examples
+
+**Basic usage with .mcp.json:**
+
+```php
+use SugarCraft\Crush\MCP\McpClient;
+
+// Create client pointing to .mcp.json config
+$client = new McpClient('/path/to/.mcp.json');
+
+// Start all configured servers
+$client->startServers();
+
+// List all available tools
+foreach ($client->listTools() as $tool) {
+    echo "{$tool->serverName}: {$tool->name} - {$tool->description}\n";
+}
+
+// Call a tool on a specific server
+$result = $client->callTool('filesystem', 'read_file', ['path' => '/tmp/test.txt']);
+
+// Or call by tool name (searches all servers)
+$result = $client->callToolByName('read_file', ['path' => '/tmp/test.txt']);
+
+// Stop all servers when done
+$client->stopServers();
+```
+
+**Programmatic server configuration:**
+
+```php
+use SugarCraft\Crush\MCP\McpClient;
+use SugarCraft\Crush\MCP\StdioMcpServer;
+use SugarCraft\Crush\MCP\HttpMcpServer;
+use GuzzleHttp\Client;
+
+// Create client (config file can be empty or non-existent)
+$client = new McpClient('/dev/null');
+
+// Manually add a stdio server
+$stdioServer = new StdioMcpServer(
+    name: 'my-filesystem',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp'],
+    env: ['NODE_ENV' => 'production'],
+);
+$stdioServer->start();
+
+// Manually add an HTTP server
+$httpServer = new HttpMcpServer(
+    name: 'my-api',
+    url: 'http://localhost:8080/mcp',
+    headers: ['Authorization' => 'Bearer token123'],
+    httpClient: new Client(['timeout' => 30]),
+);
+$httpServer->start();
+
+// Use reflection to add servers to client (for demonstration)
+// In practice, servers are added via startServer() from config
+$reflection = new \ReflectionClass($client);
+$property = $reflection->getProperty('servers');
+$property->setAccessible(true);
+$servers = $property->getValue($client);
+$servers['my-filesystem'] = $stdioServer;
+$servers['my-api'] = $httpServer;
+$property->setValue($client, $servers);
+
+// Now listTools() and callTool() work with both servers
+$tools = $client->listTools();
+$result = $client->callTool('my-api', 'some_tool', ['arg' => 'value']);
+
+// Stop servers
+$stdioServer->stop();
+$httpServer->stop();
+```
+
+### Architecture
+
+```
+McpClient
+  ├── configPath: string
+  ├── servers: array<string, McpServer>
+  ├── httpClient: GuzzleHttp\Client
+  ├── startServers() — load .mcp.json, start all servers
+  ├── stopServers() — stop all servers
+  ├── listTools() — aggregate tools from all servers
+  ├── callTool(server, name, args) — invoke on specific server
+  ├── callToolByName(name, args) — find and invoke by name
+  └── resolveEnv(env) — resolve ${VAR} patterns
+
+McpServer (interface)
+  ├── start() — initialize connection
+  ├── stop() — cleanup connection
+  ├── listTools() — discover available tools
+  └── callTool(name, args) — invoke a tool
+
+StdioMcpServer
+  ├── process: resource (proc_open handle)
+  ├── pipes: array (stdin, stdout, stderr)
+  ├── tools: array<McpTool>
+  ├── send(message) — write JSON-RPC, read response
+  └── parseTools(response) — parse tool list
+
+HttpMcpServer
+  ├── url: string
+  ├── headers: array<string, string>
+  ├── httpClient: GuzzleHttp\Client
+  ├── tools: array<McpTool>
+  ├── initialized: bool
+  ├── parseTools(response) — parse tool list
+
+McpTool (value object)
+  ├── name: string
+  ├── description: string
+  ├── inputSchema: array (JSON Schema)
+  ├── serverName: string
+  └── fromArray(data, serverName) — factory
 ```
 
 ## Step 5.1: Hook Interface and Registry
