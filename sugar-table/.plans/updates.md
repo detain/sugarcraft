@@ -86,7 +86,17 @@ Each entry should have:
   - All 195 tests pass
 
 ### Phase 3: Multiline Mode
-- Step 3.1 (impl): Pending
+- Step 3.1 (impl): **COMPLETED** ✅
+  - Branch: ai/table-multiline-mode
+  - Added `calculateRowHeight()` method to compute max lines per row
+  - Added `fillDataRowLines()` method for multi-line row rendering
+  - Modified `renderToBuffer()` to check `$this->multilineMode`:
+    - Pre-calculates row heights when multilineMode is true
+    - Adjusts buffer height calculation for variable row heights
+    - Calls `fillDataRowLines()` instead of `fillDataRow()` for multiline rows
+  - Row borders span full row height in multiline mode
+  - Backward compatible: default `multilineMode=false` preserves single-line behavior
+  - All 195 tests pass
 - Step 3.2 (review): Pending
 - Step 3.3 (fix): Pending
 - Step 3.4 (tests): Pending
