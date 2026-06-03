@@ -457,9 +457,9 @@ final class PlayerTest extends TestCase
     }
 
     /**
-     * @testdox view() is idempotent — calling it twice with same frame produces identical output
+     * @testdox view() is idempotent — calling it twice with the same frame produces identical output
      */
-    public function testPrevBufferNotMutatedInView(): void
+    public function testViewIsIdempotent(): void
     {
         $decoder = $this->makeFakeDecoder(10);
         $player = Player::openForTest($decoder, 30.0);
@@ -471,6 +471,61 @@ final class PlayerTest extends TestCase
         $output2 = $player->view();
 
         $this->assertSame($output1, $output2);
+    }
+
+    /**
+     * Regression: view() must emit the FULL current frame every call so
+     * candy-core's Renderer can diff it. A previous implementation diffed
+     * inside view() and returned an empty string for every frame after the
+     * first, freezing playback. Two visibly different frames must therefore
+     * produce two different, non-empty renders.
+     *
+     * @testdox view() renders distinct, non-empty output for distinct frames
+     */
+    public function testViewRendersFullFrameForEachFrame(): void
+    {
+        // A solid-red frame and a solid-green frame of the same size.
+        $red = $this->makeFrame("\xff\x00\x00");
+        $green = $this->makeFrame("\x00\xff\x00");
+
+        $player = Player::openForTest(new FakeDecoder([$red, $green]), 30.0);
+
+        $playerRed = $this->setCurrentFrame($player, $red, 0);
+        $outRed = $playerRed->view();
+
+        $playerGreen = $this->setCurrentFrame($player, $green, 1);
+        $outGreen = $playerGreen->view();
+
+        $this->assertNotEmpty(trim($outRed), 'red frame must render content');
+        $this->assertNotEmpty(trim($outGreen), 'green frame must render content');
+        $this->assertNotSame(
+            $outRed,
+            $outGreen,
+            'distinct frames must render distinct output (view() must emit full frames, not a self-diff)',
+        );
+    }
+
+    /**
+     * Regression (tick path): after a tick advances the frame, view() must
+     * still emit the full frame. The old implementation set the diff baseline
+     * to the just-advanced frame inside updateTick(), so view() diffed the
+     * current frame against itself and returned an empty string — the screen
+     * froze on the placeholder. Driving update() through a real tick is the
+     * path that exposed the bug.
+     *
+     * @testdox view() is non-empty after a tick advances the frame
+     */
+    public function testViewNonEmptyAfterTickAdvance(): void
+    {
+        $player = Player::openForTest(new FakeDecoder([
+            $this->makeFrame("\xff\x00\x00"),
+            $this->makeFrame("\x00\xff\x00"),
+        ]), 30.0);
+
+        [$player] = $player->update(new KeyMsg(KeyType::Space)); // unpause
+        [$player] = $player->update(new TickMsg());              // advance one frame
+
+        $this->assertNotEmpty(trim($player->view()));
     }
 
     // -------------------------------------------------------------------------
@@ -557,8 +612,6 @@ final class PlayerTest extends TestCase
         $frameIndex = $this->getPlayerProperty($player, 'frameIndex');
         $currentFrame = $this->getPlayerProperty($player, 'currentFrame');
         $lastTickTime = $this->getPlayerProperty($player, 'lastTickTime');
-        $sync = $this->getPlayerProperty($player, 'sync');
-        $prevBuffer = $this->getPlayerProperty($player, 'prevBuffer');
         $totalFrames = $this->getPlayerProperty($player, 'totalFrames');
         $cellsW = $this->getPlayerProperty($player, 'cellsW');
         $cellsH = $this->getPlayerProperty($player, 'cellsH');
@@ -574,8 +627,6 @@ final class PlayerTest extends TestCase
             'currentFrame' => $currentFrame,
             'lastTickTime' => $lastTickTime,
             'fps' => $fps,
-            'sync' => $sync,
-            'prevBuffer' => $prevBuffer,
             'totalFrames' => $totalFrames,
             'cellsW' => $cellsW,
             'cellsH' => $cellsH,
