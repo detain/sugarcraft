@@ -156,6 +156,86 @@ $t = $t->SelectPrevious();              // move cursor up
 $t = $t->CurrentRow();                  // get selected RowData
 ```
 
+## Keyboard Navigation
+
+Scroll the table vertically using keyboard input via `scrollYForKey()` and `handleKey()`:
+
+```php
+use SugarCraft\Table\Table;
+
+// Key constants for navigation
+$t = $t->handleKey(Table::KEY_ARROW_UP);    // scroll up one row
+$t = $t->handleKey(Table::KEY_ARROW_DOWN);  // scroll down one row
+$t = $t->handleKey(Table::KEY_PAGE_UP);     // scroll up one viewport
+$t = $t->handleKey(Table::KEY_PAGE_DOWN);   // scroll down one viewport
+$t = $t->handleKey(Table::KEY_HOME);        // scroll to top
+$t = $t->handleKey(Table::KEY_END);         // scroll to bottom
+```
+
+### Key Constants
+
+| Constant          | Description                      |
+|-------------------|----------------------------------|
+| `KEY_ARROW_UP`    | Scroll up by 1 row                |
+| `KEY_ARROW_DOWN`  | Scroll down by 1 row              |
+| `KEY_PAGE_UP`     | Scroll up by one viewport height |
+| `KEY_PAGE_DOWN`   | Scroll down by one viewport height |
+| `KEY_HOME`        | Scroll to first row              |
+| `KEY_END`         | Scroll to last row               |
+
+### scrollYForKey() — Raw Scroll Calculation
+
+Returns the new `scrollY` value for a key without modifying the table:
+
+```php
+$newScrollY = $t->scrollYForKey(Table::KEY_ARROW_UP);
+$t = $t->withScrollY($newScrollY);
+```
+
+This is useful when you need the raw integer value for your own integration logic.
+
+### handleKey() — Convenience Wrapper
+
+Returns a new Table with `scrollY` already adjusted:
+
+```php
+$t = $t->handleKey($keyFromInputHandler);
+```
+
+This combines `scrollYForKey()` + `withScrollY()` in one call.
+
+### Integration Example
+
+```php
+use SugarCraft\Table\Table;
+
+// Create table with viewport virtualization enabled
+$t = Table::withColumns([...])
+    ->withRows([...])
+    ->withViewportHeight(15);
+
+// Simulate keyboard input
+$key = 'arrowDown';  // from your input library (e.g., candy-pty)
+$t = $t->handleKey($key);
+
+// Or use the constants
+$t = $t->handleKey(Table::KEY_PAGE_DOWN);
+```
+
+### How It Works
+
+- **Key mapping**: `scrollYForKey()` uses a `match` expression to map key names to scroll deltas
+- **Bounds clamping**: Scroll values are clamped to `0` at the top and `maxScrollY()` at the bottom
+- **maxScrollY()**: Returns `max(0, totalFilteredRows - viewportHeight)` when viewport is active; `0` otherwise
+- **No-op for unknown keys**: Unrecognized keys return the current `scrollY` unchanged
+- **Requires viewport**: Keyboard scrolling only works when `withViewportHeight()` is set
+
+```php
+// Combined: keyboard scroll + cursor selection
+$t = $t->withScrollY($t->scrollYForKey($key))  // update scroll
+       ->SelectNext();                         // move selection
+```
+
 ## Global Search
 
 Search across all columns simultaneously with `search()`:

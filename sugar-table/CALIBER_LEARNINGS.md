@@ -113,6 +113,18 @@ Auto-managed by [caliber](https://github.com/caliber-ai-org/ai-setup) — do not
   (`withExpandedRows`/`toggleExpanded`/`isExpanded`), 1106
   (`fillDataRow` expansion check), and 1241 (`fillDataRowLines` expansion check).
 
+- **[pattern:keyboard-navigation]** `scrollYForKey()` + `handleKey()` provide
+  keyboard-driven vertical scrolling. `KEY_*` constants (`KEY_ARROW_UP`,
+  `KEY_ARROW_DOWN`, `KEY_PAGE_UP`, `KEY_PAGE_DOWN`, `KEY_HOME`, `KEY_END`)
+  identify supported keys. `scrollYForKey()` returns the new scroll offset
+  using a `match` expression with per-key delta logic and bounds clamping via
+  `maxScrollY()`. `handleKey()` is a convenience wrapper that chains
+  `scrollYForKey()` + `withScrollY()` for immutable keyboard integration.
+  Unrecognized keys are no-ops (return current `scrollY` unchanged). Requires
+  `withViewportHeight()` to be set — when viewport height is 0, `maxScrollY()`
+  returns 0 and scrolling is disabled. See `Table.php` lines 507–580
+  (`KEY_*` constants, `scrollYForKey`, `handleKey`, `maxScrollY`).
+
 - **[pattern:footer-type-enum]** `FooterType` enum controls footer content via
   `withFooterType(FooterType $type)`. Three cases: `Page` (default, shows "Page N
   of M"), `Rows` (shows "Showing X to Y of Z rows" via `RowsFooter()`), and
