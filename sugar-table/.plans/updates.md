@@ -154,8 +154,11 @@ Each entry should have:
   - ClearSearch() works: VERIFIED (line 491-494: delegates to search(''))
   - Combined search + Filter works: VERIFIED (filters ANDed together in sequence)
   - selectedIndex resets to 0 on search change: VERIFIED (line 484: $clone->selectedIndex = 0)
-- Step 5.3 (fix): Pending
-- Step 5.4 (tests): Pending
+- Step 5.3 (fix): **COMPLETED** ✅
+  - Fixed bug: `foreach ($row->data as ...)` should be `foreach ($row->data->all() as ...)` (RowData is not directly iterable)
+- Step 5.4 (tests): **COMPLETED** ✅
+  - TableGlobalSearchTest: 30 tests, 51 assertions - all passing
+  - Tests cover: search in all columns, case-insensitive, empty search, ClearSearch, search+Filter combos, immutability, selectedIndex reset
 - Step 5.5 (docs): Pending
 
 ### Phase 6: Row Expansion

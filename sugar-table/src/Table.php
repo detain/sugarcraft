@@ -527,7 +527,7 @@ final class Table
             $searchLower = \strtolower($this->searchText);
             $rows = \array_values(
                 \array_filter($rows, function (Row $row) use ($searchLower): bool {
-                    foreach ($row->data as $key => $val) {
+                    foreach ($row->data->all() as $key => $val) {
                         $str = \is_object($val) && method_exists($val, '__toString') ? (string) $val : (string) ($val ?? '');
                         if (\stripos(\strtolower($str), $searchLower) !== false) return true;
                     }
