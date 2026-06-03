@@ -22,29 +22,24 @@ namespace SugarCraft\Reel;
 final class Sync
 {
     /**
-     * @param float $fps    Frames per second of the source video
-     * @param float $speed  Playback speed multiplier (1.0 = normal)
-     */
-    public function __construct(
-        public readonly float $fps,
-        public readonly float $speed,
-    ) {
-    }
-
-    /**
-     * Compute the target frame number from wall-clock elapsed time.
+     * Compute the target frame number from video content time.
      *
-     * target = floor(elapsed * fps * speed)
+     * target = floor(videoTime * fps)
      *
-     * @param float $elapsedSeconds Wall-clock seconds since playback started
-     * @return int The frame we should be on at this elapsed time
+     * Speed is applied OUTSIDE this function (in the caller's tick math:
+     * newVideoTime = videoTime + delta * speed), so a speed change only
+     * affects FUTURE pacing — no retroactive re-scaling of prior time.
+     *
+     * @param float $videoTimeSeconds Content seconds since playback start
+     * @param float $fps              Frames per second
+     * @return int The frame we should be on at this video time
      */
-    public static function targetFrame(float $elapsedSeconds, float $fps, float $speed): int
+    public static function targetFrame(float $videoTimeSeconds, float $fps): int
     {
-        if ($elapsedSeconds < 0.0) {
+        if ($videoTimeSeconds < 0.0) {
             return 0;
         }
-        return (int)floor($elapsedSeconds * $fps * $speed);
+        return (int)floor($videoTimeSeconds * $fps);
     }
 
     /**
@@ -52,10 +47,6 @@ final class Sync
      *
      * If target is more than 2 frames ahead of current, we are behind
      * by more than the skip limit and should discard intermediate frames.
-     *
-     * @param int $currentFrame Frame currently being displayed
-     * @param int $targetFrame   Frame we should be on based on elapsed time
-     * @return bool True when we should skip ahead to catch up
      */
     public static function shouldSkip(int $currentFrame, int $targetFrame): bool
     {
@@ -67,24 +58,9 @@ final class Sync
      *
      * If current > target, we are ahead of schedule and should not
      * advance the decoder until wall time catches up.
-     *
-     * @param int $currentFrame Frame currently being displayed
-     * @param int $targetFrame   Frame we should be on based on elapsed time
-     * @return bool True when we should hold and wait for wall time
      */
     public static function shouldHold(int $currentFrame, int $targetFrame): bool
     {
         return $currentFrame > $targetFrame;
-    }
-
-    /**
-     * Reset the sync engine to initial state.
-     *
-     * Called when seeking or when playback is restarted from the beginning.
-     */
-    public function reset(): void
-    {
-        // Sync is stateless for now (fps/speed are immutable).
-        // Reset is a no-op but provides API surface for future state.
     }
 }
