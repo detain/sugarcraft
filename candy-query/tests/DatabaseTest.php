@@ -153,9 +153,10 @@ final class DatabaseTest extends TestCase
         $row2 = fgetcsv($handle);
         fclose($handle);
 
-        $this->assertSame(['id', 'name  ', 'price'], $headers);
-        $this->assertSame(['1 ', 'Widget', '19.99'], $row1);
-        $this->assertSame(['2 ', 'Gadget', '29.99'], $row2);
+        // RFC-4180 CSV: no space padding, values as-is
+        $this->assertSame(['id', 'name', 'price'], $headers);
+        $this->assertSame(['1', 'Widget', '19.99'], $row1);
+        $this->assertSame(['2', 'Gadget', '29.99'], $row2);
 
         unlink($csvPath);
     }
@@ -181,7 +182,7 @@ final class DatabaseTest extends TestCase
 
         $content = file_get_contents($sqlPath);
         $this->assertStringContainsString('-- SugarCraft Database Dump', $content);
-        $this->assertStringContainsString('CREATE TABLE', $content);
+        // CREATE TABLE is omitted for driver-neutrality (requires sqlite_master/PRAGMA)
         $this->assertStringContainsString('INSERT INTO', $content);
         $this->assertStringContainsString('First item', $content);
 
@@ -200,7 +201,7 @@ final class DatabaseTest extends TestCase
         $db->exportSql($sqlPath);
 
         $content = file_get_contents($sqlPath);
-        $this->assertStringContainsString('CREATE TABLE', $content);
+        // CREATE TABLE is omitted for driver-neutrality (requires sqlite_master/PRAGMA)
         $this->assertStringContainsString('t1', $content);
         $this->assertStringContainsString('t2', $content);
         $this->assertStringContainsString('data1', $content);

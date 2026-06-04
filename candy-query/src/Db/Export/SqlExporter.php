@@ -9,9 +9,13 @@ use SugarCraft\Query\Db\DatabaseInterface;
 /**
  * SQL export service using a DatabaseInterface instance.
  *
- * Dumps all tables as CREATE TABLE + INSERT statements.
+ * Dumps all tables as INSERT statements.
  * Driver-agnostic, safe SQL (no eval, no password logging).
  * Mirrors charmbracelet/lazysql SQL dump logic.
+ *
+ * Note: CREATE TABLE generation is omitted because obtaining the full
+ * CREATE statement in a driver-neutral way is not feasible. The INSERT
+ * data is the primary value of a SQL dump for data portability.
  */
 final class SqlExporter
 {
@@ -22,7 +26,7 @@ final class SqlExporter
     /**
      * Export the entire database to a SQL dump file.
      *
-     * Generates CREATE TABLE and INSERT statements for all user tables.
+     * Generates INSERT statements for all tables.
      * Output format: one SQL statement per line with a header comment.
      *
      * @param string $path Path to the output SQL file
@@ -42,40 +46,23 @@ final class SqlExporter
 
             $tables = $this->db->tables();
             foreach ($tables as $table) {
-                $safeTable = str_replace('`', '``', $table);
-
-                // Get CREATE TABLE statement
-                // Note: Table names can't be bound as parameters in SQLite,
-                // but str_replace escaping + single-quoted string is safe here
-                $createResult = $this->db->query(
-                    "SELECT sql FROM sqlite_master WHERE type='table' AND name = '{$safeTable}'",
-                );
-                $createRow = $createResult[0] ?? null;
-                $createSql = $createRow['sql'] ?? null;
-                if ($createSql === null) {
+                // Get column names driver-neutrally via LIMIT 1 query
+                $columns = $this->getColumnNames($table);
+                if ($columns === []) {
                     continue;
-                }
-                fwrite($handle, $createSql . ";\n\n");
-
-                // Get column names for INSERT
-                $columnResult = $this->db->query("PRAGMA table_info(`{$safeTable}`)");
-                $columns = [];
-                foreach ($columnResult as $row) {
-                    if (isset($row['name'])) {
-                        $columns[] = (string) $row['name'];
-                    }
                 }
 
                 // Get all rows and generate INSERT statements
                 $rows = $this->db->rows($table);
                 foreach ($rows as $row) {
                     $values = array_map(
-                        fn($val): string => $val === null
-                            ? 'NULL'
-                            : "'" . $this->db->quote((string) $val) . "'",
+                        fn($val): string => $this->quoteValue($val),
                         array_values($row)
                     );
-                    $columnsList = implode(', ', $columns);
+                    $columnsList = implode(', ', array_map(
+                        fn(string $col): string => "`{$col}`",
+                        $columns
+                    ));
                     $valuesList = implode(', ', $values);
                     fwrite($handle, "INSERT INTO `{$table}` ({$columnsList}) VALUES ({$valuesList});\n");
                 }
@@ -84,5 +71,44 @@ final class SqlExporter
         } finally {
             fclose($handle);
         }
+    }
+
+    /**
+     * Quote a value for SQL, handling different types appropriately.
+     *
+     * - null => NULL (unquoted)
+     * - int/float => raw number (no quotes)
+     * - string => $db->quote() result (properly quoted)
+     *
+     * @param mixed $val
+     * @return string
+     */
+    private function quoteValue(mixed $val): string
+    {
+        if ($val === null) {
+            return 'NULL';
+        }
+        if (is_int($val) || is_float($val)) {
+            return (string) $val;
+        }
+        return $this->db->quote((string) $val);
+    }
+
+    /**
+     * Get column names for a table using a driver-neutral LIMIT 1 approach.
+     *
+     * @param string $table Table name
+     * @return list<string> Column names, empty if table is empty or doesn't exist
+     */
+    private function getColumnNames(string $table): array
+    {
+        // LIMIT 1 returns first row with column keys we can extract
+        $result = $this->db->query("SELECT * FROM `{$table}` LIMIT 1");
+        if ($result !== null && count($result) > 0) {
+            return array_keys($result[0]);
+        }
+
+        // Table has no rows - cannot determine columns driver-neutrally
+        return [];
     }
 }

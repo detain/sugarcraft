@@ -15,6 +15,7 @@ use SugarCraft\Forms\Spinner\Style as SpinnerStyle;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Export\CsvExporter;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
 use SugarCraft\Sprinkles\Style;
@@ -320,6 +321,8 @@ final class ReportsPage extends PageBase
      *
      * Returns a CSV string with column headers and all rows (not just the
      * current page). Returns empty string if no report is loaded.
+     * Delegates to CsvExporter for RFC-4180 compliant output with formula
+     * injection protection.
      */
     public function exportToCsv(): string
     {
@@ -335,30 +338,13 @@ final class ReportsPage extends PageBase
         // Get column names from first row
         $columns = array_keys($rows[0]);
 
-        $lines = [];
-        // Header row
-        $lines[] = implode(',', $columns);
-
-        // Data rows - escape values that contain commas or quotes
-        foreach ($rows as $row) {
-            $values = [];
-            foreach ($columns as $col) {
-                $value = (string) ($row[$col] ?? '');
-                // Prevent CSV formula injection by prefixing dangerous characters
-                $firstChar = $value[0] ?? '';
-                if ($firstChar === '=' || $firstChar === '+' || $firstChar === '-' || $firstChar === '@') {
-                    $value = "'" . $value;
-                }
-                // Escape quotes and wrap in quotes if contains comma, quote, or newline
-                if (str_contains($value, ',') || str_contains($value, '"') || str_contains($value, "\n")) {
-                    $value = '"' . str_replace('"', '""', $value) . '"';
-                }
-                $values[] = $value;
-            }
-            $lines[] = implode(',', $values);
+        if ($this->db === null) {
+            return '';
         }
 
-        return implode("\n", $lines);
+        $exporter = new CsvExporter($this->db);
+
+        return $exporter->exportReportResultsToString($columns, $rows);
     }
 
     // ─── Rendering Methods ────────────────────────────────────────────────────
