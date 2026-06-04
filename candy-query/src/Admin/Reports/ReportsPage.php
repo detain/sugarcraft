@@ -79,6 +79,9 @@ final class ReportsPage extends PageBase
     /** @var bool */
     private bool $showRawValues = false;
 
+    /** @var int */
+    private int $selectedColumnIndex = 0;
+
     /** @var string|null */
     private ?string $lastExportCsv = null;
 
@@ -237,6 +240,33 @@ final class ReportsPage extends PageBase
             return [$this->withQuit(), null];
         }
 
+        // Category navigation: h = prev category, l = next category
+        if ($ch === 'h' || $type === KeyType::Left) {
+            return [$this->withSelectPrevCategory(), null];
+        }
+
+        if ($ch === 'l' || $type === KeyType::Right) {
+            return [$this->withSelectNextCategory(), null];
+        }
+
+        // Report navigation within current category: [ = prev report, ] = next report
+        if ($ch === '[') {
+            return [$this->withSelectPrevReport(), null];
+        }
+
+        if ($ch === ']') {
+            return [$this->withSelectNextReport(), null];
+        }
+
+        // Column navigation for unit cycling: , = prev column, . = next column
+        if ($ch === ',') {
+            return [$this->withSelectPrevColumn(), null];
+        }
+
+        if ($ch === '.') {
+            return [$this->withSelectNextColumn(), null];
+        }
+
         return [$this, null];
     }
 
@@ -276,6 +306,7 @@ final class ReportsPage extends PageBase
         $clone = clone $this;
         $clone->page = 0;
         $clone->selectedRowIndex = 0;
+        $clone->selectedColumnIndex = 0;
         $clone->loadCurrentReport();
 
         return $clone;
@@ -296,6 +327,7 @@ final class ReportsPage extends PageBase
         $clone->selectedReport = null;
         $clone->selectedRowIndex = 0;
         $clone->page = 0;
+        $clone->selectedColumnIndex = 0;
 
         if (isset($this->reportsByCategory[$category]) && !empty($this->reportsByCategory[$category])) {
             $clone->selectedReport = $this->reportsByCategory[$category][0]->name;
@@ -312,8 +344,139 @@ final class ReportsPage extends PageBase
         $clone->selectedReport = $reportName;
         $clone->selectedRowIndex = 0;
         $clone->page = 0;
+        $clone->selectedColumnIndex = 0;
 
         $clone->loadCurrentReport();
+
+        return $clone;
+    }
+
+    public function withSelectPrevCategory(): self
+    {
+        if (empty($this->categories)) {
+            return $this;
+        }
+
+        $currentIndex = array_search($this->selectedCategory, $this->categories, true);
+        if ($currentIndex === false || $currentIndex <= 0) {
+            // Wrap to last category
+            $newCategory = $this->categories[count($this->categories) - 1];
+        } else {
+            $newCategory = $this->categories[$currentIndex - 1];
+        }
+
+        return $this->withSelectCategory($newCategory);
+    }
+
+    public function withSelectNextCategory(): self
+    {
+        if (empty($this->categories)) {
+            return $this;
+        }
+
+        $currentIndex = array_search($this->selectedCategory, $this->categories, true);
+        if ($currentIndex === false || $currentIndex >= count($this->categories) - 1) {
+            // Wrap to first category
+            $newCategory = $this->categories[0];
+        } else {
+            $newCategory = $this->categories[$currentIndex + 1];
+        }
+
+        return $this->withSelectCategory($newCategory);
+    }
+
+    public function withSelectPrevReport(): self
+    {
+        $category = $this->selectedCategory;
+        if ($category === null || !isset($this->reportsByCategory[$category])) {
+            return $this;
+        }
+
+        $reports = $this->reportsByCategory[$category];
+        if (empty($reports)) {
+            return $this;
+        }
+
+        $currentIndex = -1;
+        foreach ($reports as $i => $report) {
+            if ($report->name === $this->selectedReport) {
+                $currentIndex = $i;
+                break;
+            }
+        }
+
+        if ($currentIndex <= 0) {
+            // Wrap to last report in category
+            return $this->withSelectReport($reports[count($reports) - 1]->name);
+        }
+
+        return $this->withSelectReport($reports[$currentIndex - 1]->name);
+    }
+
+    public function withSelectNextReport(): self
+    {
+        $category = $this->selectedCategory;
+        if ($category === null || !isset($this->reportsByCategory[$category])) {
+            return $this;
+        }
+
+        $reports = $this->reportsByCategory[$category];
+        if (empty($reports)) {
+            return $this;
+        }
+
+        $currentIndex = -1;
+        foreach ($reports as $i => $report) {
+            if ($report->name === $this->selectedReport) {
+                $currentIndex = $i;
+                break;
+            }
+        }
+
+        if ($currentIndex === -1 || $currentIndex >= count($reports) - 1) {
+            // Wrap to first report in category
+            return $this->withSelectReport($reports[0]->name);
+        }
+
+        return $this->withSelectReport($reports[$currentIndex + 1]->name);
+    }
+
+    public function withSelectPrevColumn(): self
+    {
+        $report = $this->currentResult?->report;
+        if ($report === null) {
+            return $this;
+        }
+
+        $numColumns = count($report->columns);
+        if ($numColumns === 0) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $clone->selectedColumnIndex = $this->selectedColumnIndex <= 0
+            ? $numColumns - 1
+            : $this->selectedColumnIndex - 1;
+
+        return $clone;
+    }
+
+    public function withSelectNextColumn(): self
+    {
+        $report = $this->currentResult?->report;
+        if ($report === null) {
+            return $this;
+        }
+
+        $numColumns = count($report->columns);
+        if ($numColumns === 0) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        $clone->selectedColumnIndex = $this->selectedColumnIndex >= $numColumns - 1
+            ? 0
+            : $this->selectedColumnIndex + 1;
 
         return $clone;
     }
@@ -503,7 +666,7 @@ final class ReportsPage extends PageBase
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav  [r] refresh  [x] export  [c] unit toggle  [q] quit');
+            ->render('[j/k] nav rows  [h/l] category  [[/]] report  [c] unit toggle  [q] quit');
     }
 
     private function renderErrorScreen(): string
@@ -608,6 +771,11 @@ final class ReportsPage extends PageBase
     public function showRawValues(): bool
     {
         return $this->showRawValues;
+    }
+
+    public function selectedColumnIndex(): int
+    {
+        return $this->selectedColumnIndex;
     }
 
     public function catalog(): ?Catalog

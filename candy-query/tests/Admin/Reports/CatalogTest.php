@@ -98,9 +98,15 @@ final class CatalogTest extends TestCase
         $this->assertContains('user_resource_use', $categories);
         $this->assertContains('wait', $categories);
 
-        $sortedCategories = $categories;
-        sort($sortedCategories);
-        $this->assertSame($sortedCategories, $categories);
+        // Categories are ordered curated (problems first), not alphabetically.
+        // Unknown categories sort alphabetically after the curated ones.
+        $this->assertSame('problems', $categories[0]);
+        $expectedOrder = ['problems', 'schema', 'io', 'wait', 'innodb', 'user_resource_use', 'memory'];
+        foreach ($expectedOrder as $index => $category) {
+            if (isset($categories[$index])) {
+                $this->assertSame($category, $categories[$index], "Category at index {$index} should be {$category}");
+            }
+        }
     }
 
     public function testGroupedByCategory(): void
