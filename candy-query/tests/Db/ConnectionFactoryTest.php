@@ -67,6 +67,67 @@ final class ConnectionFactoryTest extends TestCase
         $this->assertSame('p@ss=word', $config->pass);
     }
 
+    public function testFromDsnParsesPasswordWithAtSymbol(): void
+    {
+        // Password containing @ should be URL-encoded
+        $config = ConnectionFactory::fromDsn('mysql://root:p%40ss@host:3306/testdb');
+
+        $this->assertSame('p@ss', $config->pass);
+        $this->assertSame('root', $config->user);
+        $this->assertSame('host', $config->host);
+    }
+
+    public function testFromDsnParsesPasswordWithColon(): void
+    {
+        // Password containing : should be URL-encoded
+        $config = ConnectionFactory::fromDsn('mysql://root:p%3Ass%3Aword@host:3306/testdb');
+
+        $this->assertSame('p:ss:word', $config->pass);
+        $this->assertSame('root', $config->user);
+    }
+
+    public function testFromDsnParsesPasswordlessUser(): void
+    {
+        // Passwordless: mysql://user@host/db (no :pass part)
+        $config = ConnectionFactory::fromDsn('mysql://root@localhost/testdb');
+
+        $this->assertSame('root', $config->user);
+        $this->assertSame('', $config->pass);
+        $this->assertSame('localhost', $config->host);
+        $this->assertSame('testdb', $config->dbname);
+    }
+
+    public function testFromDsnParsesPasswordlessUserWithPort(): void
+    {
+        $config = ConnectionFactory::fromDsn('mysql://root@localhost:3306/testdb');
+
+        $this->assertSame('root', $config->user);
+        $this->assertSame('', $config->pass);
+        $this->assertSame('localhost', $config->host);
+        $this->assertSame(3306, $config->port);
+    }
+
+    public function testFromDsnParsesIpv6Host(): void
+    {
+        // IPv6 addresses are wrapped in brackets in URLs
+        $config = ConnectionFactory::fromDsn('mysql://u:p@[::1]:3306/db');
+
+        $this->assertSame('u', $config->user);
+        $this->assertSame('p', $config->pass);
+        $this->assertSame('::1', $config->host);
+        $this->assertSame(3306, $config->port);
+        $this->assertSame('db', $config->dbname);
+    }
+
+    public function testFromDsnParsesIpv6Localhost(): void
+    {
+        $config = ConnectionFactory::fromDsn('mysql://root@[::1]/testdb');
+
+        $this->assertSame('::1', $config->host);
+        $this->assertSame(0, $config->port);
+        $this->assertSame('testdb', $config->dbname);
+    }
+
     public function testFromDsnThrowsOnEmptyDsn(): void
     {
         $this->expectException(\InvalidArgumentException::class);
@@ -91,13 +152,17 @@ final class ConnectionFactoryTest extends TestCase
         ConnectionFactory::fromDsn('oracle://localhost:1521/orcl');
     }
 
-    public function testFromDsnThrowsOnSqliteMissingHostSeparator(): void
+    public function testFromDsnAllowsDsnWithoutCredentials(): void
     {
-        // For non-SQLite DSNs, must have @ separator
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Invalid DSN: missing credentials separator');
+        // DSN without @ separator — parse_url() handles this as no user/pass (valid for local connections)
+        $config = ConnectionFactory::fromDsn('mysql://localhost:3306/testdb');
 
-        ConnectionFactory::fromDsn('mysql://localhost:3306/testdb');
+        $this->assertSame('mysql', $config->driver);
+        $this->assertSame('localhost', $config->host);
+        $this->assertSame(3306, $config->port);
+        $this->assertSame('', $config->user);
+        $this->assertSame('', $config->pass);
+        $this->assertSame('testdb', $config->dbname);
     }
 
     public function testFromConfigCreatesSqliteInMemoryDatabase(): void
