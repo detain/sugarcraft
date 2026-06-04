@@ -63,17 +63,20 @@ final class AdminQueryCache
      */
     public function lookup(string $sql): ?array
     {
-        if (!array_key_exists($sql, $this->results)) {
-            $this->pending[$sql] = true;
-            return null;
+        // If we have a result, return it without re-adding to pending.
+        // Only schedule a refresh if the entry is stale.
+        if (array_key_exists($sql, $this->results)) {
+            if ((microtime(true) - ($this->storedAt[$sql] ?? 0.0)) >= self::TTL) {
+                // Stale: schedule a background refresh but keep showing last value.
+                $this->pending[$sql] = true;
+            }
+            return $this->results[$sql];
         }
 
-        if ((microtime(true) - ($this->storedAt[$sql] ?? 0.0)) >= self::TTL) {
-            // Stale: schedule a background refresh but keep showing last value.
-            $this->pending[$sql] = true;
-        }
-
-        return $this->results[$sql];
+        // Cache miss: record as pending and return null so the caller
+        // renders its loading state while the query runs async.
+        $this->pending[$sql] = true;
+        return null;
     }
 
     /**
