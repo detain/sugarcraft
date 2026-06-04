@@ -142,7 +142,12 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
 | `AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
 | `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `CachedConnection` for the next admin tick. |
-| `Calc\InnoDBBufferPoolUsage` | Computes buffer pool usage percentage: `(total - free) / total * 100` from `Innodb_buffer_pool_pages_total/free`. Mirrors MySQL Workbench sidebar gauge formula. |
+| `Calc\InnoDBBufferPoolUsageBytes` | Computes buffer pool usage percentage using bytes-based formula: `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100` (Appendix A). This replaces the older `(total - free) / total` page-count approximation and correctly handles partially-filled pages. |
+| `Dashboard\TimeSeriesCell` | Renders a timeline sparkline using Streamline. For tuple-valued widgets (e.g. `MakeTuple` with SELECT/INSERT/UPDATE/DELETE rates), uses `max()` to show the dominant series rather than summing unrelated counters. Sliding window of `$windowSize` (default 160) data points with auto-scale "nice ceiling". |
+| `Dashboard\CounterCell` | Renders a K/M/G-scaled counter widget. Used for timeline companion counters and standalone rate widgets (SELECT/s, INSERT/s, etc.). Uses `array_sum()` for tuple-valued widgets since counters are additive by design. |
+| `Dashboard\MeterCell` | Renders round (GaugeCircle) and level (Gauge) meters. Tracks `$value` and `$max` separately for level-meter readout display. `viewLevel()` appends `sprintf($format, (int)$value, (int)$max)` when the widget's format string is non-trivial (e.g. `'%d / %d'` for Connections). |
+| `Dashboard\WidgetCatalog` | Declarative widget tables mirroring MySQL Workbench Appendix A dashboard definition. `network()`, `mysqlPre80()`, `mysqlPost80()`, `innodb()` return widget entry arrays. `innodb()` now includes 13 widgets: 8 new InnoDB metrics (Row Lock Waits/Time, Pages Flushed/Created/Read, Insert Buffer, Read Ahead) plus the original 5 plus Redo Log/Doublewrite/Disk R/W metrics. |
+| `Dashboard\WidgetRegistry` | Widget kind constants (`KIND_TIMELINE`, `KIND_COUNTER`, `KIND_ROUND`, `KIND_LEVEL`) and version-gated factory (`build()`) assembling Network + MySQL + InnoDB panels. `network()`/`mysql()`/`innodb()` provide per-panel access for `buildSectionWidgetCache()` in `DashboardPage`. |
 | `Calc\TableOpenCacheHitRate` | Computes Table Open Cache hit ratio: `hits / (hits + misses) * 100` from `Table_open_cache_hits/misses`. Mirrors MySQL Workbench dashboard expression. |
 | `ReconnectManager` | Detects MySQL errors 2002/2003/2013 (connection lost), stores `ConnectionConfig`, and retries via `attemptReconnect()`. Throws `ReconnectException` on failure. |
 | `ReconnectException` | Exception thrown when reconnection fails after a MySQL connection error. |
@@ -544,6 +549,31 @@ if ($notifier->hasAlerts()) {
 ```
 
 The `[a]` key dismisses all pending alerts and clears the badge. `AlertNotifier` is mute-safe by default — running without a toast factory is a silent no-op.
+
+### Performance Dashboard
+
+`DashboardPage` renders a 3-column live monitoring view (Network / MySQL / InnoDB panels) updated every 3 seconds via `ServerContext` polling. Each panel shows timeline sparklines, counter values, and meters.
+
+**Architecture:**
+- `pollAndUpdateCells()` measures actual wall-clock elapsed via `microtime(true)` — `$elapsed = max(0.001, $now - $lastPollAt)`. On the very first poll (when `lastPollAt` is null), a 3.0s fallback is used; thereafter `lastPollAt` is always set and real elapsed time is used.
+- Per-section widget lists are built once in the constructor via `buildSectionWidgetCache()` and cached in `$this->sectionWidgetCache`. Previously, `getWidgetsForSection()` called `WidgetRegistry::*()` on every render frame, causing repeated version checks.
+- Three cell types render widgets: `TimeSeriesCell` (sparkline), `CounterCell` (K/M/G-scaled counter), `MeterCell` (round/level gauge with optional value readout).
+
+**Tuple timeline rendering:** When a `Widget::compute()` returns an associative per-series array (e.g. `['Com_select' => 10.0, 'Com_insert' => 5.0]` from `MakeTuple`), `TimeSeriesCell::ingest()` uses `max($array)` to show the dominant series rather than summing unrelated counters. `CounterCell` still uses `array_sum()` since counters are additive by design.
+
+**Meter readout:** Level-kind `MeterCell` widgets with a non-trivial format string (e.g. `'%d / %d'`) render a value/max readout after the gauge bar via `sprintf($format, (int)$value, (int)$max)`. The `Connections` level meter uses this to show `X / Y` connections.
+
+**InnoDB buffer pool formula:** `InnoDBBufferPoolUsageBytes` uses the MySQL Workbench Appendix A formula: `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100`. This is more accurate than the older `(total - free) / total` page-count approximation and correctly handles partially-filled pages.
+
+**InnoDB panel widgets (13 total):** Buffer Pool Read/Write Requests, Buffer Pool Usage (bytes-based), Disk Reads (not from pool), Row Lock Waits, Row Lock Time, Pages Flushed/Created/Read, Insert Buffer, Read Ahead, Redo Log Bytes Written, Redo Log Writes, Doublewrite Writes, InnoDB Disk Writes/Reads.
+
+**Dashboard keys:**
+
+| Key | Action |
+|-----|--------|
+| `p` | Pause/resume 3-second auto-refresh |
+| `r` | Reset all timeline/counter/meter history |
+| `a` | Dismiss all pending alert toasts |
 
 ### Toast degradation
 
