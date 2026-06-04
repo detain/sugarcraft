@@ -10,6 +10,7 @@ use SugarCraft\Query\Admin\Connections\ConnectionDetailTabs;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\Version;
 
 final class ConnectionActionsTest extends TestCase
@@ -220,23 +221,22 @@ final class FakeDb implements DatabaseInterface
     public function driverName(): string { return 'mysql'; }
     public function ping(): bool { return true; }
     public function databases(): array { return []; }
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         return new FakeStmt($this);
     }
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }
 
-final class FakeStmt
+final class FakeStmt implements PreparedStatementInterface
 {
     private bool $executed = false;
 
     public function __construct(private readonly FakeDb $db) {}
 
-    public function execute(array $values): bool
+    public function execute(?array $params = null): bool
     {
         $this->executed = true;
         if ($this->db->nextExecException !== null) {
@@ -248,9 +248,24 @@ final class FakeStmt
         return true;
     }
 
-    public function fetchAll(int $mode = \PDO::FETCH_ASSOC): array
+    public function fetch(): array|false
+    {
+        return $this->db->queryResult[0] ?? false;
+    }
+
+    public function fetchAll(): array
     {
         return $this->db->queryResult;
+    }
+
+    public function rowCount(): int
+    {
+        return $this->db->nextExecAffected;
+    }
+
+    public function closeCursor(): bool
+    {
+        return true;
     }
 }
 
@@ -266,6 +281,7 @@ final class TestCtx implements ServerContextInterface
     public function version(): Version { return Version::new('8.0.33', Flavor::MySQL); }
     public function flavor(): Flavor { return Flavor::MySQL; }
     public function versionString(): string { return 'MySQL 8.0.33'; }
+    public function password(): string { return ''; }
     public function wasReset(): bool { return false; }
     public function refresh(): void {}
 }

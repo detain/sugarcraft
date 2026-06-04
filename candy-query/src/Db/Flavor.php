@@ -70,4 +70,27 @@ enum Flavor: string
         // Fallback to SQLite for unknown/version-less drivers
         return self::Sqlite;
     }
+
+    /**
+     * Detect the database flavor from driver name.
+     *
+     * Uses the driver name (from PDO or DatabaseInterface::driverName()) as the
+     * primary signal, then refines MySQL/MariaDB/Percona using the version string
+     * if provided. This ensures a mysql/pgsql driver never falls back to SQLite
+     * for an unparseable version string.
+     *
+     * @param string $driverName Driver name ('sqlite', 'mysql', 'pgsql')
+     * @param string $version    Optional version string for MySQL/MariaDB/Percona refinement
+     * @param string $versionComment Optional version comment for MariaDB/Percona detection
+     * @return self Detected flavor
+     */
+    public static function detectFromDriver(string $driverName, string $version = '', string $versionComment = ''): self
+    {
+        return match ($driverName) {
+            'sqlite' => self::Sqlite,
+            'pgsql' => self::Postgres,
+            'mysql' => self::detectFromVersionString($version, $versionComment),
+            default => self::Sqlite,
+        };
+    }
 }

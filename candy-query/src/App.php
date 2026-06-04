@@ -595,7 +595,7 @@ final class App implements Model
 
         $dsn = $context->connection()->dsn();
         $username = $context->connection()->username() ?? '';
-        $password = $context->connection()->password() ?? '';
+        $password = $context->password();
 
         $isPostgres = $context instanceof PostgresServerContext;
 

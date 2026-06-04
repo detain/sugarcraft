@@ -10,6 +10,7 @@ use SugarCraft\Query\Admin\Connections\ProcesslistResult;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\Version;
 use SugarCraft\Query\Tests\Admin\FakeDatabase;
 
@@ -192,6 +193,8 @@ final class TestServerContext implements ServerContextInterface
         return 'MySQL 8.0.33';
     }
 
+    public function password(): string { return ''; }
+
     public function wasReset(): bool
     {
         return false;
@@ -241,7 +244,7 @@ final class SequentialFakeDatabase implements DatabaseInterface
         return [];
     }
 
-    public function query(string $sql): array
+    public function query(string $sql): array|null
     {
         if ($this->throwingException !== null
             && $this->throwingOnPattern !== null
@@ -299,12 +302,11 @@ final class SequentialFakeDatabase implements DatabaseInterface
         return [];
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
-        return false;
+        return null;
     }
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }

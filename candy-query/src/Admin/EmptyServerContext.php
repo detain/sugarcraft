@@ -60,6 +60,11 @@ final class EmptyServerContext implements ServerContextInterface
         return '';
     }
 
+    public function password(): string
+    {
+        return '';
+    }
+
     public function wasReset(): bool
     {
         return false;

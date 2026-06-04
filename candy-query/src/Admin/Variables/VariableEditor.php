@@ -64,7 +64,7 @@ final class VariableEditor
 
         try {
             $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === false || $stmt === null) {
                 return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
             }
 
@@ -105,7 +105,7 @@ final class VariableEditor
 
         try {
             $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === false || $stmt === null) {
                 return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
             }
 
@@ -143,7 +143,7 @@ final class VariableEditor
 
         try {
             $stmt = $this->db->prepare($sql);
-            if ($stmt === false) {
+            if ($stmt === false || $stmt === null) {
                 return ['success' => false, 'errorCode' => null, 'errorMessage' => 'Prepare failed'];
             }
 

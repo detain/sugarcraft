@@ -162,7 +162,9 @@ final class PostgresExplainProvider implements ExplainProviderInterface
         }
 
         if ($detail !== '') {
-            $rows[] = ['detail' => $detail];
+            // Prefix detail with depth indicator so ExplainView can render tree structure
+            $depthPrefix = $depth > 0 ? "[d{$depth}] " : '';
+            $rows[] = ['detail' => $depthPrefix . $detail];
         }
 
         // Process child nodes (Plans array in PostgreSQL explain output)

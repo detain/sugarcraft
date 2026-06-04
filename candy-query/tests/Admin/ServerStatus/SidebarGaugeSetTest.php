@@ -312,6 +312,8 @@ final class FakeServerContext implements ServerContextInterface
         return '8.0.33';
     }
 
+    public function password(): string { return ''; }
+
     public function wasReset(): bool
     {
         return false;

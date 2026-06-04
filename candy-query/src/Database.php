@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\SqliteDatabase;
 use SugarCraft\Query\Db\Export\CsvExporter;
 use SugarCraft\Query\Db\Export\SqlExporter;
@@ -92,8 +93,8 @@ final class Database implements DatabaseInterface
         return $this->delegate->rows($table, $limit);
     }
 
-    /** @return list<array<string,mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string,mixed>>|null */
+    public function query(string $sql): array|null
     {
         return $this->delegate->query($sql);
     }
@@ -139,7 +140,7 @@ final class Database implements DatabaseInterface
         return $this->delegate->databases();
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         return $this->delegate->prepare($sql);
     }
@@ -170,5 +171,4 @@ final class Database implements DatabaseInterface
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }
