@@ -183,20 +183,30 @@ $pdo = ConnectionFactory::fromArgv();
 ### DSN format
 
 ```
-driver://user:pass@host:port/dbname?ssl-mode=MODE
+driver://[user][:pass]@host[:port]/dbname[?query]
 ```
 
-| Part     | Description                          |
-|----------|--------------------------------------|
-| driver   | `mysql`, `pgsql`, `sqlite`, `sqlsrv` |
-| user     | Database username                    |
-| pass     | Database password (never echoed)      |
-| host     | Server hostname or IP                |
-| port     | Server port (default varies by driver)|
-| dbname   | Database name                        |
-| ssl-mode | Driver-specific SSL mode             |
+| Part     | Description                                                           |
+|----------|-----------------------------------------------------------------------|
+| driver   | `mysql`, `pgsql`, `sqlite`, `sqlsrv`                                 |
+| user     | Database username (URL-encoded via `rawurlencode()` if contains `@` or `:`) |
+| pass     | Database password — URL-encoded if it contains special chars; never echoed |
+| host     | Server hostname or IP; IPv6 addresses use brackets: `[::1]`           |
+| port     | Server port (default varies by driver)                                |
+| dbname   | Database name                                                         |
+| query    | Optional query string — `ssl-mode=MODE` is parsed and stored in `ConnectionConfig.sslMode`, then applied as PDO driver options at connect time |
 
-`ConnectionConfig` is a readonly value object with 8 properties: `driver`, `host`, `port`, `user`, `pass`, `dbname`, `sslMode`, `dsn`.
+> **MySQL SSL** — `ssl-mode` is parsed from the query string (e.g. `?ssl-mode=require`) and stored in `ConnectionConfig.sslMode`. It is **never** embedded in the MySQL DSN string (PDO mysql does not support `ssl-mode` as a DSN parameter). SSL is applied as `PDO::MYSQL_ATTR_SSL_CA` / `PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT` driver options in `MysqlDatabase::connect()`.
+
+### DSN parsing: `parse_url()` over manual `explode()`
+
+`ConnectionFactory::fromDsn()` uses `parse_url()` (with a SQLite-specific regex fallback) instead of manual `explode('@'|':')` splitting. This correctly handles:
+- Passwords containing `@` or `:` — URL-encode them (`p%40ss%3Dword` → `p@ss:word` via `rawurldecode()`)
+- Passwordless users — `mysql://user@host/db` (no `:` required, user without password)
+- IPv6 hosts — `mysql://u:p@[::1]:3306/db` (brackets stripped from host, port preserved)
+- SQLite — handled via direct regex since `parse_url()` returns `false` for `sqlite:///path`
+
+Source: step 2.1 ai/candy-query-dsn-and-factory
 
 ## Schema introspection
 
