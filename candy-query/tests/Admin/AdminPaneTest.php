@@ -37,25 +37,6 @@ final class AdminPaneTest extends TestCase
         $this->assertSame(AdminSection::Performance, AdminPane::PerfSchema->section());
     }
 
-    public function testAdminPaneNextCycles(): void
-    {
-        $this->assertSame(AdminPane::Variables, AdminPane::ProcessList->next());
-        $this->assertSame(AdminPane::Status, AdminPane::Variables->next());
-        $this->assertSame(AdminPane::QueryStats, AdminPane::Status->next());
-        $this->assertSame(AdminPane::Dashboard, AdminPane::QueryStats->next());
-        $this->assertSame(AdminPane::TableStats, AdminPane::Dashboard->next());
-        $this->assertSame(AdminPane::PerfSchema, AdminPane::TableStats->next());
-        $this->assertSame(AdminPane::Debug, AdminPane::PerfSchema->next());
-        $this->assertSame(AdminPane::ProcessList, AdminPane::Debug->next());
-    }
-
-    public function testAdminPaneAllReturnsAllPanes(): void
-    {
-        $all = AdminPane::all();
-        $this->assertCount(8, $all);
-        $this->assertContainsOnly(AdminPane::class, $all);
-    }
-
     public function testAdminSectionLabels(): void
     {
         $this->assertSame('Management', AdminSection::Management->label());

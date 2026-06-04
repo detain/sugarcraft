@@ -14,7 +14,7 @@ final class ConnectionConfigTest extends TestCase
 {
     public function testCreateWithAllFields(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'mysql',
             host: 'localhost',
             port: 3306,
@@ -40,7 +40,7 @@ final class ConnectionConfigTest extends TestCase
 
     public function testCreateSqliteWithMemoryDatabase(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'sqlite',
             host: '',
             port: 0,
@@ -56,7 +56,7 @@ final class ConnectionConfigTest extends TestCase
 
     public function testCreateSqliteWithFilePath(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'sqlite',
             host: '',
             port: 0,
@@ -73,7 +73,7 @@ final class ConnectionConfigTest extends TestCase
 
     public function testCreatePgsqlDriver(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'pgsql',
             host: 'db.example.com',
             port: 5432,
@@ -91,7 +91,7 @@ final class ConnectionConfigTest extends TestCase
 
     public function testCreateWithDefaultSslMode(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'mysql',
             host: 'localhost',
             port: 3306,
@@ -106,7 +106,7 @@ final class ConnectionConfigTest extends TestCase
 
     public function testCreateWithEmptyPassword(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'mysql',
             host: 'localhost',
             port: 3306,
@@ -125,7 +125,7 @@ final class ConnectionConfigTest extends TestCase
     {
         // ConnectionConfig accepts any driver without throwing.
         // Driver validation is the responsibility of ConnectionFactory::fromConfig().
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'oracle',
             host: 'localhost',
             port: 1521,

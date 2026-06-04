@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin\Calc;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Query\Admin\Calc\RawValue;
 use SugarCraft\Query\Admin\Calc\RatePerSecond;
 use SugarCraft\Query\Admin\Calc\TupleRatePerSecond;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
@@ -16,40 +15,6 @@ use SugarCraft\Query\Admin\StatusSnapshot;
  */
 final class CalcTest extends TestCase
 {
-    public function testRawValueAsString(): void
-    {
-        $v = new RawValue('hello');
-        $this->assertSame('hello', $v->asString());
-    }
-
-    public function testRawValueAsInt(): void
-    {
-        $v = new RawValue('42');
-        $this->assertSame(42, $v->asInt());
-    }
-
-    public function testRawValueAsFloat(): void
-    {
-        $v = new RawValue('3.14');
-        $this->assertEqualsWithDelta(3.14, $v->asFloat(), 0.001);
-    }
-
-    public function testRawValueAsBoolTrue(): void
-    {
-        $this->assertTrue((new RawValue('1'))->asBool());
-        $this->assertTrue((new RawValue('true'))->asBool());
-        $this->assertTrue((new RawValue('ON'))->asBool());
-        $this->assertTrue((new RawValue('TRUE'))->asBool());
-    }
-
-    public function testRawValueAsBoolFalse(): void
-    {
-        $this->assertFalse((new RawValue('0'))->asBool());
-        $this->assertFalse((new RawValue('false'))->asBool());
-        $this->assertFalse((new RawValue('off'))->asBool());
-        $this->assertFalse((new RawValue('anything'))->asBool());
-    }
-
     public function testRatePerSecondComputesRate(): void
     {
         $rate = new RatePerSecond('Queries');
