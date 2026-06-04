@@ -299,6 +299,8 @@ Available providers:
 - **`MysqlExplainProvider`** — `EXPLAIN` formatted rows with tag/parent/detail/indent
 - **`PostgresExplainProvider`** — `EXPLAIN (ANALYZE, FORMAT JSON)`, parses JSON structure for tree hierarchy
 
+> **EXPLAIN safety guard** — `ConnectionDetailTabs::getExplain()` (Connections page, MDL detail tab, key `[3]`) will not run `EXPLAIN` on a thread's query unless it is a single `SELECT` statement. Multi-statement queries (containing `;`) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) are rejected before execution. This prevents accidental execution of write/cleanup statements when inspecting a thread's current query. Returns `null` when the query is ineligible or explain fails.
+
 ## Admin providers
 
 `AdminProviderInterface` is the flavor-agnostic entry point for admin panel data, exposing three methods: `dashboard()`, `connections()`, and `serverInfo()`. Each method returns structured data that the admin UI renders — whether that UI targets MySQL or Postgres.

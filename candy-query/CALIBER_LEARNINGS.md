@@ -134,3 +134,13 @@ Source: step 1.2 ai/candy-query-page-collaborators
 Pattern: `ConnectionsPage::update(Msg)` handles keyboard input for the connections/admin page: j/k/↑/↓ for selection navigation, Tab/1/2/3 for detail tab cycling, f for hide-sleeping filter toggle, r for async refresh via `Cmd::send(new AdminFetchStartedMsg())`. The `cachedFilteredProcesslist` memoization is invalidated on every state-changing operation (`withFilters()`, `withSelectedIndex()`, `handleRefresh()`) so the next render always gets fresh data without a synchronous DB query on the keystroke path.
 Canonical: `ConnectionsPage::update()` → `withNavigateDown()` / `withNavigateUp()` → `withSelectedIndex()` → `filteredProcesslist()` (lazy, cached); `handleRefresh()` → `Cmd::send(new AdminFetchStartedMsg())` (async, not blocking).
 Source: step 1.3 ai/candy-query-connections-update
+
+### 2026-06-03 — MDL join correction: OWNER_THREAD_ID vs THREAD_ID (STEP 1.4)
+Pattern: `performance_schema.metadata_locks` has no `THREAD_ID` column — the correct join to `performance_schema.threads` is `metadata_locks.OWNER_THREAD_ID = threads.THREAD_ID`. Using `metadata_locks.THREAD_ID` silently returns zero rows. This was the pre-existing (broken) join; the fix uses `OWNER_THREAD_ID`. The PS `metadata_locks` table also lacks PROCESSLIST_ID — processlist ID must be retrieved via the `threads` table join, matching on `t.PROCESSLIST_ID = ?`.
+Canonical: `ConnectionDetailTabs::fetchMdlFromPslocks()` — `JOIN performance_schema.threads t ON ml.OWNER_THREAD_ID = t.THREAD_ID WHERE t.PROCESSLIST_ID = ?`.
+Source: step 1.4 ai/candy-query-connections-actions
+
+### 2026-06-03 — MySQL KILL不接受placeholders + KILL QUERY vs KILL CONNECTION (STEP 1.4)
+Pattern: MySQL's `KILL` and `KILL QUERY` statements do not accept `?` placeholders — the ID must be interpolated directly into the SQL string. An `int` cast makes this injection-safe. `KILL CONNECTION` disconnects the client entirely; `KILL QUERY` cancels the running statement while keeping the connection alive.
+Canonical: `ConnectionActions::executeKill()` — `"KILL CONNECTION {$id}"` or `"KILL QUERY {$id}"` via `exec()` (no result set returned).
+Source: step 1.4 ai/candy-query-connections-actions
