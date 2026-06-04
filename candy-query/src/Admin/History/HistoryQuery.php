@@ -21,25 +21,40 @@ final class HistoryQuery
     /**
      * Retrieve snapshots within a Unix-timestamp range (inclusive).
      *
+     * Preserves sub-second precision by building DateTimeImmutable with
+     * both integer seconds and microsecond parts, avoiding truncation
+     * that would drop the most-recent boundary record.
+     *
      * @return array<StatusSnapshot>
      */
     public function query(float $sinceTs, float $untilTs): array
     {
-        return $this->store->query(
-            (new \DateTimeImmutable('@' . (int) $sinceTs)),
-            (new \DateTimeImmutable('@' . (int) $untilTs)),
-        );
+        $since = self::floatToDateTimeImmutable($sinceTs);
+        $until = self::floatToDateTimeImmutable($untilTs);
+        return $this->store->query($since, $until);
+    }
+
+    /**
+     * Build a DateTimeImmutable from a float epoch while preserving microseconds.
+     */
+    private static function floatToDateTimeImmutable(float $ts): \DateTimeImmutable
+    {
+        $sec = (int) $ts;
+        $usec = (int) (($ts - $sec) * 1_000_000);
+        return \DateTimeImmutable::createFromFormat('U u', "{$sec} {$usec}") ?: new \DateTimeImmutable();
     }
 
     /**
      * Retrieve snapshots from a given timestamp up to now.
      *
+     * Uses microtime(true) for the until-bound to preserve sub-second precision.
+     *
      * @return array<StatusSnapshot>
      */
     public function querySince(float $sinceTs): array
     {
-        $now = (new \DateTimeImmutable())->getTimestamp();
-        return $this->query($sinceTs, (float) $now);
+        $nowTs = microtime(true);
+        return $this->query($sinceTs, $nowTs);
     }
 
     /**
