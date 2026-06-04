@@ -203,3 +203,16 @@ Source: step 4.1 ai/candy-query-variables-edit-dialog
 Pattern: `VariableEditor` now provides three MySQL 8.0+ persist methods gated by `$this->context->version()->isAtLeast(8, 0)`: `persist()` emits `SET PERSIST x = ?` (global + persisted), `persistOnly()` emits `SET PERSIST_ONLY x = ?` (persisted only, no runtime effect — for static vars that hit error 1238), and `resetPersist(?x)` emits `RESET PERSIST [x]` (no isEditable() check since it removes persisted state). All three use prepared statements with backtick-escaped variable names. The 'p' key in the VariablesPage edit dialog cycles GLOBAL → PERSIST → PERSIST_ONLY mode; the current mode is stored in `editPersistMode` and reflected in the prompt and SQL preview. Error 1238 message suggests pressing [p] to use PERSIST_ONLY. `getEditPreview()` signature changed from `bool $persistent` to `string $mode` ('global'|'persist'|'persist_only').
 Canonical: `VariablesPage::updateDialog('p')` cycles `editPersistMode` via MODE_GLOBAL → MODE_PERSIST → MODE_PERSIST_ONLY; `executeEdit()` routes via `match`; `VariableEditor::persist()/persistOnly()/resetPersist()` each gated on `isAtLeast(8, 0)`.
 Source: step 4.2 ai/candy-query-variables-persist
+
+### 2026-06-04 — `dynamic` vs `editable`: two-field variable metadata + JSON expansion to 1563 entries (STEP 4.3)
+Pattern: `VariableMetadata` now carries two distinct boolean flags:
+- **`editable`** = the variable can be set at all via `SET GLOBAL` or `SET PERSIST`. Read-only vars (e.g. `version`, `system_time_zone`) have `editable: false`.
+- **`dynamic`** = the variable can be changed at runtime without a server restart. Static vars (e.g. `innodb_log_file_size`) accept `SET GLOBAL` but fail with MySQL error 1238 and require a restart. These have `editable: true, dynamic: false`.
+
+The edit dialog in `VariablesPage` gates on `isDynamic()` (not `isEditable()`) so that static variables reach the confirm phase and get a clear error 1238 message rather than silently refusing at the entry point. `Catalog::isDynamic()` delegates to `VariableMetadata::isDynamic()` and falls back to `true` for entries missing the `dynamic` key (19 vars: `binlog_format`, `transaction_isolation`, `sql_mode`, `server_id`, `ssl_*`, etc. — most are genuinely dynamic in MySQL).
+
+`data/variable_metadata.json` expanded from ~43 to 1563 entries using `wb_admin_variable_list.py` as the canonical upstream source (1544 system vars scraped). Strategy: `editable = name NOT IN ro_persistable_set` (360 read-only-persistable vars); `dynamic` from upstream Python tuple bool. Result: 1376 editable, 187 read-only, 628 dynamic, 935 static.
+
+Spot-check verified: `max_connections` (editable+dynamic ✓), `innodb_log_file_size` (editable=true, dynamic=false ✓), `version` (editable=false ✓), `wait_timeout` (editable+dynamic ✓), `audit_log_buffer_size` (ro_persistable, editable=false ✓).
+Canonical: `VariableMetadata::__construct()` — `dynamic` defaults to `true` for backward compat with existing JSON entries lacking the field; `Catalog::isDynamic()` — `get()` then `isDynamic()`.
+Source: step 4.3 ai/candy-query-variables-metadata-catalog
