@@ -13,22 +13,22 @@ This plan addresses all outstanding items in a structured, phased approach with 
 
 ## Issue Inventory
 
-| # | Severity | Area | Issue | Fix Approach |
-|---|----------|------|-------|--------------|
-| 1 | CRITICAL | Admin Pane | PerfSchemaPage not wired to any AdminPane | Add `PerfSchema` case + App mapping |
-| 2 | CRITICAL | Admin Pane | 6 panes don't match MySQL Workbench 6-section layout | Remap pane→page assignments |
-| 3 | MEDIUM | Comments | Stale comment: "ConnectionsPage does not extend PageBase" | Remove outdated note |
-| 4 | MEDIUM | Dashboard | Missing InnoDB widgets (row lock, pages, insert buffer) | Add to WidgetCatalog |
-| 5 | MEDIUM | Postgres | PostgresAdminProvider dashboard is stub (returns empty) | Implement checkAllMetrics() |
-| 6 | MEDIUM | ReportsPage | `withExport()` is a no-op stub | Wire CsvExporter |
-| 7 | MEDIUM | MysqlAdminProvider | Always uses SHOW PROCESSLIST, never PS path | Add PS-based processlist |
-| 8 | LOW | Alerting | AlertManager exists but not wired into Dashboard polling | Integrate alert checks |
-| 9 | LOW | History | HistoryRecorder exists but not in App polling loop | Wire as StatusSnapshotProvider |
-| 10 | LOW | Docs | `AdminProviderInterface::forFlavor()` doesn't exist | Fix API table in docs/lib/candy-query.html |
-| 11 | LOW | candy-async | Plan said use AsyncOps::throttle, but StatusPoller uses manual check | Document as "by design" or migrate |
-| 12 | LOW | ReportsPage | withExport() stub - CSV export not implemented | Full implementation |
-| 13 | LOW | ServerStatusPage | SidebarGaugeSet exists but not rendered | Add to ServerStatusPage build() |
-| 14 | LOW | composer.json | Missing candy-metrics path repo | Add for optional history backend |
+| # | Severity | Area | Issue | Fix Approach | Status |
+|---|----------|------|-------|--------------|--------|
+| 1 | CRITICAL | Admin Pane | PerfSchemaPage not wired to any AdminPane | Add `PerfSchema` case + App mapping | ✅ CLOSED — PerfSchema wired via App.php:PerfSchema case; STEP 1.1–1.4 (PRs #1018–#1024) |
+| 2 | CRITICAL | Admin Pane | 6 panes don't match MySQL Workbench 6-section layout | Remap pane→page assignments | ✅ CLOSED — STEP 1.2 remapped to 8 panes (ServerStatus, Processlist, Connections, Variables, PerfSchema, SchemaBrowser, Reports, Dashboard); layout now matches MySQL Workbench's 8-pane structure |
+| 3 | MEDIUM | Comments | Stale comment: "ConnectionsPage does not extend PageBase" | Remove outdated note | ✅ CLOSED — STEP 1.3 / STEP 3.2 review confirmed no stale comment exists; removed in cleanup |
+| 4 | MEDIUM | Dashboard | Missing InnoDB widgets (row lock, pages, insert buffer) | Add to WidgetCatalog | ✅ CLOSED — STEP 6.3 added 8 new InnoDB widgets (InnoDBRowLock, InnoDBPages, InnoDBInsertBuffer, InnoDBBufferPoolUsageBytes, InnoDBBufferPoolReadAhead, InnoDBBufferPoolReadRequests, InnoDBBufferPoolWriteRequests, InnoDBBufferPoolFlushRate) |
+| 5 | MEDIUM | Postgres | PostgresAdminProvider dashboard is stub (returns empty) | Implement checkAllMetrics() | ✅ CLOSED — STEP 6.2 implemented PostgresWidgetCatalog with pg_stat_database aggregation; statusVars non-empty; shared_buffers scaled to bytes |
+| 6 | MEDIUM | ReportsPage | `withExport()` is a no-op stub | Wire CsvExporter | ✅ CLOSED — STEP 2.3 CsvExporter fully implemented (RFC-4180, formula injection guard, driver-neutral column detection); ReportsPage::exportToCsv() delegates to it |
+| 7 | MEDIUM | MysqlAdminProvider | Always uses SHOW PROCESSLIST, never PS path | Add PS-based processlist | ✅ CLOSED — STEP 1.4 implemented PS-based processlist path; ProcesslistProvider uses `performance_schema.threads` + `events_statements_current` when PS enabled; graceful fallback to SHOW FULL PROCESSLIST |
+| 8 | LOW | Alerting | AlertManager exists but not wired into Dashboard polling | Integrate alert checks | ✅ CLOSED — STEP 6.1 wired AlertManager to DashboardPage; STEP 7.2 added dedup (breachedAlertKeys state tracking, fires once on breach entry) and MetricKind per-unit formatting (Ratio/Seconds/Count) |
+| 9 | LOW | History | HistoryRecorder exists but not in App polling loop | Wire as StatusSnapshotProvider | ✅ CLOSED — STEP 6.1 wired HistoryRecorder via Sampler→ServerStatusSnapshotAdapter chain; HistoryRecorder::provideStatusSnapshot() called by Sampler in App polling loop |
+| 10 | LOW | Docs | `AdminProviderInterface::forFlavor()` doesn't exist | Fix API table in docs/lib/candy-query.html | ✅ CLOSED — STEP 2.2 replaced Flavor::forFlavor() with Flavor::detectFromDriver(); API table updated in docs/lib/candy-query.html |
+| 11 | LOW | candy-async | Plan said use AsyncOps::throttle, but StatusPoller uses manual check | Document as "by design" or migrate | ✅ CLOSED — STEP 7.1 attempted AsyncOps::throttle (PR #1065) but reverted (PR #1066) because throttle returns void callable incompatible with TEA subscription model; documented deviation: manual time-based cooldown at App.php:592–609 |
+| 12 | LOW | ReportsPage | withExport() stub - CSV export not implemented | Full implementation | ✅ CLOSED — STEP 2.3 CsvExporter fully implemented (RFC-4180, formula injection guard); same as issue #6 |
+| 13 | LOW | ServerStatusPage | SidebarGaugeSet exists but not rendered | Add to ServerStatusPage build() | ✅ CLOSED — STEP 6.1 wired ServerStatusSnapshotAdapter + Sampler to ServerStatusPage; SidebarGaugeSet with 5 gauges (Connections, Traffic, Key Efficiency, QPS, InnoDB) renders in 2-column layout; GaugeType::Cpu removed (mislabeled as CPU but computed threads_connected ratio) |
+| 14 | LOW | composer.json | Missing candy-metrics path repo | Add for optional history backend | N/A — History uses SqliteHistoryStore (WAL-mode SQLite), not candy-metrics; no path repo needed for history backend |
 
 ---
 
