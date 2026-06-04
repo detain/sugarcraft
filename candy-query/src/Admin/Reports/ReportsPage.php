@@ -666,7 +666,7 @@ final class ReportsPage extends PageBase
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[j/k] nav rows  [h/l] category  [[/]] report  [c] unit toggle  [q] quit');
+            ->render('[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit');
     }
 
     private function renderErrorScreen(): string
