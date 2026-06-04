@@ -67,7 +67,7 @@ final readonly class ConnectionConfig
      * @param string $sslMode SSL mode (for MySQL) — applied as PDO driver options, not in DSN
      * @return self
      */
-    public static function create(
+    public static function new(
         string $driver,
         string $host,
         int $port,

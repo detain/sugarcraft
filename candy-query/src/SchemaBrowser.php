@@ -31,7 +31,7 @@ final class SchemaBrowser
     /**
      * Create a new SchemaBrowser with automatic provider selection based on flavor.
      */
-    public static function create(DatabaseInterface $db, Flavor $flavor): self
+    public static function new(DatabaseInterface $db, Flavor $flavor): self
     {
         $provider = self::createProvider($db, $flavor);
         return new self($db, $flavor, $provider);
