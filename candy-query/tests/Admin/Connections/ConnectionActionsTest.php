@@ -65,7 +65,7 @@ final class ConnectionActionsTest extends TestCase
     {
         $this->db->setNextExecAffected(1);
         $actions = ConnectionActions::new($this->ctx);
-        $result = $actions->setInstrumentation(true);
+        $result = $actions->setInstrumentation(true, 456);
         $this->assertTrue($result);
     }
 
@@ -73,7 +73,7 @@ final class ConnectionActionsTest extends TestCase
     {
         $this->db->setNextExecThrows(new \PDOException('UPDATE denied', 1142));
         $actions = ConnectionActions::new($this->ctx);
-        $result = $actions->setInstrumentation(false);
+        $result = $actions->setInstrumentation(false, 456);
         $this->assertFalse($result);
     }
 
@@ -160,7 +160,8 @@ final class ConnectionDetailTabsTest extends TestCase
 /** @implements DatabaseInterface */
 final class FakeDb implements DatabaseInterface
 {
-    private array $queryResult = [];
+    /** @var list<array<string, mixed>> */
+    public array $queryResult = [];
     private ?\PDOException $queryException = null;
 
     /** @param \PDOException|null */
@@ -245,6 +246,11 @@ final class FakeStmt
         }
         $this->db->nextExecAffected = 1;
         return true;
+    }
+
+    public function fetchAll(int $mode = \PDO::FETCH_ASSOC): array
+    {
+        return $this->db->queryResult;
     }
 }
 
