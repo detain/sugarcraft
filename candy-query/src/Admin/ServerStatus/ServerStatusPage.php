@@ -10,6 +10,7 @@ use SugarCraft\Dash\Components\Card\Card;
 use SugarCraft\Dash\Components\Card\DefinitionList;
 use SugarCraft\Query\Admin\Format;
 use SugarCraft\Query\Admin\PageBase;
+use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
@@ -32,21 +33,28 @@ use SugarCraft\Sprinkles\Style;
 final class ServerStatusPage extends PageBase
 {
     private ?ReplicaStatusProvider $replicaProvider = null;
+    private ?Sampler $sampler = null;
+    private ?SidebarGaugeSet $gaugeSet = null;
 
     public function __construct(
         ServerContextInterface $context,
         ?ReplicaStatusProvider $replicaProvider = null,
+        ?Sampler $sampler = null,
     ) {
         parent::__construct($context);
         $this->replicaProvider = $replicaProvider ?? ReplicaStatusProvider::new($context);
+        $this->sampler = $sampler;
     }
 
     /**
      * Create a new ServerStatusPage from the server context.
      */
-    public static function new(ServerContextInterface $context): self
+    public static function new(ServerContextInterface $context, ?Sampler $sampler = null): self
     {
-        return new self($context);
+        $page = new self($context, null, $sampler);
+        // First build polls to prime the sampler with the initial snapshot.
+        $page->gaugeSet = SidebarGaugeSet::new($context, $sampler)->poll();
+        return $page;
     }
 
     /**
@@ -70,8 +78,8 @@ final class ServerStatusPage extends PageBase
         // Left panel: existing info panels stacked vertically
         $leftPanel = $this->buildLeftPanel();
 
-        // Right panel: live gauge sidebar
-        $gaugeSet = SidebarGaugeSet::new($this->context);
+        // Right panel: live gauge sidebar (already polled via withRefresh or ::new)
+        $gaugeSet = $this->gaugeSet ?? SidebarGaugeSet::new($this->context, $this->sampler);
         $rightPanel = $gaugeSet->view();
 
         // 2-column layout: info panels on left, gauges on right
@@ -446,15 +454,17 @@ final class ServerStatusPage extends PageBase
     /**
      * Return a refreshed instance.
      *
-     * Note: The context reference is shared (readonly), so calling refresh()
-     * on it mutates the shared state. This is intentional since the context
-     * is also shared in the clone via the reference.
+     * Polls the gauge set to advance the sampler, so the next render uses
+     * per-second rate data from two distinct snapshots. The context reference
+     * is shared (readonly), so calling refresh() on it mutates the shared state.
      */
     public function withRefresh(): self
     {
         $clone = clone $this;
         $clone->context->refresh();
         $clone->replicaProvider = $this->replicaProvider->refresh();
+        // Build fresh gauge set and poll to advance the sampler.
+        $clone->gaugeSet = SidebarGaugeSet::new($clone->context, $clone->sampler)->poll();
         return $clone;
     }
 

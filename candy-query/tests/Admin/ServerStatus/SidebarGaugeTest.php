@@ -16,7 +16,7 @@ final class SidebarGaugeTest extends TestCase
 {
     public function testNewCreatesInstance(): void
     {
-        $gauge = SidebarGauge::new(GaugeType::Cpu, 0.5);
+        $gauge = SidebarGauge::new(GaugeType::Connections, 0.5);
         $this->assertInstanceOf(SidebarGauge::class, $gauge);
     }
 
@@ -42,12 +42,6 @@ final class SidebarGaugeTest extends TestCase
     {
         $gauge = SidebarGauge::new(GaugeType::InnoDB, 0.5);
         $this->assertSame(GaugeType::InnoDB, $gauge->type());
-    }
-
-    public function testLabelReturnsCpuForCpuType(): void
-    {
-        $gauge = SidebarGauge::new(GaugeType::Cpu, 0.5);
-        $this->assertSame('CPU', $gauge->label());
     }
 
     public function testLabelReturnsConnectionsForConnectionsType(): void
@@ -92,13 +86,6 @@ final class SidebarGaugeTest extends TestCase
         $gauge = SidebarGauge::new(GaugeType::Connections, 0.5);
         $view = $gauge->view();
         $this->assertStringContainsString('Connections', $view);
-    }
-
-    public function testViewForCpuGaugeReturnsNonEmpty(): void
-    {
-        $gauge = SidebarGauge::new(GaugeType::Cpu, 0.5);
-        $view = $gauge->view();
-        $this->assertNotEmpty($view);
     }
 
     public function testThresholdColorReturnsGreenForLowRatio(): void
@@ -201,7 +188,6 @@ final class SidebarGaugeTest extends TestCase
 
     public function testEnumCasesAreStringBacked(): void
     {
-        $this->assertSame('cpu', GaugeType::Cpu->value);
         $this->assertSame('connections', GaugeType::Connections->value);
         $this->assertSame('traffic', GaugeType::Traffic->value);
         $this->assertSame('key_efficiency', GaugeType::KeyEfficiency->value);

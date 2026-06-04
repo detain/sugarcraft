@@ -8,14 +8,12 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Dash\Foundation\Threshold;
 use SugarCraft\Dash\Plot\Chart\Gauge;
-use SugarCraft\Dash\Plot\Chart\GaugeCircle;
 
 /**
  * Gauge types supported in the sidebar.
  */
 enum GaugeType: string
 {
-    case Cpu           = 'cpu';
     case Connections   = 'connections';
     case Traffic       = 'traffic';
     case KeyEfficiency = 'key_efficiency';
@@ -54,16 +52,6 @@ final class SidebarGauge
         $color = self::thresholdColor($this->ratio);
         $label = $this->label();
 
-        // CPU uses circular gauge; others use horizontal
-        if ($this->type === GaugeType::Cpu) {
-            $gauge = GaugeCircle::new($this->ratio)
-                ->withArcColor($color)
-                ->withNeedleColor($color)
-                ->withRadius(5);
-
-            return $gauge->render();
-        }
-
         $gauge = Gauge::new($this->ratio)
             ->withFilledColor($color)
             ->withWidth(20);
@@ -77,7 +65,6 @@ final class SidebarGauge
     public function label(): string
     {
         return match ($this->type) {
-            GaugeType::Cpu           => 'CPU',
             GaugeType::Connections   => 'Connections',
             GaugeType::Traffic       => 'Traffic',
             GaugeType::KeyEfficiency => 'Key Eff',
