@@ -178,7 +178,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetCatalogNetworkReturnsNonEmpty(): void
     {
-        $entries = WidgetCatalog::network();
+        $entries = (new WidgetCatalog())->network();
 
         $this->assertNotEmpty($entries);
         foreach ($entries as $entry) {
@@ -196,7 +196,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetCatalogMysqlPre80ReturnsNonEmpty(): void
     {
-        $entries = WidgetCatalog::mysqlPre80();
+        $entries = (new WidgetCatalog())->mysqlPre80();
 
         $this->assertNotEmpty($entries);
         $this->assertContains('Com_alter_db_upgrade', $this->extractCalcKeys($entries));
@@ -204,7 +204,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetCatalogMysqlPost80ReturnsNonEmpty(): void
     {
-        $entries = WidgetCatalog::mysqlPost80();
+        $entries = (new WidgetCatalog())->mysqlPost80();
 
         $this->assertNotEmpty($entries);
         $this->assertContains('Com_create_role', $this->extractCalcKeys($entries));
@@ -213,7 +213,7 @@ final class WidgetTest extends TestCase
 
     public function testWidgetCatalogInnodbReturnsNonEmpty(): void
     {
-        $entries = WidgetCatalog::innodb();
+        $entries = (new WidgetCatalog())->innodb();
 
         $this->assertNotEmpty($entries);
         $this->assertContains('Innodb_buffer_pool_read_requests', $this->extractCalcKeys($entries));
