@@ -169,3 +169,14 @@ Source: step 2.2 ai/candy-query-query-contract-and-flavor
 Pattern: `Flavor::detectFromDriver()` uses the PDO driver name ('mysql', 'pgsql', 'sqlite') as the primary signal, then calls `detectFromVersionString()` only for the mysql driver when a version string is also provided. This ensures a mysql/pgsql driver never accidentally falls back to SQLite for an unparseable version string.
 Canonical: `Flavor::detectFromDriver($driverName, $version, $versionComment)` — mysql + version → `detectFromVersionString()`, pgsql → `Postgres`, sqlite → `Sqlite`, default → `Sqlite`.
 Source: step 2.2 ai/candy-query-query-contract-and-flavor
+
+### 2026-06-04 — CsvExporter: driver-neutral column detection + RFC-4180 + formula guard (STEP 2.3)
+Pattern: CsvExporter column detection uses `SELECT * FROM table LIMIT 0` followed by `SELECT * FROM table LIMIT 1` (both driver-neutral) instead of SQLite-specific PRAGMA queries or sqlite_master queries. Output is proper RFC-4180 CSV via `fputcsv()` with no trailing space padding. Formula injection guard prefixes values starting with `=`, `+`, `-`, `@`, `\t`, or `\r` with `'` before writing; leading spaces are trimmed before the check so `  =SUM(...)` is also protected. The guard applies to both headers and data cells.
+Limitation: empty tables (0 rows) cannot have their columns detected driver-neutrally; exporting an empty table produces a blank file.
+Canonical: `CsvExporter::writeCsv()` — `guardFormula()` check on every header and cell value; `getColumnNames()` — LIMIT 0 then LIMIT 1 fallback.
+Source: step 2.3 ai/candy-query-exporters
+
+### 2026-06-04 — SqlExporter: no double-quoting, no CREATE TABLE, driver-neutral columns (STEP 2.3)
+Pattern: `SqlExporter::quoteValue()` passes values directly to `$db->quote()` which returns a complete quoted literal — it must NOT be wrapped in extra quotes. Numbers are cast to string unquoted. CREATE TABLE generation is intentionally omitted: the full CREATE statement requires driver-specific queries (`SHOW CREATE TABLE` for MySQL, `sqlite_master`/`PRAGMA table_info` for SQLite) which are not driver-neutral; the INSERT data is the primary value for data portability. Column detection uses `SELECT * FROM table LIMIT 1` driver-neutrally; tables with zero rows cannot have their columns determined.
+Canonical: `SqlExporter::quoteValue()` — `null`→`NULL`, int/float→unquoted string, string→`$this->db->quote()` (no extra wrapping); `getColumnNames()` — LIMIT 1 query.
+Source: step 2.3 ai/candy-query-exporters
