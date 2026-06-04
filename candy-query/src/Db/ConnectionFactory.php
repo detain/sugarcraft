@@ -22,8 +22,12 @@ final class ConnectionFactory
     /**
      * Parse a DSN string into a ConnectionConfig.
      *
-     * DSN format: driver://user:pass@host:port/dbname?ssl-mode=MODE
+     * Uses parse_url() for robust parsing of special chars in passwords,
+     * passwordless users, and IPv6 hosts.
+     *
+     * DSN format: driver://[user][:pass]@host[:port]/dbname[?query]
      * SQLite format: sqlite:///path/to/db.sqlite or sqlite://:memory:
+     * IPv6: mysql://user:pass@[::1]:3306/dbname
      *
      * @param string $dsn DSN string to parse
      * @return ConnectionConfig
@@ -35,65 +39,102 @@ final class ConnectionFactory
             throw new \InvalidArgumentException('DSN cannot be empty');
         }
 
-        // Parse driver:// scheme
+        // parse_url() requires a valid URL scheme — must have '://'
         if (!str_contains($dsn, '://')) {
             throw new \InvalidArgumentException('Invalid DSN: missing "://" separator');
         }
 
-        [$driver, $remainder] = explode('://', $dsn, 2);
+        // Extract driver from scheme (first part before '://')
+        $driver = explode('://', $dsn, 2)[0];
 
         if (!in_array($driver, self::SUPPORTED_DRIVERS, true)) {
             throw new \InvalidArgumentException('Unsupported driver: ' . $driver);
         }
 
-        // SQLite has no host/user/pass structure
+        // SQLite: parse_url() handles :memory: and /// paths inconsistently.
+        // For :memory: it returns host=':memory' (no path); for /// paths it returns false.
+        // Use direct regex extraction to handle SQLite.
         if ($driver === 'sqlite') {
-            $path = $remainder;
-            $dbname = $path === ':memory:' ? ':memory:' : '/' . ltrim($path, '/');
-            return ConnectionConfig::create(
-                driver: 'sqlite',
-                host: '',
-                port: 0,
-                user: '',
-                pass: '',
-                dbname: $dbname,
-                sslMode: '',
-            );
+            // Pattern: sqlite://[:memory] or sqlite:///path
+            // sqlite://:memory: -> host=:memory, path=/
+            // sqlite:///path -> host empty, path=/path
+            if (preg_match('#^sqlite://([^/]*)?(.*)$#', $dsn, $m)) {
+                $hostPart = $m[1] ?? '';
+                $remainder = $m[2] ?? '';
+
+                // :memory: or :memory (parse_url normalizes this way)
+                if ($hostPart === ':memory:' || $hostPart === ':memory') {
+                    return ConnectionConfig::create(
+                        driver: 'sqlite',
+                        host: '',
+                        port: 0,
+                        user: '',
+                        pass: '',
+                        dbname: ':memory:',
+                        sslMode: '',
+                    );
+                }
+
+                // File path: remainder starts with / (e.g., ///path -> remainder is //path)
+                // or is empty (meaning ///path but we captured the leading /)
+                $path = $remainder;
+                if ($path === '' || $path === '/') {
+                    // sqlite:// with no path is :memory:
+                    return ConnectionConfig::create(
+                        driver: 'sqlite',
+                        host: '',
+                        port: 0,
+                        user: '',
+                        pass: '',
+                        dbname: ':memory:',
+                        sslMode: '',
+                    );
+                }
+
+                // Normalize path: ensure leading slash for PDO sqlite
+                $dbname = str_starts_with($path, '/') ? $path : '/' . $path;
+                return ConnectionConfig::create(
+                    driver: 'sqlite',
+                    host: '',
+                    port: 0,
+                    user: '',
+                    pass: '',
+                    dbname: $dbname,
+                    sslMode: '',
+                );
+            }
+
+            throw new \InvalidArgumentException('Invalid SQLite DSN');
         }
 
-        // Parse user:pass@host:port/dbname?query
-        if (!str_contains($remainder, '@')) {
-            throw new \InvalidArgumentException('Invalid DSN: missing credentials separator');
+        // Non-SQLite drivers
+        $parsed = parse_url($dsn);
+
+        if ($parsed === false) {
+            throw new \InvalidArgumentException('Invalid DSN: parse_url() failed');
         }
 
-        [$credentials, $rest] = explode('@', $remainder, 2);
-
-        if (!str_contains($credentials, ':')) {
-            throw new \InvalidArgumentException('Invalid DSN: missing password separator');
+        if (!isset($parsed['host'])) {
+            throw new \InvalidArgumentException('Invalid DSN: missing host');
         }
 
-        [$user, $pass] = explode(':', $credentials, 2);
-
-        if (!str_contains($rest, '/')) {
-            throw new \InvalidArgumentException('Invalid DSN: missing database separator');
+        // Strip IPv6 brackets from host (parse_url keeps them)
+        $host = $parsed['host'];
+        if (str_starts_with($host, '[') && str_ends_with($host, ']')) {
+            $host = substr($host, 1, -1);
         }
 
-        [$hostPort, $dbname] = explode('/', $rest, 2);
+        $port = isset($parsed['port']) ? (int) $parsed['port'] : 0;
+        $user = isset($parsed['user']) ? rawurldecode($parsed['user']) : '';
+        $pass = isset($parsed['pass']) ? rawurldecode($parsed['pass']) : '';
 
-        // Parse host:port
-        $host = $hostPort;
-        $port = 0;
-
-        if (str_contains($hostPort, ':')) {
-            [$host, $portStr] = explode(':', $hostPort, 2);
-            $port = (int) $portStr;
-        }
+        // Extract dbname — path always starts with '/'
+        $dbname = isset($parsed['path']) ? ltrim($parsed['path'], '/') : '';
 
         // Parse query string for ssl-mode
         $sslMode = 'prefer';
-        if (str_contains($dbname, '?')) {
-            [$dbname, $query] = explode('?', $dbname, 2);
-            parse_str($query, $params);
+        if (isset($parsed['query'])) {
+            parse_str($parsed['query'], $params);
             if (isset($params['ssl-mode'])) {
                 $sslMode = $params['ssl-mode'];
             }
@@ -103,8 +144,8 @@ final class ConnectionFactory
             driver: $driver,
             host: $host,
             port: $port,
-            user: urldecode($user),
-            pass: urldecode($pass),
+            user: $user,
+            pass: $pass,
             dbname: $dbname,
             sslMode: $sslMode,
         );
