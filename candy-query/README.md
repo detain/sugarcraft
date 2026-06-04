@@ -62,8 +62,22 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `[x]`              | Export report to CSV (Reports page)             |
 | `[t]`              | Toggle column unit formatting (Reports page)    |
 | `[a]`              | Dismiss all pending alerts (Dashboard)          |
+| `1` – `8`          | Switch admin page (see digit map below)         |
 
 > **Key routing** — Admin keys use a two-tier model. App-level keys (`1–9`, `q`, `j/k`, `p`, `r`) are intercepted by `App::handleAdminKey()` first and do **not** reach the page. All other keys (Tab, Space, `a`, `w`, `s`, `e`, etc.) are delegated to the active page's `update()` method, so each page can respond to its own navigation and editing keys independently.
+
+### Admin Page Digit Map
+
+The admin sidebar is split into two sections (Management, then Performance). Digits `1`–`8` select pages in display order:
+
+| Digit | Management Section | Digit | Performance Section |
+|-------|--------------------|-------|----------------------|
+| `1`   | Process List       | `5`   | Dashboard            |
+| `2`   | Variables          | `6`   | Table Stats          |
+| `3`   | Status             | `7`   | Performance Schema   |
+| `4`   | Query Stats        | `8`   | Debug                |
+
+Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performance Schema** (not Table Stats). Display order and digit selection are both derived from `AdminPane::orderedCases()` — any code needing the mapping should call that method rather than hard-coding indices.
 >
 > **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the 3-second poll-tick refresh cycle. Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (`1–9`, `q`, `j/k`) rebuilds the page from scratch.
 
