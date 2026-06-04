@@ -64,7 +64,7 @@ final class AvailabilityChecker
                     $this->availableViews[] = (string) $row['Tables_in_sys'];
                 }
             }
-        } catch (\PDOException $e) {
+        } catch (\Throwable $e) {
             $this->availableViews = [];
         }
 
@@ -82,7 +82,7 @@ final class AvailabilityChecker
             $this->db->query("SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'");
 
             return true;
-        } catch (\PDOException) {
+        } catch (\Throwable) {
             return false;
         }
     }
