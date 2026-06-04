@@ -645,7 +645,33 @@ final class App implements Model
 
         $promises = [
             'status' => $connection->query($statusQuery)
-                ->then(function(array $rows): array {
+                ->then(function(array $rows) use ($isPostgres): array {
+                    if ($isPostgres) {
+                        // pg_stat_database returns one row per DB with columns like
+                        // datname, numbackends, xact_commit, blks_read, etc.
+                        // Aggregate all rows by summing numeric columns to produce
+                        // a single system-wide snapshot the calc engine can read.
+                        // WHY: PostgresWidgetCatalog widgets look up keys like
+                        // pg_stat_database.tup_fetched (RatePerSecond) or
+                        // pg_stat_database.numbackends (StatusVar) directly.
+                        // NOTE: we do NOT aggregate shared_buffers here (it's not
+                        // in pg_stat_database; it comes from pg_settings server vars).
+                        $out = [];
+                        foreach ($rows as $row) {
+                            foreach ($row as $key => $value) {
+                                if ($key === 'datname') {
+                                    continue; // skip database name identifier
+                                }
+                                if (is_numeric($value)) {
+                                    $out['pg_stat_database.' . $key] = isset($out['pg_stat_database.' . $key])
+                                        ? (string) (((int) $out['pg_stat_database.' . $key]) + ((int) $value))
+                                        : (string) ((int) $value);
+                                }
+                            }
+                        }
+                        return $out;
+                    }
+                    // MySQL: SHOW GLOBAL STATUS returns Variable_name/Value pairs
                     $out = [];
                     foreach ($rows as $row) {
                         if (isset($row['Variable_name'], $row['Value'])) {
@@ -655,13 +681,41 @@ final class App implements Model
                     return $out;
                 }),
             'server' => $connection->query($serverQuery)
-                ->then(function(array $rows): array {
+                ->then(function(array $rows) use ($isPostgres): array {
                     $out = [];
-                    foreach ($rows as $row) {
-                        if (isset($row['Variable_name'], $row['Value'])) {
-                            $out[(string)$row['Variable_name']] = (string)$row['Value'];
-                        } elseif (isset($row['name'], $row['setting'])) {
-                            $out[(string)$row['name']] = (string)$row['setting'];
+                    if ($isPostgres) {
+                        // pg_settings returns name/setting pairs.
+                        // Scale shared_buffers from 8KB blocks to bytes so the
+                        // WidgetCatalog format string (%.0f B) is accurate.
+                        // pg_settings.block_size is 8192 bytes on all PG versions.
+                        $blockSize = 8192;
+                        foreach ($rows as $row) {
+                            if (isset($row['name'], $row['setting'])) {
+                                $name = (string) $row['name'];
+                                $setting = (string) $row['setting'];
+                                if ($name === 'block_size' && is_numeric($setting)) {
+                                    $blockSize = (int) $setting;
+                                }
+                            }
+                        }
+                        foreach ($rows as $row) {
+                            if (isset($row['name'], $row['setting'])) {
+                                $name = (string) $row['name'];
+                                $value = (string) $row['setting'];
+                                if ($name === 'shared_buffers' && is_numeric($value)) {
+                                    // shared_buffers is stored in 8KB blocks; convert to bytes
+                                    $value = (string) (((int) $value) * $blockSize);
+                                }
+                                $out[$name] = $value;
+                            }
+                        }
+                    } else {
+                        foreach ($rows as $row) {
+                            if (isset($row['Variable_name'], $row['Value'])) {
+                                $out[(string)$row['Variable_name']] = (string)$row['Value'];
+                            } elseif (isset($row['name'], $row['setting'])) {
+                                $out[(string)$row['name']] = (string)$row['setting'];
+                            }
                         }
                     }
                     return $out;

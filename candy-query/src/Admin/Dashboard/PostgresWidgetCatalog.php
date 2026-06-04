@@ -30,7 +30,7 @@ final class PostgresWidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function io(): array
+    public function io(): array
     {
         return [
             [
@@ -133,7 +133,7 @@ final class PostgresWidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function transactions(): array
+    public function transactions(): array
     {
         return [
             [
@@ -212,7 +212,7 @@ final class PostgresWidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function cache(): array
+    public function cache(): array
     {
         return [
             [
