@@ -63,6 +63,17 @@ final class VariablesPage extends PageBase
     /** @var list<string> */
     private array $categories = [];
 
+    /**
+     * @param ServerContextInterface $context Server context for variable access
+     * @param Catalog|null $catalog Variable metadata catalog (loaded eagerly by
+     *        App::buildVariablesPage). Enables category tree, group filtering, and
+     *        per-variable [rw] editability indicators. Missing metadata is non-fatal —
+     *        the page renders without categories or edit indicators.
+     * @param VariableEditor|null $editor Edit bridge for MySQL variables via SET GLOBAL /
+     *        SET PERSIST. Created by App::buildVariablesPage() with the same catalog so
+     *        it can validate editability per variable. Null when catalog is absent or
+     *        on non-MySQL flavors.
+     */
     public function __construct(
         ServerContextInterface $context,
         private readonly ?Catalog $catalog = null,
@@ -73,6 +84,12 @@ final class VariablesPage extends PageBase
 
     /**
      * Create a new VariablesPage from the server context.
+     *
+     * Note: the no-arg form creates a page without Catalog or VariableEditor,
+     * which means no category tree, no [rw] indicators, and editing disabled.
+     * For a fully-equipped page with collaborators, use
+     * App::buildVariablesPage() which wires in the eagerly-loaded Catalog
+     * and a properly-configured VariableEditor.
      */
     public static function new(ServerContextInterface $context): self
     {
