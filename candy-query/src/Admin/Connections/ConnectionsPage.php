@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\Connections;
 
+use SugarCraft\Core\Cmd;
+use SugarCraft\Core\KeyType;
+use SugarCraft\Core\Msg;
+use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Query\Admin\PageBase;
 use SugarCraft\Query\Admin\ServerContextInterface;
@@ -22,12 +26,29 @@ use SugarCraft\Table\{Column, Row, RowData, Table};
  */
 final class ConnectionsPage extends PageBase
 {
+    public const DETAIL_TAB_DETAILS = 'details';
+    public const DETAIL_TAB_ATTRIBUTES = 'attributes';
+    public const DETAIL_TAB_MDL = 'mdl';
+
+    /** @var list<string> */
+    private const DETAIL_TAB_ORDER = [
+        self::DETAIL_TAB_DETAILS,
+        self::DETAIL_TAB_ATTRIBUTES,
+        self::DETAIL_TAB_MDL,
+    ];
+
     private ?ProcesslistResult $selectedThread = null;
     private ?ConnectionFilters $filters = null;
     private ?ProcesslistProvider $processlistProvider = null;
     private ?ConnectionCounters $counters = null;
     private ?ConnectionActions $actions = null;
     private ?ConnectionDetailTabs $detailTabs = null;
+
+    private int $selectedIndex = 0;
+    private string $activeDetailTab = self::DETAIL_TAB_DETAILS;
+
+    /** @var list<ProcesslistResult>|null Memoized filtered processlist to avoid 2-3× fetch per render */
+    private ?array $cachedFilteredProcesslist = null;
 
     public function __construct(
         ServerContextInterface $context,
@@ -62,10 +83,7 @@ final class ConnectionsPage extends PageBase
      */
     public function getTable(): Table
     {
-        $rows = $this->processlistProvider->fetchAll();
-        $filtered = $this->applyFilters($rows);
-
-        return $this->buildTable($filtered);
+        return $this->buildTable($this->filteredProcesslist());
     }
 
     /**
@@ -90,8 +108,153 @@ final class ConnectionsPage extends PageBase
     public function withFilters(ConnectionFilters $filters): self
     {
         $clone = clone $this;
+        $clone->cachedFilteredProcesslist = null; // invalidate memoization
         $clone->filters = $filters;
         return $clone;
+    }
+
+    /**
+     * Get the current detail tab.
+     */
+    public function detailTab(): string
+    {
+        return $this->activeDetailTab;
+    }
+
+    /**
+     * Return a new instance with the detail tab set.
+     */
+    public function withDetailTab(string $tab): self
+    {
+        if (!\in_array($tab, self::DETAIL_TAB_ORDER, true)) {
+            return $this;
+        }
+        $clone = clone $this;
+        $clone->activeDetailTab = $tab;
+        return $clone;
+    }
+
+    /**
+     * Return a new instance with the selected index moved down.
+     */
+    private function withNavigateDown(): self
+    {
+        $filtered = $this->filteredProcesslist();
+        $newIndex = $this->selectedIndex;
+        if ($newIndex < \count($filtered) - 1) {
+            $newIndex++;
+        }
+        return $this->withSelectedIndex($newIndex);
+    }
+
+    /**
+     * Return a new instance with the selected index moved up.
+     */
+    private function withNavigateUp(): self
+    {
+        $newIndex = $this->selectedIndex;
+        if ($newIndex > 0) {
+            $newIndex--;
+        }
+        return $this->withSelectedIndex($newIndex);
+    }
+
+    /**
+     * Handle keyboard shortcuts for connection navigation and filtering.
+     *
+     * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
+     */
+    public function update(Msg $msg): array
+    {
+        // Early exit for non-key messages
+        if (!$msg instanceof KeyMsg) {
+            return [$this, null];
+        }
+
+        $ch = $msg->rune ?? '';
+        $type = $msg->type;
+
+        // j/k or Up/Down navigate the processlist selection
+        if ($ch === 'j' || $type === KeyType::Down) {
+            return [$this->withNavigateDown(), null];
+        }
+
+        if ($ch === 'k' || $type === KeyType::Up) {
+            return [$this->withNavigateUp(), null];
+        }
+
+        // Tab cycles through detail tabs (Details → Attributes → MDL → Details)
+        if ($type === KeyType::Tab && !$msg->shift) {
+            return [$this->withCycleDetailTab(), null];
+        }
+
+        // 1/2/3 switch to specific detail tabs
+        if ($ch === '1') {
+            return [$this->withDetailTab(self::DETAIL_TAB_DETAILS), null];
+        }
+        if ($ch === '2') {
+            return [$this->withDetailTab(self::DETAIL_TAB_ATTRIBUTES), null];
+        }
+        if ($ch === '3') {
+            return [$this->withDetailTab(self::DETAIL_TAB_MDL), null];
+        }
+
+        // f toggles hide-sleeping filter
+        if ($ch === 'f') {
+            return [$this->withToggleHideSleeping(), null];
+        }
+
+        // r triggers async refresh
+        if ($ch === 'r') {
+            return $this->handleRefresh();
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Return a new instance with the detail tab cycled to the next one.
+     */
+    private function withCycleDetailTab(): self
+    {
+        $current = \array_search($this->activeDetailTab, self::DETAIL_TAB_ORDER, true);
+        $next = ($current + 1) % \count(self::DETAIL_TAB_ORDER);
+        return $this->withDetailTab(self::DETAIL_TAB_ORDER[$next]);
+    }
+
+    /**
+     * Return a new instance with hide-sleeping filter toggled.
+     */
+    private function withToggleHideSleeping(): self
+    {
+        $current = $this->filters;
+        return $this->withFilters(
+            $current->withHideSleeping(!$current->hideSleeping),
+        );
+    }
+
+    /**
+     * Handle the refresh action, returning a new instance and async command.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function handleRefresh(): array
+    {
+        // Invalidate memoization so next render fetches fresh data
+        $clone = clone $this;
+        $clone->cachedFilteredProcesslist = null;
+        $clone->processlistProvider = $this->processlistProvider->refresh();
+
+        // Trigger async refresh via AdminFetchStartedMsg - the App's existing
+        // async machinery will re-fetch all admin data including processlist.
+        // This uses Cmd::send rather than promise since the actual re-fetch
+        // happens through the existing AdminQueryCache polling loop.
+        return [
+            $clone,
+            \SugarCraft\Core\Cmd::send(
+                new \SugarCraft\Query\Core\Msg\AdminFetchStartedMsg(),
+            ),
+        ];
     }
 
     /**
@@ -111,11 +274,14 @@ final class ConnectionsPage extends PageBase
     public function withSelectedIndex(int $index): self
     {
         $clone = clone $this;
-        $rows = $this->processlistProvider->fetchAll();
-        $filtered = $this->applyFilters($rows);
+        $clone->cachedFilteredProcesslist = null; // invalidate memoization
+        $filtered = $clone->filteredProcesslist();
 
+        $clone->selectedIndex = $index;
         if ($index >= 0 && $index < \count($filtered)) {
             $clone->selectedThread = $filtered[$index];
+        } else {
+            $clone->selectedThread = null;
         }
         return $clone;
     }
@@ -127,8 +293,11 @@ final class ConnectionsPage extends PageBase
      */
     public function filteredProcesslist(): array
     {
-        $rows = $this->processlistProvider->fetchAll();
-        return $this->applyFilters($rows);
+        if ($this->cachedFilteredProcesslist === null) {
+            $rows = $this->processlistProvider->fetchAll();
+            $this->cachedFilteredProcesslist = $this->applyFilters($rows);
+        }
+        return $this->cachedFilteredProcesslist;
     }
 
     /**
