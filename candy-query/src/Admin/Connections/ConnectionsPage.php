@@ -162,7 +162,7 @@ final class ConnectionsPage extends PageBase
     /**
      * Handle keyboard shortcuts for connection navigation and filtering.
      *
-     * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
+     * @return array{0: self, 1: ?\Closure}
      */
     public function update(Msg $msg): array
     {
