@@ -364,10 +364,13 @@ final class ReportsPageTest extends TestCase
             // Data lines should have all formula prefixes escaped
             $cells = str_getcsv($line);
             foreach ($cells as $cell) {
+                if ($cell === null || $cell === '') {
+                    continue;
+                }
                 $firstChar = $cell[0] ?? '';
                 $this->assertFalse(
                     in_array($firstChar, ['=', '+', '-', '@'], true),
-                    "CSV cell starts with formula-injection character: " . substr($cell, 0, 20)
+                    "CSV cell starts with formula-injection character: " . substr((string) $cell, 0, 20)
                 );
             }
         }
