@@ -40,12 +40,19 @@ final class EmptyServerContext implements ServerContextInterface
 
     public function version(): \SugarCraft\Query\Db\Version
     {
-        throw new \RuntimeException('Not supported');
+        // EmptyServerContext is used for unsupported flavors like SQLite.
+        // Return a zero version so pages like DashboardPage can initialize
+        // without throwing in tests or when SQLite is used. Pages that need
+        // real version data should check flavor() first.
+        return \SugarCraft\Query\Db\Version::parse('');
     }
 
     public function flavor(): \SugarCraft\Query\Db\Flavor
     {
-        throw new \RuntimeException('Not supported');
+        // EmptyServerContext is used for unsupported flavors like SQLite.
+        // Return Sqlite as the default so pages like DashboardPage can
+        // initialize without throwing in tests or when SQLite is used.
+        return \SugarCraft\Query\Db\Flavor::Sqlite;
     }
 
     public function versionString(): string
