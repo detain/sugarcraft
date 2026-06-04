@@ -126,8 +126,9 @@ final class Renderer
         if ($a->pane === Pane::Admin) {
             $admin = self::adminPane($a, $cols);
             $query = self::queryPane($a, $cols);
+            $paneCount = count(AdminPane::orderedCases());
             $help = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('1-6  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit');
+                ->render("1-{$paneCount}  select page  ·  j/k  navigate  ·  p  pause  ·  r  reset  ·  tab  switch pane  ·  q  quit");
             $status = '';
             if ($a->error !== null) {
                 $status = "\n " . Style::new()->foreground(Color::hex('#ff5f87'))->bold()
@@ -305,41 +306,36 @@ final class Renderer
 
     private static function adminPane(App $a, int $terminalCols): string
     {
-        // Build sidebar WITHOUT frame — just styled text lines
+        // Build sidebar WITHOUT frame — just styled text lines.
+        // Uses orderedCases() so digit-key handler and sidebar use the same
+        // single source of truth for pane ordering (Management first, then
+        // Performance). Each line shows its digit prefix so pressing the key
+        // is self-evident rather than requiring memorisation.
         $sidebarLines = [];
+        $orderedPanes = AdminPane::orderedCases();
 
-        // Group admin panes by section
-        $managementItems = [];
-        $performanceItems = [];
-        foreach (AdminPane::cases() as $pane) {
-            if ($pane->section() === AdminSection::Management) {
-                $managementItems[] = $pane;
-            } else {
-                $performanceItems[] = $pane;
-            }
-        }
-
-        // Add "ADMIN" title
         $sidebarLines[] = Style::new()->bold()->foreground(Color::hex('#fde68a'))->render(' ADMIN ');
         $sidebarLines[] = '';
 
-        // Management section
-        $sidebarLines[] = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))->render(' Management ');
-        foreach ($managementItems as $pane) {
-            $isActive = $a->adminPane === $pane;
-            $marker = $isActive ? '▶' : ' ';
-            $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#6a5898');
-            $sidebarLines[] = Style::new()->foreground($color)->render($marker . ' ' . $pane->label());
-        }
-        $sidebarLines[] = '';
+        $currentSection = null;
+        foreach ($orderedPanes as $index => $pane) {
+            // Emit a section header when the section changes.
+            if ($pane->section() !== $currentSection) {
+                $currentSection = $pane->section();
+                $sectionLabel = $currentSection === AdminSection::Management
+                    ? 'Management'
+                    : 'Performance';
+                $sidebarLines[] = '';
+                $sidebarLines[] = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))
+                    ->render(" {$sectionLabel} ");
+            }
 
-        // Performance section
-        $sidebarLines[] = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))->render(' Performance ');
-        foreach ($performanceItems as $pane) {
+            $digit = $index + 1;
             $isActive = $a->adminPane === $pane;
             $marker = $isActive ? '▶' : ' ';
             $color = $isActive ? Color::hex('#00ffaa') : Color::hex('#6a5898');
-            $sidebarLines[] = Style::new()->foreground($color)->render($marker . ' ' . $pane->label());
+            $sidebarLines[] = Style::new()->foreground($color)
+                ->render($marker . ' ' . $digit . '. ' . $pane->label());
         }
 
         $sidebarText = implode("\n", $sidebarLines);
