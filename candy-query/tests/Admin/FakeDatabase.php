@@ -30,7 +30,6 @@ final class FakeDatabase implements DatabaseInterface
     public function setQueryThrows(\PDOException $e): void
     {
         $this->queryException = $e;
-        $this->queryResult = [];
     }
 
     /**
