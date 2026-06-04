@@ -606,15 +606,39 @@ All three database implementations (`MysqlDatabase`, `PostgresDatabase`, `Sqlite
 
 ### Exporters
 
-`Db\Export\CsvExporter` and `Db\Export\SqlExporter` provide driver-agnostic export:
+`Db\Export\CsvExporter` and `Db\Export\SqlExporter` provide driver-agnostic export to file or string:
 
 ```php
 use SugarCraft\Query\Db\Export\CsvExporter;
 use SugarCraft\Query\Db\Export\SqlExporter;
 
-$csv = (new CsvExporter($db))->export('users');
-$sql = (new SqlExporter($db))->export('users');
+$csv = (new CsvExporter($db))->exportCsv('/tmp/users.csv', 'users');
+$sql = (new SqlExporter($db))->exportSql('/tmp/users.sql');
+$csvString = (new CsvExporter($db))->exportReportResultsToString($columns, $rows);
 ```
+
+#### CsvExporter
+
+- **`exportCsv(path, table)`** — writes table rows to a CSV file (RFC-4180 compliant)
+- **`exportReportResults(path, columns, rows)`** — writes arbitrary result set to a CSV file
+- **`exportReportResultsToString(columns, rows)`** — returns CSV as a string (used by ReportsPage)
+- **`importCsv(path, table)`** — imports a CSV file into a table (backtick-quoted column names)
+
+**Formula injection guard** — headers and cell values starting with `=`, `+`, `-`, `@`, tab (`\t`), or carriage return (`\r`) are prefixed with `'` to prevent spreadsheet applications from interpreting them as formulas. Leading spaces are trimmed before the guard check so `  =SUM(...)` is also protected.
+
+**Column detection** — uses `SELECT * FROM table LIMIT 0` followed by `SELECT * FROM table LIMIT 1` to extract column names driver-neutrally. Does not use SQLite PRAGMA queries.
+
+**Limitation** — empty tables (0 rows) cannot have their columns detected driver-neutrally; exporting an empty table produces a blank file.
+
+#### SqlExporter
+
+- **`exportSql(path)`** — writes all tables as INSERT statements to a SQL dump file
+
+**No CREATE TABLE** — the full CREATE TABLE statement requires driver-specific queries (`sqlite_master` for SQLite, `SHOW CREATE TABLE` for MySQL), which are not driver-neutral. The INSERT data is the primary value for data portability.
+
+**Quoting** — uses `$db->quote()` for strings (returns a complete quoted literal); numbers are cast to string unquoted. No double-quoting: `db::quote()` already returns a complete quoted literal and must not be wrapped in extra quotes.
+
+**Column detection** — uses `SELECT * FROM table LIMIT 1` to extract column names driver-neutrally.
 
 To add MySQL or Postgres support, implement `DatabaseInterface` and pass your implementation to `App::builder()->withDb($yourImpl)->build()`.
 
