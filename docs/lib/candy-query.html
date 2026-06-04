@@ -177,7 +177,11 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>ConnectionDetailTabs</td><td>getExplain(processId)</td><td>Runs EXPLAIN on the selected thread's current query — returns null if no query or explain fails</td></tr>
 <tr><td>PostgresAdminProvider</td><td>—</td><td>AdminProviderInterface via pg_stat_database, pg_settings, pg_stat_activity. Dashboard/connections via PostgresWidgetCatalog; graceful null on permission errors (1142/1146).</td></tr>
 <tr><td>ExplainView</td><td>render()</td><td>Render plan as ANSI-coloured string</td></tr>
-<tr><td>ExplainView</td><td>toArray()</td><td>Return JSON-serialisable plan rows (depth, tag, detail, indent)</td></tr>
+      <tr><td>ExplainView</td><td>toArray()</td><td>Return JSON-serialisable plan rows (depth, tag, detail, indent)</td></tr>
+<tr><td>ConnectionActions</td><td>setInstrumentation(bool $enabled, int|string $threadId)</td><td>Enable/disable performance_schema instrumentation per-thread via UPDATE performance_schema.threads SET INSTRUMENTED=?. Requires MySQL 8.0+; returns false on permission errors.</td></tr>
+<tr><td>ConnectionActions</td><td>kill(int|string $threadId, bool $isBackground)</td><td>KILL a thread (disconnect). Refuses to kill background threads (no user or NULL user). MySQL's KILL does not accept placeholders; ID is int-cast directly (injection-safe). Returns true on success, false on refusal or error.</td></tr>
+<tr><td>ConnectionActions</td><td>killQuery(int|string $threadId, bool $isBackground)</td><td>KILL QUERY a thread (cancel statement, keep connection). Refuses to kill query on background threads. MySQL's KILL QUERY does not accept placeholders; ID is int-cast directly (injection-safe). Returns true on success, false on refusal or error.</td></tr>
+<tr><td>ConnectionDetailTabs</td><td>getExplain(processId)</td><td>Runs EXPLAIN on the selected thread's current query. Accepts single SELECT statements only — rejects multi-statement queries (containing ;) and any non-SELECT statement (INSERT/UPDATE/DELETE/DROP/etc.) before running. Returns null if no query, explain fails, or query is not a single SELECT.</td></tr>
 <tr><td>ConnectionConfig</td><td>—</td><td>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn</td></tr>
 <tr><td>ConnectionFactory</td><td>fromDsn(dsn)</td><td>Build PDO from DSN string (e.g., mysql://user:pass@host:3306/db?ssl-mode=REQUIRED)</td></tr>
 <tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Build PDO from ConnectionConfig value object</td></tr>
