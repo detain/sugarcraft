@@ -57,7 +57,7 @@ enum AdminPane: string
     }
 
     /**
-     * Get all panes in order.
+     * Get all panes in declaration order (enum case order).
      *
      * @return list<self>
      */
@@ -73,5 +73,30 @@ enum AdminPane: string
             self::PerfSchema,
             self::Debug,
         ];
+    }
+
+    /**
+     * Get all panes in the order they are displayed in the sidebar.
+     *
+     * The sidebar renders section-grouped: Management panes first, then
+     * Performance panes. This is the single source of truth for both the
+     * sidebar renderer and the digit-key handler — they MUST agree, or
+     * pressing a digit selects a different pane than what the sidebar shows.
+     *
+     * @return list<self>
+     */
+    public static function orderedCases(): array
+    {
+        $management = [];
+        $performance = [];
+        foreach (self::cases() as $pane) {
+            if ($pane->section() === AdminSection::Management) {
+                $management[] = $pane;
+            } else {
+                $performance[] = $pane;
+            }
+        }
+
+        return [...$management, ...$performance];
     }
 }
