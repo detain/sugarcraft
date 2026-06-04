@@ -32,7 +32,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
 
         $this->assertCount(2, $browser->tables);
         $names = array_map(fn(SchemaTable $t) => $t->name, $browser->tables);
@@ -44,7 +44,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $users = null;
         foreach ($browser->tables as $t) {
             if ($t->name === 'users') {
@@ -72,7 +72,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $users = null;
         foreach ($browser->tables as $t) {
             if ($t->name === 'users') {
@@ -103,7 +103,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $posts = null;
         foreach ($browser->tables as $t) {
             if ($t->name === 'posts') {
@@ -127,7 +127,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $this->assertCount(2, $browser->tables);
 
         $browser = $browser->dropTable('posts');
@@ -139,7 +139,7 @@ final class SchemaBrowserTest extends TestCase
     public function testEmptyDatabaseReturnsNoTables(): void
     {
         $db = $this->memoryDb();
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $this->assertSame([], $browser->tables);
     }
 
@@ -148,7 +148,7 @@ final class SchemaBrowserTest extends TestCase
         $db = $this->memoryDb();
         $this->setupSchema($db);
 
-        $browser = SchemaBrowser::create($db, Flavor::Sqlite)->refresh();
+        $browser = SchemaBrowser::new($db, Flavor::Sqlite)->refresh();
         $users = null;
         foreach ($browser->tables as $t) {
             if ($t->name === 'users') {

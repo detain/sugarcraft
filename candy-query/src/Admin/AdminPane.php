@@ -42,39 +42,6 @@ enum AdminPane: string
         };
     }
 
-    public function next(): self
-    {
-        return match ($this) {
-            self::ProcessList => self::Variables,
-            self::Variables   => self::Status,
-            self::Status      => self::QueryStats,
-            self::QueryStats  => self::Dashboard,
-            self::Dashboard   => self::TableStats,
-            self::TableStats  => self::PerfSchema,
-            self::PerfSchema  => self::Debug,
-            self::Debug       => self::ProcessList,
-        };
-    }
-
-    /**
-     * Get all panes in declaration order (enum case order).
-     *
-     * @return list<self>
-     */
-    public static function all(): array
-    {
-        return [
-            self::ProcessList,
-            self::Variables,
-            self::Status,
-            self::QueryStats,
-            self::Dashboard,
-            self::TableStats,
-            self::PerfSchema,
-            self::Debug,
-        ];
-    }
-
     /**
      * Get all panes in the order they are displayed in the sidebar.
      *

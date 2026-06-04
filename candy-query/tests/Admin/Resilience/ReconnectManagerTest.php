@@ -105,7 +105,7 @@ final class ReconnectManagerTest extends TestCase
     public function testSetAndGetConnectionConfig(): void
     {
         $manager = new ReconnectManager();
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'mysql',
             host: 'localhost',
             port: 3306,

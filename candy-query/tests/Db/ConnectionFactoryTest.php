@@ -167,7 +167,7 @@ final class ConnectionFactoryTest extends TestCase
 
     public function testFromConfigCreatesSqliteInMemoryDatabase(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'sqlite',
             host: '',
             port: 0,
@@ -187,7 +187,7 @@ final class ConnectionFactoryTest extends TestCase
     {
         $tmpFile = tempnam(sys_get_temp_dir(), 'candy_query_test_') . '.sqlite';
         try {
-            $config = ConnectionConfig::create(
+            $config = ConnectionConfig::new(
                 driver: 'sqlite',
                 host: '',
                 port: 0,
@@ -211,7 +211,7 @@ final class ConnectionFactoryTest extends TestCase
 
     public function testFromConfigThrowsOnUnsupportedDriver(): void
     {
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: 'sqlsrv',
             host: 'localhost',
             port: 1433,

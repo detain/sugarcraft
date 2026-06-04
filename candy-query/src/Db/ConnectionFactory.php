@@ -64,7 +64,7 @@ final class ConnectionFactory
 
                 // :memory: or :memory (parse_url normalizes this way)
                 if ($hostPart === ':memory:' || $hostPart === ':memory') {
-                    return ConnectionConfig::create(
+                    return ConnectionConfig::new(
                         driver: 'sqlite',
                         host: '',
                         port: 0,
@@ -80,7 +80,7 @@ final class ConnectionFactory
                 $path = $remainder;
                 if ($path === '' || $path === '/') {
                     // sqlite:// with no path is :memory:
-                    return ConnectionConfig::create(
+                    return ConnectionConfig::new(
                         driver: 'sqlite',
                         host: '',
                         port: 0,
@@ -93,7 +93,7 @@ final class ConnectionFactory
 
                 // Normalize path: ensure leading slash for PDO sqlite
                 $dbname = str_starts_with($path, '/') ? $path : '/' . $path;
-                return ConnectionConfig::create(
+                return ConnectionConfig::new(
                     driver: 'sqlite',
                     host: '',
                     port: 0,
@@ -140,7 +140,7 @@ final class ConnectionFactory
             }
         }
 
-        return ConnectionConfig::create(
+        return ConnectionConfig::new(
             driver: $driver,
             host: $host,
             port: $port,
@@ -197,7 +197,7 @@ final class ConnectionFactory
             );
         }
 
-        $config = ConnectionConfig::create(
+        $config = ConnectionConfig::new(
             driver: $args['driver'],
             host: $args['host'] ?? '',
             port: isset($args['port']) ? (int) $args['port'] : 0,
