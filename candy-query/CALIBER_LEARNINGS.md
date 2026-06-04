@@ -283,3 +283,28 @@ Pattern: `SidebarGaugeSet` now uses an optional `Sampler` to compute per-second 
 Canonical: `SidebarGaugeSet::computeTrafficRatio()` — uses `$rates['Bytes_received'] + $rates['Bytes_sent']` when sampler is available, falls back to `$statusVars['Bytes_received'] + $statusVars['Bytes_sent']`; `computeKeyEfficiencyRatio()` — `Key_reads / (Key_reads + Key_read_requests)`.
 Caveat: Sampler rates depend on `SHOW GLOBAL STATUS` polling cadence — `ServerStatusSnapshotAdapter` reads `$this->context->statusVariablesTs()` for the elapsed-time denominator, which reflects the actual poll interval.
 Source: step 6.1 ai/candy-query-sampler-gauges
+
+### 2026-06-04 — TimeSeriesCell: `max()` vs `array_sum()` for tuple timelines (STEP 6.3)
+Pattern: When `Widget::compute()` returns an associative array of per-series rates (e.g. `['Com_select' => 10.0, 'Com_insert' => 5.0]` from `MakeTuple`/`TupleRatePerSecond`), `TimeSeriesCell::ingest()` now uses `max($value)` instead of `array_sum($value)`. Summing unrelated counter series produces meaningless totals — e.g. summing SELECT and INSERT rates gives 15, which corresponds to no real metric. Showing the dominant (max) series gives an informative lower bound on the most active series. Multi-series timeline rendering (separate polylines per series) requires broader `LineChart` changes and is deferred.
+Canonical: `TimeSeriesCell::ingest()` — `is_array($value) ? max($value) : $value`; `CounterCell::ingest()` still uses `array_sum()` since counters are additive by design.
+Source: step 6.3 ai/candy-query-docs-6.3
+
+### 2026-06-04 — MeterCell: `$value`/`$max` tracking + `viewLevel()` value/max readout (STEP 6.3)
+Pattern: `MeterCell` now tracks `$value` (raw computed value) and `$max` (resolved maximum from `max_connections` etc.) as separate fields alongside `$ratio`. `viewLevel()` uses `sprintf($widget->format, (int)$value, (int)$max)` to render a `Connections` style `X / Y` readout when the widget has a non-trivial format string (not `'%s'` or empty). This enables level meters to display actual values alongside the gauge bar.
+Canonical: `MeterCell::ingest()` — stores `$this->value` and `$this->max` before ratio computation; `viewLevel()` — `sprintf($format, (int)$this->value, (int)$this->max)` when `$format !== '' && $format !== '%s'`.
+Source: step 6.3 ai/candy-query-docs-6.3
+
+### 2026-06-04 — DashboardPage: `elapsed` from `lastPollAt` + per-section widget cache (STEP 6.3)
+Pattern: `pollAndUpdateCells()` now measures `elapsed` as the actual wall-clock delta from `$this->lastPollAt` (via `microtime(true)`) rather than using a fixed 3.0s assumption. On the very first poll (when `lastPollAt` is null), a 3.0s fallback is used — this is only hit once since `lastPollAt` is set after the first update. Per-section widget lists are built once in the constructor via `buildSectionWidgetCache()`, producing `$this->sectionWidgetCache['network']`, `['mysql']`, `['innodb']`. Previously, `getWidgetsForSection()` called `WidgetRegistry::*()` on every render frame, causing the catalog to re-detect version on every frame.
+Canonical: `pollAndUpdateCells()` — `$elapsed = $this->lastPollAt !== null ? max(0.001, $now - $this->lastPollAt) : 3.0`; `buildSectionWidgetCache()` called from constructor; `getWidgetsForSection()` reads from `$this->sectionWidgetCache`.
+Source: step 6.3 ai/candy-query-docs-6.3
+
+### 2026-06-04 — InnoDB buffer pool: bytes-based formula (Appendix A) replaces page-count formula (STEP 6.3)
+Pattern: `InnoDBBufferPoolUsageBytes` computes buffer pool usage as `(Innodb_buffer_pool_bytes_data / Innodb_page_size) / Innodb_buffer_pool_pages_total * 100` — the MySQL Workbench Appendix A formula for the sidebar gauge. This replaces `InnoDBBufferPoolUsage` which used the simpler `(total - free) / total * 100` on page counts. The old `InnoDBBufferPoolUsage` class was deleted in PR #1061 (dead after migration). The bytes-based formula is more accurate because it accounts for partially-filled pages.
+Canonical: `InnoDBBufferPoolUsageBytes::compute()` — `$usedPages = $bytesData / $pageSize; return ($usedPages / $pagesTotal) * 100.0`.
+Source: step 6.3 ai/candy-query-docs-6.3
+
+### 2026-06-04 — WidgetCatalog: 8 new InnoDB widgets (STEP 6.3)
+Pattern: `WidgetCatalog::innodb()` expanded from the previous 5 InnoDB widgets (Buffer Pool Read Reqs, Buffer Pool Write Reqs, Buffer Pool Usage, Disk Reads, Redo Log Bytes/Log Writes/Doublewrite/Disk Writes/Disk Reads) to 13 by adding: Row Lock Waits (`Innodb_row_lock_waits`), Row Lock Time (`Innodb_row_lock_time`), Pages Flushed (`Innodb_pages_flushed`), Pages Created (`Innodb_pages_created`), Pages Read (`Innodb_pages_read`), Insert Buffer (`Innodb_ibuf_size`), Read Ahead (`Innodb_buffer_pool_read_ahead`). Buffer Pool Usage switched to `InnoDBBufferPoolUsageBytes` (bytes-based, Appendix A). `WidgetRegistry::innodb()` and `build()` automatically include the new widgets.
+Canonical: `WidgetCatalog::innodb()` — 13 entries, all using `RatePerSecond` except Buffer Pool Usage (bytes-based calc) and Insert Buffer (raw `Innodb_ibuf_size`).
+Source: step 6.3 ai/candy-query-docs-6.3
