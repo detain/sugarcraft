@@ -80,20 +80,30 @@ final class VariableEditorTest extends TestCase
     {
         $editor = VariableEditor::new($this->context);
 
-        $preview = $editor->getEditPreview('max_connections', '100', false);
+        $preview = $editor->getEditPreview('max_connections', '100', 'global');
 
         $this->assertStringContainsString('SET GLOBAL', $preview);
         $this->assertStringContainsString('`max_connections`', $preview);
         $this->assertStringContainsString('100', $preview);
     }
 
-    public function testGetEditPreviewWithPersistentFlag(): void
+    public function testGetEditPreviewWithPersistMode(): void
     {
         $editor = VariableEditor::new($this->context);
 
-        $preview = $editor->getEditPreview('max_connections', '100', true);
+        $preview = $editor->getEditPreview('max_connections', '100', 'persist');
 
         $this->assertStringContainsString('SET PERSIST', $preview);
+        $this->assertStringContainsString('`max_connections`', $preview);
+    }
+
+    public function testGetEditPreviewWithPersistOnlyMode(): void
+    {
+        $editor = VariableEditor::new($this->context);
+
+        $preview = $editor->getEditPreview('max_connections', '100', 'persist_only');
+
+        $this->assertStringContainsString('SET PERSIST_ONLY', $preview);
         $this->assertStringContainsString('`max_connections`', $preview);
     }
 
@@ -101,7 +111,7 @@ final class VariableEditorTest extends TestCase
     {
         $editor = VariableEditor::new($this->context);
 
-        $preview = $editor->getEditPreview('wait_timeout', '28800', false);
+        $preview = $editor->getEditPreview('wait_timeout', '28800', 'global');
 
         // wait_timeout is numeric, should not be quoted
         $this->assertStringContainsString(' = 28800', $preview);
@@ -111,7 +121,7 @@ final class VariableEditorTest extends TestCase
     {
         $editor = VariableEditor::new($this->context);
 
-        $preview = $editor->getEditPreview('character_set_client', 'utf8mb4', false);
+        $preview = $editor->getEditPreview('character_set_client', 'utf8mb4', 'global');
 
         // String values should be quoted
         $this->assertStringContainsString("'utf8mb4'", $preview);
@@ -255,34 +265,34 @@ final class VariableEditorTest extends TestCase
         $this->assertSame(3680, $result['errorCode']);
     }
 
-    public function testEditGlobalPersistReturnsSuccessResultWhenVariableIsEditable(): void
+    public function testPersistReturnsSuccessResultWhenVariableIsEditable(): void
     {
         $catalog = Catalog::new(__DIR__ . '/../../../data');
         $catalog->load();
 
         $editor = VariableEditor::new($this->context, $catalog);
 
-        $result = $editor->editGlobalPersist('max_connections', '200');
+        $result = $editor->persist('max_connections', '200');
 
         $this->assertTrue($result['success']);
         $this->assertNull($result['errorCode']);
         $this->assertNull($result['errorMessage']);
     }
 
-    public function testEditGlobalPersistReturnsFailureForNonEditableVariable(): void
+    public function testPersistReturnsFailureForNonEditableVariable(): void
     {
         $catalog = Catalog::new(__DIR__ . '/../../../data');
         $catalog->load();
 
         $editor = VariableEditor::new($this->context, $catalog);
 
-        $result = $editor->editGlobalPersist('system_time_zone', 'UTC');
+        $result = $editor->persist('system_time_zone', 'UTC');
 
         $this->assertFalse($result['success']);
         $this->assertSame('Variable not editable', $result['errorMessage']);
     }
 
-    public function testEditGlobalPersistReturnsErrorOnPDOException(): void
+    public function testPersistReturnsErrorOnPDOException(): void
     {
         $catalog = Catalog::new(__DIR__ . '/../../../data');
         $catalog->load();
@@ -291,10 +301,94 @@ final class VariableEditorTest extends TestCase
         // Simulate access denied error (MySQL error code 1227)
         $this->db->setQueryThrows(new \PDOException('Access denied', 1227));
 
-        $result = $editor->editGlobalPersist('max_connections', '200');
+        $result = $editor->persist('max_connections', '200');
 
         $this->assertFalse($result['success']);
         $this->assertSame(1227, $result['errorCode']);
+    }
+
+    public function testPersistOnlyReturnsSuccessResultWhenVariableIsEditable(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $result = $editor->persistOnly('max_connections', '200');
+
+        $this->assertTrue($result['success']);
+        $this->assertNull($result['errorCode']);
+        $this->assertNull($result['errorMessage']);
+    }
+
+    public function testPersistOnlyReturnsFailureForNonEditableVariable(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $result = $editor->persistOnly('system_time_zone', 'UTC');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame('Variable not editable', $result['errorMessage']);
+    }
+
+    public function testPersistOnlyReturnsErrorOnPDOException(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+        // Simulate access denied error (MySQL error code 1227)
+        $this->db->setQueryThrows(new \PDOException('Access denied', 1227));
+
+        $result = $editor->persistOnly('max_connections', '200');
+
+        $this->assertFalse($result['success']);
+        $this->assertSame(1227, $result['errorCode']);
+    }
+
+    public function testResetPersistWithNameReturnsSuccess(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $result = $editor->resetPersist('max_connections');
+
+        $this->assertTrue($result['success']);
+        $this->assertNull($result['errorCode']);
+        $this->assertNull($result['errorMessage']);
+    }
+
+    public function testResetPersistWithoutNameReturnsSuccess(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $result = $editor->resetPersist(null);
+
+        $this->assertTrue($result['success']);
+        $this->assertNull($result['errorCode']);
+        $this->assertNull($result['errorMessage']);
+    }
+
+    public function testResetPersistDoesNotCheckEditable(): void
+    {
+        // resetPersist should work even for non-editable variables
+        // because it removes the persisted value, not sets it
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $result = $editor->resetPersist('system_time_zone');
+
+        $this->assertTrue($result['success']);
     }
 
     public function testLastErrorReturnsErrorMessageAfterFailedEdit(): void
@@ -378,17 +472,60 @@ final class VariableEditorTest extends TestCase
         $this->assertStringContainsString('SET PERSIST `max_connections`', $executions[0]['sql']);
     }
 
-    public function testEditGlobalPersistExecutesCorrectSQL(): void
+    public function testPersistExecutesCorrectSQL(): void
     {
         $catalog = Catalog::new(__DIR__ . '/../../../data');
         $catalog->load();
 
         $editor = VariableEditor::new($this->context, $catalog);
 
-        $editor->editGlobalPersist('max_connections', '300');
+        $editor->persist('max_connections', '300');
 
         $executions = $this->db->getExecutions();
         $this->assertCount(1, $executions);
-        $this->assertStringContainsString('SET GLOBAL PERSIST `max_connections`', $executions[0]['sql']);
+        $this->assertStringContainsString('SET PERSIST `max_connections`', $executions[0]['sql']);
+    }
+
+    public function testPersistOnlyExecutesCorrectSQL(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $editor->persistOnly('max_connections', '300');
+
+        $executions = $this->db->getExecutions();
+        $this->assertCount(1, $executions);
+        $this->assertStringContainsString('SET PERSIST_ONLY `max_connections`', $executions[0]['sql']);
+    }
+
+    public function testResetPersistWithNameExecutesCorrectSQL(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $editor->resetPersist('max_connections');
+
+        $executions = $this->db->getExecutions();
+        $this->assertCount(1, $executions);
+        $this->assertStringContainsString('RESET PERSIST `max_connections`', $executions[0]['sql']);
+    }
+
+    public function testResetPersistWithoutNameExecutesCorrectSQL(): void
+    {
+        $catalog = Catalog::new(__DIR__ . '/../../../data');
+        $catalog->load();
+
+        $editor = VariableEditor::new($this->context, $catalog);
+
+        $editor->resetPersist(null);
+
+        $executions = $this->db->getExecutions();
+        $this->assertCount(1, $executions);
+        $this->assertStringContainsString('RESET PERSIST', $executions[0]['sql']);
+        $this->assertStringNotContainsString('`', $executions[0]['sql']);
     }
 }
