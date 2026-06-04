@@ -238,6 +238,17 @@ final class ServerContext implements ServerContextInterface
         }
     }
 
+    /**
+     * Detect whether the server has restarted since the last poll.
+     *
+     * Compares the current Uptime status variable against the last observed
+     * value. If the new uptime is less than the previous (wrap or restart),
+     * sets wasResetCache to true. This is the single authoritative source of
+     * restart detection — consumers (Sampler, StatusPoller) delegate to
+     * ServerContext via StatusSnapshotProviderInterface::wasReset().
+     *
+     * Called automatically by statusVariables() after fetching fresh data.
+     */
     private function detectReset(): void
     {
         $uptime = $this->statusVariablesCache['Uptime'] ?? null;
