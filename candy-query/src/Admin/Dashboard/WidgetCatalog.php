@@ -8,7 +8,6 @@ use SugarCraft\Query\Admin\Calc\RatePerSecond;
 use SugarCraft\Query\Admin\Calc\StatusVar;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
 use SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate;
-use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsage;
 use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes;
 
 /**
