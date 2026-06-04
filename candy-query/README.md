@@ -151,6 +151,10 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `AlertThresholds` | Immutable threshold configuration with fluent `with*()` builders. Presets: `::new()` (bare), `::default()` (60%/80%), `::strict()` (50%/70%). Watches connection usage, aborted rate, slow query time, thread running, connection errors. |
 | `AlertNotifier` | Toast notification dispatcher. Mute-safe by default (no factory = all calls no-op). `::withDefaults()` bootstraps a standard factory. `notify(Alert)`, `notifyWarning()`, `notifyCritical()`, `notifyInfo()`, `view()` composites toast over a background viewport. |
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
+| `PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` commits pending changes; `[r]` reverts. |
+| `SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` generates `UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?`. On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
+| `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (deferred wiring to STEP 5.2). |
+| `CommitPlanner` | Generates SQL statements to commit PS configuration changes. Produces `UPDATE ... RLIKE` for instruments, `UPDATE ... IN(...)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to STEP 5.2. |
 | `HistoryStoreInterface` | Persistence interface for query history. Implement `save(entry)`, `query(from, to, limit)`, `prune(before)`, and `count()` to plug in any storage backend. |
 | `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `id INTEGER PRIMARY KEY`, `query TEXT`, `duration_ms INTEGER`, `rows_affected INTEGER`, `error TEXT`, `ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. |
 | `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no active recording, no coupling to the UI. Records StatusSnapshot metrics (not SQL query text — see Query History section for SQL text storage). |
@@ -411,6 +415,43 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 > **Category/report navigation** — `h`/`l` and `[`/`]` keys traverse the category tree and the report list within each category respectively. Both wrap around at boundaries. Selecting a category or report triggers `loadCurrentReport()` asynchronously via `AdminQueryCache`, exactly as if the user clicked it in the tree.
 
 > **No DB query in `validate()`** — The requirement for reports is that `validate()`/`view()`/`update()` never issue a synchronous `db->query()`. All DB access flows through `AdminQueryCache` → `Cmd::promise` → async drain tick. If the sys schema is unavailable, `Catalog::load()` still succeeds (it's file I/O); `AvailabilityChecker::discoverViews()` returns `[]` and `view()` shows the empty category tree with no blocking error.
+
+## Performance Schema Setup
+
+The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version:
+
+**Version gating:**
+- `setup_actors` (Actors tab) is skipped entirely on MySQL <5.6 — the table did not exist until 5.6
+- `setup_objects` has an `ENABLED` column only on MySQL ≥5.6.3; on older versions the tab shows `TIMED` only
+- Timer configuration (Options tab): on MySQL <8.0, timers are loaded from `setup_timers` and are editable via `UPDATE performance_schema.setup_timers SET TIMER_NAME=? WHERE NAME=?`; on MySQL ≥8.0, timers are loaded from `performance_timers` and are read-only (timer selection is fixed at server build time)
+
+**Tabs:**
+| Tab | Content |
+|-----|---------|
+| Easy Setup | Preset PS configurations — enable full PS, disable PS, reset to defaults |
+| Instruments | Collapsible tree of all PS instruments with tri-state toggles |
+| Consumers | List of event consumers with tri-state toggles |
+| Actors | Host/user/role filter rules (not available on MySQL <5.6) |
+| Objects | Object-level instrumentation rules (ENABLED column only ≥5.6.3) |
+| Threads | List of server threads with INSTRUMENTED status (from `performance_schema.threads`) |
+| Options | Timer assignments (mutable on <8.0, read-only on ≥8.0) |
+
+**Key bindings:**
+
+| Key | Action |
+|-----|--------|
+| `j/k` or `↑/↓` | Navigate rows up/down |
+| `Space` or `Enter` | Toggle/select item (Instruments/Consumers/Actors/Objects tabs) |
+| `Tab` | Switch tabs |
+| `Shift+Tab` | Previous tab |
+| `c` | Commit pending changes (when dirty) |
+| `r` | Revert pending changes (when dirty) |
+| `1/2/3` | Easy Setup actions (enable full / disable / reset to defaults) |
+| `q` | Quit to previous view |
+
+> **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
+
+> **Threads INSTRUMENTED** — the Threads tab reads the `INSTRUMENTED` column from `performance_schema.threads`. Per-thread toggling via `withInstrumented()` is tracked but the batch `UPDATE ... WHERE THREAD_ID IN (...)` commit is wired to STEP 5.2.
 
 ## Alerting
 

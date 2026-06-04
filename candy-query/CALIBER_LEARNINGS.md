@@ -216,3 +216,17 @@ The edit dialog in `VariablesPage` gates on `isDynamic()` (not `isEditable()`) s
 Spot-check verified: `max_connections` (editable+dynamic ✓), `innodb_log_file_size` (editable=true, dynamic=false ✓), `version` (editable=false ✓), `wait_timeout` (editable+dynamic ✓), `audit_log_buffer_size` (ro_persistable, editable=false ✓).
 Canonical: `VariableMetadata::__construct()` — `dynamic` defaults to `true` for backward compat with existing JSON entries lacking the field; `Catalog::isDynamic()` — `get()` then `isDynamic()`.
 Source: step 4.3 ai/candy-query-variables-metadata-catalog
+
+### 2026-06-04 — PerfSchema version gating + SetupTimers mutable + SetupThreads INSTRUMENTED (STEP 5.1)
+Pattern: `PerfSchemaPage` applies MySQL version gating at load time for three tables:
+- `loadActors()` returns `[]` on MySQL <5.6 (`setup_actors` was introduced in 5.6)
+- `loadObjects()` omits the `ENABLED` column on MySQL <5.6.3 (the column was added in 5.6.3; older versions only have `TIMED`)
+- `loadTimers()` loads `setup_timers` on MySQL <8.0 (mutable — `UPDATE setup_timers SET timer_name=? WHERE name=?` via `SetupTimers::commitStatements()`) and `performance_timers` on MySQL >=8.0 (read-only, fixed at server build time)
+
+`SetupTimers` is now mutable via the `Mutable` trait: `withTimerName(string)` returns a new instance with `dirty=true` and `changeType=CHANGE_UPDATE`; `commitStatements()` emits the `UPDATE` SQL when dirty and an update type. On >=8.0 the timer list is loaded from `performance_timers` as clean (non-dirty) instances — `commitStatements()` returns `[]` and no write occurs.
+
+`SetupThreads` carries the `INSTRUMENTED` column from `performance_schema.threads` and exposes `withInstrumented(bool)` + `isDirty()` for tracking per-thread changes, plus `instrumentedFragment()` which generates a `THREAD_ID = N AND INSTRUMENTED = 'YES'/'NO'` SQL fragment. Batch UPDATE wiring to `CommitPlanner` is deferred to STEP 5.2 — currently `CommitPlanner::commitAll()` does not include SetupThreads/SetupTimers statements; the class-level docblock was updated to reflect the deferred-wiring reality.
+
+Version gating is asserted via `FakeDatabase` doubles in CI (testMySQL56 checks 5.5.62 → actors return `[]`; testMySQL562 checks 5.6.2 → ENABLED column omitted; 8.0 → timers read-only). Live-server smoke testing on real MySQL versions deferred to STEP 8.1.
+Canonical: `PerfSchemaPage::loadTimers()` — `if ($version->isAtLeast(8, 0)) { return $this->loadPerformanceTimers($db); }` else load from `setup_timers`; `SetupTimers::commitStatements()` — `UPDATE performance_schema.setup_timers SET TIMER_NAME = 'NANOSECOND' WHERE NAME = 'wait'`.
+Source: step 5.1 ai/candy-query-perfschema-gating-models

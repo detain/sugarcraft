@@ -15,8 +15,8 @@ namespace SugarCraft\Query\Admin\PerfSchema;
  *   - SetupConsumers: Uses IN(...) for consumer updates
  *   - SetupActors: Uses INSERT/UPDATE/DELETE keyed by HOST, USER, ROLE
  *   - SetupObjects: Uses INSERT/UPDATE/DELETE keyed by OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME
- *   - SetupThreads: Read-only, no statements generated
- *   - SetupTimers: Read-only, no statements generated
+ *   - SetupThreads: Contributes INSTRUMENTED flag fragments to CommitPlanner's batch UPDATE
+ *   - SetupTimers: Generates UPDATE for setup_timers on MySQL <8.0; read-only on >=8.0
  *
  * Error handling for MySQL errors:
  *   - 1142 = SELECT/INSERT/UPDATE/DELETE denied
