@@ -23,6 +23,23 @@ final class Catalog
     /** @var list<string>|null */
     private ?array $categories = null;
 
+    /**
+     * Curated category display order — problems first (high-priority一眼), then
+     * schema, I/O, wait, InnoDB, user resource, and memory (lower priority).
+     * Mirrors the MySQL Workbench Reports catalog ordering in Appendix B.
+     *
+     * @var array<string, int>
+     */
+    private const CATEGORY_ORDER = [
+        'problems' => 0,
+        'schema' => 1,
+        'io' => 2,
+        'wait' => 3,
+        'innodb' => 4,
+        'user_resource_use' => 5,
+        'memory' => 6,
+    ];
+
     private function __construct(
         private readonly string $basePath,
     ) {}
@@ -68,7 +85,7 @@ final class Catalog
             $columns = array_map(
                 fn(array $col): ColumnDefinition => new ColumnDefinition(
                     name: $col['name'],
-                    type: ColumnType::from($col['type']),
+                    type: ColumnType::tryFrom($col['type']) ?? ColumnType::String,
                     width: $col['width'],
                 ),
                 $reportData['columns']
@@ -147,8 +164,20 @@ final class Catalog
             foreach ($this->reports as $report) {
                 $categories[$report->category] = true;
             }
-            $this->categories = array_keys($categories);
-            sort($this->categories);
+            $categoryNames = array_keys($categories);
+
+            // Sort by curated order (problems first), then alphabetically for unknown categories
+            $maxOrder = max(self::CATEGORY_ORDER) + 1;
+            usort($categoryNames, function (string $a, string $b) use ($maxOrder): int {
+                $orderA = self::CATEGORY_ORDER[$a] ?? $maxOrder;
+                $orderB = self::CATEGORY_ORDER[$b] ?? $maxOrder;
+                if ($orderA !== $orderB) {
+                    return $orderA <=> $orderB;
+                }
+                return $a <=> $b;
+            });
+
+            $this->categories = $categoryNames;
         }
 
         return $this->categories;

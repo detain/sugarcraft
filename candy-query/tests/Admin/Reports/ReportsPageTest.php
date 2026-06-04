@@ -387,4 +387,79 @@ final class ReportsPageTest extends TestCase
             }
         }
     }
+
+    public function testSelectedColumnIndexInitiallyZero(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        $this->assertSame(0, $page->selectedColumnIndex());
+    }
+
+    public function testWithSelectPrevCategory(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        // Starting from first category, prev should wrap to last
+        $prevPage = $page->withSelectPrevCategory();
+        $categories = $prevPage->catalog()->categories();
+        $this->assertSame($categories[count($categories) - 1], $prevPage->selectedCategory());
+    }
+
+    public function testWithSelectNextCategory(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        // Starting from first category, next should go to second
+        $categories = $page->catalog()->categories();
+        $nextPage = $page->withSelectNextCategory();
+        $this->assertSame($categories[1], $nextPage->selectedCategory());
+    }
+
+    public function testWithSelectPrevReport(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        // With a report selected, prev should go to the previous one (wrapping to last)
+        $prevPage = $page->withSelectPrevReport();
+        $this->assertNotNull($prevPage->selectedReport());
+    }
+
+    public function testWithSelectNextReport(): void
+    {
+        $this->context->method('connection')->willReturn($this->db);
+
+        $page = ReportsPage::new($this->context, $this->db);
+        $page->view();
+
+        // With a report selected, next should go to the next one (wrapping to first)
+        $nextPage = $page->withSelectNextReport();
+        $this->assertNotNull($nextPage->selectedReport());
+    }
+
+    public function testWithSelectPrevColumn(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        // When no report is loaded, should return same page
+        $prevPage = $page->withSelectPrevColumn();
+        $this->assertSame(0, $prevPage->selectedColumnIndex());
+    }
+
+    public function testWithSelectNextColumn(): void
+    {
+        $page = ReportsPage::new($this->context, $this->db);
+
+        // When no report is loaded, should return same page
+        $nextPage = $page->withSelectNextColumn();
+        $this->assertSame(0, $nextPage->selectedColumnIndex());
+    }
 }
