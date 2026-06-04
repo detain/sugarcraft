@@ -538,6 +538,14 @@ final class ReportsPage extends PageBase
         return $report->caption ?? $this->selectedReport;
     }
 
+    /**
+     * Load the currently selected report.
+     *
+     * Called by update() in response to ReloadReportMsg (triggered by App after
+     * AdminDataLoadedMsg) and by withering methods that change the selection.
+     * Catches \Throwable so a failed query sets an error message rather than
+     * propagating — view() will show the error inline without crashing the page.
+     */
     private function loadCurrentReport(): void
     {
         if ($this->runner === null || $this->selectedReport === null) {
