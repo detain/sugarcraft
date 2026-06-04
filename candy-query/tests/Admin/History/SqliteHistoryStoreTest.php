@@ -161,4 +161,31 @@ final class SqliteHistoryStoreTest extends TestCase
         $this->assertSame('2', $results[1]->variables['X']);
         $this->assertSame('3', $results[2]->variables['X']);
     }
+
+    /**
+     * Sub-second timestamp records must be preserved across the SQLite REAL
+     * column round-trip. The store uses format('U.u') when building epoch strings
+     * for the query bounds so that boundary records with fractional seconds are
+     * not dropped.
+     *
+     * @see \SugarCraft\Query\Admin\History\HistoryQuery::floatToDateTimeImmutable()
+     */
+    public function testSubSecondTimestampPrecisionIsPreserved(): void
+    {
+        $tsWithSubsecond = 100.5;
+
+        $this->store->save(new StatusSnapshot(['Y' => 'subsecond'], $tsWithSubsecond));
+
+        // Build a DateTimeImmutable the same way HistoryQuery does: floatToDateTimeImmutable
+        $sec = (int) $tsWithSubsecond;
+        $usec = (int)(($tsWithSubsecond - $sec) * 1_000_000);
+        $since = \DateTimeImmutable::createFromFormat('U u', "{$sec} {$usec}") ?: new \DateTimeImmutable();
+        $until = \DateTimeImmutable::createFromFormat('U u', "{$sec} {$usec}") ?: new \DateTimeImmutable();
+
+        $results = $this->store->query($since, $until);
+
+        $this->assertCount(1, $results);
+        $this->assertEqualsWithDelta($tsWithSubsecond, $results[0]->ts, 0.001);
+        $this->assertSame('subsecond', $results[0]->variables['Y']);
+    }
 }
