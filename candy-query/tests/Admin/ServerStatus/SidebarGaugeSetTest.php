@@ -9,6 +9,8 @@ use SugarCraft\Query\Admin\ServerStatus\GaugeType;
 use SugarCraft\Query\Admin\ServerStatus\SidebarGauge;
 use SugarCraft\Query\Admin\ServerStatus\SidebarGaugeSet;
 use SugarCraft\Query\Admin\ServerContextInterface;
+use SugarCraft\Query\Admin\Sampler;
+use SugarCraft\Query\Admin\ServerStatusSnapshotAdapter;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\Version;
 
@@ -194,6 +196,75 @@ final class SidebarGaugeSetTest extends TestCase
         $set = SidebarGaugeSet::new($this->context);
         $this->assertNull($set->previousRates());
     }
+
+    /**
+     * Verifies key-efficiency uses the correct formula: Key_reads / (Key_reads + Key_write_requests).
+     *
+     * STEP 6.1 acceptance: Key-efficiency uses one correct formula.
+     */
+    public function testKeyEfficiencyRatioUsesCorrectFormula(): void
+    {
+        // Key_reads=100, Key_write_requests=400
+        // Expected ratio: 100 / (100 + 400) = 100 / 500 = 0.2
+        $this->context->setStatusVariable('Key_reads', '100');
+        $this->context->setStatusVariable('Key_write_requests', '400');
+
+        $set = SidebarGaugeSet::new($this->context);
+        $keyEffGauge = null;
+
+        foreach ($set->gauges() as $gauge) {
+            if ($gauge->type() === GaugeType::KeyEfficiency) {
+                $keyEffGauge = $gauge;
+                break;
+            }
+        }
+
+        $this->assertNotNull($keyEffGauge);
+        $this->assertEqualsWithDelta(0.2, $keyEffGauge->ratio(), 0.001);
+    }
+
+    /**
+     * Verifies that traffic gauge uses sampler per-second rates, not absolute bytes.
+     *
+     * STEP 6.1 acceptance: Gauges use sampled per-second rates.
+     *
+     * Two-sample test: set bytes to 0 at t=0, then set bytes to 10MB at t=1.
+     * Sampler computes (10485760 - 0) / 1s = 10MB/s.
+     * Traffic ratio = 10MB/s / 10MB/s baseline = 1.0.
+     */
+    public function testTrafficGaugeUsesSamplerPerSecondRates(): void
+    {
+        // Start with zero bytes at t=0
+        $this->context->setStatusVariable('Bytes_received', '0');
+        $this->context->setStatusVariable('Bytes_sent', '0');
+        $this->context->setStatusVariablesTs(0.0);
+
+        $adapter = new ServerStatusSnapshotAdapter($this->context);
+        $sampler = new Sampler($adapter);
+
+        // First poll: establish baseline (sampler stores initial snapshot, returns null rates)
+        $set = SidebarGaugeSet::new($this->context, $sampler);
+        $polled1 = $set->poll();
+
+        // Second poll at t=1 with 10MB received
+        $this->context->setStatusVariablesTs(1.0);
+        $this->context->setStatusVariable('Bytes_received', (string) (10 * 1024 * 1024));
+        $this->context->setStatusVariable('Bytes_sent', '0');
+
+        $polled2 = $polled1->poll();
+
+        $trafficGauge2 = null;
+        foreach ($polled2->gauges() as $gauge) {
+            if ($gauge->type() === GaugeType::Traffic) {
+                $trafficGauge2 = $gauge;
+                break;
+            }
+        }
+        $this->assertNotNull($trafficGauge2);
+
+        // 10MB/s / 10MB/s baseline = 1.0
+        $this->assertEqualsWithDelta(1.0, $trafficGauge2->ratio(), 0.001);
+    }
 }
 
 /**
@@ -208,6 +279,11 @@ final class FakeServerContext implements ServerContextInterface
     private array $statusVariables = [];
 
     private float $ts = 0.0;
+
+    public function setStatusVariablesTs(float $ts): void
+    {
+        $this->ts = $ts;
+    }
 
     public function setServerVariable(string $name, string $value): void
     {

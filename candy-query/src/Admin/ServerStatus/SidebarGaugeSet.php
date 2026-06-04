@@ -198,7 +198,8 @@ final class SidebarGaugeSet
 
         if ($rates !== null) {
             // Use sampler-provided per-second rates for accurate ratio
-            $totalBytesPerSec = ($rates['bytesReceived'] ?? 0.0) + ($rates['bytesSent'] ?? 0.0);
+            // Sampler preserves original MySQL status variable names (Bytes_received, Bytes_sent)
+            $totalBytesPerSec = ($rates['Bytes_received'] ?? 0.0) + ($rates['Bytes_sent'] ?? 0.0);
         } else {
             // Fallback: treat absolute bytes as a proxy for rate
             // This is less accurate but works when sampler is unavailable
