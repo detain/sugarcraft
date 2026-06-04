@@ -162,6 +162,10 @@ SQL;
     /**
      * Get EXPLAIN output for a thread's current query.
      *
+     * Only executes EXPLAIN on a single, simple SELECT statement. Rejects
+     * multi-statement queries and any statement type other than SELECT.
+     * Uses a prepared statement to safely run the EXPLAIN.
+     *
      * @return list<array<string, mixed>>|null EXPLAIN results or null if unavailable
      */
     public function getExplain(int|string $processId): ?array
@@ -177,14 +181,45 @@ SQL;
             return null;
         }
 
-        $sql = "EXPLAIN {$query}";
+        // Guard: only allow single SELECT statements (no multi-statement, no DML/DDL)
+        if (!$this->isSafeExplainQuery($query)) {
+            return null;
+        }
+
         try {
             $connection = $this->context->connection();
-            $rows = $connection->query($sql);
-            return $rows;
+            $stmt = $connection->prepare("EXPLAIN {$query}");
+            if ($stmt === false) {
+                return null;
+            }
+            $stmt->execute([]);
+            return $stmt->fetchAll(\PDO::FETCH_ASSOC);
         } catch (\PDOException $e) {
             return null;
         }
+    }
+
+    /**
+     * Returns true only if the query is a single SELECT safe to EXPLAIN.
+     *
+     * Rejects multi-statement queries (containing ;) and any statement type
+     * other than SELECT (no INSERT/UPDATE/DELETE/DROP/etc).
+     */
+    private function isSafeExplainQuery(string $query): bool
+    {
+        $trimmed = \trim($query);
+
+        // Must start with SELECT (with optional leading whitespace)
+        if (!preg_match('/^SELECT\s+/i', $trimmed)) {
+            return false;
+        }
+
+        // No semicolons = no multi-statement
+        if (str_contains($trimmed, ';')) {
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -192,17 +227,18 @@ SQL;
      */
     private function fetchMdlFromPslocks(int|string $processId): ?array
     {
+        // metadata_locks.OWNER_THREAD_ID joins to threads.THREAD_ID
         $sql = <<<'SQL'
 SELECT
     ml.LOCK_ID AS lock_id,
     ml.LOCK_TYPE AS lock_type,
     ml.LOCK_STATUS AS lock_status,
     ml.LOCK_MODE AS lock_mode,
-    ml.THREAD_ID AS thread_id,
+    ml.OWNER_THREAD_ID AS thread_id,
     t.PROCESSLIST_ID AS processlist_id
 FROM performance_schema.metadata_locks ml
 JOIN performance_schema.threads t
-    ON ml.THREAD_ID = t.THREAD_ID
+    ON ml.OWNER_THREAD_ID = t.THREAD_ID
 WHERE t.PROCESSLIST_ID = ?
 SQL;
 

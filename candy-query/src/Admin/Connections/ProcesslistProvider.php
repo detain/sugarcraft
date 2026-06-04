@@ -81,6 +81,10 @@ final class ProcesslistProvider
     /**
      * Fetch via performance_schema.threads with session_connect_attrs join.
      *
+     * SELECTs both PROCESSLIST_ID (connection id for KILL) and THREAD_ID
+     * (internal id for instrumentation/MDL queries).  Background detection
+     * uses threads.TYPE so isBackground is reliable even when USER is NULL.
+     *
      * @return list<ProcesslistResult>|null null on error (caller should fallback)
      */
     private function fetchViaPS(): ?array
@@ -88,6 +92,7 @@ final class ProcesslistProvider
         $sql = <<<'SQL'
 SELECT
     t.PROCESSLIST_ID,
+    t.THREAD_ID,
     t.PROCESSLIST_USER,
     t.PROCESSLIST_HOST,
     t.PROCESSLIST_DB,
@@ -95,6 +100,7 @@ SELECT
     t.PROCESSLIST_TIME,
     t.PROCESSLIST_STATE,
     t.PROCESSLIST_INFO,
+    t.TYPE,
     COALESCE(a.ATTR_VALUE, '') AS PROCESSLIST_ATTRS
 FROM performance_schema.threads t
 LEFT JOIN performance_schema.session_connect_attrs a
