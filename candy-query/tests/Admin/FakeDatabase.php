@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 
 /**
  * Fake DatabaseInterface for testing without a real database.
@@ -32,6 +33,18 @@ final class FakeDatabase implements DatabaseInterface
         $this->queryResult = [];
     }
 
+    /**
+     * Pop and return the stored query exception.
+     *
+     * Returns null if no exception was stored.
+     */
+    public function popQueryException(): ?\PDOException
+    {
+        $exception = $this->queryException;
+        $this->queryException = null;
+        return $exception;
+    }
+
     public function setServerVersion(string $version): void
     {
         $this->serverVersion = $version;
@@ -49,8 +62,8 @@ final class FakeDatabase implements DatabaseInterface
         return [];
     }
 
-    /** @return list<array<string, mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string, mixed>>|null */
+    public function query(string $sql): array|null
     {
         if ($this->queryException !== null) {
             throw $this->queryException;
@@ -101,13 +114,11 @@ final class FakeDatabase implements DatabaseInterface
     /**
      * Create a prepared statement.
      *
-     * @return FakeStatement|false
+     * @return PreparedStatementInterface|null
      */
-    public function prepare(string $sql): FakeStatement|false
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
-        if ($this->queryException !== null) {
-            return false;
-        }
+        // Always return a statement; any stored exception will be thrown at execute() time
         return new FakeStatement($sql, $this);
     }
 
@@ -139,13 +150,12 @@ final class FakeDatabase implements DatabaseInterface
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }
 
 /**
  * Fake PDOStatement for testing prepared statements.
  */
-final class FakeStatement
+final class FakeStatement implements PreparedStatementInterface
 {
     /** @var list<array<string, mixed>> */
     private array $results = [];
@@ -160,38 +170,67 @@ final class FakeStatement
     /**
      * Execute the prepared statement.
      *
-     * @param list<mixed> $values
+     * @param list<mixed>|null $params
+     * @throws \PDOException if a query exception was set on the database
      */
-    public function execute(array $values = []): bool
+    public function execute(?array $params = null): bool
     {
         if ($this->closed) {
             return false;
         }
 
+        // Throw the stored exception if one was set (simulates query failure)
+        $exception = $this->db->popQueryException();
+        if ($exception !== null) {
+            throw $exception;
+        }
+
         // Record this execution in the database
-        $this->db->recordExecution($this->sql, $values);
+        $this->db->recordExecution($this->sql, $params ?? []);
 
         return true;
     }
 
     /**
-     * Close the cursor.
-     */
-    public function closeCursor(): void
-    {
-        $this->closed = true;
-    }
-
-    /**
-     * Fetch results.
+     * Fetch a single row.
      *
-     * @return list<array<string, mixed>>|false
+     * @return array<string, mixed>|false
      */
-    public function fetchAll(int $mode = \PDO::FETCH_ASSOC): array|false
+    public function fetch(): array|false
     {
         if ($this->closed) {
             return false;
         }
+        return $this->results[0] ?? false;
+    }
+
+    /**
+     * Fetch all results.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function fetchAll(): array
+    {
+        if ($this->closed) {
+            return [];
+        }
         return $this->results;
+    }
+
+    /**
+     * Get row count.
+     */
+    public function rowCount(): int
+    {
+        return count($this->results);
+    }
+
+    /**
+     * Close the cursor.
+     */
+    public function closeCursor(): bool
+    {
+        $this->closed = true;
+        return true;
     }
 }

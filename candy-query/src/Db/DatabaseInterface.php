@@ -104,10 +104,12 @@ interface DatabaseInterface
     /**
      * Prepare a SQL statement for execution.
      *
+     * Returns a driver-neutral prepared statement interface.
+     *
      * @param string $sql The SQL statement to prepare
-     * @return mixed A prepared statement object (implementation-specific) or false on failure
+     * @return PreparedStatementInterface|null A prepared statement or null on failure
      */
-    public function prepare(string $sql): mixed;
+    public function prepare(string $sql): ?PreparedStatementInterface;
 
     /**
      * Get the DSN connection string.
@@ -122,11 +124,4 @@ interface DatabaseInterface
      * @return string Username
      */
     public function username(): string;
-
-    /**
-     * Get the database password.
-     *
-     * @return string Password
-     */
-    public function password(): string;
 }

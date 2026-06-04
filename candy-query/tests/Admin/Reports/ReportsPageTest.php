@@ -9,6 +9,7 @@ use SugarCraft\Query\Admin\Reports\Catalog;
 use SugarCraft\Query\Admin\Reports\ReportsPage;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 
 /**
  * Tests for ReportsPage.
@@ -40,7 +41,7 @@ final class ReportsPageTest extends TestCase
                 return [];
             }
 
-            public function query(string $sql): array
+            public function query(string $sql): array|null
             {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     $result = [];
@@ -105,14 +106,13 @@ final class ReportsPageTest extends TestCase
                 return ['test'];
             }
 
-            public function prepare(string $sql): mixed
+            public function prepare(string $sql): ?PreparedStatementInterface
             {
-                return false;
+                return null;
             }
 
             public function dsn(): string { return ''; }
             public function username(): string { return ''; }
-            public function password(): string { return ''; }
         };
     }
 
@@ -128,7 +128,7 @@ final class ReportsPageTest extends TestCase
         $brokenDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
             public function rows(string $table, int $limit = 100): array { return []; }
-            public function query(string $sql): array {
+            public function query(string $sql): array|null {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     throw new \PDOException('Table not found');
                 }
@@ -142,10 +142,9 @@ final class ReportsPageTest extends TestCase
             public function driverName(): string { return 'mysql'; }
             public function ping(): bool { return true; }
             public function databases(): array { return ['test']; }
-            public function prepare(string $sql): mixed { return false; }
+            public function prepare(string $sql): ?PreparedStatementInterface { return null; }
             public function dsn(): string { return ''; }
             public function username(): string { return ''; }
-            public function password(): string { return ''; }
         };
 
         $this->context->method('connection')->willReturn($brokenDb);
@@ -305,7 +304,7 @@ final class ReportsPageTest extends TestCase
         $injectionDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
             public function rows(string $table, int $limit = 100): array { return []; }
-            public function query(string $sql): array {
+            public function query(string $sql): array|null {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     return [['Tables_in_sys' => 'x$statement_analysis']];
                 }
@@ -329,10 +328,9 @@ final class ReportsPageTest extends TestCase
             public function driverName(): string { return 'mysql'; }
             public function ping(): bool { return true; }
             public function databases(): array { return ['test']; }
-            public function prepare(string $sql): mixed { return false; }
+            public function prepare(string $sql): ?PreparedStatementInterface { return null; }
             public function dsn(): string { return ''; }
             public function username(): string { return ''; }
-            public function password(): string { return ''; }
         };
 
         $this->context->method('connection')->willReturn($injectionDb);

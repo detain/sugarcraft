@@ -10,6 +10,7 @@ use SugarCraft\Query\Admin\Reports\Catalog;
 use SugarCraft\Query\Admin\Reports\ReportResult;
 use SugarCraft\Query\Admin\Reports\ReportRunner;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 
 /**
  * Tests for ReportRunner execution.
@@ -52,7 +53,7 @@ final class ReportRunnerTest extends TestCase
                 return [];
             }
 
-            public function query(string $sql): array
+            public function query(string $sql): array|null
             {
                 if (str_contains($sql, 'SHOW FULL TABLES FROM sys')) {
                     return [
@@ -120,14 +121,13 @@ final class ReportRunnerTest extends TestCase
                 return ['test'];
             }
 
-            public function prepare(string $sql): mixed
+            public function prepare(string $sql): ?PreparedStatementInterface
             {
-                return false;
+                return null;
             }
 
             public function dsn(): string { return ''; }
             public function username(): string { return ''; }
-            public function password(): string { return ''; }
         };
     }
 

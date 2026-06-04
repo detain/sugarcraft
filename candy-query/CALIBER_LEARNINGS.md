@@ -154,3 +154,18 @@ Source: step 2.1 ai/candy-query-dsn-and-factory
 Pattern: `ConnectionFactory::fromDsn()` uses `parse_url()` for non-SQLite drivers, which correctly handles URL-encoded special chars in passwords (`rawurldecode()`), passwordless users (no `:` required), and IPv6 hosts (brackets stripped). SQLite uses a direct regex because `parse_url()` returns `false` for `sqlite:///path` and parses `:memory:` as `host=':memory'`. The old hand-rolled `explode('@'|':')` parser broke on any of these cases.
 Canonical: `ConnectionFactory::fromDsn()` — `parse_url()` for mysql/pgsql, regex for sqlite.
 Source: step 2.1 ai/candy-query-dsn-and-factory
+
+### 2026-06-03 — query() returns null on disconnectable error (STEP 2.2)
+Pattern: `MysqlDatabase::query()` and `PostgresDatabase::query()` now return `array|null` — on errors 2002/2003/2013 (connection lost) they return `null` instead of `[]`. Callers that iterate the result directly (e.g., `foreach ($db->query($sql) as $row)`) must guard against null. This is a deliberate contract change to signal reconnectable failures distinctly from empty results.
+Canonical: `if (($rows = $db->query($sql)) === null) { /* reconnect and retry */ }`.
+Source: step 2.2 ai/candy-query-query-contract-and-flavor
+
+### 2026-06-03 — PreparedStatementInterface as driver-neutral statement contract (STEP 2.2)
+Pattern: `DatabaseInterface::prepare()` now returns `PreparedStatementInterface|null` instead of `mixed`. All three database implementations wrap their PDOStatement in `PdoPreparedStatement` before returning. This gives callers a uniform type (`execute()`/`fetch()`/`fetchAll()`/`rowCount()`/`closeCursor()`) without depending on the raw PDOStatement type, making it possible to mock statements in tests or swap drivers without changing call sites.
+Canonical: `PdoPreparedStatement` wraps `$pdo->prepare($sql)` and delegates all five interface methods; `SqlitePreparedStatement` does the same for the sqlite-specific path.
+Source: step 2.2 ai/candy-query-query-contract-and-flavor
+
+### 2026-06-03 — Flavor::detectFromDriver() companion to detectFromVersionString() (STEP 2.2)
+Pattern: `Flavor::detectFromDriver()` uses the PDO driver name ('mysql', 'pgsql', 'sqlite') as the primary signal, then calls `detectFromVersionString()` only for the mysql driver when a version string is also provided. This ensures a mysql/pgsql driver never accidentally falls back to SQLite for an unparseable version string.
+Canonical: `Flavor::detectFromDriver($driverName, $version, $versionComment)` — mysql + version → `detectFromVersionString()`, pgsql → `Postgres`, sqlite → `Sqlite`, default → `Sqlite`.
+Source: step 2.2 ai/candy-query-query-contract-and-flavor

@@ -84,7 +84,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
       <div class="feature"><strong>SnippetStore</strong><span>File-backed JSON store for named SQL snippets. <code>load()</code>/<code>add()</code>/<code>flush()</code>/<code>find()</code>/<code>search()</code>/<code>delete()</code> — immutable + fluent, persists to <code>/tmp/candy-query-snippets.json</code>.</span></div>
       <div class="feature"><strong>ConnectionConfig</strong><span>Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Password never echoed.</span></div>
       <div class="feature"><strong>ConnectionFactory</strong><span>Static factory: <code>fromDsn()</code>, <code>fromConfig()</code>, <code>fromArgv()</code>. Builds configured PDO connections.</span></div>
-      <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor.</span></div>
+      <div class="feature"><strong>Flavor</strong><span>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code>. Identifies the database server flavor. <code>Flavor::detectFromDriver()</code> detects flavor from a PDO driver name + optional version string; <code>Flavor::detectFromVersionString()</code> refines MySQL to MariaDB/Percona using the version comment.</span></div>
       <div class="feature"><strong>Version</strong><span>Parser for server version strings. Handles MariaDB's <code>5.5.5-</code> prefix. <code>isAtLeast(Version)</code> compares versions safely.</span></div>
       <div class="feature"><strong>ExplainView</strong><span>Strategy pattern for <code>EXPLAIN</code> output — delegates to driver-specific <code>ExplainProviderInterface</code> (<code>SqliteExplainProvider</code>, <code>MysqlExplainProvider</code>, <code>PostgresExplainProvider</code>) based on <code>Flavor</code>. <code>run()</code> executes against a Database; <code>render()</code> produces ANSI coloured tree; <code>toArray()</code> returns JSON-serialisable structure.</span></div>
       <div class="feature"><strong>ResultTable</strong><span>SQL result set renderer with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. <code>scrollLeft()</code>/<code>scrollRight()</code>/<code>render()</code>/<code>renderPlain()</code>.</span></div>
@@ -125,7 +125,14 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>DatabaseInterface</td><td>databases()</td><td>List available databases</td></tr>
 <tr><td>DatabaseInterface</td><td>tables()</td><td>List all tables</td></tr>
 <tr><td>DatabaseInterface</td><td>rows(table, limit, offset)</td><td>Get table rows</td></tr>
-<tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query</td></tr>
+<tr><td>DatabaseInterface</td><td>query(sql)</td><td>Execute SQL query; returns <code>list&lt;array&gt;|null</code> — null signals a reconnectable connection error (2002/2003/2013), empty array means no rows</td></tr>
+<tr><td>DatabaseInterface</td><td>prepare(sql)</td><td>Prepare SQL; returns <code>PreparedStatementInterface|null</code> — driver-neutral statement wrapper</td></tr>
+<tr><td>PreparedStatementInterface</td><td>execute(params?)</td><td>Execute with bound params; returns bool</td></tr>
+<tr><td>PreparedStatementInterface</td><td>fetch()</td><td>Fetch next row; returns <code>array&lt;string,mixed&gt;|false</code></td></tr>
+<tr><td>PreparedStatementInterface</td><td>fetchAll()</td><td>Fetch all rows; returns <code>list&lt;array&lt;string,mixed&gt;&gt;</code></td></tr>
+<tr><td>PreparedStatementInterface</td><td>rowCount()</td><td>Rows affected by last query</td></tr>
+<tr><td>PreparedStatementInterface</td><td>closeCursor()</td><td>Close cursor, enabling re-execution</td></tr>
+<tr><td>PdoPreparedStatement</td><td>—</td><td><code>PreparedStatementInterface</code> via PDOStatement. All database implementations (<code>MysqlDatabase</code>, <code>PostgresDatabase</code>, <code>SqliteDatabase</code>) wrap their <code>PDOStatement</code> in this before returning from <code>prepare()</code>.</td></tr>
 <tr><td>App</td><td>start(database, ?Flavor $flavor = Flavor::Sqlite)</td><td>Create the app model</td></tr>
 <tr><td>SchemaBrowser</td><td>refresh()</td><td>Load schema via driver-specific SchemaProviderInterface</td></tr>
 <tr><td>SchemaBrowser</td><td>forFlavor(flavor, pdo)</td><td>Create browser with explicit Flavor (static factory)</td></tr>
@@ -186,7 +193,7 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
 <tr><td>ConnectionFactory</td><td>fromDsn(dsn)</td><td>Parse DSN string via <code>parse_url()</code> (mysql/pgsql) or regex (sqlite) and build a <code>ConnectionConfig</code>. Handles URL-encoded passwords, passwordless users, and IPv6 hosts. The <code>?ssl-mode=</code> query param is parsed and stored in <code>ConnectionConfig.sslMode</code>; SSL is applied as PDO driver options in <code>MysqlDatabase::connect()</code>, not embedded in the DSN string. Examples: <code>mysql://u:p%40ss@[::1]:3306/db</code>, <code>mysql://root@localhost/db</code>.</td></tr>
 <tr><td>ConnectionFactory</td><td>fromConfig(config)</td><td>Build PDO from ConnectionConfig value object</td></tr>
 <tr><td>ConnectionFactory</td><td>fromArgv()</td><td>Build PDO from CLI args (--db-driver, --db-host, --db-port, --db-user, --db-pass, --db-name, --db-ssl-mode)</td></tr>
-<tr><td>Flavor</td><td>—</td><td>Enum: <code>MySQL</code>, <code>MariaDB</code>, <code>Percona</code>, <code>Postgres</code>, <code>Sqlite</code></td></tr>
+<tr><td>Flavor</td><td>detectFromDriver(driver, version?, versionComment?)</td><td>Detect flavor from PDO driver name ('mysql', 'pgsql', 'sqlite') + optional version string. Uses <code>detectFromVersionString()</code> for MySQL refinement. Ensures mysql/pgsql never falls back to SQLite for an unparseable version.</td></tr>
 <tr><td>Version</td><td>isAtLeast(Version)</td><td>Compare version strings (handles MariaDB 5.5.5- prefix)</td></tr>
 <tr><td>ResultTable</td><td>fromRows(rows)</td><td>Factory from a list of associative row arrays</td></tr>
 <tr><td>ResultTable</td><td>scrollLeft() / scrollRight()</td><td>Scroll viewport by one column</td></tr>

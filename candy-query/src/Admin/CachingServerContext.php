@@ -82,6 +82,11 @@ final class CachingServerContext implements ServerContextInterface
         return $this->inner->versionString();
     }
 
+    public function password(): string
+    {
+        return $this->inner->password();
+    }
+
     public function wasReset(): bool
     {
         return $this->inner->wasReset();
