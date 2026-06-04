@@ -290,7 +290,15 @@ final class App implements Model
             }
             return [$this, null];
         }
-        return [$this, null];
+
+        // Delegate unhandled keys to the active page's update(), following the
+        // precedence: app-level keys (digits, q, j/k, p, r) are handled above;
+        // page keys (Tab, w, s, etc.) reach the page here. This ensures pages
+        // like VariablesPage can respond to Tab/Space/etc. while preserving
+        // the returned page state across poll-tick refreshes.
+        $page = $this->adminPage();
+        [$newPage, $cmd] = $page->update($msg);
+        return [$this->withAdminPage($newPage), $cmd];
     }
 
     private function editQuery(KeyMsg $msg): self
@@ -663,7 +671,10 @@ final class App implements Model
 
     private function withAdminLoading(bool $loading): self
     {
-        // adminPage reset to null forces recreation against the fresh data.
-        return $this->mutate(['adminPage' => null, 'adminLoading' => $loading]);
+        // Preserve adminPage across loading cycles so in-memory state (tab,
+        // cursor, pending edits) survives a poll-tick refresh. The page reads
+        // fresh data from the shared AdminQueryCache on next render. Only
+        // withAdminPane() resets adminPage when the pane actually changes.
+        return $this->mutate(['adminLoading' => $loading]);
     }
 }
