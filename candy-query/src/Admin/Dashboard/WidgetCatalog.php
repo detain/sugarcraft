@@ -29,7 +29,7 @@ final class WidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function network(): array
+    public function network(): array
     {
         return [
             [
@@ -98,7 +98,7 @@ final class WidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function mysqlPre80(): array
+    public function mysqlPre80(): array
     {
         $ddlRates = (new MakeTuple(','))
             ->addRate('Com_create_db')
@@ -204,7 +204,7 @@ final class WidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function mysqlPost80(): array
+    public function mysqlPost80(): array
     {
         $ddlRates = (new MakeTuple(','))
             ->addRate('Com_create_db')
@@ -308,7 +308,7 @@ final class WidgetCatalog
      *
      * @return list<array{string,string,object,string,array{r:int,g:int,b:int},string,array<string,string>|null}>
      */
-    public static function innodb(): array
+    public function innodb(): array
     {
         return [
             [
