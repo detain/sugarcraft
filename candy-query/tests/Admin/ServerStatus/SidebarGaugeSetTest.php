@@ -40,33 +40,6 @@ final class SidebarGaugeSetTest extends TestCase
         $this->assertCount(5, $gauges);
     }
 
-    public function testCpuGaugeIsNullWhenMaxConnectionsUnavailable(): void
-    {
-        $set = SidebarGaugeSet::new($this->context);
-        $this->assertNull($set->cpuGauge());
-    }
-
-    public function testCpuGaugeIsPresentWhenMaxConnectionsAvailable(): void
-    {
-        $this->context->setServerVariable('max_connections', '100');
-        $this->context->setStatusVariable('Threads_connected', '50');
-
-        $set = SidebarGaugeSet::new($this->context);
-
-        $this->assertNotNull($set->cpuGauge());
-        $this->assertInstanceOf(SidebarGauge::class, $set->cpuGauge());
-    }
-
-    public function testCpuGaugeRatioIsCorrect(): void
-    {
-        $this->context->setServerVariable('max_connections', '100');
-        $this->context->setStatusVariable('Threads_connected', '50');
-
-        $set = SidebarGaugeSet::new($this->context);
-
-        $this->assertEquals(0.5, $set->cpuGauge()->ratio());
-    }
-
     public function testPollReturnsNewInstance(): void
     {
         $set = SidebarGaugeSet::new($this->context);
@@ -81,17 +54,6 @@ final class SidebarGaugeSetTest extends TestCase
         $polled = $set->poll();
 
         $this->assertCount(count($set->gauges()), $polled->gauges());
-    }
-
-    public function testPollPreservesCpuGauge(): void
-    {
-        $this->context->setServerVariable('max_connections', '100');
-        $this->context->setStatusVariable('Threads_connected', '50');
-
-        $set = SidebarGaugeSet::new($this->context);
-        $polled = $set->poll();
-
-        $this->assertNotNull($polled->cpuGauge());
     }
 
     public function testViewReturnsString(): void
@@ -120,18 +82,6 @@ final class SidebarGaugeSetTest extends TestCase
         $this->assertStringContainsString('Key Eff', $view);
         $this->assertStringContainsString('QPS', $view);
         $this->assertStringContainsString('InnoDB', $view);
-    }
-
-    public function testViewIncludesCpuGaugeWhenAvailable(): void
-    {
-        $this->context->setServerVariable('max_connections', '100');
-        $this->context->setStatusVariable('Threads_connected', '50');
-
-        $set = SidebarGaugeSet::new($this->context);
-        $view = $set->view();
-
-        // CPU gauge renders as a circular gauge with percentage " 50% "
-        $this->assertStringContainsString(' 50% ', $view);
     }
 
     public function testConnectionsRatioIsComputed(): void

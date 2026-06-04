@@ -28,9 +28,11 @@ use SugarCraft\Query\Admin\Reports\ReportsPage;
 use SugarCraft\Query\Admin\Providers\PostgresAdminProvider;
 use SugarCraft\Query\Admin\PerfSchema\EasySetupDetector;
 use SugarCraft\Query\Admin\PerfSchema\PerfSchemaPage;
+use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContext;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
+use SugarCraft\Query\Admin\ServerStatusSnapshotAdapter;
 use SugarCraft\Query\Admin\Variables\Catalog;
 use SugarCraft\Query\Admin\Variables\VariableEditor;
 use SugarCraft\Query\Admin\Variables\VariablesPage;
@@ -466,7 +468,7 @@ final class App implements Model
             AdminPane::ProcessList => ConnectionsPage::new($context),
             AdminPane::Dashboard => new DashboardPage($context),
             AdminPane::Variables => self::buildVariablesPage($context),
-            AdminPane::Status => ServerStatusPage::new($context),
+            AdminPane::Status => self::buildServerStatusPage($context),
             AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
             AdminPane::PerfSchema => PerfSchemaPage::new($context, EasySetupDetector::fromContext($context)),
             AdminPane::Debug => DebugPage::new($context),
@@ -515,6 +517,20 @@ final class App implements Model
         $editor = VariableEditor::new($context, $catalog);
 
         return VariablesPage::new($context, $catalog, $editor);
+    }
+
+    /**
+     * Build a ServerStatusPage with a Sampler for per-second rate sampling.
+     *
+     * The Sampler requires a StatusSnapshotProviderInterface, so we wrap
+     * the ServerContextInterface in a ServerStatusSnapshotAdapter.
+     */
+    private static function buildServerStatusPage(ServerContextInterface $context): ServerStatusPage
+    {
+        $adapter = new ServerStatusSnapshotAdapter($context);
+        $sampler = new Sampler($adapter);
+
+        return ServerStatusPage::new($context, $sampler);
     }
 
     private function withPane(Pane $p): self
