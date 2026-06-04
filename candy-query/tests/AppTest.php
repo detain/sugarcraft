@@ -48,10 +48,11 @@ final class AppTest extends TestCase
     }
 
     /**
-     * Number keys must reach every admin pane, not just the first six. Debug
-     * (the 8th pane) and Performance Schema (the 7th) used to be unreachable
-     * by digit because the handler capped at '1'-'6'; they were navigable only
-     * by j/k scrolling. Pressing '8' from the admin view selects Debug.
+     * Digit keys select panes by sidebar display order (Management section
+     * first, then Performance section). All 8 panes are reachable by digit.
+     * Previously the handler used enum case order which differed from the
+     * section-grouped sidebar order, so pressing digit N did NOT select the
+     * pane shown at row N in the sidebar.
      */
     public function testNumberKeySelectsLaterAdminPanes(): void
     {
@@ -62,12 +63,14 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         $this->assertSame(Pane::Admin, $a->pane);
 
-        // '7' → Performance Schema (index 6), '8' → Debug (index 7).
+        // Sidebar display order (Management, then Performance):
+        // 1=ProcessList, 2=Variables, 3=Status, 4=Debug,
+        // 5=QueryStats, 6=Dashboard, 7=TableStats, 8=PerfSchema
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '7'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::PerfSchema, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::TableStats, $a->adminPane);
 
         [$a, ] = $a->update(new KeyMsg(KeyType::Char, '8'));
-        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Debug, $a->adminPane);
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::PerfSchema, $a->adminPane);
     }
 
     /**
@@ -117,8 +120,10 @@ final class AppTest extends TestCase
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->pane);
 
-        // Switch to DashboardPage (pane 5 — see AdminPane enum order).
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '5'));
+        // Switch to DashboardPage (pane 6 — sidebar display order is
+        // Management: ProcessList,Variables,Status,Debug then Performance:
+        // QueryStats,Dashboard,TableStats,PerfSchema).
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '6'));
         $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
 
         // 'a' is NOT an app-level key, so it reaches DashboardPage->update().
@@ -159,8 +164,9 @@ final class AppTest extends TestCase
         // adminPage is now lazily created.
         $createdPage = $a->adminPage();
 
-        // Switch to DashboardPage (pane 5 — see AdminPane enum order) and toggle pause via the app-level 'p' handler.
-        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '5'));
+        // Switch to DashboardPage (pane 6 in sidebar display order) and
+        // toggle pause via the app-level 'p' handler.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '6'));
         $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
         $pageBefore = $a->adminPage();
         $this->assertFalse($pageBefore->isPaused());
