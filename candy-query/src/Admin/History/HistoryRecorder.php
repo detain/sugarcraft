@@ -10,8 +10,8 @@ use SugarCraft\Query\Admin\StatusSnapshotProviderInterface;
 /**
  * Passive recorder that persists StatusSnapshots to a HistoryStore.
  *
- * This class does NOT poll on its own — callers (e.g. StatusPoller,
- * DashboardPage) decide when to record. It can optionally pull from a
+ * This class does NOT poll on its own — callers (e.g. DashboardPage)
+  * decide when to record. It can optionally pull from a
  * StatusSnapshotProvider, making it usable as a sampler input.
  *
  * Implements StatusSnapshotProviderInterface so a HistoryRecorder

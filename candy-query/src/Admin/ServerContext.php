@@ -244,7 +244,7 @@ final class ServerContext implements ServerContextInterface
      * Compares the current Uptime status variable against the last observed
      * value. If the new uptime is less than the previous (wrap or restart),
      * sets wasResetCache to true. This is the single authoritative source of
-     * restart detection — consumers (Sampler, StatusPoller) delegate to
+     * restart detection — consumers (Sampler) delegate to
      * ServerContext via StatusSnapshotProviderInterface::wasReset().
      *
      * Called automatically by statusVariables() after fetching fresh data.
