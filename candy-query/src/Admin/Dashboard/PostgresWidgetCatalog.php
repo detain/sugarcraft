@@ -12,8 +12,18 @@ use SugarCraft\Query\Admin\Calc\MakeTuple;
 /**
  * PostgreSQL widget catalog for the Performance Dashboard.
  *
- * Provides I/O, Transactions, and Cache panel widgets using
- * PostgreSQL pg_stat_database metrics.
+ * Provides I/O, Transactions, and Cache panel widgets backed by
+ * PostgreSQL pg_stat_database and pg_settings metrics.
+ *
+ * Status variable keys are aggregated into a system-wide snapshot where
+ * each pg_stat_database column appears as a top-level key prefixed with
+ * "pg_stat_database." (e.g. pg_stat_database.tup_fetched, pg_stat_database.blks_hit).
+ * shared_buffers is read from pg_settings and scaled from 8KB blocks to bytes
+ * (value * block_size) so the %.0f B format string renders correctly.
+ *
+ * All catalog methods are instance methods (not static), allowing
+ * WidgetRegistry to build panels by calling $catalog->io() etc. and
+ * optionally subclassing for flavour-specific overrides.
  *
  * Widget array entry format:
  *   [caption, kind, calc, format, color, tooltip, serverVarsKeys]
