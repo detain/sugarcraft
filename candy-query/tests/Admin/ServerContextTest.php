@@ -9,6 +9,7 @@ use SugarCraft\Query\Admin\ServerContext;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 use SugarCraft\Query\Db\Version;
 
 /**
@@ -260,6 +261,18 @@ final class FakeDatabase implements DatabaseInterface
         $this->queryResult = [];
     }
 
+    /**
+     * Pop and return the stored query exception.
+     *
+     * Returns null if no exception was stored.
+     */
+    public function popQueryException(): ?\PDOException
+    {
+        $exception = $this->queryException;
+        $this->queryException = null;
+        return $exception;
+    }
+
     public function setServerVersion(string $version): void
     {
         $this->serverVersion = $version;
@@ -277,8 +290,8 @@ final class FakeDatabase implements DatabaseInterface
         return [];
     }
 
-    /** @return list<array<string, mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string, mixed>>|null */
+    public function query(string $sql): array|null
     {
         if ($this->queryException !== null) {
             throw $this->queryException;
@@ -326,20 +339,26 @@ final class FakeDatabase implements DatabaseInterface
         return [];
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
-        if ($this->queryException !== null) {
-            throw $this->queryException;
-        }
-        return new class($sql, $this) {
+        // Always return a statement; any stored exception will be thrown at execute() time
+        return new class($sql, $this) implements PreparedStatementInterface {
             private string $sql;
             private $db;
             public function __construct(string $sql, $db) { $this->sql = $sql; $this->db = $db; }
-            public function execute(array $values = []): bool {
-                $this->db->recordExecution($this->sql, $values);
+            public function execute(?array $params = null): bool {
+                // Throw the stored exception if one was set (simulates query failure)
+                $exception = $this->db->popQueryException();
+                if ($exception !== null) {
+                    throw $exception;
+                }
+                $this->db->recordExecution($this->sql, $params ?? []);
                 return true;
             }
-            public function closeCursor(): void {}
+            public function fetch(): array|false { return false; }
+            public function fetchAll(): array { return []; }
+            public function rowCount(): int { return 0; }
+            public function closeCursor(): bool { return true; }
         };
     }
 
@@ -355,5 +374,4 @@ final class FakeDatabase implements DatabaseInterface
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }
