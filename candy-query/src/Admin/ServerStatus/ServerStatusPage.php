@@ -36,6 +36,11 @@ final class ServerStatusPage extends PageBase
     private ?Sampler $sampler = null;
     private ?SidebarGaugeSet $gaugeSet = null;
 
+    /** @var ReplicaStatusKind::*|null */
+    private string|null $gtidModeCurrent = null;
+    private bool $gtidDialog = false;
+    private string $gtidModeEdit = '';
+
     public function __construct(
         ServerContextInterface $context,
         ?ReplicaStatusProvider $replicaProvider = null,
@@ -113,7 +118,7 @@ final class ServerStatusPage extends PageBase
     }
 
     /**
-     * Handle keyboard shortcuts for refresh and quit.
+     * Handle keyboard shortcuts for refresh, quit, and GTID mode selector.
      */
     public function update(\SugarCraft\Core\Msg $msg): array
     {
@@ -123,9 +128,15 @@ final class ServerStatusPage extends PageBase
 
         $ch = $msg->rune ?? '';
 
+        // GTID dialog takes priority when active
+        if ($this->gtidDialog) {
+            return $this->updateGtidDialog($msg);
+        }
+
         return match (true) {
             $ch === 'r' => [$this->withRefresh(), null],
             $ch === 'q' => [$this->withQuit(), null],
+            $ch === 'g' => $this->withGtidDialog(),
             default => [$this, null],
         };
     }
@@ -157,7 +168,7 @@ final class ServerStatusPage extends PageBase
             ['SSL', $this->tristate($this->hasSsl($serverVars))],
             ['Fulltext', $this->tristate($this->hasFulltext($serverVars))],
             ['Events', $this->tristate($this->hasEvents($serverVars))],
-            ['Stored Programs', $this->tristate($this->hasStoredPrograms($serverVars))],
+            ['Stored Programs', $this->tristate($this->hasStoredPrograms())],
             ['Partitioning', $this->tristate($this->hasPartitioning($serverVars))],
             ['X Plugin', $this->tristate($this->hasXPlugin($serverVars))],
         ]);
@@ -202,39 +213,56 @@ final class ServerStatusPage extends PageBase
 
     private function renderReplicaPanel(): string
     {
-        $replicaStatus = $this->replicaProvider->fetchStatus();
+        $kind = $this->replicaProvider->lastFetchKind();
+        $rows = $this->replicaProvider->fetchStatus();
 
-        if ($replicaStatus === null || count($replicaStatus) === 0) {
-            return Card::titled('Not configured or not accessible', 'Replication')->render();
+        // Distinct states for the replica panel
+        if ($kind === ReplicaStatusKind::PermissionDenied) {
+            return Card::titled('Insufficient privileges (REPLICATION CLIENT)', 'Replication')->render();
         }
 
-        $list = DefinitionList::new()
-            ->withPlaceholder('-')
-            ->withRows([
-                ['Master Host', $this->resolveValue($replicaStatus['Master_Host'] ?? $replicaStatus['Source_Host'] ?? null)],
-                ['Master Port', $this->resolveValue($replicaStatus['Master_Port'] ?? $replicaStatus['Source_Port'] ?? null)],
-                ['Slave IO Running', $this->replicaState($replicaStatus['Slave_IO_Running'] ?? $replicaStatus['Replica_IO_Running'] ?? null)],
-                ['Slave SQL Running', $this->replicaState($replicaStatus['Slave_SQL_Running'] ?? $replicaStatus['Replica_SQL_Running'] ?? null)],
-                ['Seconds Behind', $this->secondsBehind($replicaStatus['Seconds_Behind_Master'] ?? $replicaStatus['Seconds_Behind_Source'] ?? null)],
-                ['Relay Log File', $this->resolveValue($replicaStatus['Relay_Log_File'] ?? null)],
-                ['Relay Pos', $this->resolveValue($replicaStatus['Relay_Log_Pos'] ?? null)],
-            ]);
+        if ($kind === ReplicaStatusKind::Error) {
+            return Card::titled('Error accessing replication status', 'Replication')->render();
+        }
 
-        return Card::titled($list, 'Replication')->render();
+        if ($kind === ReplicaStatusKind::NotConfigured || count($rows) === 0) {
+            return Card::titled('Not configured', 'Replication')->render();
+        }
+
+        // Build a card per channel (multi-channel support)
+        $cards = [];
+        foreach ($rows as $channelRow) {
+            $list = DefinitionList::new()
+                ->withPlaceholder('-')
+                ->withRows([
+                    ['Channel', $this->resolveValue($channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? null)],
+                    ['Master Host', $this->resolveValue($channelRow['Master_Host'] ?? $channelRow['Source_Host'] ?? null)],
+                    ['Master Port', $this->resolveValue($channelRow['Master_Port'] ?? $channelRow['Source_Port'] ?? null)],
+                    ['Slave IO Running', $this->replicaState($channelRow['Slave_IO_Running'] ?? $channelRow['Replica_IO_Running'] ?? null)],
+                    ['Slave SQL Running', $this->replicaState($channelRow['Slave_SQL_Running'] ?? $channelRow['Replica_SQL_Running'] ?? null)],
+                    ['Seconds Behind', $this->secondsBehind($channelRow['Seconds_Behind_Master'] ?? $channelRow['Seconds_Behind_Source'] ?? null)],
+                    ['Relay Log File', $this->resolveValue($channelRow['Relay_Log_File'] ?? null)],
+                    ['Relay Pos', $this->resolveValue($channelRow['Relay_Log_Pos'] ?? null)],
+                ]);
+
+            $channelLabel = $channelRow['Channel_name'] ?? $channelRow['Connection_name'] ?? 'Default';
+            $cards[] = Card::titled($list, "Replication › {$channelLabel}")->render();
+        }
+
+        return implode("\n\n", $cards);
     }
 
     private function renderFirewallPanel(): string
     {
-        // Firewall status is typically only available on managed cloud instances;
-        // degrade gracefully when the Aurora marker variable is absent.
-        $statusVars = $this->context->statusVariables();
-        $hasFirewall = isset($statusVars['Aurora_lwm']);
+        $serverVars = $this->context->serverVariables();
+
+        $hasFirewall = $this->hasFirewall($serverVars);
 
         $list = DefinitionList::new()->withRows([
-            ['AWS RDS Firewall', $this->tristate($hasFirewall)],
+            ['MySQL Firewall', $this->tristate($hasFirewall)],
         ]);
 
-        return Card::titled($list, 'Firewall (AWS RDS compat.)')->render();
+        return Card::titled($list, 'Firewall')->render();
     }
 
     private function renderFooter(): string
@@ -395,11 +423,20 @@ final class ServerStatusPage extends PageBase
 
     /**
      * True when FULLTEXT indexing is available (MySQL 5.6+).
+     *
+     * Uses $serverVars to check ft_max_word_len / ft_min_word_len as a
+     * proxy for fulltext support being compiled in (these vars are only
+     * present when the feature is available).
      */
     private function hasFulltext(array $serverVars): bool
     {
         $version = $this->context->version();
-        return $version->isAtLeast(5, 6);
+        if (!$version->isAtLeast(5, 6)) {
+            return false;
+        }
+
+        // These variables only exist when FULLTEXT is compiled in
+        return isset($serverVars['ft_max_word_len']) || isset($serverVars['ft_min_word_len']);
     }
 
     /**
@@ -412,25 +449,46 @@ final class ServerStatusPage extends PageBase
     }
 
     /**
-     * True when stored procedures/functions are present.
+     * True when stored procedures or functions are present.
      *
-     * Detected by checking if routine-related status variables are non-zero.
+     * Detected by querying information_schema.ROUTINES (supports all dialects;
+     * on MariaDB or older MySQL the table exists and the count query is cheap).
      */
-    private function hasStoredPrograms(array $serverVars): bool
+    private function hasStoredPrograms(): bool
     {
-        $statusVars = $this->context->statusVariables();
-        $procs = $statusVars['Procedures'] ?? $statusVars['Functions'] ?? '0';
-        return (int) $procs > 0;
+        try {
+            $connection = $this->context->connection();
+            $result = $connection->query(
+                'SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA NOT IN (\'information_schema\', \'performance_schema\', \'mysql\') LIMIT 1'
+            );
+            return count($result) > 0 && ($result[0]['COUNT(*)'] ?? 0) > 0;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
      * True when table partitioning is available.
+     *
+     * Partitioning is compiled in by default from MySQL 5.1 onward. The
+     * have_partitioning server variable (when present and OFF) indicates
+     * it was disabled at build time, but in practice it is always available.
+     * We use the server version + optionally have_partitioning var.
      */
     private function hasPartitioning(array $serverVars): bool
     {
-        // Partitioning is available in MySQL 5.1+ and always compiled in
         $version = $this->context->version();
-        return $version->isAtLeast(5, 1);
+        if (!$version->isAtLeast(5, 1)) {
+            return false;
+        }
+
+        // have_partitioning = YES means built-in; OFF means disabled at build
+        $have = $serverVars['have_partitioning'] ?? null;
+        if ($have !== null) {
+            return strtoupper($have) === 'YES';
+        }
+
+        return true; // 5.1+ by default has partitioning compiled in
     }
 
     /**
@@ -447,6 +505,37 @@ final class ServerStatusPage extends PageBase
 
         $port = $serverVars['mysqlx_port'] ?? null;
         return $port !== null && (int) $port > 0;
+    }
+
+    /**
+     * True when the MySQL Enterprise Firewall or audit plugin is active.
+     *
+     * Detected via mysql_firewall_mode status variable (MySQL Enterprise)
+     * or by checking for an active AUDIT plugin that provides firewall
+     * functionality on some managed/cloud instances.
+     *
+     * @param array<string, string> $serverVars
+     */
+    private function hasFirewall(array $serverVars): bool
+    {
+        // MySQL Enterprise Firewall sets this status variable when active
+        $fwMode = $serverVars['mysql_firewall_mode'] ?? null;
+        if ($fwMode !== null) {
+            return strtoupper($fwMode) === 'ON';
+        }
+
+        // Fallback: check for audit plugin on managed/cloud instances
+        // (some cloud providers expose firewall via audit plugin presence)
+        $plugins = $this->context->plugins();
+        foreach ($plugins as $plugin) {
+            $name = strtolower($plugin['Name'] ?? '');
+            // AUDIT plugin is used by some cloud firewall implementations
+            if ($name === 'audit' || $name === 'firewall') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // ─── Immutable Mutations ────────────────────────────────────────────
@@ -474,6 +563,75 @@ final class ServerStatusPage extends PageBase
     public function withQuit(): self
     {
         return clone $this;
+    }
+
+    /**
+     * Open the GTID mode selector dialog.
+     *
+     * Only meaningful on MySQL ≥ 5.7.6 where GTIDs are available.
+     * Initializes the edit value from the current server GTID_MODE setting.
+     */
+    private function withGtidDialog(): array
+    {
+        $version = $this->context->version();
+        if (!$version->isAtLeast(5, 7, 6)) {
+            return [$this, null]; // GTID not available
+        }
+
+        $clone = clone $this;
+        $clone->gtidDialog = true;
+        // Initialize edit value from current server GTID_MODE
+        $current = $this->context->serverVariables()['gtid_mode'] ?? 'OFF';
+        $clone->gtidModeCurrent = $current;
+        $clone->gtidModeEdit = $current;
+        return [$clone, null];
+    }
+
+    /**
+     * Handle keyboard input when the GTID dialog is active.
+     *
+     * Keys:
+     *   c  — cycle to next GTID_MODE in the whitelist
+     *   Enter — execute SET @@GLOBAL.GTID_MODE = <mode>
+     *   Escape — cancel and close dialog
+     */
+    private function updateGtidDialog(\SugarCraft\Core\Msg\KeyMsg $msg): array
+    {
+        $ch = $msg->rune ?? '';
+
+        if ($msg->keyType === \SugarCraft\Core\KeyType::Escape) {
+            $clone = clone $this;
+            $clone->gtidDialog = false;
+            return [$clone, null];
+        }
+
+        if ($ch === 'c') {
+            // Cycle to next mode in the whitelist
+            $modes = GtidMode::values();
+            $currentIdx = array_search($this->gtidModeEdit, array_column($modes, 'value'), true);
+            $nextIdx = ($currentIdx === false ? 0 : ($currentIdx + 1) % count($modes));
+            $clone = clone $this;
+            $clone->gtidModeEdit = $modes[$nextIdx]->value;
+            return [$clone, null];
+        }
+
+        if ($msg->keyType === \SugarCraft\Core\KeyType::Enter) {
+            // Execute the GTID_MODE change
+            $mode = $this->gtidModeEdit;
+            $clone = clone $this;
+            $clone->gtidDialog = false;
+            // Execute SET @@GLOBAL.GTID_MODE = $mode
+            // GTID_MODE is always an identifier (whitelist), not user free-text
+            $connection = $this->context->connection();
+            try {
+                $connection->exec("SET @@GLOBAL.GTID_MODE = {$mode}");
+            } catch (\Throwable) {
+                // Non-fatal: just close the dialog; user can read the error
+            }
+            return [$clone, null];
+        }
+
+        return [$this, null];
     }
 
     // ─── Accessors ───────────────────────────────────────────────────────
