@@ -10,13 +10,17 @@ namespace SugarCraft\Query\Admin\PerfSchema;
  * Each setup model tracks its own dirty state. This planner extracts the
  * necessary SQL statements to persist those changes to the database.
  *
+ * All generated statements are fully parameterized — no value interpolation.
+ * Instruments use anchored, regex-escaped RLIKE patterns. Consumers use IN().
+ * Actors and objects use keyed INSERT/UPDATE/DELETE with bound parameters.
+ *
  * Supported models:
- *   - SetupInstruments: Uses RLIKE for prefix-based bucket updates
- *   - SetupConsumers: Uses IN(...) for consumer updates
+ *   - SetupInstruments: Uses anchored RLIKE (^name$) for exact-name matching
+ *   - SetupConsumers: Uses IN(?) for batch updates
  *   - SetupActors: Uses INSERT/UPDATE/DELETE keyed by HOST, USER, ROLE
  *   - SetupObjects: Uses INSERT/UPDATE/DELETE keyed by OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME
- *   - SetupThreads: Contributes INSTRUMENTED flag fragments to CommitPlanner's batch UPDATE
- *   - SetupTimers: Generates UPDATE for setup_timers on MySQL <8.0; read-only on >=8.0
+ *   - SetupThreads: Contributes INSTRUMENTED flag fragments to batch UPDATE (STEP 5.1)
+ *   - SetupTimers: Generates UPDATE for setup_timers on MySQL <8.0; read-only on >=8.0 (STEP 5.1)
  *
  * Error handling for MySQL errors:
  *   - 1142 = SELECT/INSERT/UPDATE/DELETE denied
@@ -56,9 +60,12 @@ final class CommitPlanner
     }
 
     /**
-     * Generate SQL statements to commit all changes.
+     * Generate parameterized SQL statements to commit all changes.
      *
-     * @return list<string> SQL statements to execute
+     * Each returned array contains 'sql' (the parameterized SQL with ? placeholders)
+     * and 'params' (the list of values to bind).
+     *
+     * @return list<array{sql: string, params: list<mixed>}> Parameterized statements
      */
     public function commitAll(): array
     {
@@ -73,12 +80,12 @@ final class CommitPlanner
     }
 
     /**
-     * Generate SQL statements for instrument changes.
+     * Generate parameterized SQL statements for instrument changes.
      *
-     * Groups instruments by prefix and uses RLIKE for efficient batch updates.
-     * Only generates statements for instruments that have been modified.
+     * Uses anchored RLIKE (^name$) to match exact instrument names.
+     * The name is regex-escaped so metacharacters like . / ( ) are matched literally.
      *
-     * @return list<string> SQL statements
+     * @return list<array{sql: string, params: list<mixed>}> Parameterized statements
      */
     public function commitInstruments(): array
     {
@@ -96,68 +103,57 @@ final class CommitPlanner
             return [];
         }
 
-        // Group by prefix bucket (first path segment)
+        // Group instruments by (enabled, timed) bucket
+        // Each unique (enabled, timed) combination gets its own UPDATE
         $buckets = [];
         foreach ($dirty as $instrument) {
-            $bucket = $this->getInstrumentBucket($instrument->name);
-            if (!isset($buckets[$bucket])) {
-                $buckets[$bucket] = ['enabled' => null, 'timed' => null, 'names' => []];
+            $key = ($instrument->enabled ? '1' : '0') . '-' . ($instrument->timed ? '1' : '0');
+            if (!isset($buckets[$key])) {
+                $buckets[$key] = ['enabled' => $instrument->enabled, 'timed' => $instrument->timed, 'names' => []];
             }
-            $buckets[$bucket]['names'][] = $instrument->name;
-            // Track the values - all instruments in a bucket share same enabled/timed in practice
-            // but we aggregate them for the UPDATE statement
-            $buckets[$bucket]['enabled'] = $instrument->enabled;
-            $buckets[$bucket]['timed'] = $instrument->timed;
+            $buckets[$key]['names'][] = $instrument->name;
         }
 
-        // Generate UPDATE statements per bucket using RLIKE
-        foreach ($buckets as $bucket => $data) {
-            if ($data['names'] === []) {
+        // Generate one UPDATE per (enabled, timed) bucket
+        foreach ($buckets as $bucket) {
+            if ($bucket['names'] === []) {
                 continue;
             }
 
-            // Create a pattern matching all names in this bucket
-            // Since we use RLIKE, we need a pattern that matches all instruments in the bucket
-            // We use a prefix pattern like "^(wait/|statement/|etc)"
-            $pattern = '^(' . implode('|', array_map(
-                fn(string $n) => preg_quote($n, '/'),
-                $data['names']
-            )) . ')';
-
-            // For simplicity, generate one statement per instrument name using RLIKE
-            // This is less efficient but more precise
-            foreach ($data['names'] as $name) {
-                // Find the original instrument to get its target values
-                $targetEnabled = null;
-                $targetTimed = null;
-                foreach ($dirty as $di) {
-                    if ($di->name === $name) {
-                        $targetEnabled = $di->enabled;
-                        $targetTimed = $di->timed;
-                        break;
-                    }
-                }
-
-                if ($targetEnabled !== null && $targetTimed !== null) {
-                    $statements[] = sprintf(
-                        'UPDATE `performance_schema`.`setup_instruments` SET `ENABLED` = %s, `TIMED` = %s WHERE `NAME` RLIKE %s',
-                        $targetEnabled ? "'YES'" : "'NO'",
-                        $targetTimed ? "'YES'" : "'NO'",
-                        $this->quote($name)
-                    );
-                }
+            // Build pattern: ^name$ for single instrument, ^(name1|name2)$ for multiple
+            // Each name is regex-escaped to handle metacharacters like . ( ) etc.
+            // Forward slashes are NOT regex metacharacters and don't need escaping
+            if (count($bucket['names']) === 1) {
+                // Single instrument: just anchor it
+                $pattern = '^' . preg_quote($bucket['names'][0]) . '$';
+            } else {
+                // Multiple instruments: alternation with capturing group
+                $alternations = implode('|', array_map(
+                    fn(string $n) => preg_quote($n),
+                    $bucket['names']
+                ));
+                $pattern = '^(' . $alternations . ')$';
             }
+
+            $statements[] = [
+                'sql' => 'UPDATE `performance_schema`.`setup_instruments` SET `ENABLED` = ?, `TIMED` = ? WHERE `NAME` RLIKE ?',
+                'params' => [
+                    $bucket['enabled'] ? 'YES' : 'NO',
+                    $bucket['timed'] ? 'YES' : 'NO',
+                    $pattern,
+                ],
+            ];
         }
 
         return $statements;
     }
 
     /**
-     * Generate SQL statements for consumer changes.
+     * Generate parameterized SQL statements for consumer changes.
      *
-     * Uses IN(...) clause for batch updates.
+     * Uses IN(?) clause for batch updates, all values bound as parameters.
      *
-     * @return list<string> SQL statements
+     * @return list<array{sql: string, params: list<mixed>}> Parameterized statements
      */
     public function commitConsumers(): array
     {
@@ -181,29 +177,31 @@ final class CommitPlanner
             $groups[$consumer->enabled ? 'YES' : 'NO'][] = $consumer->name;
         }
 
-        // Generate UPDATE statements per group
+        // Generate one UPDATE per enabled/disabled group, all names bound as params
         foreach ($groups as $enabled => $names) {
             if ($names === []) {
                 continue;
             }
 
-            $quoted = array_map(fn(string $n) => $this->quote($n), $names);
-            $statements[] = sprintf(
-                'UPDATE `performance_schema`.`setup_consumers` SET `ENABLED` = %s WHERE `NAME` IN (%s)',
-                $enabled === 'YES' ? "'YES'" : "'NO'",
-                implode(', ', $quoted)
-            );
+            // Build IN clause with ? placeholders, one per name
+            $placeholders = implode(', ', array_fill(0, count($names), '?'));
+
+            $statements[] = [
+                'sql' => 'UPDATE `performance_schema`.`setup_consumers` SET `ENABLED` = ? WHERE `NAME` IN (' . $placeholders . ')',
+                'params' => array_merge([$enabled === 'YES' ? 'YES' : 'NO'], $names),
+            ];
         }
 
         return $statements;
     }
 
     /**
-     * Generate SQL statements for actor changes.
+     * Generate parameterized SQL statements for actor changes.
      *
      * Uses INSERT/UPDATE/DELETE based on the type of change.
+     * All string values are bound as parameters, not interpolated.
      *
-     * @return list<string> SQL statements
+     * @return list<array{sql: string, params: list<mixed>}> Parameterized statements
      */
     public function commitActors(): array
     {
@@ -214,32 +212,38 @@ final class CommitPlanner
 
             switch ($changeType) {
                 case 'insert':
-                    $statements[] = sprintf(
-                        'INSERT INTO `performance_schema`.`setup_actors` (`HOST`, `USER`, `ROLE`, `ENABLED`) VALUES (%s, %s, %s, %s)',
-                        $this->quote($actor->host),
-                        $this->quote($actor->user),
-                        $this->quote($actor->role),
-                        $actor->enabled ? "'YES'" : "'NO'"
-                    );
+                    $statements[] = [
+                        'sql' => 'INSERT INTO `performance_schema`.`setup_actors` (`HOST`, `USER`, `ROLE`, `ENABLED`) VALUES (?, ?, ?, ?)',
+                        'params' => [
+                            $actor->host,
+                            $actor->user,
+                            $actor->role,
+                            $actor->enabled ? 'YES' : 'NO',
+                        ],
+                    ];
                     break;
 
                 case 'update':
-                    $statements[] = sprintf(
-                        'UPDATE `performance_schema`.`setup_actors` SET `ENABLED` = %s WHERE `HOST` = %s AND `USER` = %s AND `ROLE` = %s',
-                        $actor->enabled ? "'YES'" : "'NO'",
-                        $this->quote($actor->host),
-                        $this->quote($actor->user),
-                        $this->quote($actor->role)
-                    );
+                    $statements[] = [
+                        'sql' => 'UPDATE `performance_schema`.`setup_actors` SET `ENABLED` = ? WHERE `HOST` = ? AND `USER` = ? AND `ROLE` = ?',
+                        'params' => [
+                            $actor->enabled ? 'YES' : 'NO',
+                            $actor->host,
+                            $actor->user,
+                            $actor->role,
+                        ],
+                    ];
                     break;
 
                 case 'delete':
-                    $statements[] = sprintf(
-                        'DELETE FROM `performance_schema`.`setup_actors` WHERE `HOST` = %s AND `USER` = %s AND `ROLE` = %s',
-                        $this->quote($actor->host),
-                        $this->quote($actor->user),
-                        $this->quote($actor->role)
-                    );
+                    $statements[] = [
+                        'sql' => 'DELETE FROM `performance_schema`.`setup_actors` WHERE `HOST` = ? AND `USER` = ? AND `ROLE` = ?',
+                        'params' => [
+                            $actor->host,
+                            $actor->user,
+                            $actor->role,
+                        ],
+                    ];
                     break;
 
                 // case 'none' - no change, skip
@@ -251,11 +255,12 @@ final class CommitPlanner
     }
 
     /**
-     * Generate SQL statements for object changes.
+     * Generate parameterized SQL statements for object changes.
      *
      * Uses INSERT/UPDATE/DELETE based on the type of change.
+     * All string values are bound as parameters, not interpolated.
      *
-     * @return list<string> SQL statements
+     * @return list<array{sql: string, params: list<mixed>}> Parameterized statements
      */
     public function commitObjects(): array
     {
@@ -266,34 +271,40 @@ final class CommitPlanner
 
             switch ($changeType) {
                 case 'insert':
-                    $statements[] = sprintf(
-                        'INSERT INTO `performance_schema`.`setup_objects` (`OBJECT_TYPE`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `ENABLED`, `TIMED`) VALUES (%s, %s, %s, %s, %s)',
-                        $this->quote($object->objectType),
-                        $this->quote($object->objectSchema),
-                        $this->quote($object->objectName),
-                        $object->enabled ? "'YES'" : "'NO'",
-                        $object->timed ? "'YES'" : "'NO'"
-                    );
+                    $statements[] = [
+                        'sql' => 'INSERT INTO `performance_schema`.`setup_objects` (`OBJECT_TYPE`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `ENABLED`, `TIMED`) VALUES (?, ?, ?, ?, ?)',
+                        'params' => [
+                            $object->objectType,
+                            $object->objectSchema,
+                            $object->objectName,
+                            $object->enabled ? 'YES' : 'NO',
+                            $object->timed ? 'YES' : 'NO',
+                        ],
+                    ];
                     break;
 
                 case 'update':
-                    $statements[] = sprintf(
-                        'UPDATE `performance_schema`.`setup_objects` SET `ENABLED` = %s, `TIMED` = %s WHERE `OBJECT_TYPE` = %s AND `OBJECT_SCHEMA` = %s AND `OBJECT_NAME` = %s',
-                        $object->enabled ? "'YES'" : "'NO'",
-                        $object->timed ? "'YES'" : "'NO'",
-                        $this->quote($object->objectType),
-                        $this->quote($object->objectSchema),
-                        $this->quote($object->objectName)
-                    );
+                    $statements[] = [
+                        'sql' => 'UPDATE `performance_schema`.`setup_objects` SET `ENABLED` = ?, `TIMED` = ? WHERE `OBJECT_TYPE` = ? AND `OBJECT_SCHEMA` = ? AND `OBJECT_NAME` = ?',
+                        'params' => [
+                            $object->enabled ? 'YES' : 'NO',
+                            $object->timed ? 'YES' : 'NO',
+                            $object->objectType,
+                            $object->objectSchema,
+                            $object->objectName,
+                        ],
+                    ];
                     break;
 
                 case 'delete':
-                    $statements[] = sprintf(
-                        'DELETE FROM `performance_schema`.`setup_objects` WHERE `OBJECT_TYPE` = %s AND `OBJECT_SCHEMA` = %s AND `OBJECT_NAME` = %s',
-                        $this->quote($object->objectType),
-                        $this->quote($object->objectSchema),
-                        $this->quote($object->objectName)
-                    );
+                    $statements[] = [
+                        'sql' => 'DELETE FROM `performance_schema`.`setup_objects` WHERE `OBJECT_TYPE` = ? AND `OBJECT_SCHEMA` = ? AND `OBJECT_NAME` = ?',
+                        'params' => [
+                            $object->objectType,
+                            $object->objectSchema,
+                            $object->objectName,
+                        ],
+                    ];
                     break;
 
                 // case 'none' - no change, skip
@@ -343,15 +354,5 @@ final class CommitPlanner
     {
         $parts = explode('/', $name);
         return $parts[0] ?? '';
-    }
-
-    /**
-     * Quote a string value for SQL.
-     */
-    private function quote(string $value): string
-    {
-        // Escape single quotes by doubling them
-        $escaped = str_replace("'", "''", $value);
-        return "'" . $escaped . "'";
     }
 }

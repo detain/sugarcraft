@@ -354,8 +354,16 @@ final class PerfSchemaPage extends PageBase
             $statements = $this->commitPlanner->commitAll();
             $db = $this->context->connection();
 
-            foreach ($statements as $sql) {
-                $db->exec($sql);
+            foreach ($statements as $stmt) {
+                $sql = $stmt['sql'];
+                $params = $stmt['params'];
+
+                // Use prepared statement with bound parameters for safety
+                $prepared = $db->prepare($sql);
+                if ($prepared === null) {
+                    throw new \PDOException('Failed to prepare statement: ' . $sql);
+                }
+                $prepared->execute($params);
             }
 
             // Reload data after commit
@@ -951,12 +959,29 @@ final class PerfSchemaPage extends PageBase
     private function renderInstrumentsTab(): string
     {
         // Instruments are ordered hierarchically via InstrumentTree, then
-        // flattened; ItemList owns the cursor highlight + scroll window, so the
-        // old 50-row cap and "… and N more" indicator are gone.
+        // flattened with depth info. Group nodes (non-leaf) show tri-state badges.
         $rows = [];
         if ($this->instruments !== []) {
-            foreach ($this->flattenTree(InstrumentTree::fromInstruments($this->instruments)) as $instrument) {
-                $rows[] = [$instrument->enabled, Width::truncateMiddle($instrument->name, 50)];
+            $tree = InstrumentTree::fromInstruments($this->instruments);
+            foreach ($this->flattenTree($tree) as [$nodeOrInstrument, $depth, $isGroup]) {
+                if ($isGroup) {
+                    // Group node — show tri-state badge with group name
+                    $node = $nodeOrInstrument;
+                    $triState = $node->state();
+                    // triState: 1=enabled, -1=disabled, 0=mixed
+                    // Badge::tristate: true=[x], false=[ ], null=[~]
+                    $badgeState = $triState === 1 ? true : ($triState === -1 ? false : null);
+                    $groupName = $node->name();
+                    $indent = str_repeat('  ', $depth);
+                    $displayName = $indent . '[' . $groupName . ']';
+                    $rows[] = [$badgeState, Width::truncateMiddle($displayName, 50), true];
+                } else {
+                    // Instrument node — show enabled badge with instrument name
+                    $instrument = $nodeOrInstrument;
+                    $indent = str_repeat('  ', $depth);
+                    $displayName = $indent . Width::truncateMiddle($instrument->name, 50 - $depth * 2);
+                    $rows[] = [$instrument->enabled, $displayName, false];
+                }
             }
         }
 
@@ -1108,7 +1133,12 @@ final class PerfSchemaPage extends PageBase
      * Dash\Badge::tristate() glyph; ItemList owns the cursor highlight and the
      * scroll window, so there is no hand-rolled selection prefix or row cap.
      *
-     * @param list<array{0:bool,1:string}> $rows  [enabled, displayText] pairs
+     * Row formats:
+     *   - Instruments (groups): [bool|null $badgeState, string $displayText, true $isGroupFlag]
+     *     badgeState: true=[x], false=[ ], null=[~] (mixed)
+     *   - Instruments (leaves) / consumers / actors / objects: [bool $enabled, string $displayText]
+     *
+     * @param list<array{0:bool|string,1:string,2?:bool}> $rows
      */
     private function renderToggleList(string $title, array $rows, string $emptyMessage, string $totalLine): string
     {
@@ -1120,8 +1150,19 @@ final class PerfSchemaPage extends PageBase
         }
 
         $items = [];
-        foreach ($rows as [$enabled, $text]) {
-            $items[] = new StringItem(Badge::tristate($enabled)->render() . ' ' . $text);
+        foreach ($rows as $row) {
+            if (count($row) === 3 && $row[2] === true) {
+                // Group node: badgeState is at position 0 (can be null for mixed)
+                $badgeState = $row[0];
+                $text = $row[1];
+                $badge = Badge::tristate($badgeState)->render();
+            } else {
+                // Regular row: enabled is at position 0
+                $enabled = $row[0];
+                $text = $row[1];
+                $badge = Badge::tristate($enabled)->render();
+            }
+            $items[] = new StringItem($badge . ' ' . $text);
         }
 
         $list = ItemList::new($items, 80, min(20, max(1, count($items))))
@@ -1167,12 +1208,19 @@ final class PerfSchemaPage extends PageBase
     {
         $result = [];
 
-        // Depth-first traversal
+        // Depth-first traversal that includes both instruments and group nodes
+        // Returns array of [instrumentOrNode, depth, isGroupNode]
         $stack = [[$tree, 0]];
         while ($stack !== []) {
             [$node, $depth] = array_pop($stack);
+
             if ($node->instrument() !== null) {
-                $result[] = $node->instrument();
+                // This is an instrument node (leaf)
+                $result[] = [$node->instrument(), $depth, false];
+            } else {
+                // This is a group node (non-leaf)
+                // Include group nodes in the flattened list so they render as indent rows
+                $result[] = [$node, $depth, true];
             }
 
             // Add children in reverse order so first child is processed first
