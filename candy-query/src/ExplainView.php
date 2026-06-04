@@ -63,7 +63,9 @@ final class ExplainView
      */
     public static function run(DatabaseInterface $db, string $sql): self
     {
-        $flavor = Flavor::detectFromVersionString($db->serverVersion());
+        // Seed flavor from driver name first, then refine with version string
+        // for MySQL/MariaDB/Percona distinction
+        $flavor = Flavor::detectFromDriver($db->driverName(), $db->serverVersion());
         $provider = self::createProvider($db, $flavor);
         $raw = $provider->explain($sql);
 
@@ -178,11 +180,17 @@ final class ExplainView
     /**
      * Extract tree depth from detail line.
      *
-     * For SQLite: |--  (depth 1), |----  (depth 2) etc.
-     * and `--  for the last child at that depth.
+     * Supports two formats:
+     * - SQLite tree markers: |--  (depth 1), |----  (depth 2) etc.
+     * - Explicit depth prefix: [d0], [d1], [d2] etc. (MySQL/PostgreSQL JSON providers)
      */
     private function depthFromDetail(string $detail): int
     {
+        // Check for explicit depth prefix first (MySQL/PostgreSQL JSON providers)
+        if (preg_match('/^\s*\[d(\d+)\]/', $detail, $m)) {
+            return (int) $m[1];
+        }
+
         // Count the number of pipe+hyphen or backtick+hyphen segments.
         // Leading whitespace may precede the tree characters.
         if (preg_match('/^\s*(?:\|--|\`--)/', $detail, $m)) {

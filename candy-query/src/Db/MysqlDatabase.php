@@ -115,7 +115,7 @@ final class MysqlDatabase implements DatabaseInterface
     public function query(string $sql): array|null
     {
         if ($this->pdo === null) {
-            return [];
+            return null;
         }
 
         try {
@@ -247,13 +247,13 @@ final class MysqlDatabase implements DatabaseInterface
         return $out;
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         if ($this->pdo === null) {
-            return false;
+            return null;
         }
 
-        return $this->pdo->prepare($sql);
+        return new PdoPreparedStatement($this->pdo->prepare($sql));
     }
 
     /**

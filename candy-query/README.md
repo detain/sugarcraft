@@ -91,12 +91,14 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | File              | Role                                                                                          |
 |-------------------|----------------------------------------------------------------------------------------------|
 | `ConnectionConfig`| Readonly value object: driver, host, port, user, pass, dbname, sslMode, dsn. Pass never echoed. |
-| `ConnectionFactory`| Static factory: `fromDsn()`, `fromConfig()`, `fromArgv()`. Builds configured connections.       |
-| `Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor.    |
+| `ConnectionFactory`| Static factory: `fromDsn()`, `fromConfig()`, `fromArgv()`. Builds configured connections.    |
+| `Flavor`          | Enum: `MySQL`, `MariaDB`, `Percona`, `Postgres`, `Sqlite`. Used to identify database flavor. `Flavor::detectFromDriver()` detects flavor from a PDO driver name + optional version string. |
 | `Version`         | Parser for server version strings. Handles MariaDB `5.5.5-` prefix. `isAtLeast(Version)` compares versions. |
 | `Database`        | ⚠️ Deprecated thin alias to `SqliteDatabase`. Use `DatabaseInterface` for driver-agnostic code.   |
 | `MysqlDatabase`   | `DatabaseInterface` implementation via PDO `mysql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
 | `PostgresDatabase`| `DatabaseInterface` implementation via PDO `pgsql`. Implements `serverVersion()`, `driverName()`, `ping()`, `databases()`. |
+| `PreparedStatementInterface` | Driver-neutral prepared statement interface: `execute()`, `fetch()`, `fetchAll()`, `rowCount()`, `closeCursor()`. Abstracts PDOStatement so callers work with a uniform type across drivers. |
+| `PdoPreparedStatement` | `PreparedStatementInterface` via PDOStatement. Wraps any PDO driver statement in the neutral interface. All implementations (`MysqlDatabase`, `PostgresDatabase`, `SqliteDatabase`) return this wrapper from `prepare()`. |
 | `Pane`            | Enum for pane focus + `next()`.                                                              |
 | `App` (Model)      | Tables list, rows pane, in-progress SQL editor buffer, error string, status string.         |
 | `Renderer`        | Three rounded-border panes — tables, rows, query — with the focused pane getting a brighter accent. |
@@ -543,13 +545,13 @@ The `HistoryRecorder` implements `StatusSnapshotProviderInterface`, so it slots 
 
 `App` depends on `DatabaseInterface` rather than a concrete PDO/SQLite implementation. This decouples the UI from the database driver, enabling MySQL and Postgres support without changing application logic.
 
-The interface defines 11 methods:
+The interface defines 12 methods:
 
 | Method | Description |
 |--------|-------------|
 | `tables()` | List all tables/views |
 | `rows()` | Fetch rows from a table |
-| `query()` | Execute a SQL query |
+| `query()` | Execute a SQL query; returns `list<array<string,mixed>>|null` — `null` signals a reconnectable connection error (caller should retry) |
 | `lastInsertId()` | Return the last insert ID |
 | `quote()` | Quote a string for safe SQL |
 | `exec()` | Execute SQL without results |
@@ -558,6 +560,7 @@ The interface defines 11 methods:
 | `driverName()` | Get the driver name (e.g., `sqlite`, `mysql`) |
 | `ping()` | Check connection is alive |
 | `databases()` | List available databases |
+| `prepare()` | Prepare a SQL statement; returns `PreparedStatementInterface|null` — a driver-neutral wrapper around PDOStatement |
 
 ### Deprecated: `Database` class
 
@@ -569,6 +572,37 @@ use SugarCraft\Query\Db\DatabaseInterface;
 // Type-hint against the interface for driver-agnostic code
 function processDb(DatabaseInterface $db): void { ... }
 ```
+
+### PreparedStatementInterface
+
+`DatabaseInterface::prepare()` returns a `PreparedStatementInterface` — a driver-neutral wrapper around the native PDOStatement. This keeps caller code free of driver-specific statement types:
+
+```php
+use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
+
+function runQuery(DatabaseInterface $db, string $sql, array $params = []): array
+{
+    $stmt = $db->prepare($sql);
+    if ($stmt === null) {
+        return [];  // connection error — caller should reconnect and retry
+    }
+    $stmt->execute($params);
+    return $stmt->fetchAll();
+}
+```
+
+The interface exposes five methods:
+
+| Method | Description |
+|--------|-------------|
+| `execute(?array $params)` | Execute with bound parameters; returns `bool` |
+| `fetch()` | Fetch next row; returns `array<string,mixed>|false` |
+| `fetchAll()` | Fetch all rows; returns `list<array<string,mixed>>` |
+| `rowCount()` | Rows affected by last query |
+| `closeCursor()` | Close cursor, enabling re-execution |
+
+All three database implementations (`MysqlDatabase`, `PostgresDatabase`, `SqliteDatabase`) now wrap their PDOStatement in `PdoPreparedStatement` before returning from `prepare()`.
 
 ### Exporters
 

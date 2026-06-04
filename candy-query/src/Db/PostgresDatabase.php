@@ -89,11 +89,11 @@ final class PostgresDatabase implements DatabaseInterface
         return $stmt === false ? [] : $stmt->fetchAll();
     }
 
-    /** @return list<array<string,mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string,mixed>>|null */
+    public function query(string $sql): array|null
     {
         if ($this->pdo === null) {
-            return [];
+            return null;
         }
 
         $stmt = $this->pdo->prepare($sql);
@@ -202,12 +202,12 @@ final class PostgresDatabase implements DatabaseInterface
         return $out;
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         if ($this->pdo === null) {
-            return false;
+            return null;
         }
-        return $this->pdo->prepare($sql);
+        return new PdoPreparedStatement($this->pdo->prepare($sql));
     }
 
     public function dsn(): string
@@ -218,10 +218,5 @@ final class PostgresDatabase implements DatabaseInterface
     public function username(): string
     {
         return $this->connectionConfig?->user ?? '';
-    }
-
-    public function password(): string
-    {
-        return $this->connectionConfig?->pass ?? '';
     }
 }
