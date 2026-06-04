@@ -266,6 +266,14 @@ final class ConnectionsPage extends PageBase
     }
 
     /**
+     * Get the current selected index in the filtered processlist.
+     */
+    public function selectedIndex(): int
+    {
+        return $this->selectedIndex;
+    }
+
+    /**
      * Select a thread by index in the current filtered list.
      *
      * @param int $index 0-based index in filtered processlist
@@ -326,7 +334,7 @@ final class ConnectionsPage extends PageBase
     }
 
     /**
-     * Build the page content.
+     * Compose the connections page output: header, counters, and processlist table.
      */
     protected function build(): string
     {
@@ -415,6 +423,8 @@ final class ConnectionsPage extends PageBase
     }
 
     /**
+     * Build the column definitions for the processlist table.
+     *
      * @return list<Column>
      */
     private function buildColumns(): array
@@ -432,6 +442,8 @@ final class ConnectionsPage extends PageBase
     }
 
     /**
+     * Convert processlist rows to table Row objects.
+     *
      * @param list<ProcesslistResult> $rows
      * @return list<Row>
      */
