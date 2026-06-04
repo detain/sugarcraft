@@ -100,9 +100,4 @@ final class CachedConnection implements DatabaseInterface
     {
         return $this->inner->username();
     }
-
-    public function password(): string
-    {
-        return $this->inner->password();
-    }
 }

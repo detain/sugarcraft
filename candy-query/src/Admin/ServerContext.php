@@ -136,6 +136,17 @@ final class ServerContext implements ServerContextInterface
         return $this->connection()->serverVersion();
     }
 
+    public function password(): string
+    {
+        // Delegated to the underlying connection if it has password().
+        // CachedConnection no longer exposes password() so we return ''
+        // when the connection doesn't support it.
+        if (method_exists($this->connection(), 'password')) {
+            return $this->connection()->password();
+        }
+        return '';
+    }
+
     public function wasReset(): bool
     {
         $this->statusVariables();
