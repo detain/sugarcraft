@@ -123,7 +123,14 @@ final class ReportsPageTest extends TestCase
         $this->assertInstanceOf(ReportsPage::class, $page);
     }
 
-    public function testViewShowsErrorWhenSysSchemaNotAvailable(): void
+    /**
+     * STEP 3.1 removed sync DB query from validate() — no more sysSchemaExists() call.
+     * The page now shows async loading state (spinner + "Loading...") when currentResult
+     * is null, rather than an immediate error screen. The actual DB query for reports
+     * is queued via CachedConnection and dispatched on ReloadReportMsg (after
+     * AdminDataLoadedMsg). This test verifies the NEW loading-state behavior.
+     */
+    public function testViewShowsLoadingStateWhenDbUnavailable(): void
     {
         $brokenDb = new class implements DatabaseInterface {
             public function tables(): array { return []; }
@@ -152,7 +159,12 @@ final class ReportsPageTest extends TestCase
         $page = ReportsPage::new($this->context, $brokenDb);
         $view = $page->view();
 
-        $this->assertStringContainsString('sys schema', $view);
+        // NEW behavior: validate() makes no sync DB queries → currentResult stays null
+        // → renderReportGrid() shows loading spinner + "Loading <report>…" message
+        // NOT an error screen about sys schema.
+        $this->assertStringContainsString('Loading', $view);
+        // The loading indicator must be present (⠋ dot spinner in the output)
+        $this->assertStringContainsString('⠋', $view);
     }
 
     public function testCatalogProperty(): void
