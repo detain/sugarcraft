@@ -7,13 +7,12 @@ namespace SugarCraft\Query\Admin\ServerStatus;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Query\Admin\Sampler;
 use SugarCraft\Query\Admin\ServerContextInterface;
-use SugarCraft\Query\Admin\StatusSnapshotProviderInterface;
 use SugarCraft\Sprinkles\Style;
 
 /**
  * Collection of all sidebar gauges for the Server Status page.
  *
- * Contains CPU (optional), Connections, Traffic, Key Efficiency, QPS, and InnoDB
+ * Contains Connections, Traffic, Key Efficiency, QPS, and InnoDB
  * gauges. Polls the ServerContext and optional Sampler to compute current ratios.
  *
  * @see Mirrors mysql-workbench sidebar gauge set
@@ -26,7 +25,6 @@ final class SidebarGaugeSet
      */
     private function __construct(
         private readonly array $gauges,
-        private readonly ?SidebarGauge $cpuGauge,
         private readonly ServerContextInterface $context,
         private readonly ?Sampler $sampler,
         private readonly ?array $previousRates,
@@ -35,14 +33,11 @@ final class SidebarGaugeSet
 
     /**
      * Create a new gauge set from the server context.
-     *
-     * CPU gauge is optional — null when max_connections is not available.
      */
     public static function new(ServerContextInterface $context, ?Sampler $sampler = null): self
     {
         $instance = new self(
             gauges: [],
-            cpuGauge: null,
             context: $context,
             sampler: $sampler,
             previousRates: null,
@@ -69,19 +64,13 @@ final class SidebarGaugeSet
 
         // Build new gauges with updated ratios
         $newGauges = [];
-        $newCpuGauge = null;
 
         foreach ($this->gauges as $gauge) {
             $newGauges[] = $this->updateGauge($gauge, $statusVars, $serverVars, $rates);
         }
 
-        if ($this->cpuGauge !== null) {
-            $newCpuGauge = $this->updateGauge($this->cpuGauge, $statusVars, $serverVars, $rates);
-        }
-
         return new self(
             gauges: $newGauges,
-            cpuGauge: $newCpuGauge,
             context: $this->context,
             sampler: $this->sampler,
             previousRates: $rates,
@@ -98,11 +87,6 @@ final class SidebarGaugeSet
 
         $lines[] = Style::new()->bold()->foreground(Color::ansi(6))->render('Server Metrics');
         $lines[] = Style::new()->foreground(Color::ansi(6))->render(str_repeat('─', 18));
-
-        if ($this->cpuGauge !== null) {
-            $lines[] = '';
-            $lines[] = $this->cpuGauge->view();
-        }
 
         foreach ($this->gauges as $gauge) {
             $lines[] = '';
@@ -123,14 +107,6 @@ final class SidebarGaugeSet
     }
 
     /**
-     * Accessor for the CPU gauge (may be null).
-     */
-    public function cpuGauge(): ?SidebarGauge
-    {
-        return $this->cpuGauge;
-    }
-
-    /**
      * Accessor for the previous rates.
      *
      * @return array<string, float>|null
@@ -147,9 +123,6 @@ final class SidebarGaugeSet
     {
         $statusVars = $this->context->statusVariables();
         $serverVars = $this->context->serverVariables();
-
-        // CPU gauge is optional (depends on max_connections availability)
-        $cpuGauge = $this->buildOptionalCpuGauge($statusVars, $serverVars);
 
         // Build standard gauges
         $connectionsRatio = $this->computeConnectionsRatio($statusVars, $serverVars);
@@ -168,29 +141,11 @@ final class SidebarGaugeSet
 
         return new self(
             gauges: $gauges,
-            cpuGauge: $cpuGauge,
             context: $this->context,
             sampler: $this->sampler,
             previousRates: null,
             previousTs: null,
         );
-    }
-
-    /**
-     * Build the optional CPU gauge.
-     */
-    private function buildOptionalCpuGauge(array $statusVars, array $serverVars): ?SidebarGauge
-    {
-        // CPU requires max_connections to compute the ratio
-        $maxConn = $serverVars['max_connections'] ?? null;
-        if ($maxConn === null || (int) $maxConn <= 0) {
-            return null;
-        }
-
-        $threadsConnected = $statusVars['Threads_connected'] ?? '0';
-        $ratio = (int) $threadsConnected / (int) $maxConn;
-
-        return SidebarGauge::new(GaugeType::Cpu, $ratio);
     }
 
     /**
@@ -203,7 +158,6 @@ final class SidebarGaugeSet
         array $rates,
     ): SidebarGauge {
         $ratio = match ($gauge->type()) {
-            GaugeType::Cpu          => $this->computeConnectionsRatio($statusVars, $serverVars),
             GaugeType::Connections  => $this->computeConnectionsRatio($statusVars, $serverVars),
             GaugeType::Traffic      => $this->computeTrafficRatio($statusVars, $rates),
             GaugeType::KeyEfficiency => $this->computeKeyEfficiencyRatio($statusVars),
@@ -257,7 +211,7 @@ final class SidebarGaugeSet
     }
 
     /**
-     * Compute key efficiency ratio: Key_reads / (Key_reads + Key_writes).
+     * Compute key efficiency ratio: Key_reads / (Key_reads + Key_read_requests).
      *
      * A high ratio indicates many cache misses (reads hitting disk).
      * A low ratio indicates good cache utilization.
@@ -267,16 +221,12 @@ final class SidebarGaugeSet
     private function computeKeyEfficiencyRatio(array $statusVars): float
     {
         $keyReads = (int) ($statusVars['Key_reads'] ?? '0');
-        $keyWrites = (int) ($statusVars['Key_writes'] ?? '0');
         $keyWriteRequests = (int) ($statusVars['Key_write_requests'] ?? '0');
 
-        $total = $keyReads + $keyWrites;
-        if ($total === 0) {
+        if ($keyReads === 0 && $keyWriteRequests === 0) {
             return 0.0;
         }
 
-        // Key reads / total operations = cache miss ratio
-        // Lower is better (more reads are satisfied by cache)
         return $keyReads / ($keyReads + $keyWriteRequests);
     }
 
