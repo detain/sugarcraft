@@ -65,26 +65,31 @@ final class ConnectionActions
     }
 
     /**
-     * Enable or disable performance_schema instrumentation.
+     * Enable or disable performance_schema instrumentation for a specific thread.
      *
-     * Uses UPDATE performance_schema.setup_actors to enable/disable
-     * instrumentation for new threads.
+     * Uses UPDATE performance_schema.threads SET INSTRUMENTED=? WHERE THREAD_ID=?
+     * to control instrumentation per-thread (MySQL 8.0+).
      *
      * @param bool $enabled True to enable, false to disable
+     * @param int|string $threadId THREAD_ID from performance_schema.threads
      * @return bool True on success
      */
-    public function setInstrumentation(bool $enabled): bool
+    public function setInstrumentation(bool $enabled, int|string $threadId): bool
     {
         $value = $enabled ? 'YES' : 'NO';
-        $sql = "UPDATE performance_schema.setup_actors SET ENABLED = '{$value}' WHERE HOST = '%' AND USER = '%'";
+        $sql = "UPDATE performance_schema.threads SET INSTRUMENTED = ? WHERE THREAD_ID = ? LIMIT 1";
 
         try {
             $connection = $this->context->connection();
-            $connection->exec($sql);
+            $stmt = $connection->prepare($sql);
+            if ($stmt === false) {
+                return false;
+            }
+            $stmt->execute([$value, (int) $threadId]);
             return true;
         } catch (\PDOException $e) {
             // 1142: UPDATE privilege denied on performance_schema
-            // 1146: setup_actors table doesn't exist (old MySQL)
+            // 1146: threads table doesn't exist (old MySQL)
             if ($this->isAclError($e)) {
                 return false;
             }
@@ -116,23 +121,25 @@ final class ConnectionActions
     /**
      * Execute KILL [QUERY] on a thread ID.
      *
-     * @param int|string $threadId Processlist ID
-     * @param string $modifier '' for KILL, 'QUERY' for KILL QUERY
+     * MySQL's KILL does not accept prepared-statement placeholders, so the
+     * id is int-cast directly into the statement (injection-safe). Uses exec()
+     * since KILL returns no result set.
+     *
+     * @param int|string $threadId Processlist/connection ID
+     * @param string $modifier '' for KILL CONNECTION, 'QUERY' for KILL QUERY
      * @return bool True on success
      */
     private function executeKill(int|string $threadId, string $modifier): bool
     {
+        $id = (int) $threadId;
+        // MySQL KILL does not accept ? placeholders; int-cast is injection-safe
         $sql = $modifier !== ''
-            ? "KILL {$modifier} ?"
-            : "KILL ?";
+            ? "KILL QUERY {$id}"
+            : "KILL CONNECTION {$id}";
 
         try {
             $connection = $this->context->connection();
-            $stmt = $connection->prepare($sql);
-            if ($stmt === false) {
-                return false;
-            }
-            $stmt->execute([(string) $threadId]);
+            $connection->exec($sql);
             return true;
         } catch (\PDOException $e) {
             // 2005: Unknown MySQL server host / 2003: Can't connect

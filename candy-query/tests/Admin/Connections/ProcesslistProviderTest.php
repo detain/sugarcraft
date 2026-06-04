@@ -114,7 +114,7 @@ final class ProcesslistProviderTest extends TestCase
         $result = $provider->fetchAll();
 
         $this->assertSame(512, \strlen($result[0]->info));
-        $this->assertTrue($result[0]->infoTruncated());
+        $this->assertTrue($result[0]->infoTruncated);
     }
 
     public function testInfoTruncatedIsFalseForShortInfo(): void
@@ -127,7 +127,7 @@ final class ProcesslistProviderTest extends TestCase
         $result = $provider->fetchAll();
 
         $this->assertSame('SELECT 1', $result[0]->info);
-        $this->assertFalse($result[0]->infoTruncated());
+        $this->assertFalse($result[0]->infoTruncated);
     }
 
     public function testIsBackgroundReturnsTrueForEmptyUser(): void
