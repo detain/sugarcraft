@@ -13,7 +13,13 @@ use SugarCraft\Sprinkles\Style;
  * Collection of all sidebar gauges for the Server Status page.
  *
  * Contains Connections, Traffic, Key Efficiency, QPS, and InnoDB
- * gauges. Polls the ServerContext and optional Sampler to compute current ratios.
+ * gauges. Polls the ServerContext and an optional Sampler to compute
+ * per-second rate deltas for the Traffic gauge. Key-efficiency uses
+ * the formula Key_reads / (Key_reads + Key_read_requests).
+ *
+ * The Sampler is threaded through via ServerStatusSnapshotAdapter
+ * (which wraps ServerContextInterface to satisfy StatusSnapshotProviderInterface),
+ * allowing two-sample rate comparisons on each refresh cycle.
  *
  * @see Mirrors mysql-workbench sidebar gauge set
  */
