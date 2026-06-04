@@ -41,6 +41,7 @@ use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
+use SugarCraft\Query\Core\Msg\ReloadReportMsg;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
@@ -143,7 +144,15 @@ final class App implements Model
             return [$this, null];
         }
         if ($msg instanceof AdminDataLoadedMsg) {
-            return [$this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt), null];
+            // After status/server vars are cached, trigger report reload for
+            // ReportsPage so its async query is queued for the next tick.
+            $newApp = $this->withAdminCachedData($msg->statusVars, $msg->serverVars, $msg->fetchedAt);
+            // adminPage may be null if msg arrives before first render (e.g. tests).
+            if ($this->adminPage !== null) {
+                [$newPage,] = $this->adminPage->update(new ReloadReportMsg());
+                $newApp = $newApp->withAdminPage($newPage);
+            }
+            return [$newApp, null];
         }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
