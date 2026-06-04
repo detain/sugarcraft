@@ -79,4 +79,73 @@ final class SetupThreadsTest extends TestCase
         $this->assertNull($thread->processlistCommand);
         $this->assertNull($thread->processlistInfo);
     }
+
+    public function testInstrumentedDefaultsToTrue(): void
+    {
+        $thread = SetupThreads::new(
+            threadId: 1,
+            name: 'thread/sql/main',
+            type: 'FOREGROUND',
+        );
+
+        $this->assertTrue($thread->instrumented);
+        $this->assertFalse($thread->isDirty());
+    }
+
+    public function testInstrumentedCanBeSet(): void
+    {
+        $thread = SetupThreads::new(
+            threadId: 1,
+            name: 'thread/sql/main',
+            type: 'FOREGROUND',
+            instrumented: false,
+        );
+
+        $this->assertFalse($thread->instrumented);
+    }
+
+    public function testWithInstrumentedReturnsNewInstance(): void
+    {
+        $original = SetupThreads::new(
+            threadId: 1,
+            name: 'thread/sql/main',
+            type: 'FOREGROUND',
+            instrumented: true,
+        );
+        $modified = $original->withInstrumented(false);
+
+        $this->assertTrue($original->instrumented);
+        $this->assertFalse($modified->instrumented);
+        $this->assertFalse($original->isDirty());
+        $this->assertTrue($modified->isDirty());
+    }
+
+    public function testWithInstrumentedNoOpWhenSame(): void
+    {
+        $original = SetupThreads::new(
+            threadId: 1,
+            name: 'thread/sql/main',
+            type: 'FOREGROUND',
+            instrumented: true,
+        );
+        $modified = $original->withInstrumented(true);
+
+        $this->assertSame($original, $modified);
+        $this->assertFalse($modified->isDirty());
+    }
+
+    public function testInstrumentedFragment(): void
+    {
+        $thread = SetupThreads::new(
+            threadId: 42,
+            name: 'thread/sql/main',
+            type: 'FOREGROUND',
+            instrumented: true,
+        );
+
+        $this->assertSame('`THREAD_ID` = 42 AND `INSTRUMENTED` = \'YES\'', $thread->instrumentedFragment());
+
+        $uninstrumented = $thread->withInstrumented(false);
+        $this->assertSame('`THREAD_ID` = 42 AND `INSTRUMENTED` = \'NO\'', $uninstrumented->instrumentedFragment());
+    }
 }

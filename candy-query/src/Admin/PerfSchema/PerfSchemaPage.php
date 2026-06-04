@@ -583,6 +583,12 @@ final class PerfSchemaPage extends PageBase
      */
     private function loadActors(DatabaseInterface $db): array
     {
+        // setup_actors table was introduced in MySQL 5.6
+        $version = $this->context->version();
+        if (!$version->isAtLeast(5, 6)) {
+            return [];
+        }
+
         $actors = [];
         try {
             $result = $db->query('SELECT `HOST`, `USER`, `ROLE`, `ENABLED` FROM `performance_schema`.`setup_actors`');
@@ -607,15 +613,33 @@ final class PerfSchemaPage extends PageBase
     {
         $objects = [];
         try {
-            $result = $db->query('SELECT `OBJECT_TYPE`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `ENABLED`, `TIMED` FROM `performance_schema`.`setup_objects`');
-            foreach ($result as $row) {
-                $objects[] = SetupObjects::new(
-                    objectType: (string) ($row['OBJECT_TYPE'] ?? ''),
-                    objectSchema: (string) ($row['OBJECT_SCHEMA'] ?? ''),
-                    objectName: (string) ($row['OBJECT_NAME'] ?? ''),
-                    enabled: $this->parseEnabled((string) ($row['ENABLED'] ?? 'NO')),
-                    timed: $this->parseEnabled((string) ($row['TIMED'] ?? 'NO')),
-                );
+            // ENABLED column was introduced in MySQL 5.6.3
+            $version = $this->context->version();
+            $hasEnabled = $version->isAtLeast(5, 6, 3);
+
+            if ($hasEnabled) {
+                $result = $db->query('SELECT `OBJECT_TYPE`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `ENABLED`, `TIMED` FROM `performance_schema`.`setup_objects`');
+                foreach ($result as $row) {
+                    $objects[] = SetupObjects::new(
+                        objectType: (string) ($row['OBJECT_TYPE'] ?? ''),
+                        objectSchema: (string) ($row['OBJECT_SCHEMA'] ?? ''),
+                        objectName: (string) ($row['OBJECT_NAME'] ?? ''),
+                        enabled: $this->parseEnabled((string) ($row['ENABLED'] ?? 'NO')),
+                        timed: $this->parseEnabled((string) ($row['TIMED'] ?? 'NO')),
+                    );
+                }
+            } else {
+                // On <5.6.3, only TIMED column exists
+                $result = $db->query('SELECT `OBJECT_TYPE`, `OBJECT_SCHEMA`, `OBJECT_NAME`, `TIMED` FROM `performance_schema`.`setup_objects`');
+                foreach ($result as $row) {
+                    $objects[] = SetupObjects::new(
+                        objectType: (string) ($row['OBJECT_TYPE'] ?? ''),
+                        objectSchema: (string) ($row['OBJECT_SCHEMA'] ?? ''),
+                        objectName: (string) ($row['OBJECT_NAME'] ?? ''),
+                        enabled: false, // Not available on <5.6.3
+                        timed: $this->parseEnabled((string) ($row['TIMED'] ?? 'NO')),
+                    );
+                }
             }
         } catch (\PDOException) {
             // Gracefully handle PS being disabled
@@ -631,7 +655,7 @@ final class PerfSchemaPage extends PageBase
         $threads = [];
         try {
             $result = $db->query(
-                'SELECT `THREAD_ID`, `NAME`, `TYPE`, `PROCESSLIST_ID`, `PROCESSLIST_USER`, `PROCESSLIST_COMMAND`, `PROCESSLIST_INFO` FROM `performance_schema`.`threads` LIMIT 100'
+                'SELECT `THREAD_ID`, `NAME`, `TYPE`, `PROCESSLIST_ID`, `PROCESSLIST_USER`, `PROCESSLIST_COMMAND`, `PROCESSLIST_INFO`, `INSTRUMENTED` FROM `performance_schema`.`threads` LIMIT 100'
             );
             foreach ($result as $row) {
                 $threads[] = SetupThreads::new(
@@ -642,6 +666,7 @@ final class PerfSchemaPage extends PageBase
                     processlistUser: isset($row['PROCESSLIST_USER']) ? (string) $row['PROCESSLIST_USER'] : null,
                     processlistCommand: isset($row['PROCESSLIST_COMMAND']) ? (string) $row['PROCESSLIST_COMMAND'] : null,
                     processlistInfo: isset($row['PROCESSLIST_INFO']) ? (string) $row['PROCESSLIST_INFO'] : null,
+                    instrumented: $this->parseInstrumented((string) ($row['INSTRUMENTED'] ?? 'YES')),
                 );
             }
         } catch (\PDOException) {
@@ -655,14 +680,44 @@ final class PerfSchemaPage extends PageBase
      */
     private function loadTimers(DatabaseInterface $db): array
     {
+        // On MySQL >= 8.0, setup_timers doesn't exist and timer selection is fixed
+        $version = $this->context->version();
+        if ($version->isAtLeast(8, 0)) {
+            // Load performance_timers for display (read-only on >= 8.0)
+            return $this->loadPerformanceTimers($db);
+        }
+
+        // On MySQL < 8.0, load from setup_timers (mutable)
         $timers = [];
         try {
-            $result = $db->query('SELECT `NAME`, `TIMER_NAME`, `SCALE_FACTOR` FROM `performance_schema`.`performance_timers`');
+            $result = $db->query('SELECT `NAME`, `TIMER_NAME` FROM `performance_schema`.`setup_timers`');
             foreach ($result as $row) {
                 $timers[] = SetupTimers::new(
                     name: (string) ($row['NAME'] ?? ''),
                     timerName: (string) ($row['TIMER_NAME'] ?? ''),
-                    scaleFactor: (float) ($row['SCALE_FACTOR'] ?? 1.0),
+                );
+            }
+        } catch (\PDOException) {
+            // Gracefully handle PS being disabled - fall back to performance_timers
+            $timers = $this->loadPerformanceTimers($db);
+        }
+        return $timers;
+    }
+
+    /**
+     * Load performance_timers (available on all PS versions, but read-only).
+     *
+     * @return list<SetupTimers>
+     */
+    private function loadPerformanceTimers(DatabaseInterface $db): array
+    {
+        $timers = [];
+        try {
+            $result = $db->query('SELECT `NAME`, `TIMER_NAME` FROM `performance_schema`.`performance_timers`');
+            foreach ($result as $row) {
+                $timers[] = SetupTimers::new(
+                    name: (string) ($row['NAME'] ?? ''),
+                    timerName: (string) ($row['TIMER_NAME'] ?? ''),
                 );
             }
         } catch (\PDOException) {
@@ -672,6 +727,12 @@ final class PerfSchemaPage extends PageBase
     }
 
     private function parseEnabled(string $value): bool
+    {
+        $lower = strtolower($value);
+        return $lower === 'yes' || $lower === 'on' || $value === '1';
+    }
+
+    private function parseInstrumented(string $value): bool
     {
         $lower = strtolower($value);
         return $lower === 'yes' || $lower === 'on' || $value === '1';

@@ -4,17 +4,20 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin\PerfSchema;
 
+use SugarCraft\Core\Concerns\Mutable;
+
 /**
- * Immutable representation of a Performance Schema thread.
+ * Mutable representation of a Performance Schema thread.
  *
- * Threads represent server threads or connections. This is a read-only
- * model as threads cannot be modified directly - they are derived from
- * the server's internal thread table.
+ * Threads represent server threads or connections. This model tracks
+ * the INSTRUMENTED flag which can be toggled via update statements.
  *
  * @see Mirrors mysql-workbench wb_admin_performance_schema threads
  */
 final readonly class SetupThreads
 {
+    use Mutable;
+
     /**
      * @param int         $threadId          Unique thread identifier
      * @param string      $name              Thread name (e.g. "thread/sql/main")
@@ -23,6 +26,8 @@ final readonly class SetupThreads
      * @param string|null $processlistUser   User from the processlist
      * @param string|null $processlistCommand Current command being executed
      * @param string|null $processlistInfo  Current SQL statement being executed
+     * @param bool        $instrumented      Whether this thread is instrumented
+     * @param bool        $dirty             Whether this thread has unsaved changes
      */
     public function __construct(
         public int $threadId,
@@ -32,6 +37,8 @@ final readonly class SetupThreads
         public ?string $processlistUser = null,
         public ?string $processlistCommand = null,
         public ?string $processlistInfo = null,
+        public bool $instrumented = true,
+        private bool $dirty = false,
     ) {}
 
     /**
@@ -45,6 +52,7 @@ final readonly class SetupThreads
         ?string $processlistUser = null,
         ?string $processlistCommand = null,
         ?string $processlistInfo = null,
+        bool $instrumented = true,
     ): self {
         return new self(
             $threadId,
@@ -54,7 +62,32 @@ final readonly class SetupThreads
             $processlistUser,
             $processlistCommand,
             $processlistInfo,
+            $instrumented,
+            false,
         );
+    }
+
+    /**
+     * Return a new instance with the instrumented state changed.
+     *
+     * @param bool $instrumented New instrumented state
+     * @return static New instance
+     */
+    public function withInstrumented(bool $instrumented): static
+    {
+        if ($this->instrumented === $instrumented) {
+            return $this;
+        }
+
+        return $this->mutate(['instrumented' => $instrumented, 'dirty' => true]);
+    }
+
+    /**
+     * Check if this thread has unsaved changes.
+     */
+    public function isDirty(): bool
+    {
+        return $this->dirty;
     }
 
     /**
@@ -84,12 +117,28 @@ final readonly class SetupThreads
     /**
      * Generate SQL statement(s) to commit changes.
      *
-     * Threads are read-only - they cannot be modified directly.
+     * Generates UPDATE statement for threads INSTRUMENTED flag.
+     * Note: the actual batch UPDATE with IN() clause is handled by CommitPlanner.
      *
-     * @return list<string> Empty array - no statements generated
+     * @return list<string> SQL statements to execute
      */
     public function commitStatements(): array
     {
+        // Individual thread doesn't generate its own statement;
+        // CommitPlanner handles the batch IN() update.
         return [];
+    }
+
+    /**
+     * Generate a partial SQL fragment for this thread's INSTRUMENTED update.
+     *
+     * Used by CommitPlanner to build the IN() clause.
+     *
+     * @return string SQL fragment: THREAD_ID = {id} AND INSTRUMENTED = {value}
+     */
+    public function instrumentedFragment(): string
+    {
+        $enabled = $this->instrumented ? "'YES'" : "'NO'";
+        return sprintf('`THREAD_ID` = %d AND `INSTRUMENTED` = %s', $this->threadId, $enabled);
     }
 }

@@ -14,12 +14,12 @@ final class SetupTimersTest extends TestCase
         $timer = SetupTimers::new(
             name: 'NANOSECOND',
             timerName: 'sql_timer_nanosecond',
-            scaleFactor: 1000.0,
         );
 
         $this->assertSame('NANOSECOND', $timer->name);
         $this->assertSame('sql_timer_nanosecond', $timer->timerName);
-        $this->assertSame(1000.0, $timer->scaleFactor);
+        $this->assertFalse($timer->isDirty());
+        $this->assertSame(SetupTimers::CHANGE_NONE, $timer->getChangeType());
     }
 
     public function testNameUpper(): void
@@ -45,5 +45,47 @@ final class SetupTimersTest extends TestCase
         $cycle = SetupTimers::new(name: 'cycle');
 
         $this->assertTrue($cycle->isCycle());
+    }
+
+    public function testWithTimerNameReturnsNewInstance(): void
+    {
+        $original = SetupTimers::new(name: 'CYCLE', timerName: 'cycle');
+        $modified = $original->withTimerName('nanosecond');
+
+        $this->assertSame('cycle', $original->timerName);
+        $this->assertSame('nanosecond', $modified->timerName);
+        $this->assertFalse($original->isDirty());
+        $this->assertTrue($modified->isDirty());
+        $this->assertSame(SetupTimers::CHANGE_UPDATE, $modified->getChangeType());
+    }
+
+    public function testWithTimerNameNoOpWhenSame(): void
+    {
+        $original = SetupTimers::new(name: 'CYCLE', timerName: 'cycle');
+        $modified = $original->withTimerName('cycle');
+
+        $this->assertSame($original, $modified);
+        $this->assertFalse($modified->isDirty());
+    }
+
+    public function testCommitStatementsReturnsUpdateWhenDirty(): void
+    {
+        $timer = SetupTimers::new(name: 'CYCLE', timerName: 'cycle');
+        $modified = $timer->withTimerName('nanosecond');
+
+        $statements = $modified->commitStatements();
+
+        $this->assertCount(1, $statements);
+        $this->assertSame(
+            "UPDATE `performance_schema`.`setup_timers` SET `TIMER_NAME` = 'nanosecond' WHERE `NAME` = 'CYCLE'",
+            $statements[0]
+        );
+    }
+
+    public function testCommitStatementsReturnsEmptyWhenClean(): void
+    {
+        $timer = SetupTimers::new(name: 'CYCLE', timerName: 'cycle');
+
+        $this->assertSame([], $timer->commitStatements());
     }
 }

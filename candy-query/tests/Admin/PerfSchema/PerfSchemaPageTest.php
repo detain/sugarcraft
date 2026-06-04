@@ -408,4 +408,115 @@ final class PerfSchemaPageTest extends TestCase
 
         $this->assertStringContainsString('[q] quit', $result);
     }
+
+    // ─── Version Gating Tests ─────────────────────────────────────────────────
+
+    public function testActorsNotLoadedOnMySQL56(): void
+    {
+        // MySQL 5.5 doesn't have setup_actors table
+        $this->db->setServerVersion('MySQL version 5.5.62');
+
+        // Setup actors data that would be returned if queried
+        $this->db->setQueryResult([
+            ['HOST' => "'%'", 'USER' => "'%'", 'ROLE' => "'%'", 'ENABLED' => 'YES'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Actors should not be loaded on MySQL < 5.6
+        $this->assertSame([], $page->actors());
+    }
+
+    public function testActorsLoadedOnMySQL56(): void
+    {
+        // MySQL 5.6 has setup_actors table
+        $this->db->setServerVersion('MySQL version 5.6.62');
+
+        // Setup actors data
+        $this->db->setQueryResult([
+            ['HOST' => "'%'", 'USER' => "'%'", 'ROLE' => "'%'", 'ENABLED' => 'YES'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Actors should be loaded on MySQL >= 5.6
+        $this->assertCount(1, $page->actors());
+        $this->assertSame("'%'", $page->actors()[0]->host);
+    }
+
+    public function testObjectsEnabledColumnOmittedOnMySQL563(): void
+    {
+        // MySQL 5.6.2 doesn't have ENABLED column in setup_objects
+        $this->db->setServerVersion('MySQL version 5.6.2');
+
+        // Query returns only TIMED column
+        $this->db->setQueryResult([
+            ['OBJECT_TYPE' => 'TABLE', 'OBJECT_SCHEMA' => "'%'", 'OBJECT_NAME' => "'%'", 'TIMED' => 'YES'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Objects should be loaded but enabled should default to false (ENABLED not available)
+        $this->assertCount(1, $page->objects());
+        $this->assertFalse($page->objects()[0]->enabled);
+        $this->assertTrue($page->objects()[0]->timed);
+    }
+
+    public function testObjectsEnabledColumnPresentOnMySQL563(): void
+    {
+        // MySQL 5.6.3+ has ENABLED column in setup_objects
+        $this->db->setServerVersion('MySQL version 5.6.3');
+
+        $this->db->setQueryResult([
+            ['OBJECT_TYPE' => 'TABLE', 'OBJECT_SCHEMA' => "'%'", 'OBJECT_NAME' => "'%'", 'ENABLED' => 'YES', 'TIMED' => 'YES'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Objects should have ENABLED properly loaded
+        $this->assertCount(1, $page->objects());
+        $this->assertTrue($page->objects()[0]->enabled);
+    }
+
+    public function testTimersLoadedFromSetupTimersOnMySQL57(): void
+    {
+        // MySQL 5.7 uses setup_timers table
+        $this->db->setServerVersion('MySQL version 5.7.42');
+
+        // Query setup_timers (what's queried on < 8.0)
+        $this->db->setQueryResult([
+            ['NAME' => 'CYCLE', 'TIMER_NAME' => 'cycle'],
+            ['NAME' => 'NANOSECOND', 'TIMER_NAME' => 'nanosecond'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Timers from setup_timers should be loaded
+        $this->assertCount(2, $page->timers());
+        // The timers should have isDirty() returning false (clean load)
+        $this->assertFalse($page->timers()[0]->isDirty());
+    }
+
+    public function testTimersReadOnlyOnMySQL80(): void
+    {
+        // MySQL 8.0+ doesn't have setup_timers - uses performance_timers
+        $this->db->setServerVersion('MySQL version 8.0.33');
+
+        $this->db->setQueryResult([
+            ['NAME' => 'CYCLE', 'TIMER_NAME' => 'cycle'],
+            ['NAME' => 'NANOSECOND', 'TIMER_NAME' => 'nanosecond'],
+        ]);
+
+        $page = new PerfSchemaPage($this->context);
+        $page->view();
+
+        // Timers from performance_timers should be loaded (read-only)
+        $this->assertCount(2, $page->timers());
+        $this->assertFalse($page->timers()[0]->isDirty());
+    }
 }
