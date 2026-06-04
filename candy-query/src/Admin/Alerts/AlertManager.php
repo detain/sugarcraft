@@ -79,6 +79,7 @@ final class AlertManager
                     'Connection usage critically high',
                     $ratio,
                     $this->thresholds->connectionCriticalThreshold(),
+                    MetricKind::Ratio,
                 );
             } elseif ($ratio >= $this->thresholds->connectionWarningThreshold()) {
                 $alerts['connection_warning'] = Alert::warning(
@@ -86,6 +87,7 @@ final class AlertManager
                     'Connection usage elevated',
                     $ratio,
                     $this->thresholds->connectionWarningThreshold(),
+                    MetricKind::Ratio,
                 );
             }
         }
@@ -100,6 +102,7 @@ final class AlertManager
                     'Aborted connection rate elevated',
                     $abortedRate,
                     $this->thresholds->abortedRateThreshold(),
+                    MetricKind::Ratio,
                 );
             }
         }
@@ -116,6 +119,7 @@ final class AlertManager
                     'Thread running count elevated',
                     $threadRunningRatio,
                     $this->thresholds->threadRunningThreshold(),
+                    MetricKind::Ratio,
                 );
             }
         }
@@ -146,6 +150,7 @@ final class AlertManager
                     sprintf('Slow query time set to %.1fs', $slowQueryTime),
                     $slowQueryTime,
                     $slowQueryThreshold,
+                    MetricKind::Seconds,
                 );
             }
         }
@@ -162,6 +167,7 @@ final class AlertManager
                     sprintf('Connection errors detected: %d total', $connectionErrorsTotal),
                     (float) $connectionErrorsTotal,
                     (float) $errorThreshold,
+                    MetricKind::Count,
                 );
             }
         }
@@ -191,6 +197,8 @@ final class AlertManager
                         ),
                         $usageRatio,
                         $this->thresholds->connectionCriticalThreshold(),
+                        new \DateTimeImmutable(),
+                        MetricKind::Ratio,
                     );
                 }
             }
