@@ -55,7 +55,7 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `[r]`              | Reset counters (Dashboard) / Refresh processlist (Connections) |
 | `[j/k]`            | Navigate rows down/up (Variables, Connections, Reports) |
 | `[↑/↓]`            | Navigate rows down/up — alias for j/k on all list pages |
-| `[e]`              | Edit selected variable (Variables page)         |
+| `[e]`              | Edit selected variable — dynamic vars only (Variables page): type new value, [Enter] confirm → [Enter] execute or [Esc] cancel |
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
 | `[tab]`            | Toggle Status/System tab (Variables page) / Cycle detail tabs (Connections) |
@@ -122,8 +122,10 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
 | `ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for rate calculations. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
-| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. Mirrors `charmbracelet/lazysql` VariablesPage. |
-| `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET GLOBAL PERSIST`. Uses prepared statements, handles errors 1142/1227/3680. Mirrors `mysql-workbench wb_admin_variable_editor`. |
+| `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. The `[e]` key opens a two-phase dialog: type the new value (DLG_INPUT), press [Enter] to review the SET statement (DLG_CONFIRM), then [Enter] again to execute or [Esc] to cancel. Self-write is guarded: setting a variable to its current value is a no-op. Static (non-dynamic) variables show error 1238 with a clear message rather than silently refusing. Mirrors `charmbracelet/lazysql` VariablesPage. |
+| `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET GLOBAL PERSIST`. Uses prepared statements; backtick-escapes variable names (from catalog, not user input), uses `?` placeholder for values. Error handling: 1142 (no privilege), 1227 (access denied), 1238 (variable is not dynamic — requires restart), 3680 (persisted_variables restriction). Mirrors `mysql-workbench wb_admin_variable_editor`. |
+| `VariableMetadata` | Immutable descriptor: name, description, editable flag, dynamic flag, group memberships. Single MySQL system variable. |
+| `Catalog` | Loads `data/variable_metadata.json` (73 variables, 16 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`, `isDynamic()`. Missing metadata is non-fatal — the page renders without categories or `[rw]` indicators. |
 | `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), detail tab cycling (Tab/1/2/3), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. Mirrors `charmbracelet/lazysql` connections page. |
 | `ConnectionFilters` | Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate. All fields are readonly with paired `$Set` sentinels. |
 | `ConnectionCounters` | Connection metrics from `SHOW GLOBAL STATUS`: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes `connectionUsageRatio()` lazily (0.0–1.0). |

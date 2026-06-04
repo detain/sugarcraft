@@ -193,3 +193,8 @@ Column type parsing uses `ColumnType::tryFrom()` instead of `ColumnType::from()`
 `selectedColumnIndex` tracks the focused column for unit display but is not yet consumed in the render path — the `[c]` key remains a global unit toggle. Future per-column unit cycling would need to re-architect `ReportRunner::formatRows()` to store both raw and formatted values, or re-query on toggle.
 Canonical: `ReportsPage::update()` — `h`/`l`/`[/]`,/`., `[`/`]` key handlers; `Catalog::categories()` — `CATEGORY_ORDER` usort; `ColumnType::tryFrom()` fallback.
 Source: step 3.2 ai/candy-query-reports-navigation-catalog
+
+### 2026-06-04 — VariablesPage edit dialog: two-phase state machine + self-write guard + error 1238 (STEP 4.1)
+Pattern: The edit dialog is a two-phase state machine (`DLG_INPUT` → `DLG_CONFIRM`) implemented via `withEditDialog()` — a private wither that clones the page and returns a new instance with dialog fields set. The `handleEdit()` method gates on `isDynamic()` (not `isEditable()`) so that static (non-dynamic) variables reach error 1238 at the confirm phase with a user-facing message rather than silently no-opping at the entry point. The self-write guard in `updateDialogInput()` compares `editNewValue` to `editCurrentValue` — if they match, the dialog stays in input phase with the original value shown, preventing a no-op SET GLOBAL. All `with*()` methods use `clone $this` and return a new instance, keeping `update()` and `updateDialog()` pure.
+Canonical: `VariablesPage::updateDialog()` → `updateDialogInput()` / `updateDialogConfirm()` → `executeEdit()` → `editor->edit()` → `withEditDialog()` (immutable state transition).
+Source: step 4.1 ai/candy-query-variables-edit-dialog

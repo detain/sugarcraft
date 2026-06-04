@@ -26,14 +26,15 @@ use SugarCraft\Table\Table;
  * Variables page displaying SHOW GLOBAL STATUS / SHOW GLOBAL VARIABLES.
  *
  * Features dual tabs (Status/System), category tree navigation,
- * search filtering, and inline editing of editable variables.
+ * search filtering, and inline editing of dynamic variables via a
+ * value-input dialog that confirms before issuing SET GLOBAL.
  *
  * Keyboard shortcuts:
  *   [tab]     - toggle between Status/System tabs
- *   [w]       - toggle read/write filter (show only editable variables)
+ *   [w]       - toggle read/write filter (show only dynamic variables)
  *   [s]       - focus search input
  *   [j/k]     - navigate rows down/up
- *   [e]       - edit selected variable
+ *   [e]       - edit selected variable (dynamic vars only)
  *   [q]       - quit to previous view
  *
  * @see Mirrors charmbracelet/lazysql VariablesPage
@@ -43,6 +44,10 @@ final class VariablesPage extends PageBase
     /** Tab enum for Status vs System variables. */
     public const TAB_STATUS = 'status';
     public const TAB_SYSTEM = 'system';
+
+    // Edit dialog phase constants
+    private const DLG_INPUT  = 'input';
+    private const DLG_CONFIRM = 'confirm';
 
     /** @var array<string, string> */
     private array $variables = [];
@@ -63,6 +68,22 @@ final class VariablesPage extends PageBase
     /** @var list<string> */
     private array $categories = [];
 
+    // Edit dialog state — null means no dialog active
+    /** @var string|null DLG_INPUT | DLG_CONFIRM | null */
+    private ?string $editDialogPhase = null;
+
+    /** @var string|null variable name being edited */
+    private ?string $editVarName = null;
+
+    /** @var string|null value entered by user in the dialog (starts empty, accumulates typed chars) */
+    private ?string $editNewValue = null;
+
+    /** @var string|null the value when the dialog was opened (for self-write guard) */
+    private ?string $editCurrentValue = null;
+
+    /** @var string|null error message from a failed SET (e.g. 1238) */
+    private ?string $editErrorMessage = null;
+
     /**
      * @param ServerContextInterface $context Server context for variable access
      * @param Catalog|null $catalog Variable metadata catalog (loaded eagerly by
@@ -78,8 +99,19 @@ final class VariablesPage extends PageBase
         ServerContextInterface $context,
         private readonly ?Catalog $catalog = null,
         private readonly ?VariableEditor $editor = null,
+        // Dialog state — stored as individual fields for immutability via clone
+        ?string $editDialogPhase = null,
+        ?string $editVarName = null,
+        ?string $editNewValue = null,
+        ?string $editCurrentValue = null,
+        ?string $editErrorMessage = null,
     ) {
         parent::__construct($context);
+        $this->editDialogPhase = $editDialogPhase;
+        $this->editVarName = $editVarName;
+        $this->editNewValue = $editNewValue;
+        $this->editCurrentValue = $editCurrentValue;
+        $this->editErrorMessage = $editErrorMessage;
     }
 
     /**
@@ -128,6 +160,13 @@ final class VariablesPage extends PageBase
         $lines[] = $this->renderTabBar();
         $lines[] = '';
         $lines[] = $this->renderLayout();
+
+        $dialog = $this->renderDialog();
+        if ($dialog !== '') {
+            $lines[] = '';
+            $lines[] = $dialog;
+        }
+
         $lines[] = '';
         $lines[] = $this->renderFooter();
 
@@ -141,6 +180,11 @@ final class VariablesPage extends PageBase
      */
     public function update(Msg $msg): array
     {
+        // Delegate to dialog state machine when active
+        if ($this->editDialogPhase !== null) {
+            return $this->updateDialog($msg);
+        }
+
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -198,6 +242,149 @@ final class VariablesPage extends PageBase
         }
 
         return [$this, null];
+    }
+
+    /**
+     * Handle dialog key events — input phase, confirm phase.
+     *
+     * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
+     */
+    private function updateDialog(Msg $msg): array
+    {
+        if (!$msg instanceof KeyMsg) {
+            return [$this, null];
+        }
+
+        $type = $msg->type;
+
+        if ($this->editDialogPhase === self::DLG_INPUT) {
+            return $this->updateDialogInput($msg);
+        }
+
+        if ($this->editDialogPhase === self::DLG_CONFIRM) {
+            // In confirm phase, Enter executes the SET, Escape cancels to browse
+            if ($type === KeyType::Enter) {
+                return $this->executeEdit();
+            }
+
+            if ($type === KeyType::Escape) {
+                return [$this->withEditDialog(null, null, null, null, null), null];
+            }
+
+            return [$this, null];
+        }
+
+        // Unknown phase — cancel dialog
+        return [$this->withEditDialog(null, null, null, null, null), null];
+    }
+
+    /**
+     * Handle key events in the input phase of the edit dialog.
+     *
+     * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
+     */
+    private function updateDialogInput(Msg $msg): array
+    {
+        if (!$msg instanceof KeyMsg) {
+            return [$this, null];
+        }
+
+        $type = $msg->type;
+        $varName = $this->editVarName ?? '';
+        $currentValue = $this->editCurrentValue ?? '';
+
+        // Escape cancels and returns to browse
+        if ($type === KeyType::Escape) {
+            return [$this->withEditDialog(null, null, null, null, null), null];
+        }
+
+        // Character input — build the new value from scratch
+        if ($type === KeyType::Char) {
+            $ch = $msg->rune ?? '';
+            // If user hasn't started typing yet (null), start from empty
+            $newValue = ($this->editNewValue ?? '') . $ch;
+            return [$this->withEditDialog(
+                self::DLG_INPUT,
+                $varName,
+                $newValue,
+                $currentValue,
+                null,
+            ), null];
+        }
+
+        // Enter transitions to confirm phase (only if value changed from original)
+        if ($type === KeyType::Enter) {
+            $newValue = $this->editNewValue ?? '';
+
+            // Self-write guard: no-op if new value same as original
+            // (null newValue means user typed nothing — treat as same as original)
+            if ($newValue === $currentValue) {
+                return [$this->withEditDialog(
+                    self::DLG_INPUT,
+                    $varName,
+                    $currentValue,
+                    $currentValue,
+                    null,
+                ), null];
+            }
+
+            // Transition to confirm phase
+            return [$this->withEditDialog(
+                self::DLG_CONFIRM,
+                $varName,
+                $newValue,
+                $currentValue,
+                null,
+            ), null];
+        }
+
+        return [$this, null];
+    }
+
+    /**
+     * Execute the SET GLOBAL edit and return the new page state.
+     *
+     * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
+     */
+    private function executeEdit(): array
+    {
+        $varName = $this->editVarName ?? '';
+        $newValue = $this->editNewValue ?? '';
+        $currentValue = $this->editCurrentValue ?? '';
+
+        // Editor must be available (guard — should not be null if dialog is active)
+        if ($this->editor === null) {
+            return [$this->withEditDialog(null, null, null, null, null), null];
+        }
+
+        // No-op if same value (defensive — confirm phase already checked)
+        if ($newValue === $currentValue) {
+            return [$this->withEditDialog(null, null, null, null, null), null];
+        }
+
+        $result = $this->editor->edit($varName, $newValue);
+
+        if ($result['success']) {
+            // Reload variables and return to browse
+            $this->loadVariables();
+            return [$this->withEditDialog(null, null, null, null, null), null];
+        }
+
+        // Error — show in confirm phase (user can retry or cancel)
+        $errorMessage = $result['errorMessage'] ?? 'Unknown error';
+
+        // Error 1238 = variable is not dynamic (requires restart)
+        if (($result['errorCode'] ?? 0) === 1238) {
+            $errorMessage = "Error 1238: '{$varName}' is not dynamic — requires server restart";
+        }
+
+        return [$this->withEditDialog(
+            self::DLG_CONFIRM,
+            $varName,
+            $newValue,
+            $currentValue,
+            $errorMessage,
+        ), null];
     }
 
     // ─── Wither Methods ───────────────────────────────────────────────────────
@@ -314,6 +501,37 @@ final class VariablesPage extends PageBase
         return $clone;
     }
 
+    /**
+     * Return a new instance with the edit dialog in the given state.
+     *
+     * @param string|null $phase DLG_INPUT | DLG_CONFIRM | null
+     */
+    private function withEditDialog(
+        ?string $phase,
+        ?string $varName = null,
+        ?string $newValue = null,
+        ?string $currentValue = null,
+        ?string $errorMessage = null,
+    ): self {
+        $clone = clone $this;
+        $clone->editDialogPhase = $phase;
+        $clone->editVarName = $varName;
+        $clone->editNewValue = $newValue;
+        $clone->editCurrentValue = $currentValue;
+        $clone->editErrorMessage = $errorMessage;
+        return $clone;
+    }
+
+    private function isDynamic(string $varName): bool
+    {
+        if ($this->metadataMap === null) {
+            return false;
+        }
+
+        $metadata = $this->metadataMap[$varName] ?? null;
+        return $metadata !== null && $metadata->isDynamic();
+    }
+
     private function handleEdit(): array
     {
         $filteredNames = $this->getFilteredVariableNames();
@@ -326,34 +544,36 @@ final class VariablesPage extends PageBase
             return [$this, null];
         }
 
-        // Check if editable
-        if (!$this->isEditable($varName)) {
+        // Editor must be available
+        if ($this->editor === null) {
             return [$this, null];
         }
 
-        // Editor must be available for editing
-        if ($this->editor === null) {
+        // Gate on dynamic, not just editable — static vars hit error 1238
+        if (!$this->isDynamic($varName)) {
             return [$this, null];
         }
 
         $currentValue = $this->variables[$varName] ?? '';
 
-        // Get edit preview to show what will happen
-        $preview = $this->editor->getEditPreview($varName, $currentValue, false);
+        // Enter the input phase. editNewValue starts empty and accumulates
+        // typed characters; editCurrentValue preserves the original for the
+        // self-write guard.  The TextInput placeholder shows $currentValue
+        // so the user sees the original without pre-filling the state.
+        $input = TextInput::new()
+            ->withPrompt('new value > ')
+            ->withPlaceholder($currentValue)
+            ->setValue('');  // start empty so typing appends correctly
 
-        // Perform the edit (using current value for now - proper implementation
-        // would prompt user for new value via a dialog component)
-        $result = $this->editor->edit($varName, $currentValue);
+        [$focusedInput] = $input->focus();
 
-        if ($result['success']) {
-            // Reload variables to reflect the new value
-            $this->loadVariables();
-            return [$this, null];
-        }
-
-        // Error occurred - could set an error message state here
-        // For now, just return with current state
-        return [$this, null];
+        return [$this->withEditDialog(
+            self::DLG_INPUT,
+            $varName,
+            '',         // editNewValue — empty, user types to set it
+            $currentValue,  // editCurrentValue — original value for guard
+            null,
+        ), null];
     }
 
     // ─── Data Loading ────────────────────────────────────────────────────────
@@ -418,11 +638,11 @@ final class VariablesPage extends PageBase
             );
         }
 
-        // Filter by read/write (editable) only
+        // Filter by read/write (dynamic) only — inline SET GLOBAL only works at runtime
         if ($this->showReadWriteOnly) {
             $names = \array_values(
                 \array_filter($names, function (string $name): bool {
-                    return $this->isEditable($name);
+                    return $this->isDynamic($name);
                 })
             );
         }
@@ -430,6 +650,17 @@ final class VariablesPage extends PageBase
         return $names;
     }
 
+    /**
+     * Check if a variable is editable per its metadata catalog.
+     *
+     * Distinct from isDynamic(): isEditable() reflects the [rw] metadata flag,
+     * while isDynamic() reflects whether SET GLOBAL actually works at runtime.
+     * handleEdit() gates on isDynamic() so that static variables reach the
+     * confirm phase and get a clear error 1238 message rather than silently
+     * declining at the entry point.
+     *
+     * @return bool True if the variable is in the catalog with editable=true
+     */
     private function isEditable(string $varName): bool
     {
         if ($this->metadataMap === null) {
@@ -541,7 +772,7 @@ final class VariablesPage extends PageBase
             $rows[] = Row::new(RowData::from([
                 'name' => $varName,
                 'value' => $value,
-                'editable' => $this->isEditable($varName) ? 'rw' : '',
+                'editable' => $this->isDynamic($varName) ? 'rw' : '',
             ]));
         }
 
@@ -557,10 +788,49 @@ final class VariablesPage extends PageBase
     private function renderFooter(): string
     {
         return Style::new()->foreground(Color::hex('#6b7280'))
-            ->render('[tab] toggle  [w] rw filter  [s] search  [j/k] nav  [e] edit  [q] quit');
+            ->render('[tab] toggle  [w] rw filter  [s] search  [j/k] nav  [e] edit(dynamic)  [q] quit');
     }
 
-    // ─── Accessors ───────────────────────────────────────────────────────────
+    /**
+     * Render the edit dialog overlay when one is active.
+     *
+     * DLG_INPUT phase: prompts for the new value, shows current value as placeholder.
+     * DLG_CONFIRM phase: shows the pending SET GLOBAL statement, [Enter] to execute,
+     * [Esc] to cancel. If executeEdit() returned an error (e.g. 1238 for non-dynamic
+     * variables), the error message is shown in red below the confirm line.
+     *
+     * @return string Empty string when no dialog is active.
+     */
+    private function renderDialog(): string
+    {
+        $phase = $this->editDialogPhase;
+        $varName = $this->editVarName ?? '';
+        $currentValue = $this->variables[$varName] ?? '';
+        $newValue = $this->editNewValue ?? '';
+        $errorMsg = $this->editErrorMessage;
+
+        if ($phase === self::DLG_INPUT) {
+            $prompt = "  Edit: {$varName}  (current: {$currentValue})\n";
+            $prompt .= '  Enter new value, [Enter] confirm, [Esc] cancel';
+            return Style::new()->foreground(Color::hex('#fde047'))->render($prompt);
+        }
+
+        if ($phase === self::DLG_CONFIRM) {
+            $lines = [];
+            $lines[] = '';
+            $lines[] = Style::new()->foreground(Color::hex('#22d3ee'))->render("  SET GLOBAL `{$varName}` = ?");
+            $lines[] = '  ' . Style::new()->foreground(Color::hex('#4ade80'))->render("[Enter] execute   [Esc] cancel");
+
+            if ($errorMsg !== null) {
+                $lines[] = '';
+                $lines[] = Style::new()->foreground(Color::hex('#f87171'))->render("  {$errorMsg}");
+            }
+
+            return \implode("\n", $lines);
+        }
+
+        return '';
+    }
 
     public function activeTab(): string
     {
