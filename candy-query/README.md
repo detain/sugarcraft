@@ -52,12 +52,17 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | Key                | Action                                          |
 |--------------------|-------------------------------------------------|
 | `[p]`              | Pause/resume auto-refresh (Dashboard)           |
-| `[r]`              | Reset all counters and graphs (Dashboard)       |
+| `[r]`              | Reset counters (Dashboard) / Refresh processlist (Connections) |
 | `[j/k]`            | Navigate rows down/up (Variables, Connections, Reports) |
+| `[↑/↓]`            | Navigate rows down/up — alias for j/k on all list pages |
 | `[e]`              | Edit selected variable (Variables page)         |
 | `[w]`              | Toggle read/write filter (Variables page)       |
 | `[s]`              | Focus search input (Variables page)              |
-| `[tab]`            | Toggle Status/System tab (Variables page)       |
+| `[tab]`            | Toggle Status/System tab (Variables page) / Cycle detail tabs (Connections) |
+| `[f]`              | Toggle hide-sleeping filter (Connections page)  |
+| `[1]`              | Switch to Details detail tab (Connections page) |
+| `[2]`              | Switch to Attributes detail tab (Connections page) |
+| `[3]`              | Switch to MDL detail tab (Connections page)    |
 | `[c]`              | Commit pending changes (PerfSchema page)        |
 | `[x]`              | Export report to CSV (Reports page)             |
 | `[t]`              | Toggle column unit formatting (Reports page)    |
@@ -117,6 +122,11 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `VariablesPage`     | Dual-tab (Status/System) variable browser with category tree, search filtering, keyboard nav (j/k/w/s/tab/e/q), and inline edit via VariableEditor. Mirrors `charmbracelet/lazysql` VariablesPage. |
 | `VariableEditor`    | Inline editor for MySQL variables via `SET GLOBAL` / `SET PERSIST` / `SET GLOBAL PERSIST`. Uses prepared statements, handles errors 1142/1227/3680. Mirrors `mysql-workbench wb_admin_variable_editor`. |
+| `ConnectionsPage`  | Processlist browser with selection navigation (j/k/↑/↓), detail tab cycling (Tab/1/2/3), hide-sleeping filter (f), and async refresh (r) via `Cmd::send`. Mirrors `charmbracelet/lazysql` connections page. |
+| `ConnectionFilters` | Immutable filter config: hide-sleeping, hide-background, skip-full-info, refresh-rate. All fields are readonly with paired `$Set` sentinels. |
+| `ConnectionCounters` | Connection metrics from `SHOW GLOBAL STATUS`: threads-connected/running/cached, connections, aborted-connects, connection-errors. Computes `connectionUsageRatio()` lazily (0.0–1.0). |
+| `ConnectionDetailTabs` | Three detail tabs (Details/Attributes/MDL) per processlist thread. Details from `performance_schema.threads`; Attributes from `session_connect_attrs`; MDL from `performance_schema.metadata_locks` with graceful fallback to `information_schema.metadata_lock_info`. Gracefully returns `null` on permission errors (1142/1146/1227). |
+| `ProcesslistProvider` | Fetches processlist via PS (`performance_schema.threads` + `session_connect_attrs`) with fallback to `SHOW FULL PROCESSLIST` on permission errors. Memoized via `cachedFilteredProcesslist` in `ConnectionsPage` to avoid 2–3× fetch per render. |
 | `ReplicaStatusProvider` | Fetches replica status via `SHOW REPLICA STATUS` (MySQL 8+) or `SHOW SLAVE STATUS` (MySQL 5.x/MariaDB), graceful 1227 handling. |
 | `SidebarGauge` | Single metric gauge with threshold coloring (green/yellow/red). CPU uses circular GaugeCircle; others use horizontal Gauge. |
 | `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional `Sampler` for rate calculations. Traffic gauge uses Sampler delta for baseline-corrected ratio. |
