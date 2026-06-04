@@ -30,6 +30,8 @@ use SugarCraft\Query\Admin\PerfSchema\PerfSchemaPage;
 use SugarCraft\Query\Admin\ServerContext;
 use SugarCraft\Query\Admin\ServerContextInterface;
 use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
+use SugarCraft\Query\Admin\Variables\Catalog;
+use SugarCraft\Query\Admin\Variables\VariableEditor;
 use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
@@ -241,13 +243,14 @@ final class App implements Model
      */
     private function handleAdminKey(KeyMsg $msg): array
     {
-        $allPanes = AdminPane::cases();
+        $allPanes = AdminPane::orderedCases();
         $count = count($allPanes);
 
         // Number keys directly select an admin pane (1 = first pane). The range
-        // spans every pane — including PerfSchema and Debug, which sit past the
-        // old 1-6 cap and were otherwise reachable only by j/k scrolling. The
-        // isset() guard below ignores digits with no matching pane.
+        // spans every pane. Uses orderedCases() so digit N selects the same
+        // pane that appears at row N in the sidebar (section-grouped display
+        // order: Management first, then Performance). The isset() guard below
+        // ignores digits with no matching pane.
         if ($msg->type === KeyType::Char && $msg->rune >= '1' && $msg->rune <= '9') {
             $index = (int) $msg->rune - 1;
             if (isset($allPanes[$index]) && $allPanes[$index] !== $this->adminPane) {
@@ -405,7 +408,7 @@ final class App implements Model
 
     private function withAdminCursor(int $adminCursor): self
     {
-        $allPanes = AdminPane::cases();
+        $allPanes = AdminPane::orderedCases();
         return $this->mutate([
             'adminCursor' => max(0, min($adminCursor, count($allPanes) - 1)),
         ]);
@@ -452,9 +455,9 @@ final class App implements Model
         return match ($this->adminPane) {
             AdminPane::ProcessList => ConnectionsPage::new($context),
             AdminPane::Dashboard => new DashboardPage($context),
-            AdminPane::Variables => VariablesPage::new($context),
+            AdminPane::Variables => self::buildVariablesPage($context),
             AdminPane::Status => ServerStatusPage::new($context),
-            AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context),
+            AdminPane::QueryStats, AdminPane::TableStats => ReportsPage::new($context, $context->connection()),
             AdminPane::PerfSchema => PerfSchemaPage::new($context),
             AdminPane::Debug => DebugPage::new($context),
         };
@@ -480,6 +483,28 @@ final class App implements Model
     {
         $provider = PostgresAdminProvider::new($this->db);
         return PostgresServerContext::new($this->db, $provider);
+    }
+
+    /**
+     * Build a VariablesPage with its Catalog and VariableEditor collaborators.
+     *
+     * The catalog is loaded eagerly so loadCategories() and isEditable() work
+     * immediately. If loading fails (e.g., missing metadata file), the page
+     * still renders — it just shows an empty category tree and [rw] will be
+     * absent for all variables.
+     */
+    private static function buildVariablesPage(ServerContextInterface $context): VariablesPage
+    {
+        $catalog = Catalog::new();
+        try {
+            $catalog->load();
+        } catch (\Throwable) {
+            // Missing metadata is non-fatal — page renders without categories.
+        }
+
+        $editor = VariableEditor::new($context, $catalog);
+
+        return VariablesPage::new($context, $catalog, $editor);
     }
 
     private function withPane(Pane $p): self
