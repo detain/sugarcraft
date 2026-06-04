@@ -23,6 +23,10 @@ final class MeterCell
 
     private bool $hasValue = false;
 
+    private float $value = 0.0;
+
+    private float $max = 0.0;
+
     public function __construct(
         private readonly Widget $widget,
         private readonly ?float $maxOverride = null,
@@ -49,12 +53,11 @@ final class MeterCell
             $value = array_sum($value);
         }
 
-        $value = (float) $value;
+        $this->value = (float) $value;
+        $this->max = $this->resolveMax($current, $serverVars);
 
-        $max = $this->resolveMax($current, $serverVars);
-
-        if ($max > 0) {
-            $this->ratio = min(1.0, $value / $max);
+        if ($this->max > 0) {
+            $this->ratio = min(1.0, $this->value / $this->max);
         } else {
             $this->ratio = 0.0;
         }
@@ -86,11 +89,17 @@ final class MeterCell
     /**
      * Set the ratio directly (for level meters that get ratio from a different source).
      */
-    public function withRatio(float $ratio): self
+    public function withRatio(float $ratio, ?float $value = null, ?float $max = null): self
     {
         $clone = clone $this;
         $clone->ratio = max(0.0, min(1.0, $ratio));
         $clone->hasValue = true;
+        if ($value !== null) {
+            $clone->value = $value;
+        }
+        if ($max !== null) {
+            $clone->max = $max;
+        }
         return $clone;
     }
 
@@ -101,6 +110,8 @@ final class MeterCell
     {
         $this->ratio = 0.0;
         $this->hasValue = false;
+        $this->value = 0.0;
+        $this->max = 0.0;
         return $this;
     }
 
@@ -126,6 +137,22 @@ final class MeterCell
     public function percentage(): int
     {
         return (int) round($this->ratio * 100);
+    }
+
+    /**
+     * Get the current raw value.
+     */
+    public function value(): float
+    {
+        return $this->value;
+    }
+
+    /**
+     * Get the resolved maximum.
+     */
+    public function max(): float
+    {
+        return $this->max;
     }
 
     /**
@@ -158,7 +185,17 @@ final class MeterCell
             ->withWidth($width)
             ->withFilledColor(Color::rgb($color['r'], $color['g'], $color['b']));
 
-        return $gauge->render();
+        $gaugeStr = $gauge->render();
+
+        // Render value/max readout using the widget's format string.
+        // Connections level meter has format '%d / %d'.
+        $format = $this->widget->format;
+        if ($format !== '' && $format !== '%s') {
+            $readout = sprintf($format, (int) $this->value, (int) $this->max);
+            return $gaugeStr . ' ' . $readout;
+        }
+
+        return $gaugeStr;
     }
 
     /**

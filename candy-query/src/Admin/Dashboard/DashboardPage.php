@@ -59,6 +59,9 @@ final class DashboardPage extends PageBase
     /** @var array<Widget> */
     private array $allWidgets = [];
 
+    /** @var array<string, list<Widget>> */
+    private array $sectionWidgetCache = [];
+
     private ?string $previousSnapshot = null;
 
     private bool $isPostgres = false;
@@ -78,6 +81,7 @@ final class DashboardPage extends PageBase
             ? WidgetRegistry::buildForPostgres()
             : WidgetRegistry::build($version ?? $this->context->version());
         $this->initializeCells();
+        $this->buildSectionWidgetCache();
         // Mute-safe by default — no toast factory means notify() is a no-op
         $this->alertNotifier = AlertNotifier::withDefaults(muted: true);
     }
@@ -257,15 +261,21 @@ final class DashboardPage extends PageBase
             return;
         }
 
-        $this->lastPollAt = $now;
-
         $current = $this->context->statusVariables();
         $previous = $this->previousSnapshot !== null
             ? (array) json_decode($this->previousSnapshot, true)
             : $current;
         $serverVars = $this->context->serverVariables();
 
-        $elapsed = 3.0;
+        // Measure actual wall-clock elapsed since last poll; use 3.0 as fallback
+        // only on the very first sample when lastPollAt is null.
+        if ($this->lastPollAt !== null) {
+            $elapsed = max(0.001, $now - $this->lastPollAt);
+        } else {
+            $elapsed = 3.0;
+        }
+
+        $this->lastPollAt = $now;
 
         foreach ($this->timelineCells as $cell) {
             $cell->ingest($current, $previous, $elapsed);
@@ -324,6 +334,31 @@ final class DashboardPage extends PageBase
         }
     }
 
+    /**
+     * Build the per-section widget cache once during construction.
+     *
+     * This avoids rebuilding widget lists every frame, which was causing
+     * the catalog to re-read version and drift from the keyed cells.
+     */
+    private function buildSectionWidgetCache(): void
+    {
+        if ($this->isPostgres) {
+            $this->sectionWidgetCache = [
+                'network' => WidgetRegistry::postgresIo(),
+                'mysql' => WidgetRegistry::postgresTransactions(),
+                'innodb' => WidgetRegistry::postgresCache(),
+            ];
+            return;
+        }
+
+        $version = $this->context->version();
+        $this->sectionWidgetCache = [
+            'network' => WidgetRegistry::network(),
+            'mysql' => WidgetRegistry::mysql($version),
+            'innodb' => WidgetRegistry::innodb(),
+        ];
+    }
+
     private function widgetId(Widget $widget): string
     {
         return $widget->caption . ':' . $widget->kind;
@@ -367,25 +402,7 @@ final class DashboardPage extends PageBase
      */
     private function getWidgetsForSection(string $section): array
     {
-        if ($this->isPostgres) {
-            return match ($section) {
-                'network' => WidgetRegistry::postgresIo(),
-                'mysql' => WidgetRegistry::postgresTransactions(),
-                'innodb' => WidgetRegistry::postgresCache(),
-                default => [],
-            };
-        }
-
-        $networkWidgets = WidgetRegistry::network();
-        $mysqlWidgets = WidgetRegistry::mysql($this->context->version());
-        $innodbWidgets = WidgetRegistry::innodb();
-
-        return match ($section) {
-            'network' => $networkWidgets,
-            'mysql' => $mysqlWidgets,
-            'innodb' => $innodbWidgets,
-            default => [],
-        };
+        return $this->sectionWidgetCache[$section] ?? [];
     }
 
     private function renderHeader(): string

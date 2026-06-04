@@ -62,7 +62,14 @@ final class TimeSeriesCell
         $value = $this->widget->compute($current, $previous, $elapsed);
 
         if (is_array($value)) {
-            $value = array_sum($value);
+            // MakeTuple / TupleRatePerSecond return associative arrays like
+            // ['Com_select' => 10.0, 'Com_insert' => 5.0, ...]. Summing these
+            // would produce meaningless totals (e.g. 15 from two unrelated
+            // counter series). Multi-series timeline rendering (separate
+            // polylines per series) requires broader LineChart changes and is
+            // deferred; for now, show the dominant series so the graph is at
+            // least informative rather than misleading.
+            $value = empty($value) ? 0.0 : max($value);
         }
 
         $value = (float) $value;
