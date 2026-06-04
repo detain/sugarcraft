@@ -7,7 +7,13 @@ namespace SugarCraft\Query\Db;
 /**
  * Readonly value object representing database connection configuration.
  *
- * Stores all connection parameters without getter methods - access via ->property.
+ * All properties are public and readonly — access via ->property.
+ * Password is never echoed in any output (logs, DSN strings, exceptions).
+ *
+ * For MySQL connections, SSL is NOT included in the DSN string — it is
+ * applied as PDO driver options at connect time (see MysqlDatabase::connect()).
+ *
+ * @see MysqlDatabase::connect() For SSL driver option application
  */
 final readonly class ConnectionConfig
 {
