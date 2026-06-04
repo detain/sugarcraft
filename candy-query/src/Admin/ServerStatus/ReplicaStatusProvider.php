@@ -10,22 +10,26 @@ use SugarCraft\Query\Db\Version;
 use SugarCraft\Query\Db\DatabaseInterface;
 
 /**
- * Provides replica status by executing SHOW REPLICA STATUS (MySQL 8+)
- * or SHOW SLAVE STATUS (MySQL 5.x / MariaDB).
+ * Provides replica status by executing SHOW REPLICA STATUS (MySQL 8+),
+ * SHOW SLAVE STATUS (MySQL 5.x), or SHOW ALL SLAVES STATUS (MariaDB).
  *
- * Gracefully handles MySQL error 1227 (replica command denied) by returning
- * empty/null when the user lacks REPLICATION CLIENT privilege.
+ * Gracefully distinguishes: configured (rows returned), not configured
+ * (empty result), insufficient privileges (error 1227), and server errors.
+ * All rows are returned to support multi-channel replication setups.
  *
  * @see Mirrors mysql-workbench/wb_admin_replication
  */
 final class ReplicaStatusProvider
 {
     /**
-     * Cached replica status rows, or null if not yet fetched or on error.
+     * Cached replica status rows.
      *
-     * @var array<string, scalar>|null
+     * @var list<array<string, scalar>>|null
      */
-    private ?array $cachedStatus = null;
+    private ?array $cachedRows = null;
+
+    /** @var ReplicaStatusKind|null */
+    private ?ReplicaStatusKind $cachedKind = null;
 
     private ?bool $isConfigured = null;
 
@@ -42,22 +46,39 @@ final class ReplicaStatusProvider
     }
 
     /**
-     * Fetch replica status from the server.
+     * Fetch all replica status rows from the server.
      *
-     * Returns null when replica status is not accessible (not configured,
-     * privileges missing, or server error). Use isReplicaConfigured() to
-     * distinguish between "not configured" and "error accessing".
+     * Returns all channels when configured (multi-row). Empty array when
+     * not configured or inaccessible. Use lastFetchKind() to distinguish
+     * the specific condition.
      *
-     * @return array<string, scalar>|null Row data or null on failure
+     * @return list<array<string, scalar>>
      */
-    public function fetchStatus(): ?array
+    public function fetchStatus(): array
     {
-        if ($this->cachedStatus !== null) {
-            return $this->cachedStatus;
+        if ($this->cachedRows !== null) {
+            return $this->cachedRows;
         }
 
-        $this->cachedStatus = $this->doFetch();
-        return $this->cachedStatus;
+        $this->doFetch();
+        return $this->cachedRows ?? [];
+    }
+
+    /**
+     * The specific condition last encountered when fetching status.
+     *
+     * Allows the UI to display distinct messages for: configured rows
+     * returned, empty result (not configured), error 1227 (permission
+     * denied), or an unexpected error.
+     */
+    public function lastFetchKind(): ReplicaStatusKind
+    {
+        if ($this->cachedKind !== null) {
+            return $this->cachedKind;
+        }
+
+        $this->doFetch();
+        return $this->cachedKind ?? ReplicaStatusKind::NotConfigured;
     }
 
     /**
@@ -72,8 +93,8 @@ final class ReplicaStatusProvider
             return $this->isConfigured;
         }
 
-        $status = $this->fetchStatus();
-        $this->isConfigured = $status !== null && count($status) > 0;
+        $kind = $this->lastFetchKind();
+        $this->isConfigured = $kind === ReplicaStatusKind::Configured;
         return $this->isConfigured;
     }
 
@@ -83,7 +104,8 @@ final class ReplicaStatusProvider
     public function refresh(): self
     {
         $clone = clone $this;
-        $clone->cachedStatus = null;
+        $clone->cachedRows = null;
+        $clone->cachedKind = null;
         $clone->isConfigured = null;
         return $clone;
     }
@@ -91,9 +113,9 @@ final class ReplicaStatusProvider
     /**
      * Execute the appropriate SHOW command for the server version.
      *
-     * @return array<string, scalar>|null
+     * @return list<array<string, scalar>>
      */
-    private function doFetch(): ?array
+    private function doFetch(): void
     {
         $sql = $this->chooseQuery();
 
@@ -102,42 +124,40 @@ final class ReplicaStatusProvider
             $rows = $connection->query($sql);
 
             if (count($rows) === 0) {
-                return null;
+                $this->cachedRows = [];
+                $this->cachedKind = ReplicaStatusKind::NotConfigured;
+                return;
             }
 
-            /** @var array<string, scalar> $firstRow */
-            $firstRow = $rows[0];
-            return $firstRow;
+            /** @var list<array<string, scalar>> $rows */
+            $this->cachedRows = $rows;
+            $this->cachedKind = ReplicaStatusKind::Configured;
         } catch (\PDOException $e) {
-            // MySQL error 1227: REPLICATION CLIENT privilege denied
-            // This is expected when the user lacks privileges — not an error condition
+            $this->cachedRows = [];
             if ($this->isReplicaCommandDenied($e)) {
-                return null;
+                $this->cachedKind = ReplicaStatusKind::PermissionDenied;
+                return;
             }
 
-            // Log unexpected errors but treat as "not accessible"
-            // The page will show a friendly message rather than a stack trace
-            return null;
+            // Unexpected error — treat as inaccessible
+            $this->cachedKind = ReplicaStatusKind::Error;
         }
     }
 
     /**
-     * Choose SHOW REPLICA STATUS (MySQL 8+) or SHOW SLAVE STATUS (MySQL 5.x / MariaDB).
-     *
-     * MySQL 8.0+ uses REPLICA (preferred) over SLAVE terminology.
-     * MariaDB and MySQL 5.x still use SLAVE STATUS.
+     * Choose the correct SHOW command for the server flavor and version.
      */
     private function chooseQuery(): string
     {
         $flavor = $this->context->flavor();
         $version = $this->context->version();
 
-        // MariaDB always uses SHOW SLAVE STATUS
+        // MariaDB uses SHOW ALL SLAVES STATUS for multi-channel support
         if ($flavor === Flavor::MariaDB) {
-            return 'SHOW SLAVE STATUS';
+            return 'SHOW ALL SLAVES STATUS';
         }
 
-        // MySQL 8.0+ uses SHOW REPLICA STATUS
+        // MySQL 8.0+ uses SHOW REPLICA STATUS (preferred over SLAVE)
         if ($flavor === Flavor::MySQL && $version->major >= 8) {
             return 'SHOW REPLICA STATUS';
         }
@@ -151,7 +171,6 @@ final class ReplicaStatusProvider
      */
     private function isReplicaCommandDenied(\PDOException $e): bool
     {
-        // MySQL error codes can be in the exception code or message
         $code = (string) $e->getCode();
 
         // PDO error code format varies: some use '42000', others use integer 1227
@@ -159,9 +178,9 @@ final class ReplicaStatusProvider
             return true;
         }
 
-        // Check error message for "command denied" pattern
+        // Check error message for "command denied" + "replica" or "slave" pattern
         $message = strtolower($e->getMessage());
         return str_contains($message, 'command denied')
-            && str_contains($message, 'replica');
+            && (str_contains($message, 'replica') || str_contains($message, 'slave'));
     }
 }

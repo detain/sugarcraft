@@ -29,14 +29,16 @@ final class ReplicaStatusProviderTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::class, $provider);
     }
 
-    public function testFetchStatusReturnsNullWhenNotConfigured(): void
+    public function testFetchStatusReturnsEmptyArrayWhenNotConfigured(): void
     {
         $this->db->setQueryResult([]);
 
         $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
         $result = $provider->fetchStatus();
 
-        $this->assertNull($result);
+        $this->assertIsArray($result);
+        $this->assertSame([], $result);
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::NotConfigured, $provider->lastFetchKind());
     }
 
     public function testFetchStatusReturnsDataWhenConfigured(): void
@@ -49,7 +51,9 @@ final class ReplicaStatusProviderTest extends TestCase
         $result = $provider->fetchStatus();
 
         $this->assertIsArray($result);
-        $this->assertSame('master.example.com', $result['Master_Host']);
+        $this->assertNotEmpty($result);
+        $this->assertSame('master.example.com', $result[0]['Master_Host']);
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::Configured, $provider->lastFetchKind());
     }
 
     public function testIsReplicaConfiguredReturnsFalseWhenNoData(): void
@@ -93,7 +97,7 @@ final class ReplicaStatusProviderTest extends TestCase
         $newResult = $refreshed->fetchStatus();
 
         $this->assertNotSame($firstResult, $newResult);
-        $this->assertSame('master2.example.com', $newResult['Master_Host']);
+        $this->assertSame('master2.example.com', $newResult[0]['Master_Host']);
     }
 
     public function testFetchStatusCachesOnFirstCall(): void
@@ -114,10 +118,10 @@ final class ReplicaStatusProviderTest extends TestCase
         $second = $provider->fetchStatus();
 
         $this->assertSame($first, $second);
-        $this->assertSame('cached.example.com', $first['Master_Host']);
+        $this->assertSame('cached.example.com', $first[0]['Master_Host']);
     }
 
-    public function testFetchStatusReturnsNullOnError1227(): void
+    public function testFetchStatusReturnsEmptyOnError1227(): void
     {
         // PDOException constructor takes (message, code) where code must be int or string depending on driver
         // Using error code 1227 which is "command denied" in MySQL
@@ -126,8 +130,10 @@ final class ReplicaStatusProviderTest extends TestCase
         $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
         $result = $provider->fetchStatus();
 
-        // Error 1227 (command denied) should be handled gracefully
-        $this->assertNull($result);
+        // Error 1227 (command denied) returns empty rows with PermissionDenied kind
+        $this->assertIsArray($result);
+        $this->assertSame([], $result);
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::PermissionDenied, $provider->lastFetchKind());
     }
 
     public function testIsReplicaConfiguredIsCached(): void
@@ -181,6 +187,65 @@ final class ReplicaStatusProviderTest extends TestCase
         $result = $provider->fetchStatus();
 
         $this->assertIsArray($result);
-        $this->assertSame('mysql8-master.example.com', $result['Source_Host']);
+        $this->assertNotEmpty($result);
+        $this->assertSame('mysql8-master.example.com', $result[0]['Source_Host']);
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::Configured, $provider->lastFetchKind());
+    }
+
+    public function testLastFetchKindReturnsNotConfiguredOnEmptyResult(): void
+    {
+        $this->db->setQueryResult([]);
+
+        $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
+        $provider->fetchStatus();
+
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::NotConfigured, $provider->lastFetchKind());
+    }
+
+    public function testLastFetchKindReturnsConfiguredOnRows(): void
+    {
+        $this->db->setQueryResult([
+            ['Master_Host' => 'replica.example.com'],
+        ]);
+
+        $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
+        $provider->fetchStatus();
+
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::Configured, $provider->lastFetchKind());
+    }
+
+    public function testLastFetchKindReturnsPermissionDeniedOnError1227(): void
+    {
+        $this->db->setQueryThrows(new \PDOException('command denied', 1227));
+
+        $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
+        $provider->fetchStatus();
+
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::PermissionDenied, $provider->lastFetchKind());
+    }
+
+    public function testLastFetchKindReturnsErrorOnUnexpectedException(): void
+    {
+        $this->db->setQueryThrows(new \PDOException('connection lost', 2006));
+
+        $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
+        $provider->fetchStatus();
+
+        $this->assertSame(\SugarCraft\Query\Admin\ServerStatus\ReplicaStatusKind::Error, $provider->lastFetchKind());
+    }
+
+    public function testFetchStatusReturnsAllChannels(): void
+    {
+        $this->db->setQueryResult([
+            ['Channel_name' => 'channel_1', 'Master_Host' => 'master1.example.com'],
+            ['Channel_name' => 'channel_2', 'Master_Host' => 'master2.example.com'],
+        ]);
+
+        $provider = \SugarCraft\Query\Admin\ServerStatus\ReplicaStatusProvider::new($this->context);
+        $result = $provider->fetchStatus();
+
+        $this->assertCount(2, $result);
+        $this->assertSame('master1.example.com', $result[0]['Master_Host']);
+        $this->assertSame('master2.example.com', $result[1]['Master_Host']);
     }
 }
