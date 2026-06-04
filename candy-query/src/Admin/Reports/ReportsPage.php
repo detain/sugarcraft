@@ -351,6 +351,14 @@ final class ReportsPage extends PageBase
         return $clone;
     }
 
+    /**
+     * Select the previous category, wrapping to the last if already at the first.
+     *
+     * Navigation wraps cyclically so the user never gets stuck at a boundary.
+     * Selecting a category resets the selected column index to 0.
+     *
+     * @return self New instance with the previous category selected
+     */
     public function withSelectPrevCategory(): self
     {
         if (empty($this->categories)) {
@@ -368,6 +376,14 @@ final class ReportsPage extends PageBase
         return $this->withSelectCategory($newCategory);
     }
 
+    /**
+     * Select the next category, wrapping to the first if already at the last.
+     *
+     * Navigation wraps cyclically so the user never gets stuck at a boundary.
+     * Selecting a category resets the selected column index to 0.
+     *
+     * @return self New instance with the next category selected
+     */
     public function withSelectNextCategory(): self
     {
         if (empty($this->categories)) {
@@ -385,6 +401,15 @@ final class ReportsPage extends PageBase
         return $this->withSelectCategory($newCategory);
     }
 
+    /**
+     * Select the previous report within the current category, wrapping to the last
+     * report if already at the first.
+     *
+     * Navigation wraps cyclically so the user never gets stuck at a boundary.
+     * Selecting a report resets the selected column index to 0.
+     *
+     * @return self New instance with the previous report selected
+     */
     public function withSelectPrevReport(): self
     {
         $category = $this->selectedCategory;
@@ -413,6 +438,15 @@ final class ReportsPage extends PageBase
         return $this->withSelectReport($reports[$currentIndex - 1]->name);
     }
 
+    /**
+     * Select the next report within the current category, wrapping to the first
+     * report if already at the last.
+     *
+     * Navigation wraps cyclically so the user never gets stuck at a boundary.
+     * Selecting a report resets the selected column index to 0.
+     *
+     * @return self New instance with the next report selected
+     */
     public function withSelectNextReport(): self
     {
         $category = $this->selectedCategory;
@@ -441,6 +475,14 @@ final class ReportsPage extends PageBase
         return $this->withSelectReport($reports[$currentIndex + 1]->name);
     }
 
+    /**
+     * Select the previous column for unit display targeting.
+     *
+     * Wraps to the last column when already at the first.
+     * No-op when no report is loaded.
+     *
+     * @return self New instance with the previous column index selected
+     */
     public function withSelectPrevColumn(): self
     {
         $report = $this->currentResult?->report;
@@ -461,6 +503,14 @@ final class ReportsPage extends PageBase
         return $clone;
     }
 
+    /**
+     * Select the next column for unit display targeting.
+     *
+     * Wraps to the first column when already at the last.
+     * No-op when no report is loaded.
+     *
+     * @return self New instance with the next column index selected
+     */
     public function withSelectNextColumn(): self
     {
         $report = $this->currentResult?->report;

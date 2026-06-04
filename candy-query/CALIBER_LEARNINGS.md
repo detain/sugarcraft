@@ -186,3 +186,10 @@ Pattern: `ReportsPage::validate()` must never call `db->query()`. Instead it cal
 Canonical: `ReportsPage::validate()` — only `Catalog::load()` (no DB); `App::update(AdminDataLoadedMsg)` → sends `ReloadReportMsg`; `ReportsPage::update(ReloadReportMsg)` → `loadCurrentReport()` via `AdminQueryCache::lookup()` returning `null` → `view()` shows spinner; next tick fills cache and re-renders.
 Caveat: `AvailabilityChecker::discoverViews()` catches `\Throwable`, not just `\PDOException` — React/cached connections can surface non-PDO error types.
 Source: step 3.1 ai/candy-query-reports-async
+
+### 2026-06-04 — Reports catalog navigation + curated category ordering (STEP 3.2)
+Pattern: `ReportsPage` now has keyboard navigation: `h`/`l` (prev/next category with wrap), `[`/`]` (prev/next report within category with wrap), `,`/`.` (prev/next column index for future per-column unit targeting). All navigation methods return a new `self` instance and reset `selectedColumnIndex` to 0. Navigation is wired through `App::handleAdminKey()` → `ReportsPage::update()` and triggers async report loading via `loadCurrentReport()`. `Catalog::categories()` sorts by a `CATEGORY_ORDER` constant (problems first, matching MySQL Workbench Appendix B) rather than alphabetically; unknown categories fall through to alphabetical ordering after the curated set.
+Column type parsing uses `ColumnType::tryFrom()` instead of `ColumnType::from()` — `tryFrom()` returns `null` for unknown types (preventing a ValueError fatal) while `from()` throws. Unknown types fall back to `ColumnType::String`.
+`selectedColumnIndex` tracks the focused column for unit display but is not yet consumed in the render path — the `[c]` key remains a global unit toggle. Future per-column unit cycling would need to re-architect `ReportRunner::formatRows()` to store both raw and formatted values, or re-query on toggle.
+Canonical: `ReportsPage::update()` — `h`/`l`/`[/]`,/`., `[`/`]` key handlers; `Catalog::categories()` — `CATEGORY_ORDER` usort; `ColumnType::tryFrom()` fallback.
+Source: step 3.2 ai/candy-query-reports-navigation-catalog
