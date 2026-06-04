@@ -31,9 +31,14 @@ Source: step-7.1 ai/resilience
 Pattern: `MysqlDatabase::query()` returns `array|null` — on reconnectable errors (2002/2003/2013) it returns `null`, signaling the caller to re-fetch the connection and retry. This avoids throwing an exception when the connection is legitimately being re-established.
 Source: step-7.1 ai/resilience
 
-### 2026-06-02 — restart detection via uptime comparison
-Pattern: Record server uptime at construction (`Sampler::registerUptime()`) and compare uptime snapshots across polls to detect MySQL restarts. When uptime decreases (wraps or resets), clear cached state before it becomes stale.
+### 2026-06-02 — restart detection via uptime comparison (STEP 7.1)
+Pattern: `ServerContext::detectReset()` is the single authoritative owner of restart detection. It is called by `statusVariables()` after fetching fresh `SHOW GLOBAL STATUS` data, compares the current `Uptime` value against `$this->lastUptime`, and sets `wasResetCache = true` when the new value is lower (wraps or restarts). `Sampler` and `StatusPoller` consume this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized. Previously, uptime tracking was spread across `Sampler::registerUptime()` and `StatusPoller`; these were unified into `ServerContext` as the single source of truth.
 Source: step-7.1 ai/resilience
+
+### 2026-06-04 — AsyncOps::throttle() returns void callable, not a promise (STEP 7.1)
+Pattern: `AsyncOps::throttle()` returns `callable(mixed...): void` — a synchronous gating wrapper that sets a `$cooldown` flag and fires the wrapped function immediately, scheduling a timer to reset the flag. It cannot be awaited as a Promise in the `Cmd::promise` flow used by `App::subscriptions()`. A manual time-based cooldown (static `$lastFetchAt`, 3.0s elapsed guard) was used instead in `App::subscriptions()`, which keeps the tick firing (for `AdminQueryCache` queue draining) while skipping the fetch during cooldown. This is a deliberate deviation: `AsyncOps::throttle()` is useful for fire-and-forget event handlers but incompatible with promise-based async flows that need to preserve the `Cmd` chain.
+Canonical: `App::subscriptions()` — `static $lastFetchAt = 0.0; $elapsed = $now - $lastFetchAt; if ($elapsed < 3.0) { return Cmd::none(); } $lastFetchAt = $now;` instead of `AsyncOps::throttle()`.
+Source: step-7.1 ai/candy-query-async-throttle-restart
 
 ### 2026-06-02 — stateless AlertManager pattern
 Pattern: An alert checker should hold no state between calls — each `check*()` invocation is independent and returns fresh `Alert` value objects. This makes the checker safe for both polling loops (3s DashboardPage cycle) and event-driven contexts without needing to reset state. The manager is constructed once with thresholds and notifier, then queried repeatedly.
