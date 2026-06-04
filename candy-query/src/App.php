@@ -227,6 +227,18 @@ final class App implements Model
         return $this;
     }
 
+    /**
+     * Handle keyboard input while the Admin pane is focused.
+     *
+     * App-level keys (digits 1-9, q, j/k, p, r) are handled first. All other
+     * keys — Tab, Space, 'a', 'w', 's', and any other navigation/editing keys
+     * — are delegated to the active page's update() method so pages like
+     * VariablesPage and DashboardPage can respond to them. The page returned
+     * by update() is stored back in App, preserving any in-memory state
+     * (cursor, active tab, pending edits) that survived the refresh cycle.
+     *
+     * @return array{App, ?Cmd} [updated App, optional command to execute]
+     */
     private function handleAdminKey(KeyMsg $msg): array
     {
         $allPanes = AdminPane::cases();
@@ -669,12 +681,19 @@ final class App implements Model
         ]);
     }
 
+    /**
+     * Mark admin data fetch as loading or complete.
+     *
+     * Unlike the old behaviour (which nulled adminPage on every tick), this
+     * preserves the existing page instance so that in-memory state — active
+     * tab, cursor position, pending edits — survives a poll-tick refresh.
+     * The page reads fresh data from the shared AdminQueryCache on the next
+     * render. Only withAdminPane() resets adminPage when the pane changes.
+     *
+     * @see withAdminPane() resets adminPage when the active pane changes.
+     */
     private function withAdminLoading(bool $loading): self
     {
-        // Preserve adminPage across loading cycles so in-memory state (tab,
-        // cursor, pending edits) survives a poll-tick refresh. The page reads
-        // fresh data from the shared AdminQueryCache on next render. Only
-        // withAdminPane() resets adminPage when the pane actually changes.
         return $this->mutate(['adminLoading' => $loading]);
     }
 }

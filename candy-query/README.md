@@ -63,6 +63,10 @@ bin/candy-query --dsn sqlite:///absolute/path/to/db.sqlite
 | `[t]`              | Toggle column unit formatting (Reports page)    |
 | `[a]`              | Dismiss all pending alerts (Dashboard)          |
 
+> **Key routing** — Admin keys use a two-tier model. App-level keys (`1–9`, `q`, `j/k`, `p`, `r`) are intercepted by `App::handleAdminKey()` first and do **not** reach the page. All other keys (Tab, Space, `a`, `w`, `s`, `e`, etc.) are delegated to the active page's `update()` method, so each page can respond to its own navigation and editing keys independently.
+>
+> **Page state survival** — Admin pages (Variables, Dashboard, Connections, etc.) preserve their in-memory state (active tab, cursor position, pending edits) across the 3-second poll-tick refresh cycle. Fresh server data is read from the shared `AdminQueryCache` on each render; only switching panes (`1–9`, `q`, `j/k`) rebuilds the page from scratch.
+
 ## Architecture
 
 | File              | Role                                                                                          |
