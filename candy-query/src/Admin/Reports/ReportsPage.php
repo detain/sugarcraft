@@ -92,6 +92,13 @@ final class ReportsPage extends PageBase
     /** @var array<string, list<ReportDefinition>> */
     private array $reportsByCategory = [];
 
+    /**
+     * @param ServerContextInterface $context Server context
+     * @param DatabaseInterface|null $db Optional DB handle. Note: any value
+     *        passed here is overwritten on first validate() which unconditionally
+     *        sets $this->db = $this->context->connection(). For test doubles,
+     *        inject via ServerContextInterface instead.
+     */
     public function __construct(
         ServerContextInterface $context,
         ?DatabaseInterface $db = null,

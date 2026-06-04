@@ -114,3 +114,18 @@ Source: step-i1 ai/sidebar-gauges
 Pattern: `handleAdminKey()` delegates unhandled keys to the active page's `update()` so pages can respond to Tab/Space/'a'/'w'/'s' without App intercepting them first. Precedence is deliberate: app-level keys (digits, q, j/k, p, r) are handled before delegation. Page state survives the poll-tick refresh cycle because `withAdminLoading()` no longer nulls `adminPage`; only `withAdminPane()` resets it when the pane changes. Pages read fresh data from the shared `AdminQueryCache` on each render, so in-memory state (cursor, tab, pending edits) is preserved while server data stays current.
 Canonical: `App::handleAdminKey()` → `[$newPage, $cmd] = $page->update($msg)` at end of method; `withAdminLoading()` uses `mutate(['adminLoading' => $loading])` without touching `adminPage`.
 Source: step 1.1 ai/candy-query-admin-key-routing
+
+### 2026-06-03 — VariablesPage collaborator injection (STEP 1.2)
+Pattern: `VariablesPage` is constructed with an optional `Catalog` (eagerly loaded) and an optional `VariableEditor`. The `Catalog` is loaded eagerly in `App::buildVariablesPage()` so that `loadCategories()` and `isEditable()` are available immediately. A missing metadata file is non-fatal — the page renders with an empty category tree and no `[rw]` indicator. `VariableEditor` is created with the catalog so it can validate editability per variable.
+Canonical: `App::buildVariablesPage()` → `Catalog::new()->load()` + `VariableEditor::new($context, $catalog)` → `VariablesPage::new($context, $catalog, $editor)`.
+Source: step 1.2 ai/candy-query-page-collaborators
+
+### 2026-06-03 — AdminPane::orderedCases() as single source of truth (STEP 1.2)
+Pattern: `AdminPane::orderedCases()` groups enum cases by section (Management first: ProcessList, Variables, Status, Debug; then Performance: QueryStats, Dashboard, TableStats, PerfSchema) and is the single source of truth for both the sidebar renderer and the digit-key handler. Code that needs display order MUST use `orderedCases()` — `cases()` returns declaration order and differs from display order. The digit keys map as: 1=ProcessList, 2=Variables, 3=Status, 4=QueryStats, 5=Dashboard, 6=TableStats, 7=PerfSchema, 8=Debug.
+Canonical: `AdminPane::orderedCases()` used in `App::handleAdminKey()` for digit dispatch and in the sidebar render loop for display.
+Source: step 1.2 ai/candy-query-page-collaborators
+
+### 2026-06-03 — ReportsPage db injection overwrite on validate() (STEP 1.2 note)
+Pattern: `ReportsPage` accepts an optional `?DatabaseInterface $db` in its constructor but `validate()` unconditionally sets `$this->db = $this->context->connection()`. This means any db passed via the constructor is overwritten on first `validate()`. This is pre-existing behaviour but important for anyone trying to inject a test double — inject the mock in `validate()` or use a test double of `ServerContextInterface` instead.
+Canonical: `ReportsPage` constructor `$db` param is unused after first `validate()` call.
+Source: step 1.2 ai/candy-query-page-collaborators
