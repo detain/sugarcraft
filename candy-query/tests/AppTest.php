@@ -78,8 +78,8 @@ final class AppTest extends TestCase
      * page-driven queries. It was dead code (never wired into ProgramOptions),
      * which hid a missing import and a static call to the instance method
      * Subscriptions::withTick(). Guard the whole path: no tick outside admin,
-     * no tick while a fetch is in flight, a registered 'admin-fetch' tick once
-     * loading clears, and a produce() closure that yields a Msg (not a fatal).
+     * tick registered immediately on admin entry (throttle gates the fetch, not
+     * the tick), and a produce() closure that yields a Msg (not a fatal).
      */
     public function testAdminSubscriptionTickIsWiredAndProducesAMsg(): void
     {
@@ -87,15 +87,12 @@ final class AppTest extends TestCase
         $this->assertNull($a->subscriptions(), 'no subscriptions outside the admin pane');
 
         // Tables → Rows → Query → Admin (entering admin sets adminLoading=true).
+        // Throttle gates the actual fetch; the tick is registered immediately.
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
         [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
-        $this->assertNull($a->subscriptions(), 'no tick while a fetch is in flight');
-
-        // Fetch completes → adminLoading clears → tick should register.
-        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminDataLoadedMsg([], [], microtime(true)));
         $subs = $a->subscriptions();
-        $this->assertNotNull($subs);
+        $this->assertNotNull($subs, 'tick registered immediately (throttle gates fetch, not tick)');
         $this->assertTrue($subs->has('admin-fetch'));
 
         // The tick's produce() must yield a Msg the Program can dispatch.
