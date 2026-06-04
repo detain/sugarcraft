@@ -153,8 +153,8 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `AlertManager` | Stateless alert checker. `checkConnectionUsage(ConnectionCounters)` and `checkAllMetrics(statusVariables, serverVariables)` return `array<string, Alert>`. `checkAndDispatch()` combines check + notify in one call. No state held between calls. |
 | `PerfSchemaPage` | Performance Schema configuration page with 7 tabs (Easy Setup, Instruments, Consumers, Actors, Objects, Threads, Options). Version-gated loading: `setup_actors` table skipped on <5.6; `setup_objects.ENABLED` column omitted on <5.6.3; `setup_timers` (mutable) used on <8.0 vs `performance_timers` (read-only) on >=8.0. Threads tab shows `INSTRUMENTED` column from `performance_schema.threads`. `[c]` commits pending changes; `[r]` reverts. |
 | `SetupTimers` | Mutable model for a PS timer entry. On MySQL <8.0, loaded from `performance_schema.setup_timers` and can be modified via `withTimerName()`. `isDirty()` tracks unsaved changes; `commitStatements()` generates `UPDATE setup_timers SET TIMER_NAME=? WHERE NAME=?`. On MySQL >=8.0, loaded from `performance_schema.performance_timers` as clean (read-only) instances. |
-| `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (deferred wiring to STEP 5.2). |
-| `CommitPlanner` | Generates SQL statements to commit PS configuration changes. Produces `UPDATE ... RLIKE` for instruments, `UPDATE ... IN(...)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to STEP 5.2. |
+| `SetupThreads` | Mutable model for a PS thread entry carrying `INSTRUMENTED` flag. `withInstrumented(bool)` toggles; `isDirty()` tracks changes; `instrumentedFragment()` generates a `THREAD_ID=N AND INSTRUMENTED='YES'/'NO'` SQL fragment for CommitPlanner's batch UPDATE (deferred wiring to STEP 5.3). |
+| `CommitPlanner` | Generates SQL statements to commit PS configuration changes. All statements are fully parameterized — returns `list<array{sql:string, params:list<mixed>}>` tuples with all values bound as `?` placeholders, not interpolated. Produces anchored `UPDATE ... RLIKE '^name$'` for instruments (regex-escaped via `preg_quote()`), `UPDATE ... IN(?)` for consumers, and `INSERT/UPDATE/DELETE` for actors and objects. SetupTimers/SetupThreads wiring deferred to STEP 5.3. |
 | `HistoryStoreInterface` | Persistence interface for query history. Implement `save(entry)`, `query(from, to, limit)`, `prune(before)`, and `count()` to plug in any storage backend. |
 | `SqliteHistoryStore` | `HistoryStoreInterface` via SQLite with WAL mode. Schema: `id INTEGER PRIMARY KEY`, `query TEXT`, `duration_ms INTEGER`, `rows_affected INTEGER`, `error TEXT`, `ts TIMESTAMP DEFAULT CURRENT_TIMESTAMP`. |
 | `HistoryRecorder` | Passive recorder implementing `StatusSnapshotProviderInterface`. Accepts a `HistoryStoreInterface` and calls `save()` only when `provideStatusSnapshot()` is invoked by the polling loop — no active recording, no coupling to the UI. Records StatusSnapshot metrics (not SQL query text — see Query History section for SQL text storage). |
@@ -429,7 +429,7 @@ The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface f
 | Tab | Content |
 |-----|---------|
 | Easy Setup | Preset PS configurations — enable full PS, disable PS, reset to defaults |
-| Instruments | Collapsible tree of all PS instruments with tri-state toggles |
+| Instruments | Collapsible tree of all PS instruments with indented display and tri-state badges on group nodes (`[x]` all-enabled, `[~]` mixed, `[ ]` all-disabled) |
 | Consumers | List of event consumers with tri-state toggles |
 | Actors | Host/user/role filter rules (not available on MySQL <5.6) |
 | Objects | Object-level instrumentation rules (ENABLED column only ≥5.6.3) |
@@ -451,7 +451,11 @@ The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface f
 
 > **Timer mutation safety** — on MySQL ≥8.0 the Options tab renders `performance_timers` as read-only instances. `SetupTimers::commitStatements()` returns `[]` for these because they carry `dirty=false`. Only timers loaded from `setup_timers` on <8.0 generate `UPDATE` statements.
 
-> **Threads INSTRUMENTED** — the Threads tab reads the `INSTRUMENTED` column from `performance_schema.threads`. Per-thread toggling via `withInstrumented()` is tracked but the batch `UPDATE ... WHERE THREAD_ID IN (...)` commit is wired to STEP 5.2.
+> **Threads INSTRUMENTED** — the Threads tab reads the `INSTRUMENTED` column from `performance_schema.threads`. Per-thread toggling via `withInstrumented()` is tracked but the batch `UPDATE ... WHERE THREAD_ID IN (...)` commit is wired to STEP 5.3.
+
+> **Instrument RLIKE fix (STEP 5.2)** — `UPDATE ... WHERE NAME RLIKE '...'` patterns are now anchored (`^name$`) and regex-escaped via `preg_quote()` so metacharacters like `.` `/` `(` `)` are matched literally. Backtick-wrapping (which caused the pattern to match literal backtick chars) is removed. The CommitPlanner generates fully parameterized statements (`sql` + `params` tuple structure) — no value string-interpolation.
+
+> **Tree rendering (STEP 5.2)** — the Instruments tab now renders an indented tree with group nodes (path prefixes like `wait/`) showing tri-state badges (`[x]`/`[~]`/`[ ]`) representing the aggregate enabled state of their subtrees. `InstrumentTree::flattenTree()` returns `[nodeOrInstrument, depth, isGroup]` triples consumed by the renderer. Group toggle cascade methods `setChildrenEnabled()`/`setChildrenTimed()` exist on `InstrumentTree` but are not yet wired to keyboard input (DEFERRED to STEP 5.3).
 
 ## Alerting
 
