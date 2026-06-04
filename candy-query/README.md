@@ -418,7 +418,25 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 
 ## Performance Schema Setup
 
-The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version:
+The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface for configuring MySQL's `performance_schema`. It is version-aware and adapts its queries and editable fields to the detected MySQL version.
+
+**EasySetupDetector (STEP 5.3):** The page uses `EasySetupDetector` (created via `EasySetupDetector::fromContext($context)` when not explicitly provided) to detect the current PS setup state as one of four values shown in the header badge:
+
+| State | Badge | Meaning |
+|-------|-------|---------|
+| `fully` | green FULLY | All consumers enabled AND all instruments enabled+timed (TIMED-off → `custom`) |
+| `default` | yellow DEFAULT | Setup matches MySQL default profile for the detected version |
+| `custom` | blue CUSTOM | User has customized the PS configuration |
+| `disabled` | red DISABLED | Performance Schema is inaccessible |
+
+The detector is wired from `App::adminPage()` into the `PerfSchemaPage` constructor. If no detector is provided, `detectSetupState()` (which uses loaded instrument data only, without checking TIMED or consumers) serves as a fallback — less accurate but sufficient for backward compatibility.
+
+**Version-gated default profiles (Appendix C):**
+
+| | MySQL 5.6 | MySQL 5.7+ |
+|---|---|---|
+| Instruments | `wait/io/file/%`, `wait/io/table/%`, `wait/lock/table/sql/handler`, `statement/%`, `idle` | Same five (stage/% removed in 5.7) |
+| Consumers | `events_statements_current`, `events_transactions_current`, `global_instrumentation`, `thread_instrumentation` | Same four + `statements_digest` |
 
 **Version gating:**
 - `setup_actors` (Actors tab) is skipped entirely on MySQL <5.6 — the table did not exist until 5.6
@@ -428,7 +446,7 @@ The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface f
 **Tabs:**
 | Tab | Content |
 |-----|---------|
-| Easy Setup | Preset PS configurations — enable full PS, disable PS, reset to defaults |
+| Easy Setup | Preset PS configurations — enable full PS, disable PS, reset to defaults (version-appropriate default sets) |
 | Instruments | Collapsible tree of all PS instruments with indented display and tri-state badges on group nodes (`[x]` all-enabled, `[~]` mixed, `[ ]` all-disabled) |
 | Consumers | List of event consumers with tri-state toggles |
 | Actors | Host/user/role filter rules (not available on MySQL <5.6) |
@@ -456,6 +474,8 @@ The Performance Schema Setup page (`[7]` in admin) provides a tabbed interface f
 > **Instrument RLIKE fix (STEP 5.2)** — `UPDATE ... WHERE NAME RLIKE '...'` patterns are now anchored (`^name$`) and regex-escaped via `preg_quote()` so metacharacters like `.` `/` `(` `)` are matched literally. Backtick-wrapping (which caused the pattern to match literal backtick chars) is removed. The CommitPlanner generates fully parameterized statements (`sql` + `params` tuple structure) — no value string-interpolation.
 
 > **Tree rendering (STEP 5.2)** — the Instruments tab now renders an indented tree with group nodes (path prefixes like `wait/`) showing tri-state badges (`[x]`/`[~]`/`[ ]`) representing the aggregate enabled state of their subtrees. `InstrumentTree::flattenTree()` returns `[nodeOrInstrument, depth, isGroup]` triples consumed by the renderer. Group toggle cascade methods `setChildrenEnabled()`/`setChildrenTimed()` exist on `InstrumentTree` but are not yet wired to keyboard input (DEFERRED to STEP 5.3).
+
+> **Hub-admin privileges** — modifying PS setup tables requires the `PROCESS` privilege on MySQL. `PerfSchemaPage::hasUpdatePrivilege()` tests this with a no-op `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`. When the privilege is absent the page renders in read-only mode and all write actions are disabled.
 
 ## Alerting
 
