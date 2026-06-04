@@ -31,8 +31,9 @@ final class ConnectionConfigTest extends TestCase
         $this->assertSame('secret123', $config->pass);
         $this->assertSame('testdb', $config->dbname);
         $this->assertSame('require', $config->sslMode);
+        // ssl-mode is NOT in the DSN — SSL is passed as PDO driver options at connect time
         $this->assertSame(
-            'mysql:host=localhost;port=3306;dbname=testdb;ssl-mode=require',
+            'mysql:host=localhost;port=3306;dbname=testdb',
             $config->dsn,
         );
     }
@@ -100,7 +101,7 @@ final class ConnectionConfigTest extends TestCase
         );
 
         $this->assertSame('prefer', $config->sslMode);
-        $this->assertSame('mysql:host=localhost;port=3306;dbname=testdb;ssl-mode=prefer', $config->dsn);
+        $this->assertSame('mysql:host=localhost;port=3306;dbname=testdb', $config->dsn);
     }
 
     public function testCreateWithEmptyPassword(): void
