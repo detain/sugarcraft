@@ -380,8 +380,8 @@ Columns auto-size to the widest value; cells exceeding `maxCellWidth` (default 4
 | **Features** | InnoDB, SSL, Fulltext, Events, Stored Programs, Partitioning, X Plugin — tristate: Yes/No/Unknown |
 | **Directories** | datadir, tmpdir, log_error, pid_file |
 | **SSL** | have_ssl, ssl_cipher, tls_version, ssl_ca, ssl_cert, ssl_key |
-| **Replication** | Master Host/Port, IO/SQL Running state, Seconds Behind, Relay Log File/Pos — via `ReplicaStatusProvider` |
-| **Firewall** | AWS RDS firewall status (Aurora_lwm sentinel) |
+| **Replication** | Per-channel cards: Master Host/Port, IO/SQL Running state, Seconds Behind, Relay Log File/Pos. Gracefully shows distinct panels for each state: configured (channels returned), not configured (empty), permission denied (error 1227), or error. Multi-channel replication supported (MariaDB `SHOW ALL SLAVES STATUS` returns all channels as separate cards; MySQL 8+ uses `SHOW REPLICA STATUS`; MySQL 5.x uses `SHOW SLAVE STATUS`). |
+| **Firewall** | MySQL Enterprise Firewall via `mysql_firewall_mode` status variable (ON/OFF); falls back to AUDIT plugin detection on managed/cloud instances. AWS RDS firewall is no longer detected via Aurora_lwm sentinel. |
 
 ```php
 use SugarCraft\Query\Admin\ServerStatus\ServerStatusPage;
@@ -391,7 +391,17 @@ $page = ServerStatusPage::new($context);
 echo $page->render();
 ```
 
-`ReplicaStatusProvider` uses `SHOW REPLICA STATUS` on MySQL 8+ and `SHOW SLAVE STATUS` on MySQL 5.x/MariaDB, gracefully handling error 1227 (REPLICATION CLIENT privilege denied).
+`ReplicaStatusProvider::fetchStatus()` returns `list<array<string, scalar>>` — all replica channels. `ReplicaStatusProvider::lastFetchKind()` returns a `ReplicaStatusKind` enum value (`Configured`, `NotConfigured`, `PermissionDenied`, `Error`) to distinguish the specific condition. Flavor-aware queries: MariaDB uses `SHOW ALL SLAVES STATUS` (multi-channel); MySQL 8+ uses `SHOW REPLICA STATUS`; MySQL 5.x uses `SHOW SLAVE STATUS`. Error 1227 (REPLICATION CLIENT privilege denied) is detected by both PDO error code and message pattern matching.
+
+**Key bindings:**
+
+| Key | Action |
+|-----|--------|
+| `[r]` | Refresh data |
+| `[q]` | Quit to previous view |
+| `[g]` | Open GTID mode selector dialog (MySQL ≥ 5.7.6 only) |
+
+GTID dialog: press `[c]` to cycle through `OFF → OFF_PERMISSIVE → OFF_SECURE → ON_PERMISSIVE → ON`, then `[Enter]` to execute `SET @@GLOBAL.GTID_MODE = <mode>` or `[Esc]` to cancel. The dialog is only active when the server version is at least MySQL 5.7.6.
 
 **Sidebar gauges:** The right-hand gauge panel displays five metrics — Connections (`threads_connected/max_connections`), Traffic (per-second bytes rate via Sampler delta), Key Efficiency (`Key_reads / (Key_reads + Key_read_requests)`), QPS (`Questions/Uptime`), and InnoDB Buffer Pool utilization. The Traffic gauge uses sampled per-second deltas from `ServerStatusSnapshotAdapter` bridging `ServerContextInterface` to `StatusSnapshotProviderInterface`, so the displayed ratio reflects actual throughput changes between poll cycles (baseline-corrected) rather than cumulative byte counts. Key-efficiency ratio of 0.0 means all key reads were served from memory; higher values indicate cache misses requiring disk I/O. There is no CPU gauge — MySQL exposes no CPU status variable; the former "CPU" gauge was a mislabeled connections ratio and has been removed.
 
