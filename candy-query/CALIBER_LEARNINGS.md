@@ -109,3 +109,8 @@ Source: step-f1 ai/alert-manager
 Pattern: `ServerStatusPage` uses a 2-column layout — info panels (server info, features, directories, SSL, replication, firewall) on the left, `SidebarGaugeSet` on the right. Gauges poll `ServerContext` and an optional `Sampler` for rate calculations. The traffic gauge uses Sampler delta for a baseline-corrected ratio, fixing cases where cumulative counters reset or wrap.
 Canonical: `ServerStatusPage::render()` composes left panel stack + right `SidebarGaugeSet::view()`.
 Source: step-i1 ai/sidebar-gauges
+
+### 2026-06-03 — Admin page state survival + key delegation (STEP 1.1)
+Pattern: `handleAdminKey()` delegates unhandled keys to the active page's `update()` so pages can respond to Tab/Space/'a'/'w'/'s' without App intercepting them first. Precedence is deliberate: app-level keys (digits, q, j/k, p, r) are handled before delegation. Page state survives the poll-tick refresh cycle because `withAdminLoading()` no longer nulls `adminPage`; only `withAdminPane()` resets it when the pane changes. Pages read fresh data from the shared `AdminQueryCache` on each render, so in-memory state (cursor, tab, pending edits) is preserved while server data stays current.
+Canonical: `App::handleAdminKey()` → `[$newPage, $cmd] = $page->update($msg)` at end of method; `withAdminLoading()` uses `mutate(['adminLoading' => $loading])` without touching `adminPage`.
+Source: step 1.1 ai/candy-query-admin-key-routing
