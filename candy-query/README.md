@@ -134,8 +134,8 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `SidebarGaugeSet` | Collection of 6 gauges: CPU (optional), Connections, Traffic, Key Efficiency, QPS, InnoDB. Polls ServerContext and optional `Sampler` for rate calculations. Traffic gauge uses Sampler delta for baseline-corrected ratio. |
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, group memberships. Single MySQL system variable. |
 | `Catalog` | Loads `data/variable_metadata.json` (73 variables, 16 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`. |
-| `Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. |
-| `ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads the catalog (file I/O) — no DB queries on the render path. Report queries and `AvailabilityChecker::discoverViews()` are routed through `AdminQueryCache` and drained asynchronously via `Cmd::promise`, matching the processlist/replica pattern. Shows a loading spinner until the async result lands on the next tick. |
+| `Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. Categories are sorted by a curated `CATEGORY_ORDER` constant (problems first, matching MySQL Workbench Appendix B) rather than alphabetically. Unknown categories fall through to alphabetical ordering after the curated set. Uses `ColumnType::tryFrom()` to gracefully handle unknown column type strings rather than throwing a fatal. |
+| `ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads `Catalog` (file I/O) — no DB queries on the render path. Navigation methods `withSelectPrevCategory()` / `withSelectNextCategory()` / `withSelectPrevReport()` / `withSelectNextReport()` cycle through the catalog with wrap-around. `selectedColumnIndex` tracks the focused column for unit display targeting (future work). Footer shows keybindings `[j/k] nav rows  [h/l] category  [/] report  [c] unit toggle  [q] quit`. |
 | `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
 | `AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
 | `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `CachedConnection` for the next admin tick. |
@@ -399,10 +399,15 @@ The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` s
 | Key | Action |
 |-----|--------|
 | `j/k` or `↑/↓` | Navigate rows down/up |
+| `h/l` or `←/→` | Previous/next category (wraps; triggers async load) |
+| `[` / `]` | Previous/next report within the current category (wraps) |
+| `,` / `.` | Previous/next column index (for future per-column unit cycling; `[c]` is the global unit toggle) |
 | `r` | Refresh current report (async — queues a new query) |
 | `x` | Export current report to CSV (RFC-4180, formula-safe) |
-| `c` | Toggle unit display for time columns |
+| `c` | Toggle unit display for time/byte columns (global; `selectedColumnIndex` is tracked for future per-column targeting) |
 | `q` | Quit to previous view |
+
+> **Category/report navigation** — `h`/`l` and `[`/`]` keys traverse the category tree and the report list within each category respectively. Both wrap around at boundaries. Selecting a category or report triggers `loadCurrentReport()` asynchronously via `AdminQueryCache`, exactly as if the user clicked it in the tree.
 
 > **No DB query in `validate()`** — The requirement for reports is that `validate()`/`view()`/`update()` never issue a synchronous `db->query()`. All DB access flows through `AdminQueryCache` → `Cmd::promise` → async drain tick. If the sys schema is unavailable, `Catalog::load()` still succeeds (it's file I/O); `AvailabilityChecker::discoverViews()` returns `[]` and `view()` shows the empty category tree with no blocking error.
 
