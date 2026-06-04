@@ -144,3 +144,13 @@ Source: step 1.4 ai/candy-query-connections-actions
 Pattern: MySQL's `KILL` and `KILL QUERY` statements do not accept `?` placeholders — the ID must be interpolated directly into the SQL string. An `int` cast makes this injection-safe. `KILL CONNECTION` disconnects the client entirely; `KILL QUERY` cancels the running statement while keeping the connection alive.
 Canonical: `ConnectionActions::executeKill()` — `"KILL CONNECTION {$id}"` or `"KILL QUERY {$id}"` via `exec()` (no result set returned).
 Source: step 1.4 ai/candy-query-connections-actions
+
+### 2026-06-03 — MySQL SSL via PDO driver options, not DSN (STEP 2.1)
+Pattern: PDO mysql does not support `ssl-mode` as a DSN parameter — the MySQL DSN must be just `mysql:host=%s;port=%d;dbname=%s`. SSL is configured instead as PDO driver options (`PDO::MYSQL_ATTR_SSL_CA`, `PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT`) applied at connect time in `MysqlDatabase::connect()` and `reconnect()`. The `sslMode` string is stored in `ConnectionConfig` and translated to driver options: `disable`/`''` means no SSL; `prefer`/`require` sets `VERIFY_SERVER_CERT=false`; `verify_ca`/`verify_identity` sets `VERIFY_SERVER_CERT=true`.
+Canonical: `MysqlDatabase::connect()` — SSL driver options set based on `$config->sslMode`.
+Source: step 2.1 ai/candy-query-dsn-and-factory
+
+### 2026-06-03 — DSN parsing via `parse_url()` + SQLite regex fallback (STEP 2.1)
+Pattern: `ConnectionFactory::fromDsn()` uses `parse_url()` for non-SQLite drivers, which correctly handles URL-encoded special chars in passwords (`rawurldecode()`), passwordless users (no `:` required), and IPv6 hosts (brackets stripped). SQLite uses a direct regex because `parse_url()` returns `false` for `sqlite:///path` and parses `:memory:` as `host=':memory'`. The old hand-rolled `explode('@'|':')` parser broke on any of these cases.
+Canonical: `ConnectionFactory::fromDsn()` — `parse_url()` for mysql/pgsql, regex for sqlite.
+Source: step 2.1 ai/candy-query-dsn-and-factory
