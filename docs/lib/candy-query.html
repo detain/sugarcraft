@@ -320,6 +320,62 @@ $pdo = ConnectionFactory::fromDsn('mysql://user:pass@localhost:3306/dbname');
   </div>
 </section>
 
+<section class="section" style="background: var(--surface);">
+    <div class="container">
+        <h2>Smoke Testing.</h2>
+        <p class="lede">Manual verification checklist — CI runs unit tests against fakes; these steps validate end-to-end behavior against real database servers.</p>
+
+        <h3>SQLite smoke (browser regression)</h3>
+        <p>No live server needed. Tests the TUI layer and async cache with an in-memory SQLite connection.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn sqlite:///tmp/smoke_test.db</code> — launches; table list populates within 1 second.</li>
+            <li>Press <kbd>Tab</kbd> to cycle panes — Schema Browser, Query Editor, History, Results all render without crash.</li>
+            <li>Press <kbd>n</kbd> in Schema Browser — new table dialog opens; confirm/cancel works.</li>
+            <li>Press <kbd>e</kbd> in table list — rows load with spinner; second tick shows rows (async cache).</li>
+            <li>Press <kbd>r</kbd> in Query Editor — run a <code>SELECT 1</code>; result grid renders correctly.</li>
+            <li>Press <kbd>x</kbd> in Results pane — CSV export produces valid RFC-4180 output (no trailing space padding, formula guard active).</li>
+            <li>Press <kbd>q</kbd> — clean exit; no segfault or panic.</li>
+        </ol>
+
+        <h3>MySQL smoke (admin pages + round-trips)</h3>
+        <p>Requires a scratch MySQL 5.6+ instance. Validates all 7 admin panes, version gating, and write round-trips.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn mysql://user:pass@localhost:3306/testdb</code> — connects; status bar shows MySQL version.</li>
+            <li>Admin pages reachable via number keys (1–7):
+                <ul>
+                    <li><kbd>1</kbd> Server Status — sidebar gauges (Connections, Traffic, Key Efficiency, QPS, InnoDB) render with live rate calculations; restart detection badge works.</li>
+                    <li><kbd>2</kbd> Process List — PS path active when <code>performance_schema = ON</code>; KILL button kills a test connection cleanly; KILL QUERY aborts a running query.</li>
+                    <li><kbd>3</kbd> Connections — connection list loads; ConnectionActions (kill, killQuery, setInstrumentation) all respond.</li>
+                    <li><kbd>4</kbd> Variables — [e] opens edit dialog for dynamic vars; [p] cycles GLOBAL/PERSIST/PERSIST_ONLY modes; error 1238 surfaces for static vars; SET PERSIST_ONLY commits successfully on MySQL 8+.</li>
+                    <li><kbd>5</kbd> Performance Schema — Easy Setup badge shows (fully/default/custom/disabled); all 7 tabs navigate; [c] commits dirty changes; on MySQL 5.5, actors tab is empty (version gate).</li>
+                    <li><kbd>6</kbd> Reports — category tree loads from catalog; [h]/[l] cycle categories; [ ] cycle reports; report executes and renders with unit toggle [c]; [x] exports CSV.</li>
+                    <li><kbd>7</kbd> Dashboard — widgets render with real values; alert toasts fire once on breach entry (not every tick); history recorder responds to poll loop.</li>
+                </ul>
+            </li>
+            <li>Variables edit round-trip: <kbd>4</kbd> → pick <code>wait_timeout</code> → [e] → change value → [Enter] confirm → verify variable updated via <code>SHOW GLOBAL VARIABLES LIKE 'wait_timeout'</code>.</li>
+            <li>PS instrument commit round-trip: <kbd>5</kbd> → Instruments tab → Space toggles a row → [c] commits → verify via <code>SELECT * FROM performance_schema.setup_instruments WHERE NAME = '...'</code>.</li>
+            <li>CSV export round-trip: <kbd>6</kbd> → navigate to a report → [x] → save to /tmp/export.csv → verify file is valid RFC-4180 CSV (no trailing spaces, formula cells prefixed with <code>'</code>).</li>
+            <li>Replica panel (MySQL 5.7.6+): connect to a replica → <kbd>1</kbd> → Server Status → replica card shows configured/not-configured state; [g] opens GTID mode selector; [c] cycles modes; Enter commits <code>SET @@GLOBAL.GTID_MODE = ...</code>.</li>
+        </ol>
+
+        <h3>PostgreSQL smoke</h3>
+        <p>Requires a scratch PostgreSQL 10+ instance. Validates PostgresWidgetCatalog and pg_stat_database aggregation.</p>
+        <ol>
+            <li><code>php bin/candy-query --dsn pgsql://user:pass@localhost:5432/testdb</code> — connects; status bar shows PostgreSQL version.</li>
+            <li>Widgets show pg_stat_database-backed values (not empty/not stub).</li>
+            <li>shared_buffers shows byte value (scaled from 8KB block count × 8192).</li>
+        </ol>
+
+        <h3>Known limitations (documented, not fixed in this audit)</h3>
+        <ul>
+            <li><code>hasStoredPrograms()</code> in ServerStatusPage renders via a sync <code>information_schema.ROUTINES</code> query. Low-overhead on typical servers; worth monitoring on routine-heavy schemas.</li>
+            <li>GTID mode cycling uses <code>array_search</code> strict comparison — current enum value is shown verbatim; cycling starts at index 0 on mismatch. MySQL normalizes GTID_MODE to uppercase so this is academic.</li>
+            <li>CSV export for empty tables produces a blank file (LIMIT 0/LIMIT 1 column detection requires at least one row).</li>
+            <li>AlertNotifier is <code>final</code> — spy injection via <code>ReflectionProperty::setValue()</code> blocked by PHP typed-property enforcement. Dedup behavioral test deferred.</li>
+        </ul>
+    </div>
+</section>
+
 <section class="section" style="background: var(--card); border-block: 1px solid var(--line);">
     <div class="container">
         <h2>Demos.</h2>
