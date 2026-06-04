@@ -135,6 +135,10 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `VariableMetadata` | Immutable descriptor: name, description, editable flag, group memberships. Single MySQL system variable. |
 | `Catalog` | Loads `data/variable_metadata.json` (73 variables, 16 groups). Provides `get()`, `all()`, `byGroup()`, `groups()`, `isEditable()`. |
 | `Reports\Catalog` | Loads `data/sys_reports.json` (report widget definitions). Provides `get()`, `all()`, `byCategory()`, `categories()`. |
+| `ReportsPage` | Performance Reports admin page: left category/report tree + right sortable/exportable grid. `validate()` only loads the catalog (file I/O) — no DB queries on the render path. Report queries and `AvailabilityChecker::discoverViews()` are routed through `AdminQueryCache` and drained asynchronously via `Cmd::promise`, matching the processlist/replica pattern. Shows a loading spinner until the async result lands on the next tick. |
+| `ReportRunner` | Executes `SELECT * FROM sys.<view>` for report views. Uses prepared statements with backtick-quoted view names. `run()` applies time/byte unit formatting; `runRaw()` returns unformatted values. |
+| `AvailabilityChecker` | Checks which sys schema views are available via `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'`. Caches results in-memory. `discoverViews()` catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO errors. |
+| `ReloadReportMsg` | Message dispatched by `App` after `AdminDataLoadedMsg` to trigger async report loading. `ReportsPage::update()` handles this by calling `loadCurrentReport()` which queues the query via `CachedConnection` for the next admin tick. |
 | `Calc\InnoDBBufferPoolUsage` | Computes buffer pool usage percentage: `(total - free) / total * 100` from `Innodb_buffer_pool_pages_total/free`. Mirrors MySQL Workbench sidebar gauge formula. |
 | `Calc\TableOpenCacheHitRate` | Computes Table Open Cache hit ratio: `hits / (hits + misses) * 100` from `Table_open_cache_hits/misses`. Mirrors MySQL Workbench dashboard expression. |
 | `ReconnectManager` | Detects MySQL errors 2002/2003/2013 (connection lost), stores `ConnectionConfig`, and retries via `attemptReconnect()`. Throws `ReconnectException` on failure. |
@@ -376,6 +380,31 @@ echo $page->render();
 ```
 
 `ReplicaStatusProvider` uses `SHOW REPLICA STATUS` on MySQL 8+ and `SHOW SLAVE STATUS` on MySQL 5.x/MariaDB, gracefully handling error 1227 (REPLICATION CLIENT privilege denied).
+
+## Performance Reports
+
+The Performance Reports page (`[8]` in admin) displays data from MySQL's `sys` schema views — grouped by category (problems, schema, IO, memory, etc.). Report queries are fully asynchronous: `validate()` calls only `Catalog::load()` (file I/O), then `App` dispatches `ReloadReportMsg` after the admin data tick, queuing the report query via `AdminQueryCache` for the next event-loop tick. This means the page never blocks on a slow `SELECT * FROM sys.x$*` query, matching the non-blocking behaviour of processlist and replica pages.
+
+**Async flow:**
+1. `ReportsPage::validate()` — loads `Catalog` from `data/sys_reports.json` (file I/O, always sync, never blocks)
+2. After admin status/variables data lands, `App` sends `ReloadReportMsg` to `ReportsPage`
+3. `ReportsPage::update(ReloadReportMsg)` calls `loadCurrentReport()` — queries are issued through `AdminQueryCache` via `CachedConnection`, returning `null` immediately
+4. `view()` sees `currentResult === null` and renders a loading spinner
+5. On the next admin tick the cached result is available and `view()` renders the report grid
+
+**Availability:** `AvailabilityChecker::discoverViews()` runs `SHOW FULL TABLES FROM sys WHERE Table_type='VIEW'` asynchronously and caches the result. Reports whose views are missing on the server are filtered out with graceful degradation. Error handling catches `\Throwable` (not just `\PDOException`) because React/cached connections can surface non-PDO error types.
+
+**Key bindings:**
+
+| Key | Action |
+|-----|--------|
+| `j/k` or `↑/↓` | Navigate rows down/up |
+| `r` | Refresh current report (async — queues a new query) |
+| `x` | Export current report to CSV (RFC-4180, formula-safe) |
+| `c` | Toggle unit display for time columns |
+| `q` | Quit to previous view |
+
+> **No DB query in `validate()`** — The requirement for reports is that `validate()`/`view()`/`update()` never issue a synchronous `db->query()`. All DB access flows through `AdminQueryCache` → `Cmd::promise` → async drain tick. If the sys schema is unavailable, `Catalog::load()` still succeeds (it's file I/O); `AvailabilityChecker::discoverViews()` returns `[]` and `view()` shows the empty category tree with no blocking error.
 
 ## Alerting
 
