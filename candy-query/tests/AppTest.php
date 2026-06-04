@@ -100,6 +100,106 @@ final class AppTest extends TestCase
         $this->assertInstanceOf(\SugarCraft\Core\Msg::class, $produced);
     }
 
+    /**
+     * Regression: unhandled admin keys (Tab, Space, 'a', etc.) must reach the
+     * active page's update() so pages like VariablesPage can respond to nav
+     * keys, and the returned page must be stored back in App's adminPage.
+     * App-level keys (digits, q, j/k, p, r) take precedence and do NOT
+     * reach the page's update() — this is the deliberate precedence design.
+     */
+    public function testUnhandledAdminKeyDelegatesToPageUpdate(): void
+    {
+        $a = App::start($this->db());
+
+        // Navigate: Tables → Rows → Query → Admin
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->pane);
+
+        // Switch to DashboardPage (pane 5 — see AdminPane enum order).
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '5'));
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
+
+        // 'a' is NOT an app-level key, so it reaches DashboardPage->update().
+        // DashboardPage responds to 'a' by clearing alerts and returning a new page.
+        $pageBefore = $a->adminPage();
+        $this->assertSame(0, $pageBefore->alertCount(), 'sanity: no alerts initially');
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'a'));
+
+        $pageAfter = $a->adminPage();
+        // The page should have been updated and stored back in App.
+        $this->assertNotSame($pageBefore, $pageAfter, 'DashboardPage should be a new instance after handling "a"');
+        $this->assertSame(0, $pageAfter->alertCount());
+    }
+
+    /**
+     * Regression: adminPage state must survive a poll-tick refresh cycle.
+     * Previously withAdminLoading(true) nulled adminPage, destroying in-memory
+     * state (tab, cursor, pending edits) on every tick. Now adminPage is
+     * preserved across refresh cycles and only nulled when the pane changes.
+     */
+    public function testAdminPageStateSurvivesRefreshCycle(): void
+    {
+        $a = App::start($this->db());
+
+        // Enter Admin and wait for initial data (so adminPage is created).
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        [$a, ] = $a->update(new KeyMsg(KeyType::Tab, ''));
+        $this->assertSame(\SugarCraft\Query\Pane::Admin, $a->pane);
+        // Trigger initial fetch and data arrival.
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminFetchStartedMsg());
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminDataLoadedMsg(
+            ['Uptime' => '12345'],
+            ['max_connections' => '100'],
+            microtime(true),
+        ));
+        // adminPage is now lazily created.
+        $createdPage = $a->adminPage();
+
+        // Switch to DashboardPage (pane 5 — see AdminPane enum order) and toggle pause via the app-level 'p' handler.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, '5'));
+        $this->assertSame(\SugarCraft\Query\Admin\AdminPane::Dashboard, $a->adminPane);
+        $pageBefore = $a->adminPage();
+        $this->assertFalse($pageBefore->isPaused());
+        // Press 'p' — app-level handler toggles pause and stores updated page.
+        [$a, ] = $a->update(new KeyMsg(KeyType::Char, 'p'));
+        $pageAfterPause = $a->adminPage();
+        $this->assertTrue($pageAfterPause->isPaused(), 'pause should be toggled');
+        $this->assertNotSame($pageBefore, $pageAfterPause);
+
+        // Simulate poll tick: AdminFetchStartedMsg (loading starts).
+        // With the fix, adminPage is NOT nulled here.
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminFetchStartedMsg());
+
+        // adminPage must be the SAME instance — not recreated.
+        $this->assertSame(
+            $pageAfterPause,
+            $a->adminPage(),
+            'adminPage should survive AdminFetchStartedMsg (no state loss)',
+        );
+        $this->assertTrue($a->adminPage()->isPaused(), 'pause state must be preserved');
+
+        // Simulate data arriving: AdminDataLoadedMsg (loading clears).
+        // adminPage is still NOT nulled here.
+        [$a, ] = $a->update(new \SugarCraft\Query\Core\Msg\AdminDataLoadedMsg(
+            ['Uptime' => '67890'],
+            ['max_connections' => '200'],
+            microtime(true),
+        ));
+
+        // adminPage must STILL be the same instance with state preserved.
+        $finalPage = $a->adminPage();
+        $this->assertSame(
+            $pageAfterPause,
+            $finalPage,
+            'adminPage should survive AdminDataLoadedMsg (no state loss)',
+        );
+        $this->assertTrue($finalPage->isPaused(), 'pause state must be preserved after data refresh');
+    }
+
     public function testJKMovesTableCursor(): void
     {
         $a = App::start($this->db());
