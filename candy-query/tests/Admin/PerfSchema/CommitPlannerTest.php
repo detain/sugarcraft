@@ -341,12 +341,11 @@ final class CommitPlannerTest extends TestCase
         $timer = SetupTimers::new(
             name: 'NANOSECOND',
             timerName: 'nanosecond',
-            scaleFactor: 1000.0,
         );
 
         $planner = CommitPlanner::new();
 
-        // Timers are read-only, should return empty statements
+        // Timers are not tracked by CommitPlanner, should return empty statements
         $this->assertSame([], $planner->commitAll());
     }
 
