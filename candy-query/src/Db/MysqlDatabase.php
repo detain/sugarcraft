@@ -29,6 +29,10 @@ final class MysqlDatabase implements DatabaseInterface
 
     /**
      * Connect to a MySQL database using connection configuration.
+     *
+     * SSL is configured via PDO driver options, not the DSN string.
+     * sslMode values: '' (disabled/no SSL), 'prefer' (try SSL), 'require' (require SSL),
+     * 'verify_ca' (require + verify server cert), 'verify_identity' (require + verify CN).
      */
     public static function connect(ConnectionConfig $config): self
     {
@@ -38,10 +42,22 @@ final class MysqlDatabase implements DatabaseInterface
             );
         }
 
-        $pdo = new \PDO($config->dsn, $config->user, $config->pass, [
+        $pdoOptions = [
             \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
             \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-        ]);
+        ];
+
+        // Apply SSL driver options based on sslMode when explicitly set
+        if ($config->sslMode !== '' && $config->sslMode !== 'disable') {
+            $pdoOptions[\PDO::MYSQL_ATTR_SSL_CA] = null; // Let PDO use system defaults
+            if ($config->sslMode === 'verify_ca' || $config->sslMode === 'verify_identity') {
+                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
+            } else {
+                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
+        }
+
+        $pdo = new \PDO($config->dsn, $config->user, $config->pass, $pdoOptions);
 
         $instance = new self($pdo);
         $instance->connectionConfig = $config;
@@ -287,15 +303,28 @@ final class MysqlDatabase implements DatabaseInterface
             return false;
         }
 
+        $config = $this->connectionConfig;
+        $pdoOptions = [
+            \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+            \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
+        ];
+
+        // Apply SSL driver options on reconnect as well
+        if ($config->sslMode !== '' && $config->sslMode !== 'disable') {
+            $pdoOptions[\PDO::MYSQL_ATTR_SSL_CA] = null;
+            if ($config->sslMode === 'verify_ca' || $config->sslMode === 'verify_identity') {
+                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
+            } else {
+                $pdoOptions[\PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = false;
+            }
+        }
+
         try {
             $pdo = new \PDO(
-                $this->connectionConfig->dsn,
-                $this->connectionConfig->user,
-                $this->connectionConfig->pass,
-                [
-                    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
-                    \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC,
-                ],
+                $config->dsn,
+                $config->user,
+                $config->pass,
+                $pdoOptions,
             );
             $this->pdo = $pdo;
             return $this;

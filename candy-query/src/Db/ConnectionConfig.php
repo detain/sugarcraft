@@ -25,23 +25,24 @@ final readonly class ConnectionConfig
     /**
      * Build a DSN string from components.
      *
+     * SSL is NOT included in the MySQL DSN — it is passed as PDO driver options
+     * at connect time via MysqlDatabase::connect().
+     *
      * @param string $driver Database driver (sqlite, mysql, pgsql)
      * @param string $host Host address
      * @param int $port Port number
      * @param string $dbname Database name
-     * @param string $sslMode SSL mode
      * @return string DSN string
      */
-    private static function buildDsn(string $driver, string $host, int $port, string $dbname, string $sslMode): string
+    private static function buildDsn(string $driver, string $host, int $port, string $dbname): string
     {
         return match ($driver) {
             'sqlite' => $dbname === ':memory:' ? 'sqlite::memory:' : 'sqlite:/' . ltrim($dbname, '/'),
             'mysql' => sprintf(
-                'mysql:host=%s;port=%d;dbname=%s;ssl-mode=%s',
+                'mysql:host=%s;port=%d;dbname=%s',
                 $host,
                 $port,
                 $dbname,
-                $sslMode,
             ),
             'pgsql' => sprintf('pgsql:host=%s;port=%d;dbname=%s', $host, $port, $dbname),
             default => sprintf('%s:host=%s;port=%d;dbname=%s', $driver, $host, $port, $dbname),
@@ -57,7 +58,7 @@ final readonly class ConnectionConfig
      * @param string $user Username
      * @param string $pass Password
      * @param string $dbname Database name
-     * @param string $sslMode SSL mode (for MySQL)
+     * @param string $sslMode SSL mode (for MySQL) — applied as PDO driver options, not in DSN
      * @return self
      */
     public static function create(
@@ -69,7 +70,7 @@ final readonly class ConnectionConfig
         string $dbname,
         string $sslMode = 'prefer',
     ): self {
-        $dsn = self::buildDsn($driver, $host, $port, $dbname, $sslMode);
+        $dsn = self::buildDsn($driver, $host, $port, $dbname);
         return new self($driver, $host, $port, $user, $pass, $dbname, $sslMode, $dsn);
     }
 }
