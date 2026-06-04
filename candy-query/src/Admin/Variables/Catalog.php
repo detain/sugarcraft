@@ -66,7 +66,8 @@ final class Catalog
                 name: $metadata['name'],
                 description: $metadata['description'],
                 editable: $metadata['editable'],
-                groups: $metadata['groups'],
+                dynamic: $metadata['dynamic'] ?? true,
+                groups: $metadata['groups'] ?? [],
             );
         }
 
@@ -152,6 +153,19 @@ final class Catalog
         $metadata = $this->get($name);
 
         return $metadata !== null && $metadata->editable;
+    }
+
+    /**
+     * Check if a variable is runtime-dynamic (can be changed without restart).
+     *
+     * @param string $name The variable name to check
+     * @return bool True if the variable is dynamic, false if static or not found
+     */
+    public function isDynamic(string $name): bool
+    {
+        $metadata = $this->get($name);
+
+        return $metadata !== null && $metadata->isDynamic();
     }
 
     /**
