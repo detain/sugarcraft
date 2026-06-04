@@ -20,6 +20,7 @@ final class Alert
      * @param float $value        Actual metric value when alert fired
      * @param float $threshold    Threshold value that was exceeded
      * @param \DateTimeImmutable $firedAt When the alert was triggered
+     * @param MetricKind $metricKind Controls how value/threshold are formatted in toToastMessage()
      */
     public function __construct(
         public readonly Severity $severity,
@@ -28,30 +29,31 @@ final class Alert
         public readonly float $value,
         public readonly float $threshold,
         public readonly \DateTimeImmutable $firedAt = new \DateTimeImmutable(),
+        public readonly MetricKind $metricKind = MetricKind::Ratio,
     ) {}
 
     /**
      * Create a warning-level alert.
      */
-    public static function warning(string $metric, string $message, float $value, float $threshold): self
+    public static function warning(string $metric, string $message, float $value, float $threshold, MetricKind $kind = MetricKind::Ratio): self
     {
-        return new self(Severity::Warning, $metric, $message, $value, $threshold);
+        return new self(Severity::Warning, $metric, $message, $value, $threshold, new \DateTimeImmutable(), $kind);
     }
 
     /**
      * Create a critical-level alert.
      */
-    public static function critical(string $metric, string $message, float $value, float $threshold): self
+    public static function critical(string $metric, string $message, float $value, float $threshold, MetricKind $kind = MetricKind::Ratio): self
     {
-        return new self(Severity::Critical, $metric, $message, $value, $threshold);
+        return new self(Severity::Critical, $metric, $message, $value, $threshold, new \DateTimeImmutable(), $kind);
     }
 
     /**
      * Create an info-level alert.
      */
-    public static function info(string $metric, string $message, float $value, float $threshold): self
+    public static function info(string $metric, string $message, float $value, float $threshold, MetricKind $kind = MetricKind::Ratio): self
     {
-        return new self(Severity::Info, $metric, $message, $value, $threshold);
+        return new self(Severity::Info, $metric, $message, $value, $threshold, new \DateTimeImmutable(), $kind);
     }
 
     /**
@@ -83,12 +85,28 @@ final class Alert
      */
     public function toToastMessage(): string
     {
-        return sprintf(
-            '%s: %s (%.1f%% > %.1f%%)',
-            $this->metric,
-            $this->message,
-            $this->value * 100,
-            $this->threshold * 100,
-        );
+        return match ($this->metricKind) {
+            MetricKind::Ratio => sprintf(
+                '%s: %s (%.1f%% > %.1f%%)',
+                $this->metric,
+                $this->message,
+                $this->value * 100,
+                $this->threshold * 100,
+            ),
+            MetricKind::Seconds => sprintf(
+                '%s: %s (%.1fs > %.1fs)',
+                $this->metric,
+                $this->message,
+                $this->value,
+                $this->threshold,
+            ),
+            MetricKind::Count => sprintf(
+                '%s: %s (%d > %d)',
+                $this->metric,
+                $this->message,
+                (int) $this->value,
+                (int) $this->threshold,
+            ),
+        };
     }
 }

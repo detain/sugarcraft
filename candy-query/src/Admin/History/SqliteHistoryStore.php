@@ -72,13 +72,18 @@ final class SqliteHistoryStore implements HistoryStoreInterface
      */
     public function query(\DateTimeImmutable $since, \DateTimeImmutable $until): array
     {
+        // Use format('U.u') to preserve sub-second precision; binding as TEXT
+        // allows SQLite to compare the stored REAL (float) column correctly.
+        $sinceEpoch = $since->format('U.u');
+        $untilEpoch = $until->format('U.u');
+
         $stmt = $this->db->prepare(
             'SELECT ts, variables FROM history
              WHERE ts >= :since AND ts <= :until
              ORDER BY ts ASC'
         );
-        $stmt->bindValue(':since', $since->getTimestamp(), \SQLITE3_FLOAT);
-        $stmt->bindValue(':until', $until->getTimestamp(), \SQLITE3_FLOAT);
+        $stmt->bindValue(':since', $sinceEpoch, \SQLITE3_TEXT);
+        $stmt->bindValue(':until', $untilEpoch, \SQLITE3_TEXT);
 
         $result = $stmt->execute();
         $snapshots = [];
@@ -106,7 +111,7 @@ final class SqliteHistoryStore implements HistoryStoreInterface
         $stmt = $this->db->prepare(
             'DELETE FROM history WHERE ts < :before'
         );
-        $stmt->bindValue(':before', $before->getTimestamp(), \SQLITE3_FLOAT);
+        $stmt->bindValue(':before', $before->format('U.u'), \SQLITE3_TEXT);
         $stmt->execute();
         $changes = $this->db->changes();
         $stmt->close();

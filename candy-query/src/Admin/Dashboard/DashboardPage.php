@@ -69,6 +69,9 @@ final class DashboardPage extends PageBase
     /** @var array<string, Alert> */
     private array $pendingAlerts = [];
 
+    /** @var array<string, bool> Tracks which alert keys were breached at last check for dedup */
+    private array $breachedAlertKeys = [];
+
     private AlertNotifier $alertNotifier;
 
     public function __construct(
@@ -300,6 +303,9 @@ final class DashboardPage extends PageBase
      *
      * Uses a mute-safe notifier by default; provide a factory via
      * withAlertNotifier() to enable toast notifications.
+     *
+     * Only fires a toast notification when a key transitions from not-breached
+     * to breached — not on every poll tick while the breach persists (dedup).
      */
     private function checkAlerts(array $statusVars, array $serverVars): void
     {
@@ -309,15 +315,29 @@ final class DashboardPage extends PageBase
 
         $alerts = $manager->checkAllMetrics($statusVars, $serverVars);
 
+        // Compute keys that are newly breached (not in last-breached set).
+        // Use array_diff_key+array_flip to compare by key name, not value.
+        $currentKeys = array_flip(array_keys($alerts));
+        $previousKeys = $this->breachedAlertKeys;
+        $newKeys = array_diff_key($currentKeys, $previousKeys);
+
         if ($alerts !== []) {
             // Merge new alerts, avoiding duplicates by key
             $this->pendingAlerts = array_merge($this->pendingAlerts, $alerts);
 
-            // Dispatch to notifier (no-op if muted or no factory)
-            foreach ($alerts as $alert) {
-                $this->alertNotifier = $this->alertNotifier->notify($alert);
+            // Dispatch to notifier only for NEWLY breached keys (dedup).
+            // Continuously-breached keys do NOT re-fire the toast.
+            foreach ($alerts as $key => $alert) {
+                if (isset($newKeys[$key])) {
+                    $this->alertNotifier = $this->alertNotifier->notify($alert);
+                }
             }
         }
+
+        // Persist current breach keys so the next tick can detect new entries.
+        // Keys that have cleared naturally drop out since $alerts only holds
+        // currently-breached entries.
+        $this->breachedAlertKeys = $currentKeys;
     }
 
     private function initializeCells(): void
@@ -515,6 +535,8 @@ final class DashboardPage extends PageBase
     {
         $clone = clone $this;
         $clone->pendingAlerts = [];
+        // Also reset breach tracking so new breaches on the same keys re-fire toasts.
+        $clone->breachedAlertKeys = [];
         return $clone;
     }
 
