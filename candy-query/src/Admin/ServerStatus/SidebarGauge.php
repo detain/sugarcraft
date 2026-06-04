@@ -24,7 +24,7 @@ enum GaugeType: string
 /**
  * A single sidebar gauge displaying a metric with threshold coloring.
  *
- * Renders CPU as a circular GaugeCircle; all others as horizontal Gauge.
+ * Renders gauges as horizontal bars with threshold coloring.
  * Color transitions: green (0.0-0.6) → yellow (0.6-0.8) → red (0.8-1.0).
  *
  * @see Mirrors mysql-workbench sidebar gauge components
