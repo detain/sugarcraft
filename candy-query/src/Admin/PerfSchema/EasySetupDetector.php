@@ -56,7 +56,7 @@ final class EasySetupDetector
 
     /**
      * Default instruments for MySQL 5.7+ (per Appendix C).
-     * stage/% was removed in 5.7; wait/sga/% added.
+     * stage/% was removed in 5.7 (it is not included here).
      *
      * @var list<string>
      */
