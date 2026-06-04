@@ -586,24 +586,25 @@ final class App implements Model
         }
 
         // Throttle: the admin fetch runs at most once every 3 seconds.
-        // AsyncOps::throttle ensures the fetch is not re-triggered during
-        // the cooldown window (no overlapping fetches). The tick at 1s
-        // continues firing so the page-driven query queue (AdminQueryCache)
-        // is drained promptly even when the status fetch is throttled.
-        static $throttledFetch = null;
-        $throttledFetch ??= AsyncOps::throttle(
-            fn() => $this->createAdminFetchPromise($this->historyRecorder),
-            3.0,
-        );
+        // We call createAdminFetchPromise() directly and manage a cooldown flag.
+        // The tick at 1s continues firing so the page-driven query queue
+        // (AdminQueryCache) is drained promptly even when the status fetch is throttled.
+        static $lastFetchAt = 0.0;
+        $now = microtime(true);
+        $elapsed = $now - $lastFetchAt;
 
-        // Tick at 1s so page-driven queries (process list, sys reports, etc.)
-        // discovered during render are drained promptly. The throttle above
-        // prevents overlapping fetches, so a slow report in the batch
-        // simply delays the next poll rather than piling up.
-        return (new Subscriptions())->withTick('admin-fetch', 1.0, function(): \SugarCraft\Core\Msg {
+        if ($elapsed < 3.0) {
+            // In cooldown — still fire the tick (for queue draining) but skip the fetch.
+            return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
+                return Cmd::none();
+            });
+        }
+        $lastFetchAt = $now;
+
+        return (new Subscriptions())->withTick('admin-fetch', 1.0, function (): \SugarCraft\Core\Msg {
             return Cmd::batch(
-                fn() => new AdminFetchStartedMsg(),
-                Cmd::promise(fn () => $throttledFetch()),
+                fn (): Msg => new AdminFetchStartedMsg(),
+                Cmd::promise(fn () => $this->createAdminFetchPromise($this->historyRecorder)),
             )();
         });
     }
