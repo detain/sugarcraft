@@ -107,9 +107,7 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `SqliteSchemaProvider` | `SchemaProviderInterface` via PRAGMA queries (tables, columns, indexes, foreign keys). |
 | `MysqlSchemaProvider` | `SchemaProviderInterface` via `INFORMATION_SCHEMA` queries. |
 | `PostgresSchemaProvider` | `SchemaProviderInterface` via `pg_catalog` + `information_schema` queries. |
-| `ResultPager`     | Cursor-based pagination for SQL result sets. Immutable + fluent `nextPage()`/`prevPage()`. |
-| `CellEditor`       | Cell-level UPDATE by primary-key identity. `updateCell()`, `updateRow()`, `readCell()`.     |
-| `SnippetStore`   | File-backed JSON store for named SQL snippets. Immutable + fluent `add()`/`delete()`/`find()`/`search()`. Persists to `/tmp/candy-query-snippets.json`. |
+
 | `ExplainView`     | Renders `EXPLAIN` output as a colour-coded ANSI tree. Uses strategy pattern — delegates to driver-specific `ExplainProviderInterface` based on `Flavor`. |
 | `ExplainProviderInterface` | Interface for driver-specific EXPLAIN parsing. Implement `explain(pdo, sql)` returning a list of explain rows. |
 | `SqliteExplainProvider` | `ExplainProviderInterface` via `EXPLAIN QUERY PLAN`. Parses tree prefixes (`|--`, `` `-- ``) for depth. |
@@ -119,7 +117,7 @@ Digit `4` selects **Query Stats** (not Dashboard); digit `7` selects **Performan
 | `MysqlAdminProvider` | `AdminProviderInterface` via MySQL `SHOW GLOBAL STATUS/VARIABLES`, `SHOW ENGINE INNODB STATUS`, `SHOW REPLICA STATUS`, and `fetchProcesslist()` (prefers Performance Schema `performance_schema.threads` with graceful fallback to `SHOW FULL PROCESSLIST` on permission errors). |
 | `PostgresAdminProvider` | `AdminProviderInterface` via `pg_stat_database`, `pg_settings`, `pg_stat_activity`. Dashboard/connections implemented via `PostgresWidgetCatalog`. |
 | `PostgresWidgetCatalog` | Provides `io()` (10 widgets: tuple metrics) and `cache()` (4 widgets: Shared Buffers) panels. Includes `parseSharedBuffers()` for byte conversion. |
-| `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. |
+| `ResultTable`    | Renders SQL result sets with horizontal scrolling, JSON pretty-print (2-space indent), styled NULL token, and column auto-sizing. `scrollLeft()`/`scrollRight()` builders. (Active — distinct from the deleted `ResultPager` pagination class.) |
 | `ServerStatusPage` | 2-column admin page: info/features/directories/SSL/replication/firewall panels on left, `SidebarGaugeSet` on right. Gauges poll ServerContext and optional Sampler for per-second rate calculations. `r` refresh, `q` quit. |
 | `ServerInfoCard`    | Info card with host, socket, port, version, uptime (computed to running-since). |
 | `ServerStatusSnapshotAdapter` | Adapter wrapping `ServerContextInterface` to satisfy `StatusSnapshotProviderInterface`, enabling `Sampler` to compute per-second rate deltas across poll cycles. Stores snapshots internally so two-sample rate logic can operate on the same context without the context needing to implement the interface directly. |
@@ -620,7 +618,7 @@ $db = new MysqlDatabase($pdo, reconnectManager: new ReconnectManager());
 
 ### Restart detection
 
-`ServerContext::detectReset()` is the single authoritative owner of restart detection. It compares the current `Uptime` status variable against the last observed value after each `statusVariables()` fetch; a lower uptime indicates a restart and sets `wasResetCache = true`. `Sampler` and `StatusPoller` consume this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized in one place.
+`ServerContext::detectReset()` is the single authoritative owner of restart detection. It compares the current `Uptime` status variable against the last observed value after each `statusVariables()` fetch; a lower uptime indicates a restart and sets `wasResetCache = true`. `Sampler` consumes this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized in one place.
 
 The admin fetch in `App::subscriptions()` uses a manual time-based cooldown (static `$lastFetchAt`, 3.0s throttle) rather than `AsyncOps::throttle()` — `AsyncOps::throttle()` returns a void callable that cannot be awaited as a Promise in the `Cmd::promise` flow, so a simple elapsed-time guard is used instead.
 
