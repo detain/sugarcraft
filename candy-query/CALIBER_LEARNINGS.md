@@ -129,3 +129,8 @@ Source: step 1.2 ai/candy-query-page-collaborators
 Pattern: `ReportsPage` accepts an optional `?DatabaseInterface $db` in its constructor but `validate()` unconditionally sets `$this->db = $this->context->connection()`. This means any db passed via the constructor is overwritten on first `validate()`. This is pre-existing behaviour but important for anyone trying to inject a test double — inject the mock in `validate()` or use a test double of `ServerContextInterface` instead.
 Canonical: `ReportsPage` constructor `$db` param is unused after first `validate()` call.
 Source: step 1.2 ai/candy-query-page-collaborators
+
+### 2026-06-03 — ConnectionsPage::update() + selection/index memoization (STEP 1.3)
+Pattern: `ConnectionsPage::update(Msg)` handles keyboard input for the connections/admin page: j/k/↑/↓ for selection navigation, Tab/1/2/3 for detail tab cycling, f for hide-sleeping filter toggle, r for async refresh via `Cmd::send(new AdminFetchStartedMsg())`. The `cachedFilteredProcesslist` memoization is invalidated on every state-changing operation (`withFilters()`, `withSelectedIndex()`, `handleRefresh()`) so the next render always gets fresh data without a synchronous DB query on the keystroke path.
+Canonical: `ConnectionsPage::update()` → `withNavigateDown()` / `withNavigateUp()` → `withSelectedIndex()` → `filteredProcesslist()` (lazy, cached); `handleRefresh()` → `Cmd::send(new AdminFetchStartedMsg())` (async, not blocking).
+Source: step 1.3 ai/candy-query-connections-update
