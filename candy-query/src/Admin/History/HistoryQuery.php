@@ -36,6 +36,13 @@ final class HistoryQuery
 
     /**
      * Build a DateTimeImmutable from a float epoch while preserving microseconds.
+     *
+     * Float epochs from `microtime(true)` carry sub-second precision (e.g. 1717500000.123456).
+     * Casting the integer part directly to int and extracting microseconds via integer arithmetic
+     * avoids floating-point rounding that would drop the most-recent boundary record when
+     * `DateTimeImmutable` reconstructs from the float via `setTimestamp()` alone.
+     *
+     * @param float $ts Unix timestamp with fractional seconds from microtime(true)
      */
     private static function floatToDateTimeImmutable(float $ts): \DateTimeImmutable
     {

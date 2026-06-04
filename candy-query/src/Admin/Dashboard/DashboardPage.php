@@ -305,7 +305,14 @@ final class DashboardPage extends PageBase
      * withAlertNotifier() to enable toast notifications.
      *
      * Only fires a toast notification when a key transitions from not-breached
-     * to breached — not on every poll tick while the breach persists (dedup).
+     * to breached — not on every poll tick while the breach persists. The
+     * $breachedAlertKeys array tracks which alert keys were active at the last
+     * check; array_diff_key against the current alert keys isolates newly-breached
+     * entries. This prevents alert storms when a threshold remains breached
+     * across consecutive 3s poll cycles.
+     *
+     * @param array $statusVars  SHOW GLOBAL STATUS (or pg_stat_database for Postgres)
+     * @param array $serverVars  SHOW GLOBAL VARIABLES (or pg_settings for Postgres)
      */
     private function checkAlerts(array $statusVars, array $serverVars): void
     {
