@@ -342,4 +342,111 @@ final class InstrumentTree
 
         return $output;
     }
+
+    /**
+     * Get the depth of this node in the tree.
+     *
+     * Root node has depth 0, its children have depth 1, etc.
+     *
+     * @return int Depth from root (0 = root)
+     */
+    public function depth(): int
+    {
+        return $this->computeDepth();
+    }
+
+    /**
+     * Get the full depth of this node from root (used for indent calculation).
+     *
+     * @return int Number of path segments (0 for root, 1 for top-level, etc.)
+     */
+    public function pathDepth(): int
+    {
+        if ($this->name === '') {
+            return 0;
+        }
+
+        return count(explode('/', $this->name));
+    }
+
+    /**
+     * Set the enabled state for this node and cascade to all descendants.
+     *
+     * When a group node is toggled, all instruments in its subtree should
+     * be marked with the same enabled state. This method marks all instruments
+     * at or below this node with the given state, then invalidates caches.
+     *
+     * @param bool $enabled The enabled state to cascade
+     * @return list<SetupInstruments> All instruments that were modified
+     */
+    public function setChildrenEnabled(bool $enabled): array
+    {
+        $modified = [];
+
+        // If this node has an instrument, update it
+        if ($this->instrument !== null) {
+            $currentEnabled = $this->instrument->enabled;
+            if ($currentEnabled !== $enabled) {
+                $this->instrument = $this->instrument->withEnabled($enabled);
+                $modified[] = $this->instrument;
+            }
+        }
+
+        // Cascade to all children
+        foreach ($this->children as $child) {
+            $modified = array_merge($modified, $child->setChildrenEnabled($enabled));
+        }
+
+        // Invalidate caches after modifications
+        $this->invalidateCache();
+
+        return $modified;
+    }
+
+    /**
+     * Set the timed state for this node and cascade to all descendants.
+     *
+     * When a group node is toggled, all instruments in its subtree should
+     * be marked with the same timed state.
+     *
+     * @param bool $timed The timed state to cascade
+     * @return list<SetupInstruments> All instruments that were modified
+     */
+    public function setChildrenTimed(bool $timed): array
+    {
+        $modified = [];
+
+        // If this node has an instrument, update it
+        if ($this->instrument !== null) {
+            $currentTimed = $this->instrument->timed;
+            if ($currentTimed !== $timed) {
+                $this->instrument = $this->instrument->withTimed($timed);
+                $modified[] = $this->instrument;
+            }
+        }
+
+        // Cascade to all children
+        foreach ($this->children as $child) {
+            $modified = array_merge($modified, $child->setChildrenTimed($timed));
+        }
+
+        // Invalidate caches after modifications
+        $this->invalidateCache();
+
+        return $modified;
+    }
+
+    /**
+     * Compute the depth of this node by walking up.
+     */
+    private function computeDepth(): int
+    {
+        // The depth is the number of segments in the path
+        // Root (empty name) = 0, "wait" = 1, "wait/io" = 2, etc.
+        if ($this->name === '') {
+            return 0;
+        }
+
+        return count(explode('/', $this->name));
+    }
 }

@@ -99,15 +99,27 @@ final readonly class SetupConsumers
             return [];
         }
 
-        // Backtick-escape the consumer name for safety
-        $escapedName = '`' . str_replace('`', '``', $this->name) . '`';
+        // Quote the consumer name for safe SQL inclusion
+        $quotedName = $this->quote($this->name);
 
         return [
             sprintf(
                 'UPDATE `performance_schema`.`setup_consumers` SET `ENABLED` = %s WHERE `NAME` IN (%s)',
                 $this->enabled ? "'YES'" : "'NO'",
-                $escapedName
+                $quotedName
             ),
         ];
+    }
+
+    /**
+     * Quote a string value for SQL.
+     *
+     * @param string $value Value to quote
+     * @return string Quoted value
+     */
+    private function quote(string $value): string
+    {
+        $escaped = str_replace("'", "''", $value);
+        return "'" . $escaped . "'";
     }
 }

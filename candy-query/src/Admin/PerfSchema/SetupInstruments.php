@@ -146,8 +146,14 @@ final readonly class SetupInstruments
     /**
      * Generate SQL statement to commit changes.
      *
-     * Uses RLIKE to precisely match this instrument's name.
+     * Uses anchored RLIKE to precisely match this instrument's name.
+     * The regex pattern is anchored (^...$) and the name is regex-escaped
+     * so that metacharacters like . / ( ) are matched literally.
      * Only emits a statement if the instrument is dirty.
+     *
+     * NOTE: The SQL is still string-interpolated here for compatibility
+     * with the existing commitAll() contract. CommitPlanner::commitInstruments()
+     * generates properly parameterized statements instead.
      *
      * @return list<string> SQL statements to execute
      */
@@ -157,16 +163,30 @@ final readonly class SetupInstruments
             return [];
         }
 
-        // Backtick-escape the instrument name for safety
-        $escapedName = '`' . str_replace('`', '``', $this->name) . '`';
+        // Anchor and regex-escape the instrument name for the RLIKE pattern
+        // This ensures exact match: ^name$ matches only the exact instrument
+        // preg_quote escapes regex metacharacters like . / ( ) [ ] etc.
+        $escapedName = '^' . preg_quote($this->name, '/') . '$';
 
         return [
             sprintf(
                 'UPDATE `performance_schema`.`setup_instruments` SET `ENABLED` = %s, `TIMED` = %s WHERE `NAME` RLIKE %s',
                 $this->enabled ? "'YES'" : "'NO'",
                 $this->timed ? "'YES'" : "'NO'",
-                $escapedName
+                $this->quote($escapedName)
             ),
         ];
+    }
+
+    /**
+     * Quote a string value for SQL.
+     *
+     * @param string $value Value to quote
+     * @return string Quoted value
+     */
+    private function quote(string $value): string
+    {
+        $escaped = str_replace("'", "''", $value);
+        return "'" . $escaped . "'";
     }
 }
