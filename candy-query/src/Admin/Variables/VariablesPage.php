@@ -49,6 +49,11 @@ final class VariablesPage extends PageBase
     private const DLG_INPUT  = 'input';
     private const DLG_CONFIRM = 'confirm';
 
+    // Persist mode constants for SET statement variants
+    private const MODE_GLOBAL = 'global';
+    private const MODE_PERSIST = 'persist';
+    private const MODE_PERSIST_ONLY = 'persist_only';
+
     /** @var array<string, string> */
     private array $variables = [];
 
@@ -84,6 +89,9 @@ final class VariablesPage extends PageBase
     /** @var string|null error message from a failed SET (e.g. 1238) */
     private ?string $editErrorMessage = null;
 
+    /** @var string persist mode: 'global', 'persist', or 'persist_only' */
+    private string $editPersistMode = self::MODE_GLOBAL;
+
     /**
      * @param ServerContextInterface $context Server context for variable access
      * @param Catalog|null $catalog Variable metadata catalog (loaded eagerly by
@@ -105,6 +113,7 @@ final class VariablesPage extends PageBase
         ?string $editNewValue = null,
         ?string $editCurrentValue = null,
         ?string $editErrorMessage = null,
+        ?string $editPersistMode = null,
     ) {
         parent::__construct($context);
         $this->editDialogPhase = $editDialogPhase;
@@ -112,6 +121,7 @@ final class VariablesPage extends PageBase
         $this->editNewValue = $editNewValue;
         $this->editCurrentValue = $editCurrentValue;
         $this->editErrorMessage = $editErrorMessage;
+        $this->editPersistMode = $editPersistMode ?? self::MODE_GLOBAL;
     }
 
     /**
@@ -290,17 +300,35 @@ final class VariablesPage extends PageBase
         }
 
         $type = $msg->type;
+        $ch = $msg->rune ?? '';
         $varName = $this->editVarName ?? '';
         $currentValue = $this->editCurrentValue ?? '';
+        $persistMode = $this->editPersistMode;
 
         // Escape cancels and returns to browse
         if ($type === KeyType::Escape) {
             return [$this->withEditDialog(null, null, null, null, null), null];
         }
 
+        // 'p' cycles through persist modes: global → persist → persist_only → global
+        if ($ch === 'p') {
+            $persistMode = match ($this->editPersistMode) {
+                self::MODE_GLOBAL => self::MODE_PERSIST,
+                self::MODE_PERSIST => self::MODE_PERSIST_ONLY,
+                self::MODE_PERSIST_ONLY => self::MODE_GLOBAL,
+            };
+            return [$this->withEditDialog(
+                self::DLG_INPUT,
+                $varName,
+                $this->editNewValue ?? '',
+                $currentValue,
+                null,
+                $persistMode,
+            ), null];
+        }
+
         // Character input — build the new value from scratch
         if ($type === KeyType::Char) {
-            $ch = $msg->rune ?? '';
             // If user hasn't started typing yet (null), start from empty
             $newValue = ($this->editNewValue ?? '') . $ch;
             return [$this->withEditDialog(
@@ -309,6 +337,7 @@ final class VariablesPage extends PageBase
                 $newValue,
                 $currentValue,
                 null,
+                $persistMode,
             ), null];
         }
 
@@ -325,6 +354,7 @@ final class VariablesPage extends PageBase
                     $currentValue,
                     $currentValue,
                     null,
+                    $persistMode,
                 ), null];
             }
 
@@ -335,6 +365,7 @@ final class VariablesPage extends PageBase
                 $newValue,
                 $currentValue,
                 null,
+                $persistMode,
             ), null];
         }
 
@@ -342,7 +373,12 @@ final class VariablesPage extends PageBase
     }
 
     /**
-     * Execute the SET GLOBAL edit and return the new page state.
+     * Execute the SET edit and return the new page state.
+     *
+     * Chooses the editor method based on the current persist mode (global,
+     * persist, or persist_only). Error 1238 (variable not dynamic) is shown
+     * with a suggestion to use PERSIST_ONLY, allowing the user to manually
+     * switch modes by pressing 'p'.
      *
      * @return array{0: self, 1: ?\SugarCraft\Core\Cmd}
      */
@@ -351,6 +387,7 @@ final class VariablesPage extends PageBase
         $varName = $this->editVarName ?? '';
         $newValue = $this->editNewValue ?? '';
         $currentValue = $this->editCurrentValue ?? '';
+        $persistMode = $this->editPersistMode;
 
         // Editor must be available (guard — should not be null if dialog is active)
         if ($this->editor === null) {
@@ -362,20 +399,25 @@ final class VariablesPage extends PageBase
             return [$this->withEditDialog(null, null, null, null, null), null];
         }
 
-        $result = $this->editor->edit($varName, $newValue);
+        // Choose the editor method based on persist mode
+        $result = match ($persistMode) {
+            self::MODE_PERSIST => $this->editor->persist($varName, $newValue),
+            self::MODE_PERSIST_ONLY => $this->editor->persistOnly($varName, $newValue),
+            default => $this->editor->edit($varName, $newValue),
+        };
 
+        // Success — reload variables and return to browse
         if ($result['success']) {
-            // Reload variables and return to browse
             $this->loadVariables();
             return [$this->withEditDialog(null, null, null, null, null), null];
         }
 
-        // Error — show in confirm phase (user can retry or cancel)
+        // Error — show in confirm phase (user can retry, cancel, or press 'p' to switch mode)
         $errorMessage = $result['errorMessage'] ?? 'Unknown error';
 
-        // Error 1238 = variable is not dynamic (requires restart)
+        // Error 1238 = variable is not dynamic (requires restart) — suggest PERSIST_ONLY
         if (($result['errorCode'] ?? 0) === 1238) {
-            $errorMessage = "Error 1238: '{$varName}' is not dynamic — requires server restart";
+            $errorMessage = "Error 1238: '{$varName}' is not dynamic — press [p] to use PERSIST_ONLY";
         }
 
         return [$this->withEditDialog(
@@ -384,6 +426,7 @@ final class VariablesPage extends PageBase
             $newValue,
             $currentValue,
             $errorMessage,
+            $persistMode,
         ), null];
     }
 
@@ -505,6 +548,7 @@ final class VariablesPage extends PageBase
      * Return a new instance with the edit dialog in the given state.
      *
      * @param string|null $phase DLG_INPUT | DLG_CONFIRM | null
+     * @param string|null $persistMode 'global' | 'persist' | 'persist_only'
      */
     private function withEditDialog(
         ?string $phase,
@@ -512,6 +556,7 @@ final class VariablesPage extends PageBase
         ?string $newValue = null,
         ?string $currentValue = null,
         ?string $errorMessage = null,
+        ?string $persistMode = null,
     ): self {
         $clone = clone $this;
         $clone->editDialogPhase = $phase;
@@ -519,6 +564,7 @@ final class VariablesPage extends PageBase
         $clone->editNewValue = $newValue;
         $clone->editCurrentValue = $currentValue;
         $clone->editErrorMessage = $errorMessage;
+        $clone->editPersistMode = $persistMode ?? self::MODE_GLOBAL;
         return $clone;
     }
 
@@ -794,10 +840,12 @@ final class VariablesPage extends PageBase
     /**
      * Render the edit dialog overlay when one is active.
      *
-     * DLG_INPUT phase: prompts for the new value, shows current value as placeholder.
-     * DLG_CONFIRM phase: shows the pending SET GLOBAL statement, [Enter] to execute,
-     * [Esc] to cancel. If executeEdit() returned an error (e.g. 1238 for non-dynamic
-     * variables), the error message is shown in red below the confirm line.
+     * DLG_INPUT phase: prompts for the new value, shows current value as placeholder,
+     * and indicates the current persist mode. Press 'p' to cycle modes.
+     * DLG_CONFIRM phase: shows the pending SET statement with the chosen mode,
+     * [Enter] to execute, [Esc] to cancel. If executeEdit() returned an error
+     * (e.g. 1238 for non-dynamic variables), the error message is shown in red
+     * below the confirm line.
      *
      * @return string Empty string when no dialog is active.
      */
@@ -808,17 +856,30 @@ final class VariablesPage extends PageBase
         $currentValue = $this->variables[$varName] ?? '';
         $newValue = $this->editNewValue ?? '';
         $errorMsg = $this->editErrorMessage;
+        $persistMode = $this->editPersistMode;
+
+        $modeLabel = match ($persistMode) {
+            self::MODE_PERSIST => 'PERSIST',
+            self::MODE_PERSIST_ONLY => 'PERSIST_ONLY',
+            default => 'GLOBAL',
+        };
 
         if ($phase === self::DLG_INPUT) {
-            $prompt = "  Edit: {$varName}  (current: {$currentValue})\n";
-            $prompt .= '  Enter new value, [Enter] confirm, [Esc] cancel';
+            $prompt = "  Edit [{$modeLabel}]: {$varName}  (current: {$currentValue})\n";
+            $prompt .= '  Enter new value, [p] toggle mode, [Enter] confirm, [Esc] cancel';
             return Style::new()->foreground(Color::hex('#fde047'))->render($prompt);
         }
 
         if ($phase === self::DLG_CONFIRM) {
             $lines = [];
             $lines[] = '';
-            $lines[] = Style::new()->foreground(Color::hex('#22d3ee'))->render("  SET GLOBAL `{$varName}` = ?");
+
+            // Generate the correct SQL preview using the editor's preview method
+            $preview = $this->editor !== null
+                ? $this->editor->getEditPreview($varName, $newValue, $persistMode)
+                : "SET {$modeLabel} `{$varName}` = ?";
+
+            $lines[] = Style::new()->foreground(Color::hex('#22d3ee'))->render("  {$preview}");
             $lines[] = '  ' . Style::new()->foreground(Color::hex('#4ade80'))->render("[Enter] execute   [Esc] cancel");
 
             if ($errorMsg !== null) {
