@@ -14,12 +14,12 @@ use SugarCraft\Query\Db\Version;
  * defines the default instrument/consumer sets recommended by MySQL documentation
  * (per Appendix C of the MySQL Workbench specification).
  *
- * Default instruments (MySQL 5.6/5.7):
- *   - wait/io/file/%    : File I/O instruments
- *   - wait/io/table/%  : Table I/O instruments
- *   - wait/lock/table/sql/handler : Table lock instruments
- *   - statement/%      : Statement instruments
- *   - idle             : Idle instrument
+ * Default instruments (MySQL 5.6 and 5.7 — same set):
+ *   - wait/io/file/%                      : File I/O instruments
+ *   - wait/io/table/%                     : Table I/O instruments
+ *   - wait/lock/table/sql/handler         : Table lock instruments
+ *   - statement/%                         : Statement instruments
+ *   - idle                                : Idle instrument
  *
  * Default consumers (MySQL 5.6):
  *   - events_statements_current
@@ -27,11 +27,15 @@ use SugarCraft\Query\Db\Version;
  *   - global_instrumentation
  *   - thread_instrumentation
  *
- * Default consumers (MySQL 5.7, adds):
+ * Default consumers (MySQL 5.7+, adds):
  *   - statements_digest
  *
- * Note: memory/% instruments are excluded from standard toggle operations
+ * Note: memory/% instruments are excluded from all toggle operations
  * as they require special handling due to their dynamic nature.
+ *
+ * Version-aware: pass a Version to the constructor (or use fromContext()) and
+ * the correct default set is returned automatically. Defaults to 5.6 profile
+ * when no version is provided.
  *
  * @see Mirrors mysql-workbench wb_admin_performance_schema easy_setup
  * @see Appendix C: Default instrument/consumer profiles for MySQL 5.6 / 5.7
