@@ -517,7 +517,7 @@ final class PerfSchemaPage extends PageBase
         // Load timers
         $this->timers = $this->loadTimers($db);
 
-        // Detect setup state
+        // Detect setup state using the wired detector, or fallback for backward compatibility
         if ($this->detector !== null) {
             $this->setupState = $this->detector->detect();
         } else {
@@ -746,6 +746,15 @@ final class PerfSchemaPage extends PageBase
         return $lower === 'yes' || $lower === 'on' || $value === '1';
     }
 
+    /**
+     * Fallback detection when no EasySetupDetector is wired.
+     *
+     * Uses the instrument data already loaded to determine setup state.
+     * Note: This is less accurate than EasySetupDetector as it doesn't check
+     * TIMED status or query consumers separately.
+     *
+     * @return string One of: 'fully', 'default', 'custom', 'disabled'
+     */
     private function detectSetupState(): string
     {
         $enabledCount = 0;

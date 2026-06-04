@@ -100,14 +100,15 @@ final class EasySetupTest extends TestCase
 
         $this->assertNotEmpty($statements);
 
-        // Should disable non-default instruments first
+        // Should disable non-default instruments first (instruments not in the default set)
+        // Note: % is escaped as \% in LIKE patterns (backslash is MySQL LIKE escape char)
         $hasNonDefaultDisable = false;
         foreach ($statements as $statement) {
             if (str_contains($statement, 'setup_instruments')
                 && str_contains($statement, 'NOT LIKE')
-                && str_contains($statement, 'stage/%')
-                && str_contains($statement, 'statement/%')
-                && str_contains($statement, 'wait/%')) {
+                && str_contains($statement, 'wait/io/file/\\%')
+                && str_contains($statement, 'wait/io/table/\\%')
+                && str_contains($statement, 'wait/lock/table/sql/handler')) {
                 $hasNonDefaultDisable = true;
                 break;
             }
@@ -139,11 +140,11 @@ final class EasySetupTest extends TestCase
         $consumerDisable = $this->findStatement($statements, 'setup_consumers');
         $this->assertNotNull($consumerDisable);
 
-        // Should enable specific default consumers with IN clause
+        // Should enable specific default consumers with IN clause (MySQL 5.6 defaults)
         $hasConsumerInClause = false;
         foreach ($statements as $statement) {
             if (str_contains($statement, 'setup_consumers')
-                && str_contains($statement, 'events_statements_history')
+                && str_contains($statement, 'events_statements_current')
                 && str_contains($statement, 'IN')) {
                 $hasConsumerInClause = true;
                 break;
@@ -157,7 +158,15 @@ final class EasySetupTest extends TestCase
         $setup = EasySetup::new();
         $defaults = $setup->defaultInstruments();
 
-        $this->assertSame(['stage/%', 'statement/%', 'wait/%'], $defaults);
+        // MySQL 5.6 defaults per Appendix C
+        $expected = [
+            'wait/io/file/%',
+            'wait/io/table/%',
+            'wait/lock/table/sql/handler',
+            'statement/%',
+            'idle',
+        ];
+        $this->assertSame($expected, $defaults);
     }
 
     public function testDefaultConsumersReturnsExpectedConsumers(): void
@@ -165,11 +174,12 @@ final class EasySetupTest extends TestCase
         $setup = EasySetup::new();
         $defaults = $setup->defaultConsumers();
 
+        // MySQL 5.6 defaults per Appendix C
         $expected = [
-            'events_statements_history',
-            'events_statements_history_long',
-            'events_waits_history',
-            'events_waits_history_long',
+            'events_statements_current',
+            'events_transactions_current',
+            'global_instrumentation',
+            'thread_instrumentation',
         ];
         $this->assertSame($expected, $defaults);
     }
@@ -232,10 +242,10 @@ final class EasySetupTest extends TestCase
         $statements = $setup->resetToDefaultStatements();
 
         // Find the statement that enables default consumers
-        $consumerEnable = $this->findStatement($statements, 'events_statements_history');
+        $consumerEnable = $this->findStatement($statements, 'events_statements_current');
 
         $this->assertNotNull($consumerEnable);
         // Should have backtick-quoted consumer names
-        $this->assertStringContainsString('`events_statements_history`', $consumerEnable);
+        $this->assertStringContainsString('`events_statements_current`', $consumerEnable);
     }
 }
