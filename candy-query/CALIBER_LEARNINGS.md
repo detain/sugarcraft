@@ -32,7 +32,7 @@ Pattern: `MysqlDatabase::query()` returns `array|null` — on reconnectable erro
 Source: step-7.1 ai/resilience
 
 ### 2026-06-02 — restart detection via uptime comparison (STEP 7.1)
-Pattern: `ServerContext::detectReset()` is the single authoritative owner of restart detection. It is called by `statusVariables()` after fetching fresh `SHOW GLOBAL STATUS` data, compares the current `Uptime` value against `$this->lastUptime`, and sets `wasResetCache = true` when the new value is lower (wraps or restarts). `Sampler` and `StatusPoller` consume this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized. Previously, uptime tracking was spread across `Sampler::registerUptime()` and `StatusPoller`; these were unified into `ServerContext` as the single source of truth.
+Pattern: `ServerContext::detectReset()` is the single authoritative owner of restart detection. It is called by `statusVariables()` after fetching fresh `SHOW GLOBAL STATUS` data, compares the current `Uptime` value against `$this->lastUptime`, and sets `wasResetCache = true` when the new value is lower (wraps or restarts). `Sampler` consumes this via `StatusSnapshotProviderInterface::wasReset()` (delegating to `ServerContext::wasReset()`), keeping restart detection logic centralized. Previously, uptime tracking was spread across `Sampler::registerUptime()` and an active poller class that has since been deleted; these were unified into `ServerContext` as the single source of truth.
 Source: step-7.1 ai/resilience
 
 ### 2026-06-04 — AsyncOps::throttle() returns void callable, not a promise (STEP 7.1)
@@ -349,3 +349,23 @@ Pattern: `microtime(true)` returns a float with sub-second precision (e.g. `1717
 Canonical: `floatToDateTimeImmutable(float $ts): \DateTimeImmutable` — `$sec = (int) $ts; $usec = (int) (($ts - $sec) * 1_000_000); return \DateTimeImmutable::createFromFormat('U u', "{$sec} {$usec}")`.
 Caveat: `DateTimeImmutable::createFromFormat('U u', ...)` returns `false` on PHP < 8.3 if the microsecond part is exactly zero — the `?:` fallback to `new \DateTimeImmutable()` catches this.
 Source: step 7.2 ai/candy-query-docs-7.2
+
+### 2026-06-04 — STEP 7.3 dead-code-cleanup: 9 orphan classes removed (PR #1072 + PR #1073)
+The following classes were deleted as part of the orphan/dead-code cleanup:
+
+- **`ProcessQueryExecutor`** (security) — logged plaintext credentials in query text. Deleted; `MysqlAdminProvider` now uses direct PDO `exec()` for `KILL` and `SET` statements (no result set) instead of wrapping them in a query executor that would log the SQL.
+- **`StatusPoller`** (orphaned) — active poller with a `tick()` method that was replaced by the passive `HistoryRecorder` + `Sampler` composition. The `Sampler` now consumes `StatusSnapshotProviderInterface::wasReset()` directly from `ServerContext::detectReset()`, which is the single authoritative owner of restart detection.
+- **`PostgresDashboardAdapter`** (orphaned) — duplicate of `PostgresWidgetCatalog::io()` / `cache()`. Its functionality was subsumed by the widget catalog.
+- **`RawValue`**, **`ResultPager`**, **`CellEditor`**, **`SnippetStore`** (unused) — never wired into the application; were stubs or experiments that never reached production. `ResultPager` (cursor-based pagination) and `SnippetStore` (file-backed JSON snippets) were design experiments that did not ship; `CellEditor` (cell-level UPDATE) was stubbed but never integrated.
+- **`Validation/*` validators** (unused) — the validation directory contained input validators that were never called from any production code path.
+- **`Lang.php`** is retained — it is actively used by `SqliteDatabase` for i18n.
+
+**Factory rename (non-breaking):** `ConnectionConfig::create()`, `ConnectionFactory::create()`, `SchemaBrowser::create()` were renamed to `::new()` to match the project convention (`::new()` is the default factory — never `::create()`/`::make()`/`::default()`).
+
+**`AdminPane::all()` / `::next()` deleted** — `AdminPane` is a pure enum; display order is derived exclusively from `AdminPane::orderedCases()` which groups by section (Management then Performance). No `all()` or `next()` methods exist or are needed.
+
+**`MysqlDatabase` admin imports** (DEFERRED to STEP 8.1) — `MysqlDatabase` has deferred admin-related imports (`AdminQueryCache`, `CachedConnection`, `ProcesslistProvider`, `ConnectionActions`) that should be moved to an `Admin` namespace prefix. This work is deferred to STEP 8.1.
+
+**`ResultTable` adapter** (DEFERRED to STEP 8.1) — `ResultTable` may eventually need an adapter to bridge it to the admin result set rendering path. Deferred to STEP 8.1 to avoid expanding scope.
+
+Source: step 7.3 ai/candy-query-docs-7.3
