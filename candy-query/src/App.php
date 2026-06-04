@@ -11,7 +11,6 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
-use SugarCraft\Async\AsyncOps;
 use SugarCraft\Core\Subscriptions;
 use SugarCraft\Forms\TextArea\TextArea;
 use SugarCraft\Query\Admin\AdminPane;
