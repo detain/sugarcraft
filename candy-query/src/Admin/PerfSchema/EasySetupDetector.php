@@ -24,11 +24,26 @@ use SugarCraft\Query\Db\Version;
  *   - fully:    COUNT(setup_consumers WHERE enabled='NO') == 0
  *               AND COUNT(setup_instruments WHERE NAME NOT LIKE 'memory/%'
  *                   AND (enabled='NO' OR timed='NO')) == 0
- *   - disabled: COUNT(setup_consumers WHERE enabled='YES') == 0
- *               AND COUNT(setup_instruments WHERE NAME NOT LIKE 'memory/%'
- *                   AND (enabled='YES' OR timed='YES')) == 0
+ *               Additionally verifies enabledPercentage == 100% as a guard —
+ *               a server with <100% instruments enabled cannot be 'fully'.
+ *   - disabled: isDisabled() returns true — PS tables are inaccessible
+ *               (caught by PDOException on query; does NOT use isFullyDisabled())
  *   - default:  SUM(IF matches default profile)) == expected count
  *   - custom:   otherwise
+ *
+ * **TIMED-off is 'custom', not 'fully'**: The 'fully' state requires ALL instruments
+ * to be both enabled AND timed. If any instrument has timed='NO', the setup is 'custom'.
+ *
+ * **isFullyDisabled() is available but not wired to detect()**: This method checks
+ * whether no consumer is enabled AND no instrument is enabled or timed. It exists for
+ * future use but is not called by detect(); detect() uses isDisabled() to check for
+ * PS accessibility instead.
+ *
+ * Version-gated defaults (Appendix C):
+ *   - MySQL 5.6 instruments: wait/io/file/%, wait/io/table/%, wait/lock/table/sql/handler, statement/%, idle
+ *   - MySQL 5.7+ instruments: same five patterns (stage/% removed in 5.7)
+ *   - MySQL 5.6 consumers: events_statements_current, events_transactions_current, global_instrumentation, thread_instrumentation
+ *   - MySQL 5.7+ consumers: adds statements_digest
  *
  * @see Mirrors mysql-workbench wb_admin_performance_schema easy_setup_detector
  * @see Appendix C: Default instrument/consumer profiles for MySQL 5.6 / 5.7

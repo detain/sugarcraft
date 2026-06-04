@@ -245,3 +245,30 @@ Source: step 5.2 ai/candy-query-perfschema-commit-tree
 Pattern: `PerfSchemaPage::flattenTree(InstrumentTree): array` returns `list<array{0:InstrumentTree|null, 1:int, 2:bool}>` — a flat list of `[nodeOrInstrument, depth, isGroup]` triples. Group nodes (intermediate path nodes with `instrument === null`) and instrument leaf nodes are interleaved in tree order. `renderInstrumentsTab()` uses depth for indentation and calls `Badge::tristate()` for group nodes (where null means "mixed" state = `[~]`). Instrument leaf nodes render with individual `[x]`/`[ ]` badges. `pathDepth()` on each `InstrumentTree` node returns the number of path segments (root=0, `wait`=1, `wait/io`=2, etc.) for indent calculation.
 Canonical: `flattenTree()` — `foreach ($tree->children() as $child) { $results[] = [$child, $child->pathDepth(), $child->instrument() === null]; ... }`; `renderInstrumentsTab()` — indentation via `str_repeat('  ', $depth)`.
 Source: step 5.2 ai/candy-query-perfschema-commit-tree
+
+### 2026-06-04 — EasySetupDetector: four-state detection with version-gated defaults (STEP 5.3)
+Pattern: `EasySetupDetector::detect()` returns one of four states: `fully` (all instruments enabled+timed AND all consumers enabled), `disabled` (no consumers enabled AND no instruments enabled/timed), `default` (matches Appendix C default profile for the detected version), `custom` (anything else). The detection uses `enabledPercentage() < 100` as a guard before detailed checks — a server with <100% instruments enabled cannot be `fully`, regardless of what the disabled/untimed counts show. The `isFullyDisabled()` method exists but is NOT wired to `detect()` — it is available for future use.
+
+Version-gated default profiles (Appendix C):
+- MySQL 5.6 instruments: `wait/io/file/%`, `wait/io/table/%`, `wait/lock/table/sql/handler`, `statement/%`, `idle`
+- MySQL 5.7+ instruments: same five patterns (stage/% was removed in 5.7 but not re-added to defaults)
+- MySQL 5.6 consumers: `events_statements_current`, `events_transactions_current`, `global_instrumentation`, `thread_instrumentation`
+- MySQL 5.7+ consumers: adds `statements_digest`
+
+Key subtlety: `isFullyEnabled()` requires all instruments to be both `enabled='YES'` AND `timed='YES'` — a server with all instruments enabled but any timed='NO' is `custom`, NOT `fully`. This matches the MySQL Workbench spec which defines "fully" as all consumers enabled AND all instruments enabled+timed. memory/% instruments are excluded from all calculations (they require special handling).
+
+Detection is wired from `App::adminPage()` → `PerfSchemaPage` via `EasySetupDetector::fromContext($context)`. `detectSetupState()` (which uses loaded instrument data only, without TIMED or consumer checks) serves as a fallback when no detector is wired.
+
+`DEFAULT_INSTRUMENTS_57` had a stale doc comment referencing `wait/sga/%` which was removed in the fix PR.
+Canonical: `EasySetupDetector::detect()` → `isDisabled()` → `isFullyEnabled()` → `isDefaultSetup()` → `custom`; `DEFAULT_INSTRUMENTS_57` / `DEFAULT_CONSUMERS_57` version-gated via `$this->version->isAtLeast(5, 7)`.
+Source: step 5.3 ai/candy-query-docs-5.3
+
+### 2026-06-04 — EasySetup: Appendix C default sets with version-gated consumers (STEP 5.3)
+Pattern: `EasySetup` provides SQL toggle statements for PS setup and defines the canonical Appendix C default sets. Default instruments (same for 5.6 and 5.7): `wait/io/file/%`, `wait/io/table/%`, `wait/lock/table/sql/handler`, `statement/%`, `idle`. Default consumers: 5.6 has four (`events_statements_current`, `events_transactions_current`, `global_instrumentation`, `thread_instrumentation`); 5.7+ adds `statements_digest`. `resetToDefaultStatements()` disables all non-default instruments, then re-enables default instruments with both ENABLED and TIMED set to YES, and resets consumers to the version-appropriate defaults. The class is version-aware — `Version` is passed at construction and `defaultInstruments()`/`defaultConsumers()` return the correct set. memory/% instruments are excluded from all toggle operations.
+Canonical: `EasySetup::resetToDefaultStatements()` — builds `UPDATE ... WHERE NAME NOT LIKE 'wait/io/file/%' AND NAME NOT LIKE ... SET ENABLED='NO', TIMED='NO'` for non-defaults; `EasySetup::defaultConsumers()` / `defaultInstruments()` check `$version->isAtLeast(5, 7)`.
+Source: step 5.3 ai/candy-query-docs-5.3
+
+### 2026-06-04 — Hub-admin privileges for PS setup writes (STEP 5.3)
+Pattern: Modifying Performance Schema setup tables (`setup_instruments`, `setup_consumers`, `setup_actors`, `setup_objects`) requires the `PROCESS` privilege. `PerfSchemaPage::hasUpdatePrivilege()` tests this by running a no-op `UPDATE ... SET ENABLED=ENABLED WHERE 1=0` — if it succeeds, the user can modify PS configuration. When the privilege is absent, the page renders in read-only mode (`readOnlyMode=true`) and all `[1]`/`[2]`/`[3]` Easy Setup actions and inline toggles are disabled. Error codes 1142 (SELECT/INSERT/UPDATE denied) and 1227 (DDL denied) trigger the read-only state. Operators provisioning PS monitoring should be granted `PROCESS` on the target MySQL instance.
+Canonical: `PerfSchemaPage::hasUpdatePrivilege()` — `UPDATE performance_schema.setup_consumers SET ENABLED=ENABLED WHERE 1=0`; `hasUpdatePrivilege()` result stored in `$this->readOnlyMode`.
+Source: step 5.3 ai/candy-query-docs-5.3

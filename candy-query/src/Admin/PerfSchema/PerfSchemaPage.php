@@ -34,6 +34,25 @@ use SugarCraft\Table\Table;
  * - Threads: Read-only list of instrumented threads
  * - Options: Timer configuration (read-only)
  *
+ * **EasySetupDetector wiring (STEP 5.3)**: When an `EasySetupDetector` is provided
+ * at construction, it is used to detect the current PS setup state via four-state
+ * detection: `fully` (all instruments enabled+timed, all consumers enabled),
+ * `disabled` (PS inaccessible), `default` (matches MySQL 5.6 or 5.7 Appendix C
+ * profile), or `custom` (user-modified). The detector is created via
+ * `EasySetupDetector::fromContext($context)` when not explicitly provided.
+ *
+ * When no detector is wired (backward-compatibility fallback), `detectSetupState()`
+ * uses loaded instrument data only — it cannot check TIMED status or consumers,
+ * making it less accurate than the wired detector.
+ *
+ * **State badge colours**: FULLY (green), DEFAULT (yellow), CUSTOM (blue),
+ * DISABLED (red), UNKNOWN (neutral).
+ *
+ * **Read-only mode**: Detected by `hasUpdatePrivilege()` — tests with a no-op
+ * `UPDATE ... SET ENABLED=ENABLED WHERE 1=0`. When true, all write actions
+ * (Easy Setup [1/2/3] and inline toggles) are disabled. Requires `PROCESS`
+ * privilege on MySQL.
+ *
  * Keyboard shortcuts:
  *   [j/k] or [↑/↓] - Navigate items
  *   [Space] or [Enter] - Toggle/select item
