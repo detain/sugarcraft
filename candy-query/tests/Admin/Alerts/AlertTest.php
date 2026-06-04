@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Tests\Admin\Alerts;
 
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Query\Admin\Alerts\Alert;
+use SugarCraft\Query\Admin\Alerts\MetricKind;
 use SugarCraft\Query\Admin\Alerts\Severity;
 
 /**
@@ -132,5 +133,53 @@ final class AlertTest extends TestCase
         $a2 = Alert::warning('m', 'm', 0.0, 0.0);
 
         $this->assertNotSame($a1, $a2);
+    }
+
+    /**
+     * @covers \SugarCraft\Query\Admin\Alerts\Alert::toToastMessage()
+     */
+    public function testToToastMessageWithSecondsMetricKind(): void
+    {
+        $alert = new Alert(
+            Severity::Warning,
+            'slow_query',
+            'Slow query time set to 5.0s',
+            5.0,
+            3.0,
+            new \DateTimeImmutable(),
+            MetricKind::Seconds,
+        );
+
+        $msg = $alert->toToastMessage();
+
+        $this->assertStringContainsString('slow_query', $msg);
+        $this->assertStringContainsString('Slow query time set to 5.0s', $msg);
+        $this->assertStringContainsString('5.0s', $msg);
+        $this->assertStringContainsString('3.0s', $msg);
+        $this->assertStringNotContainsString('%', $msg);
+    }
+
+    /**
+     * @covers \SugarCraft\Query\Admin\Alerts\Alert::toToastMessage()
+     */
+    public function testToToastMessageWithCountMetricKind(): void
+    {
+        $alert = new Alert(
+            Severity::Warning,
+            'connection_errors',
+            'Connection errors detected: 150 total',
+            150.0,
+            100.0,
+            new \DateTimeImmutable(),
+            MetricKind::Count,
+        );
+
+        $msg = $alert->toToastMessage();
+
+        $this->assertStringContainsString('connection_errors', $msg);
+        $this->assertStringContainsString('Connection errors detected: 150 total', $msg);
+        $this->assertStringContainsString('150 > 100', $msg);
+        $this->assertStringNotContainsString('%', $msg);
+        $this->assertStringNotContainsString('s', \substr(\rtrim($msg), -2));
     }
 }

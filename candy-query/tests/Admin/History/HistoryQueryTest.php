@@ -157,6 +157,29 @@ final class HistoryQueryTest extends TestCase
 
         $this->assertNull($rate);
     }
+
+    /**
+     * Sub-second epoch timestamps must be preserved when building the
+     * DateTimeImmutable query bounds. Uses DateTimeImmutable::createFromFormat('U u')
+     * to avoid truncating the microseconds component.
+     */
+    public function testQueryPreservesSubSecondTimestamps(): void
+    {
+        $this->store->setSnapshots([
+            new StatusSnapshot(['X' => '1'], 100.5),
+        ]);
+
+        $this->query->query(100.5, 200.5);
+
+        $this->assertNotNull($this->store->lastSince);
+        $this->assertNotNull($this->store->lastUntil);
+        // Integer seconds must match
+        $this->assertSame(100, $this->store->lastSince->getTimestamp());
+        $this->assertSame(200, $this->store->lastUntil->getTimestamp());
+        // Microseconds must be preserved (500000 usec = 0.5 seconds)
+        $this->assertSame('500000', $this->store->lastSince->format('u'));
+        $this->assertSame('500000', $this->store->lastUntil->format('u'));
+    }
 }
 
 /**
