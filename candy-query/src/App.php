@@ -647,13 +647,15 @@ final class App implements Model
             'status' => $connection->query($statusQuery)
                 ->then(function(array $rows) use ($isPostgres): array {
                     if ($isPostgres) {
-                        // pg_stat_database returns one row per DB with columns like
+                        // pg_stat_database returns one row per database with columns like
                         // datname, numbackends, xact_commit, blks_read, etc.
                         // Aggregate all rows by summing numeric columns to produce
                         // a single system-wide snapshot the calc engine can read.
                         // WHY: PostgresWidgetCatalog widgets look up keys like
                         // pg_stat_database.tup_fetched (RatePerSecond) or
                         // pg_stat_database.numbackends (StatusVar) directly.
+                        // The aggregated keys take the form pg_stat_database.<column>
+                        // (e.g. pg_stat_database.tup_fetched, pg_stat_database.numbackends).
                         // NOTE: we do NOT aggregate shared_buffers here (it's not
                         // in pg_stat_database; it comes from pg_settings server vars).
                         $out = [];
@@ -685,9 +687,12 @@ final class App implements Model
                     $out = [];
                     if ($isPostgres) {
                         // pg_settings returns name/setting pairs.
-                        // Scale shared_buffers from 8KB blocks to bytes so the
-                        // WidgetCatalog format string (%.0f B) is accurate.
-                        // pg_settings.block_size is 8192 bytes on all PG versions.
+                        // PostgreSQL's shared_buffers is expressed in 8KB blocks (the unit
+                        // pg uses internally), but the PostgresWidgetCatalog cache panel
+                        // displays it with a byte format string (%.0f B).  We therefore
+                        // scale it here: shared_buffers value * block_size = bytes.
+                        // pg_settings.block_size is 8192 bytes on all currently supported
+                        // PG versions; we read it dynamically in case that ever changes.
                         $blockSize = 8192;
                         foreach ($rows as $row) {
                             if (isset($row['name'], $row['setting'])) {

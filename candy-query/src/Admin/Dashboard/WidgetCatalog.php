@@ -17,6 +17,11 @@ use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsage;
  * dashboard definition (Appendix A). Version-gated assembly happens in
  * WidgetRegistry.
  *
+ * All catalog methods are instance methods (not static), allowing
+ * WidgetRegistry to build panels by calling $catalog->network() etc. and
+ * optionally subclassing for version-specific overrides (e.g. mysqlPre80()
+ * vs mysqlPost80() for MySQL 5.x vs 8.0+ DDL command coverage).
+ *
  * Widget array entry format:
  *   [caption, kind, calc, format, color, tooltip, serverVarsKeys]
  *
