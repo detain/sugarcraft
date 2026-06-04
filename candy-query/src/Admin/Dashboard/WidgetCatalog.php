@@ -9,6 +9,7 @@ use SugarCraft\Query\Admin\Calc\StatusVar;
 use SugarCraft\Query\Admin\Calc\MakeTuple;
 use SugarCraft\Query\Admin\Calc\TableOpenCacheHitRate;
 use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsage;
+use SugarCraft\Query\Admin\Calc\InnoDBBufferPoolUsageBytes;
 
 /**
  * Declarative widget tables for the Performance Dashboard.
@@ -337,10 +338,10 @@ final class WidgetCatalog
             [
                 'Buffer Pool Usage',
                 'round',
-                new InnoDBBufferPoolUsage(),
+                new InnoDBBufferPoolUsageBytes(),
                 '%.0f%%',
                 ['r' => 124, 'g' => 193, 'b' => 80],
-                'InnoDB buffer pool usage percentage',
+                'InnoDB buffer pool usage percentage (bytes-based, Appendix A)',
                 null,
             ],
             [
@@ -350,6 +351,69 @@ final class WidgetCatalog
                 '%s/s',
                 ['r' => 253, 'g' => 138, 'b' => 39],
                 'InnoDB buffer pool reads from disk per second',
+                null,
+            ],
+            [
+                'Row Lock Waits',
+                'counter',
+                new RatePerSecond('Innodb_row_lock_waits'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB row lock waits per second',
+                null,
+            ],
+            [
+                'Row Lock Time',
+                'counter',
+                new RatePerSecond('Innodb_row_lock_time'),
+                '%s ms/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB row lock time per second (milliseconds)',
+                null,
+            ],
+            [
+                'Pages Flushed',
+                'counter',
+                new RatePerSecond('Innodb_pages_flushed'),
+                '%s/s',
+                ['r' => 253, 'g' => 138, 'b' => 39],
+                'InnoDB pages flushed per second',
+                null,
+            ],
+            [
+                'Pages Created',
+                'counter',
+                new RatePerSecond('Innodb_pages_created'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB pages created per second',
+                null,
+            ],
+            [
+                'Pages Read',
+                'counter',
+                new RatePerSecond('Innodb_pages_read'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB pages read per second',
+                null,
+            ],
+            [
+                'Insert Buffer',
+                'counter',
+                new RatePerSecond('Innodb_ibuf_size'),
+                '%s',
+                ['r' => 124, 'g' => 193, 'b' => 80],
+                'InnoDB insert buffer size (pages)',
+                null,
+            ],
+            [
+                'Read Ahead',
+                'counter',
+                new RatePerSecond('Innodb_buffer_pool_read_ahead'),
+                '%s/s',
+                ['r' => 60, 'g' => 178, 'b' => 191],
+                'InnoDB buffer pool read-ahead per second',
                 null,
             ],
             [
