@@ -8,8 +8,9 @@ namespace SugarCraft\Query\Admin;
  * Computes rate-per-second deltas from successive status snapshots.
  *
  * First sample returns null for all rates. Deltas are computed as
- * (newValue - oldValue) / elapsedSeconds. If a restart is detected
- * (uptime decreased), resetAll() is called.
+ * (newValue - oldValue) / elapsedSeconds. Restart detection is
+ * consumed from StatusSnapshotProviderInterface::wasReset() (which
+ * delegates to ServerContext::wasReset()).
  *
  * @see Mirrors charmbracelet/lazysql Sampler
  */
@@ -18,7 +19,6 @@ final class Sampler
     private ?array $previous = null;
     private float $previousTs = 0.0;
     private bool $firstSample = true;
-    private ?float $lastUptime = null;
     private bool $wasReset = false;
 
     public function __construct(
@@ -95,22 +95,6 @@ final class Sampler
         $this->previousTs = 0.0;
         $this->firstSample = true;
         $this->wasReset = true;
-    }
-
-    /**
-     * Register the current server uptime and detect if the server restarted.
-     *
-     * If the new uptime is less than the last known uptime, the server
-     * has restarted and resetAll() is called.
-     */
-    public function registerUptime(float $uptime): void
-    {
-        if ($this->lastUptime !== null && $uptime < $this->lastUptime) {
-            $this->resetAll();
-            return;
-        }
-
-        $this->lastUptime = $uptime;
     }
 
     /**
