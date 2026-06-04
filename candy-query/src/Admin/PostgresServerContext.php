@@ -124,6 +124,15 @@ final class PostgresServerContext implements ServerContextInterface
         return $this->versionString;
     }
 
+    public function password(): string
+    {
+        // PostgresDatabase has password() as a public method
+        if (method_exists($this->connection, 'password')) {
+            return $this->connection->password();
+        }
+        return '';
+    }
+
     public function wasReset(): bool
     {
         return $this->provider->wasReset();

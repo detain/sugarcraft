@@ -78,16 +78,18 @@ final class MysqlExplainProvider implements ExplainProviderInterface
      * Flatten JSON tree into detail strings for ExplainView parsing.
      *
      * @param array<string,mixed> $node JSON tree node
+     * @param int $depth Current depth in the tree
      * @return list<array{detail:string}>
      */
-    private function flattenJsonTree(array $node): array
+    private function flattenJsonTree(array $node, int $depth = 0): array
     {
         $rows = [];
         $prefix = $node['query_block'] ?? null;
 
         if ($prefix !== null && is_array($prefix)) {
-            $rows[] = ['detail' => $this->formatQueryBlock($prefix)];
-            $rows = array_merge($rows, $this->extractOperations($prefix));
+            $depthPrefix = $depth > 0 ? "[d{$depth}] " : '';
+            $rows[] = ['detail' => $depthPrefix . $this->formatQueryBlock($prefix)];
+            $rows = array_merge($rows, $this->extractOperations($prefix, $depth));
         }
 
         return $rows;
@@ -111,9 +113,10 @@ final class MysqlExplainProvider implements ExplainProviderInterface
      * Extract operations from query block into detail rows.
      *
      * @param array<string,mixed> $block Query block
+     * @param int $depth Current depth in the tree
      * @return list<array{detail:string}>
      */
-    private function extractOperations(array $block): array
+    private function extractOperations(array $block, int $depth): array
     {
         $rows = [];
 
@@ -122,15 +125,22 @@ final class MysqlExplainProvider implements ExplainProviderInterface
                 continue;
             }
 
-            // Handle nested operations (joins, scans, etc.)
+            // Skip non-operation fields
             if (in_array($key, ['join_conditions', 'access_type', 'used_columns'], true)) {
                 continue;
             }
 
+            // Handle nested_statement (subqueries) - recurse with increased depth
+            if ($key === 'nested_statement' && is_array($value)) {
+                $rows = array_merge($rows, $this->flattenJsonTree($value, $depth + 1));
+                continue;
+            }
+
             if (is_array($value) && isset($value[0])) {
+                $depthPrefix = $depth > 0 ? "[d{$depth}] " : '';
                 foreach ($value as $item) {
                     if (is_array($item)) {
-                        $rows[] = ['detail' => $this->formatOperation($key, $item)];
+                        $rows[] = ['detail' => $depthPrefix . $this->formatOperation($key, $item)];
                     }
                 }
             }

@@ -76,9 +76,10 @@ final class MysqlDatabaseTest extends TestCase
         $this->assertSame([], $this->db->rows('users', 50));
     }
 
-    public function testQueryReturnsEmptyWhenDisconnected(): void
+    public function testQueryReturnsNullWhenDisconnected(): void
     {
-        $this->assertSame([], $this->db->query('SELECT 1'));
+        // Per STEP 2.2: query() returns null on handled connection loss
+        $this->assertNull($this->db->query('SELECT 1'));
     }
 
     public function testLastInsertIdReturnsZeroWhenDisconnected(): void

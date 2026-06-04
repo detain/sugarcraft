@@ -62,9 +62,12 @@ final class SqliteDatabase implements DatabaseInterface
         return $stmt === false ? [] : $stmt->fetchAll(\PDO::FETCH_ASSOC);
     }
 
-    /** @return list<array<string,mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string,mixed>>|null */
+    public function query(string $sql): array|null
     {
+        if ($this->pdo === null) {
+            return null;
+        }
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute();
         if ($stmt->columnCount() > 0) {
@@ -127,15 +130,14 @@ final class SqliteDatabase implements DatabaseInterface
         return [basename($this->path)];
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         if ($this->pdo === null) {
-            return false;
+            return null;
         }
-        return $this->pdo->prepare($sql);
+        return new PdoPreparedStatement($this->pdo->prepare($sql));
     }
 
     public function dsn(): string { return 'sqlite:' . $this->path; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
 }

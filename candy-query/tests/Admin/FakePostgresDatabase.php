@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 
 /**
  * Fake DatabaseInterface for testing PostgreSQL admin providers.
@@ -34,6 +35,18 @@ final class FakePostgresDatabase implements DatabaseInterface
         unset($this->queryResults[$table]);
     }
 
+    /**
+     * Pop and return the stored query exception for a table.
+     *
+     * Returns null if no exception was stored for this table.
+     */
+    public function popQueryException(string $table): ?\PDOException
+    {
+        $exception = $this->queryExceptions[$table] ?? null;
+        unset($this->queryExceptions[$table]);
+        return $exception;
+    }
+
     public function setServerVersion(string $version): void
     {
         $this->serverVersion = $version;
@@ -51,8 +64,8 @@ final class FakePostgresDatabase implements DatabaseInterface
         return [];
     }
 
-    /** @return list<array<string, mixed>> */
-    public function query(string $sql): array
+    /** @return list<array<string, mixed>>|null */
+    public function query(string $sql): array|null
     {
         $table = $this->extractTableFromQuery($sql);
 
@@ -115,54 +128,13 @@ final class FakePostgresDatabase implements DatabaseInterface
         return [];
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         $table = $this->extractTableFromQuery($sql);
-
-        if (isset($this->queryExceptions[$table])) {
-            return false;
-        }
-
         $results = $this->queryResults[$table] ?? [];
-        return new class($sql, $results) {
-            /** @var list<array<string, mixed>> */
-            private array $results;
-            private bool $executed = false;
 
-            public function __construct(
-                private readonly string $sql,
-                array $results,
-            ) {
-                $this->results = $results;
-            }
-
-            public function execute(array $values = []): bool
-            {
-                $this->executed = true;
-                return true;
-            }
-
-            public function closeCursor(): void
-            {
-            }
-
-            public function fetch(): array|false
-            {
-                if (!$this->executed) {
-                    return false;
-                }
-                return $this->results[0] ?? false;
-            }
-
-            /** @return list<array<string, mixed>> */
-            public function fetchAll(): array
-            {
-                if (!$this->executed) {
-                    return [];
-                }
-                return $this->results;
-            }
-        };
+        // Always return a statement; exception will be thrown at execute() time if set
+        return new FakePostgresStatement($sql, $table, $results, $this);
     }
 
     /**
@@ -197,5 +169,66 @@ final class FakePostgresDatabase implements DatabaseInterface
 
     public function dsn(): string { return ''; }
     public function username(): string { return ''; }
-    public function password(): string { return ''; }
+}
+
+/**
+ * Fake PostgreSQL statement for testing.
+ */
+final class FakePostgresStatement implements PreparedStatementInterface
+{
+    /** @var list<array<string, mixed>> */
+    private array $results;
+    private bool $executed = false;
+
+    public function __construct(
+        private readonly string $sql,
+        private readonly string $table,
+        array $results,
+        private readonly FakePostgresDatabase $db,
+    ) {
+        $this->results = $results;
+    }
+
+    public function execute(?array $params = null): bool
+    {
+        if ($this->executed) {
+            return false;
+        }
+
+        // Throw stored exception if one was set for this table
+        $exception = $this->db->popQueryException($this->table);
+        if ($exception !== null) {
+            throw $exception;
+        }
+
+        $this->executed = true;
+        return true;
+    }
+
+    public function fetch(): array|false
+    {
+        if (!$this->executed) {
+            return false;
+        }
+        return $this->results[0] ?? false;
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function fetchAll(): array
+    {
+        if (!$this->executed) {
+            return [];
+        }
+        return $this->results;
+    }
+
+    public function rowCount(): int
+    {
+        return count($this->results);
+    }
+
+    public function closeCursor(): bool
+    {
+        return true;
+    }
 }

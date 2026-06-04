@@ -65,6 +65,13 @@ interface ServerContextInterface
     public function versionString(): string;
 
     /**
+     * Get the database password for async connection creation.
+     *
+     * @return string Password (may be empty for SQLite)
+     */
+    public function password(): string;
+
+    /**
      * True when SHOW GLOBAL STATUS returned different Uptime than last poll
      * (server was restarted or variables were reset).
      */
