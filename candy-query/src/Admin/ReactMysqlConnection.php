@@ -49,8 +49,16 @@ final class ReactMysqlConnection implements AsyncConnection
     /**
      * Convert PDO-style DSN to react/mysql URI format.
      *
-     * PDO:         mysql:host=localhost;port=3306;dbname=test
-     * react/mysql: user:pass@localhost:3306/test
+     * PDO:         mysql:host=db.example.com;port=3306;dbname=test
+     * react/mysql: mysql://user:pass@db.example.com:3306/test
+     *
+     * The `mysql://` scheme is REQUIRED: react/mysql's Factory runs the URI
+     * through parse_url() and connects to $parts['host'] (Io/Factory.php). A
+     * scheme-less URI like `user:pass@host/db` mis-parses (parse_url reads the
+     * username as the scheme and reports no host), so with assertions disabled
+     * react/mysql connects to an empty host and every connect is "refused".
+     * react/mysql rawurldecode()s the user/pass/db, so they are rawurlencode()d
+     * here to survive credentials containing @ : / etc.
      */
     private function dsnToUri(string $dsn, string $username, string $password): string
     {
@@ -61,7 +69,7 @@ final class ReactMysqlConnection implements AsyncConnection
         $user = $username !== '' ? $username : 'root';
 
         return sprintf(
-            '%s:%s@%s:%s/%s',
+            'mysql://%s:%s@%s:%s/%s',
             rawurlencode($user),
             rawurlencode($password),
             $host,
