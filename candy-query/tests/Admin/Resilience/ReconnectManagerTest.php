@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Tests\Admin\Resilience;
 
 use PHPUnit\Framework\TestCase;
-use SugarCraft\Query\Admin\Resilience\ReconnectException;
 use SugarCraft\Query\Admin\Resilience\ReconnectManager;
+use SugarCraft\Query\Db\ReconnectException;
 use SugarCraft\Query\Db\ConnectionConfig;
 
 /**
