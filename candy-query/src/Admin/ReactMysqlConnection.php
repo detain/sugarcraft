@@ -63,7 +63,12 @@ final class ReactMysqlConnection implements AsyncConnection
     private function dsnToUri(string $dsn, string $username, string $password): string
     {
         $host = $this->extractDsnValue($dsn, 'host') ?? 'localhost';
-        $port = $this->extractDsnValue($dsn, 'port') ?? '3306';
+        // PDO tolerates port 0 (libmysqlclient falls back to 3306) but react/mysql
+        // connects to literal :0 and is refused — normalise a missing/zero port.
+        $port = $this->extractDsnValue($dsn, 'port');
+        if ($port === null || (int) $port <= 0) {
+            $port = '3306';
+        }
         $dbname = $this->extractDsnValue($dsn, 'dbname') ?? '';
 
         $user = $username !== '' ? $username : 'root';

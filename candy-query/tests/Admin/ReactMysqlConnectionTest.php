@@ -46,6 +46,17 @@ final class ReactMysqlConnectionTest extends TestCase
         $this->assertSame(3307, $parts['port'] ?? null);
     }
 
+    public function testZeroPortIsNormalisedToTheDefault(): void
+    {
+        // PDO tolerates port 0 (→3306); react/mysql connects to literal :0 and
+        // is refused, so dsnToUri must substitute the default.
+        $uri = $this->uriFor('mysql:host=mysqlcluster1;port=0;dbname=my', 'replication_user', 'secret');
+        $parts = parse_url($uri);
+
+        $this->assertSame('mysqlcluster1', $parts['host'] ?? null);
+        $this->assertSame(3306, $parts['port'] ?? null, 'port 0 must not reach the driver');
+    }
+
     public function testCredentialsAndDbnameRoundTripThroughUrlEncoding(): void
     {
         // react/mysql rawurldecode()s user/pass/path, so special chars must be encoded.

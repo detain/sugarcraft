@@ -124,7 +124,10 @@ final class ConnectionFactory
             $host = substr($host, 1, -1);
         }
 
-        $port = isset($parsed['port']) ? (int) $parsed['port'] : 0;
+        // A missing port must fall back to the driver's standard port, NOT 0.
+        // PDO tolerates port 0 (libmysqlclient uses 3306), but the async
+        // react/mysql driver connects to literal :0 and is refused.
+        $port = isset($parsed['port']) ? (int) $parsed['port'] : self::defaultPort($driver);
         $user = isset($parsed['user']) ? rawurldecode($parsed['user']) : '';
         $pass = isset($parsed['pass']) ? rawurldecode($parsed['pass']) : '';
 
@@ -149,6 +152,19 @@ final class ConnectionFactory
             dbname: $dbname,
             sslMode: $sslMode,
         );
+    }
+
+    /**
+     * The standard TCP port for a driver, used when the DSN/args omit one.
+     * SQLite has no port. Returns 0 for unknown drivers (validated elsewhere).
+     */
+    private static function defaultPort(string $driver): int
+    {
+        return match ($driver) {
+            'mysql' => 3306,
+            'pgsql' => 5432,
+            default => 0,
+        };
     }
 
     /**
@@ -200,7 +216,7 @@ final class ConnectionFactory
         $config = ConnectionConfig::new(
             driver: $args['driver'],
             host: $args['host'] ?? '',
-            port: isset($args['port']) ? (int) $args['port'] : 0,
+            port: isset($args['port']) ? (int) $args['port'] : self::defaultPort($args['driver']),
             user: $args['user'] ?? '',
             pass: $args['pass'] ?? '',
             dbname: $args['db'],
