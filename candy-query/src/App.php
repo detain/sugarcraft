@@ -551,8 +551,13 @@ final class App implements Model
     private function withTableCursor(int $i): self
     {
         $size = count($this->tables);
-        if ($size === 0) return $this;
-        return $this->mutate(['tableCursor' => max(0, min($size - 1, $i))]);
+        if ($size === 0) {
+            return $this;
+        }
+        // Wrap around: moving up past the top lands on the bottom of the list,
+        // and moving down past the bottom lands back on the top. The extra
+        // "+ $size" keeps the result non-negative for the up direction (-1).
+        return $this->mutate(['tableCursor' => (($i % $size) + $size) % $size]);
     }
 
     private function withAdminPane(AdminPane $adminPane): self
