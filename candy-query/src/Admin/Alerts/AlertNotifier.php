@@ -20,7 +20,7 @@ use SugarCraft\Toast\ToastType;
  *   $notifier = $notifier->notifyWarning('High memory usage');
  *   $composed = $toast->View($background);
  */
-final class AlertNotifier
+final class AlertNotifier implements AlertNotifierInterface
 {
     /**
      * @param ?\Closure():Toast $toastFactory  Factory that produces Toast instances

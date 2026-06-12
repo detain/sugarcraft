@@ -27,7 +27,7 @@ final class AlertManager
 {
     private function __construct(
         private readonly AlertThresholds $thresholds,
-        private readonly ?AlertNotifier $notifier = null,
+        private readonly ?AlertNotifierInterface $notifier = null,
     ) {}
 
     /**
@@ -52,7 +52,7 @@ final class AlertManager
     /**
      * Return a new AlertManager with the given notifier.
      */
-    public function withNotifier(AlertNotifier $n): self
+    public function withNotifier(AlertNotifierInterface $n): self
     {
         return new self(
             thresholds: $this->thresholds,
@@ -218,7 +218,7 @@ final class AlertManager
     /**
      * Get the current notifier, if set.
      */
-    public function notifier(): ?AlertNotifier
+    public function notifier(): ?AlertNotifierInterface
     {
         return $this->notifier;
     }
@@ -229,7 +229,7 @@ final class AlertManager
      * This is a convenience method that combines checkConnectionUsage with notifier dispatch.
      * Returns the alerts and an updated notifier separately.
      *
-     * @return array{alerts: array<string, Alert>, notifier: AlertNotifier}
+     * @return array{alerts: array<string, Alert>, notifier: AlertNotifierInterface}
      */
     public function checkAndDispatch(ConnectionCounters $counters): array
     {

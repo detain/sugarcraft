@@ -24,6 +24,7 @@ use SugarCraft\Sprinkles\Position;
 use SugarCraft\Query\Admin\Alerts\Alert;
 use SugarCraft\Query\Admin\Alerts\AlertManager;
 use SugarCraft\Query\Admin\Alerts\AlertNotifier;
+use SugarCraft\Query\Admin\Alerts\AlertNotifierInterface;
 use SugarCraft\Query\Admin\Alerts\AlertThresholds;
 use SugarCraft\Sprinkles\Style;
 
@@ -72,7 +73,7 @@ final class DashboardPage extends PageBase
     /** @var array<string, bool> Tracks which alert keys were breached at last check for dedup */
     private array $breachedAlertKeys = [];
 
-    private AlertNotifier $alertNotifier;
+    private AlertNotifierInterface $alertNotifier;
 
     public function __construct(
         ServerContextInterface $context,
@@ -556,7 +557,7 @@ final class DashboardPage extends PageBase
      *   $notifier = AlertNotifier::withDefaults(muted: false);
      *   $page = $page->withAlertNotifier($notifier);
      */
-    public function withAlertNotifier(AlertNotifier $notifier): self
+    public function withAlertNotifier(AlertNotifierInterface $notifier): self
     {
         $clone = clone $this;
         $clone->alertNotifier = $notifier;
@@ -581,7 +582,7 @@ final class DashboardPage extends PageBase
         return count($this->pendingAlerts);
     }
 
-    public function alertNotifier(): AlertNotifier
+    public function alertNotifier(): AlertNotifierInterface
     {
         return $this->alertNotifier;
     }
