@@ -34,11 +34,12 @@ final class CachingServerContext implements ServerContextInterface
             return $this->cachedServerVars;
         }
         // Fall back to AdminQueryCache which holds fresh async-fetched data.
-        $cached = AdminQueryCache::instance()->getServerVariables();
-        if ($cached !== null) {
-            return $cached;
-        }
-        return $this->inner->serverVariables();
+        // On a cold miss we return [] rather than calling inner->serverVariables()
+        // synchronously: this context is on the render path, and SHOW GLOBAL
+        // VARIABLES against a remote server can take seconds (it froze the whole
+        // UI). The data arrives shortly via the async admin tick, which fetches
+        // and caches it; until then the page shows its loading/empty state.
+        return AdminQueryCache::instance()->getServerVariables() ?? [];
     }
 
     /** @return array<string, string> */
@@ -48,12 +49,9 @@ final class CachingServerContext implements ServerContextInterface
         if ($this->cachedStatusVars !== null) {
             return $this->cachedStatusVars;
         }
-        // Fall back to AdminQueryCache which holds fresh async-fetched data.
-        $cached = AdminQueryCache::instance()->getStatusVariables();
-        if ($cached !== null) {
-            return $cached;
-        }
-        return $this->inner->statusVariables();
+        // Cold miss → [] (never a synchronous query on the render path; see
+        // serverVariables() above). The async admin tick fills the cache.
+        return AdminQueryCache::instance()->getStatusVariables() ?? [];
     }
 
     public function statusVariablesTs(): float
