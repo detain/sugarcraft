@@ -215,6 +215,30 @@ final class AppTest extends TestCase
         $this->assertSame(0, $a->tableCursor);
     }
 
+    public function testUpAtTopWrapsToBottom(): void
+    {
+        // db() has two tables; App::start lands on index 0.
+        $a = App::start($this->db());
+        $this->assertSame(0, $a->tableCursor);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Up, ''));
+
+        $this->assertSame(1, $a->tableCursor, 'up at the top wraps to the last table');
+        $this->assertSame('users', $a->selectedTable);
+    }
+
+    public function testDownAtBottomWrapsToTop(): void
+    {
+        $a = App::start($this->db());
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, '')); // to the last table
+        $this->assertSame(1, $a->tableCursor);
+
+        [$a, ] = $a->update(new KeyMsg(KeyType::Down, '')); // wraps back to the first
+
+        $this->assertSame(0, $a->tableCursor, 'down at the bottom wraps to the first table');
+        $this->assertSame('posts', $a->selectedTable);
+    }
+
     public function testEnterLoadsSelectedTable(): void
     {
         $a = App::start($this->db());
