@@ -124,7 +124,7 @@ final class ConnectionFactoryTest extends TestCase
         $config = ConnectionFactory::fromDsn('mysql://root@[::1]/testdb');
 
         $this->assertSame('::1', $config->host);
-        $this->assertSame(0, $config->port);
+        $this->assertSame(3306, $config->port, 'a portless mysql DSN defaults to 3306, not 0');
         $this->assertSame('testdb', $config->dbname);
     }
 
@@ -305,5 +305,30 @@ final class ConnectionFactoryTest extends TestCase
         $db = ConnectionFactory::fromArgv($argv);
 
         $this->assertInstanceOf(SqliteDatabase::class, $db);
+    }
+
+    public function testFromDsnDefaultsMissingMysqlPortTo3306(): void
+    {
+        // Regression: a portless DSN used to yield port 0, which PDO tolerates
+        // (libmysqlclient falls back to 3306) but the async react/mysql driver
+        // connects to literally :0 and is refused.
+        $config = ConnectionFactory::fromDsn('mysql://replication_user:secret@mysqlcluster1/mydb');
+
+        $this->assertSame(3306, $config->port);
+        $this->assertStringContainsString('port=3306', $config->dsn);
+    }
+
+    public function testFromDsnDefaultsMissingPostgresPortTo5432(): void
+    {
+        $config = ConnectionFactory::fromDsn('pgsql://u:p@dbhost/app');
+
+        $this->assertSame(5432, $config->port);
+    }
+
+    public function testFromDsnHonoursAnExplicitNonStandardPort(): void
+    {
+        $config = ConnectionFactory::fromDsn('mysql://u:p@managed.example.com:25060/app');
+
+        $this->assertSame(25060, $config->port);
     }
 }
