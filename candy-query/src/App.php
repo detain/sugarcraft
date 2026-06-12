@@ -38,6 +38,7 @@ use SugarCraft\Query\Admin\Variables\VariableEditor;
 use SugarCraft\Query\Admin\Variables\VariablesPage;
 use SugarCraft\Query\Db\DatabaseInterface;
 use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\PreviewQuery;
 use SugarCraft\Query\App\AppBuilder;
 use SugarCraft\Query\Admin\History\HistoryRecorder;
 use SugarCraft\Query\Admin\QueryLogger;
@@ -45,6 +46,7 @@ use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
 use SugarCraft\Query\Core\Msg\ReloadReportMsg;
+use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
 
 /**
  * SQLite browser as a SugarCraft Model. Three panes:
@@ -101,6 +103,7 @@ final class App implements Model
         public readonly float $adminCacheTs = 0.0,
         public readonly bool $adminLoading = false,
         public readonly ?HistoryRecorder $historyRecorder = null,
+        public readonly bool $rowsLoading = false,
     ) {}
 
     /**
@@ -157,6 +160,10 @@ final class App implements Model
             }
             return [$newApp, null];
         }
+        if ($msg instanceof TableRowsLoadedMsg) {
+            // An async browse fetch finished — fold its rows (or error) in.
+            return [$this->applyLoadedRows($msg), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -180,7 +187,7 @@ final class App implements Model
             return [$this->editQuery($msg), null];
         }
         if ($this->pane === Pane::Tables) {
-            return [$this->handleTablesKey($msg), null];
+            return $this->handleTablesKey($msg);
         }
         if ($this->pane === Pane::Admin) {
             return $this->handleAdminKey($msg);
@@ -193,26 +200,35 @@ final class App implements Model
         return Renderer::render($this);
     }
 
-    private function handleTablesKey(KeyMsg $msg): self
+    /**
+     * Tables-pane navigation. Moving the cursor (or Enter/Space) loads the
+     * highlighted table's row preview. The load returns an optional Cmd: for
+     * MySQL/Postgres the fetch runs on the React loop (so a large/remote table
+     * never freezes the UI), so this handler returns a tuple rather than a bare
+     * model.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function handleTablesKey(KeyMsg $msg): array
     {
         if ($msg->type === KeyType::Up
             || ($msg->type === KeyType::Char && $msg->rune === 'k')) {
             $newApp = $this->withTableCursor($this->tableCursor - 1);
             $name = $newApp->tables[$newApp->tableCursor] ?? null;
-            return $name === null ? $newApp : $newApp->loadTable($name);
+            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
         }
         if ($msg->type === KeyType::Down
             || ($msg->type === KeyType::Char && $msg->rune === 'j')) {
             $newApp = $this->withTableCursor($this->tableCursor + 1);
             $name = $newApp->tables[$newApp->tableCursor] ?? null;
-            return $name === null ? $newApp : $newApp->loadTable($name);
+            return $name === null ? [$newApp, null] : $newApp->beginLoadTable($name);
         }
         if ($msg->type === KeyType::Enter
             || $msg->type === KeyType::Space) {
             $name = $this->tables[$this->tableCursor] ?? null;
-            return $name === null ? $this : $this->loadTable($name);
+            return $name === null ? [$this, null] : $this->beginLoadTable($name);
         }
-        return $this;
+        return [$this, null];
     }
 
     private function handleRowsKey(KeyMsg $msg): self
@@ -383,10 +399,135 @@ final class App implements Model
         }
     }
 
+    /**
+     * Begin loading a table's row preview.
+     *
+     * SQLite loads synchronously — a local file can't freeze the event loop and
+     * there is no React driver for it. MySQL/Postgres load on the React loop so
+     * a large or remote table never blocks the UI: the model is marked loading
+     * and the rows arrive later via {@see TableRowsLoadedMsg}. Either way the
+     * preview is blob-safe (see {@see PreviewQuery}) — no BLOB bytes cross the
+     * wire just to peek at a table.
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function beginLoadTable(string $name): array
+    {
+        if (!$this->isAsyncFlavor()) {
+            return [$this->loadTable($name), null];
+        }
+        $loading = $this->mutate([
+            'tableCursor' => array_search($name, $this->tables, true) ?: 0,
+            'selectedTable' => $name,
+            'rows' => [],
+            'rowCursor' => 0,
+            'resultTable' => null,
+            'rowsLoading' => true,
+            'error' => null,
+            'status' => 'loading…',
+        ]);
+        return [$loading, Cmd::promise(fn () => $this->createRowsPromise($name))];
+    }
+
+    /**
+     * Whether table-row browsing for this flavor must run on the React loop.
+     * SQLite is a local file (synchronous is fine and there is no async driver).
+     */
+    private function isAsyncFlavor(): bool
+    {
+        return match ($this->flavor) {
+            Flavor::MySQL, Flavor::MariaDB, Flavor::Percona, Flavor::Postgres => true,
+            Flavor::Sqlite => false,
+        };
+    }
+
+    /**
+     * Fold an async browse result into the model. A result for a table the user
+     * has since navigated away from is stale and dropped — leaving the current
+     * in-flight load's spinner untouched.
+     */
+    private function applyLoadedRows(TableRowsLoadedMsg $msg): self
+    {
+        if ($msg->table !== $this->selectedTable) {
+            return $this;
+        }
+        if ($msg->error !== null) {
+            return $this->mutate([
+                'rows' => [],
+                'rowsLoading' => false,
+                'error' => $msg->error,
+                'status' => null,
+            ]);
+        }
+        return $this->mutate([
+            'rows' => $msg->rows,
+            'rowCursor' => 0,
+            'resultTable' => null,
+            'rowsLoading' => false,
+            'error' => null,
+            'status' => count($msg->rows) . ' rows',
+        ]);
+    }
+
+    /**
+     * Build the non-blocking browse fetch: introspect the table's columns then
+     * fetch the blob-safe preview, BOTH on the React loop, so neither the (tiny)
+     * metadata query nor the row fetch blocks the UI. Reuses the same pooled
+     * async connection as the admin pane (same DSN → same connection key).
+     */
+    private function createRowsPromise(string $name): \React\Promise\PromiseInterface
+    {
+        try {
+            $context = $this->serverContext ?? $this->createContext();
+        } catch (\Throwable $e) {
+            return \React\Promise\resolve(new TableRowsLoadedMsg($name, [], $e->getMessage()));
+        }
+        if ($context === null) {
+            return \React\Promise\resolve(
+                new TableRowsLoadedMsg($name, [], 'Async browse unsupported for this driver'),
+            );
+        }
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username() ?? '';
+        $password = $context->password();
+        $isPostgres = $context instanceof PostgresServerContext;
+        $flavor = $isPostgres ? Flavor::Postgres : $this->flavor;
+
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        return $connection->query(PreviewQuery::columnsSql($flavor, $name))
+            ->then(function (array $colRows) use ($connection, $flavor, $name): \React\Promise\PromiseInterface {
+                $columns = PreviewQuery::classify($flavor, $colRows);
+                return $connection->query(PreviewQuery::build($flavor, $name, $columns));
+            })
+            ->then(
+                static fn (array $rows): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, $rows, null),
+            )
+            ->otherwise(
+                static fn (\Throwable $e): TableRowsLoadedMsg => new TableRowsLoadedMsg($name, [], $e->getMessage()),
+            );
+    }
+
+    /**
+     * Synchronously load a blob-safe row preview. Used at startup (no event loop
+     * yet) and for SQLite browsing. The preview never selects BLOB/large-text
+     * bytes — see {@see PreviewQuery} — so even a media table loads cheaply.
+     */
     private function loadTable(string $name): self
     {
         try {
-            $rows = $this->db->rows($name);
+            $columns = PreviewQuery::classify(
+                $this->flavor,
+                $this->db->query(PreviewQuery::columnsSql($this->flavor, $name)) ?? [],
+            );
+            $rows = $this->db->query(PreviewQuery::build($this->flavor, $name, $columns)) ?? [];
             return $this->mutate([
                 'tableCursor' => array_search($name, $this->tables, true) ?: 0,
                 'selectedTable' => $name,
@@ -394,6 +535,7 @@ final class App implements Model
                 'rowCursor' => 0,
                 // Browsing a table → the sugar-table grid, not the query viewer.
                 'resultTable' => null,
+                'rowsLoading' => false,
                 'error' => null,
                 'status' => count($rows) . ' rows',
             ]);
@@ -401,6 +543,7 @@ final class App implements Model
             return $this->mutate([
                 'error' => $e->getMessage(),
                 'status' => null,
+                'rowsLoading' => false,
             ]);
         }
     }
