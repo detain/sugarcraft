@@ -4,10 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Db;
 
-use SugarCraft\Query\Admin\Sampler;
-use SugarCraft\Query\Admin\Resilience\ReconnectException;
-use SugarCraft\Query\Admin\Resilience\ReconnectManager;
-
 /**
  * MySQL implementation of DatabaseInterface using PDO.
  *
@@ -18,8 +14,8 @@ final class MysqlDatabase implements DatabaseInterface
     private ?\PDO $pdo = null;
     private ?float $lastUptime = null;
     private ?ConnectionConfig $connectionConfig = null;
-    private ?ReconnectManager $reconnectManager = null;
-    private ?Sampler $sampler = null;
+    private ?ReconnectManagerInterface $reconnectManager = null;
+    private ?SamplerInterface $sampler = null;
 
     private function __construct(\PDO $pdo)
     {
@@ -279,7 +275,7 @@ final class MysqlDatabase implements DatabaseInterface
     /**
      * Inject a ReconnectManager for connection error handling.
      */
-    public function setReconnectManager(ReconnectManager $reconnectManager): void
+    public function setReconnectManager(ReconnectManagerInterface $reconnectManager): void
     {
         $this->reconnectManager = $reconnectManager;
     }
@@ -287,7 +283,7 @@ final class MysqlDatabase implements DatabaseInterface
     /**
      * Inject a Sampler for reset signaling after server restarts.
      */
-    public function setSampler(Sampler $sampler): void
+    public function setSampler(SamplerInterface $sampler): void
     {
         $this->sampler = $sampler;
     }
@@ -348,9 +344,7 @@ final class MysqlDatabase implements DatabaseInterface
             if ($result !== false) {
                 $row = $result->fetch();
                 if ($row !== false && isset($row['Value'])) {
-                    $uptime = (float) $row['Value'];
-                    $this->lastUptime = $uptime;
-                    $this->sampler?->registerUptime($uptime);
+                    $this->lastUptime = (float) $row['Value'];
                 }
             }
         } catch (\PDOException) {
