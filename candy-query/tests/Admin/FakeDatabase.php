@@ -21,6 +21,9 @@ final class FakeDatabase implements DatabaseInterface
     /** @var list<array{sql: string, values: array}> */
     private array $executions = [];
 
+    /** @var list<string> Raw SQL passed to exec() (e.g. KILL statements) */
+    private array $execLog = [];
+
     public function setQueryResult(array $result): void
     {
         $this->queryResult = $result;
@@ -82,7 +85,14 @@ final class FakeDatabase implements DatabaseInterface
 
     public function exec(string $sql): int
     {
+        $this->execLog[] = $sql;
         return 0;
+    }
+
+    /** @return list<string> Raw SQL strings passed to exec(), in order. */
+    public function execLog(): array
+    {
+        return $this->execLog;
     }
 
     public function close(): void

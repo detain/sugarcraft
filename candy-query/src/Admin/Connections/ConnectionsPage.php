@@ -47,6 +47,13 @@ final class ConnectionsPage extends PageBase
     private int $selectedIndex = 0;
     private string $activeDetailTab = self::DETAIL_TAB_DETAILS;
 
+    /** Connection awaiting a kill confirmation (null = no pending kill). */
+    private ?ProcesslistResult $pendingKill = null;
+    /** True when the pending action is KILL QUERY rather than KILL CONNECTION. */
+    private bool $pendingKillIsQuery = false;
+    /** Transient feedback line shown after an action (kill sent/failed/cancelled). */
+    private ?string $actionMessage = null;
+
     /** @var list<ProcesslistResult>|null Memoized filtered processlist to avoid 2-3× fetch per render */
     private ?array $cachedFilteredProcesslist = null;
 
@@ -174,6 +181,15 @@ final class ConnectionsPage extends PageBase
         $ch = $msg->rune ?? '';
         $type = $msg->type;
 
+        // While a kill awaits confirmation, only an explicit y/Y fires it; ANY
+        // other key cancels (fail-safe: a stray keystroke never kills a session).
+        if ($this->pendingKill !== null) {
+            if ($ch === 'y' || $ch === 'Y') {
+                return $this->executeConfirmedKill();
+            }
+            return [$this->withClearedKillPrompt('Kill cancelled'), null];
+        }
+
         // j/k or Up/Down navigate the processlist selection
         if ($ch === 'j' || $type === KeyType::Down) {
             return [$this->withNavigateDown(), null];
@@ -209,7 +225,83 @@ final class ConnectionsPage extends PageBase
             return $this->handleRefresh();
         }
 
+        // K arms a KILL CONNECTION; X arms a KILL QUERY. Both are destructive,
+        // so they only set up a confirmation prompt — the kill fires on y.
+        if ($ch === 'K') {
+            return [$this->withPendingKill(false), null];
+        }
+        if ($ch === 'X') {
+            return [$this->withPendingKill(true), null];
+        }
+
         return [$this, null];
+    }
+
+    /**
+     * Arm a kill confirmation for the currently-selected connection.
+     *
+     * Refuses background/system threads outright (killing them can destabilise
+     * the server) and reports when there is nothing selected.
+     */
+    private function withPendingKill(bool $isQuery): self
+    {
+        $clone = clone $this;
+        $selected = $this->filteredProcesslist()[$this->selectedIndex] ?? null;
+
+        if ($selected === null) {
+            $clone->actionMessage = 'No connection selected';
+            return $clone;
+        }
+        if ($selected->isBackground) {
+            $clone->actionMessage = 'Refusing to kill a background thread';
+            return $clone;
+        }
+
+        $clone->pendingKill = $selected;
+        $clone->pendingKillIsQuery = $isQuery;
+        $clone->actionMessage = null;
+        return $clone;
+    }
+
+    /**
+     * Clear any pending kill prompt, optionally leaving a feedback message.
+     */
+    private function withClearedKillPrompt(?string $message): self
+    {
+        $clone = clone $this;
+        $clone->pendingKill = null;
+        $clone->pendingKillIsQuery = false;
+        $clone->actionMessage = $message;
+        return $clone;
+    }
+
+    /**
+     * Execute the confirmed kill against the pending connection, then refresh.
+     *
+     * @return array{0: self, 1: ?\Closure}
+     */
+    private function executeConfirmedKill(): array
+    {
+        $target = $this->pendingKill;
+        if ($target === null || $this->actions === null) {
+            return [$this->withClearedKillPrompt(null), null];
+        }
+
+        $ok = $this->pendingKillIsQuery
+            ? $this->actions->killQuery($target->processId, $target->isBackground)
+            : $this->actions->kill($target->processId, $target->isBackground);
+
+        $verb = $this->pendingKillIsQuery ? 'Kill query' : 'Kill';
+        $message = $ok
+            ? sprintf('%s sent to connection %s', $verb, (string) $target->processId)
+            : sprintf('%s failed for connection %s', $verb, (string) $target->processId);
+
+        // Re-fetch so the killed connection drops out of the grid.
+        [$clone, $cmd] = $this->handleRefresh();
+        $clone->pendingKill = null;
+        $clone->pendingKillIsQuery = false;
+        $clone->actionMessage = $message;
+        return [$clone, $cmd];
     }
 
     /**
@@ -338,13 +430,57 @@ final class ConnectionsPage extends PageBase
      */
     protected function build(): string
     {
-        return implode("\n", [
+        $lines = [
             Style::new()->bold()->foreground(Color::hex('#22d3ee'))->render('Connections'),
             '',
             $this->renderCounters(),
-            '',
-            $this->getTable()->View(),
-        ]);
+        ];
+
+        $actionLine = $this->renderActionLine();
+        if ($actionLine !== '') {
+            $lines[] = $actionLine;
+        }
+
+        $lines[] = '';
+        $lines[] = $this->getTable()->View();
+        $lines[] = $this->renderKeyHints();
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * Render the kill confirmation prompt, or the latest action feedback line.
+     * Returns '' when neither is active.
+     */
+    private function renderActionLine(): string
+    {
+        if ($this->pendingKill !== null) {
+            $verb = $this->pendingKillIsQuery ? 'Cancel running query on' : 'KILL';
+            return Style::new()->bold()->foreground(Color::hex('#f9e2af'))->render(
+                sprintf(
+                    '%s connection %s (%s@%s)?  [y] confirm   [any other key] cancel',
+                    $verb,
+                    (string) $this->pendingKill->processId,
+                    $this->pendingKill->user !== '' ? $this->pendingKill->user : '?',
+                    $this->pendingKill->host !== '' ? $this->pendingKill->host : '?',
+                ),
+            );
+        }
+        if ($this->actionMessage !== null) {
+            return Style::new()->foreground(Color::hex('#94a3b8'))->render($this->actionMessage);
+        }
+        return '';
+    }
+
+    /**
+     * Render the page-specific key hints (the global status bar only shows the
+     * generic admin keys, so the kill shortcuts need advertising here).
+     */
+    private function renderKeyHints(): string
+    {
+        return Style::new()->foreground(Color::hex('#6b7280'))->render(
+            'j/k:nav  Tab:tabs  K:kill  X:kill-query  f:filter  r:refresh',
+        );
     }
 
     /**

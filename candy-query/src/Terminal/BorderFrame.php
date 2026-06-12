@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Terminal;
 
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Kit\Frame;
+use SugarCraft\Query\Admin\AdminPane;
 use SugarCraft\Query\App;
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
@@ -96,7 +97,10 @@ final class BorderFrame
             $segments[] = 'Ctrl+R:run';
         }
         if ($a->pane === Pane::Admin) {
-            $segments[] = '1-6:select';
+            // Derive the digit range from the pane list so it never drifts when
+            // panes are added/removed (the audit caught a stale hardcoded "1-6"
+            // after the pane count grew to 8 — orderedCases() is the source of truth).
+            $segments[] = '1-' . count(AdminPane::orderedCases()) . ':select';
             $segments[] = 'j/k:nav';
             $segments[] = '[admin:' . $a->adminPane->value . ']';
         }
