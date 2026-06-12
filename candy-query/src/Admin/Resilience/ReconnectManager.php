@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Admin\Resilience;
 
 use SugarCraft\Query\Db\ConnectionConfig;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\ReconnectManagerInterface;
 
 /**
  * Manages reconnection logic for MySQL connection errors.
@@ -16,7 +17,7 @@ use SugarCraft\Query\Db\DatabaseInterface;
  *
  * @see Mirrors charmbracelet/lazysql reconnect logic
  */
-final class ReconnectManager
+final class ReconnectManager implements ReconnectManagerInterface
 {
     /** @var array<int, string> MySQL error codes that indicate connection issues */
     private const RECONNECT_CODES = [
@@ -45,7 +46,7 @@ final class ReconnectManager
      *
      * @param callable(): (DatabaseInterface|false) $connect Factory that returns a new connection or false on failure
      * @return bool True if reconnect succeeded, false otherwise
-     * @throws ReconnectException If reconnect fails with details of original error
+     * @throws \SugarCraft\Query\Db\ReconnectException If reconnect fails with details of original error
      */
     public function attemptReconnect(callable $connect): bool
     {

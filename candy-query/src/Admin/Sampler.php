@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Query\Admin;
 
+use SugarCraft\Query\Db\SamplerInterface;
+
 /**
  * Computes rate-per-second deltas from successive status snapshots.
  *
@@ -14,7 +16,7 @@ namespace SugarCraft\Query\Admin;
  *
  * @see Mirrors charmbracelet/lazysql Sampler
  */
-final class Sampler
+final class Sampler implements SamplerInterface
 {
     private ?array $previous = null;
     private float $previousTs = 0.0;

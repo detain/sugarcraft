@@ -2,12 +2,15 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Query\Admin\Resilience;
+namespace SugarCraft\Query\Db;
 
 /**
- * Thrown when reconnection to MySQL fails after a connection error.
+ * Thrown when reconnection to the database fails after a connection error.
  *
- * @see ReconnectManager::attemptReconnect()
+ * Lives in the Db layer (it is raised by DatabaseInterface implementations)
+ * so concrete drivers do not have to reach up into the Admin layer.
+ *
+ * @see ReconnectManagerInterface::attemptReconnect()
  */
 final class ReconnectException extends \RuntimeException
 {
