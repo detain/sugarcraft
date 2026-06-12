@@ -899,7 +899,7 @@ final class App implements Model
             );
         }
 
-        return \React\Promise\all($promises)->then(function(array $results) use ($recorder): AdminDataLoadedMsg {
+        return \React\Promise\all($promises)->then(function(array $results) use ($recorder, $cache): AdminDataLoadedMsg {
             // Record status snapshot to history if recorder is configured
             if ($recorder !== null && isset($results['status'])) {
                 $ts = microtime(true);
