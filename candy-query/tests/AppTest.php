@@ -8,9 +8,12 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Query\App;
+use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
 use SugarCraft\Query\Database;
+use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Pane;
 use SugarCraft\Query\Renderer;
+use SugarCraft\Query\Tests\Admin\FakeDatabase;
 use PHPUnit\Framework\TestCase;
 
 final class AppTest extends TestCase
@@ -467,6 +470,90 @@ final class AppTest extends TestCase
         // Should only have one entry
         $this->assertCount(1, $a->queryHistory);
         $this->assertSame('SELECT 1', $a->queryHistory[0]);
+    }
+
+    /**
+     * On MySQL/Postgres, cursoring onto a table must NOT block on a synchronous
+     * fetch (the asset_media freeze). Instead the model is marked loading, the
+     * title follows the cursor immediately, and an async Cmd is returned to run
+     * the blob-safe fetch on the React loop. The rows arrive later via
+     * {@see TableRowsLoadedMsg}.
+     */
+    public function testMysqlCursorDownLoadsRowsAsynchronously(): void
+    {
+        $app = new App(
+            db: new FakeDatabase(),
+            flavor: Flavor::MySQL,
+            tables: ['posts', 'users'],
+            selectedTable: 'posts',
+        );
+        [$next, $cmd] = $app->update(new KeyMsg(KeyType::Down, ''));
+
+        $this->assertSame(1, $next->tableCursor);
+        $this->assertSame('users', $next->selectedTable, 'title follows the cursor immediately');
+        $this->assertTrue($next->rowsLoading, 'rows marked loading while the fetch is in flight');
+        $this->assertSame([], $next->rows, 'no stale rows shown during load');
+        $this->assertNotNull($cmd, 'MySQL browse returns an async Cmd, not a blocking fetch');
+    }
+
+    public function testTableRowsLoadedMsgPopulatesRowsAndClearsLoading(): void
+    {
+        $app = new App(
+            db: new FakeDatabase(),
+            flavor: Flavor::MySQL,
+            tables: ['posts', 'users'],
+            selectedTable: 'users',
+            rowsLoading: true,
+        );
+        [$next, $cmd] = $app->update(new TableRowsLoadedMsg('users', [['id' => 1], ['id' => 2]]));
+
+        $this->assertNull($cmd);
+        $this->assertFalse($next->rowsLoading);
+        $this->assertCount(2, $next->rows);
+        $this->assertSame('2 rows', $next->status);
+    }
+
+    public function testStaleTableRowsResultForOtherTableIsIgnored(): void
+    {
+        $app = new App(
+            db: new FakeDatabase(),
+            flavor: Flavor::MySQL,
+            tables: ['posts', 'users'],
+            selectedTable: 'users',
+            rowsLoading: true,
+        );
+        // A result for 'posts' arrives after the user already moved on to 'users'.
+        [$next, ] = $app->update(new TableRowsLoadedMsg('posts', [['id' => 99]]));
+
+        $this->assertSame([], $next->rows, 'stale result for a different table is dropped');
+        $this->assertTrue($next->rowsLoading, 'the in-flight load keeps its spinner');
+    }
+
+    public function testTableRowsLoadedMsgErrorStashesError(): void
+    {
+        $app = new App(
+            db: new FakeDatabase(),
+            flavor: Flavor::MySQL,
+            tables: ['users'],
+            selectedTable: 'users',
+            rowsLoading: true,
+        );
+        [$next, ] = $app->update(new TableRowsLoadedMsg('users', [], 'Table dropped'));
+
+        $this->assertFalse($next->rowsLoading);
+        $this->assertSame('Table dropped', $next->error);
+    }
+
+    public function testRowsPaneShowsLoadingIndicatorWhileFetching(): void
+    {
+        $app = new App(
+            db: new FakeDatabase(),
+            flavor: Flavor::MySQL,
+            tables: ['users'],
+            selectedTable: 'users',
+            rowsLoading: true,
+        );
+        $this->assertStringContainsString('loading', $app->view());
     }
 
 }

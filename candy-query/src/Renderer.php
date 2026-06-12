@@ -240,11 +240,12 @@ final class Renderer
         $width = max(60, $width);
 
         if ($a->rows === []) {
-            return self::frame(
-                $a, Pane::Rows, $title,
-                Style::new()->foreground(Color::hex('#7d6e98'))->render('(empty)'),
-                $width,
-            );
+            // Distinguish "no rows here" from "the async browse fetch is still
+            // in flight" so a remote table doesn't look empty while it loads.
+            $body = $a->rowsLoading
+                ? Style::new()->foreground(Color::hex('#fbbf24'))->render('loading…')
+                : Style::new()->foreground(Color::hex('#7d6e98'))->render('(empty)');
+            return self::frame($a, Pane::Rows, $title, $body, $width);
         }
 
         // Executed-query results render through ResultTable (its horizontal-
