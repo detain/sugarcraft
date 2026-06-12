@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Admin;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\PreparedStatementInterface;
 
 /**
  * A read-through {@see DatabaseInterface} that serves query() results from the
@@ -86,7 +87,7 @@ final class CachedConnection implements DatabaseInterface
         return $this->inner->databases();
     }
 
-    public function prepare(string $sql): mixed
+    public function prepare(string $sql): ?PreparedStatementInterface
     {
         return $this->inner->prepare($sql);
     }
