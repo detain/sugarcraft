@@ -63,7 +63,7 @@ final class StdioMcpServer implements McpServer
         $response = $this->request('initialize', [
             'protocolVersion' => '2024-11-05',
             'capabilities' => [],
-            'clientInfo' => ['name' => 'candy-crush', 'version' => '1.0.0'],
+            'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
         ]);
 
         if ($response === null || ($response->result === null && $response->error === null)) {

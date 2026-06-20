@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to open the command palette.
  *
- * Mirrors charmbracelet/candy-crush CommandPaletteCmd.
+ * Mirrors charmbracelet/crush CommandPaletteCmd.
  */
 final readonly class CommandPaletteCmd implements KeyCmd
 {

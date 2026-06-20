@@ -44,26 +44,26 @@ final class SkillLoader
     }
 
     /**
-     * Load user skills from ~/.candy-crush/skills/.
+     * Load user skills from ~/.sugar-crush/skills/.
      *
      * @return array<string, Skill>
      */
     public function loadUserSkills(): array
     {
         $dir = $_SERVER['HOME'] ?? '/root';
-        $dir .= '/.candy-crush/skills';
+        $dir .= '/.sugar-crush/skills';
 
         return $this->loadFromDirectory($dir);
     }
 
     /**
-     * Load project skills from .candy-crush/skills/.
+     * Load project skills from .sugar-crush/skills/.
      *
      * @return array<string, Skill>
      */
     public function loadProjectSkills(string $projectRoot): array
     {
-        $dir = rtrim($projectRoot, '/') . '/.candy-crush/skills';
+        $dir = rtrim($projectRoot, '/') . '/.sugar-crush/skills';
 
         return $this->loadFromDirectory($dir);
     }

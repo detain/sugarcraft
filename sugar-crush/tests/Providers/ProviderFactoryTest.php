@@ -347,10 +347,8 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateOpenAiCreatesOpenAIProvider(): void
     {
-        // Skip - OpenAI\Client is final and cannot be mocked, and real instantiation
-        // triggers class loading conflicts in test environment
-        $this->markTestSkipped('OpenAI provider instantiation has infrastructure limitations (final class conflict)');
-
+        // A dummy key is enough: \OpenAI::client() builds the client offline and
+        // makes no network call until a request is actually issued.
         $provider = $this->factory->create([
             'type' => 'openai',
             'apiKey' => 'test-api-key',
@@ -359,6 +357,16 @@ final class ProviderFactoryTest extends TestCase
 
         $this->assertInstanceOf(OpenAIProvider::class, $provider);
         $this->assertInstanceOf(ProviderInterface::class, $provider);
+        $this->assertSame('openai', $provider->name());
+
+        // The configured model reached the provider (drives contextWindow()).
+        $this->assertSame(128_000, $provider->contextWindow());
+
+        // And a real OpenAI client implementing the contract was injected.
+        $this->assertInstanceOf(
+            \OpenAI\Contracts\ClientContract::class,
+            $this->openAiClientOf($provider),
+        );
     }
 
     public function testCreateCustomCreatesCustomProvider(): void
@@ -419,11 +427,9 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateVertexCreatesVertexProvider(): void
     {
-        // Skip if Google Cloud AIPlatform is not installed
-        if (!class_exists(\Google\Cloud\AIPlatform\V1\PredictionServiceClient::class)) {
-            $this->markTestSkipped('Google Cloud AIPlatform library is not installed');
-        }
-
+        // VertexProvider::create() no longer constructs the Google SDK client at
+        // build time (the network call lives behind a lazy predictor seam), so
+        // this runs without the AIPlatform library or credentials.
         $provider = $this->factory->create([
             'type' => 'vertex',
             'projectId' => 'test-project',
@@ -470,10 +476,6 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateResolvesEnvVariablesInConfig(): void
     {
-        // Skip - OpenAI\Client is final and cannot be mocked, and real instantiation
-        // triggers class loading conflicts in test environment
-        $this->markTestSkipped('OpenAI provider instantiation has infrastructure limitations (final class conflict)');
-
         putenv('FACTORY_TEST_API_KEY=env-resolved-key');
 
         try {
@@ -483,7 +485,8 @@ final class ProviderFactoryTest extends TestCase
                 'model' => 'gpt-4o',
             ]);
 
-            // Verify the provider was created (env var was resolved)
+            // Provider was created => the ${VAR} apiKey resolved to a non-empty
+            // value (an empty apiKey would have failed required-key validation).
             $this->assertInstanceOf(OpenAIProvider::class, $provider);
         } finally {
             putenv('FACTORY_TEST_API_KEY');
@@ -492,10 +495,6 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateResolvesEnvVariablesWithDefaults(): void
     {
-        // Skip - OpenAI\Client is final and cannot be mocked, and real instantiation
-        // triggers class loading conflicts in test environment
-        $this->markTestSkipped('OpenAI provider instantiation has infrastructure limitations (final class conflict)');
-
         // Ensure var is not set
         putenv('FACTORY_UNSET_VAR');
 
@@ -506,7 +505,8 @@ final class ProviderFactoryTest extends TestCase
                 'model' => 'gpt-4o',
             ]);
 
-            // Should have used default value since var is not set
+            // Should have used the default value since the var is not set; the
+            // non-empty default satisfies required-key validation.
             $this->assertInstanceOf(OpenAIProvider::class, $provider);
         } finally {
             putenv('FACTORY_UNSET_VAR');
@@ -519,10 +519,6 @@ final class ProviderFactoryTest extends TestCase
 
     public function testCreateOpenAiWithOptionalOrganization(): void
     {
-        // Skip - OpenAI\Client is final and cannot be mocked, and real instantiation
-        // triggers class loading conflicts in test environment
-        $this->markTestSkipped('OpenAI provider instantiation has infrastructure limitations (final class conflict)');
-
         $provider = $this->factory->create([
             'type' => 'openai',
             'apiKey' => 'test-key',
@@ -531,6 +527,7 @@ final class ProviderFactoryTest extends TestCase
         ]);
 
         $this->assertInstanceOf(OpenAIProvider::class, $provider);
+        $this->assertInstanceOf(\OpenAI\Contracts\ClientContract::class, $this->openAiClientOf($provider));
     }
 
     public function testCreateCustomWithOptionalStreamingSupport(): void
@@ -547,5 +544,20 @@ final class ProviderFactoryTest extends TestCase
         $this->assertInstanceOf(CustomProvider::class, $provider);
         $this->assertFalse($provider->supportsStreaming());
         $this->assertTrue($provider->supportsFunctionCalling());
+    }
+
+    /**
+     * Reads the private OpenAI client the factory injected, to prove the
+     * configured client (not a fallback) was wired in.
+     */
+    private function openAiClientOf(OpenAIProvider $provider): object
+    {
+        $prop = (new \ReflectionClass(OpenAIProvider::class))->getProperty('client');
+        $prop->setAccessible(true);
+
+        /** @var object $client */
+        $client = $prop->getValue($provider);
+
+        return $client;
     }
 }

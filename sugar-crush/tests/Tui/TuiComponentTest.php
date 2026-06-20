@@ -100,7 +100,7 @@ final class TuiComponentTest extends TestCase
     }
 
     /**
-     * @testdox ChatPane::render() shows "Welcome to CandyCrush!" when no messages
+     * @testdox ChatPane::render() shows "Welcome to SugarCrush!" when no messages
      */
     public function testChatPaneShowsWelcomeMessageWhenNoMessages(): void
     {
@@ -109,7 +109,7 @@ final class TuiComponentTest extends TestCase
 
         $output = ChatPane::render($app, 120, 40);
 
-        $this->assertStringContainsString('Welcome to CandyCrush', $output);
+        $this->assertStringContainsString('Welcome to SugarCrush', $output);
     }
 
     /**

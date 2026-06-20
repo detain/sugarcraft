@@ -138,7 +138,7 @@ final class ComponentTest extends TestCase
 
         $output = ChatPane::render($app, 120, 40);
 
-        $this->assertStringContainsString('Welcome to CandyCrush', $output);
+        $this->assertStringContainsString('Welcome to SugarCrush', $output);
     }
 
     public function testChatPaneRendersMessageClassNames(): void

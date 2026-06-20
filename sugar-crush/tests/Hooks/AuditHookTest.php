@@ -79,7 +79,7 @@ final class AuditHookTest extends TestCase
         $result = $hook->execute($context);
 
         $this->assertTrue($result->isAllowed());
-        $defaultLogFile = sys_get_temp_dir() . '/candy-crush-audit.log';
+        $defaultLogFile = sys_get_temp_dir() . '/sugar-crush-audit.log';
         $this->assertFileExists($defaultLogFile);
         // Clean up default log file
         if (file_exists($defaultLogFile)) {

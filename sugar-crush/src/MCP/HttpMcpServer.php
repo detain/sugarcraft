@@ -36,7 +36,7 @@ final class HttpMcpServer implements McpServer
             $this->rpc('initialize', [
                 'protocolVersion' => '2024-11-05',
                 'capabilities' => [],
-                'clientInfo' => ['name' => 'candy-crush', 'version' => '1.0.0'],
+                'clientInfo' => ['name' => 'sugar-crush', 'version' => '1.0.0'],
             ]);
 
             $response = $this->rpc('tools/list', []);

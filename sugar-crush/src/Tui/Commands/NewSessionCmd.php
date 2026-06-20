@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to start a new session.
  *
- * Mirrors charmbracelet/candy-crush NewSessionCmd.
+ * Mirrors charmbracelet/crush NewSessionCmd.
  */
 final readonly class NewSessionCmd implements KeyCmd
 {

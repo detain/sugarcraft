@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to cancel the current operation.
  *
- * Mirrors charmbracelet/candy-crush CancelCmd.
+ * Mirrors charmbracelet/crush CancelCmd.
  */
 final readonly class CancelCmd implements KeyCmd
 {

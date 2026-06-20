@@ -19,7 +19,7 @@ use SugarCraft\Crush\Tui\Components\ToolsPane;
 use SugarCraft\Crush\Tui\Components\MenuBar;
 
 /**
- * Stateless renderer for the candy-crush TUI.
+ * Stateless renderer for the sugar-crush TUI.
  * Composes multiple panes into a full terminal interface.
  * Pure function - given the same App it always produces the same bytes.
  */

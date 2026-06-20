@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tui;
 
 /**
- * Pane types for the CandyCrush TUI layout.
+ * Pane types for the SugarCrush TUI layout.
  *
- * Mirrors charmbracelet/candy-crush TUI pane enumeration.
+ * Mirrors charmbracelet/crush TUI pane enumeration.
  *
  * @internal
  */

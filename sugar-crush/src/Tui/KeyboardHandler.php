@@ -17,7 +17,7 @@ use SugarCraft\Crush\Tui\Components\MenuBar;
 /**
  * Handles keyboard input and routes to appropriate handlers.
  *
- * Mirrors charmbracelet/candy-crush key handling logic.
+ * Mirrors charmbracelet/crush key handling logic.
  */
 final class KeyboardHandler
 {

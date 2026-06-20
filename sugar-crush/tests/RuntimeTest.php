@@ -446,7 +446,7 @@ final class RuntimeTest extends TestCase
 
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
 
-        $this->assertStringContainsString('CandyCrush', $result);
+        $this->assertStringContainsString('SugarCrush', $result);
         $this->assertStringContainsString('AI coding assistant', $result);
     }
 
@@ -472,7 +472,7 @@ final class RuntimeTest extends TestCase
 
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
 
-        $this->assertStringContainsString('CandyCrush', $result);
+        $this->assertStringContainsString('SugarCrush', $result);
         $this->assertStringContainsString('## Skill: TestSkill', $result);
         $this->assertStringContainsString('Skill content here', $result);
     }
@@ -486,7 +486,7 @@ final class RuntimeTest extends TestCase
 
         $result = $this->invokePrivateMethod($this->runtime, 'buildSystemPrompt', [$app]);
 
-        $this->assertStringContainsString('CandyCrush', $result);
+        $this->assertStringContainsString('SugarCrush', $result);
         $this->assertStringNotContainsString('## Skill', $result);
     }
 
