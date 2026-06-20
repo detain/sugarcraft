@@ -32,18 +32,30 @@
         "bin/sugarcrush"
     ],
     "require": {
-        "php": ">=8.3",
+        "php": "^8.3",
         "react/promise": "^3.3",
+        "openai-php/client": "^0.10",
+        "guzzlehttp/guzzle": "^7.9",
+        "aws/aws-sdk-php": "^3.300",
+        "google/cloud-ai-platform": "^1.0",
+        "symfony/yaml": "^7.0",
         "sugarcraft/candy-buffer": "dev-master",
         "sugarcraft/candy-core": "dev-master",
         "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-shine": "dev-master"
+        "sugarcraft/candy-shine": "dev-master",
+        "sugarcraft/candy-forms": "dev-master",
+        "sugarcraft/candy-pty": "dev-master"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.0"
+        "phpunit/phpunit": "^10.5"
     },
     "suggest": {
-        "ext-curl": "Required by HTTP-based backends you might write (Anthropic, OpenAI, Ollama)."
+        "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom)."
+    },
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
     },
     "autoload": {
         "psr-4": {
@@ -110,6 +122,27 @@
         {
             "type": "path",
             "url": "../candy-input",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-forms",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-pty",
+            "options": {
+                "symlink": true
+            }
+        },
+        {
+            "type": "path",
+            "url": "../candy-fuzzy",
             "options": {
                 "symlink": true
             }
