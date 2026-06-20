@@ -76,8 +76,7 @@ Status legend:
 | [charmbracelet/skate](https://github.com/charmbracelet/skate) | **SugarSkate** | `sugar-skate/` | `sugarcraft/sugar-skate` | `SugarCraft\Skate` | 🟢 | Personal key/value store |
 | [charmbracelet/pop](https://github.com/charmbracelet/pop) | **SugarPost** | `sugar-post/` | `sugarcraft/sugar-post` | `SugarCraft\Post` | 🟢 |
 | [charmbracelet/soft-serve](https://github.com/charmbracelet/soft-serve) | **CandyServe** | `candy-serve/` | `sugarcraft/candy-serve` | `SugarCraft\Serve` | 🟢 |
-| [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` | `sugarcraft/sugar-crush` | `SugarCraft\Crush` | 🟢 | Chat-shell TUI for AI coding assistants |
-| — (pioneering) | **CandyCrush** | `candy-crush/` | `sugarcraft/candy-crush` | `SugarCraft\Crush` | 🟡 | TUI AI coding assistant — multi-provider, multi-agent, skill-aware |
+| [charmbracelet/crush](https://github.com/charmbracelet/crush) | **SugarCrush** | `sugar-crush/` | `sugarcraft/sugar-crush` | `SugarCraft\Crush` | 🟢 | TUI AI coding agent — 7 providers, tools, skills, hooks, agents, MCP, SQLite sessions |
 | [Broderick-Westrope/tetrigo](https://github.com/Broderick-Westrope/tetrigo) | **CandyTetris** | `candy-tetris/` | `sugarcraft/candy-tetris` | `SugarCraft\Tetris` | 🟢 | Tetris clone — SRS / 7-bag / NES scoring |
 | [yorukot/superfile](https://github.com/yorukot/superfile) | **CandyFiles** | `candy-files/` | `sugarcraft/candy-files` | `SugarCraft\Files` | 🟢 | Dual-pane file manager |
 | [jesseduffield/lazygit](https://github.com/jesseduffield/lazygit) | **SugarStash** | `sugar-stash/` | `sugarcraft/sugar-stash` | `SugarCraft\Stash` | 🟢 | Three-pane git TUI — shells out to `git` |
