@@ -94,8 +94,7 @@
         "sugarcraft/sugar-toast": "dev-master",
         "sugarcraft/sugar-veil": "dev-master",
         "sugarcraft/sugar-wishlist": "dev-master",
-        "sugarcraft/candy-files": "dev-master",
-        "sugarcraft/candy-crush": "dev-master"
+        "sugarcraft/candy-files": "dev-master"
     },
     "repositories": [
         {
@@ -472,13 +471,6 @@
         {
             "type": "path",
             "url": "candy-files",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "candy-crush",
             "options": {
                 "symlink": true
             }
