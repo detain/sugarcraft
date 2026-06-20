@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
-use OpenAI\Client;
 use OpenAI\OpenAI;
 
 /**
@@ -299,35 +298,33 @@ final readonly class ProviderFactory
      */
     private function createAnthropic(array $config): ProviderInterface
     {
-        // Anthropic provider uses HTTP client like CustomProvider
         $baseUrl = $config['baseUrl'] ?? 'https://api.anthropic.com';
         $apiKey = $config['apiKey'];
         $model = $config['model'] ?? 'claude-sonnet-4-6';
 
+        // Anthropic's Messages API authenticates with x-api-key + anthropic-version,
+        // NOT a bearer token. Build the client with those headers and inject it directly
+        // so the auth headers actually reach the wire (the previous code discarded this
+        // client and fell back to CustomProvider's bearer-auth client).
         $headers = [
             'Content-Type' => 'application/json',
             'x-api-key' => $apiKey,
             'anthropic-version' => '2023-06-01',
         ];
 
-        if ($baseUrl !== 'https://api.anthropic.com') {
-            $headers['anthropic-dangerous-direct-browser-access'] = 'true';
-        }
-
         $client = new \GuzzleHttp\Client([
             'base_uri' => $baseUrl,
             'headers' => $headers,
         ]);
 
-        // Use CustomProvider as Anthropic implementation
-        // It speaks OpenAI-compatible format but uses Anthropic's API
-        return CustomProvider::openAiCompatible(
-            name: 'anthropic',
-            baseUrl: $baseUrl . '/v1',
-            model: $model,
-            apiKey: $apiKey,
-            supportsStreaming: true,
-            supportsFunctionCalling: false,
+        return new CustomProvider(
+            'anthropic',
+            $baseUrl,
+            $model,
+            $apiKey,
+            $client,
+            true,
+            false,
         );
     }
 

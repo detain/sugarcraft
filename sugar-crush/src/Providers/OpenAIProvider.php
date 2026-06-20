@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
-use OpenAI\Client;
-use OpenAI\Responses\Completions\CompletionResponse;
+use OpenAI\Contracts\ClientContract;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\AssistantMessage;
 use SugarCraft\Crush\Messages\UserMessage;
@@ -17,7 +16,7 @@ use SugarCraft\Crush\Tools\ToolCall;
 final readonly class OpenAIProvider implements ProviderInterface
 {
     public function __construct(
-        private Client $client,
+        private ClientContract $client,
         private string $defaultModel = 'gpt-4o',
     ) {}
 
@@ -184,9 +183,10 @@ final readonly class OpenAIProvider implements ProviderInterface
         }, $tools);
     }
 
-    private function parseResponse(CompletionResponse $response): CompleteResponse
+    private function parseResponse(mixed $response): CompleteResponse
     {
-        $choices = $response->toArray()['choices'][0] ?? [];
+        $data = $response->toArray();
+        $choices = $data['choices'][0] ?? [];
         $message = $choices['message'] ?? [];
 
         $toolCalls = null;
@@ -195,7 +195,9 @@ final readonly class OpenAIProvider implements ProviderInterface
                 fn($tc) => ToolCall::fromArray([
                     'id' => $tc['id'],
                     'name' => $tc['function']['name'],
-                    'arguments' => json_decode($tc['function']['arguments'], true) ?? [],
+                    'arguments' => is_string($tc['function']['arguments'] ?? null)
+                        ? json_decode($tc['function']['arguments'], true) ?? []
+                        : ($tc['function']['arguments'] ?? []),
                 ]),
                 $message['tool_calls']
             );
@@ -205,8 +207,8 @@ final readonly class OpenAIProvider implements ProviderInterface
             content: $message['content'] ?? '',
             reasoning: null,
             toolCalls: $toolCalls,
-            tokensUsed: $response->usage['total_tokens'] ?? 0,
-            costUsd: $this->calculateCost($response),
+            tokensUsed: $data['usage']['total_tokens'] ?? 0,
+            costUsd: $this->calculateCost($data['usage'] ?? []),
         );
     }
 
@@ -232,9 +234,11 @@ final readonly class OpenAIProvider implements ProviderInterface
         );
     }
 
-    private function calculateCost(CompletionResponse $response): float
+    /**
+     * @param array<string, mixed> $usage
+     */
+    private function calculateCost(array $usage): float
     {
-        $usage = $response->usage ?? [];
         $promptTokens = $usage['prompt_tokens'] ?? 0;
         $completionTokens = $usage['completion_tokens'] ?? 0;
 

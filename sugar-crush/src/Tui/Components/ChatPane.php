@@ -29,7 +29,7 @@ final class ChatPane
         }
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' chat '))
+            ->border(Border::normal()->withTitle(' chat '))
             ->padding(0, 1)
             ->width($width);
 
@@ -42,8 +42,12 @@ final class ChatPane
 
     private static function formatMessage(Message $msg): string
     {
+        // Surface the concrete message type (e.g. UserMessage) so the
+        // transcript shows provenance, not just the role string.
+        $shortName = (new \ReflectionClass($msg))->getShortName();
+        $tag = Style::new()->foreground(Color::hex('#7d6e98'))->render('[' . $shortName . ']');
         $role = Style::new()->bold()->foreground(Color::hex('#fde68a'))->render($msg->role() . ':');
         $content = Style::new()->foreground(Color::hex('#c5b6dd'))->render($msg->content());
-        return "$role $content";
+        return "$tag $role $content";
     }
 }

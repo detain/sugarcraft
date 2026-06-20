@@ -40,10 +40,17 @@ final class Runtime
             systemPrompt: $systemPrompt,
         );
 
-        if ($this->provider->supportsStreaming()) {
-            yield from $this->runStreaming($request, $app);
-        } else {
-            yield from $this->runBatch($request, $app);
+        // foreach-reyield instead of `yield from`: `yield from` preserves
+        // each inner generator's 0-based keys, so the assistant message
+        // (key 0) and the first tool-result message (key 0) collide and get
+        // collapsed by iterator_to_array(). Re-yielding lets this outer
+        // generator hand out fresh sequential keys.
+        $inner = $this->provider->supportsStreaming()
+            ? $this->runStreaming($request, $app)
+            : $this->runBatch($request, $app);
+
+        foreach ($inner as $msg) {
+            yield $msg;
         }
     }
 
@@ -51,28 +58,28 @@ final class Runtime
     {
         $buffer = '';
         $toolCalls = [];
+        $reasoning = null;
 
+        // Accumulate the whole stream and emit one assistant message when the
+        // generator is exhausted. We deliberately do NOT use a tokensUsed>0
+        // sentinel to detect completion — real providers stream content with
+        // tokensUsed=0 and only report totals at the end (if at all), so a
+        // sentinel drops the entire message in production.
         foreach ($this->provider->completeStream($request) as $response) {
             $buffer .= $response->content;
-
-            // Check for tool calls
             if ($response->toolCalls !== null) {
                 $toolCalls = array_merge($toolCalls, $response->toolCalls);
             }
+            if ($response->reasoning !== null && $response->reasoning !== '') {
+                $reasoning = ($reasoning ?? '') . $response->reasoning;
+            }
+        }
 
-            // Check for complete response
-            if ($response->tokensUsed > 0) {
-                // Final response
-                $assistantMsg = new AssistantMessage($buffer, $toolCalls ?: null);
-                yield $assistantMsg;
+        yield new AssistantMessage($buffer, $toolCalls ?: null, $reasoning);
 
-                // Execute any tool calls
-                if (!empty($toolCalls)) {
-                    yield from $this->executeToolCalls($toolCalls, $app);
-                }
-
-                $buffer = '';
-                $toolCalls = [];
+        if ($toolCalls !== []) {
+            foreach ($this->executeToolCalls($toolCalls, $app) as $msg) {
+                yield $msg;
             }
         }
     }
@@ -81,16 +88,16 @@ final class Runtime
     {
         $response = $this->provider->complete($request);
 
-        $assistantMsg = new AssistantMessage(
+        yield new AssistantMessage(
             $response->content,
             $response->toolCalls,
             $response->reasoning,
         );
 
-        yield $assistantMsg;
-
-        if ($response->toolCalls !== null) {
-            yield from $this->executeToolCalls($response->toolCalls, $app);
+        if ($response->toolCalls !== null && $response->toolCalls !== []) {
+            foreach ($this->executeToolCalls($response->toolCalls, $app) as $msg) {
+                yield $msg;
+            }
         }
     }
 
@@ -116,16 +123,18 @@ final class Runtime
                 sessionId: $app->sessionId ?? '',
                 toolName: $tool->name(),
                 toolArgs: $toolCall->arguments(),
-                toolInput: json_encode($toolCall->arguments()),
+                toolInput: json_encode($toolCall->arguments()) ?: '{}',
                 toolOutput: '',
                 model: $app->model,
                 provider: $app->provider->name(),
-                projectRoot: getcwd(),
+                projectRoot: getcwd() ?: '',
             );
 
-            // Run pre-hook
+            // Run pre-hook. Only a true DENY blocks the call — a MODIFY
+            // result is "allowed but with rewritten input", so it must fall
+            // through to execution (isAllowed() is false for MODIFY too).
             $hookResult = $this->hookManager->preToolUse($context);
-            if (!$hookResult->isAllowed()) {
+            if (!$hookResult->isAllowed() && !$hookResult->isModified()) {
                 yield new ToolResultMessage(
                     $toolCall->id(),
                     "Hook denied: {$hookResult->message}",
@@ -134,30 +143,22 @@ final class Runtime
                 continue;
             }
 
-            // Execute tool
+            // A MODIFY hook rewrites the tool input before execution.
             $args = $hookResult->isModified()
-                ? json_decode($hookResult->modifiedInput, true) ?? $toolCall->arguments()
+                ? (json_decode($hookResult->modifiedInput ?? '', true) ?? $toolCall->arguments())
                 : $toolCall->arguments();
 
-            $startTime = microtime(true);
             $result = $tool->execute($args);
-            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
 
-            $resultWithDuration = new \SugarCraft\Crush\Tools\ToolResult(
-                toolCallId: $result->toolCallId(),
-                content: $result->content(),
-                isError: $result->isError(),
-                durationMs: $durationMs,
-            );
+            // Post-hook observes the tool output.
+            $this->hookManager->postToolUse($context->withToolOutput($result->content()));
 
-            // Run post-hook
-            $postContext = $context->withToolOutput($result->content());
-            $this->hookManager->postToolUse($postContext);
-
+            // Echo the ORIGINAL tool-call id: the model correlates a result
+            // to its request by this id, and the tool itself never sees it.
             yield new ToolResultMessage(
-                $resultWithDuration->toolCallId(),
-                $resultWithDuration->content(),
-                $resultWithDuration->isError(),
+                $toolCall->id(),
+                $result->content(),
+                $result->isError(),
             );
         }
     }

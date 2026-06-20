@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Tui\Commands;
 
-use SugarCraft\Crush\Tui\KeyCmd;
-
 /**
  * Command to cancel the current operation.
  *

@@ -31,6 +31,11 @@ final readonly class Skill
      */
     public static function fromFile(string $path): self
     {
+        // Check existence first so a missing path throws cleanly instead of
+        // emitting a PHP warning from file_get_contents before we throw.
+        if (!is_file($path)) {
+            throw new \RuntimeException("Failed to read skill file: $path");
+        }
         $content = file_get_contents($path);
         if ($content === false) {
             throw new \RuntimeException("Failed to read skill file: $path");

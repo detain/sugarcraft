@@ -8,6 +8,7 @@ use SugarCraft\Crush\App\App;
 use SugarCraft\Crush\Tui\Commands\CancelCmd;
 use SugarCraft\Crush\Tui\Commands\CommandPaletteCmd;
 use SugarCraft\Crush\Tui\Commands\GroupInputCmd;
+use SugarCraft\Crush\Tui\Commands\KeyCmd;
 use SugarCraft\Crush\Tui\Commands\NewSessionCmd;
 use SugarCraft\Crush\Tui\Commands\ProviderSelectCmd;
 use SugarCraft\Crush\Tui\Commands\SourceSkillCmd;
