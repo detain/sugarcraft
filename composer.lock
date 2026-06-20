@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "041d63673f936d1f95731910e18207c3",
+    "content-hash": "cae0d1453ae65efbb65af10348337d6d",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3307,49 +3307,6 @@
             }
         },
         {
-            "name": "sugarcraft/candy-crush",
-            "version": "dev-master",
-            "dist": {
-                "type": "path",
-                "url": "candy-crush",
-                "reference": "ae04ea4c53c31654d0c2f5fc5e9f65fafb8c91af"
-            },
-            "require": {
-                "aws/aws-sdk-php": "^3.300",
-                "google/cloud-ai-platform": "^1.0",
-                "guzzlehttp/guzzle": "^7.9",
-                "openai-php/client": "^0.10",
-                "php": "^8.3",
-                "sugarcraft/candy-core": "*",
-                "sugarcraft/candy-forms": "*",
-                "sugarcraft/candy-pty": "*",
-                "sugarcraft/candy-sprinkles": "*",
-                "symfony/yaml": "^7.0"
-            },
-            "require-dev": {
-                "phpunit/phpunit": "^10.5"
-            },
-            "type": "library",
-            "autoload": {
-                "psr-4": {
-                    "SugarCraft\\Crush\\": "src/"
-                }
-            },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Crush\\Tests\\": "tests/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "TUI AI coding assistant - multi-provider, multi-agent, skill-aware",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
             "name": "sugarcraft/candy-files",
             "version": "dev-master",
             "dist": {
@@ -4446,7 +4403,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-query",
-                "reference": "9c6ac90990dc45e4aad2b5c67fc8d04838fbea9c"
+                "reference": "a8e65b21aac3b072bf447a09c4954f1569b1f0b3"
             },
             "require": {
                 "ext-pdo_mysql": "*",
@@ -4454,6 +4411,7 @@
                 "ext-pdo_sqlite": "*",
                 "php": ">=8.3",
                 "react/mysql": "0.7.x-dev",
+                "sugarcraft/candy-async": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-forms": "dev-master",
                 "sugarcraft/candy-kit": "dev-master",
@@ -5606,21 +5564,28 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "3f4448f569485c7d8f628e54194bd1d98f91c610"
+                "reference": "354876652aa1b901363c314c881f33dbaecb6595"
             },
             "require": {
-                "php": ">=8.3",
+                "aws/aws-sdk-php": "^3.300",
+                "google/cloud-ai-platform": "^1.0",
+                "guzzlehttp/guzzle": "^7.9",
+                "openai-php/client": "^0.10",
+                "php": "^8.3",
                 "react/promise": "^3.3",
                 "sugarcraft/candy-buffer": "dev-master",
                 "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-forms": "dev-master",
+                "sugarcraft/candy-pty": "dev-master",
                 "sugarcraft/candy-shine": "dev-master",
-                "sugarcraft/candy-sprinkles": "dev-master"
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "symfony/yaml": "^7.0"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.0"
+                "phpunit/phpunit": "^10.5"
             },
             "suggest": {
-                "ext-curl": "Required by HTTP-based backends you might write (Anthropic, OpenAI, Ollama)."
+                "ext-curl": "Used by the HTTP-based providers (OpenAI, Anthropic, SGLang, Custom)."
             },
             "bin": [
                 "bin/sugarcrush"
@@ -7764,11 +7729,11 @@
     "packages-dev": [
         {
             "name": "phpstan/phpstan",
-            "version": "2.2.1",
+            "version": "2.2.2",
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/dea9c8f2d25cc849391042b71e429c1a4bf82660",
-                "reference": "dea9c8f2d25cc849391042b71e429c1a4bf82660",
+                "url": "https://api.github.com/repos/phpstan/phpstan/zipball/e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
+                "reference": "e5cc34d491a90e79c216d824f60fe21fd4d93bd6",
                 "shasum": ""
             },
             "require": {
@@ -7824,7 +7789,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-05-28T14:44:12+00:00"
+            "time": "2026-06-05T09:00:01+00:00"
         },
         {
             "name": "phpstan/phpstan-phpunit",
@@ -7890,6 +7855,7 @@
         "sugarcraft/candy-async": 20,
         "sugarcraft/candy-buffer": 20,
         "sugarcraft/candy-core": 20,
+        "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flip": 20,
         "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-freeze": 20,
@@ -7899,18 +7865,18 @@
         "sugarcraft/candy-lister": 20,
         "sugarcraft/candy-log": 20,
         "sugarcraft/candy-metrics": 20,
-        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-mines": 20,
         "sugarcraft/candy-mold": 20,
         "sugarcraft/candy-mosaic": 20,
+        "sugarcraft/candy-mouse": 20,
         "sugarcraft/candy-palette": 20,
         "sugarcraft/candy-pty": 20,
         "sugarcraft/candy-query": 20,
         "sugarcraft/candy-serve": 20,
-        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-shell": 20,
         "sugarcraft/candy-shine": 20,
         "sugarcraft/candy-sprinkles": 20,
+        "sugarcraft/candy-testing": 20,
         "sugarcraft/candy-tetris": 20,
         "sugarcraft/candy-vcr": 20,
         "sugarcraft/candy-vt": 20,
@@ -7938,15 +7904,13 @@
         "sugarcraft/sugar-tick": 20,
         "sugarcraft/sugar-toast": 20,
         "sugarcraft/sugar-veil": 20,
-        "sugarcraft/sugar-wishlist": 20,
-        "sugarcraft/candy-files": 20,
-        "sugarcraft/candy-crush": 20
+        "sugarcraft/sugar-wishlist": 20
     },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
-    "platform-dev": [],
-    "plugin-api-version": "2.3.0"
+    "platform-dev": {},
+    "plugin-api-version": "2.6.0"
 }
