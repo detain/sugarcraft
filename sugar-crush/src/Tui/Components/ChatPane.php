@@ -19,7 +19,7 @@ final class ChatPane
         $messages = $a->messages;
         if ($messages === []) {
             $body = Style::new()->foreground(Color::hex('#7d6e98'))
-                ->render('Welcome to CandyCrush! Start typing to chat...');
+                ->render('Welcome to SugarCrush! Start typing to chat...');
         } else {
             $lines = [];
             foreach ($messages as $msg) {

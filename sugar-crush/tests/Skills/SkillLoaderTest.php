@@ -19,7 +19,7 @@ final class SkillLoaderTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->tempDir = sys_get_temp_dir() . '/candy-crush-test-' . uniqid();
+        $this->tempDir = sys_get_temp_dir() . '/sugar-crush-test-' . uniqid();
         $this->errorLogCalls = [];
     }
 
@@ -220,9 +220,9 @@ SKILL;
         // Arrange
         $loader = new SkillLoader();
         $projectRoot = $this->tempDir . '/project';
-        mkdir($projectRoot . '/.candy-crush/skills/my-skill', 0777, true);
+        mkdir($projectRoot . '/.sugar-crush/skills/my-skill', 0777, true);
         file_put_contents(
-            $projectRoot . '/.candy-crush/skills/my-skill/SKILL.md',
+            $projectRoot . '/.sugar-crush/skills/my-skill/SKILL.md',
             "---\ndescription: Project skill\n---\nProject skill content"
         );
 
@@ -240,9 +240,9 @@ SKILL;
         // Arrange
         $loader = new SkillLoader();
         $projectRoot = $this->tempDir . '/project2';
-        mkdir($projectRoot . '/.candy-crush/skills/trailing-test', 0777, true);
+        mkdir($projectRoot . '/.sugar-crush/skills/trailing-test', 0777, true);
         file_put_contents(
-            $projectRoot . '/.candy-crush/skills/trailing-test/SKILL.md',
+            $projectRoot . '/.sugar-crush/skills/trailing-test/SKILL.md',
             "---\ndescription: Trailing slash test\n---\nContent"
         );
 
@@ -299,9 +299,9 @@ SKILL;
 
         // Create a temp project with a skill
         $projectRoot = $this->tempDir . '/override-test-project';
-        mkdir($projectRoot . '/.candy-crush/skills/override-skill', 0777, true);
+        mkdir($projectRoot . '/.sugar-crush/skills/override-skill', 0777, true);
         file_put_contents(
-            $projectRoot . '/.candy-crush/skills/override-skill/SKILL.md',
+            $projectRoot . '/.sugar-crush/skills/override-skill/SKILL.md',
             "---\ndescription: Project override skill\n---\nThis should appear in loadAll"
         );
 

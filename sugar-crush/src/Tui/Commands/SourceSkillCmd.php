@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to apply/source a skill.
  *
- * Mirrors charmbracelet/candy-crush SourceSkillCmd.
+ * Mirrors charmbracelet/crush SourceSkillCmd.
  */
 final readonly class SourceSkillCmd implements KeyCmd
 {

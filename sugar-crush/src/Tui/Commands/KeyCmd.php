@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Marker interface for keyboard-triggered commands emitted by KeyboardHandler.
  *
- * Mirrors charmbracelet/candy-crush KeyCmd interface.
+ * Mirrors charmbracelet/crush KeyCmd interface.
  */
 interface KeyCmd
 {

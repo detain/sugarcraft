@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to select a provider.
  *
- * Mirrors charmbracelet/candy-crush ProviderSelectCmd.
+ * Mirrors charmbracelet/crush ProviderSelectCmd.
  */
 final readonly class ProviderSelectCmd implements KeyCmd
 {

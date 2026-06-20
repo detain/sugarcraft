@@ -7,7 +7,7 @@ namespace SugarCraft\Crush\Tui\Commands;
 /**
  * Command to enable multi-line/group input mode.
  *
- * Mirrors charmbracelet/candy-crush GroupInputCmd.
+ * Mirrors charmbracelet/crush GroupInputCmd.
  */
 final readonly class GroupInputCmd implements KeyCmd
 {

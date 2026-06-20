@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\Providers;
 
-use OpenAI\OpenAI;
-
 /**
  * Factory for creating provider instances from configuration arrays.
  *
@@ -283,7 +281,12 @@ final readonly class ProviderFactory
      */
     private function createOpenAI(array $config): OpenAIProvider
     {
-        $client = OpenAI::client(
+        // The openai-php package declares its factory as the GLOBAL `\OpenAI`
+        // class (file src/OpenAI.php has no namespace), so it must be referenced
+        // unqualified. Importing `OpenAI\OpenAI` made the autoloader re-load that
+        // file under the wrong PSR-4 path and fatal with "Cannot declare class
+        // OpenAI, because the name is already in use" the moment this ran.
+        $client = \OpenAI::client(
             apiKey: $config['apiKey'],
             organization: $config['organization'] ?? null,
         );

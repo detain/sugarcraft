@@ -15,7 +15,7 @@ final readonly class AuditHook implements HookInterface
 
     public function __construct(?string $logFile = null)
     {
-        $this->logFile = $logFile ?? sys_get_temp_dir() . '/candy-crush-audit.log';
+        $this->logFile = $logFile ?? sys_get_temp_dir() . '/sugar-crush-audit.log';
     }
 
     public function name(): string

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Crush\Tests\Messages;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Crush\Attachment;
+use SugarCraft\Crush\AttachmentType;
 use SugarCraft\Crush\Messages\Message;
 use SugarCraft\Crush\Messages\UserMessage;
 use SugarCraft\Crush\Messages\AssistantMessage;
@@ -98,6 +100,48 @@ final class MessageTest extends TestCase
 
         $this->assertSame('', $message->content());
         $this->assertSame(['role' => 'user', 'content' => ''], $message->toArray());
+    }
+
+    public function testUserMessageHasNoAttachmentsByDefault(): void
+    {
+        $this->assertSame([], (new UserMessage('hi'))->attachments());
+    }
+
+    public function testUserMessageWithFileAttachmentIsImmutable(): void
+    {
+        $base = new UserMessage('see this');
+        $withFile = $base->withFile('/tmp/report.pdf');
+
+        $this->assertSame([], $base->attachments());
+        $this->assertCount(1, $withFile->attachments());
+        $this->assertInstanceOf(Attachment::class, $withFile->attachments()[0]);
+        $this->assertSame('/tmp/report.pdf', $withFile->attachments()[0]->path);
+        $this->assertSame(AttachmentType::File, $withFile->attachments()[0]->type);
+    }
+
+    public function testUserMessageWithImageAttachment(): void
+    {
+        $message = (new UserMessage('look'))->withImage('/tmp/pic.png');
+
+        $this->assertSame(AttachmentType::Image, $message->attachments()[0]->type);
+    }
+
+    public function testUserMessageAccumulatesAttachments(): void
+    {
+        $message = (new UserMessage('multi'))
+            ->withFile('/a.txt')
+            ->withImage('/b.png');
+
+        $this->assertCount(2, $message->attachments());
+    }
+
+    public function testUserMessageToArraySurfacesAttachmentsOnlyWhenPresent(): void
+    {
+        $message = (new UserMessage('with file'))->withFile('/x.md');
+        $array = $message->toArray();
+
+        $this->assertArrayHasKey('attachments', $array);
+        $this->assertSame([['type' => 'File', 'path' => '/x.md']], $array['attachments']);
     }
 
     // =========================================================================

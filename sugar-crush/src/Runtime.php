@@ -188,7 +188,7 @@ final class Runtime
 
     private function buildSystemPrompt(App $app): string
     {
-        $base = 'You are CandyCrush, an AI coding assistant.';
+        $base = 'You are SugarCrush, an AI coding assistant.';
 
         if (!empty($app->enabledSkills)) {
             foreach ($app->enabledSkills as $skill) {
