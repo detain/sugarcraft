@@ -7,28 +7,31 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-crush)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-crush)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/sugar-crush?label=packagist)](https://packagist.org/packages/sugarcraft/sugar-crush)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
 ![demo](.vhs/chat.gif)
 
-Chat-shell TUI for AI coding assistants — port of [`charmbracelet/crush`](https://github.com/charmbracelet/crush). Pluggable backends (ship your own Anthropic / OpenAI / Ollama / shell-out adapter), Markdown rendering of replies via CandyShine, scrollback above a fixed input box.
+A terminal AI coding agent — PHP port of [`charmbracelet/crush`](https://github.com/charmbracelet/crush). It is a candy-core TEA program (a real `Model`/`Program` render loop with buffer-diffed output and Markdown-rendered replies) wrapped around a full agent engine: **multiple LLM providers**, model-driven **tool calling** gated by **hooks**, prompt-injecting **skills**, **sub-agents**, an **MCP** client/server, and **SQLite** session history.
 
 ```
 ┌─ SugarCrush ───────────────────────────────────────┐
-│ user> explain fiber-based scheduling in PHP        │
+│ user> add a test for the Width helper              │
 │                                                    │
 │ assistant                                          │
-│ ## Fibers (PHP 8.1+)                               │
-│                                                    │
-│ Fibers are cooperative units of execution …        │
+│ I'll read the helper first, then write the test.   │
+│   ⚙ Read  src/Util/Width.php                       │
+│   ⚙ Edit  tests/Util/WidthTest.php                 │
+│ Done — added 4 cases covering the clamp edges.     │
 └────────────────────────────────────────────────────┘
 ┌────────────────────────────────────────────────────┐
-│ > how do they relate to ReactPHP?█                 │
+│ > run them█                                        │
 └────────────────────────────────────────────────────┘
  Enter to send · Esc / ^C to quit
 ```
+
+> **History:** SugarCrush absorbed the former experimental `candy-crush` port. There is now a single `SugarCraft\Crush` library.
 
 ## Run it
 
@@ -37,119 +40,126 @@ composer install
 ./bin/sugarcrush
 ```
 
-By default it ships with `EchoBackend` so the binary is runnable offline (the assistant just echoes what you typed). To wire it to a real LLM, set `$SUGARCRUSH_BACKEND_CMD` to a command that reads JSON history on stdin and writes the reply to stdout:
+With no configuration the binary runs the **offline `EchoProvider`** through the full engine, so it launches with zero network and zero keys. Point it at a real model with environment variables:
 
 ```bash
-export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic-stream.sh
+# OpenAI
+export SUGARCRUSH_PROVIDER=openai
+export OPENAI_API_KEY=sk-...
+export SUGARCRUSH_MODEL=gpt-4o          # optional; provider default otherwise
 ./bin/sugarcrush
 ```
 
-### Sample wrapper script (Anthropic)
+`SUGARCRUSH_PROVIDER` accepts `openai`, `anthropic`, `claude-code`, `sglang`, `bedrock`, `vertex`, or `custom`. Each reads its own credentials from the environment (e.g. `ANTHROPIC_API_KEY`, AWS ambient creds for Bedrock, `GOOGLE_APPLICATION_CREDENTIALS` for Vertex). When a real provider is active, the binary wires the built-in coding tools (Bash/Read/Edit/Glob/Grep/WebFetch) and the safety hooks automatically.
+
+### Dependency-free shell-out
+
+To avoid PHP SDKs entirely, set `SUGARCRUSH_BACKEND_CMD` to a command that reads JSON history on stdin and writes the reply to stdout:
+
+```bash
+export SUGARCRUSH_BACKEND_CMD=~/bin/anthropic.sh
+./bin/sugarcrush
+```
 
 ```bash
 #!/usr/bin/env bash
-# ~/bin/anthropic-stream.sh
-payload=$(jq -nc --argjson h "$(cat)" \
-  '{model: "claude-opus-4-7", max_tokens: 4096, messages: $h}')
-
+# ~/bin/anthropic.sh — keeps PHP network-dep-free, swap models by editing this file
+payload=$(jq -nc --argjson h "$(cat)" '{model:"claude-opus-4-8", max_tokens:4096, messages:$h}')
 curl -sN https://api.anthropic.com/v1/messages \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
-  -H "content-type: application/json" \
-  -d "$payload" \
-  | jq -r '.content[0].text'
+  -H "x-api-key: $ANTHROPIC_API_KEY" -H "anthropic-version: 2023-06-01" \
+  -H "content-type: application/json" -d "$payload" | jq -r '.content[0].text'
 ```
 
-`chmod +x ~/bin/anthropic-stream.sh` and you're done.
+## Providers
 
-The wrapper-script approach is deliberate: keeps the PHP package network-dep-free, lets you swap providers without changing PHP code, and makes prompt-engineering iteration as fast as editing a shell script.
-
-## Writing a custom Backend
-
-If you'd rather skip the shell-out dance and integrate the SDK directly, implement the `Backend` interface in PHP:
+`SugarCraft\Crush\Providers\ProviderInterface` is the single LLM abstraction (capability introspection, batch + `\Generator` streaming, function calling, embeddings, per-model cost). Build one directly or from config via `ProviderFactory` (which resolves `${VAR}` / `${VAR:-default}` from the environment):
 
 ```php
-use SugarCraft\Crush\{Backend, Chat, Message};
+use SugarCraft\Crush\Providers\ProviderFactory;
 
-final class MyBackend implements Backend {
-    public function complete(array $history): Message {
-        $reply = /* your call here, returning a string */;
-        return Message::assistant($reply);
-    }
-}
-
-(new Program(new Chat(backend: new MyBackend())))->run();
+$factory  = new ProviderFactory();
+$provider = $factory->create(['type' => 'openai', 'apiKey' => '${OPENAI_API_KEY}', 'model' => 'gpt-4o']);
 ```
+
+| Provider        | Type key      | Notes                                                            |
+|-----------------|---------------|------------------------------------------------------------------|
+| OpenAI          | `openai`      | `openai-php/client`; function calling, embeddings, cost table    |
+| Anthropic       | `anthropic`   | real Messages API (`/v1/messages`, `x-api-key`)                  |
+| Claude Code CLI | `claude-code` | drives the `claude` binary headless; native cost; JSON schema    |
+| SGLang          | `sglang`      | OpenAI-compatible self-hosted endpoints (Guzzle)                 |
+| AWS Bedrock     | `bedrock`     | Converse API via `aws/aws-sdk-php`; per-model pricing            |
+| GCP Vertex      | `vertex`      | Anthropic-on-Vertex via an injectable predictor seam             |
+| Custom          | `custom`      | any OpenAI-compatible HTTP endpoint                              |
+| Echo            | —             | `EchoProvider`: offline, echoes the last turn; default + tests   |
+
+## The agent loop
+
+`EngineBackend` bridges the chat-shell `Backend` seam to the engine. Each user turn runs a **bounded agentic loop**: call the provider through the `Runtime`, execute any tool calls through the hook gate, feed the results back, and repeat until the model answers without calling tools — or a `maxSteps` ceiling is hit.
+
+```php
+use SugarCraft\Crush\Backend\EngineBackend;
+use SugarCraft\Crush\Hooks\{HookManager, HookRegistry};
+use SugarCraft\Crush\Tools\BuiltIn\{Bash, Read, Edit, Glob, Grep, WebFetch};
+
+$hooks = new HookManager(new HookRegistry());
+$hooks->registerBuiltIns();                       // audit + confirm-rm + protect-files
+
+$backend = (EngineBackend::new($provider, 'gpt-4o'))
+    ->withTools([new Bash(), new Read(), new Edit(), new Glob(), new Grep(), new WebFetch()])
+    ->withHooks($hooks);
+
+(new Program(new Chat(backend: $backend)))->run();
+```
+
+## Capabilities
+
+- **Tools** — `Tools\BuiltIn\*`: `Bash`, `Read`, `Edit`, `Glob`, `Grep`, `WebFetch`. Implement `Tools\Tool` for your own.
+- **Hooks** — `Hooks\*`: pre/post-tool-use guards (allow / deny / **modify** the input). Built-ins: `AuditHook`, `ConfirmRemoveHook`, `ProtectFilesHook`. YAML config and external `ScriptHook` supported.
+- **Skills** — `Skills\*`: frontmatter `SKILL.md` files inject prompt context, matched by keyword/path. Discovered from built-ins, `~/.sugar-crush/skills`, and `<project>/.sugar-crush/skills` (project wins). Ships php-best-practices, security-audit, phpunit-master, composer-wizard.
+- **Agents** — `Agents\*`: 6 sub-agent presets (coder/reviewer/debugger/architect/tester/devops) with their own model, tools, skills, and a streaming lifecycle.
+- **MCP** — `MCP\*`: multi-server client (stdio + HTTP, `.mcp.json`, `${VAR}` interpolation) and stdio/HTTP servers to host your own tools.
+- **Sessions** — `Session\SessionStore`: SQLite (WAL) persistence of sessions/messages/tool-calls with FK-enforced cascade and age-based pruning.
+- **Tokens & export** — `Util\TokenTracker` (token + cost accumulation) and `Util\Exporter` (Markdown / JSON / text transcripts).
+- **Messages** — typed `Messages\{System,User,Assistant,ToolResult}Message`; `UserMessage` carries file/image attachments; `AssistantMessage` carries tool calls + reasoning.
 
 ## Architecture
 
-| File                         | Role                                                           |
-|------------------------------|----------------------------------------------------------------|
-| `Role` enum                  | system / user / assistant — matches every API's wire vocab     |
-| `Message`                    | VO: role, content, createdAt; `toWire()` for adapters          |
-| `Backend` interface          | `complete(list<Message>): Message`                             |
-| `Backend\EchoBackend`        | Offline default — echoes the last user message                 |
-| `Backend\CommandBackend`     | Shells out via proc_open; JSON history → stdin → stdout reply  |
-| `Backend\StreamingCommandBackend` | Streams backend output line-by-line as it arrives     |
-| `StreamingDirectoryLister`    | Generator-based lazy directory listing — memory-safe for huge dirs |
-| `Compactor`                  | Groups small files by extension/type to reduce visual clutter |
-| `CompactedGroup`             | Value object: label, paths, and isCompact flag per group     |
-| `AssistantMsg`               | Internal `Msg` — fires when a backend completion arrives       |
-| `Chat`                       | SugarCraft Model — history, input buffer, inFlight gate         |
-| `Renderer`                   | Pure view fn — CandyShine-rendered scrollback + input box      |
-| `Session`                    | Persists UI state to ~/.config/sugarcraft-crush/session.json |
-| `CommandParser`              | Parses `/command` slash-input; extracts name + shell-quoted args |
-| `ParsedCommand`               | Result VO: `name` (lowercase) + `args` list                   |
-| `ToolRegistry`               | Registry of slash-commands; 5 built-ins (filter/sort/goto/select/quit) |
-| `Tool`                       | Registered tool: name, signature, execute handler               |
-| `ToolSignature`              | Tool arg spec: positional names + named flags + description    |
-| `ToolCall`                   | VO: name, arguments, optional id — from AI backend              |
-| `ToolResult`                 | VO: name, result, optional error, optional id — to AI backend   |
-| `McpMessage`                  | JSON-RPC 2.0 envelope: request/response/notification/error  |
-| `McpClient`                   | MCP stdio client for Claude Code — connect/callTool/listTools  |
+SugarCrush keeps the proven sugar-crush **chassis** (the `Chat` candy-core `Model`, buffer-diff `Renderer`, `bin/sugarcrush`) and runs the ported **engine** behind it:
 
-## Session persistence
+```
+bin/sugarcrush
+  └─ Program → Chat (Model: input, scrollback, inFlight gate, buffer-diff view)
+       └─ Backend  ── EchoBackend / CommandBackend (simple)
+                   └─ EngineBackend (agent loop)
+                        └─ Runtime → ProviderInterface  (+ Tools · Hooks · Skills via App)
+```
 
-`Session` stores and restores the file-browser state across invocations:
+The chassis speaks the root `Message` value object; the engine speaks the typed `Messages\*` hierarchy; `EngineBackend` converts at the seam.
 
-- `cwd` — current working directory
-- `selected` — list of selected file paths
-- `filter` — active filter string
-- `sortColumn` / `sortDir` — sort preferences
-- `activePane` — active pane identifier
+## Custom provider
 
-`Session::load()` and `Session::save()` are called by the application entry point. Missing or corrupted session files yield a fresh empty session silently rather than propagating errors.
+```php
+use SugarCraft\Crush\Providers\{ProviderInterface, CompleteRequest, CompleteResponse, EmbeddingsRequest, EmbeddingsResponse};
 
-## Test plan
+final class MyProvider implements ProviderInterface
+{
+    public function name(): string { return 'mine'; }
+    public function supportsStreaming(): bool { return false; }
+    public function supportsFunctionCalling(): bool { return true; }
+    public function supportsVision(): bool { return false; }
+    public function supportsJsonSchema(): bool { return false; }
+    public function contextWindow(): int { return 128_000; }
+    public function costPer1kTokens(string $model, string $direction): float { return 0.0; }
+    public function complete(CompleteRequest $r): CompleteResponse { /* ... */ }
+    public function completeStream(CompleteRequest $r): \Generator { /* yield CompleteResponse chunks */ }
+    public function embeddings(EmbeddingsRequest $r): EmbeddingsResponse { /* ... */ }
+}
+```
 
-- 158 tests / 444 assertions
-- `Message`: factories, wire shape, custom timestamps
-- `EchoBackend`: echoes most recent user, handles empty history
-- `CommandBackend`: history is JSON-piped to stdin, exit code surfaced as error message, missing command handled gracefully
-- `Session`: load returns fresh on missing/corrupted file, save creates directory hierarchy, with*() builders are immutable and fluent, home-directory resolution via $HOME / posix_getpwuid / getcwd fallback
-- `Chat`: type accumulation, space, UTF-8-aware backspace, Enter submits + clears + arms inFlight, empty submit no-op, AssistantMsg appends + clears inFlight, keystrokes ignored while inFlight, Esc quits, full echo round-trip via the real `EchoBackend`
-- `StreamingDirectoryLister`: lazy yield, empty/non-dir/no-handle handled gracefully, listFiles filters correctly, count scans without loading entries
-- `Compactor`: threshold partitions small vs large, extension maps to correct category, maxPerGroup splits oversized buckets, CompactedGroup value object methods
-- `CommandParser`: slash vs plain text discrimination, name normalization (lowercase/alphanumeric/hyphens), colon/space delimiter parsing, shell-quoted arg splitting (single/double quotes, whitespace separation), empty/no-op edge cases
-- `ToolRegistry`: register overrides existing, get/has/execute/all, 5 built-in tools (filter/sort/goto/select/quit) with correct signatures and execute output
-- `ToolCall`: fromArray/toArray round-trip, defaults for optional fields
-- `ToolResult`: ok() / error() factories, isError() predicate, toWire() role/tool_call_id shape
+## Tests
 
-## Buffer diffing
+```bash
+cd sugar-crush && composer install && vendor/bin/phpunit
+```
 
-The `Renderer` maintains a `?Buffer $previousFrame` across renders. On each render it
-builds the current Buffer, computes `current->diff(previous)` (from
-[candy-buffer](https://github.com/detain/sugarcraft-candy-buffer)), and emits only
-the delta ANSI ops via `DiffEncoder::encode($ops)`. The current frame then replaces
-`previousFrame` for the next render.
-
-**SSH bandwidth + flicker win:** a one-character change in an 80×24 viewport
-produces ~8 bytes of delta ops instead of ~1 940 bytes for a full repaint.
-Over an SSH session this means far less per-frame data on the wire and
-eliminates the full-screen flicker of rewrite-based terminals. The first render
-after startup or a resize still emits a full Buffer (no diff possible), so
-behaviour is always correct.
-
-## Status
-
-Phase 9+ entry #17 — first cut. Single-shot replies (no streaming yet); `StreamingBackend` interface is the obvious follow-up. Markdown rendering, persistent input buffer, and the inFlight gate are all wired.
+1,239 tests / 2,924 assertions. Coverage spans every subsystem: typed messages + attachments, the 6 built-in tools, all 7 providers (unit-tested with mocked transports — no live calls), the hook framework, skills discovery, sub-agents, the MCP client/servers, the SQLite store, token tracking, export, the TUI components, the `Runtime` orchestration (streaming accumulation, tool-result correlation, MODIFY hooks), and the `EngineBackend` agentic loop (incl. the `maxSteps` guard).
