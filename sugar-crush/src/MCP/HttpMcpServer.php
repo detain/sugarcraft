@@ -15,6 +15,9 @@ final class HttpMcpServer implements McpServer
 
     private bool $initialized = false;
 
+    /** Monotonic JSON-RPC request id — never reuse an id within a session. */
+    private int $nextId = 0;
+
     public function __construct(
         public readonly string $name,
         private string $url,
@@ -24,51 +27,39 @@ final class HttpMcpServer implements McpServer
 
     public function start(): void
     {
+        // Idempotent: a started server must not re-issue the HTTP handshake.
         if ($this->initialized) {
             return;
         }
 
         try {
-            // Initialize
-            $this->httpClient->post($this->url, [
-                'json' => [
-                    'jsonrpc' => '2.0',
-                    'id' => 0,
-                    'method' => 'initialize',
-                    'params' => [
-                        'protocolVersion' => '2024-11-05',
-                        'capabilities' => [],
-                        'clientInfo' => ['name' => 'candy-crush', 'version' => '1.0.0'],
-                    ],
-                ],
-                'headers' => $this->headers,
+            $this->rpc('initialize', [
+                'protocolVersion' => '2024-11-05',
+                'capabilities' => [],
+                'clientInfo' => ['name' => 'candy-crush', 'version' => '1.0.0'],
             ]);
 
-            $this->initialized = true;
-
-            // List tools
-            $response = $this->httpClient->post($this->url, [
-                'json' => [
-                    'jsonrpc' => '2.0',
-                    'id' => 1,
-                    'method' => 'tools/list',
-                    'params' => [],
-                ],
-                'headers' => $this->headers,
-            ]);
+            $response = $this->rpc('tools/list', []);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            if (is_array($data)) {
-                $this->tools = $this->parseTools($data);
+            // A non-JSON / non-object body (e.g. an HTTP 5xx error page) means the
+            // tools/list leg of the handshake failed — surface it as a start failure.
+            if (!is_array($data)) {
+                throw new \RuntimeException('tools/list returned an invalid response');
             }
+            $this->tools = $this->parseTools($data);
         } catch (\Exception $e) {
             throw new \RuntimeException("Failed to start MCP server {$this->name}: {$e->getMessage()}");
         }
+
+        // Mark initialized only after the full handshake succeeds, so a failed
+        // start can be retried rather than wedging the server half-open.
+        $this->initialized = true;
     }
 
     public function stop(): void
     {
-        // HTTP servers don't need stopping
+        // HTTP servers are stateless per request — nothing to tear down.
     }
 
     /**
@@ -85,17 +76,9 @@ final class HttpMcpServer implements McpServer
     public function callTool(string $toolName, array $args): array
     {
         try {
-            $response = $this->httpClient->post($this->url, [
-                'json' => [
-                    'jsonrpc' => '2.0',
-                    'id' => time(),
-                    'method' => 'tools/call',
-                    'params' => [
-                        'name' => $toolName,
-                        'arguments' => $args,
-                    ],
-                ],
-                'headers' => $this->headers,
+            $response = $this->rpc('tools/call', [
+                'name' => $toolName,
+                'arguments' => $args,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -103,6 +86,24 @@ final class HttpMcpServer implements McpServer
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Issue a single JSON-RPC request over HTTP with the configured headers.
+     *
+     * @param array<string, mixed> $params
+     */
+    private function rpc(string $method, array $params): \Psr\Http\Message\ResponseInterface
+    {
+        return $this->httpClient->post($this->url, [
+            'json' => [
+                'jsonrpc' => '2.0',
+                'id' => $this->nextId++,
+                'method' => $method,
+                'params' => $params,
+            ],
+            'headers' => $this->headers,
+        ]);
     }
 
     /**

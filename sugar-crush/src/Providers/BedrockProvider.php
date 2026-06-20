@@ -102,7 +102,9 @@ final readonly class BedrockProvider implements ProviderInterface
         }
 
         try {
-            $result = $this->client->invokeModel($params);
+            // Converse-shaped params (messages/system/inferenceConfig) require the
+            // Converse API, not the legacy invokeModel body protocol.
+            $result = $this->client->converse($params);
             $data = $result->toArray();
 
             return $this->parseResponse($data);
@@ -127,7 +129,6 @@ final readonly class BedrockProvider implements ProviderInterface
         $params = [
             'modelId' => $request->model,
             'messages' => $this->formatMessages($request->messages),
-            'guardrailConfig' => [],
             'inferenceConfig' => [
                 'maxTokens' => $request->maxTokens ?? 4096,
                 'temperature' => $request->temperature ?? 0.7,
@@ -139,16 +140,13 @@ final readonly class BedrockProvider implements ProviderInterface
         }
 
         try {
-            $result = $this->client->invokeModelWithResponseStream($params);
-            $stream = $result->get('body');
+            // ConverseStream emits an event stream of typed events; each text token
+            // arrives as a contentBlockDelta event (not the legacy `completion` field).
+            $result = $this->client->converseStream($params);
+            $stream = $result->get('stream');
 
-            foreach ($stream as $chunk) {
-                if (isset($chunk['chunk']['bytes'])) {
-                    $data = json_decode($chunk['chunk']['bytes'], true);
-                    if ($data !== null) {
-                        yield $this->parseChunk($data);
-                    }
-                }
+            foreach ($stream as $event) {
+                yield $this->parseChunk($event);
             }
         } catch (AwsException $e) {
             throw new \RuntimeException('Bedrock streaming failed: ' . $e->getMessage(), 0, $e);
@@ -191,12 +189,18 @@ final readonly class BedrockProvider implements ProviderInterface
         $output = $data['output']['message'] ?? [];
         $content = $output['content'] ?? [];
 
+        $inputTokens = $data['usage']['inputTokens'] ?? 0;
+        $outputTokens = $data['usage']['outputTokens'] ?? 0;
+
+        $costUsd = ($inputTokens * $this->costPer1kTokens($this->defaultModel, 'input')
+            + $outputTokens * $this->costPer1kTokens($this->defaultModel, 'output')) / 1000;
+
         return new CompleteResponse(
             content: $content[0]['text'] ?? '',
             reasoning: null,
             toolCalls: null,
-            tokensUsed: ($data['usage']['inputTokens'] ?? 0) + ($data['usage']['outputTokens'] ?? 0),
-            costUsd: 0.0, // Calculate from usage if needed
+            tokensUsed: $inputTokens + $outputTokens,
+            costUsd: $costUsd,
         );
     }
 
@@ -213,18 +217,11 @@ final readonly class BedrockProvider implements ProviderInterface
      */
     private function parseChunk(array $data): CompleteResponse
     {
-        if (isset($data['completion'])) {
-            return new CompleteResponse(
-                content: $data['completion'],
-                reasoning: null,
-                toolCalls: null,
-                tokensUsed: 0,
-                costUsd: 0.0,
-            );
-        }
+        // ConverseStream text tokens arrive as contentBlockDelta events.
+        $text = $data['contentBlockDelta']['delta']['text'] ?? '';
 
         return new CompleteResponse(
-            content: '',
+            content: $text,
             reasoning: null,
             toolCalls: null,
             tokensUsed: 0,

@@ -20,6 +20,10 @@ final class SessionStore
         $this->pdo = new PDO("sqlite:$dbPath");
         $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
         $this->pdo->exec('PRAGMA journal_mode=WAL');
+        // Foreign keys are OFF by default in SQLite and must be enabled per
+        // connection. Without this the FK/ON DELETE CASCADE clauses below are
+        // inert and orphaned rows can accumulate.
+        $this->pdo->exec('PRAGMA foreign_keys=ON');
         $this->initSchema();
     }
 
@@ -48,7 +52,7 @@ final class SessionStore
                 model TEXT,
                 tokens_used INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(id)
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
             )
         ');
 
@@ -63,8 +67,8 @@ final class SessionStore
                 duration_ms INTEGER,
                 success INTEGER DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(id),
-                FOREIGN KEY (message_id) REFERENCES messages(id)
+                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
             )
         ');
     }
@@ -105,9 +109,12 @@ final class SessionStore
      */
     public function listSessions(int $limit = 20): array
     {
+        // Tiebreak on rowid (insertion order): CURRENT_TIMESTAMP has only
+        // second resolution, so sessions created milliseconds apart share an
+        // updated_at and would otherwise sort non-deterministically.
         $stmt = $this->pdo->prepare('
             SELECT * FROM sessions
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, rowid DESC
             LIMIT ?
         ');
         $stmt->execute([$limit]);

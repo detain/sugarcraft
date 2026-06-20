@@ -18,8 +18,11 @@ final class McpClient
 
     public function __construct(
         private string $configPath,
+        ?Client $httpClient = null,
     ) {
-        $this->httpClient = new Client(['timeout' => 30]);
+        // Injectable so tests can supply a MockHandler-backed client; defaults to
+        // a real client for production use.
+        $this->httpClient = $httpClient ?? new Client(['timeout' => 30]);
     }
 
     /**
@@ -68,7 +71,14 @@ final class McpClient
             default => throw new \RuntimeException("Unknown MCP server type: $type"),
         };
 
-        $server->start();
+        // A single unreachable/misbehaving server must not abort loading the rest.
+        // An unknown type is a config error and is thrown above, before we get here.
+        try {
+            $server->start();
+        } catch (\RuntimeException) {
+            return;
+        }
+
         $this->servers[$name] = $server;
     }
 

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace SugarCraft\Crush\Tui;
+namespace SugarCraft\Crush\Tui\Commands;
 
 /**
- * Base interface for keyboard commands.
+ * Marker interface for keyboard-triggered commands emitted by KeyboardHandler.
  *
  * Mirrors charmbracelet/candy-crush KeyCmd interface.
  */

@@ -7,6 +7,7 @@ namespace SugarCraft\Crush\Tui\Components;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Style;
 use SugarCraft\Crush\App\App;
+use SugarCraft\Crush\Tui\Pane;
 
 final class MenuBar
 {
@@ -18,6 +19,19 @@ final class MenuBar
         'Skills' => ['Browse Skills', 'Enable Skill...', 'Manage Built-in Skills'],
         'Agents' => ['Create Agent', 'Manage Agents', 'Active Agents'],
         'Help' => ['Keyboard Shortcuts', 'Documentation', 'About'],
+    ];
+
+    /**
+     * Panes surfaced as quick-switch tabs in the bar, in display order.
+     *
+     * @var list<Pane>
+     */
+    private const PANE_TABS = [
+        Pane::Chat,
+        Pane::Files,
+        Pane::Tools,
+        Pane::Skills,
+        Pane::Agents,
     ];
 
     private static int $activeMenu = 0;
@@ -34,7 +48,28 @@ final class MenuBar
             $menuIndex++;
         }
         $output .= ' ';
-        return $output;
+
+        return $output . self::paneTabs($a);
+    }
+
+    /**
+     * Render the quick-switch pane tabs plus the current-pane indicator.
+     * The focused pane's tab is highlighted; the indicator drives the
+     * "Currently: <Label>" hint the status line relies on.
+     */
+    private static function paneTabs(App $a): string
+    {
+        $tabs = ' ';
+        foreach (self::PANE_TABS as $pane) {
+            $color = $a->pane === $pane ? Color::hex('#00ffaa') : Color::hex('#7d6e98');
+            $tabs .= Style::new()->foreground($color)->render('[' . $pane->label() . ']');
+            $tabs .= ' ';
+        }
+
+        $current = Style::new()->foreground(Color::hex('#fde68a'))
+            ->render('Currently: ' . $a->pane->label());
+
+        return $tabs . ' ' . $current;
     }
 
     public static function handleKey(string $key, int $currentMenu): array

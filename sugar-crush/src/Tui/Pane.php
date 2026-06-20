@@ -21,11 +21,14 @@ enum Pane: string
     case Tools = 'tools';
     case Settings = 'settings';
     case Help = 'help';
+    case Menu = 'menu';
 
     /**
      * Returns the next pane in the cycling order.
      *
-     * Cycle: Chat → Input → Files → Tools → Skills → Agents → Settings → Help → Chat
+     * Cycle: Chat → Input → Files → Tools → Skills → Agents → Settings → Help → Chat.
+     * Menu is a transient overlay reached by shortcut, not part of the Tab cycle,
+     * so it folds back into Chat rather than extending the loop.
      */
     public function next(): self
     {
@@ -38,6 +41,7 @@ enum Pane: string
             self::Agents => self::Settings,
             self::Settings => self::Help,
             self::Help => self::Chat,
+            self::Menu => self::Chat,
         };
     }
 
@@ -55,6 +59,7 @@ enum Pane: string
             self::Tools => 'Tools',
             self::Settings => 'Settings',
             self::Help => 'Help',
+            self::Menu => 'Menu',
         };
     }
 }

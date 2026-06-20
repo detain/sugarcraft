@@ -13,13 +13,15 @@ final class InputPane
 {
     public static function render(App $a, int $cols): string
     {
-        $width = max(20, $cols - 6);
+        // Box spans the full terminal width: 2 border corners + 2 padding
+        // columns frame a content area of cols - 4.
+        $width = max(1, $cols - 4);
 
         $placeholder = Style::new()->foreground(Color::hex('#7d6e98'))
             ->render('Type your message... (Enter to send, Ctrl+G for group)');
 
         $st = Style::new()
-            ->border(Border::rounded()->withTitle(' input '))
+            ->border(Border::normal()->withTitle(' input '))
             ->padding(0, 1)
             ->width($width);
 
