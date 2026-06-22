@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — CandyFocus</title>
+<meta name="description" content="CandyFocus: dependency-free focus ring — an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal for full-window TUI layouts.">
+<meta property="og:title" content="SugarCraft — CandyFocus">
+<meta property="og:description" content="Focus-ring state machine for full-window TUIs: register each focusable region, map Tab to next() and Shift-Tab to previous(), and accent-border the region current() returns. Immutable, dependency-free.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/candy-focus.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/candy-focus.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/candy-focus.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/candy-focus.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/candy-focus.png" alt="CandyFocus" onerror="this.style.display='none'">
+      <div>
+        <h2>CandyFocus</h2>
+        <p class="detail-sub">Focus-ring state machine — ordered focusable regions with Tab/Shift-Tab traversal</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">original — no upstream parallel</span>
+          <span class="tag-chip">focus</span>
+          <span class="tag-chip">layout</span>
+          <span class="tag-chip">navigation</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">A tiny, dependency-free <strong>focus ring</strong> for full-window terminal UIs: an ordered set of focusable regions with a single focused member and wrap-around Tab/Shift-Tab traversal. It is the app-wide "which panel has focus" state for a TUI layout — register each focusable region (sidebar, content grid, filter bar…), map <strong>Tab</strong> to <code>next()</code> and <strong>Shift-Tab</strong> to <code>previous()</code>, and give the region <code>current()</code> returns an accent border when you render. The ring carries no rendering or key decoding of its own, so it composes with any candy-core model without pulling in dependencies. Original SugarCraft component — no 1:1 upstream; inspired by focus-traversal in charmbracelet/bubbles and sugar-dash's FocusManager.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/candy-focus</code></pre>
+
+    <h3 style="margin-top: 32px;">Quickstart</h3>
+    <pre class="code"><code>use SugarCraft\Focus\FocusRing;
+
+$ring = FocusRing::of('sidebar', 'grid', 'filter'); // 'sidebar' is focused
+
+$ring = $ring->next();        // → 'grid'
+$ring = $ring->next();        // → 'filter'
+$ring = $ring->next();        // → 'sidebar' (wraps)
+$ring = $ring->previous();    // → 'filter' (wraps the other way)
+$ring = $ring->focus('grid'); // jump straight to a region
+
+$ring->current();             // 'grid'
+$ring->isFocused('grid');     // true</code></pre>
+
+    <p>Wire it into a candy-core model's <code>update()</code>, then let each region style itself in <code>view()</code>:</p>
+    <pre class="code"><code>if ($msg instanceof KeyMsg &amp;&amp; $msg->type === KeyType::Tab) {
+    $ring = $msg->shift ? $this->ring->previous() : $this->ring->next();
+    return [$this->withRing($ring), null];
+}
+
+// …and in view():
+$style = $ring->isFocused('sidebar') ? $accentBorder : $plainBorder;</code></pre>
+
+    <h3 style="margin-top: 32px;">Behaviour</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Exactly one focused region</strong><span>A non-empty ring always has exactly one focused region; an empty ring focuses nothing (<code>current()</code> is <code>null</code>, <code>index()</code> is <code>-1</code>).</span></div>
+      <div class="feature"><strong>register() appends</strong><span>Adds to the traversal order and focuses the region only when the ring was empty; re-registering an existing id is a no-op.</span></div>
+      <div class="feature"><strong>unregister() preserves focus</strong><span>Keeps focus on the same region where possible; removing the focused region shifts focus to whatever takes its slot (clamped to the end), and emptying the ring clears focus.</span></div>
+      <div class="feature"><strong>Wrap-around traversal</strong><span><code>next()</code> / <code>previous()</code> wrap past the ends and are no-ops with fewer than two regions.</span></div>
+      <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new <code>FocusRing</code> and leaves the receiver untouched, so it slots into the immutable-model (TEA) pattern.</span></div>
+      <div class="feature"><strong>Dependency-free</strong><span>No rendering or key decoding of its own — the owning model wires keys to it and reads <code>isFocused()</code> when drawing. Composes with any candy-core model.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Full-window TUI layouts</strong> — track which panel (sidebar, content grid, filter bar) currently owns keyboard focus.</li>
+      <li><strong>Tab / Shift-Tab traversal</strong> — wrap-around movement across an ordered set of regions, decoupled from key decoding.</li>
+      <li><strong>Accent-border styling</strong> — read <code>isFocused()</code> in <code>view()</code> to highlight the active region.</li>
+      <li><strong>Immutable (TEA) models</strong> — drop the ring into your Model state; every mutator returns a fresh instance.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/candy-focus">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-focus/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/candy-focus/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>FocusRing</td><td>new(): self</td><td>An empty ring with nothing registered or focused</td></tr>
+<tr><td>FocusRing</td><td>of(string ...$ids): self</td><td>A ring of regions (duplicates dropped), focusing the first</td></tr>
+<tr><td>FocusRing</td><td>register(string $id): self</td><td>Add a region to the end of the traversal order</td></tr>
+<tr><td>FocusRing</td><td>unregister(string $id): self</td><td>Remove a region, preserving focus where possible</td></tr>
+<tr><td>FocusRing</td><td>focus(string $id): self</td><td>Focus a specific registered region</td></tr>
+<tr><td>FocusRing</td><td>next(): self</td><td>Tab traversal — move to the next region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>previous(): self</td><td>Shift-Tab traversal — move to the previous region (wrapping)</td></tr>
+<tr><td>FocusRing</td><td>current(): ?string</td><td>The focused region id, or null when empty</td></tr>
+<tr><td>FocusRing</td><td>isFocused(string $id): bool</td><td>Whether $id is the focused region</td></tr>
+<tr><td>FocusRing</td><td>has(string $id): bool</td><td>Whether $id is registered</td></tr>
+<tr><td>FocusRing</td><td>index(): int</td><td>Focused position, or -1 when empty</td></tr>
+<tr><td>FocusRing</td><td>ids(): list&lt;string&gt;</td><td>Registered region ids in traversal order</td></tr>
+<tr><td>FocusRing</td><td>count(): int</td><td>Number of registered regions</td></tr>
+<tr><td>FocusRing</td><td>isEmpty(): bool</td><td>Whether the ring has no regions</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/candy-focus">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/candy-focus/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
