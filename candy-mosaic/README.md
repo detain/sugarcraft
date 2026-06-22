@@ -70,6 +70,41 @@ $compressed = $renderer->renderWithOptions($image, 40, null, $opts);
 - Palette PNGs are automatically converted to truecolor before
   processing.
 
+## Remote images
+
+Load images straight from a URL. `fromUrl()` is synchronous (PHP stream
+wrappers — `http`/`https`/`file`/`data`, redirects followed); `fromUrlAsync()`
+is non-blocking on the ReactPHP event loop and resolves with a decoded
+`ImageSource`, ideal for fetching many posters concurrently without stalling
+the render loop.
+
+```php
+use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Mosaic;
+
+// Synchronous (blocks) — handy for scripts/CLIs.
+$image = ImageSource::fromUrl('https://example.com/poster.png', [
+    'Authorization' => 'Bearer ' . $token,   // optional request headers
+]);
+echo Mosaic::halfBlock()->render($image, width: 24, height: 36);
+
+// Asynchronous — resolves with an ImageSource on the loop.
+ImageSource::fromUrlAsync('https://example.com/poster.png')
+    ->then(fn (ImageSource $img) => Mosaic::probe()->render($img, 24, 36))
+    ->then(fn (string $ansi) => print($ansi));
+```
+
+`fromUrlAsync()` needs the suggested `react/http` package
+(`composer require react/http`); without it the returned promise rejects with
+an install hint rather than fataling. Pass your own pre-configured
+`React\Http\Browser` as the third argument to share a connector/timeout.
+
+> **Security:** as with `fromFile()`, the source-trust decision is yours. Both
+> methods honour every PHP/redirect scheme, so a user-influenced URL can reach
+> local files (`file://`) or internal hosts (SSRF). Only pass URLs you control
+> or have validated against an allow-list. Header values containing CR/LF are
+> rejected to prevent request splitting.
+
 ## KittyOptions — virtual-image placement and compression
 
 The Kitty renderer supports two advanced options via `KittyOptions`:

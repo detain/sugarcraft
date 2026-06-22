@@ -16,6 +16,10 @@ return [
     'image_source.no_gd'             => 'ext-gd is required but is not available',
     'image_source.gd_load_failed'    => 'GD failed to load image: {path}',
     'image_source.temp_failed'       => 'Failed to create temporary file for in-memory image',
+    'image_source.url_fetch_failed'  => 'Failed to fetch image from URL: {url}',
+    'image_source.url_bad_status'    => 'Unexpected HTTP status {status} while fetching image from URL',
+    'image_source.url_http_missing'  => 'Async URL loading requires react/http. Install it with: composer require react/http',
+    'image_source.header_crlf'       => 'Request header names and values must not contain CR or LF characters',
 
     // PixelGrid
     'pixel_grid.alloc_failed'  => 'GD failed to allocate a resize buffer',
