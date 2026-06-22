@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "84d0d503122b1ff95673b69940f19383",
+    "content-hash": "2971ebd07c168f40ea2dde194e8ee7f4",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3437,10 +3437,16 @@
         {
             "name": "sugarcraft/candy-focus",
             "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-focus.git",
+                "reference": "c43494a66156c95112ad6bec22230f7a0aefec29"
+            },
             "dist": {
-                "type": "path",
-                "url": "candy-focus",
-                "reference": "1281c1329a24220103ea7674d80cb1acfb08fa7e"
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-focus/zipball/c43494a66156c95112ad6bec22230f7a0aefec29",
+                "reference": "c43494a66156c95112ad6bec22230f7a0aefec29",
+                "shasum": ""
             },
             "require": {
                 "php": "^8.3"
@@ -3448,6 +3454,7 @@
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -3484,10 +3491,7 @@
                 "source": "https://github.com/sugarcraft/candy-focus",
                 "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
             },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "time": "2026-06-22T18:25:39+00:00"
         },
         {
             "name": "sugarcraft/candy-forms",
@@ -5766,30 +5770,34 @@
         {
             "name": "sugarcraft/sugar-gallery",
             "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/sugar-gallery.git",
+                "reference": "a455bef32a1cbfe40b5543f861f9b91081865d9c"
+            },
             "dist": {
-                "type": "path",
-                "url": "sugar-gallery",
-                "reference": "eeca9ec85a1039622a0116aad9b8b42778732a29"
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/sugar-gallery/zipball/a455bef32a1cbfe40b5543f861f9b91081865d9c",
+                "reference": "a455bef32a1cbfe40b5543f861f9b91081865d9c",
+                "shasum": ""
             },
             "require": {
                 "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master",
                 "sugarcraft/candy-sprinkles": "dev-master",
                 "sugarcraft/candy-zone": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
             },
+            "default-branch": true,
             "type": "library",
             "autoload": {
                 "psr-4": {
                     "SugarCraft\\Gallery\\": "src/"
                 }
             },
-            "autoload-dev": {
-                "psr-4": {
-                    "SugarCraft\\Gallery\\Tests\\": "tests/"
-                }
-            },
+            "notification-url": "https://packagist.org/downloads/",
             "license": [
                 "MIT"
             ],
@@ -5803,24 +5811,21 @@
             "description": "Poster grids and rails for media TUIs — a 2-D virtualized PosterGrid with sparse range paging, a horizontal Rail carousel, and a PosterCard tile. Renderer-agnostic (holds pre-rendered poster cells).",
             "homepage": "https://github.com/sugarcraft/sugar-gallery",
             "keywords": [
+                "Virtualization",
                 "carousel",
                 "gallery",
                 "grid",
                 "poster",
                 "sugarcraft",
                 "terminal",
-                "tui",
-                "virtualization"
+                "tui"
             ],
             "support": {
+                "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html",
                 "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
-                "source": "https://github.com/sugarcraft/sugar-gallery",
-                "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html"
+                "source": "https://github.com/sugarcraft/sugar-gallery"
             },
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
+            "time": "2026-06-22T19:02:31+00:00"
         },
         {
             "name": "sugarcraft/sugar-glow",

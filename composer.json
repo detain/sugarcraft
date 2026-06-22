@@ -135,11 +135,8 @@
             }
         },
         {
-            "type": "path",
-            "url": "candy-focus",
-            "options": {
-                "symlink": true
-            }
+            "type": "vcs",
+            "url": "https://github.com/sugarcraft/candy-focus"
         },
         {
             "type": "path",
@@ -375,13 +372,6 @@
         {
             "type": "path",
             "url": "sugar-dash",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "sugar-gallery",
             "options": {
                 "symlink": true
             }
