@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SugarCraft — SugarGallery</title>
+<meta name="description" content="SugarGallery: poster grids & rails for media TUIs — a 2-D virtualized, sparse, absolute-indexed PosterGrid with owner-driven range paging, a horizontal Rail carousel, and a renderer-agnostic PosterCard tile.">
+<meta property="og:title" content="SugarCraft — SugarGallery">
+<meta property="og:description" content="Browse-grid widgets for media TUIs: a 2-D virtualized PosterGrid that holds only the cards on screen (sparse, absolute-indexed) and emits a need-range window for owner-driven paging, a Rail carousel, and a renderer-agnostic PosterCard. Immutable.">
+<meta property="og:image" content="https://sugarcraft.github.io/img/icons/sugar-gallery.png">
+<link rel="canonical" href="https://sugarcraft.github.io/lib/sugar-gallery.html">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://sugarcraft.github.io/lib/sugar-gallery.html">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="../img/icons/sugar-gallery.png">
+<link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="../css/search.css">
+</head>
+<body>
+
+<nav class="nav"><div class="nav-inner">
+    <a class="brand" href="../"><span class="logo-mark"></span>SugarCraft</a>
+    <div class="nav-links">
+        <a href="../#libraries">Libraries</a>
+        <a href="../#apps">Apps</a>
+        <a href="../#demos">Demos</a>
+        <a href="../#quickstart">Quickstart</a>
+        <a href="../compare.html">Compare</a>
+        <a href="https://github.com/sugarcraft" class="btn btn-ghost">GitHub →</a>
+    </div>
+</div></nav>
+
+<section class="section">
+  <div class="container">
+    <p style="color: var(--ink-2); margin: 0 0 16px 0;"><a href="../#libraries">← All libraries</a></p>
+
+    <div class="detail-header">
+      <img class="detail-icon" src="../img/icons/sugar-gallery.png" alt="SugarGallery" onerror="this.style.display='none'">
+      <div>
+        <h2>SugarGallery</h2>
+        <p class="detail-sub">Poster grids & rails for media TUIs — virtualized PosterGrid, Rail carousel, PosterCard</p>
+        <div class="detail-meta">
+          <span class="tag-chip accent">original — no upstream parallel</span>
+          <span class="tag-chip">grid</span>
+          <span class="tag-chip">gallery</span>
+          <span class="tag-chip">virtualization</span>
+          <span class="tag-chip">media</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="lede" style="margin-top: 28px;">Browse-row widgets for media terminal UIs: a 2-D virtualized <strong>PosterGrid</strong> for large libraries, a horizontal <strong>Rail</strong> carousel for browse rows, and a single <strong>PosterCard</strong> tile. The grid is <em>sparse</em> — it knows the total item count up front but holds only the cards that have been fetched, keyed by their <strong>absolute index</strong>, so a 50,000-item library renders as cheaply as a 50-item one; missing indices draw as skeletons and only the rows inside the viewport are ever rendered. Paging is owner-driven: after every cursor move the owner reads <code>visibleRange()</code> (the absolute-index window now on screen — the terminal analogue of the web grid's <code>need-range</code> event) and splices the covering page back in with <code>withItems()</code>. The widgets are <strong>renderer-agnostic</strong>: a card holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. <a href="candy-mosaic.html">candy-mosaic</a>), so this lib pulls in no image decoder. Original SugarCraft component — no 1:1 upstream; inspired by charmbracelet/bubbles' list/viewport and the phlix web media grid.</p>
+
+    <h3 style="margin-top: 32px;">Install</h3>
+    <pre class="code"><code>composer require sugarcraft/sugar-gallery</code></pre>
+
+    <h3 style="margin-top: 32px;">PosterGrid — virtualized, sparse, owner-paged</h3>
+    <pre class="code"><code>use SugarCraft\Gallery\PosterGrid;
+use SugarCraft\Gallery\PosterCard;
+
+$grid = PosterGrid::new(cardWidth: 16, posterHeight: 9)
+    ->withViewport($cols, $rows)
+    ->reset(total: 5000);          // a fresh result set
+
+// Keyboard nav (map your keys to these — all clamp + keep the cursor on screen):
+$grid = $grid->right();            // ← → move within a row
+$grid = $grid->down();             // ↑ ↓ move between rows
+$grid = $grid->pageDown();         // PgUp / PgDn
+$grid = $grid->home()->end();      // Home / End
+$grid = $grid->moveTo(2600);       // jump (e.g. an A–Z letter offset)</code></pre>
+
+    <p>After each move, read the visible window and fetch the page(s) covering it, then splice the results back in at their absolute index — the <code>need-range</code> pattern:</p>
+    <pre class="code"><code>[$start, $end] = $grid->visibleRange(overscanRows: 1);
+if ($start &lt;= $end &amp;&amp; $start !== $lastFetchedStart) {
+    // fetch items [$start, $end] from your API, build cards keyed by index…
+    $grid = $grid->withItems([$start =&gt; $card0, $start + 1 =&gt; $card1, /* … */]);
+}
+
+// Async poster arrived for one cell?
+$grid = $grid->withItem($index, $card->withPoster($ansi));</code></pre>
+
+    <p>Render the visible rows (the cursor shows only when the grid is focused). Pass a <a href="candy-zone.html">candy-zone</a> <code>Manager</code> to make each cell mouse-clickable — wrapped as zone id <code>cell:&lt;index&gt;</code>:</p>
+    <pre class="code"><code>echo $grid->render(focused: true);
+
+$frame = $grid->render(true, $zones);
+$clean = $zones->scan($frame);                 // strip markers, record bounds
+$zone  = $zones->anyInBounds($mouseMsg);       // → "cell:42"</code></pre>
+
+    <h3 style="margin-top: 32px;">Rail — horizontal carousel</h3>
+    <pre class="code"><code>use SugarCraft\Gallery\Rail;
+
+$rail = new Rail('Continue Watching', $cards);
+$rail = $rail->moveCursor(+1, Rail::perRow($railWidth, $cardWidth));
+echo $rail->render($railWidth, focused: true, cardWidth: 16, posterHeight: 9);</code></pre>
+
+    <h3 style="margin-top: 32px;">PosterCard — one tile</h3>
+    <pre class="code"><code>use SugarCraft\Gallery\PosterCard;
+
+$card = new PosterCard(id: '42', title: 'The Matrix', posterUrl: $url);
+$card = $card->withPoster($renderedAnsi);   // attach when the async render lands
+$card = $card->withProgress(0.6);           // optional continue-watching bar
+echo $card->render(focused: true, width: 16, posterHeight: 9);</code></pre>
+
+    <h3 style="margin-top: 32px;">Behaviour</h3>
+    <div class="feature-grid">
+      <div class="feature"><strong>Sparse & absolute-indexed</strong><span>The grid knows the <code>total()</code> up front but holds only fetched cards keyed by absolute index; indices with no card yet render as <code>░</code> skeleton placeholders.</span></div>
+      <div class="feature"><strong>2-D virtualization</strong><span>Only the rows inside the viewport are ever rendered, so a 50,000-item library costs the same to draw as a 50-item one.</span></div>
+      <div class="feature"><strong>Owner-driven paging</strong><span><code>visibleRange(overscanRows)</code> returns the absolute-index window on screen (with optional prefetch overscan) — the terminal analogue of the web grid's <code>need-range</code> event; the owner fetches and splices via <code>withItems()</code>.</span></div>
+      <div class="feature"><strong>Clamped navigation</strong><span><code>left/right/up/down/pageUp/pageDown/home/end/moveTo</code> all clamp into range and scroll the minimum needed to keep the cursor's row visible.</span></div>
+      <div class="feature"><strong>Uniform cells</strong><span>Each cell is a uniform <code>cardWidth × (posterHeight + 2)</code> box (reserving a title and a progress row), so columns and rows always line up regardless of which cards carry progress bars.</span></div>
+      <div class="feature"><strong>Optional mouse</strong><span>Pass a candy-zone <code>Manager</code> to <code>render()</code> and each real cell is wrapped as zone id <code>cell:&lt;index&gt;</code> for hit-testing — the caller scans the frame and resolves clicks.</span></div>
+      <div class="feature"><strong>Renderer-agnostic</strong><span>A <code>PosterCard</code> holds <em>already-rendered</em> poster bytes (produce them however you like, e.g. candy-mosaic), so the lib pulls in no image decoder.</span></div>
+      <div class="feature"><strong>Immutable</strong><span>Every mutator returns a new grid / rail / card and leaves the receiver untouched, slotting into the immutable-model (TEA) pattern; a no-op move returns the receiver by identity.</span></div>
+    </div>
+
+    <h3 style="margin-top: 40px;">Use it for</h3>
+    <ul>
+      <li><strong>Large media libraries</strong> — a browse grid over thousands of posters fetched lazily a page at a time.</li>
+      <li><strong>Browse rows</strong> — horizontal Rail carousels (Continue Watching, per-library rows) with their own cursor and scroll.</li>
+      <li><strong>A–Z / letter jumps</strong> — <code>moveTo()</code> to an absolute offset, then page in whatever the visible window now covers.</li>
+      <li><strong>Async posters</strong> — start with skeleton cells, then <code>withItem()</code> / <code>withPoster()</code> each tile as its render resolves.</li>
+      <li><strong>Mouse-clickable grids</strong> — wire candy-zone to resolve <code>cell:&lt;index&gt;</code> clicks back to items.</li>
+    </ul>
+
+    <h3 style="margin-top: 40px;">Source &amp; demos</h3>
+    <ul>
+      <li><a href="https://github.com/sugarcraft/sugar-gallery">Source on GitHub</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-gallery/blob/main/README.md">Full README</a></li>
+      <li><a href="https://github.com/sugarcraft/sugar-gallery/tree/main/tests">Test suite</a></li>
+    </ul>
+
+    <h3 style="margin-top: 32px;">Dependencies</h3>
+    <ul>
+      <li><a href="candy-sprinkles.html">CandySprinkles</a> — <code>Layout::joinHorizontal/joinVertical</code> stitches cells, rows, and rails together</li>
+      <li><a href="candy-zone.html">CandyZone</a> — optional mouse hit-testing; the grid wraps each cell as zone id <code>cell:&lt;index&gt;</code></li>
+      <li><a href="candy-mosaic.html">CandyMosaic</a> — a typical (but not required) source of the pre-rendered poster bytes a PosterCard holds</li>
+    </ul>
+
+    <p style="margin-top: 48px;"><a href="../#quickstart" class="btn btn-primary">Try the quickstart →</a></p>
+
+    <h3 style="margin-top: 32px;">API</h3>
+<table class="api-table">
+<tr><th>Class</th><th>Method</th><th>Description</th></tr>
+<tr><td>PosterGrid</td><td>new(int $cardWidth, int $posterHeight, int $hSpacing = 2, int $vSpacing = 1): self</td><td>A new empty grid with the given card geometry</td></tr>
+<tr><td>PosterGrid</td><td>reset(int $total): self</td><td>Begin a fresh result set — drop cached cards, return the cursor to the top</td></tr>
+<tr><td>PosterGrid</td><td>withTotal(int $total): self</td><td>Update the known total without dropping cards, clamping the cursor</td></tr>
+<tr><td>PosterGrid</td><td>withItems(array $items): self</td><td>Splice a page of cards in at their absolute indices (new cards win)</td></tr>
+<tr><td>PosterGrid</td><td>withItem(int $index, PosterCard $card): self</td><td>Set/replace a single card by absolute index (e.g. an async poster)</td></tr>
+<tr><td>PosterGrid</td><td>withViewport(int $cols, int $rows): self</td><td>Resize the rendered area, re-clamping scroll to keep the cursor visible</td></tr>
+<tr><td>PosterGrid</td><td>left/right/up/down(): self</td><td>Move the cursor one cell, clamped and kept on screen</td></tr>
+<tr><td>PosterGrid</td><td>pageUp/pageDown(): self</td><td>Move the cursor one viewport of rows</td></tr>
+<tr><td>PosterGrid</td><td>home/end(): self</td><td>Jump the cursor to the first / last item</td></tr>
+<tr><td>PosterGrid</td><td>moveTo(int $index): self</td><td>Jump the cursor to an absolute index (e.g. an A–Z offset), clamped</td></tr>
+<tr><td>PosterGrid</td><td>visibleRange(int $overscanRows = 0): array</td><td>The inclusive [start, end] absolute-index window on screen — the need-range; [0, -1] when empty</td></tr>
+<tr><td>PosterGrid</td><td>columns/visibleRows/totalRows/cellHeight(): int</td><td>Derived geometry of the current layout</td></tr>
+<tr><td>PosterGrid</td><td>total/loadedCount/cursorIndex/cursorRow/scrollRow(): int</td><td>Counts and cursor/scroll position accessors</td></tr>
+<tr><td>PosterGrid</td><td>item(int $index): ?PosterCard</td><td>The card at an absolute index, or null when not loaded</td></tr>
+<tr><td>PosterGrid</td><td>cursorCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
+<tr><td>PosterGrid</td><td>isEmpty(): bool</td><td>Whether the grid has no items</td></tr>
+<tr><td>PosterGrid</td><td>render(bool $focused = true, ?ZoneManager $zones = null): string</td><td>Render the visible rows; cursor shown only when focused; optional candy-zone cell marking</td></tr>
+<tr><td>Rail</td><td>__construct(string $title, array $cards = [], int $cursor = 0, int $scroll = 0)</td><td>A horizontal carousel of PosterCards with a title, cursor, and scroll offset</td></tr>
+<tr><td>Rail</td><td>withCards(array $cards): self</td><td>Replace the card list, clamping cursor/scroll into range</td></tr>
+<tr><td>Rail</td><td>withCard(PosterCard $card): self</td><td>Replace a single card by id (e.g. when its poster finishes loading)</td></tr>
+<tr><td>Rail</td><td>focusedCard(): ?PosterCard</td><td>The card under the cursor, or null</td></tr>
+<tr><td>Rail</td><td>isEmpty(): bool</td><td>Whether the rail has no cards</td></tr>
+<tr><td>Rail</td><td>moveCursor(int $delta, int $perRow): self</td><td>Move the cursor by $delta, scrolling so it stays visible</td></tr>
+<tr><td>Rail</td><td>perRow(int $railWidth, int $cardWidth, int $spacing = 2): int</td><td>How many cards of $cardWidth fit in $railWidth at $spacing gap</td></tr>
+<tr><td>Rail</td><td>render(int $railWidth, bool $focused, int $cardWidth, int $posterHeight, int $spacing = 2): string</td><td>Render the title plus the visible slice of cards</td></tr>
+<tr><td>PosterCard</td><td>__construct(string $id, string $title, ?string $posterUrl = null, ?float $progress = null, ?string $poster = null)</td><td>One tile: poster area, title, and optional progress bar</td></tr>
+<tr><td>PosterCard</td><td>withPoster(string $ansi): self</td><td>Attach the rendered ANSI poster (e.g. when an async render resolves)</td></tr>
+<tr><td>PosterCard</td><td>withProgress(?float $progress): self</td><td>Set (or clear) the continue-watching progress bar</td></tr>
+<tr><td>PosterCard</td><td>hasPoster(): bool</td><td>Whether a rendered poster is attached</td></tr>
+<tr><td>PosterCard</td><td>render(bool $focused, int $width, int $posterHeight): string</td><td>Render a fixed-$width block: poster (or placeholder) rows, a title row, and a progress row when set</td></tr>
+</table>
+  </div>
+</section>
+
+<footer class="footer">
+    <div class="container">
+        <div><span class="logo-mark"></span> <strong>SugarCraft</strong> · MIT-licensed · PHP 8.3+</div>
+        <div>
+            <a href="https://github.com/sugarcraft">GitHub</a> ·
+            <a href="https://packagist.org/packages/sugarcraft/sugar-gallery">Packagist</a> ·
+            <a href="https://www.interserver.net/">InterServer</a> ·
+            <a href="https://github.com/sugarcraft/blob/master/CONTRIBUTING.md">Contributing</a> ·
+            <a href="https://github.com/sugarcraft/sugar-gallery/issues">Issues</a>
+        </div>
+    </div>
+</footer>
+
+<script src="../js/main.js"></script>
+<div id="search-modal" class="search-modal" role="dialog" aria-modal="true" aria-label="Search libraries" aria-hidden="true">
+    <div class="search-backdrop"></div>
+    <div class="search-dialog">
+        <div class="search-input-wrap">
+            <svg class="search-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input type="search" id="search-input" class="search-input" placeholder="Search libraries and apps..." autocomplete="off" aria-autocomplete="list" aria-controls="search-results">
+            <kbd class="search-kbd">esc</kbd>
+        </div>
+        <ul id="search-results" class="search-results" role="listbox"></ul>
+        <div class="search-footer">
+            <span><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+            <span><kbd>↵</kbd> open</span>
+            <span><kbd>esc</kbd> close</span>
+        </div>
+    </div>
+</div>
+<script src="../js/search.js" defer></script>
+</body>
+</html>
