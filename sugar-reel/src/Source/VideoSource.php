@@ -128,10 +128,10 @@ final class VideoSource
             return new self($path, 0, 0, 0.0, 0.0, false);
         }
 
-        fclose($pipes[0]);
+        // Only descriptor 1 (stdout) is a pipe; descriptors 0 and 2 are
+        // file-backed (/dev/null) and are NOT present in $pipes.
         $stdout = stream_get_contents($pipes[1]);
         fclose($pipes[1]);
-        fclose($pipes[2]);
 
         $exitCode = proc_close($process);
         if ($exitCode !== 0 || $stdout === false || $stdout === '') {
