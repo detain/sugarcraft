@@ -21,6 +21,11 @@ return [
     'image_source.url_http_missing'  => 'Async URL loading requires react/http. Install it with: composer require react/http',
     'image_source.header_crlf'       => 'Request header names and values must not contain CR or LF characters',
 
+    // DiskCache
+    'disk_cache.max_entries'   => 'maxEntries must be >= 1, got {max}',
+    'disk_cache.mkdir_failed'  => 'Failed to create cache directory: {dir}',
+    'disk_cache.write_failed'  => 'Failed to write cache entry in: {dir}',
+
     // PixelGrid
     'pixel_grid.alloc_failed'  => 'GD failed to allocate a resize buffer',
     'pixel_grid.decode_failed' => 'GD failed to decode image bytes',

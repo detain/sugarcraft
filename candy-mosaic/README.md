@@ -105,6 +105,38 @@ an install hint rather than fataling. Pass your own pre-configured
 > or have validated against an allow-list. Header values containing CR/LF are
 > rejected to prevent request splitting.
 
+## Persistent render cache
+
+Encoding a poster (fetch → GD-decode → scale → protocol-encode) is expensive.
+`DiskCache` stores the finished ANSI/sixel/kitty bytes on disk keyed by the
+poster's identity, so a redraw — even across process restarts — is an O(1) file
+read. It pairs with the in-memory `AdaptiveImage` LRU (which avoids re-encoding
+*within* a session).
+
+```php
+use SugarCraft\Mosaic\DiskCache;
+use SugarCraft\Mosaic\ImageSource;
+use SugarCraft\Mosaic\Mosaic;
+
+$mosaic = Mosaic::probe();
+$cache  = new DiskCache($_SERVER['HOME'] . '/.cache/posters', maxEntries: 512);
+
+// Key includes the protocol — the same image at the same size encodes
+// differently for sixel vs kitty vs half-block.
+$key = DiskCache::key($url, width: 24, height: 36, protocol: $mosaic->protocol());
+
+$ansi = $cache->getOrCompute($key, fn (): string =>
+    $mosaic->render(ImageSource::fromUrl($url), 24, 36));
+echo $ansi;
+```
+
+`get()`/`getOrCompute()` touch an entry on a hit, and `put()` evicts the
+approximately least-recently-used entries once the directory exceeds
+`maxEntries` (mtime is 1-second-resolution, so the cap is always honoured but
+same-second writes order arbitrarily). Writes are atomic (temp file + rename)
+and keys are hashed to derive the filename, so an arbitrary key can never escape
+the cache directory.
+
 ## KittyOptions — virtual-image placement and compression
 
 The Kitty renderer supports two advanced options via `KittyOptions`:
