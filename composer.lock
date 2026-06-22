@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "acfb2796d43a880e10a87555518d726c",
+    "content-hash": "84d0d503122b1ff95673b69940f19383",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -5764,6 +5764,65 @@
             }
         },
         {
+            "name": "sugarcraft/sugar-gallery",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "sugar-gallery",
+                "reference": "eeca9ec85a1039622a0116aad9b8b42778732a29"
+            },
+            "require": {
+                "php": "^8.3",
+                "sugarcraft/candy-sprinkles": "dev-master",
+                "sugarcraft/candy-zone": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Gallery\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Gallery\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Poster grids and rails for media TUIs — a 2-D virtualized PosterGrid with sparse range paging, a horizontal Rail carousel, and a PosterCard tile. Renderer-agnostic (holds pre-rendered poster cells).",
+            "homepage": "https://github.com/sugarcraft/sugar-gallery",
+            "keywords": [
+                "carousel",
+                "gallery",
+                "grid",
+                "poster",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "virtualization"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/sugar-gallery/issues",
+                "source": "https://github.com/sugarcraft/sugar-gallery",
+                "docs": "https://sugarcraft.github.io/lib/sugar-gallery.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/sugar-glow",
             "version": "dev-master",
             "dist": {
@@ -7951,6 +8010,7 @@
         "sugarcraft/sugar-crumbs": 20,
         "sugarcraft/sugar-crush": 20,
         "sugarcraft/sugar-dash": 20,
+        "sugarcraft/sugar-gallery": 20,
         "sugarcraft/sugar-glow": 20,
         "sugarcraft/sugar-post": 20,
         "sugarcraft/sugar-prompt": 20,
