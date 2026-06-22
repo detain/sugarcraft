@@ -132,6 +132,9 @@ flag_management:
     - name: candy-focus
       paths: ["candy-focus/src/**"]
       carryforward: true
+    - name: sugar-gallery
+      paths: ["sugar-gallery/src/**"]
+      carryforward: true
     - name: candy-fuzzy
       paths: ["candy-fuzzy/src/**"]
       carryforward: true
@@ -404,6 +407,12 @@ component_management:
         - "candy-focus/src/**"
       flag_regexes:
         - "^candy-focus$"
+    - component_id: sugar-gallery
+      name: sugar-gallery
+      paths:
+        - "sugar-gallery/src/**"
+      flag_regexes:
+        - "^sugar-gallery$"
     - component_id: candy-fuzzy
       name: candy-fuzzy
       paths:
