@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "cae0d1453ae65efbb65af10348337d6d",
+    "content-hash": "acfb2796d43a880e10a87555518d726c",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3435,6 +3435,61 @@
             }
         },
         {
+            "name": "sugarcraft/candy-focus",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "candy-focus",
+                "reference": "1281c1329a24220103ea7674d80cb1acfb08fa7e"
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Focus\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Focus\\Tests\\": "tests/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Focus-ring state machine — an ordered set of focusable regions with wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Dependency-free.",
+            "homepage": "https://github.com/sugarcraft/candy-focus",
+            "keywords": [
+                "focus",
+                "keyboard",
+                "navigation",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-focus/issues",
+                "source": "https://github.com/sugarcraft/candy-focus",
+                "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
             "name": "sugarcraft/candy-forms",
             "version": "dev-master",
             "dist": {
@@ -4157,7 +4212,7 @@
             "dist": {
                 "type": "path",
                 "url": "candy-mosaic",
-                "reference": "3d0ec500a4c0ee9631b384ba3b4f4fe93edaef5a"
+                "reference": "74f59bde8d6b71768989c3ad037bb9d87b9ac574"
             },
             "require": {
                 "ext-gd": "*",
@@ -4169,7 +4224,11 @@
                 "sugarcraft/candy-sprinkles": "dev-master"
             },
             "require-dev": {
-                "phpunit/phpunit": "^10.5"
+                "phpunit/phpunit": "^10.5",
+                "react/http": "^1.11"
+            },
+            "suggest": {
+                "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
             },
             "type": "library",
             "autoload": {
@@ -7857,6 +7916,7 @@
         "sugarcraft/candy-core": 20,
         "sugarcraft/candy-files": 20,
         "sugarcraft/candy-flip": 20,
+        "sugarcraft/candy-focus": 20,
         "sugarcraft/candy-forms": 20,
         "sugarcraft/candy-freeze": 20,
         "sugarcraft/candy-fuzzy": 20,
