@@ -9,7 +9,8 @@ use SugarCraft\Reel\Source\VideoSource;
 
 /**
  * Unit tests for VideoSource value object.
- * Uses only canned JSON fixtures — no real ffmpeg or video files needed.
+ * Mostly canned JSON fixtures; one guarded test exercises the live ffprobe
+ * proc_open path (skips when ffmpeg/ffprobe are unavailable).
  *
  * @covers \SugarCraft\Reel\Source\VideoSource
  */
@@ -192,5 +193,48 @@ final class VideoSourceTest extends TestCase
         // The following would cause a "Cannot modify readonly property" Error:
         // $source->width = 999;
         $this->assertTrue(true); // Placeholder — language guarantees immutability.
+    }
+
+    // -------------------------------------------------------------------------
+    // probe — live ffprobe path (regression guard)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox probe() reads real metadata via ffprobe (live proc_open path)
+     */
+    public function testProbeReadsRealVideoViaFfprobe(): void
+    {
+        exec('command -v ffmpeg', $foundFfmpeg, $rcFfmpeg);
+        exec('command -v ffprobe', $foundFfprobe, $rcFfprobe);
+        if ($rcFfmpeg !== 0 || $rcFfprobe !== 0) {
+            $this->markTestSkipped('ffmpeg/ffprobe not available');
+        }
+
+        $file = tempnam(sys_get_temp_dir(), 'reel_probe_') . '.mp4';
+        exec(sprintf(
+            'ffmpeg -y -f lavfi -i testsrc=duration=1:size=320x240:rate=15 -pix_fmt yuv420p %s 2>/dev/null',
+            escapeshellarg($file)
+        ), $_, $rc);
+
+        try {
+            if ($rc !== 0 || !is_file($file) || filesize($file) === 0) {
+                $this->markTestSkipped('could not synthesize a test video');
+            }
+
+            // Exercises the live proc_open path. The old code called
+            // fclose($pipes[0]) / fclose($pipes[2]) on file-backed descriptors
+            // that are absent from $pipes, raising a TypeError here.
+            $source = VideoSource::probe($file);
+
+            $this->assertSame(320, $source->width);
+            $this->assertSame(240, $source->height);
+            $this->assertEqualsWithDelta(15.0, $source->fps, 0.01);
+            $this->assertGreaterThan(0.0, $source->duration);
+            $this->assertFalse($source->hasAudio);
+        } finally {
+            if (is_file($file)) {
+                @unlink($file);
+            }
+        }
     }
 }
