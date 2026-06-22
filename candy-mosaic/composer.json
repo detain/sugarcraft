@@ -37,7 +37,11 @@
         "react/promise": "^3.3"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^10.5",
+        "react/http": "^1.11"
+    },
+    "suggest": {
+        "react/http": "Enables ImageSource::fromUrlAsync() for non-blocking remote image loading on the ReactPHP event loop (^1.11)."
     },
     "autoload": {
         "psr-4": {

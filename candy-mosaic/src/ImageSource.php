@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use React\Http\Browser;
+use React\Promise\PromiseInterface;
 use SugarCraft\Core\Util\Color;
+
+use function React\Promise\reject;
 
 /**
  * A decoded image ready for rendering. Stores raw bytes, detected
@@ -147,6 +151,149 @@ final class ImageSource
         }
 
         return new self($bytes, $format, $width, $height);
+    }
+
+    /**
+     * Load from a remote URL synchronously.
+     *
+     * Fetches the bytes with PHP stream wrappers (`file_get_contents`), so
+     * any scheme PHP supports works — `http`, `https`, `file`, `data`.
+     * Redirects are followed. This blocks the calling thread; for the
+     * event loop use {@see ImageSource::fromUrlAsync()} instead.
+     *
+     * Security: like {@see ImageSource::fromFile()}, the trust decision for
+     * the source is the caller's. Because every PHP scheme is honoured and
+     * redirects are followed, passing an untrusted/user-influenced URL exposes
+     * local-file reads (`file:///etc/passwd`) and SSRF (e.g. cloud metadata at
+     * `http://169.254.169.254/…`, possibly reached via a redirect). Only pass
+     * URLs you control or have validated against an allow-list.
+     *
+     * @param string $url     Absolute URL (http/https/file/data).
+     * @param array<string,string>|list<string> $headers  Optional request
+     *               headers, either associative ('Authorization' => 'Bearer x')
+     *               or pre-formatted lines ('Authorization: Bearer x').
+     * @throws \InvalidArgumentException  if the URL cannot be fetched, a header
+     *                                    contains CR/LF, or the payload is not
+     *                                    a supported image
+     * @throws \RuntimeException          if ext-gd is not available
+     */
+    public static function fromUrl(string $url, ?array $headers = null): self
+    {
+        return self::fromString(self::fetchUrlSync($url, $headers));
+    }
+
+    /**
+     * Load from a remote URL asynchronously on the ReactPHP event loop.
+     *
+     * Resolves with a decoded {@see ImageSource}; rejects on transport error,
+     * a non-2xx response, or a payload that is not a supported image. The GD
+     * decode runs in the success callback, so the returned image is ready to
+     * render immediately.
+     *
+     * Requires `react/http` (a suggested dependency). When no $browser is
+     * supplied and the package is not installed, the returned promise rejects
+     * with a clear instruction rather than fataling.
+     *
+     * @param string $url     Absolute http(s) URL.
+     * @param array<string,string> $headers  Optional request headers. Must be
+     *               associative ('Authorization' => 'Bearer x') — unlike the
+     *               synchronous {@see ImageSource::fromUrl()}, the async path
+     *               forwards them straight to Browser::get().
+     * @param Browser|null $browser  Optional pre-configured ReactPHP Browser
+     *               (e.g. with a shared connector/timeout); one is created on
+     *               the default loop when omitted.
+     * @return PromiseInterface<self>
+     */
+    public static function fromUrlAsync(
+        string $url,
+        ?array $headers = null,
+        ?Browser $browser = null,
+    ): PromiseInterface {
+        if ($browser === null) {
+            if (!class_exists(Browser::class)) {
+                return reject(new \RuntimeException(Lang::t('image_source.url_http_missing')));
+            }
+            $browser = new Browser();
+        }
+
+        return $browser->get($url, $headers ?? [])->then(
+            static function ($response): self {
+                // The default Browser rejects 4xx/5xx itself, but a caller may
+                // inject one with withRejectErrorResponse(false); guard the
+                // status here so the "rejects on non-2xx" contract always holds
+                // rather than feeding an error page to the GD decoder.
+                $status = $response->getStatusCode();
+                if ($status < 200 || $status >= 300) {
+                    throw new \RuntimeException(
+                        Lang::t('image_source.url_bad_status', ['status' => $status]),
+                    );
+                }
+
+                return self::fromString((string) $response->getBody());
+            },
+        );
+    }
+
+    /**
+     * Fetch raw bytes from a URL synchronously via PHP stream wrappers.
+     *
+     * @param array<string,string>|list<string>|null $headers
+     * @throws \InvalidArgumentException  if the fetch fails or returns empty
+     */
+    private static function fetchUrlSync(string $url, ?array $headers): string
+    {
+        $http = [
+            'method'          => 'GET',
+            'timeout'         => 30,
+            'follow_location' => 1,
+            'max_redirects'   => 5,
+            'ignore_errors'   => false,
+        ];
+        if ($headers !== null && $headers !== []) {
+            $http['header'] = self::formatHeaders($headers);
+        }
+
+        $context = stream_context_create(['http' => $http]);
+
+        error_clear_last();
+        $bytes = @file_get_contents($url, false, $context);
+
+        if ($bytes === false || $bytes === '') {
+            // Surface the underlying cause (DNS failure, refused, 404, timeout)
+            // that the @-suppression otherwise hides, for debuggability.
+            $reason = error_get_last()['message'] ?? null;
+            throw new \InvalidArgumentException(
+                Lang::t('image_source.url_fetch_failed', ['url' => $url])
+                . ($reason !== null ? ' (' . $reason . ')' : ''),
+            );
+        }
+
+        return $bytes;
+    }
+
+    /**
+     * Normalise headers into the `Name: value` line list a stream context wants.
+     *
+     * Accepts an associative map ('Authorization' => 'Bearer x') or an already
+     * formatted list ('Authorization: Bearer x'); both round-trip correctly.
+     *
+     * @param array<string,string>|list<string> $headers
+     * @return list<string>
+     * @throws \InvalidArgumentException  if a header contains CR or LF (request
+     *                                    splitting / header injection)
+     */
+    private static function formatHeaders(array $headers): array
+    {
+        $lines = [];
+        foreach ($headers as $name => $value) {
+            $line = is_int($name) ? (string) $value : $name . ': ' . $value;
+            if (preg_match('/[\r\n]/', $line) === 1) {
+                throw new \InvalidArgumentException(Lang::t('image_source.header_crlf'));
+            }
+            $lines[] = $line;
+        }
+
+        return $lines;
     }
 
     /**
