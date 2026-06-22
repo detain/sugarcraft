@@ -1,0 +1,45 @@
+{
+    "name": "sugarcraft/candy-focus",
+    "description": "Focus-ring state machine — an ordered set of focusable regions with wrap-around Tab/Shift-Tab traversal for full-window TUI layouts. Dependency-free.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "tui",
+        "terminal",
+        "focus",
+        "navigation",
+        "keyboard",
+        "sugarcraft"
+    ],
+    "homepage": "https://github.com/sugarcraft/candy-focus",
+    "authors": [
+        {
+            "name": "Joe Huss",
+            "email": "detain@interserver.net",
+            "role": "Maintainer"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/sugarcraft/candy-focus/issues",
+        "source": "https://github.com/sugarcraft/candy-focus",
+        "docs": "https://sugarcraft.github.io/lib/candy-focus.html"
+    },
+    "require": {
+        "php": "^8.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "SugarCraft\\Focus\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "SugarCraft\\Focus\\Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
