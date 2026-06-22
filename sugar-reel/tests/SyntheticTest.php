@@ -73,8 +73,8 @@ final class SyntheticTest extends TestCase
      */
     public function testNoBuildSyntheticGifRemains(): void
     {
-        $srcDir = '/home/sites/sugarcraft/sugar-reel/src';
-        $exDir = '/home/sites/sugarcraft/sugar-reel/examples';
+        $srcDir = \dirname(__DIR__) . '/src';
+        $exDir = \dirname(__DIR__) . '/examples';
 
         $violations = [];
         foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($srcDir)) as $f) {
@@ -113,7 +113,7 @@ final class SyntheticTest extends TestCase
             2 => ['pipe', 'w'],
         ];
         $proc = proc_open(
-            ['php', '/home/sites/sugarcraft/sugar-reel/examples/play.php', '--help'],
+            ['php', \dirname(__DIR__) . '/examples/play.php', '--help'],
             $spec,
             $pipes,
         );
@@ -142,7 +142,8 @@ final class SyntheticTest extends TestCase
      */
     public function testPlayPhpNoArgsEmitsNoWarnings(): void
     {
-        $cmd = "bash -c 'echo q | php /home/sites/sugarcraft/sugar-reel/examples/play.php 2>&1'";
+        $playPhp = \dirname(__DIR__) . '/examples/play.php';
+        $cmd = 'bash -c ' . escapeshellarg('echo q | php ' . escapeshellarg($playPhp) . ' 2>&1');
         $stderr = shell_exec($cmd);
 
         $this->assertStringNotContainsString('Warning:', (string) $stderr);
