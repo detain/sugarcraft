@@ -12,6 +12,7 @@ use SugarCraft\Reel\AudioPlayer;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
 use SugarCraft\Reel\Player;
+use SugarCraft\Reel\Source\Probe;
 use SugarCraft\Reel\Tests\FakeDecoder;
 use SugarCraft\Reel\Render\HalfBlockRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
@@ -1436,6 +1437,195 @@ final class PlayerTest extends TestCase
             $spyAudioPlayer->hasStarted(),
             'start() must NOT be called on seek when player is paused'
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // Time-based seek: position()/duration()/seekToSeconds()/frameAt()/stop()
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox duration() is totalFrames / fps; position() starts at 0
+     */
+    public function testPositionAndDurationReport(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(10), 30.0, totalFrames: 300);
+
+        $this->assertSame(0.0, $player->position());
+        $this->assertSame(10.0, $player->duration(), '300 frames @ 30fps = 10s');
+    }
+
+    /**
+     * @testdox duration() is 0.0 for a stream of unknown length (totalFrames 0)
+     */
+    public function testDurationZeroWhenLengthUnknown(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(10), 30.0, totalFrames: 0);
+
+        $this->assertSame(0.0, $player->duration());
+    }
+
+    /**
+     * @testdox seekToSeconds() sets position to the time and frameIndex to time*fps
+     */
+    public function testSeekToSecondsSetsPositionAndFrameIndex(): void
+    {
+        // videoPath defaults to '/fake' → the index-based rebuild path (no ffmpeg).
+        $player = Player::openForTest($this->makeFakeDecoder(100), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(2.0);
+
+        $this->assertSame(2.0, $seeked->position());
+        $this->assertSame(60, $seeked->frameIndex, '2.0s @ 30fps = frame 60');
+        $this->assertFalse($seeked->ended, 'a seek clears the ended state');
+    }
+
+    /**
+     * @testdox seekToSeconds() clamps beyond the duration to the end
+     */
+    public function testSeekToSecondsClampsToDuration(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(400), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(999.0);
+
+        $this->assertSame(10.0, $seeked->position(), 'clamped to the 10s duration');
+        $this->assertSame(300, $seeked->frameIndex);
+    }
+
+    /**
+     * @testdox seekToSeconds() clamps a negative time to 0
+     */
+    public function testSeekToSecondsClampsNegativeToZero(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(100), 30.0, totalFrames: 300);
+
+        $seeked = $player->seekToSeconds(-5.0);
+
+        $this->assertSame(0.0, $seeked->position());
+        $this->assertSame(0, $seeked->frameIndex);
+    }
+
+    /**
+     * @testdox seekToSeconds() realigns audio to the target offset (stops old, recreates at startMs)
+     */
+    public function testSeekToSecondsRealignsAudio(): void
+    {
+        $spy = new SpyAudioPlayer('/fake', 0);
+        $created = [];
+        $factory = static function (string $path, ?int $startMs) use ($spy, &$created): AudioPlayer {
+            $created[] = ['path' => $path, 'startMs' => $startMs];
+            return $spy;
+        };
+
+        $player = Player::openForTest(
+            decoder: $this->makeFakeDecoder(200),
+            fps: 30.0,
+            totalFrames: 600,
+            videoPath: '/fake',
+            audioFactory: \Closure::fromCallable($factory),
+            audioPlayer: $spy,
+            paused: true,
+        );
+
+        $player->seekToSeconds(4.0);
+
+        $this->assertSame(1, $spy->stopCallCount, 'old audio stopped exactly once');
+        $this->assertNotEmpty($created, 'a fresh audio companion is created on seek');
+        $this->assertSame(4000, $created[0]['startMs'], '4.0s → startMs 4000');
+    }
+
+    /**
+     * @testdox frameAt() returns null for a synthetic/test/unbound source
+     */
+    public function testFrameAtReturnsNullForNonRealSources(): void
+    {
+        $fake = Player::openForTest($this->makeFakeDecoder(10), 30.0, videoPath: '/fake');
+        $this->assertNull($fake->frameAt(1.0));
+
+        $unbound = Player::openForTest($this->makeFakeDecoder(10), 30.0, videoPath: '');
+        $this->assertNull($unbound->frameAt(1.0));
+    }
+
+    /**
+     * @testdox stop() stops the audio companion and closes the decoder
+     */
+    public function testStopStopsAudioAndClosesDecoder(): void
+    {
+        $spy = new SpyAudioPlayer('/fake', 0);
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest(
+            decoder: $decoder,
+            fps: 30.0,
+            videoPath: '/fake',
+            audioPlayer: $spy,
+        );
+
+        $player->stop();
+
+        $this->assertSame(1, $spy->stopCallCount, 'audio stopped');
+        $this->assertTrue($decoder->isClosed(), 'decoder closed (ffmpeg torn down)');
+    }
+
+    /**
+     * @testdox frameAt() input-seeks a real clip, grabbing distinct frames at distinct times
+     *
+     * Live proof of the time-domain seek: with real ffmpeg, frameAt() spawns a
+     * throwaway decoder with `-ss` and the frames at 0.2s vs 2.5s differ (the
+     * seek lands at different content). Skipped without ffmpeg; watchdog-guarded
+     * so a regression that wedged a subprocess can't hang the suite.
+     */
+    public function testFrameAtInputSeeksARealClip(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-seek-' . getmypid() . '.mp4';
+        $wd = proc_open(['sh', '-c', 'sleep 20; pkill -9 -f sugar-reel-seek'], [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $wdPipes);
+
+        try {
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(), '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi', '-i', 'testsrc=duration=3:size=128x96:rate=15',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) {
+                    \fclose($p);
+                }
+            }
+            proc_close($gen);
+            $this->assertFileExists($clip);
+
+            $player = Player::open($clip, 40, 20, 15.0, Mode::HalfBlock);
+            $this->assertEqualsWithDelta(3.0, $player->duration(), 0.5, 'probed duration ~3s');
+
+            $a = $player->frameAt(0.2);
+            $b = $player->frameAt(2.5);
+            $this->assertInstanceOf(RgbFrame::class, $a);
+            $this->assertInstanceOf(RgbFrame::class, $b);
+            $this->assertNotSame($a->bytes, $b->bytes, 'a -ss seek lands at different content per time');
+
+            $seeked = $player->seekToSeconds(1.5);
+            $this->assertSame(1.5, $seeked->position());
+            $this->assertSame(23, $seeked->frameIndex, '1.5s @ 15fps = frame 23 (round)');
+
+            $player->stop();
+            $seeked->stop();
+        } finally {
+            if (is_resource($wd)) {
+                proc_terminate($wd);
+                proc_close($wd);
+            }
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
     }
 
     /**
