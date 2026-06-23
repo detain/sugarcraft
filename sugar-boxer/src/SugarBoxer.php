@@ -305,6 +305,14 @@ final class SugarBoxer
 
         $result = [];
         foreach (\explode("\n", $text) as $paragraphLine) {
+            // A non-empty line that already fits needs no wrapping — preserve it
+            // verbatim. Word-wrapping re-joins on single spaces, which collapses
+            // intentional runs of whitespace (column alignment in a table, padded
+            // key bindings in a hint), so only ever rewrap lines that overflow.
+            if ($paragraphLine !== '' && $this->strWidth($paragraphLine) <= $width) {
+                $result[] = $paragraphLine;
+                continue;
+            }
             $words = \preg_split('/\s+/', $paragraphLine) ?: [];
             $current = '';
 
