@@ -33,7 +33,7 @@ final class SpyDecoder implements Decoder
         $this->frames = $frames;
     }
 
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
     {
         $this->index = 0;
     }

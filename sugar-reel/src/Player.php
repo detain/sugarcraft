@@ -868,6 +868,121 @@ final class Player implements Model
     }
 
     /**
+     * Current playback position in content seconds (videoTime).
+     */
+    public function position(): float
+    {
+        return $this->videoTime;
+    }
+
+    /**
+     * Total duration in content seconds, or 0.0 when unknown (a stream of
+     * indeterminate length, where totalFrames is 0).
+     */
+    public function duration(): float
+    {
+        return ($this->totalFrames > 0 && $this->fps > 0.0)
+            ? $this->totalFrames / $this->fps
+            : 0.0;
+    }
+
+    /**
+     * Seek to an absolute time in content seconds (clamped to [0, duration]).
+     *
+     * The time-domain companion to {@see withSeek()} (which is frame-indexed):
+     * it re-spawns the decoder with a fast ffmpeg input seek (`-ss`) so jumping
+     * deep into a multi-GB network stream is instant rather than decoding every
+     * intervening frame. Audio is realigned to the same offset. Returns a new
+     * Player (immutable); a host screen decides whether to re-arm the tick.
+     */
+    public function seekToSeconds(float $sec): self
+    {
+        $sec = max(0.0, $sec);
+        $duration = $this->duration();
+        if ($duration > 0.0 && $sec > $duration) {
+            $sec = $duration;
+        }
+        $targetIndex = (int) round($sec * $this->fps);
+
+        // Realign audio to the seek target (same factory seam as withSeek()).
+        $newAudio = $this->audioPlayer;
+        if ($this->audioPlayer !== null) {
+            $this->audioPlayer->stop();
+            $startMs = (int) round($sec * 1000);
+            $factory = $this->audioFactory ?? static fn(string $path, ?int $ms): AudioPlayer => new AudioPlayer($path, $ms);
+            $newAudio = $factory($this->videoPath, $startMs);
+            if (!$this->paused) {
+                $newAudio->start();
+            }
+        }
+
+        [$decoder, $frame] = $this->rebuildDecoderAtSeconds($this->cellsW, $this->cellsH, $this->mode, $sec);
+
+        return $this->mutate([
+            'decoder' => $decoder,
+            'currentFrame' => $frame ?? $this->currentFrame,
+            'frameIndex' => $targetIndex,
+            'videoTime' => $sec,
+            'lastTickTime' => microtime(true),
+            'audioPlayer' => $newAudio,
+            'ended' => false, // a seek clears the end-of-stream state
+        ]);
+    }
+
+    /**
+     * Grab a single frame at $sec for a scrubber-hover thumbnail, WITHOUT
+     * disturbing live playback. Spawns a throwaway decoder seeked to $sec (fast
+     * `-ss`), reads one frame, and closes it. Returns null for a synthetic /
+     * test / unbound source, or when the grab yields nothing.
+     */
+    public function frameAt(float $sec): ?RgbFrame
+    {
+        if ($this->videoPath === '' || $this->videoPath === '/fake') {
+            return null;
+        }
+        $decoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec));
+        $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
+        $decoder->close();
+
+        return $frame;
+    }
+
+    /**
+     * Tear down playback: stop the audio companion and close the decoder
+     * (terminating its ffmpeg subprocess). Idempotent — safe to call more than
+     * once. A host screen calls this when leaving the player so no audio/video
+     * subprocess leaks across play → back.
+     */
+    public function stop(): void
+    {
+        $this->audioPlayer?->stop();
+        $this->decoder->close();
+    }
+
+    /**
+     * Build a fresh decoder seeked to $startSec via fast ffmpeg input seeking
+     * (`-ss`), returning the decoder and its first (target) frame. The real path
+     * closes the old decoder first (F21: no leaked ffmpeg) and threads startSec
+     * through DecoderFactory; the '/fake' test path has no `-ss`, so it falls
+     * back to the index-based rebuild (decode-forward to the equivalent frame).
+     *
+     * @return array{0: Decoder, 1: ?RgbFrame}
+     */
+    private function rebuildDecoderAtSeconds(int $cellsW, int $cellsH, Mode $mode, float $startSec): array
+    {
+        if ($this->videoPath === '/fake') {
+            $index = (int) round(max(0.0, $startSec) * $this->fps);
+            return $this->rebuildDecoderAt($cellsW, $cellsH, $mode, $index);
+        }
+
+        $this->decoder->close(); // never leak the old ffmpeg process
+        $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec));
+        $frame = $decoder->next(); // with -ss, the first frame IS the seek target
+
+        return [$decoder, $frame];
+    }
+
+    /**
      * Create a new Player with a new decoded frame, advancing frame index.
      */
     private function withNewFrame(

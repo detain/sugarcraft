@@ -81,6 +81,37 @@ final class GifDecoderTest extends TestCase
         $decoder->close();
     }
 
+    /**
+     * @testdox a zero startSec starts from the first frame
+     */
+    public function testStartSecZeroStartsFromFirstFrame(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 0.0);
+
+        $this->assertInstanceOf(RgbFrame::class, $decoder->next());
+        $decoder->close();
+    }
+
+    /**
+     * @testdox a positive startSec advances (best-effort) past the seeked frames
+     *
+     * The fixture GIF has a single frame, so seeking to 1.0s @ 10fps (frame 10,
+     * clamped to the one available) lands past the end → next() is null.
+     */
+    public function testStartSecSeeksPastTheAvailableFrames(): void
+    {
+        $path = $this->createTempGif();
+
+        $decoder = new GifDecoder();
+        $decoder->open($path, 1, 1, 10.0, Mode::HalfBlock, 1.0);
+
+        $this->assertNull($decoder->next(), 'a seek beyond the GIF lands past the end');
+        $decoder->close();
+    }
+
     // -------------------------------------------------------------------------
     // Iterator exhaustion
     // -------------------------------------------------------------------------
