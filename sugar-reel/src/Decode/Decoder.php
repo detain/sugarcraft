@@ -23,8 +23,11 @@ interface Decoder
      * @param int $cellsH Target height in terminal cells
      * @param float $fps Target frames per second
      * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
+     * @param float $startSec Seconds to seek into the source before the first frame
+     *        (0 = from the start). Enables fast time-based seeking; a decoder without
+     *        true seek support treats it as best-effort.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void;
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void;
 
     /**
      * Yield the next RgbFrame, or null if there are no more frames.

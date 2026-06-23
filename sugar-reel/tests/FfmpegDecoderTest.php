@@ -332,4 +332,43 @@ final class FfmpegDecoderTest extends TestCase
         $this->assertStringContainsString('fps=25,scale=100:60:flags=bilinear', $joined);
         $this->assertSame('-', $cmd[array_key_last($cmd)], 'output goes to the stdout pipe (-)');
     }
+
+    /**
+     * @testdox a positive startSec adds a fast input seek (-ss) before -i
+     */
+    public function testStartSecAddsInputSeekBeforeInput(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 80, 48, 24.0, 90.5);
+
+        $ssIdx = array_search('-ss', $cmd, true);
+        $inputIdx = array_search('-i', $cmd, true);
+        $this->assertIsInt($ssIdx, '-ss must be present for a positive startSec');
+        $this->assertSame('90.500', $cmd[$ssIdx + 1], 'seek time is formatted to ms precision');
+        $this->assertLessThan($inputIdx, $ssIdx, '-ss is an input option → before -i');
+    }
+
+    /**
+     * @testdox a zero startSec omits the input seek entirely
+     */
+    public function testZeroStartSecOmitsSeek(): void
+    {
+        $this->assertNotContains('-ss', FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 80, 48, 24.0, 0.0));
+        $this->assertNotContains('-ss', FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 80, 48, 24.0));
+    }
+
+    /**
+     * @testdox reconnect flags and -ss coexist for a seeked network stream, both before -i
+     */
+    public function testNetworkSeekOrdersReconnectThenSeekThenInput(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/s.mkv?sig=x', 80, 48, 24.0, 12.0);
+
+        $reconnectIdx = array_search('-reconnect', $cmd, true);
+        $ssIdx = array_search('-ss', $cmd, true);
+        $inputIdx = array_search('-i', $cmd, true);
+        $this->assertIsInt($reconnectIdx);
+        $this->assertIsInt($ssIdx);
+        $this->assertLessThan($ssIdx, $reconnectIdx, 'reconnect block precedes -ss');
+        $this->assertLessThan($inputIdx, $ssIdx, '-ss precedes -i');
+    }
 }

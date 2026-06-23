@@ -40,7 +40,7 @@ final class GifDecoder implements Decoder
      * the 1-row modes → cellsH). $mode === null defaults to 2 (HalfBlock),
      * matching DecoderFactory's documented null-default.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
     {
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
@@ -49,6 +49,13 @@ final class GifDecoder implements Decoder
         // Decode the GIF using candy-flip's pure-PHP decoder. Scale the cell-grid
         // height by rowsPerCell so the frame pixel resolution matches the mode.
         $this->frames = FlipDecoder::decode($source, $cellsW, $cellsH * ($mode?->rowsPerCell() ?? 2));
+
+        // Best-effort time seek: all GIF frames are already in memory, so advance
+        // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,
+        // so this uses the caller's nominal fps as an approximation.
+        if ($startSec > 0.0 && $fps > 0.0) {
+            $this->frameIndex = min(count($this->frames), (int) round($startSec * $fps));
+        }
     }
 
     /**

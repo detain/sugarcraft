@@ -45,7 +45,7 @@ final class FfmpegDecoder implements Decoder
     /**
      * @inheritDoc
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
     {
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
@@ -63,7 +63,7 @@ final class FfmpegDecoder implements Decoder
 
         // Build command as array — never a shell string.
         // No escaping needed; proc_open passes args directly with no shell.
-        $cmd = self::buildCommand($ffmpegPath, $source, $this->cellsW, $this->frameH, $fps);
+        $cmd = self::buildCommand($ffmpegPath, $source, $this->cellsW, $this->frameH, $fps, $startSec);
 
         // stderr goes to a file sink (the OS null device), never a pipe — an
         // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
@@ -100,9 +100,14 @@ final class FfmpegDecoder implements Decoder
      * Static and pure (input → argv) so the assembly is unit-testable without
      * launching a subprocess.
      *
+     * When $startSec > 0 a fast input seek (`-ss` BEFORE `-i`) decodes from the
+     * keyframe at/just before that time without walking the whole file — what
+     * makes scrubbing a multi-GB network stream instant (slightly less
+     * frame-exact than output seeking, an acceptable trade for instant seeks).
+     *
      * @return list<string>
      */
-    public static function buildCommand(string $ffmpegPath, string $source, int $cellsW, int $frameH, float $fps): array
+    public static function buildCommand(string $ffmpegPath, string $source, int $cellsW, int $frameH, float $fps, float $startSec = 0.0): array
     {
         $cmd = [$ffmpegPath, '-hide_banner', '-loglevel', 'error'];
 
@@ -114,6 +119,10 @@ final class FfmpegDecoder implements Decoder
                 '-reconnect_on_network_error', '1',
                 '-reconnect_delay_max', '4',
             );
+        }
+
+        if ($startSec > 0.0) {
+            array_push($cmd, '-ss', sprintf('%.3f', $startSec));
         }
 
         array_push(
