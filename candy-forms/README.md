@@ -46,6 +46,23 @@ $form = Form::new(
 echo $form->view();
 ```
 
+### Pre-filling fields
+
+Show a form's current values before the user touches anything — handy for
+"edit settings" screens. `Input::withValue()` seeds the editable text (it is
+the submitted value until edited; pass `''` to clear). `Select` pre-selects
+by value with `withSelected()` (no-op when the value isn't an option) or by
+0-based index with `withSelectedIndex()` (negatives clamp to the first option).
+
+```php
+use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Field\Select;
+
+Input::new('name')->withValue('Ada');                      // edit box starts as "Ada"
+Select::new('theme')->withOptions('Nocturne', 'Daylight', 'Midnight')
+    ->withSelected('Midnight');                            // or ->withSelectedIndex(2)
+```
+
 Standalone spinner (now lives here, was in sugar-bits):
 
 ```php

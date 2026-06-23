@@ -7,6 +7,7 @@ namespace SugarCraft\Forms\Tests\Field;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Forms\Field\Input;
+use SugarCraft\Forms\Form;
 use PHPUnit\Framework\TestCase;
 
 final class InputTest extends TestCase
@@ -123,5 +124,32 @@ final class InputTest extends TestCase
         [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'b'));
         [$f, ] = $f->update(new KeyMsg(KeyType::Char, 'c'));
         $this->assertNull($f->getError());
+    }
+
+    public function testWithValuePreFillsValue(): void
+    {
+        $f = Input::new('k')->withValue('hello');
+        $this->assertSame('hello', $f->value());
+    }
+
+    public function testWithValueIsSubmittedWhenUntouched(): void
+    {
+        $form = Form::new(Input::new('k')->withValue('hello'));
+        // No keystrokes: the pre-filled value is the submitted value.
+        $this->assertSame('hello', $form->getString('k'));
+    }
+
+    public function testWithValueThenTypingEdits(): void
+    {
+        [$f, ] = Input::new('k')->withValue('hi')->focus();
+        // Cursor sits at end of the pre-filled text; a keystroke appends.
+        [$f, ] = $f->update(new KeyMsg(KeyType::Char, '!'));
+        $this->assertSame('hi!', $f->value());
+    }
+
+    public function testWithValueEmptyClearsToEmpty(): void
+    {
+        $f = Input::new('k')->withValue('seed')->withValue('');
+        $this->assertSame('', $f->value());
     }
 }

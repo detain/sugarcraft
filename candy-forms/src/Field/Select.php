@@ -151,6 +151,31 @@ final class Select implements \SugarCraft\Forms\Field
     public function withHeight(int $h): self          { return $this->mutate(list: $this->list->setSize($this->list->width, max(1, $h))); }
 
     /**
+     * Pre-select an option by its 0-based index. Negative indices clamp
+     * to 0; the inner {@see ItemList} clamps the upper bound. Handy for
+     * showing a form's current value before the user touches it.
+     */
+    public function withSelectedIndex(int $index): self
+    {
+        return $this->mutate(list: $this->list->select(max(0, $index)));
+    }
+
+    /**
+     * Pre-select the option whose value matches `$value`. When the value
+     * is not among the field's options the selection is left unchanged.
+     * Delegates to {@see withSelectedIndex()} once the index is resolved.
+     */
+    public function withSelected(string $value): self
+    {
+        foreach ($this->list->items() as $i => $item) {
+            if ($item->title() === $value) {
+                return $this->withSelectedIndex($i);
+            }
+        }
+        return $this;
+    }
+
+    /**
      * When a backed enum class is provided, the selected value is coerced
      * to the enum via `EnumClass::from($stringValue)`. The option titles
      * must match the enum case values exactly. Mirrors huh's enum mode.
