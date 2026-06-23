@@ -77,11 +77,32 @@ $history->append($h->selected());  // save selected item
 $allItems = $history->all();      // load previous items
 ```
 
+## Fuzzy ranking (candy-fuzzy)
+
+By default the filter is anchor-aware contiguous-substring matching. Plug in a
+[candy-fuzzy](../candy-fuzzy) ranker to switch to **true subsequence matching**,
+ordering the list by descending fuzzy score and highlighting the scored runes:
+
+```php
+use SugarCraft\Hermit\Hermit;
+use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
+
+$h = Hermit::new($items)
+    ->setRanker(new SmithWatermanMatcher())   // or any FuzzyMatcher
+    ->setMatchStyle("\e[1m")
+    ->show()
+    ->type('tml');   // matches "terminal" (t·m·l subsequence), substring would miss it
+
+// setRanker(null) restores the default substring filter.
+```
+
+A custom `setFilterFn()` predicate still applies on top of the ranker.
+
 ## Features
 
 | Feature | Description |
 |---------|-------------|
-| **Fuzzy filtering** | Filter list items as you type with anchor-aware substring matching |
+| **Fuzzy filtering** | Filter list items as you type with anchor-aware substring matching, or plug in a candy-fuzzy ranker via `setRanker()` for true subsequence scoring |
 | **Overlay compositing** | Background view renders underneath; overlay chars replace background at specified positions |
 | **Background continues updating** | The Hermit doesn't block the underlying view |
 | **Fully styleable** | Custom filter prompt, item format, matching highlight, window dimensions |
@@ -141,6 +162,11 @@ public function setItemFormatter(\Closure $fn): self
 // Custom filter predicate: Closure(Item $item): bool
 // Applied after text-based fuzzy filtering; return false to exclude item
 public function setFilterFn(\Closure $fn): self
+
+// Plug in a candy-fuzzy ranker (null restores the default substring filter).
+// When set, a non-empty filter ranks items by descending fuzzy score (true
+// subsequence matching) and highlighting follows the scored indices.
+public function setRanker(?\SugarCraft\Fuzzy\FuzzyMatcher $matcher): self
 
 // Apply a candy-sprinkles Border to the overlay window
 public function withBorder(?\SugarCraft\Sprinkles\Border $border): self

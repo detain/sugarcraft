@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Fuzzy\Highlighter;
+use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Sprinkles\Align;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Style;
@@ -44,6 +46,14 @@ final class Hermit
 
     /** @var \Closure(Item $item): bool Filter function applied to items. */
     private \Closure $filterFn;
+
+    /**
+     * Optional fuzzy ranker. When set, a non-empty filter text is scored against
+     * every item's value via candy-fuzzy (true subsequence matching) and the
+     * filtered list is ordered by descending score instead of the default
+     * substring/anchor filter; match highlighting follows the scored indices.
+     */
+    private ?FuzzyMatcher $ranker = null;
 
     /** Match highlight style (ANSI SGR codes, e.g. "\e[33m"). */
     private string $matchStyle = '';
@@ -164,6 +174,22 @@ final class Hermit
     {
         $clone = clone $this;
         $clone->filterFn = $fn;
+        $clone->filteredItems = $clone->applyFilter($clone->filterText);
+        $clone->cursor = 0;
+        return $clone;
+    }
+
+    /**
+     * Set (or clear, with null) a candy-fuzzy ranker. When set, a non-empty
+     * filter text ranks items by descending fuzzy score (true subsequence match)
+     * instead of the default contiguous-substring/anchor filter, and match
+     * highlighting follows the scored indices. The custom filterFn still applies
+     * as a predicate. Pass null to restore the default substring behaviour.
+     */
+    public function setRanker(?FuzzyMatcher $matcher): self
+    {
+        $clone = clone $this;
+        $clone->ranker = $matcher;
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
@@ -448,7 +474,9 @@ final class Hermit
             $itemStr    = ($this->itemFormatter)($items[$i]->value(), $isSelected);
 
             if ($filter !== '' && $this->matchStyle !== '') {
-                $itemStr = $this->highlightMatches($itemStr, $filter);
+                $itemStr = $this->ranker !== null
+                    ? $this->highlightFuzzy($this->ranker, $itemStr, $filter)
+                    : $this->highlightMatches($itemStr, $filter);
             }
 
             $itemStr = \str_pad(\mb_substr($itemStr, 0, $winWidth, 'UTF-8'), $winWidth, ' ');
@@ -487,6 +515,9 @@ final class Hermit
                 )
             );
         }
+        if ($this->ranker !== null) {
+            return $this->applyRankedFilter($this->ranker, $text);
+        }
         $lower = \strtolower($text);
         return \array_values(
             \array_filter(
@@ -501,6 +532,38 @@ final class Hermit
         );
     }
 
+    /**
+     * Rank items by descending candy-fuzzy score for a non-empty filter text,
+     * keeping only positive-scoring items that also pass the filterFn predicate.
+     * Ties break on the items' original order so ranking is stable.
+     *
+     * @return list<Item>
+     */
+    private function applyRankedFilter(FuzzyMatcher $ranker, string $text): array
+    {
+        $fn = $this->filterFn;
+
+        /** @var list<array{item: Item, score: int, order: int}> $scored */
+        $scored = [];
+        foreach ($this->allItems as $order => $item) {
+            if (!$fn($item)) {
+                continue;
+            }
+            $result = $ranker->match($text, $item->value());
+            if ($result === null || !$result->isMatched()) {
+                continue;
+            }
+            $scored[] = ['item' => $item, 'score' => $result->score, 'order' => $order];
+        }
+
+        \usort(
+            $scored,
+            static fn(array $a, array $b): int => ($b['score'] <=> $a['score']) ?: ($a['order'] <=> $b['order']),
+        );
+
+        return \array_map(static fn(array $s): Item => $s['item'], $scored);
+    }
+
     private function computeWidth(): int
     {
         $promptLen = \strlen($this->prompt);
@@ -513,7 +576,12 @@ final class Hermit
         return \max($promptLen + $filterLen + 5, $itemMax + 2);
     }
 
-    private function highlightMatches(string $text, string $filter): string
+    /**
+     * Extract the printable text (runes only, ANSI control sequences stripped)
+     * from a formatted item string, so a highlighter can re-style matched runs
+     * by character index without disturbing escape sequences.
+     */
+    private function printableText(string $text): string
     {
         $charPositions = [];
         $charString = '';
@@ -578,6 +646,17 @@ final class Hermit
         $parser->feed($text);
         $parser->flush();
 
+        return $charString;
+    }
+
+    /**
+     * Highlight every contiguous occurrence of the filter text within a
+     * formatted item string (the default substring strategy).
+     */
+    private function highlightMatches(string $text, string $filter): string
+    {
+        $charString = $this->printableText($text);
+
         $lower = \mb_strtolower($charString, 'UTF-8');
         $filterLower = \mb_strtolower($filter, 'UTF-8');
         $flen = \mb_strlen($filterLower, 'UTF-8');
@@ -607,6 +686,28 @@ final class Hermit
             }
         }
         return $result;
+    }
+
+    /**
+     * Highlight the candy-fuzzy-matched runes in a formatted item string,
+     * following the ranker's scored indices (a subsequence match) rather than a
+     * contiguous substring. Falls back to the plain printable text when the
+     * ranker reports no match for the displayed string.
+     */
+    private function highlightFuzzy(FuzzyMatcher $ranker, string $text, string $filter): string
+    {
+        $charString = $this->printableText($text);
+        $result = $ranker->match($filter, $charString);
+        if ($result === null || $result->isEmpty()) {
+            return $charString;
+        }
+
+        $style = $this->matchStyle;
+
+        return (new Highlighter())->highlight(
+            $result,
+            static fn(string $matched): string => $style . $matched . Ansi::reset(),
+        );
     }
 
     private function compositeOver(array $overlayLines, string $background): string
