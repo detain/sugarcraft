@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Gallery\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Gallery\PosterCard;
 use SugarCraft\Sprinkles\Layout;
 
@@ -83,5 +84,59 @@ final class PosterCardTest extends TestCase
 
         self::assertGreaterThanOrEqual(4, Layout::width($lines[0]), 'width floored at 4');
         self::assertCount(2, $lines, 'posterHeight floored at 1 → 1 poster + 1 title');
+    }
+
+    public function testWideCjkTitleIsMeasuredInCellsNotChars(): void
+    {
+        // 日本語 = 3 CJK chars = 6 visible cells; fits in width-2 → no ellipsis,
+        // and the row is exactly `width` visible cells (the old mb_strlen path
+        // would have mis-measured the wide glyphs).
+        $titleLine = explode("\n", (new PosterCard('1', '日本語'))->render(false, 10, 1))[1];
+
+        self::assertSame(10, Width::of($titleLine), 'wide title row is exactly width cells');
+        self::assertStringContainsString('日本語', $titleLine);
+        self::assertStringNotContainsString('…', $titleLine);
+    }
+
+    public function testStyledTitleRendersAtTheCorrectVisibleWidth(): void
+    {
+        // Visible title is "Highlight" (9 cells) but carries inline ANSI.
+        $card = (new PosterCard('1', 'Highlight'))->withStyledTitle("\e[1mHi\e[0mghlight");
+        $titleLine = explode("\n", $card->render(false, 14, 1))[1];
+
+        // The row is exactly `width` VISIBLE cells despite the escape bytes …
+        self::assertSame(14, Width::of($titleLine), 'styled title row is exactly width cells');
+        // … and the escape sequences survive intact (not split by the width math).
+        self::assertStringContainsString("\e[1mHi\e[0m", $titleLine);
+    }
+
+    public function testStyledTitleTruncatesAnsiAwareKeepingEscapes(): void
+    {
+        // 26 visible cells, with a styled run at the front; width-2 = 8 cells fit.
+        $card = (new PosterCard('1', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'))
+            ->withStyledTitle("\e[1mABCDE\e[0mFGHIJKLMNOPQRSTUVWXYZ");
+        $titleLine = explode("\n", $card->render(false, 10, 1))[1];
+
+        self::assertSame(10, Width::of($titleLine), 'truncated to the cell width, ANSI not counted');
+        self::assertStringContainsString("\e[1m", $titleLine, 'the leading style survives the truncation');
+    }
+
+    public function testWithStyledTitleKeepsThePlainTitleForIdentity(): void
+    {
+        $card = (new PosterCard('id-1', 'Plain'))->withStyledTitle("\e[1mP\e[0mlain");
+
+        self::assertSame('Plain', $card->title, 'plain title retained for identity/sort');
+        self::assertSame("\e[1mP\e[0mlain", $card->styledTitle);
+    }
+
+    public function testStyledTitleSurvivesWithPosterAndWithProgress(): void
+    {
+        $card = (new PosterCard('1', 'X'))
+            ->withStyledTitle("\e[1mX\e[0m")
+            ->withPoster("AAA")
+            ->withProgress(0.5);
+
+        self::assertSame("\e[1mX\e[0m", $card->styledTitle, 'styled title threads through withPoster/withProgress');
+        self::assertStringContainsString("\e[1mX\e[0m", $card->render(false, 8, 1));
     }
 }
