@@ -134,6 +134,22 @@ final class Table
     /** Hidden column indices. Hidden columns are excluded from rendering but still affect data/filters. */
     private array $hiddenCols = [];
 
+    /**
+     * Borderless mode: render NO outer box (no top/bottom border rows, no
+     * left/right border columns) and use a single space between columns instead
+     * of a vertical rule. Lets the table compose inside another bordered shell
+     * (e.g. a sugar-boxer content box) without a double border. The header
+     * separator rule is still drawn when the header is shown.
+     */
+    private bool $borderless = false;
+
+    /**
+     * Fixed total render width in cells (0 = derive from the columns). When set,
+     * Flex columns fill exactly this width and every rendered line is exactly
+     * this many cells (borderless) — deterministic for composition.
+     */
+    private int $targetWidth = 0;
+
     // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
@@ -361,6 +377,32 @@ final class Table
     {
         $clone = clone $this;
         $clone->cellPadding = \max(0, $padding);
+        return $clone;
+    }
+
+    /**
+     * Render without an outer box (no top/bottom border rows, no left/right
+     * border columns; a single space separates columns). For composing the table
+     * inside another bordered container without a double border. Combine with
+     * {@see withWidth()} for a width-exact borderless table.
+     */
+    public function withBorderless(bool $v = true): self
+    {
+        $clone = clone $this;
+        $clone->borderless = $v;
+        return $clone;
+    }
+
+    /**
+     * Pin the total render width (in cells). Flex columns fill exactly the room
+     * left after Fixed/Percent columns and the inter-column gaps, so every line
+     * renders to exactly $cols cells. 0 restores the natural (column-derived)
+     * width.
+     */
+    public function withWidth(int $cols): self
+    {
+        $clone = clone $this;
+        $clone->targetWidth = \max(0, $cols);
         return $clone;
     }
 
@@ -913,11 +955,16 @@ final class Table
             $remaining = $tableWidth - $reservedWidth - $fixedWidth;
             $flexWidth = $remaining > 0 ? (int) \floor($remaining / $flexCount) : 0;
 
-            // Apply Dynamic/Content as content-based or minimum flex
+            // Apply Dynamic/Content/Flex as content-based or share-based width
             foreach ($this->columns as $i => $col) {
                 if ($widths[$i] === null) {
                     $contentLen = $this->contentWidthForColumn($col);
-                    if ($col->columnWidth === ColumnWidth::Dynamic) {
+                    if ($col->columnWidth === ColumnWidth::Flex) {
+                        // Flex: take the share verbatim, ignoring content (it is
+                        // truncated to fit) — the basis for an exact total width.
+                        // May shrink to 0 when the width is too tight to spare any.
+                        $widths[$i] = \max(0, $flexWidth);
+                    } elseif ($col->columnWidth === ColumnWidth::Dynamic) {
                         // Dynamic: use content length or flex width, whichever is larger
                         $widths[$i] = \max($contentLen, $flexWidth);
                     } else {
@@ -932,6 +979,22 @@ final class Table
         foreach ($widths as $i => $w) {
             if ($w === null) {
                 $widths[$i] = $this->columns[$i]->width;
+            }
+        }
+
+        // With a pinned width, give the last Flex column the integer-rounding
+        // slack so the columns + inter-column gaps sum to EXACTLY $tableWidth
+        // (and a selected row's reverse highlight reaches the right edge).
+        if ($this->targetWidth > 0) {
+            $lastFlex = null;
+            foreach ($this->columns as $i => $col) {
+                if ($col->columnWidth === ColumnWidth::Flex) {
+                    $lastFlex = $i;
+                }
+            }
+            if ($lastFlex !== null) {
+                $used = \array_sum($widths) + \max(0, \count($this->columns) - 1);
+                $widths[$lastFlex] = \max(0, $widths[$lastFlex] + ($tableWidth - $used));
             }
         }
 
@@ -1009,11 +1072,12 @@ final class Table
         }
 
         // Calculate buffer dimensions
-        // Height: top border + [header + header sep] + rows + [footer] + bottom border
-        $topBorderRows = 1;
+        // Height: top border + [header + header sep] + rows + [footer] + bottom border.
+        // Borderless mode drops the top/bottom border rows entirely.
+        $topBorderRows = $this->borderless ? 0 : 1;
         $headerRows = $this->showHeader ? 2 : 0; // header + separator
         $footerRows = ($this->showFooter && $this->pageSize > 0) ? 1 : 0;
-        $bottomBorderRows = 1;
+        $bottomBorderRows = $this->borderless ? 0 : 1;
         $rowCount = \count($rows);
 
         // When multilineMode is enabled, pre-calculate row heights
@@ -1028,7 +1092,9 @@ final class Table
         }
 
         $bufferHeight = $topBorderRows + $headerRows + $totalRowHeight + $footerRows + $bottomBorderRows;
-        $bufferWidth = $totalWidth + 2; // +2 for left/right border chars
+        // Borderless drops the +2 left/right border columns, so the buffer is
+        // exactly the content width (every line == $totalWidth cells).
+        $bufferWidth = $totalWidth + ($this->borderless ? 0 : 2);
 
         // When scrollX > 0, compute visible width for border rows
         // so borders align with visible content rather than extending beyond it
@@ -1042,8 +1108,10 @@ final class Table
         $bufferRow = 0;
 
         // Top border - use visibleWidth so border spans only visible content when scrolled
-        $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'top');
-        $bufferRow++;
+        if (!$this->borderless) {
+            $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'top');
+            $bufferRow++;
+        }
 
         // Header
         if ($this->showHeader) {
@@ -1072,7 +1140,9 @@ final class Table
         }
 
         // Bottom border
-        $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'bottom');
+        if (!$this->borderless) {
+            $buffer = $this->fillBorderRow($buffer, $bufferRow, $visibleWidth, 'bottom');
+        }
 
         return $buffer;
     }
@@ -1122,6 +1192,48 @@ final class Table
         return $width;
     }
 
+    /**
+     * Write a row's left edge. Bordered: the left border glyph at col 0, content
+     * starts at col 1. Borderless: nothing, content starts at col 0.
+     *
+     * @return array{0: Buffer, 1: int} [buffer, starting content column]
+     */
+    private function writeLeftEdge(Buffer $buffer, int $row, ?Style $style): array
+    {
+        if ($this->borderless) {
+            return [$buffer, 0];
+        }
+        return [$buffer->withCellAt(0, $row, new Cell($this->borderLeft(), $style, null, 1)), 1];
+    }
+
+    /** Write a row's right edge at $col (no-op in borderless mode). */
+    private function writeRightEdge(Buffer $buffer, int $row, int $col, ?Style $style): Buffer
+    {
+        if ($this->borderless || $col >= $buffer->width()) {
+            return $buffer;
+        }
+        return $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
+    }
+
+    /**
+     * Write the inter-column separator at $col and return the next column.
+     * Bordered: a vertical rule in the border style. Borderless: a single space
+     * carrying the ROW style so a selected row's reverse highlight stays
+     * continuous across the gap.
+     *
+     * @return array{0: Buffer, 1: int} [buffer, next column]
+     */
+    private function writeColumnSeparator(Buffer $buffer, int $row, int $col, ?Style $rowStyle, ?Style $borderStyle): array
+    {
+        if ($col >= $buffer->width()) {
+            return [$buffer, $col + 1]; // defensive: too-narrow width, nothing to draw
+        }
+        $cell = $this->borderless
+            ? new Cell(' ', $rowStyle, null, 1)
+            : new Cell($this->borderCenterV(), $borderStyle, null, 1);
+        return [$buffer->withCellAt($col, $row, $cell), $col + 1];
+    }
+
     private function fillBorderRow(Buffer $buffer, int $row, int $contentWidth, string $type): Buffer
     {
         $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
@@ -1153,11 +1265,8 @@ final class Table
     private function fillHeaderRow(Buffer $buffer, int $row, int $contentWidth, array $computedWidths): Buffer
     {
         $style = $this->parseAnsiToStyle($this->headerStyle);
-        $col = 0;
-
-        // Left border
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
-        $col++;
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
         // Header cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
@@ -1184,43 +1293,28 @@ final class Table
                 $ciFrozen = \in_array($ci, $this->frozenCols, true);
                 $nextVisible = $this->isColumnVisible($ci + 1);
                 if ($ciFrozen || $nextVisible) {
-                    $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-                    $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                    $col++;
+                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
                 }
             }
         }
 
-        // Right border
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $sepStyle, null, 1));
-
-        return $buffer;
+        return $this->writeRightEdge($buffer, $row, $col, $sepStyle);
     }
 
     private function fillHeaderSeparatorRow(Buffer $buffer, int $row, int $contentWidth): Buffer
     {
         $style = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        $col = 0;
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
-        // Left border
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
-        $col++;
-
-        // Separator
+        // Separator rule spanning the content width.
         $buffer = $this->fillCellContent($buffer, $row, $col, \str_repeat($this->borderCenterH(), $contentWidth), $contentWidth, $style);
         $col += $contentWidth;
 
-        // Right border
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
-
-        return $buffer;
+        return $this->writeRightEdge($buffer, $row, $col, $style);
     }
 
     private function fillDataRow(Buffer $buffer, int $row, Row $rowData, int $rowIndex, int $contentWidth, bool $isSelected, array $computedWidths): Buffer
     {
-        $col = 0;
-
         // Determine row-level style
         $rowStyle = '';
         if ($rowData->style !== '') {
@@ -1232,10 +1326,9 @@ final class Table
         }
         if ($isSelected) $rowStyle = '7'; // reverse
 
-        // Left border
         $style = $rowStyle !== '' ? $this->parseAnsiToStyle($rowStyle) : null;
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
-        $col++;
+        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
 
         // Data cells - render only visible columns
         foreach ($this->columns as $ci => $column) {
@@ -1301,18 +1394,12 @@ final class Table
                 $ciFrozen = \in_array($ci, $this->frozenCols, true);
                 $nextVisible = $this->isColumnVisible($ci + 1);
                 if ($ciFrozen || $nextVisible) {
-                    $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-                    $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                    $col++;
+                    [$buffer, $col] = $this->writeColumnSeparator($buffer, $row, $col, $style, $sepStyle);
                 }
             }
         }
 
-        // Right border
-        $sepStyle = $this->borderStyle !== '' ? $this->parseAnsiToStyle($this->borderStyle) : null;
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $sepStyle, null, 1));
-
-        return $buffer;
+        return $this->writeRightEdge($buffer, $row, $col, $sepStyle);
     }
 
     /**
@@ -1434,11 +1521,9 @@ final class Table
         // Render each line of the row
         for ($lineIdx = 0; $lineIdx < $rowHeight; $lineIdx++) {
             $bufferRow = $startRow + $lineIdx;
-            $col = 0;
 
             // Left border (full height)
-            $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderLeft(), $style, null, 1));
-            $col++;
+            [$buffer, $col] = $this->writeLeftEdge($buffer, $bufferRow, $style);
 
             // Render each visible cell
             foreach ($this->columns as $ci => $column) {
@@ -1473,14 +1558,13 @@ final class Table
                     $ciFrozen = \in_array($ci, $this->frozenCols, true);
                     $nextVisible = $this->isColumnVisible($ci + 1);
                     if ($ciFrozen || $nextVisible) {
-                        $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderCenterV(), $sepStyle, null, 1));
-                        $col++;
+                        [$buffer, $col] = $this->writeColumnSeparator($buffer, $bufferRow, $col, $style, $sepStyle);
                     }
                 }
             }
 
             // Right border (full height)
-            $buffer = $buffer->withCellAt($col, $bufferRow, new Cell($this->borderRight(), $sepStyle, null, 1));
+            $buffer = $this->writeRightEdge($buffer, $bufferRow, $col, $sepStyle);
         }
 
         return $buffer;
@@ -1518,14 +1602,11 @@ final class Table
 
         $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
 
-        $col = 0;
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderLeft(), $style, null, 1));
-        $col++;
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
         $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
         $col += $contentWidth;
-        $buffer = $buffer->withCellAt($col, $row, new Cell($this->borderRight(), $style, null, 1));
 
-        return $buffer;
+        return $this->writeRightEdge($buffer, $row, $col, $style);
     }
 
     /**
@@ -1534,9 +1615,13 @@ final class Table
     private function fillCellContent(Buffer $buffer, int $row, int $startCol, string $text, int $cellWidth, ?Style $style): Buffer
     {
         $clusters = $this->graphemeClusters($text);
+        $bufWidth = $buffer->width();
         $col = $startCol;
 
         foreach ($clusters as $cluster) {
+            if ($col >= $bufWidth) {
+                break; // never write past the buffer (defensive: too-narrow width)
+            }
             $gw = $this->graphemeWidth($cluster);
             $gw = $gw === 0 ? 1 : $gw; // Minimum 1 cell
 
@@ -1549,19 +1634,19 @@ final class Table
                 break;
             }
 
-            $cell = new Cell($cluster, $style, null, $gw);
-            $buffer = $buffer->withCellAt($col, $row, $cell);
-            $col += $gw;
+            $buffer = $buffer->withCellAt($col, $row, new Cell($cluster, $style, null, $gw));
 
-            // Add continuation cell for wide chars
-            if ($gw === 2) {
-                $buffer = $buffer->withCellAt($col, $row, Cell::continuation());
-                $col++;
+            // A wide grapheme occupies two slots: the display-width-2 cell at $col
+            // plus a continuation marker at $col + 1 (NOT $col + 2 — advancing by
+            // $gw already covers both slots).
+            if ($gw === 2 && $col + 1 < $bufWidth) {
+                $buffer = $buffer->withCellAt($col + 1, $row, Cell::continuation());
             }
+            $col += $gw;
         }
 
-        // Fill remaining width with spaces if needed
-        while (($col - $startCol) < $cellWidth) {
+        // Fill remaining width with spaces if needed (clamped to the buffer).
+        while (($col - $startCol) < $cellWidth && $col < $bufWidth) {
             $buffer = $buffer->withCellAt($col, $row, new Cell(' ', $style, null, 1));
             $col++;
         }
@@ -1938,6 +2023,12 @@ final class Table
 
     private function computeTotalWidth(): int
     {
+        // A pinned width wins: the content span is exactly targetWidth (Flex
+        // columns absorb whatever the Fixed/Percent columns and gaps leave).
+        if ($this->targetWidth > 0) {
+            return $this->targetWidth;
+        }
+
         // Sum raw column widths as initial estimate
         $total = 0;
         foreach ($this->columns as $col) {
