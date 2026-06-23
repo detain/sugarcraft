@@ -32,7 +32,7 @@ final class GeometryFakeDecoder implements Decoder
     {
     }
 
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
     {
         $this->w = $cellsW;
         $this->frameH = $cellsH * ($mode?->rowsPerCell() ?? 2);

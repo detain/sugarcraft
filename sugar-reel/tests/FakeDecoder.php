@@ -36,10 +36,11 @@ final class FakeDecoder implements Decoder
     /**
      * @inheritDoc
      *
-     * The $mode parameter is accepted for interface compatibility but ignored
-     * since FakeDecoder always outputs its predetermined frame sequence.
+     * The $mode and $startSec parameters are accepted for interface compatibility
+     * but ignored — FakeDecoder always replays its predetermined frame sequence
+     * from the start.
      */
-    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): void
+    public function open(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): void
     {
         $this->opened = true;
         $this->everOpened = true;

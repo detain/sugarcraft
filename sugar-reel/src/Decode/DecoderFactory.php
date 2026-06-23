@@ -25,9 +25,10 @@ final class DecoderFactory
      * @param int $cellsH Target height in terminal cells
      * @param float $fps Target frames per second
      * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
+     * @param float $startSec Seconds to seek into the source before the first frame (0 = start)
      * @return Decoder
      */
-    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null): Decoder
+    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): Decoder
     {
         $isGif = preg_match('/\.gif$/i', $source) === 1;
 
@@ -40,7 +41,7 @@ final class DecoderFactory
             $decoder = new GifDecoder();
         }
 
-        $decoder->open($source, $cellsW, $cellsH, $fps, $mode);
+        $decoder->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);
         return $decoder;
     }
 }
