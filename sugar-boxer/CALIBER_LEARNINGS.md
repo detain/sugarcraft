@@ -69,6 +69,13 @@ preserving the Boundary between the layout engine and the styling system.
 **Anti-pattern:** Retaining a previousFrame across a window resize or cursor-move event produces a delta against a buffer that no longer maps to the physical terminal state — visual corruption.
 **Source:** step-27 ai/buffer-diff-consumers
 
+### 2026-06-23 — flex-grow-children
+**Pattern:** `Node::withFlex(int)` / `withGrow()` add a `flex` weight. In `renderVertical`/`renderHorizontal`, if any child is flex, fixed children take their *natural* size (`totalHeight()`/`totalWidth()`, so borders/padding are reserved) and flex children share the leftover by weight (the last flex child absorbs the integer-rounding remainder so children sum to exactly the content span). With NO flex child, the historical weight-by-`min*` split is untouched (100% back-compat).
+**Anti-pattern:** distributing the whole axis by `minHeight`-as-weight — a 3-leaf header/content/status splits ~1/3 each, clipping the content region to a third of the terminal on every screen.
+**Footgun fixed alongside:** `Node::with()` defaulted `border` to `true` and passed it positionally, so ANY `with*()` call after `withBorder(false)` silently re-enabled the border. Changed to `?bool $border = null` → `$border ?? $this->border` (preserve unless a `with*` sets it). Required to express a borderless 1-line header/status next to a filling content panel.
+**Caveat:** the inter-panel separator (drawn between children when `spacing === 0`) lands on the *last row* of the preceding child — fine for bordered panels (it merges with their border) but it overwrites a borderless 1-row leaf. Use `spacing >= 1`, or bordered panels, when composing tight flex layouts.
+**Source:** ai/boxer-flex-fill
+
 ### 2026-06-23 — ansi-aware-content-placement
 **Pattern:** Place leaf content one *visible cell* at a time, where a cell = its leading ANSI escape sequences + one grapheme. Group escapes with the grapheme they style (escapes are zero-width and must not consume a column), advance the cursor by the grapheme's visible width (candy-core `Util\Width`), and blank the continuation cell of a wide grapheme. Apply the SAME visible-column measure to any truncation (`splitWord`) — never byte/codepoint offsets (`mb_substr`/`preg_split('//u')`).
 **Anti-pattern:** Splitting a line per-codepoint and writing each byte into its own cell — every escape byte (`\e`, `[`, `7`, `m`) steals a column, so styled bodies mis-width and clip, and a clipped reverse-video span loses its reset and bleeds colour into the border / next row.
