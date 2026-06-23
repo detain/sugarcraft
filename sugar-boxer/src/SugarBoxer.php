@@ -285,13 +285,216 @@ final class SugarBoxer
         foreach ($linesToRender as $lineIdx => $line) {
             $lineY = $y + $lineIdx;
             if ($lineY >= \count($cells)) break;
+            $this->placeLine($line, $x, $lineY, $w, $cells);
+        }
+    }
 
-            $chars = \preg_split('//u', $line, -1, \PREG_SPLIT_NO_EMPTY) ?: [];
-            for ($i = 0; $i < $w; $i++) {
-                $char = $chars[$i] ?? ' ';
-                $this->setChar($x + $i, $lineY, $char, $cells);
+    /**
+     * Place one (already-wrapped) line into the cell grid, ANSI-aware.
+     *
+     * The line is split into visible cells — each carrying its leading escape
+     * sequences with the visible grapheme they style (escapes are zero-width, so
+     * they ride in the same grid cell and never consume a column). Placement and
+     * truncation are measured by VISIBLE columns (candy-core {@see Width}), so a
+     * styled span keeps its true width and its escapes survive in order; a wide
+     * (CJK/emoji) grapheme occupies its two columns with a blanked continuation
+     * cell.
+     *
+     * Reset safety: a colour/attribute left open — whether the source span was
+     * unbalanced or a reverse-video span got clipped by the width — is terminated
+     * with an SGR reset on the last placed cell, so style never bleeds past the
+     * content region into the border or the next row.
+     */
+    private function placeLine(string $line, int $x, int $y, int $w, array &$cells): void
+    {
+        ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($line);
+
+        $col       = 0;
+        $lastCol   = -1;
+        $carry     = '';      // zero-width graphemes awaiting a base cell
+        $styleOpen = false;
+        $truncated = false;
+
+        foreach ($segments as $seg) {
+            $gw = $this->strWidth($seg);
+
+            // Zero-width grapheme (combining mark / lone joiner): keep it attached
+            // to the previous cell, else carry it onto the next visible one.
+            if ($gw <= 0) {
+                if ($lastCol >= 0) {
+                    $cells[$y][$x + $lastCol] .= $seg;
+                } else {
+                    $carry .= $seg;
+                }
+                $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+                continue;
+            }
+
+            if ($col + $gw > $w) {
+                $truncated = true;
+                break;
+            }
+
+            $this->setChar($x + $col, $y, $carry . $seg, $cells);
+            $carry     = '';
+            $styleOpen = $this->sgrLeavesStyleOpen($seg, $styleOpen);
+            $lastCol   = $col;
+
+            // A wide grapheme spans a continuation cell — blank it so the row
+            // keeps exactly its visible width and no stale glyph shows through.
+            for ($k = 1; $k < $gw; $k++) {
+                $this->setChar($x + $col + $k, $y, '', $cells);
+            }
+            $col += $gw;
+        }
+
+        // The line's own trailing escapes (e.g. an SGR reset) ride on the last
+        // cell when the whole line fit; if we truncated mid-line they belonged to
+        // clipped cells and are dropped (reset safety below still closes the span).
+        if (!$truncated && $trailing !== '' && $lastCol >= 0) {
+            $cells[$y][$x + $lastCol] .= $trailing;
+            $styleOpen = $this->sgrLeavesStyleOpen($trailing, $styleOpen);
+        }
+
+        if ($styleOpen && $lastCol >= 0) {
+            $cells[$y][$x + $lastCol] .= "\x1b[0m";
+        }
+
+        // Pad the remainder of the region with spaces (overwriting prior content).
+        for (; $col < $w; $col++) {
+            $this->setChar($x + $col, $y, ' ', $cells);
+        }
+    }
+
+    /**
+     * Split a line into per-cell segments for ANSI-aware placement.
+     *
+     * Each returned cell is "(zero or more leading escape sequences) + one
+     * visible grapheme". Escape sequences trailing the final grapheme (an SGR
+     * reset, say) are returned separately so the caller can re-attach them and
+     * avoid colour bleed.
+     *
+     * @return array{cells: list<string>, trailing: string}
+     */
+    private function visualCells(string $line): array
+    {
+        $cells   = [];
+        $pending = '';
+        $len     = \strlen($line);
+        $i       = 0;
+
+        while ($i < $len) {
+            $seq = $this->escapeAt($line, $i);
+            if ($seq !== null) {
+                $pending .= $seq;
+                $i += \strlen($seq);
+                continue;
+            }
+            $g = $this->nextGrapheme($line, $i);
+            if ($g === '') {
+                $i++; // defensive: never spin on a zero-length read
+                continue;
+            }
+            $cells[] = $pending . $g;
+            $pending = '';
+            $i += \strlen($g);
+        }
+
+        return ['cells' => $cells, 'trailing' => $pending];
+    }
+
+    /**
+     * If an ANSI escape sequence begins at byte $i, return it; else null.
+     * Recognises CSI (ESC [ … final 0x40-0x7e) and OSC (ESC ] … BEL/ST)
+     * sequences. For any other ESC, consumes the two-byte form ONLY when the
+     * second byte is ASCII (an ECMA-48 nF/Fe/Fs escape's final byte is always
+     * 0x20-0x7e) — so a stray ESC sitting before a multi-byte grapheme returns
+     * just the ESC and never splits that grapheme.
+     */
+    private function escapeAt(string $s, int $i): ?string
+    {
+        if (($s[$i] ?? '') !== "\x1b") {
+            return null;
+        }
+        $next = $s[$i + 1] ?? '';
+        $len  = \strlen($s);
+
+        if ($next === '[') {
+            $j = $i + 2;
+            while ($j < $len) {
+                $c = \ord($s[$j]);
+                $j++;
+                if ($c >= 0x40 && $c <= 0x7e) break;
+            }
+            return \substr($s, $i, $j - $i);
+        }
+        if ($next === ']') {
+            $j = $i + 2;
+            while ($j < $len) {
+                if ($s[$j] === "\x07") { $j++; break; }
+                if ($s[$j] === "\x1b" && ($s[$j + 1] ?? '') === '\\') { $j += 2; break; }
+                $j++;
+            }
+            return \substr($s, $i, $j - $i);
+        }
+
+        return ($next !== '' && \ord($next) < 0x80) ? \substr($s, $i, 2) : "\x1b";
+    }
+
+    /** Read one extended grapheme cluster starting at byte $i (intl, with a UTF-8 fallback). */
+    private function nextGrapheme(string $s, int $i): string
+    {
+        if (\function_exists('grapheme_extract')) {
+            $next    = 0;
+            $cluster = \grapheme_extract($s, 1, \GRAPHEME_EXTR_COUNT, $i, $next);
+            if (\is_string($cluster) && $cluster !== '') {
+                return $cluster;
             }
         }
+        $b     = \ord($s[$i]);
+        $bytes = match (true) {
+            ($b & 0x80) === 0    => 1,
+            ($b & 0xe0) === 0xc0 => 2,
+            ($b & 0xf0) === 0xe0 => 3,
+            ($b & 0xf8) === 0xf0 => 4,
+            default              => 1,
+        };
+        return \substr($s, $i, $bytes);
+    }
+
+    /**
+     * Track SGR open/closed state across the escape sequences in $s, returning
+     * whether a style is left open afterwards. ESC[0m / ESC[m close; any other
+     * attribute opens. The parameters of extended-colour selectors
+     * (38/48 ; 5 ; n and 38/48 ; 2 ; r ; g ; b) are skipped so a colour index of
+     * 0 isn't mistaken for a reset.
+     */
+    private function sgrLeavesStyleOpen(string $s, bool $open): bool
+    {
+        if (\strpos($s, "\x1b[") === false) {
+            return $open;
+        }
+        if (\preg_match_all('/\x1b\[([0-9;]*)m/', $s, $matches) === 0) {
+            return $open;
+        }
+        foreach ($matches[1] as $params) {
+            if ($params === '') {
+                $open = false; // ESC[m == reset
+                continue;
+            }
+            $codes = \explode(';', $params);
+            for ($k = 0, $n = \count($codes); $k < $n; $k++) {
+                $code = (int) $codes[$k];
+                if (($code === 38 || $code === 48) && isset($codes[$k + 1])) {
+                    $k += ((int) $codes[$k + 1]) === 2 ? 4 : 2;
+                    $open = true; // a colour is being set
+                    continue;
+                }
+                $open = $code !== 0;
+            }
+        }
+
+        return $open;
     }
 
     /**
@@ -341,13 +544,46 @@ final class SugarBoxer
         return $result ?: [''];
     }
 
+    /**
+     * Break an oversized word into width-sized chunks, ANSI-aware: escape
+     * sequences ride with their grapheme and never count toward the width, and
+     * each chunk is measured by visible columns (so wide graphemes and styled
+     * runs split on real cell boundaries rather than byte offsets).
+     *
+     * A single grapheme wider than $width (e.g. a 2-column CJK char in a
+     * 1-column region) is emitted as its own oversized chunk — a grapheme is
+     * atomic and cannot be split — and {@see placeLine} then clips it to the
+     * region. {@see wordWrap} is the sole caller and only reaches here with
+     * $width >= 1 and a word whose visible width exceeds $width.
+     *
+     * @return list<string>
+     */
     private function splitWord(string $word, int $width): array
     {
+        // Sole caller wordWrap() only reaches here with $width >= 1 and a word of
+        // visible width > $width, so the tokenization always yields ≥1 segment.
+        ['cells' => $segments, 'trailing' => $trailing] = $this->visualCells($word);
+
         $chunks = [];
-        $len = \mb_strlen($word, 'UTF-8');
-        for ($i = 0; $i < $len; $i += $width) {
-            $chunks[] = \mb_substr($word, $i, $width, 'UTF-8');
+        $buf    = '';
+        $col    = 0;
+        foreach ($segments as $seg) {
+            $gw = $this->strWidth($seg);
+            if ($buf !== '' && $gw > 0 && $col + $gw > $width) {
+                $chunks[] = $buf;
+                $buf      = '';
+                $col      = 0;
+            }
+            $buf .= $seg;
+            $col += $gw;
         }
+        if ($trailing !== '') {
+            $buf .= $trailing;
+        }
+        if ($buf !== '') {
+            $chunks[] = $buf;
+        }
+
         return $chunks ?: [''];
     }
 
