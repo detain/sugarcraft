@@ -95,7 +95,7 @@ final class VeilAnimationTest extends TestCase
     public function testBackdropWithMediumOpacity(): void
     {
         // Backdrop of 50 gives dimPasses = 2 (50/33 rounded = 2)
-        // This exercises the inner loop in applyBackdrop (runs once for dimPasses=2)
+        // This exercises the inner dim-pass loop in dimLine() (runs once for dimPasses=2)
         $v = Veil::new()->withBackdrop(50);
 
         $bg = "..........\n..........";
@@ -108,7 +108,7 @@ final class VeilAnimationTest extends TestCase
     public function testBackdropWithHighOpacity(): void
     {
         // Backdrop of 100 gives dimPasses = 3 (100/33 rounded = 3)
-        // This exercises the inner loop in applyBackdrop (runs twice for dimPasses=3)
+        // This exercises the inner dim-pass loop in dimLine() (runs twice for dimPasses=3)
         $v = Veil::new()->withBackdrop(100);
 
         $bg = "..........\n..........";
@@ -122,7 +122,7 @@ final class VeilAnimationTest extends TestCase
     public function testApplyBackdropInnerLoopWithDimPassesThree(): void
     {
         // Backdrop of 100 gives dimPasses=3, inner loop runs twice
-        // This specifically exercises the inner for loop at applyBackdrop line 482
+        // This specifically exercises the inner for loop in dimLine()
         $v = Veil::new()->withBackdrop(100);
 
         $bg = "..........\n..........\n..........";
@@ -147,7 +147,7 @@ final class VeilAnimationTest extends TestCase
 
     public function testBackdropMultiLineContent(): void
     {
-        // Test applyBackdrop with multi-line content to exercise the outer loop fully
+        // Test backdrop dimming with multi-line content (dimLine applied per row)
         $v = Veil::new()->withBackdrop(100);
 
         $bg = "............\n............\n............\n............";

@@ -429,11 +429,6 @@ final class Veil
             return $background;
         }
 
-        // Apply backdrop dimming to background if configured
-        if ($this->backdropOpacity > 0) {
-            $bgLines = $this->applyBackdrop($bgLines);
-        }
-
         // Resolve base position
         $baseX = $horizontal->xOffset($fgWidth, $bgWidth);
         $baseY = $vertical->yOffset($fgHeight, $bgHeight);
@@ -446,28 +441,34 @@ final class Veil
         $x = \max(0, \min($x, $bgWidth  - 1));
         $y = \max(0, \min($y, $bgHeight - 1));
 
-        // Build output by copying background lines
-        $output = $bgLines;
+        // Build the output a row at a time. Each foreground line is overlaid as a
+        // single styled SEGMENT at [x, x + visibleWidth) — cell-aware (via Width)
+        // so its ANSI escape sequences are never split — and the backdrop is dimmed
+        // only OUTSIDE the foreground footprint, so the overlay stays bright over a
+        // dimmed background instead of inheriting the dim.
+        $output = [];
+        for ($row = 0; $row < $bgHeight; $row++) {
+            $bgLine = $bgLines[$row];
+            $fy = $row - $y;
 
-        // Overlay each foreground line
-        for ($fy = 0; $fy < $fgHeight; $fy++) {
-            $destY = $y + $fy;
-            if ($destY >= $bgHeight) break;
-
-            $fgLine = $fgLines[$fy];
-            // Split into characters (not bytes) to handle UTF-8 properly
-            $fgChars = \mb_str_split($fgLine);
-            $fgCharCount = \count($fgChars);
-
-            for ($fx = 0; $fx < $fgCharCount; $fx++) {
-                $destX = $x + $fx;
-                if ($destX >= $bgWidth) break;
-
-                $char = $fgChars[$fx];
-                if ($char !== "\n" && $char !== "\r") {
-                    $output[$destY] = $this->replaceCharAt($output[$destY], $destX, $char);
-                }
+            if ($fy < 0 || $fy >= $fgHeight) {
+                // Not covered by the foreground — dim the whole background line.
+                $output[$row] = $this->dimLine($bgLine);
+                continue;
             }
+
+            // Clip the foreground line to the room left on this row (keeping its
+            // escapes) and measure its visible footprint.
+            $fgLine = Width::truncateAnsi($fgLines[$fy], $bgWidth - $x);
+            $fgVis  = Width::string($fgLine);
+
+            // Background before/after the overlay: pad the gap to x cells, slice
+            // the tail at a clean cell boundary, and dim both — the foreground
+            // segment between them is left bright.
+            $prefix = Width::padRight(Width::truncateAnsi($bgLine, $x), $x);
+            $suffix = Width::dropAnsi($bgLine, $x + $fgVis);
+
+            $output[$row] = $this->dimLine($prefix) . $fgLine . $this->dimLine($suffix);
         }
 
         $fullOutput = \implode("\n", $output);
@@ -488,38 +489,36 @@ final class Veil
     }
 
     /**
-     * Apply backdrop dimming to background lines.
-     *
-     * @param list<string> $lines
-     * @return list<string>
+     * Dim a single background line by wrapping it in SGR FAINT, repeated per the
+     * backdrop opacity (0–100 → 0–3 passes). An empty line or a zero backdrop is
+     * returned unchanged so the overlay footprint (empty prefix/suffix) and the
+     * no-backdrop path stay free of stray escape codes.
      */
-    private function applyBackdrop(array $lines): array
+    private function dimLine(string $line): string
     {
-        // Convert 0-100 opacity to ANSI dim level
-        // SGR code 2 = dim (reduced intensity)
-        // Higher opacity = more dim passes
-        $dimPasses = (int) \round($this->backdropOpacity / 33); // 0-100 → 0-3 passes
-        $dimPasses = \max(0, \min(3, $dimPasses));
-
-        if ($dimPasses === 0) {
-            return $lines;
+        $dimPasses = $this->dimPasses();
+        if ($dimPasses === 0 || $line === '') {
+            return $line;
         }
 
         $dimCode = Ansi::sgr(Ansi::FAINT);
         $resetCode = Ansi::reset();
 
-        // Wrap each line with dim codes
-        $dimmed = [];
-        foreach ($lines as $line) {
-            $wrapped = $dimCode . $line . $resetCode;
-            // Apply multiple passes for stronger dimming
-            for ($i = 1; $i < $dimPasses; $i++) {
-                $wrapped = $dimCode . $wrapped . $resetCode;
-            }
-            $dimmed[] = $wrapped;
+        // Wrap with dim codes; extra passes deepen the dim.
+        $wrapped = $dimCode . $line . $resetCode;
+        for ($i = 1; $i < $dimPasses; $i++) {
+            $wrapped = $dimCode . $wrapped . $resetCode;
         }
 
-        return $dimmed;
+        return $wrapped;
+    }
+
+    /**
+     * Map the backdrop opacity (0–100) to a count of SGR FAINT passes (0–3).
+     */
+    private function dimPasses(): int
+    {
+        return \max(0, \min(3, (int) \round($this->backdropOpacity / 33)));
     }
 
     /**
@@ -558,71 +557,6 @@ final class Veil
     public function lineWidth(string $line): int
     {
         return Width::string($line);
-    }
-
-    /**
-     * Replace the character at position $x in $line, respecting multibyte chars.
-     */
-    private function replaceCharAt(string $line, int $x, string $char): string
-    {
-        $result = '';
-        $bytePos = 0;
-        $col = 0;
-        $len = \strlen($line);
-
-        while ($bytePos < $len) {
-            if ($col === $x) {
-                // Found the target column — first advance past the old character
-                $c = $line[$bytePos];
-                if ($c >= "\x80") {
-                    $ord = \ord($c);
-                    if ($ord < 0xC0) {
-                        $bytePos++;
-                    } elseif ($ord < 0xE0) {
-                        $bytePos += 2;
-                    } elseif ($ord < 0xF0) {
-                        $bytePos += 3;
-                    } else {
-                        $bytePos += 4;
-                    }
-                } else {
-                    $bytePos++;
-                }
-                // Now append replacement char and rest of string
-                return $result . $char . \substr($line, $bytePos);
-            }
-
-            // Not at target column yet — accumulate character and advance
-            $c = $line[$bytePos];
-            if ($c >= "\x80") {
-                // Multibyte — include full character
-                $ord = \ord($c);
-                if ($ord < 0xC0) {
-                    $result .= $c;
-                    $bytePos++;
-                } elseif ($ord < 0xE0) {
-                    $result .= \substr($line, $bytePos, 2);
-                    $bytePos += 2;
-                } elseif ($ord < 0xF0) {
-                    $result .= \substr($line, $bytePos, 3);
-                    $bytePos += 3;
-                } else {
-                    $result .= \substr($line, $bytePos, 4);
-                    $bytePos += 4;
-                }
-            } else {
-                $result .= $c;
-                $bytePos++;
-            }
-            $col++;
-        }
-
-        // Position was beyond line end — pad and append
-        if ($col === $x) {
-            $result .= $char;
-        }
-
-        return $result;
     }
 
     /**
