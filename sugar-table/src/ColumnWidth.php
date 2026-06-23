@@ -23,4 +23,13 @@ enum ColumnWidth: string
 
     /** Content-based: exactly fit content, compress if needed. */
     case Content = 'content';
+
+    /**
+     * Flexible: take an equal share of the width left after Fixed/Percent
+     * columns, IGNORING content length (content is truncated to fit). The "fill
+     * the rest" column — unlike Dynamic it never grows past its share, so a table
+     * with a Flex column and a set width ({@see Table::withWidth()}) renders to an
+     * exact, deterministic total width.
+     */
+    case Flex = 'flex';
 }
