@@ -106,6 +106,32 @@ $toast = $toast->alert(ToastType::Info, 'Connected', null);  // never expires
 
 Persistent alerts are dismissed only via `dismiss()`, `clear()`, or `pruneExpired()`.
 
+## Loop integration
+
+Expired alerts are removed by `pruneExpired()`, but something has to *call* it.
+Rather than poll on a fixed interval, ask the toast when the next prune is due and
+schedule a single timer for exactly that moment:
+
+```php
+$delay = $toast->secondsUntilNextExpiry();   // seconds until the soonest expiry, or null
+if ($delay !== null) {
+    // e.g. in a candy-core TEA app:
+    $cmd = Cmd::tick($delay, fn () => new ToastTickMsg());
+}
+
+// when the tick fires:
+$toast = $toast->pruneExpired();
+if ($toast->hasActiveAlert()) {
+    // reschedule for the next expiry, repeat
+}
+```
+
+- **`nextExpiry(): ?float`** — the soonest expiry instant (seconds since epoch)
+  among queued alerts that auto-dismiss, or `null` if none expire. May be in the
+  past when an alert is already due.
+- **`secondsUntilNextExpiry(): ?float`** — the same as a delay from now, clamped
+  to `>= 0.0` (an already-due alert yields `0.0`), or `null` if nothing expires.
+
 ## Internationalization
 
 User-facing strings are internationalized via `SugarCraft\Toast\Lang::t()`.
@@ -234,6 +260,8 @@ for now.
 | `->progressToast(ToastType\|string, string, float $progress, ?float $expiresAt)` | Add alert with progress bar (0.0–1.0) |
 | `->error/warning/info/success(string)` | Convenience alert helpers |
 | `->hasActiveAlert(): bool` | True if non-expired alerts queued |
+| `->nextExpiry(): ?float` | Soonest expiry instant (epoch seconds) of an auto-dismissing alert, or `null` |
+| `->secondsUntilNextExpiry(): ?float` | Delay until the next expiry, clamped `>= 0.0`, or `null` — schedule one prune tick |
 | `->dismiss() / clear() / pruneExpired()` | Manage alert lifecycle; `dismiss()` records to history |
 | `->getHistory(): list<Alert>` | Return all dismissed alerts |
 | `->view(string $background, int $w, int $h): string` | Render toast layer over background |
