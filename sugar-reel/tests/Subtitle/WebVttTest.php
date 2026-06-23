@@ -87,6 +87,23 @@ final class WebVttTest extends TestCase
         self::assertSame('Real cue', $vtt->cues()[0]->text);
     }
 
+    public function testCueIdentifierStartingWithABlockKeywordStillParses(): void
+    {
+        // Identifiers that merely begin with REGION/STYLE/WEBVTT are real cues,
+        // not block keywords — they have a timing line, so they must parse.
+        $vtt = WebVtt::parse(
+            "WEBVTT\n\n"
+            . "REGION 5\n00:00:01.000 --> 00:00:02.000\nOne\n\n"
+            . "STYLE note\n00:00:03.000 --> 00:00:04.000\nTwo\n\n"
+            . "WEBVTT-ish\n00:00:05.000 --> 00:00:06.000\nThree"
+        );
+
+        self::assertCount(3, $vtt->cues());
+        self::assertSame('One', $vtt->cues()[0]->text);
+        self::assertSame('Two', $vtt->cues()[1]->text);
+        self::assertSame('Three', $vtt->cues()[2]->text);
+    }
+
     public function testToleratesSrtStyleInput(): void
     {
         // Numeric index line + comma millisecond separator.
