@@ -312,6 +312,46 @@ final class Toast
     }
 
     /**
+     * The soonest expiry instant (seconds since epoch) among the queued alerts
+     * that auto-dismiss, or null when no queued alert has an expiry.
+     *
+     * This is the loop-integration primitive: instead of polling
+     * {@see pruneExpired()} on a fixed interval, a TEA / event-loop host can
+     * schedule ONE timer to fire at this instant, prune, then reschedule. The
+     * value may be in the past if an alert is already due for pruning (the host
+     * should prune immediately in that case) — see {@see secondsUntilNextExpiry()}
+     * for a clamped, ready-to-schedule delay.
+     */
+    public function nextExpiry(): ?float
+    {
+        $soonest = null;
+        foreach ($this->queue as $alert) {
+            if ($alert->expiresAt === null) {
+                continue;
+            }
+            if ($soonest === null || $alert->expiresAt < $soonest) {
+                $soonest = $alert->expiresAt;
+            }
+        }
+        return $soonest;
+    }
+
+    /**
+     * Seconds from now until the next alert expires, clamped to >= 0.0 (an
+     * already-due alert yields 0.0 → prune now), or null when no queued alert
+     * auto-dismisses. Convenience for scheduling a single prune tick, e.g.
+     * `Cmd::tick($toast->secondsUntilNextExpiry() ?? $idle, …)`.
+     */
+    public function secondsUntilNextExpiry(): ?float
+    {
+        $at = $this->nextExpiry();
+        if ($at === null) {
+            return null;
+        }
+        return \max(0.0, $at - \microtime(true));
+    }
+
+    /**
      * Return the history of dismissed alerts.
      *
      * @return list<Alert>
