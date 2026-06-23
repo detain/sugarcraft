@@ -70,6 +70,30 @@ final class Reel
     }
 
     /**
+     * Open a remote video source by http(s) URL.
+     *
+     * ffmpeg decodes a network stream natively, so this is the entry-point a
+     * media client uses to direct-play a server's stream URL (e.g. a signed
+     * `/media/{id}/stream` link) without downloading or transcoding it first.
+     * The decoder passes the http/https reconnect options through so a transient
+     * drop does not end playback. Audio (ffplay/mpv) likewise streams the URL.
+     *
+     * Functionally identical to {@see open()} — the URL is just recorded — but
+     * named for intent and it rejects a non-http(s) argument so a path typo
+     * surfaces immediately rather than as an obscure ffmpeg failure.
+     *
+     * @throws \InvalidArgumentException When $url is not an http(s) URL
+     */
+    public static function openUrl(string $url): self
+    {
+        if (preg_match('#^https?://#i', $url) !== 1) {
+            throw new \InvalidArgumentException("Not an http(s) URL: {$url}");
+        }
+
+        return new self($url, null, 80, 24, null, false, 'standard');
+    }
+
+    /**
      * The source video path this player was opened with ('' when unbound).
      */
     public function path(): string

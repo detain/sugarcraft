@@ -21,6 +21,11 @@ use SugarCraft\Reel\Source\Probe;
  * kernel buffer on noisy input — which then wedges our blocking fread(stdout) —
  * so we never hold an unread stderr pipe.
  *
+ * The source may be a local path OR an http(s) URL — ffmpeg decodes a network
+ * stream natively (so the console client can direct-play the server's signed
+ * stream URL, bypassing any transcode). For URL sources the http/https protocol
+ * reconnect options are passed so a momentary drop does not abort playback.
+ *
  * @see video_plan.md lines 79-82
  * @implements Decoder
  */
@@ -58,21 +63,7 @@ final class FfmpegDecoder implements Decoder
 
         // Build command as array — never a shell string.
         // No escaping needed; proc_open passes args directly with no shell.
-        $cmd = [
-            $ffmpegPath,
-            '-hide_banner',
-            '-loglevel', 'error',
-            '-i', $source,
-            '-f', 'rawvideo',
-            '-pix_fmt', 'rgb24',
-            '-vf', sprintf(
-                'fps=%s,scale=%d:%d:flags=bilinear',
-                (string) $fps,
-                $cellsW,
-                $this->frameH
-            ),
-            '-',
-        ];
+        $cmd = self::buildCommand($ffmpegPath, $source, $this->cellsW, $this->frameH, $fps);
 
         // stderr goes to a file sink (the OS null device), never a pipe — an
         // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
@@ -94,6 +85,56 @@ final class FfmpegDecoder implements Decoder
         if (is_resource($pipes[0])) {
             \fclose($pipes[0]);
         }
+    }
+
+    /**
+     * Assemble the ffmpeg argv as an array (never a shell string — proc_open
+     * passes the args verbatim with no shell, so nothing needs escaping).
+     *
+     * For an http(s) source the http/https protocol reconnect options are
+     * inserted BEFORE `-i` (they are input options) so a transient network drop
+     * or a slow signed-URL response reconnects instead of ending the stream.
+     * They are valid only for the network protocols, so a local path omits them
+     * (ffmpeg rejects `-reconnect` on a file input).
+     *
+     * Static and pure (input → argv) so the assembly is unit-testable without
+     * launching a subprocess.
+     *
+     * @return list<string>
+     */
+    public static function buildCommand(string $ffmpegPath, string $source, int $cellsW, int $frameH, float $fps): array
+    {
+        $cmd = [$ffmpegPath, '-hide_banner', '-loglevel', 'error'];
+
+        if (self::isNetworkSource($source)) {
+            array_push(
+                $cmd,
+                '-reconnect', '1',
+                '-reconnect_streamed', '1',
+                '-reconnect_on_network_error', '1',
+                '-reconnect_delay_max', '4',
+            );
+        }
+
+        array_push(
+            $cmd,
+            '-i', $source,
+            '-f', 'rawvideo',
+            '-pix_fmt', 'rgb24',
+            '-vf', sprintf('fps=%s,scale=%d:%d:flags=bilinear', (string) $fps, $cellsW, $frameH),
+            '-',
+        );
+
+        return $cmd;
+    }
+
+    /**
+     * Whether the source is an http(s) URL (vs a local file path). ffmpeg's
+     * reconnect options apply only to the network protocols.
+     */
+    private static function isNetworkSource(string $source): bool
+    {
+        return preg_match('#^https?://#i', $source) === 1;
     }
 
     /**
