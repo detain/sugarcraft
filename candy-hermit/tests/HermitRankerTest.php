@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit\Tests;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Fuzzy\MatchResult;
 use SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher;
@@ -183,6 +184,56 @@ final class HermitRankerTest extends TestCase
         $out = $h->View($bg);
 
         self::assertStringContainsString("\e[1mte" . Ansi::reset() . 'rminal', $out);
+    }
+
+    public function testHighlightedItemLineIsExactlyTheVisibleWindowWidth(): void
+    {
+        $width = 40;
+        $h = Hermit::new([new FilteredItem(1, 'terminal')])
+            ->setRanker($this->indicesMatcher([0, 1]))      // highlight 'te'
+            ->setMatchStyle("\e[1m")
+            ->setItemFormatter(static fn (string $v, bool $sel): string => $v)
+            ->setWindowWidth($width)
+            ->setWindowHeight(5)
+            ->setOffset(0, 0)
+            ->type('te');
+
+        // Mirror the real consumer: render over a blank canvas exactly $width cells wide.
+        $bg = implode("\n", array_fill(0, 5, str_repeat(' ', $width)));
+        $lines = explode("\n", $h->View($bg));
+
+        // header(0), separator(1), then the first item row.
+        $itemLine = $lines[2];
+        self::assertStringContainsString('rminal', $itemLine, 'sanity: this is the item row');
+        // The styled run survives intact (escapes not split by the width math) …
+        self::assertStringContainsString("\e[1mte" . Ansi::reset() . 'rminal', $itemLine);
+        // … and the row is exactly $width VISIBLE cells (the old mb_substr/str_pad
+        // counted the escape bytes as columns and left the box edge short at 32).
+        self::assertSame($width, Width::of($itemLine), 'box edge is straight at the visible width');
+    }
+
+    public function testAutoWidthMeasuresHighlightedItemsInVisibleCells(): void
+    {
+        // computeWidth() (no explicit setWindowWidth) must measure in visible
+        // cells: a CJK item is 本=2 cells, not 3 bytes.
+        $h = Hermit::new([new FilteredItem(1, '日本語')]) // 3 wide runes = 6 cells
+            ->setRanker($this->indicesMatcher([0]))
+            ->setMatchStyle("\e[33m")
+            ->setItemFormatter(static fn (string $v, bool $sel): string => $v)
+            ->setWindowHeight(4)
+            ->setOffset(0, 0)
+            ->type('本');
+
+        // computeWidth = max(prompt+filter+5, itemMax+2), all in visible cells.
+        $expected = max(Width::of('> ') + Width::of('本') + 5, Width::of('日本語') + 2); // = 9
+        // Canvas exactly the auto width so no trailing background cells inflate it.
+        $bg = implode("\n", array_fill(0, 4, str_repeat(' ', $expected)));
+        $lines = explode("\n", $h->View($bg));
+
+        // The separator row is exactly the auto width — in cells, not bytes (the
+        // old strlen path would have sized it to 11 from the 9-byte/6-cell value).
+        self::assertSame($expected, Width::of($lines[1]), 'auto width measured in cells, not bytes');
+        self::assertStringContainsString("\e[33m", $lines[2], 'the CJK highlight survives');
     }
 
     public function testFuzzyHighlightFallsBackWhenTheRankerReportsNoMatch(): void
