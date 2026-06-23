@@ -79,13 +79,17 @@ final class WebVtt
     private static function parseBlock(string $block): ?Cue
     {
         $lines = explode("\n", trim($block));
-        if ($lines === [] || $lines[0] === '') {
+        if ($lines[0] === '') {
             return null;
         }
 
+        // A NOTE comment may contain "-->" in its free text, so it must be
+        // skipped BEFORE the timing search. WEBVTT headers and STYLE/REGION
+        // blocks have no timing line and are dropped by the no-timing check
+        // below — so a real cue whose *identifier* merely starts with one of
+        // those words (e.g. "REGION 5", "WEBVTT-ish", "STYLE note") still parses.
         $first = strtoupper(trim($lines[0]));
-        if (str_starts_with($first, 'WEBVTT') || str_starts_with($first, 'NOTE')
-            || str_starts_with($first, 'STYLE') || str_starts_with($first, 'REGION')) {
+        if ($first === 'NOTE' || str_starts_with($first, 'NOTE ') || str_starts_with($first, "NOTE\t")) {
             return null;
         }
 
