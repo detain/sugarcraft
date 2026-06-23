@@ -198,6 +198,50 @@ final class VeilTest extends TestCase
         $this->assertStringContainsString('X', $result);
     }
 
+    public function testBrightOverlayIsNotDimmedWhileBackgroundIs(): void
+    {
+        // A FULL-WIDTH styled foreground bar over a dotted background + backdrop.
+        $width = 20;
+        $fg = "\e[1m" . \str_repeat('M', $width) . "\e[0m"; // bold, 20 visible cells
+        $bg = \implode("\n", \array_fill(0, 4, \str_repeat('.', $width)));
+
+        $out = $this->veil->withBackdrop(60)->composite($fg, $bg, Position::TOP, Position::LEFT);
+        $lines = \explode("\n", $out);
+
+        // (i) the styled bar survives intact — its escapes are not split.
+        $this->assertStringContainsString("\e[1m" . \str_repeat('M', $width) . "\e[0m", $out);
+        // (ii) the foreground row carries the fg's own style and is NOT dim-wrapped …
+        $this->assertStringContainsString("\e[1m", $lines[0]);
+        $this->assertStringNotContainsString("\e[2m", $lines[0], 'the bright overlay row is not dimmed');
+        // … while a background-only row IS dimmed.
+        $this->assertStringContainsString("\e[2m", $lines[1], 'the surrounding background is dimmed');
+        // (iii) the frame keeps its line count.
+        $this->assertSame(4, \substr_count($out, "\n") + 1);
+    }
+
+    public function testCenteredStyledOverlayStaysBrightBetweenDimmedBackground(): void
+    {
+        // A narrow styled box centered over the background: the prefix/suffix
+        // background is dimmed, the overlay between them stays bright + intact.
+        $fg = "\e[1mAB\e[0m"; // 2 visible cells, styled
+        $bg = \implode("\n", \array_fill(0, 5, \str_repeat('.', 20)));
+
+        $out = $this->veil->withBackdrop(60)->composite($fg, $bg, Position::CENTER, Position::CENTER);
+        $lines = \explode("\n", $out);
+        $fgRow = $lines[2]; // CENTER of 5 rows for a 1-row fg
+
+        // (i) escapes preserved intact on the overlay row (not split char-by-char).
+        $this->assertStringContainsString("\e[1mAB\e[0m", $fgRow);
+        // (ii) the overlay is immediately preceded by a RESET — i.e. the backdrop
+        // dim is CLOSED before it, so it renders bright instead of inheriting the
+        // dim (the old whole-line-dim left the overlay inside the \e[2m…\e[0m wrapper).
+        $this->assertStringContainsString("\e[0m\e[1mAB\e[0m", $fgRow, 'overlay is bright (dim closed before it)');
+        // … while the surrounding background on the same row IS dimmed.
+        $this->assertStringContainsString("\e[2m", $fgRow, 'prefix/suffix background is dimmed');
+        // (iii) line count preserved.
+        $this->assertSame(5, \substr_count($out, "\n") + 1);
+    }
+
     // ─── animation ─────────────────────────────────────────────────────────────
 
     public function testWithAnimation(): void
