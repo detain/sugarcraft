@@ -52,13 +52,12 @@ final class MatchResult
 
 ## Interface
 
-Swap matchers without touching call-sites:
+Swap matchers without touching call-sites — type-hint the `FuzzyMatcher` interface, implemented by both `SmithWatermanMatcher` and `SahilmMatcher`:
 
 ```php
-use SugarCraft\Fuzzy\MatcherInterface;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 
-function filter(MatcherInterface $matcher, string $query, array $candidates): array
+function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 {
     return $matcher->matchAll($query, $candidates);
 }
