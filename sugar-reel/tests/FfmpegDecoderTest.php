@@ -271,4 +271,65 @@ final class FfmpegDecoderTest extends TestCase
 
         $this->assertInstanceOf(\Generator::class, $iterator);
     }
+
+    // -------------------------------------------------------------------------
+    // HTTP/stream source — reconnect input options
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox an http(s) source gets the reconnect input options, before -i
+     */
+    public function testNetworkSourceCommandIncludesReconnectFlagsBeforeInput(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/media/m1/stream?sig=x', 80, 48, 24.0);
+
+        foreach (['-reconnect', '-reconnect_streamed', '-reconnect_on_network_error', '-reconnect_delay_max'] as $flag) {
+            $this->assertContains($flag, $cmd, "network command must carry {$flag}");
+        }
+
+        // Reconnect options are INPUT options — they must precede -i <source>.
+        $reconnectIdx = array_search('-reconnect', $cmd, true);
+        $inputIdx = array_search('-i', $cmd, true);
+        $this->assertIsInt($reconnectIdx);
+        $this->assertIsInt($inputIdx);
+        $this->assertLessThan($inputIdx, $reconnectIdx, '-reconnect must come before -i');
+
+        // The source URL is passed verbatim as the -i argument.
+        $this->assertSame('https://srv/media/m1/stream?sig=x', $cmd[$inputIdx + 1]);
+    }
+
+    /**
+     * @testdox plain http (not just https) is treated as a network source
+     */
+    public function testPlainHttpIsANetworkSource(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'http://box:8096/s.mkv', 80, 48, 24.0);
+        $this->assertContains('-reconnect', $cmd);
+    }
+
+    /**
+     * @testdox a local file source omits the reconnect options (ffmpeg rejects them on files)
+     */
+    public function testLocalFileCommandOmitsReconnectFlags(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/movie.mkv', 80, 48, 24.0);
+
+        $this->assertNotContains('-reconnect', $cmd);
+        $this->assertNotContains('-reconnect_streamed', $cmd);
+        $this->assertContains('/tmp/movie.mkv', $cmd);
+    }
+
+    /**
+     * @testdox the command always carries the core rawvideo/rgb24/scale args
+     */
+    public function testCommandHasCoreRawvideoArgs(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/movie.mkv', 100, 60, 25.0);
+
+        $joined = implode(' ', $cmd);
+        $this->assertStringContainsString('-f rawvideo', $joined);
+        $this->assertStringContainsString('-pix_fmt rgb24', $joined);
+        $this->assertStringContainsString('fps=25,scale=100:60:flags=bilinear', $joined);
+        $this->assertSame('-', $cmd[array_key_last($cmd)], 'output goes to the stdout pipe (-)');
+    }
 }

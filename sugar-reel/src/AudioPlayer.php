@@ -27,7 +27,9 @@ use SugarCraft\Reel\Source\Probe;
 class AudioPlayer
 {
     /**
-     * @param string  $videoPath Absolute path to the video file
+     * @param string  $videoPath Path to the video file, OR an http(s) URL —
+     *                            ffplay/mpv both stream a network source natively,
+     *                            so a media client can play a signed stream URL.
      * @param int|null $startMs  Optional start offset in milliseconds (for seek)
      */
     public function __construct(
