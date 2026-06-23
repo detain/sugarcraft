@@ -15,6 +15,39 @@ final class ReelTest extends TestCase
         $this->assertSame('/tmp/x.mp4', Reel::open('/tmp/x.mp4')->path());
     }
 
+    public function testOpenUrlRecordsTheUrlAsThePath(): void
+    {
+        $url = 'https://srv.example/media/m1/stream?exp=1&sig=abc';
+        $this->assertSame($url, Reel::openUrl($url)->path());
+    }
+
+    public function testOpenUrlAcceptsPlainHttp(): void
+    {
+        $this->assertSame('http://box:8096/s.mkv', Reel::openUrl('http://box:8096/s.mkv')->path());
+    }
+
+    /**
+     * @testdox openUrl() rejects a non-http(s) argument so a path typo fails fast
+     */
+    public function testOpenUrlRejectsNonHttpScheme(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Not an http(s) URL');
+        Reel::openUrl('/tmp/local.mp4');
+    }
+
+    /**
+     * @testdox an openUrl() source is configurable just like open() (immutable with*)
+     */
+    public function testOpenUrlSourceIsConfigurable(): void
+    {
+        $reel = Reel::openUrl('https://srv/v.mkv')->withSize(120, 40)->withFps(30.0);
+        $this->assertSame('https://srv/v.mkv', $reel->path());
+        $this->assertSame(120, $reel->cols());
+        $this->assertSame(40, $reel->rows());
+        $this->assertSame(30.0, $reel->fps());
+    }
+
     public function testNewConstructsWithEmptyPath(): void
     {
         $this->assertSame('', Reel::new()->path());
