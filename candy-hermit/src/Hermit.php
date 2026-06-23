@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
 use SugarCraft\Sprinkles\Align;
@@ -454,10 +455,10 @@ final class Hermit
 
         // Build the overlay string
         $headerLine = $prompt . $filter;
-        $headerLen  = \strlen($headerLine);
 
-        // Pad header to window width
-        $headerLine = \str_pad($headerLine, $winWidth, ' ');
+        // Pad header to window width (ANSI- and width-aware so wide/styled runes
+        // measure in visible cells, not bytes).
+        $headerLine = Width::padRight($headerLine, $winWidth);
 
         $lines = [$headerLine];
 
@@ -479,7 +480,10 @@ final class Hermit
                     : $this->highlightMatches($itemStr, $filter);
             }
 
-            $itemStr = \str_pad(\mb_substr($itemStr, 0, $winWidth, 'UTF-8'), $winWidth, ' ');
+            // ANSI-aware truncate + pad: a matchStyle-highlighted item keeps its
+            // escape sequences and the box edge stays straight (the old
+            // mb_substr/str_pad counted escape bytes as visible columns).
+            $itemStr = Width::padRight(Width::truncateAnsi($itemStr, $winWidth), $winWidth);
             $lines[] = $itemStr;
         }
 
@@ -566,11 +570,13 @@ final class Hermit
 
     private function computeWidth(): int
     {
-        $promptLen = \strlen($this->prompt);
-        $filterLen = \strlen($this->filterText);
+        // Measure in visible cells (ANSI-stripped, wide-rune aware) so the auto
+        // width matches what View() actually renders.
+        $promptLen = Width::of($this->prompt);
+        $filterLen = Width::of($this->filterText);
         $itemMax   = 0;
         foreach ($this->filteredItems as $item) {
-            $itemLen = \strlen(($this->itemFormatter)($item->value(), false));
+            $itemLen = Width::of(($this->itemFormatter)($item->value(), false));
             if ($itemLen > $itemMax) $itemMax = $itemLen;
         }
         return \max($promptLen + $filterLen + 5, $itemMax + 2);
