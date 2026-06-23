@@ -99,6 +99,8 @@ final class Input implements \SugarCraft\Forms\Field
     public function withTitle(string $t): self       { return $this->mutate(title: $t); }
     public function withDescription(string $d): self { return $this->mutate(description: $d); }
     public function withPlaceholder(string $p): self { return $this->mutate(input: $this->input->withPlaceholder($p)); }
+    /** Pre-fill the editable text with an initial value. Unlike a placeholder this is the actual submitted value until the user edits it. Pass an empty string to clear. */
+    public function withValue(string $value): self   { return $this->mutate(input: $this->input->setValue($value)); }
     public function withPrompt(string $p): self      { return $this->mutate(input: $this->input->withPrompt($p)); }
     public function withCharLimit(int $n): self      { return $this->mutate(input: $this->input->withCharLimit($n)); }
     public function withWidth(int $w): self          { return $this->mutate(input: $this->input->withWidth($w)); }

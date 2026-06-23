@@ -8,6 +8,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\SuggestionsReadyMsg;
 use SugarCraft\Forms\Field\Select;
+use SugarCraft\Forms\Form;
 use PHPUnit\Framework\TestCase;
 
 final class SelectTest extends TestCase
@@ -174,6 +175,48 @@ final class SelectTest extends TestCase
         $this->assertStringContainsString('alpha', $view);
         $this->assertStringContainsString('ablation', $view);
         $this->assertStringContainsString('label', $view);
+    }
+
+    public function testWithSelectedIndexPreSelects(): void
+    {
+        $f = Select::new('k')->withOptions('A', 'B', 'C')->withSelectedIndex(2);
+        $this->assertSame('C', $f->value());
+    }
+
+    public function testWithSelectedIndexClampsNegativeToFirst(): void
+    {
+        $f = Select::new('k')->withOptions('A', 'B', 'C')->withSelectedIndex(-1);
+        $this->assertSame('A', $f->value());
+    }
+
+    public function testWithSelectedByValue(): void
+    {
+        $f = Select::new('k')->withOptions('A', 'B', 'C')->withSelected('B');
+        $this->assertSame('B', $f->value());
+    }
+
+    public function testWithSelectedUnknownValueLeavesSelectionUnchanged(): void
+    {
+        $f = Select::new('k')->withOptions('A', 'B', 'C')->withSelected('Nope');
+        // Unknown value: selection stays on the prior (first) option.
+        $this->assertSame('A', $f->value());
+    }
+
+    public function testWithSelectedAfterReSettingOptions(): void
+    {
+        $f = Select::new('k')
+            ->withOptions('A', 'B', 'C')
+            ->withOptions('X', 'Y', 'Z')
+            ->withSelected('Z');
+        $this->assertSame('Z', $f->value());
+    }
+
+    public function testPreSelectedValueIsSubmittedWhenUntouched(): void
+    {
+        $form = Form::new(
+            Select::new('k')->withOptions('A', 'B', 'C')->withSelected('C'),
+        );
+        $this->assertSame('C', $form->getString('k'));
     }
 }
 
