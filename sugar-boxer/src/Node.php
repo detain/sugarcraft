@@ -43,6 +43,8 @@ final class Node
     public readonly int $maxWidth;
     public readonly int $minHeight;
     public readonly int $maxHeight;
+    /** Flex/grow weight: 0 = fixed (sized by min*+border), >0 = fills leftover space by weight. */
+    public readonly int $flex;
     public readonly int $padding;
     public readonly bool $border;
     public readonly int $spacing;
@@ -74,6 +76,7 @@ final class Node
         array $margin = [0, 0, 0, 0],
         ?Align $alignH = null,
         ?VAlign $alignV = null,
+        int $flex = 0,
     ) {
         $this->kind        = $kind;
         $this->content     = $content;
@@ -82,6 +85,7 @@ final class Node
         $this->maxWidth    = $maxWidth;
         $this->minHeight   = $minHeight;
         $this->maxHeight   = $maxHeight;
+        $this->flex        = $flex;
         $this->padding     = $padding;
         $this->border      = $border;
         $this->spacing     = $spacing;
@@ -142,6 +146,24 @@ final class Node
     public function withMaxHeight(int $h): self
     {
         return $this->with(maxHeight: $h);
+    }
+
+    /**
+     * Mark this child as flexible: in a horizontal/vertical parent it grows to
+     * fill the space left after the fixed (non-flex) siblings take their natural
+     * size, sharing that leftover with other flex children in proportion to the
+     * weight. A weight of 0 is treated as "no change" (like the other dimension
+     * setters) — use {@see withFlex} with weight >= 1, or {@see withGrow}.
+     */
+    public function withFlex(int $weight): self
+    {
+        return $this->with(flex: \max(0, $weight));
+    }
+
+    /** Shorthand for {@see withFlex}(1): this child fills the leftover space. */
+    public function withGrow(): self
+    {
+        return $this->withFlex(1);
     }
 
     public function withPadding(int $cells): self
@@ -310,7 +332,7 @@ final class Node
         int $minHeight = 0,
         int $maxHeight = 0,
         int $padding = 0,
-        bool $border = true,
+        ?bool $border = null,
         int $spacing = 0,
         mixed $borderStyle = null,
         mixed $style = null,
@@ -318,6 +340,7 @@ final class Node
         array $margin = [0, 0, 0, 0],
         mixed $alignH = null,
         mixed $alignV = null,
+        int $flex = 0,
     ): self {
         // Preserve existing value when sentinel is passed (no arg).
         // Explicitly pass null to clear.
@@ -346,7 +369,10 @@ final class Node
             $minHeight   ?: $this->minHeight,
             $maxHeight   ?: $this->maxHeight,
             $padding     ?: $this->padding,
-            $border,
+            // Preserve the existing border unless a with*() call set it explicitly
+            // — otherwise any later builder (withMinHeight, withGrow, …) would
+            // silently re-enable a border that withBorder(false) turned off.
+            $border ?? $this->border,
             $spacing     ?: $this->spacing,
             $resolvedBorderStyle,
             $resolvedStyle,
@@ -354,6 +380,7 @@ final class Node
             $margin      !== [0, 0, 0, 0] ? $margin : $this->margin,
             $resolvedAlignH,
             $resolvedAlignV,
+            $flex        ?: $this->flex,
         );
     }
 }

@@ -193,11 +193,21 @@ final class SugarBoxer
 
         if ($availableW <= 0 || $availableH <= 0) return;
 
-        // Distribute width proportionally by minWidth weights
-        $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
-        $totalWeight = \array_sum($weights);
-
-        $offsets = $this->distribute($availableW, $weights, $totalWeight, $sp, $b);
+        // Flex children grow to fill the leftover after fixed siblings; without
+        // any flex child, fall back to distributing width by minWidth weights.
+        if ($this->hasFlex($children)) {
+            $offsets = $this->distributeFlex(
+                $availableW,
+                \array_map(fn(Node $c) => $c->totalWidth(), $children),
+                \array_map(fn(Node $c) => $c->flex, $children),
+                $sp,
+                $b,
+            );
+        } else {
+            $weights = \array_map(fn(Node $c) => $c->minWidth > 0 ? $c->minWidth : 1, $children);
+            $totalWeight = \array_sum($weights);
+            $offsets = $this->distribute($availableW, $weights, $totalWeight, $sp, $b);
+        }
 
         // Draw outer border first
         if ($node->border) {
@@ -238,10 +248,22 @@ final class SugarBoxer
 
         if ($availableW <= 0 || $availableH <= 0) return;
 
-        $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
-        $totalWeight = \array_sum($weights);
-
-        $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
+        // Flex children grow to fill the leftover after fixed siblings; without
+        // any flex child, fall back to distributing height by minHeight weights
+        // (the historical 1/3-style split).
+        if ($this->hasFlex($children)) {
+            $offsets = $this->distributeFlex(
+                $availableH,
+                \array_map(fn(Node $c) => $c->totalHeight(), $children),
+                \array_map(fn(Node $c) => $c->flex, $children),
+                $sp,
+                $b,
+            );
+        } else {
+            $weights = \array_map(fn(Node $c) => $c->minHeight > 0 ? $c->minHeight : 1, $children);
+            $totalWeight = \array_sum($weights);
+            $offsets = $this->distribute($availableH, $weights, $totalWeight, $sp, $b);
+        }
 
         if ($node->border) {
             $this->drawBorder($node->borderStyle, $x, $y, $w, $h, $cells);
@@ -671,6 +693,72 @@ final class SugarBoxer
             $share = (int) \round($weights[$i] / $totalWeight * ($available - $spacing * ($n - 1)));
             $share = \max($share, 1);
             $offsets[] = $offsets[$i] + $share + $spacing;
+        }
+
+        return $offsets;
+    }
+
+    /** @param list<Node> $children */
+    private function hasFlex(array $children): bool
+    {
+        foreach ($children as $c) {
+            if ($c->flex > 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Distribute space when at least one child is flexible. Fixed (non-flex)
+     * children take their natural size ($bases, i.e. totalWidth/totalHeight);
+     * the leftover is shared among flex children in proportion to their weight,
+     * with the last flex child absorbing the rounding remainder so the children
+     * sum to exactly the available content span. Returns the same starting-offset
+     * shape as {@see distribute()} (the caller derives the final child's size as
+     * the remainder, which equals its computed size because the sizes sum exact).
+     *
+     * @param list<int> $bases   natural size per child (ignored for flex children)
+     * @param list<int> $flexes  flex weight per child (0 = fixed)
+     * @return list<int>
+     */
+    private function distributeFlex(int $available, array $bases, array $flexes, int $spacing, int $borderPad): array
+    {
+        $n       = \count($flexes);
+        $gaps    = $spacing * \max(0, $n - 1);
+        $content = \max(0, $available - $gaps);
+
+        $totalFlex = \array_sum($flexes);
+        $fixedSum  = 0;
+        $lastFlex  = -1;
+        foreach ($flexes as $i => $f) {
+            if ($f > 0) {
+                $lastFlex = $i;
+            } else {
+                $fixedSum += \max(0, $bases[$i]);
+            }
+        }
+        $remaining = \max(0, $content - $fixedSum);
+
+        $sizes     = [];
+        $allocated = 0;
+        foreach ($flexes as $i => $f) {
+            if ($f <= 0) {
+                $sizes[$i] = \max(0, $bases[$i]);
+            } elseif ($i === $lastFlex) {
+                $sizes[$i] = $remaining - $allocated; // absorb the rounding remainder
+            } else {
+                // $totalFlex >= 1 here: distributeFlex only runs when a flex child exists.
+                $share      = (int) \floor($f / $totalFlex * $remaining);
+                $sizes[$i]  = $share;
+                $allocated += $share;
+            }
+        }
+
+        $offsets = [$borderPad];
+        for ($i = 0; $i < $n - 1; $i++) {
+            $offsets[] = $offsets[$i] + $sizes[$i] + $spacing;
         }
 
         return $offsets;

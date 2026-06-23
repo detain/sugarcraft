@@ -19,6 +19,7 @@ PHP port of [treilik/bubbleboxer](https://github.com/treilik/bubbleboxer) — bo
 - **No-border mode** — render adjacent panels without separators
 - **Per-panel padding** — inner whitespace around content
 - **ANSI-aware content** — styled/coloured leaf text places by *visible* columns: escape sequences ride with the grapheme they style (zero width), wide graphemes keep their two columns, and a clipped or unbalanced span is auto-reset so colour never bleeds past the box
+- **Flex / grow children** — `withFlex(int)` / `withGrow()`: fixed children take their natural size, flex children fill the leftover by weight — so a layout can say "header = 1 fixed, content = FILL, status = 1 fixed" instead of an even weight split
 - **Width/Height hints** — nodes can specify min/max dimensions
 - **Dynamic dimension calculation** — boxer computes total viewport from children
 - **Leaf content** — any stringable content at leaf nodes
