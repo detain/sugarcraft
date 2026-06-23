@@ -109,6 +109,55 @@ final class SugarBoxerTest extends TestCase
         $this->assertStringContainsString('plain', $result);
     }
 
+    public function testFittingLinePreservesInternalWhitespace(): void
+    {
+        // A line that fits the width must NOT be word-wrapped (which re-joins on
+        // single spaces) — intentional runs of whitespace (column alignment,
+        // padded key hints) have to survive verbatim.
+        $layout = Node::leaf('a    b    c')->withBorder(false);
+        $result = $this->boxer->render($layout, 20, 1);
+
+        $this->assertStringContainsString('a    b    c', $result);
+        $this->assertStringNotContainsString('a b c', $result);
+    }
+
+    public function testFittingPaddedColumnsArePreserved(): void
+    {
+        // A table-style row with right-padded columns survives intact.
+        $row = '#   Title          Duration';
+        $layout = Node::leaf($row)->withBorder(false);
+        $result = $this->boxer->render($layout, 40, 1);
+
+        $this->assertStringContainsString($row, $result);
+    }
+
+    public function testOverflowingLineStillWraps(): void
+    {
+        // Lines that do NOT fit must still wrap across rows (regression guard).
+        $layout = Node::leaf('alpha beta gamma delta epsilon')->withBorder(false);
+        $result = $this->boxer->render($layout, 11, 6);
+
+        // Every word survives the wrap…
+        foreach (['alpha', 'beta', 'gamma', 'delta', 'epsilon'] as $word) {
+            $this->assertStringContainsString($word, $result);
+        }
+        // …and the text is split across more than one visual row.
+        $rows = array_values(array_filter(
+            array_map('rtrim', explode("\n", $result)),
+            static fn (string $l): bool => $l !== '',
+        ));
+        $this->assertGreaterThan(1, count($rows));
+    }
+
+    public function testFittingLineExactlyAtWidthIsPreserved(): void
+    {
+        $line = 'x  y  z'; // width 7
+        $layout = Node::leaf($line)->withBorder(false);
+        $result = $this->boxer->render($layout, 7, 1);
+
+        $this->assertStringContainsString($line, $result);
+    }
+
     public function testRenderHorizontalTwoPanels(): void
     {
         $layout = Node::horizontal(
