@@ -72,8 +72,16 @@ final readonly class PosterCard
         $width = max(4, $width);
         $posterHeight = max(1, $posterHeight);
 
+        // Split on any line ending — a poster is produced by an external renderer
+        // (e.g. candy-mosaic) and a stale cache entry or a different platform may
+        // join rows with CRLF or a lone CR rather than LF. Exploding on "\n" alone
+        // would leave a trailing "\r" on every row; once stitched side by side and
+        // printed, those embedded carriage returns yank the cursor to column 0 and
+        // collapse the whole rail to a single visible line. Splitting on every
+        // separator (and normalising the row count below) keeps the tile exactly
+        // $posterHeight rows tall regardless of how the poster bytes were encoded.
         $lines = $this->poster !== null
-            ? explode("\n", $this->poster)
+            ? self::posterRows($this->poster, $width, $posterHeight)
             : array_fill(0, $posterHeight, str_repeat('░', $width));
 
         $marker = $focused ? '▸' : ' ';
@@ -87,6 +95,36 @@ final readonly class PosterCard
         }
 
         return implode("\n", $lines);
+    }
+
+    /**
+     * Normalise raw poster bytes into exactly $posterHeight rows.
+     *
+     * Splits on any line ending (CRLF / CR / LF) so a poster encoded with a
+     * separator other than "\n" — e.g. a stale cache entry written before an
+     * upstream renderer fix — never leaves a stray carriage return mid-row.
+     * The row count is then clamped to $posterHeight: a short poster is padded
+     * with blank (width-wide) rows and a tall one is cropped, so the tile always
+     * occupies the height the rail/grid reserved for it and cards stay aligned.
+     *
+     * @return list<string>
+     */
+    private static function posterRows(string $poster, int $width, int $posterHeight): array
+    {
+        $rows = preg_split('/\r\n|\r|\n/', $poster);
+        if ($rows === false) {
+            $rows = [$poster];
+        }
+
+        if (count($rows) > $posterHeight) {
+            return array_slice($rows, 0, $posterHeight);
+        }
+
+        while (count($rows) < $posterHeight) {
+            $rows[] = str_repeat(' ', $width);
+        }
+
+        return $rows;
     }
 
     /**
