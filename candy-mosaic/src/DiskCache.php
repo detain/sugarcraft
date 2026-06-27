@@ -51,8 +51,11 @@ final class DiskCache
      *
      * v2: half/quarter-block rows are joined with "\n" (were "\r\n"); CRLF-era
      *     entries rendered as a single collapsed line and must not be reused.
+     * v3: sixel encoding rewritten to be spec-correct (ST terminator, `#` colour
+     *     declarations, `"` raster, `-` band joins, pixel-resolution canvas);
+     *     v2-era sixel blobs were unparseable and printed as text.
      */
-    private const FORMAT_VERSION = 2;
+    private const FORMAT_VERSION = 3;
 
     /**
      * @param string $dir         Directory that holds the cache entries
