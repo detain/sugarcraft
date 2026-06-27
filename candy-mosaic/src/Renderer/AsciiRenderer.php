@@ -114,6 +114,11 @@ final class AsciiRenderer implements Renderer
         return false;
     }
 
+    public function isInline(): bool
+    {
+        return true;
+    }
+
     /** Plain-text SGR output — no stored image identity to delete. */
     public function delete(string $imageId): string
     {

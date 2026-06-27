@@ -104,6 +104,11 @@ final class ChafaRenderer implements Renderer
         return true;
     }
 
+    public function isInline(): bool
+    {
+        return true;
+    }
+
     /**
      * Chafa invokes an external command — no persistent image identity
      * to delete. Returns the empty string.

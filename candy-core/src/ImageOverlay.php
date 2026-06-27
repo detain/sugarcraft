@@ -56,6 +56,25 @@ final class ImageOverlay
     }
 
     /**
+     * Build a $width × $height cell block reserving an image box: a one-cell
+     * {@see marker()} at the top-left and blank spaces everywhere else. Place
+     * this in the text frame where the image should appear; the surrounding cells
+     * keep the layout honest and {@see resolve()} turns the marker into a paint.
+     */
+    public static function markerBlock(int $id, int $width, int $height): string
+    {
+        $width = max(1, $width);
+        $height = max(1, $height);
+
+        $rows = [self::marker($id) . str_repeat(' ', $width - 1)];
+        for ($i = 1; $i < $height; $i++) {
+            $rows[] = str_repeat(' ', $width);
+        }
+
+        return implode("\n", $rows);
+    }
+
+    /**
      * Resolve markers in a composed frame against their blobs.
      *
      * Returns the cleaned body (markers replaced by spaces, safe to hand to the
