@@ -51,9 +51,30 @@ final class Iterm2RendererTest extends TestCase
         $out = $this->renderer->render($image, 8, 4);
 
         $pngBytes = file_get_contents(__DIR__ . '/fixtures/8x4_red.png');
-        $expectedB64 = base64_encode($pngBytes);
+        $expectedB64 = base64_encode((string) $pngBytes);
 
-        $this->assertStringContainsString('File=' . $expectedB64, $out);
+        // The base64 payload follows the `File=<args>:` prefix.
+        $this->assertStringContainsString(':' . $expectedB64 . "\x07", $out);
+    }
+
+    public function testReEncodesNonPngWithoutLeakingToStdout(): void
+    {
+        // A non-PNG source takes the imagepng() re-encode path, which must NOT
+        // dump the raw PNG to stdout (the bytes belong in the base64 payload).
+        $jpeg = imagecreatetruecolor(8, 4);
+        imagefilledrectangle($jpeg, 0, 0, 8, 4, (int) imagecolorallocate($jpeg, 200, 50, 50));
+        ob_start();
+        imagejpeg($jpeg);
+        $jpegBytes = (string) ob_get_clean();
+        imagedestroy($jpeg);
+
+        ob_start();
+        $out = $this->renderer->render(ImageSource::fromString($jpegBytes), 8, 4);
+        $stray = ob_get_clean();
+
+        self::assertSame('', $stray, 'no raw PNG written to stdout during render');
+        self::assertStringStartsWith("\x1b]1337;File=", $out);
+        self::assertStringNotContainsString('IHDR', $out, 'raw PNG header not in the payload');
     }
 
     public function testNameReturnsIterm2(): void
