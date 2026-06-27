@@ -140,6 +140,47 @@ final class PosterCardTest extends TestCase
         self::assertStringContainsString("\e[1mX\e[0m", $card->render(false, 8, 1));
     }
 
+    public function testImageModeRendersAMarkerBlockReservingThePosterArea(): void
+    {
+        $card = (new PosterCard('1', 'Movie'))->withImage('SIXELBYTES', 7);
+        $lines = explode("\n", $card->render(false, 14, 9));
+
+        // 9 reserved poster rows + 1 title row.
+        self::assertCount(10, $lines);
+        // Top-left cell is the overlay marker for id 7; the row is full width.
+        self::assertStringContainsString(\SugarCraft\Core\ImageOverlay::marker(7), $lines[0]);
+        self::assertSame(14, \SugarCraft\Core\Util\Width::string($lines[0]));
+        // Remaining poster rows are blank (no inline ░ placeholder, no escapes).
+        self::assertSame(str_repeat(' ', 14), $lines[5]);
+        // hasPoster() is true so the loader won't re-request it.
+        self::assertTrue($card->hasPoster());
+        self::assertSame('SIXELBYTES', $card->posterImage);
+        self::assertSame(7, $card->imageId);
+    }
+
+    public function testImageModeMarkerResolvesToAPaintInstruction(): void
+    {
+        $card = (new PosterCard('1', 'Movie'))->withImage('BYTES', 3);
+        [$body, $paints] = \SugarCraft\Core\ImageOverlay::resolve($card->render(false, 14, 9), [3 => 'BYTES']);
+
+        self::assertCount(1, $paints);
+        self::assertSame('BYTES', $paints[0]['bytes']);
+        self::assertStringNotContainsString(\SugarCraft\Core\ImageOverlay::marker(3), $body, 'marker blanked');
+    }
+
+    public function testWithImageThreadsThroughTitleAndProgress(): void
+    {
+        $card = (new PosterCard('1', 'X'))
+            ->withImage('B', 1)
+            ->withProgress(0.5)
+            ->withStyledTitle("\e[1mX\e[0m");
+
+        self::assertSame('B', $card->posterImage);
+        self::assertSame(1, $card->imageId);
+        self::assertSame(0.5, $card->progress);
+        self::assertSame("\e[1mX\e[0m", $card->styledTitle);
+    }
+
     public function testCrlfJoinedPosterLeavesNoStrayCarriageReturn(): void
     {
         // A poster encoded with CRLF (e.g. a stale cache entry from before an
