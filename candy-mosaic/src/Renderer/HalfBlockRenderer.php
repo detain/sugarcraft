@@ -109,6 +109,11 @@ final class HalfBlockRenderer implements Renderer
         return false;
     }
 
+    public function isInline(): bool
+    {
+        return true;
+    }
+
     /**
      * Half-block rendering uses plain text SGR codes — no stored image
      * identity to delete. Returns the empty string.

@@ -117,6 +117,11 @@ final class QuarterBlockRenderer implements Renderer
         return false;
     }
 
+    public function isInline(): bool
+    {
+        return true;
+    }
+
     /**
      * Quarter-block rendering uses plain text SGR codes — no stored
      * image identity to delete. Returns the empty string.

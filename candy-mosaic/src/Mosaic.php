@@ -288,6 +288,17 @@ final class Mosaic
     }
 
     /**
+     * True if {@see render()} produces inline cell text that can be placed
+     * directly in a text frame (half/quarter-block, ASCII); false for a
+     * pixel-graphics blob (Sixel/Kitty/iTerm2) that must be painted as an
+     * out-of-band overlay. See {@see Renderer::isInline()}.
+     */
+    public function isInline(): bool
+    {
+        return $this->renderer->isInline();
+    }
+
+    /**
      * Best-effort font-size derived from capability detection.
      * Returns null if font-size probing hasn't been implemented yet.
      *
