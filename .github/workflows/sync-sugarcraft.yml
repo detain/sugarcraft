@@ -81,6 +81,18 @@ jobs:
           TOKEN: ${{ secrets.SUGARCRAFT_SYNC_TOKEN }}
           FORCE_ALL: ${{ steps.affected.outputs.force_all }}
           AFFECTED_LIBS: ${{ steps.affected.outputs.affected_libs }}
+          # Packagist auto-update: a sugarcraft/<lib> split repo only re-crawls
+          # on Packagist if it carries the per-repo Packagist webhook, and a
+          # FRESHLY-CREATED split repo starts WITHOUT it — which is how several
+          # libs (candy-buffer, candy-forms, candy-focus, sugar-gallery, …)
+          # silently stopped auto-updating, forcing a manual "Update" on
+          # packagist.org. To make the system self-healing, we ALSO ping
+          # Packagist's update-package API for every lib we push here, so a
+          # missing/misconfigured webhook can never strand a package on a stale
+          # dev-master again. Non-fatal: a package not yet registered on
+          # Packagist (new lib) just logs a non-200 and the sync continues.
+          PACKAGIST_USERNAME: detain
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_API_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -131,6 +143,18 @@ jobs:
               "https://x-access-token:$TOKEN@github.com/sugarcraft/$lib.git" \
               "$sha:refs/heads/master"
             echo "✓ synced $lib ($sha)"
+
+            # Belt-and-suspenders Packagist re-crawl (see env note above).
+            # Guarded on the token so a fork/secret-less run skips it cleanly;
+            # the `|| true` keeps a transient Packagist hiccup from failing the
+            # whole sync (the per-repo webhook is still the primary path).
+            if [ -n "${PACKAGIST_TOKEN:-}" ]; then
+              code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 -XPOST \
+                -H 'content-type: application/json' \
+                "https://packagist.org/api/update-package?username=${PACKAGIST_USERNAME}&apiToken=${PACKAGIST_TOKEN}" \
+                -d "{\"repository\":{\"url\":\"https://github.com/sugarcraft/$lib\"}}" || echo "000")
+              echo "  ↳ packagist update $lib → HTTP $code"
+            fi
           done
           echo "Done — ${#libs[@]} libs pushed"
 
