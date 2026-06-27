@@ -148,6 +148,11 @@ final class KittyRenderer implements Renderer
         return true;
     }
 
+    public function isInline(): bool
+    {
+        return false;
+    }
+
     /**
      * Remove a previously rendered image by its numeric id.
      *

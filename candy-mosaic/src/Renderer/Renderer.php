@@ -38,6 +38,18 @@ interface Renderer
     public function supportsAlpha(): bool;
 
     /**
+     * True if {@see render()} produces inline cell text — newline-separated
+     * rows, one terminal line per cell row — that can be placed directly in a
+     * text frame and stitched beside other content (half/quarter-block, ASCII).
+     *
+     * False for pixel-graphics protocols (Sixel, Kitty, iTerm2) whose output is
+     * one opaque escape blob with no per-row structure: it must be painted as an
+     * out-of-band overlay (see candy-core's `ImageOverlay`) rather than embedded
+     * in the frame. Lets a caller route output without hard-coding protocol names.
+     */
+    public function isInline(): bool;
+
+    /**
      * Emit the protocol-specific sequence to delete a previously rendered
      * image identified by `$imageId`.
      *

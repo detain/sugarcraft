@@ -124,6 +124,25 @@ final class ImageOverlayTest extends TestCase
         self::assertNotSame(ImageOverlay::signature($a), ImageOverlay::signature($b));
     }
 
+    public function testMarkerBlockReservesAWidthByHeightBox(): void
+    {
+        $block = ImageOverlay::markerBlock(4, 6, 3);
+        $rows = explode("\n", $block);
+
+        self::assertCount(3, $rows);
+        self::assertStringStartsWith(ImageOverlay::marker(4), $rows[0]);
+        self::assertSame(6, mb_strlen($rows[0], 'UTF-8'), 'top row is width cells (marker + spaces)');
+        self::assertSame(str_repeat(' ', 6), $rows[1], 'lower rows are blank');
+    }
+
+    public function testMarkerBlockResolvesToASinglePaintAtItsOrigin(): void
+    {
+        [$body, $paints] = ImageOverlay::resolve(ImageOverlay::markerBlock(0, 5, 2), [0 => 'BYTES']);
+
+        self::assertSame(['row' => 1, 'col' => 1, 'bytes' => 'BYTES'], $paints[0]);
+        self::assertStringNotContainsString(ImageOverlay::marker(0), $body);
+    }
+
     public function testResolveRoundTripsAFullPosterStyleBlock(): void
     {
         // A 4-wide × 3-tall image box: marker top-left, the rest spaces, and a

@@ -71,6 +71,11 @@ final class Iterm2Renderer implements Renderer
         return true;
     }
 
+    public function isInline(): bool
+    {
+        return false;
+    }
+
     /**
      * Remove the most recently displayed iTerm2 / WezTerm image.
      *
