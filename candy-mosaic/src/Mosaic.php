@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace SugarCraft\Mosaic;
 
+use SugarCraft\Mosaic\Renderer\AsciiColorMode;
+use SugarCraft\Mosaic\Renderer\AsciiRenderer;
 use SugarCraft\Mosaic\Renderer\ChafaRenderer;
 use SugarCraft\Mosaic\Renderer\HalfBlockRenderer;
 use SugarCraft\Mosaic\Renderer\Iterm2Renderer;
@@ -172,6 +174,38 @@ final class Mosaic
     {
         return new self(
             new HalfBlockRenderer(),
+            Capability::universal(),
+            null,
+            null,
+            null,
+        );
+    }
+
+    /** Force the quarter-block Unicode renderer (higher density than half-block). */
+    public static function quarterBlock(): self
+    {
+        return new self(
+            new QuarterBlockRenderer(),
+            Capability::universal(),
+            null,
+            null,
+            null,
+        );
+    }
+
+    /**
+     * Force the ASCII / ANSI character-ramp renderer (one pixel per cell).
+     *
+     * ```php
+     * $mosaic = Mosaic::ascii();                            // monochrome chars
+     * $mosaic = Mosaic::ascii(AsciiColorMode::Ansi256);     // 256-colour chars
+     * $mosaic = Mosaic::ascii(AsciiColorMode::TrueColor);   // 24-bit-colour chars
+     * ```
+     */
+    public static function ascii(AsciiColorMode $color = AsciiColorMode::Mono): self
+    {
+        return new self(
+            new AsciiRenderer($color),
             Capability::universal(),
             null,
             null,
