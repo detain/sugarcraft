@@ -85,8 +85,26 @@ final class ScreenRoundTripTest extends TestCase
         $this->assertNotFalse($output);
 
         $loop = new StreamSelectLoop();
+        // The session makes EXACTLY 6 update() calls — the three startup Msgs
+        // (WindowSizeMsg, EnvMsg, ColorProfileMsg) plus the three KeyMsgs from
+        // the piped 'abc' input — so the model converges on `tick: 6`.
+        //
+        // The model NEVER self-quits (quitAfter: PHP_INT_MAX); instead the
+        // recording ends deterministically on an EVENT — the appearance of
+        // the final rendered frame in the output stream — not on a wall
+        // clock. The old `addTimer(0.020, quit)` raced the input read +
+        // render: under load (CI) the 20 ms quit could fire before the
+        // `tick: 6` frame was rendered, so the cassette recorded the `quit`
+        // event AHEAD of the final `output` frame. Replay stops accumulating
+        // expected output at the quit event, so it then compared a blank
+        // recorded screen against the replay's `tick: 6` — a flaky mismatch.
+        //
+        // Polling the output for the converged frame guarantees the
+        // `output: "tick: 6"` frame is recorded BEFORE the `quit` event,
+        // regardless of host/CI speed.
+        $finalFrame = (new TickModel(quitAfter: \PHP_INT_MAX))->withCount(6)->view();
         $program = new Program(
-            new TickModel(quitAfter: PHP_INT_MAX),
+            new TickModel(quitAfter: \PHP_INT_MAX),
             new ProgramOptions(
                 useAltScreen: false,
                 catchInterrupts: false,
@@ -101,7 +119,24 @@ final class ScreenRoundTripTest extends TestCase
         $loop->futureTick(static function () use ($writer): void {
             fwrite($writer, 'abc');
         });
-        $loop->addTimer(0.020, static fn () => $program->quit());
+        // Re-arming probe: quit only once the converged frame has actually
+        // been rendered (and therefore recorded). Reads the in-memory output
+        // stream without disturbing its write pointer.
+        $probe = null;
+        $probe = static function () use (&$probe, $program, $loop, $output, $finalFrame): void {
+            $pos = ftell($output);
+            rewind($output);
+            $written = stream_get_contents($output);
+            if ($pos !== false) {
+                fseek($output, $pos);
+            }
+            if (is_string($written) && str_contains($written, $finalFrame)) {
+                $program->quit();
+                return;
+            }
+            $loop->futureTick($probe);
+        };
+        $loop->futureTick($probe);
         $loop->addTimer(2.0, static fn () => $loop->stop());
         $program->run();
 
@@ -147,6 +182,14 @@ final class TickModel implements Model
     public function init(): ?\Closure
     {
         return null;
+    }
+
+    /** Test helper: a copy at a given count (used to derive the final view). */
+    public function withCount(int $count): self
+    {
+        $clone = clone $this;
+        $clone->count = $count;
+        return $clone;
     }
 
     public function update(Msg $msg): array

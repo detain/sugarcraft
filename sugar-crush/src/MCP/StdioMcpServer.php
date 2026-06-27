@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Crush\MCP;
 
-require_once __DIR__ . '/../../../vendor/autoload.php';
-
 use SugarCraft\Crush\McpMessage;
 
 final class StdioMcpServer implements McpServer
