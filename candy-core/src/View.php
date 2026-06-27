@@ -59,6 +59,16 @@ final class View
          * current state alone.
          */
         public readonly ?bool $bracketedPaste = null,
+        /**
+         * Pixel-graphics image layer: a map of image id → raw protocol bytes
+         * (sixel / kitty / iTerm2). The {@see $body} carries a one-cell marker
+         * ({@see ImageOverlay::marker()}) at the top-left of each image's box;
+         * the runtime resolves those markers to screen positions and paints the
+         * blobs on top of the text frame. Empty (the default) means no images.
+         *
+         * @var array<int, string>
+         */
+        public readonly array $images = [],
     ) {
     }
 }

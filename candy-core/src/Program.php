@@ -56,6 +56,10 @@ final class Program
     private ?Cursor $lastCursor = null;
     private bool $lastCursorHidden = false;
     private ?Progress $lastProgress = null;
+    /** Signature of the image layer painted last frame, to skip redundant repaints. */
+    private string $lastImageSignature = '';
+    /** The resolved body rendered last frame; `null` until the first render. */
+    private ?string $lastRenderedBody = null;
     private ?Util\Color $lastForegroundColor = null;
     private ?Util\Color $lastBackgroundColor = null;
     private ?MouseMode $activeMouseMode = null;
@@ -315,6 +319,8 @@ final class Program
     {
         $this->setupTerminal();
         $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
         $this->dirty = true;
     }
 
@@ -429,6 +435,8 @@ final class Program
             // every visible row.
             $this->writeOutput($msg->text . "\n");
             $this->renderer->reset();
+            $this->lastRenderedBody = null;
+            $this->lastImageSignature = '';
             $this->dirty = true;
             return;
         }
@@ -604,6 +612,8 @@ final class Program
         }
         $this->setupTerminal();
         $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
         $this->dirty = true;
 
         $produced = $req->onComplete !== null
@@ -652,6 +662,8 @@ final class Program
         });
         $this->setupTerminal();
         $this->renderer->reset();
+        $this->lastRenderedBody = null;
+        $this->lastImageSignature = '';
         $this->dirty = true;
         $this->dispatch(new ResumeMsg());
     }
@@ -772,15 +784,51 @@ final class Program
             return;
         }
         $rendered = $this->activeModel()->view();
+        $images = [];
         if ($rendered instanceof View) {
             $this->applyViewSideEffects($rendered);
             $body = $rendered->body;
+            $images = $rendered->images;
         } else {
             $body = $rendered;
         }
+
+        $paints = [];
+        if ($images !== []) {
+            [$body, $paints] = ImageOverlay::resolve($body, $images);
+        }
+
+        $bodyChanged = $body !== $this->lastRenderedBody;
+        $this->lastRenderedBody = $body;
+
         $this->renderer->render($body);
+        $this->paintImageLayer($paints, $bodyChanged);
 
         $this->lastFrameDuration = microtime(true) - $frameStart;
+    }
+
+    /**
+     * Paint the pixel-graphics image layer on top of the just-rendered text.
+     *
+     * Graphics blobs are re-emitted when the image set changed OR when the text
+     * frame changed — a text diff erases the cells it repaints, including any
+     * image pixels there, so an unchanged image still has to be redrawn over a
+     * changed frame. When neither changed, the images already on screen are
+     * left untouched (no flicker, no bandwidth) at idle.
+     *
+     * @param list<array{row: int, col: int, bytes: string}> $paints
+     */
+    private function paintImageLayer(array $paints, bool $bodyChanged): void
+    {
+        $signature = ImageOverlay::signature($paints);
+        if (!$bodyChanged && $signature === $this->lastImageSignature) {
+            return;
+        }
+
+        if ($paints !== []) {
+            $this->writeOutput(ImageOverlay::paint($paints));
+        }
+        $this->lastImageSignature = $signature;
     }
 
     private function applyViewSideEffects(View $view): void

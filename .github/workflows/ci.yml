@@ -20,6 +20,13 @@ env:
   # we install everything on every cell.
   PHP_EXTENSIONS: mbstring, intl, json, pcntl, sqlite3, pdo_sqlite, pdo_mysql, pdo_pgsql, ssh2, gd, curl, openssl, ffi
 
+  # CI checks the repo out at a detached merge ref, so each lib's root package
+  # versions as `dev-<sha>`. Libs with a circular intra-monorepo dependency
+  # (e.g. candy-core ⇆ candy-pty) then fail install because the sibling's
+  # back-requirement on `dev-master` doesn't match the root's `dev-<sha>`.
+  # Pin the root version so composer treats every lib-under-test as dev-master.
+  COMPOSER_ROOT_VERSION: dev-master
+
 jobs:
   # Compute every job's matrix by diffing the change-set and walking the
   # reverse-dep graph from each lib's composer.json (see scripts/affected-libs.php).
