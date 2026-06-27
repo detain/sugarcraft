@@ -853,4 +853,31 @@ final class VeilTest extends TestCase
         $full = $this->veil->composite("overlay!!", $bg, Position::CENTER, Position::CENTER);
         $this->assertStringContainsString('background line', $full, 'After reset, composite re-emits full output');
     }
+
+    /**
+     * The reused-instance diff path (bufferFromOutput -> diff -> DiffEncoder) must
+     * handle multibyte UTF-8 lines correctly. A box-drawing/UTF-8 overlay runs through
+     * bufferFromOutput where each multibyte rune occupies one byte-index but several
+     * bytes, exercising the byte-tail edge ($col < strlen($line) but past the rune
+     * count -> ''). An identical second frame must produce an EMPTY delta; a changed
+     * multibyte second frame must produce a non-empty delta without error.
+     */
+    public function testMultibyteLineThroughDiffBuffer(): void
+    {
+        $bg = str_repeat("background line padding here\n", 6);
+        $fg = "┌──────────┐\n│ café ☕ │\n└──────────┘";
+
+        // First frame: full output, remembered as the previous buffer source.
+        $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+
+        // Identical second frame at same dims -> reused diff path -> empty delta.
+        $same = $this->veil->composite($fg, $bg, Position::CENTER, Position::CENTER);
+        $this->assertSame('', $same, 'Identical multibyte frame yields an empty delta');
+
+        // Changed multibyte second frame -> non-empty delta, no errors, still UTF-8.
+        $fg2 = "┌──────────┐\n│ thé ☕ │\n└──────────┘";
+        $delta = $this->veil->composite($fg2, $bg, Position::CENTER, Position::CENTER);
+        $this->assertNotSame('', $delta, 'Changed multibyte frame yields a delta');
+        $this->assertStringNotContainsString('background line', $delta, 'Changed frame is a delta, not full output');
+    }
 }

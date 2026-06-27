@@ -793,19 +793,23 @@ final class SugarBoxer
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
-        $buffer = Buffer::new($width, $height);
         $lines = \explode("\n", $output);
-
+        /** @var list<Cell> $grid */
+        $grid = [];
         for ($row = 0; $row < $height; $row++) {
             $line = $lines[$row] ?? '';
+            $byteLen = \strlen($line);
+            $chars = \mb_str_split($line);              // O(len) ONCE per line (was mb_substr per cell)
             for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
-                $cell = Cell::new($char, null, null, 1);
-                $buffer = $buffer->withCellAt($col, $row, $cell);
+                // EXACT replication of the old `isset($line[$col]) ? mb_substr($line,$col,1) : ' '`:
+                //   col <  byteLen  -> the col-th char, or '' for the multibyte byte-tail
+                //   col >= byteLen  -> ' '
+                $char = $col < $byteLen ? ($chars[$col] ?? '') : ' ';
+                $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
             }
         }
 
-        return $buffer;
+        return Buffer::fromGrid($width, $height, $grid);
     }
 
     /**
