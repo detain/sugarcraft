@@ -139,4 +139,49 @@ final class PosterCardTest extends TestCase
         self::assertSame("\e[1mX\e[0m", $card->styledTitle, 'styled title threads through withPoster/withProgress');
         self::assertStringContainsString("\e[1mX\e[0m", $card->render(false, 8, 1));
     }
+
+    public function testCrlfJoinedPosterLeavesNoStrayCarriageReturn(): void
+    {
+        // A poster encoded with CRLF (e.g. a stale cache entry from before an
+        // upstream renderer fix) must not leak a "\r" into the stitched output —
+        // an embedded carriage return collapses the whole rail to one line.
+        $card = (new PosterCard('1', 'X'))->withPoster("AAA\r\nBBB\r\nCCC");
+        $out = $card->render(false, 8, 3);
+
+        self::assertStringNotContainsString("\r", $out, 'no stray carriage return survives');
+        self::assertCount(4, explode("\n", $out), '3 poster rows + 1 title row');
+        foreach (['AAA', 'BBB', 'CCC'] as $row) {
+            self::assertStringContainsString($row, $out);
+        }
+    }
+
+    public function testLoneCrJoinedPosterIsSplitIntoRows(): void
+    {
+        $card = (new PosterCard('1', 'X'))->withPoster("AAA\rBBB");
+        $lines = explode("\n", $card->render(false, 8, 2));
+
+        self::assertStringContainsString('AAA', $lines[0]);
+        self::assertStringContainsString('BBB', $lines[1]);
+    }
+
+    public function testPosterIsPaddedToReservedHeight(): void
+    {
+        // A poster shorter than the reserved height is padded with blank rows so
+        // the tile still occupies posterHeight rows and cards stay aligned.
+        $lines = explode("\n", (new PosterCard('1', 'X'))->withPoster('ONLY')->render(false, 9, 4));
+
+        self::assertCount(5, $lines, '4 poster rows (1 real + 3 padded) + 1 title');
+        self::assertStringContainsString('ONLY', $lines[0]);
+        self::assertSame(9, Layout::width($lines[2]), 'padded rows are exactly width cells');
+    }
+
+    public function testPosterTallerThanReservedHeightIsCropped(): void
+    {
+        $poster = implode("\n", ['R0', 'R1', 'R2', 'R3', 'R4']);
+        $lines = explode("\n", (new PosterCard('1', 'X'))->withPoster($poster)->render(false, 9, 3));
+
+        self::assertCount(4, $lines, '3 poster rows + 1 title');
+        self::assertStringContainsString('R2', $lines[2]);
+        self::assertStringNotContainsString('R3', $lines[2], 'overflow rows are dropped');
+    }
 }

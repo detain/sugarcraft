@@ -61,6 +61,20 @@ final class DiskCacheTest extends TestCase
         $this->assertNotSame($base, DiskCache::key('https://x/q.png', 24, 36, 'sixel'));
     }
 
+    public function testKeyIsNamespacedByFormatVersion(): void
+    {
+        // The format version is baked into the key, so an entry hashed under the
+        // current version must not collide with the same image under any other
+        // version — that namespacing is what retires stale, wrongly-encoded bytes
+        // after a renderer fix without a manual cache clear.
+        $key = DiskCache::key('https://x/p.png', 24, 36, 'sixel');
+        $legacy = sha1('https://x/p.png|24|36|sixel');
+        $unversioned = sha1('https://x/p.png|24|36|sixel|v1');
+
+        $this->assertNotSame($legacy, $key);
+        $this->assertNotSame($unversioned, $key);
+    }
+
     public function testPutThenGetRoundTrips(): void
     {
         $cache = new DiskCache($this->dir);

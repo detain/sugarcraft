@@ -40,6 +40,21 @@ final class DiskCache
     private const TEMP_GRACE_SECONDS = 30;
 
     /**
+     * Cache-format version, mixed into every {@see key()}.
+     *
+     * Bump this whenever the encoded bytes a renderer emits for the same
+     * (url, size, protocol) change in a way that would make a previously cached
+     * entry render incorrectly — e.g. a row-separator or escape-sequence fix.
+     * Because the version is part of the hashed key, old entries simply stop
+     * matching and are re-rendered on demand (and aged out by LRU), so a fix
+     * ships without anyone having to manually clear the on-disk cache.
+     *
+     * v2: half/quarter-block rows are joined with "\n" (were "\r\n"); CRLF-era
+     *     entries rendered as a single collapsed line and must not be reused.
+     */
+    private const FORMAT_VERSION = 2;
+
+    /**
      * @param string $dir         Directory that holds the cache entries
      *                            (created on first write if missing).
      * @param int    $maxEntries  Soft cap on stored entries; the oldest are
@@ -60,12 +75,14 @@ final class DiskCache
     /**
      * Canonical cache key for a rendered image.
      *
-     * Combines the source URL, target cell dimensions, and render protocol —
-     * everything that changes the encoded bytes — into a stable hash.
+     * Combines the source URL, target cell dimensions, render protocol, and the
+     * {@see FORMAT_VERSION} — everything that changes the encoded bytes — into a
+     * stable hash. Bumping the format version retires every prior entry so a
+     * renderer fix can never serve stale, wrongly-encoded bytes.
      */
     public static function key(string $url, int $width, int $height, string $protocol): string
     {
-        return sha1($url . '|' . $width . '|' . $height . '|' . $protocol);
+        return sha1($url . '|' . $width . '|' . $height . '|' . $protocol . '|v' . self::FORMAT_VERSION);
     }
 
     /** Whether an entry exists for the key (does not affect LRU order). */
