@@ -54,8 +54,10 @@ final class DiskCache
      * v3: sixel encoding rewritten to be spec-correct (ST terminator, `#` colour
      *     declarations, `"` raster, `-` band joins, pixel-resolution canvas);
      *     v2-era sixel blobs were unparseable and printed as text.
+     * v4: iTerm2 OSC 1337 fixed — base64 now follows `File=<args>:`, and the PNG
+     *     re-encode no longer leaks to stdout; v3 iterm2 blobs were malformed.
      */
-    private const FORMAT_VERSION = 3;
+    private const FORMAT_VERSION = 4;
 
     /**
      * @param string $dir         Directory that holds the cache entries

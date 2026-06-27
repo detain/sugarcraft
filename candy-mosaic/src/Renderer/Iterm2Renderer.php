@@ -7,7 +7,6 @@ namespace SugarCraft\Mosaic\Renderer;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Mosaic\ImageSource;
 use SugarCraft\Mosaic\Lang;
-use SugarCraft\Mosaic\PixelGrid;
 
 /**
  * iTerm2 / WezTerm inline image renderer via OSC 1337.
@@ -46,7 +45,12 @@ final class Iterm2Renderer implements Renderer
                 imagepalettetotruecolor($img);
             }
             try {
-                $pngBytes = imagepng($img);
+                // imagepng() with no path writes to STDOUT and returns bool —
+                // capture the bytes via an output buffer instead (otherwise the
+                // raw PNG is dumped to the terminal and the image is empty).
+                ob_start();
+                imagepng($img);
+                $pngBytes = (string) ob_get_clean();
             } finally {
                 imagedestroy($img);
             }

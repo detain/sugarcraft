@@ -686,18 +686,24 @@ final class Ansi
      */
     public static function iterm2InlineImage(string $base64Png, array $opts = []): string
     {
-        $parts = ['File=' . $base64Png];
+        // iTerm2 inline-image protocol:
+        //   OSC 1337 ; File = <key=value;key=value;…> : <base64 data> BEL
+        // The arguments go in `File=…`, then a COLON, then the base64 payload.
+        // (The previous form put the base64 straight after `File=` and the
+        // arguments after it — not valid, so terminals printed the payload.)
+        $args = [];
         if (isset($opts['width'])) {
-            $parts[] = 'width=' . $opts['width'];
+            $args[] = 'width=' . $opts['width'];
         }
         if (isset($opts['height'])) {
-            $parts[] = 'height=' . $opts['height'];
+            $args[] = 'height=' . $opts['height'];
         }
         if (isset($opts['preserveAspectRatio'])) {
-            $parts[] = 'preserveAspectRatio=' . ($opts['preserveAspectRatio'] ? '1' : '0');
+            $args[] = 'preserveAspectRatio=' . ($opts['preserveAspectRatio'] ? '1' : '0');
         }
-        $parts[] = 'inline=1';
-        return self::OSC . '1337;' . implode(';', $parts) . self::BEL;
+        $args[] = 'inline=1';
+
+        return self::OSC . '1337;File=' . implode(';', $args) . ':' . $base64Png . self::BEL;
     }
 
     /**
