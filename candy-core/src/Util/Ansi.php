@@ -801,10 +801,14 @@ final class Ansi
      */
     public static function sixelDcsHeader(int $width, int $height): string
     {
-        // Phrase color selection and aspect ratio come after the header;
-        // here we emit just the mode setting: "1;0" = Set Raster Status +
-        // aspect 2:1 (0) which is the Sixel default.
-        return self::DCS . '1;0;0q' . "$width;$height" . ';';
+        // DECSIXEL: `ESC P P1;P2;P3 q` then raster attributes
+        // `" Pan;Pad;Ph;Pv`. P1=0 (1:1 aspect, set precisely by the raster),
+        // P2=1 (pixels left at 0 stay transparent), P3=0. The raster's
+        // `"1;1;W;H` declares the pixel aspect (1:1) and the image's pixel
+        // width/height so the terminal reserves the right area. The `"` prefix
+        // is REQUIRED — emitting bare `W;H` (as before) is not valid sixel and
+        // terminals print the payload as text.
+        return self::DCS . '0;1;0q"1;1;' . $width . ';' . $height;
     }
 
     /**
@@ -822,12 +826,15 @@ final class Ansi
      */
     public static function sixelColorIntroducer(int $index, int $r, int $g, int $b): string
     {
-        return self::DCS
-            . (string) $index
-            . ';' . self::toSixelColor($r)
+        // DECGCI: `# Pc ; Pu ; Px ; Py ; Pz` with Pu=2 (RGB) and Px/Py/Pz as
+        // 0-100 percentages. It is part of the ENCLOSING sixel DCS — NOT its own
+        // device-control string. (The previous code wrapped each colour in its
+        // own `DCS … ST`, which is invalid and breaks the whole image.)
+        return '#'
+            . $index
+            . ';2;' . self::toSixelColor($r)
             . ';' . self::toSixelColor($g)
-            . ';' . self::toSixelColor($b)
-            . '$' . self::ST;
+            . ';' . self::toSixelColor($b);
     }
 
     /**
@@ -842,7 +849,9 @@ final class Ansi
      */
     public static function sixelColorSelect(int $index): string
     {
-        return self::DCS . (string) $index . '$' . self::ST;
+        // DECGCR: select a previously declared colour with `# Pc` — again part
+        // of the enclosing sixel DCS, not its own control string.
+        return '#' . $index;
     }
 
     /**
@@ -882,7 +891,10 @@ final class Ansi
      */
     public static function sixelTerminator(): string
     {
-        return self::BEL;
+        // A sixel image is a Device Control String, which is terminated by ST
+        // (`ESC \`) — NOT BEL (which only closes an OSC). With BEL the terminal
+        // never sees the DCS end and renders the payload as text.
+        return self::ST;
     }
 
     /**
