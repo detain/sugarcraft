@@ -43,6 +43,36 @@ final class Buffer
         return new self($width, $height, $grid);
     }
 
+    /**
+     * Build a Buffer directly from a pre-computed flat cell grid (O(1) wrap).
+     *
+     * Unlike {@see new()} followed by repeated {@see withCellAt()} calls
+     * (each O(n) → O(n²) overall), this wraps an already-built grid in a
+     * single step, enabling O(n) bulk construction.
+     *
+     * @param list<Cell> $grid Flat grid of exactly width*height cells, index = $row*$width + $col.
+     *
+     * @throws \InvalidArgumentException when dimensions are non-positive or
+     *                                   $grid does not contain exactly
+     *                                   width*height cells.
+     */
+    public static function fromGrid(int $width, int $height, array $grid): self
+    {
+        if ($width <= 0 || $height <= 0) {
+            throw new \InvalidArgumentException(
+                'Buffer dimensions must be positive'
+            );
+        }
+        $expected = $width * $height;
+        if (count($grid) !== $expected) {
+            throw new \InvalidArgumentException(
+                "Buffer grid must contain exactly {$expected} cells ({$width}x{$height}), got " . count($grid)
+            );
+        }
+
+        return new self($width, $height, $grid);
+    }
+
     // ─── Accessors ─────────────────────────────────────────────────────
 
     /** Width in cells. */

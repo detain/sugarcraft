@@ -58,6 +58,48 @@ final class BufferTest extends TestCase
         Buffer::new(0, 5);
     }
 
+    public function testFromGridRoundTrips(): void
+    {
+        // Build a 3×2 grid: index = $row * 3 + $col.
+        $grid = [];
+        $width = 3;
+        $height = 2;
+        for ($row = 0; $row < $height; $row++) {
+            for ($col = 0; $col < $width; $col++) {
+                $grid[$row * $width + $col] = Cell::new((string) ($row * $width + $col));
+            }
+        }
+
+        $buf = Buffer::fromGrid($width, $height, $grid);
+
+        $this->assertSame($width, $buf->width());
+        $this->assertSame($height, $buf->height());
+
+        // Every cell round-trips to its row/col position.
+        for ($row = 0; $row < $height; $row++) {
+            for ($col = 0; $col < $width; $col++) {
+                $this->assertSame(
+                    (string) ($row * $width + $col),
+                    $buf->cellAt($col, $row)->rune(),
+                    "cell ({$col}, {$row})"
+                );
+            }
+        }
+    }
+
+    public function testFromGridWrongSizeThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        // 3×2 needs 6 cells; supply 5.
+        Buffer::fromGrid(3, 2, array_fill(0, 5, Cell::new()));
+    }
+
+    public function testFromGridNonPositiveDimensionsThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Buffer::fromGrid(0, 2, []);
+    }
+
     public function testCellAtBoundsCheckColUnderflow(): void
     {
         $buf = Buffer::new(10, 3);
