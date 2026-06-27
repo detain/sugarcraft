@@ -63,8 +63,11 @@ final class Veil
     /** @var Manager|null Stored manager for back-compat only (deprecated) */
     private readonly ?Manager $manager;
 
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
+    /** @var Buffer|null Lazily-built previous frame buffer for diff-based emission */
     private ?Buffer $previousFrame = null;
+
+    /** @var string|null Previous full composite output (string), kept so the diff buffer can be built lazily on frame 2 */
+    private ?string $previousOutput = null;
 
     /** @var int|null Previous output width for resize detection */
     private ?int $prevWidth = null;
@@ -105,6 +108,7 @@ final class Veil
         $this->marker = new Mark();
         $this->manager = $manager;
         $this->previousFrame = null;
+        $this->previousOutput = null;
         $this->prevWidth = null;
         $this->prevHeight = null;
     }
@@ -409,13 +413,6 @@ final class Veil
         $bgHeight = \count($bgLines);
         $bgWidth  = $this->maxLineWidth($bgLines);
 
-        // Detect window resize — reset diff state so we emit a full frame.
-        if ($this->prevWidth !== null && ($this->prevWidth !== $bgWidth || $this->prevHeight !== $bgHeight)) {
-            $this->previousFrame = null;
-        }
-        $this->prevWidth = $bgWidth;
-        $this->prevHeight = $bgHeight;
-
         // When autoSize is enabled, apply border chrome first and compute dimensions from bordered content
         if ($this->autoSize) {
             $foreground = $this->applyBorderChrome($foreground);
@@ -473,16 +470,27 @@ final class Veil
 
         $fullOutput = \implode("\n", $output);
 
-        // First frame or resize: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
-            $this->previousFrame = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
+        // First frame (or after a resize): emit the full output and remember it as a
+        // STRING only. Building the diff buffer here is pure waste for callers that use
+        // a fresh Veil per render and never reach the diff path, so it is deferred to
+        // the first subsequent same-dimension composite below.
+        if ($this->previousOutput === null || $this->prevWidth !== $bgWidth || $this->prevHeight !== $bgHeight) {
+            $this->previousOutput = $fullOutput;
+            $this->prevWidth = $bgWidth;
+            $this->prevHeight = $bgHeight;
+            $this->previousFrame = null;
             return $fullOutput;
         }
 
-        // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
-        $ops = $currentFrame->diff($this->previousFrame);
-        $this->previousFrame = $currentFrame;
+        // Subsequent frames with same dimensions: materialise the previous buffer lazily
+        // (exactly ONCE — cached in $previousFrame), build the current buffer, diff and
+        // emit the delta. Reused callers thus build exactly one buffer per frame, same as
+        // before; fresh-instance callers build zero.
+        $prev = $this->previousFrame ??= $this->bufferFromOutput($this->previousOutput, $bgWidth, $bgHeight);
+        $current = $this->bufferFromOutput($fullOutput, $bgWidth, $bgHeight);
+        $ops = $current->diff($prev);
+        $this->previousFrame = $current;
+        $this->previousOutput = $fullOutput;
 
         $encoder = new DiffEncoder();
         return $encoder->encode($ops);
@@ -620,5 +628,8 @@ final class Veil
     public function resetPreviousFrame(): void
     {
         $this->previousFrame = null;
+        $this->previousOutput = null;
+        $this->prevWidth = null;
+        $this->prevHeight = null;
     }
 }

@@ -785,4 +785,72 @@ final class VeilTest extends TestCase
         $totalDelta = $bytes2 + $bytes3;
         $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
     }
+
+    /**
+     * Regression for the FIX-2 deferred-buffer change.
+     *
+     * The diff-buffer build is now deferred from frame 1 to the first subsequent
+     * same-dimension composite. Public behaviour must be IDENTICAL to before:
+     *  (a) a fresh Veil's first composite() returns the FULL output;
+     *  (b) a REUSED Veil's second same-dim composite() returns a DELTA (not the full
+     *      output) for a small change;
+     *  (c) a resize (changed dimensions) returns the FULL output again.
+     */
+    public function testDeferredBufferPreservesFullThenDeltaThenFullOnResize(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+
+        // (a) Fresh instance, first frame → full output.
+        $full = $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'Frame 1 should be the full composite output');
+        $this->assertGreaterThan(50, \strlen($full), 'Frame 1 should be full output, not a delta');
+
+        // (b) Reused instance, second frame, same dims, small change → delta.
+        $delta = $this->veil->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $delta, 'Frame 2 should be a delta, not the full frame');
+        $this->assertLessThanOrEqual(30, \strlen($delta), 'Frame 2 delta should be small');
+
+        // (c) Resize (taller background → changed dimensions) → full output again.
+        $biggerBg = str_repeat("background line\n", 14);
+        $fullAgain = $this->veil->composite("overlay!", $biggerBg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $fullAgain, 'A resize should re-emit the full output');
+        $this->assertGreaterThan(50, \strlen($fullAgain), 'Resize frame should be full output, not a delta');
+
+        // After the resize full frame, a subsequent same-dim composite is a delta again.
+        $deltaAfterResize = $this->veil->composite("overlay!!", $biggerBg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $deltaAfterResize, 'Post-resize frame 2 should be a delta');
+        $this->assertLessThanOrEqual(30, \strlen($deltaAfterResize), 'Post-resize delta should be small');
+    }
+
+    /**
+     * A FRESH Veil per composite() (exactly what CommandPalette does) must always
+     * return the full output and must never reach the diff/buffer path — that is the
+     * case FIX-2 makes cheap by deferring the buffer build.
+     */
+    public function testFreshInstancePerComposite_alwaysFullOutput(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+        foreach (["a", "ab", "abc"] as $fg) {
+            $out = Veil::new()->composite($fg, $bg, Position::CENTER, Position::CENTER);
+            $this->assertStringContainsString('background line', $out, 'Fresh-instance composite must be full output');
+        }
+    }
+
+    /**
+     * resetPreviousFrame() must restart the first-frame path so the next composite()
+     * emits the full output again.
+     */
+    public function testResetPreviousFrameRestartsFullOutput(): void
+    {
+        $bg = str_repeat("background line\n", 10);
+
+        $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+        $delta = $this->veil->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringNotContainsString('background line', $delta, 'Second frame is a delta before reset');
+
+        $this->veil->resetPreviousFrame();
+
+        $full = $this->veil->composite("overlay!!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'After reset, composite re-emits full output');
+    }
 }
