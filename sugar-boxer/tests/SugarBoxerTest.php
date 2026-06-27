@@ -349,4 +349,79 @@ final class SugarBoxerTest extends TestCase
         $totalDelta = $bytes2 + $bytes3;
         $this->assertLessThanOrEqual(60, $totalDelta, 'Total delta bytes for 2 frames should be ≤60');
     }
+
+    /**
+     * Regression for the FIX-3 deferred-buffer change.
+     *
+     * The diff-buffer build is now deferred from frame 1 to the first subsequent
+     * same-dimension render. Public behaviour must be IDENTICAL to before:
+     *  (a) a fresh SugarBoxer's first render() returns the FULL output;
+     *  (b) a REUSED instance's second same-dim render() returns a DELTA (not the full
+     *      output) for a small change;
+     *  (c) a resize (changed dimensions) returns the FULL output again.
+     */
+    public function testDeferredBufferPreservesFullThenDeltaThenFullOnResize(): void
+    {
+        $boxer = SugarBoxer::new();
+
+        // (a) Fresh instance, first frame → full output.
+        $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $full = $boxer->render($layout1, 20, 5);
+        $this->assertStringContainsString('Hello', $full, 'Frame 1 should be the full render output');
+        $this->assertGreaterThan(50, \strlen($full), 'Frame 1 should be full output, not a delta');
+
+        // (b) Reused instance, second frame, same dims, small change → delta.
+        $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $delta = $boxer->render($layout2, 20, 5);
+        $this->assertStringNotContainsString('╭', $delta, 'Frame 2 should be a delta, not the full frame');
+        $this->assertLessThanOrEqual(30, \strlen($delta), 'Frame 2 delta should be small');
+
+        // (c) Resize (taller viewport → changed dimensions) → full output again.
+        $fullAgain = $boxer->render($layout2, 20, 7);
+        $this->assertStringContainsString('Hello', $fullAgain, 'A resize should re-emit the full output');
+        $this->assertGreaterThan(50, \strlen($fullAgain), 'Resize frame should be full output, not a delta');
+
+        // After the resize full frame, a subsequent same-dim render is a delta again.
+        $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $deltaAfterResize = $boxer->render($layout3, 20, 7);
+        $this->assertStringNotContainsString('╭', $deltaAfterResize, 'Post-resize frame 2 should be a delta');
+        $this->assertLessThanOrEqual(30, \strlen($deltaAfterResize), 'Post-resize delta should be small');
+    }
+
+    /**
+     * A FRESH SugarBoxer per render() (exactly what Chrome::frame() does) must always
+     * return the full output and must never reach the diff/buffer path — that is the
+     * case FIX-3 makes cheap by deferring the buffer build.
+     */
+    public function testFreshInstancePerRender_alwaysFullOutput(): void
+    {
+        foreach (['a', 'ab', 'abc'] as $content) {
+            $layout = Node::leaf($content)->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+            $out = SugarBoxer::new()->render($layout, 20, 5);
+            $this->assertStringContainsString($content, $out, 'Fresh-instance render must be full output');
+            $this->assertStringContainsString('╭', $out, 'Fresh-instance render must be the full frame');
+        }
+    }
+
+    /**
+     * resetPreviousFrame() must restart the first-frame path so the next render()
+     * emits the full output again.
+     */
+    public function testResetPreviousFrameRestartsFullOutput(): void
+    {
+        $boxer = SugarBoxer::new();
+
+        $layout1 = Node::leaf('Hello')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $boxer->render($layout1, 20, 5);
+        $layout2 = Node::leaf('Hello!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $delta = $boxer->render($layout2, 20, 5);
+        $this->assertStringNotContainsString('╭', $delta, 'Second frame is a delta before reset');
+
+        $boxer->resetPreviousFrame();
+
+        $layout3 = Node::leaf('Hello!!')->withBorder(true)->withMinWidth(10)->withMinHeight(3);
+        $full = $boxer->render($layout3, 20, 5);
+        $this->assertStringContainsString('╭', $full, 'After reset, render re-emits full output');
+        $this->assertGreaterThan(50, \strlen($full), 'After reset, render is full output, not a delta');
+    }
 }
