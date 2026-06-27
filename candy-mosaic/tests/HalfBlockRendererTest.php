@@ -91,7 +91,9 @@ final class HalfBlockRendererTest extends TestCase
         // Should contain exactly one ▀ (U+2580) character.
         $this->assertSame(1, preg_match_all('/\xE2\x96\x80/', $out));
         // Single-row render: no linebreak separator.
-        $this->assertSame(0, substr_count($out, "\r\n"));
+        $this->assertSame(0, substr_count($out, "\n"));
+        // Output must never contain a carriage return (TUI uses \n only).
+        $this->assertStringNotContainsString("\r", $out);
     }
 
     public function testCheckerboardAt4x3(): void
@@ -99,8 +101,10 @@ final class HalfBlockRendererTest extends TestCase
         $image = ImageSource::fromFile(__DIR__ . '/fixtures/checkerboard.png');
         $out = $this->renderer->render($image, 4, 3);
 
-        // 4 cells per row × 3 rows = 3 lines → 2 \r\n separators.
-        $this->assertSame(2, substr_count($out, "\r\n"));
+        // 4 cells per row × 3 rows = 3 lines → 2 \n separators.
+        $this->assertSame(2, substr_count($out, "\n"));
+        // Output must never contain a carriage return (TUI uses \n only).
+        $this->assertStringNotContainsString("\r", $out);
         // 4 × 3 = 12 half-block glyphs.
         $this->assertSame(12, preg_match_all('/\xE2\x96\x80/', $out));
     }
