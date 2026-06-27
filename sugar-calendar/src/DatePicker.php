@@ -43,6 +43,9 @@ final class DatePicker
     /** Selected date (null if none selected). */
     private ?\DateTimeImmutable $selectedDate = null;
 
+    /** Injected "today" reference (null = real wall-clock now). */
+    private ?\DateTimeImmutable $today = null;
+
     /** Cursor grid index 0-41 (6 weeks × 7 days). */
     private int $cursorIndex = 0;
 
@@ -152,12 +155,29 @@ final class DatePicker
 
     public function GoToToday(): self
     {
-        $today = new \DateTimeImmutable();
+        $today = $this->today();
         $clone = clone $this;
         $clone->viewMonth = (int) $today->format('n');
         $clone->viewYear  = (int) $today->format('Y');
         $clone->clampCursor();
         return $clone;
+    }
+
+    /**
+     * Pin the "today" reference (testability). Default (unset) uses the
+     * real wall-clock now, so production behavior is unchanged.
+     */
+    public function withToday(\DateTimeImmutable $today): self
+    {
+        $clone = clone $this;
+        $clone->today = $today;
+        return $clone;
+    }
+
+    /** Resolve the "today" reference: injected value or real now. */
+    private function today(): \DateTimeImmutable
+    {
+        return $this->today ?? new \DateTimeImmutable();
     }
 
     public function SetTime(\DateTimeImmutable $t): self
@@ -648,7 +668,7 @@ final class DatePicker
         $daysInMonth = (int) $firstOfMonth->format('t');
         $firstDow    = (int) $firstOfMonth->format('w'); // 0=Sun
 
-        $today = new \DateTimeImmutable();
+        $today = $this->today();
         $todayDay = (int) $today->format('j');
         $todayMonth = (int) $today->format('n');
         $todayYear  = (int) $today->format('Y');

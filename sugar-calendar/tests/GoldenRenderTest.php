@@ -26,7 +26,8 @@ final class GoldenRenderTest extends TestCase
     public function testJanuary2026RendersAnsi(): void
     {
         // January 2026: first day is a Thursday (offset 4), has 31 days
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'));
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-01-15'))
+            ->withToday(new \DateTimeImmutable('2026-06-15'));
         $output = $dp->View();
 
         $this->assertNotEmpty($output);
@@ -40,6 +41,7 @@ final class GoldenRenderTest extends TestCase
     {
         // May 2026: first day is a Friday (offset 5), has 31 days
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-06-15'))
             ->SelectDate();
 
         $output = $dp->View();
@@ -54,7 +56,8 @@ final class GoldenRenderTest extends TestCase
     public function testWeekViewRendersAnsi(): void
     {
         // A week view is the same 6×7 grid - just navigate to show week context
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-06-01'));
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-06-01'))
+            ->withToday(new \DateTimeImmutable('2026-06-15'));
 
         $output = $dp->View();
 
