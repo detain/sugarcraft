@@ -28,9 +28,17 @@ use SugarCraft\Mosaic\Lang;
  */
 final class SixelRenderer implements Renderer
 {
+    /**
+     * @param int $cellWidth  Pixel width of a terminal cell — the render() cell
+     *                        dimensions are multiplied by this so a sixel poster
+     *                        fills its cell box (not one device pixel per cell).
+     * @param int $cellHeight Pixel height of a terminal cell.
+     */
     public function __construct(
         private readonly Dither $dither = Dither::FloydSteinberg,
         private readonly int $maxColors = 256,
+        private readonly int $cellWidth = 10,
+        private readonly int $cellHeight = 20,
     ) {
         if ($maxColors < 1 || $maxColors > 256) {
             throw new \InvalidArgumentException(
@@ -53,12 +61,17 @@ final class SixelRenderer implements Renderer
             );
         }
 
-        $effectiveHeight = $height ?? (int) round($width / $image->aspectRatio());
-        if ($effectiveHeight <= 0) {
-            $effectiveHeight = 1;
+        $cellH = $height ?? (int) round($width / $image->aspectRatio());
+        if ($cellH <= 0) {
+            $cellH = 1;
         }
 
-        // Load and resize the image.
+        // The cell box maps to a PIXEL canvas (cells × terminal cell size) so the
+        // image fills its area; one device-pixel-per-cell would be microscopic.
+        $pixelW = max(1, $width * $this->cellWidth);
+        $pixelH = max(1, $cellH * $this->cellHeight);
+
+        // Load and resize the image to the pixel canvas.
         $src = imagecreatefromstring($image->bytes);
         if ($src === false) {
             throw new \RuntimeException(Lang::t('renderer.gd_load_failed'));
@@ -66,7 +79,7 @@ final class SixelRenderer implements Renderer
         if (!imageistruecolor($src)) {
             imagepalettetotruecolor($src);
         }
-        $resized = imagecreatetruecolor($width, $effectiveHeight);
+        $resized = imagecreatetruecolor($pixelW, $pixelH);
         if ($resized === false) {
             imagedestroy($src);
             throw new \RuntimeException(Lang::t('renderer.gd_resize_failed'));
@@ -74,28 +87,33 @@ final class SixelRenderer implements Renderer
         imagecopyresampled(
             $resized, $src,
             0, 0, 0, 0,
-            $width, $effectiveHeight,
+            $pixelW, $pixelH,
             imagesx($src), imagesy($src)
         );
         imagedestroy($src);
 
         try {
-            $pixels  = $this->extractPixels($resized);
-            $palette = $this->medianCut($pixels, $this->maxColors);
+            // The palette only needs a representative sample, not every pixel —
+            // median-cut over a capped subset is far cheaper and visually
+            // indistinguishable at thumbnail sizes.
+            $palette = $this->medianCut($this->samplePixels($resized, 4096), $this->maxColors);
 
             // Apply error-diffusion dithering before building the index grid.
             $grid = $this->dither === Dither::None
                 ? $this->buildIndexGrid($resized, $palette)
                 : $this->ditheredIndexGrid($resized, $palette, $this->dither);
 
-            $out = Ansi::sixelDcsHeader($width, $effectiveHeight);
+            $out = Ansi::sixelDcsHeader($pixelW, $pixelH);
             $out .= $this->emitPalette($palette);
 
-            for ($bandTop = 0; $bandTop < $effectiveHeight; $bandTop += 6) {
-                $bandBottom = min($bandTop + 6, $effectiveHeight);
-                $out .= $this->emitBand($grid, $bandTop, $bandBottom, $width, $palette);
-                if ($bandBottom < $effectiveHeight) {
-                    $out .= "\n";
+            for ($bandTop = 0; $bandTop < $pixelH; $bandTop += 6) {
+                $bandBottom = min($bandTop + 6, $pixelH);
+                $out .= $this->emitBand($grid, $bandTop, $bandBottom, $pixelW, $palette);
+                // Graphics newline `-` advances to the next 6-row band (NOT "\n",
+                // which a terminal reads as a literal line feed and which breaks
+                // the image).
+                if ($bandBottom < $pixelH) {
+                    $out .= '-';
                 }
             }
 
@@ -150,19 +168,32 @@ final class SixelRenderer implements Renderer
 
     // ─── Pixel extraction ─────────────────────────────────────────────────────
 
-    /** @return list<array{int,int,int}> */
-    private function extractPixels(\GdImage $img): array
+    /**
+     * Collect up to $max representative pixels by striding over the image, for
+     * building the palette. Sampling instead of reading every pixel keeps
+     * median-cut cheap on the larger pixel canvas.
+     *
+     * @return list<array{int,int,int}>
+     */
+    private function samplePixels(\GdImage $img, int $max): array
     {
         $w = imagesx($img);
         $h = imagesy($img);
+        $total = $w * $h;
+        $step = $total > $max ? (int) ceil($total / $max) : 1;
+
         $pixels = [];
+        $i = 0;
         for ($y = 0; $y < $h; $y++) {
             for ($x = 0; $x < $w; $x++) {
-                $idx = imagecolorat($img, $x, $y);
-                $c   = imagecolorsforindex($img, $idx);
+                if (($i++ % $step) !== 0) {
+                    continue;
+                }
+                $c = imagecolorsforindex($img, imagecolorat($img, $x, $y));
                 $pixels[] = [$c['red'], $c['green'], $c['blue']];
             }
         }
+
         return $pixels;
     }
 
@@ -308,12 +339,17 @@ final class SixelRenderer implements Renderer
         $w    = imagesx($img);
         $h    = imagesy($img);
         $grid = [];
+        $cache = []; // packed RGB → palette index; posters reuse few colours.
         for ($y = 0; $y < $h; $y++) {
             $row = [];
             for ($x = 0; $x < $w; $x++) {
                 $idx = imagecolorat($img, $x, $y);
                 $c   = imagecolorsforindex($img, $idx);
-                $row[] = $this->nearestColor($c['red'], $c['green'], $c['blue'], $palette);
+                // Key the memo on a coarse 5-bit-per-channel cube so it caps at
+                // 32768 entries — nearestColor runs O(distinct cubes), not
+                // O(pixels), bounding cost regardless of image size.
+                $key = (($c['red'] >> 3) << 10) | (($c['green'] >> 3) << 5) | ($c['blue'] >> 3);
+                $row[] = $cache[$key] ??= $this->nearestColor($c['red'], $c['green'], $c['blue'], $palette);
             }
             $grid[] = $row;
         }
@@ -354,6 +390,7 @@ final class SixelRenderer implements Renderer
         }
 
         $grid = [];
+        $cache = []; // packed rounded RGB → palette index, reused across pixels.
 
         for ($y = 0; $y < $h; $y++) {
             $row = [];
@@ -364,12 +401,13 @@ final class SixelRenderer implements Renderer
                 $clampedG = max(0.0, min(255.0, $g));
                 $clampedB = max(0.0, min(255.0, $b));
 
-                $palIdx = $this->nearestColor(
-                    (int) round($clampedR),
-                    (int) round($clampedG),
-                    (int) round($clampedB),
-                    $palette,
-                );
+                $ri = (int) round($clampedR);
+                $gi = (int) round($clampedG);
+                $bi = (int) round($clampedB);
+                // Coarse 5-bit cube key (see buildIndexGrid) caps the memo at
+                // 32768 nearest-colour computations across the whole image.
+                $key = (($ri >> 3) << 10) | (($gi >> 3) << 5) | ($bi >> 3);
+                $palIdx = $cache[$key] ??= $this->nearestColor($ri, $gi, $bi, $palette);
                 [$pr, $pg, $pb] = $palette[$palIdx];
 
                 // Quantization error (original − quantized).
@@ -517,52 +555,62 @@ final class SixelRenderer implements Renderer
         }
 
         $out = '';
+        $first = true;
 
         foreach (array_keys($activeColors) as $palIndex) {
+            // Each colour pass starts back at the band's left edge. `$` is a
+            // graphics carriage-return; the colours overlay on the same 6-row
+            // band rather than printing one after another.
+            if (!$first) {
+                $out .= '$';
+            }
+            $first = false;
+
             $out .= Ansi::sixelColorSelect($palIndex);
 
-            $sixelBase = $palIndex << 6;
-
-            $col       = 0;
-            $runCount  = 0;
-            $prevByte  = -1;
+            $col      = 0;
+            $runCount = 0;
+            $prevBits = -1;
 
             while ($col < $width) {
-                $bitmask = 0;
+                // The data byte holds ONLY the 6-row bitmask for the active
+                // colour (the colour itself was selected above) — the previous
+                // `palIndex << 6` corrupted every byte.
+                $bits = 0;
                 for ($row = $bandTop; $row < $bandBottom; $row++) {
                     if (($grid[$row][$col] ?? 0) === $palIndex) {
-                        $bitmask |= (1 << ($row - $bandTop));
+                        $bits |= (1 << ($row - $bandTop));
                     }
                 }
-                $sixelByte = $sixelBase | $bitmask;
 
-                if ($sixelByte === $prevByte) {
+                if ($bits === $prevBits) {
                     $runCount++;
                 } else {
                     if ($runCount > 0) {
-                        $out .= $this->emitRle($prevByte, $runCount);
+                        $out .= $this->emitRle($prevBits, $runCount);
                     }
-                    $prevByte = $sixelByte;
+                    $prevBits = $bits;
                     $runCount = 1;
                 }
                 $col++;
             }
 
             if ($runCount > 0) {
-                $out .= $this->emitRle($prevByte, $runCount);
+                $out .= $this->emitRle($prevBits, $runCount);
             }
         }
 
         return $out;
     }
 
-    private function emitRle(int $sixelByte, int $count): string
+    /**
+     * One sixel data byte = `bits + 63` (printable range 63-126), run-length
+     * encoded as `!count byte` when a column run repeats.
+     */
+    private function emitRle(int $bits, int $count): string
     {
-        $ascii = ($sixelByte >= 0 && $sixelByte < 128)
-            ? max(63, min(126, $sixelByte))
-            : 63;
-        $char = chr($ascii);
+        $char = chr(($bits & 0x3F) + 63);
 
-        return $count > 1 ? "!$count$char" : $char;
+        return $count > 1 ? '!' . $count . $char : $char;
     }
 }

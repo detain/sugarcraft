@@ -34,13 +34,14 @@ final class Sixel256FallbackTest extends TestCase
         $out16 = $r16->render($image, 8, 8);
 
         // Both should produce valid Sixel output.
-        $this->assertStringStartsWith("\x1bP1;0;0q", $out256);
-        $this->assertStringStartsWith("\x1bP1;0;0q", $out16);
+        $this->assertStringStartsWith("\x1bP0;1;0q", $out256);
+        $this->assertStringStartsWith("\x1bP0;1;0q", $out16);
 
-        // The 16-color version should have fewer DECGCI declarations
-        // (one per palette entry). We can count DCS ... $ ST sequences.
-        $count256 = substr_count($out256, "\x1bP");
-        $count16 = substr_count($out16, "\x1bP");
+        // The 16-color version should declare fewer palette entries. Count the
+        // DECGCI colour declarations (`# Pc ; 2 ; r ; g ; b`).
+        $count256 = preg_match_all('/#\d+;2;/', $out256);
+        $count16 = preg_match_all('/#\d+;2;/', $out16);
+        $this->assertLessThanOrEqual(16, $count16);
         $this->assertGreaterThan($count16, $count256);
     }
 
