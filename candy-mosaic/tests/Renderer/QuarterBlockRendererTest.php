@@ -88,7 +88,9 @@ final class QuarterBlockRendererTest extends TestCase
         $out = $this->renderer->render($image, 1, 1);
 
         // Single cell: no linebreak separator.
-        $this->assertSame(0, substr_count($out, "\r\n"));
+        $this->assertSame(0, substr_count($out, "\n"));
+        // Output must never contain a carriage return (TUI uses \n only).
+        $this->assertStringNotContainsString("\r", $out);
     }
 
     public function testCheckerboardAt4x4ProducesThreeLineSeparators(): void
@@ -96,8 +98,10 @@ final class QuarterBlockRendererTest extends TestCase
         $image = ImageSource::fromFile(__DIR__ . '/../../tests/fixtures/checkerboard_qb.png');
         $out = $this->renderer->render($image, 4, 4);
 
-        // 4 cells per row × 4 rows = 4 lines → 3 \r\n separators.
-        $this->assertSame(3, substr_count($out, "\r\n"));
+        // 4 cells per row × 4 rows = 4 lines → 3 \n separators.
+        $this->assertSame(3, substr_count($out, "\n"));
+        // Output must never contain a carriage return (TUI uses \n only).
+        $this->assertStringNotContainsString("\r", $out);
     }
 
     public function testFromStringProducesIdenticalOutput(): void

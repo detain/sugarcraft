@@ -96,7 +96,7 @@ final class HalfBlockRenderer implements Renderer
             $lines[] = $line;
         }
 
-        return implode("\r\n", $lines);
+        return implode("\n", $lines);
     }
 
     public function name(): string

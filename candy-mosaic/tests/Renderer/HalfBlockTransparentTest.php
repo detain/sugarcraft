@@ -75,8 +75,10 @@ final class HalfBlockTransparentTest extends TestCase
         // Verify red is in the output (from cell 1,0 which is opaque red).
         $this->assertStringContainsString(Ansi::fgRgb(255, 0, 0), $out);
         // The line should have fg=red for cell 1,0.
-        $lines = explode("\r\n", $out);
+        $lines = explode("\n", $out);
         $this->assertCount(1, $lines);
+        // Output must never contain a carriage return (TUI uses \n only).
+        $this->assertStringNotContainsString("\r", $out);
     }
 
     public function testBothOpaqueRendersWithColors(): void
