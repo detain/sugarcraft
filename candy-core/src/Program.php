@@ -58,6 +58,8 @@ final class Program
     private ?Progress $lastProgress = null;
     /** Signature of the image layer painted last frame, to skip redundant repaints. */
     private string $lastImageSignature = '';
+    /** Screen rows covered by last frame's images, to surgically clear them on change. @var array<int, true> */
+    private array $lastImageRows = [];
     /** The resolved body rendered last frame; `null` until the first render. */
     private ?string $lastRenderedBody = null;
     private ?Util\Color $lastForegroundColor = null;
@@ -321,6 +323,7 @@ final class Program
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
+        $this->lastImageRows = [];
         $this->dirty = true;
     }
 
@@ -437,6 +440,7 @@ final class Program
             $this->renderer->reset();
             $this->lastRenderedBody = null;
             $this->lastImageSignature = '';
+            $this->lastImageRows = [];
             $this->dirty = true;
             return;
         }
@@ -614,6 +618,7 @@ final class Program
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
+        $this->lastImageRows = [];
         $this->dirty = true;
 
         $produced = $req->onComplete !== null
@@ -664,6 +669,7 @@ final class Program
         $this->renderer->reset();
         $this->lastRenderedBody = null;
         $this->lastImageSignature = '';
+        $this->lastImageRows = [];
         $this->dirty = true;
         $this->dispatch(new ResumeMsg());
     }
@@ -798,31 +804,50 @@ final class Program
             [$body, $paints] = ImageOverlay::resolve($body, $images);
         }
         $signature = ImageOverlay::signature($paints);
-
-        // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
-        // cells under them are repainted. When the image layer changes — a scroll
-        // moves the posters, or a screen push/pop swaps them out — the text frame
-        // often does NOT repaint the (blank) cells the old images occupied, so
-        // they linger as ghosts under the new content. Force a full repaint
-        // (cursor-home + erase, which also clears the terminal's graphics) before
-        // redrawing whenever the image set changes and any image is involved.
         $imagesChanged = $signature !== $this->lastImageSignature;
-        if ($imagesChanged && ($paints !== [] || $this->lastImageSignature !== '')) {
-            $this->renderer->reset();
-            $this->lastRenderedBody = null;
-        }
-
         $bodyChanged = $body !== $this->lastRenderedBody;
-        $this->lastRenderedBody = $body;
 
+        // Paint the text frame first (a normal diff — repaints only changed lines).
         $this->renderer->render($body);
 
-        if (($bodyChanged || $imagesChanged) && $paints !== []) {
+        // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
+        // cells under them are repainted, and the text diff skips the blank cells
+        // an image's marker block leaves behind — so when the image layer changes
+        // (a scroll moves the posters, a screen push/pop swaps them), old images
+        // linger as ghosts. Rather than wipe the whole screen, surgically clear
+        // just the rows the OLD images covered (re-render those text lines, which
+        // clears the graphics on them), then repaint the current images on top.
+        if ($imagesChanged && $this->lastImageRows !== []) {
+            $this->writeOutput($this->clearImageRows($this->lastImageRows, explode("\n", $body)));
+        }
+        if (($imagesChanged || $bodyChanged) && $paints !== []) {
             $this->writeOutput(ImageOverlay::paint($paints));
         }
+
+        $this->lastRenderedBody = $body;
         $this->lastImageSignature = $signature;
+        $this->lastImageRows = ImageOverlay::coveredRows($paints);
 
         $this->lastFrameDuration = microtime(true) - $frameStart;
+    }
+
+    /**
+     * Clear the cells previously occupied by graphics images by re-rendering
+     * their text rows from the current clean frame. Erasing + rewriting each row
+     * removes any graphics lingering on it without touching the rest of the
+     * screen (no full-screen wipe / flicker).
+     *
+     * @param array<int, true> $rows        1-based row indices to repaint
+     * @param list<string>     $cleanLines  the current frame's lines (markers blanked)
+     */
+    private function clearImageRows(array $rows, array $cleanLines): string
+    {
+        $out = '';
+        foreach (array_keys($rows) as $row) {
+            $out .= Ansi::cursorTo($row, 1) . Ansi::eraseLine() . ($cleanLines[$row - 1] ?? '');
+        }
+
+        return $out;
     }
 
     private function applyViewSideEffects(View $view): void

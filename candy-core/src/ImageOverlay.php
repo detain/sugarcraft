@@ -75,28 +75,29 @@ final class ImageOverlay
     }
 
     /**
-     * Resolve markers in a composed frame against their blobs.
+     * Resolve markers in a composed frame against their placements.
      *
      * Returns the cleaned body (markers replaced by spaces, safe to hand to the
-     * diff renderer) and the paint list — one `(row, col, bytes)` per marker
-     * that had a registered blob. Rows and cols are 1-based for {@see Ansi::cursorTo()}.
-     * Markers with no blob are still blanked (so a stale marker never shows as
-     * tofu) but produce no paint.
+     * diff renderer) and the paint list — one entry per marker that had a
+     * registered image, carrying the screen position (1-based, for
+     * {@see Ansi::cursorTo()}) plus the image bytes and its cell footprint (so
+     * the runtime can clear the cells it covers). Markers with no placement are
+     * still blanked (so a stale marker never shows as tofu) but produce no paint.
      *
-     * @param array<int, string> $blobs  image id → raw protocol bytes
-     * @return array{0: string, 1: list<array{row: int, col: int, bytes: string}>}
+     * @param array<int, ImagePlacement> $images  image id → placement
+     * @return array{0: string, 1: list<array{row: int, col: int, bytes: string, w: int, h: int}>}
      */
-    public static function resolve(string $frame, array $blobs): array
+    public static function resolve(string $frame, array $images): array
     {
         // Fast path: no images registered and no stray marker to blank.
-        if ($blobs === [] && !self::hasAnyMarker($frame)) {
+        if ($images === [] && !self::hasAnyMarker($frame)) {
             return [$frame, []];
         }
 
         $lines = explode("\n", $frame);
         $paints = [];
         foreach ($lines as $row => $line) {
-            $lines[$row] = self::resolveLine($line, $row + 1, $blobs, $paints);
+            $lines[$row] = self::resolveLine($line, $row + 1, $images, $paints);
         }
 
         return [implode("\n", $lines), $paints];
@@ -104,12 +105,12 @@ final class ImageOverlay
 
     /**
      * Walk one line, counting visible columns past ANSI escapes, turning any
-     * marker into a paint (when a blob exists) and blanking its cell.
+     * marker into a paint (when an image exists) and blanking its cell.
      *
-     * @param array<int, string>                                  $blobs
-     * @param list<array{row: int, col: int, bytes: string}>      $paints  appended to
+     * @param array<int, ImagePlacement>                                          $images
+     * @param list<array{row: int, col: int, bytes: string, w: int, h: int}>      $paints  appended to
      */
-    private static function resolveLine(string $line, int $row, array $blobs, array &$paints): string
+    private static function resolveLine(string $line, int $row, array $images, array &$paints): string
     {
         $len = strlen($line);
         $col = 0;
@@ -131,8 +132,15 @@ final class ImageOverlay
 
             $id = $cp - self::MARKER_BASE;
             if ($id >= 0 && $id < self::MAX_IMAGES) {
-                if (isset($blobs[$id])) {
-                    $paints[] = ['row' => $row, 'col' => $col + 1, 'bytes' => $blobs[$id]];
+                if (isset($images[$id])) {
+                    $placement = $images[$id];
+                    $paints[] = [
+                        'row' => $row,
+                        'col' => $col + 1,
+                        'bytes' => $placement->bytes,
+                        'w' => $placement->widthCells,
+                        'h' => $placement->heightCells,
+                    ];
                 }
                 $out .= ' '; // occupy the cell with a real space
                 $col += 1;
@@ -151,7 +159,7 @@ final class ImageOverlay
      * out of the way afterwards so a subsequent text diff doesn't append at an
      * image's origin.
      *
-     * @param list<array{row: int, col: int, bytes: string}> $paints
+     * @param list<array{row: int, col: int, bytes: string, w: int, h: int}> $paints
      */
     public static function paint(array $paints): string
     {
@@ -168,19 +176,41 @@ final class ImageOverlay
     }
 
     /**
-     * A stable signature of a paint list — same positions + same blobs → same
-     * string. Lets a caller skip re-emitting identical images frame to frame.
+     * A stable signature of a paint list — same positions + footprints + blobs →
+     * same string. Lets a caller skip re-emitting identical images frame to frame.
      *
-     * @param list<array{row: int, col: int, bytes: string}> $paints
+     * @param list<array{row: int, col: int, bytes: string, w: int, h: int}> $paints
      */
     public static function signature(array $paints): string
     {
         $parts = [];
         foreach ($paints as $p) {
-            $parts[] = $p['row'] . ':' . $p['col'] . ':' . crc32($p['bytes']);
+            $parts[] = $p['row'] . ':' . $p['col'] . ':' . $p['w'] . ':' . $p['h'] . ':' . crc32($p['bytes']);
         }
 
         return implode('|', $parts);
+    }
+
+    /**
+     * The set of 1-based screen rows covered by a paint list (each image spans
+     * its top row down through its cell height). Used to clear an image's cells
+     * when it moves or disappears.
+     *
+     * @param list<array{row: int, col: int, bytes: string, w: int, h: int}> $paints
+     * @return array<int, true>  row index → true
+     */
+    public static function coveredRows(array $paints): array
+    {
+        $rows = [];
+        foreach ($paints as $p) {
+            $top = $p['row'];
+            $bottom = $top + max(1, $p['h']);
+            for ($r = $top; $r < $bottom; $r++) {
+                $rows[$r] = true;
+            }
+        }
+
+        return $rows;
     }
 
     private static function hasAnyMarker(string $frame): bool
