@@ -237,6 +237,20 @@ final class Program
             }
         });
 
+        // Paint the initial frame synchronously, before the loop starts, so the
+        // first view is on screen immediately rather than one render-tick later.
+        // This also makes startup deterministic: a program that quits almost
+        // immediately (a fast init Cmd, or a short test timer) still emits its
+        // first frame instead of racing the first periodic tick — previously a
+        // too-early quit on a slow host could write only the setup/teardown
+        // terminal escapes and no frame at all. ($this->running is guaranteed
+        // true here — the early-return guard above already handled a quit during
+        // the initial dispatches.)
+        if ($this->dirty) {
+            $this->renderFrame();
+            $this->dirty = false;
+        }
+
         $this->loop->run();
 
         $this->loop->cancelTimer($tickTimer);
