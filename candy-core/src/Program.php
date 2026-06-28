@@ -494,10 +494,19 @@ final class Program
                     $this->dispatch($resolvedMsg);
                 }
             })->otherwise(function (\Throwable $e): void {
-                // Dispatch ExceptionMsg for backward compat and also
-                // invoke the user-configured exception handler.
+                // Surface the async failure as an ExceptionMsg (models can react /
+                // quit) and run the user-configured exception handler.
                 $this->dispatch(new ExceptionMsg($e));
-                ($this->exceptionHandler)($e);
+                // The handler may rethrow — the DEFAULT one does (fail-fast). But
+                // we're inside a promise callback, so a rethrow can't crash the
+                // program; it would only resurface as a noisy "Unhandled promise
+                // rejection". The error is already surfaced above, so swallow the
+                // rethrow here to keep that contract without the noise.
+                try {
+                    ($this->exceptionHandler)($e);
+                } catch (\Throwable) {
+                    // Intentionally swallowed — see comment above.
+                }
             });
             return;
         }
