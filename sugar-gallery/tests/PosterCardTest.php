@@ -161,7 +161,8 @@ final class PosterCardTest extends TestCase
     public function testImageModeMarkerResolvesToAPaintInstruction(): void
     {
         $card = (new PosterCard('1', 'Movie'))->withImage('BYTES', 3);
-        [$body, $paints] = \SugarCraft\Core\ImageOverlay::resolve($card->render(false, 14, 9), [3 => 'BYTES']);
+        $images = [3 => new \SugarCraft\Core\ImagePlacement('BYTES', 14, 9)];
+        [$body, $paints] = \SugarCraft\Core\ImageOverlay::resolve($card->render(false, 14, 9), $images);
 
         self::assertCount(1, $paints);
         self::assertSame('BYTES', $paints[0]['bytes']);
