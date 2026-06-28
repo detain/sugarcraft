@@ -330,7 +330,11 @@ final class FfmpegDecoderTest extends TestCase
         $joined = implode(' ', $cmd);
         $this->assertStringContainsString('-f rawvideo', $joined);
         $this->assertStringContainsString('-pix_fmt rgb24', $joined);
-        $this->assertStringContainsString('fps=25,scale=100:60:flags=bilinear', $joined);
+        // Aspect-preserving fit + centred pad to the exact frame size.
+        $this->assertStringContainsString(
+            'fps=25,scale=100:60:force_original_aspect_ratio=decrease:flags=bilinear,pad=100:60:(ow-iw)/2:(oh-ih)/2',
+            $joined,
+        );
         $this->assertSame('-', $cmd[array_key_last($cmd)], 'output goes to the stdout pipe (-)');
     }
 
