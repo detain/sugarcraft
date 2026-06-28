@@ -97,11 +97,15 @@ final class GraphicsRenderer implements FrameRenderer
         return match ($this->mode) {
             Mode::Iterm2 => new Iterm2Renderer(),
             Mode::Kitty  => new KittyRenderer(),
+            // `--scale=max` makes chafa upscale the frame to fill the cell box
+            // (aspect-preserving) instead of drawing it at native pixel size —
+            // chafa's `--exact-size=auto` otherwise renders sixel 1:1 when the
+            // frame is smaller than the on-screen area, leaving the video tiny.
             // `--polite on` inhibits chafa's cursor-hide / sixel-mode toggles so the
             // output is a bare sixel DCS blob — no per-frame flicker, and it embeds
             // cleanly inside the surrounding TEA frame.
             Mode::Sixel  => ChafaRenderer::available()
-                ? new ChafaRenderer(['--polite', 'on'], 'sixels')
+                ? new ChafaRenderer(['--scale=max', '--polite', 'on'], 'sixels')
                 : new SixelRenderer(Dither::FloydSteinberg, 256, $this->cellPxW, $this->cellPxH),
             default => throw new \InvalidArgumentException(
                 "GraphicsRenderer does not support mode {$this->mode->value}"
