@@ -26,19 +26,21 @@ final class DecoderFactory
      * @param float $fps Target frames per second
      * @param Mode|null $mode Rendering mode (null = HalfBlock for backward compatibility)
      * @param float $startSec Seconds to seek into the source before the first frame (0 = start)
+     * @param int $cellPxW Pixel width of a terminal cell (graphics modes decode at cells·cellPx)
+     * @param int $cellPxH Pixel height of a terminal cell
      * @return Decoder
      */
-    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0): Decoder
+    public static function create(string $source, int $cellsW, int $cellsH, float $fps, ?Mode $mode = null, float $startSec = 0.0, int $cellPxW = 10, int $cellPxH = 20): Decoder
     {
         $isGif = preg_match('/\.gif$/i', $source) === 1;
 
         if ($isGif) {
-            $decoder = new GifDecoder();
+            $decoder = new GifDecoder($cellPxW, $cellPxH);
         } elseif (Probe::hasFFmpeg()) {
-            $decoder = new FfmpegDecoder();
+            $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
         } else {
             // Fallback to GIF decoder — will fail gracefully on non-GIF sources
-            $decoder = new GifDecoder();
+            $decoder = new GifDecoder($cellPxW, $cellPxH);
         }
 
         $decoder->open($source, $cellsW, $cellsH, $fps, $mode, $startSec);

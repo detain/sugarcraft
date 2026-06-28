@@ -161,6 +161,54 @@ final class PlayerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Cell pixel geometry (graphics-mode decode/render resolution)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox Player::openForTest stores the cellPxW/cellPxH it was given
+     *
+     * Graphics modes decode at cells·cellPx; the Player threads the cell pixel
+     * box into every decoder/renderer rebuild, exposing it as public readonly
+     * properties.
+     */
+    public function testOpenForTestStoresCellPxGeometry(): void
+    {
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 30.0, cellPxW: 8, cellPxH: 16);
+
+        $this->assertSame(8, $player->cellPxW);
+        $this->assertSame(16, $player->cellPxH);
+    }
+
+    /**
+     * @testdox the default cell pixel box is 10x20 when no cellPx args are passed
+     */
+    public function testOpenForTestDefaultCellPxGeometry(): void
+    {
+        $player = Player::openForTest($this->makeFakeDecoder(3), 30.0);
+
+        $this->assertSame(10, $player->cellPxW);
+        $this->assertSame(20, $player->cellPxH);
+    }
+
+    /**
+     * @testdox the cell pixel box survives a withSeek() rebuild
+     *
+     * withSeek() rebuilds the Player (and its decoder/renderer) — the explicit
+     * cellPx geometry must be carried over, not reset to the defaults.
+     */
+    public function testCellPxGeometrySurvivesSeek(): void
+    {
+        $decoder = $this->makeFakeDecoder(20);
+        $player = Player::openForTest($decoder, 30.0, totalFrames: 20, cellPxW: 8, cellPxH: 16);
+
+        $seeked = $player->withSeek(5);
+
+        $this->assertSame(8, $seeked->cellPxW, 'cellPxW must survive the seek rebuild');
+        $this->assertSame(16, $seeked->cellPxH, 'cellPxH must survive the seek rebuild');
+    }
+
+    // -------------------------------------------------------------------------
     // Space key toggles pause
     // -------------------------------------------------------------------------
 

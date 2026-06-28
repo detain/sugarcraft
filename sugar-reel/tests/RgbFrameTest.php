@@ -148,4 +148,92 @@ final class RgbFrameTest extends TestCase
         $this->assertNotNull($img);
         imagedestroy($img);
     }
+
+    // -------------------------------------------------------------------------
+    // PNG-frame payload ($png !== null) — the graphics-protocol decode path
+    // -------------------------------------------------------------------------
+
+    /**
+     * Build a real PNG blob at runtime via GD (no committed binary fixture).
+     */
+    private static function makePng(int $w, int $h): string
+    {
+        $img = \imagecreatetruecolor($w, $h);
+        \imagefilledrectangle($img, 0, 0, $w - 1, $h - 1, (\imagecolorallocate($img, 12, 34, 56)));
+        \ob_start();
+        \imagepng($img);
+        $bytes = (string) \ob_get_clean();
+        \imagedestroy($img);
+
+        return $bytes;
+    }
+
+    /**
+     * @testdox a PNG-payload frame stores $png and leaves $bytes empty
+     */
+    public function testPngFrameStoresPngAndEmptyBytes(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        $png = self::makePng(4, 2);
+        $frame = new RgbFrame('', 4, 2, $png);
+
+        $this->assertSame('', $frame->bytes);
+        $this->assertSame(4, $frame->w);
+        $this->assertSame(2, $frame->h);
+        $this->assertSame($png, $frame->png);
+    }
+
+    /**
+     * @testdox toGd() on a PNG-payload frame decodes the PNG to a GdImage of the PNG's dimensions
+     *
+     * A graphics-mode decoder fills $png with a full-resolution PNG; toGd() must
+     * decode it via imagecreatefromstring (and the recovered image dimensions
+     * come from the PNG itself, independent of the $w/$h hints).
+     */
+    public function testToGdDecodesPngPayload(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        $png = self::makePng(4, 2);
+        // Pass deliberately "wrong" w/h hints to prove toGd() trusts the PNG.
+        $frame = new RgbFrame('', 99, 99, $png);
+
+        $img = $frame->toGd();
+        $this->assertInstanceOf(\GdImage::class, $img);
+        $this->assertSame(4, imagesx($img));
+        $this->assertSame(2, imagesy($img));
+
+        // The painted colour round-trips through the PNG decode.
+        $rgb = imagecolorat($img, 0, 0);
+        $this->assertSame(12, ($rgb >> 16) & 0xff);
+        $this->assertSame(34, ($rgb >> 8) & 0xff);
+        $this->assertSame(56, $rgb & 0xff);
+
+        imagedestroy($img);
+    }
+
+    /**
+     * @testdox toGd() throws RuntimeException when the PNG payload is undecodable
+     */
+    public function testToGdThrowsOnInvalidPng(): void
+    {
+        $frame = new RgbFrame('', 1, 1, 'not-a-png');
+
+        // imagecreatefromstring() emits a benign PHP warning on undecodable data
+        // before returning false; swallow only that diagnostic so the assertion
+        // can focus on the RuntimeException the production code then throws.
+        set_error_handler(static fn(): bool => true, E_WARNING);
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('Failed to decode PNG frame');
+            $frame->toGd();
+        } finally {
+            restore_error_handler();
+        }
+    }
 }

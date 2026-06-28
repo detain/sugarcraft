@@ -15,12 +15,48 @@ use SugarCraft\Mosaic\Lang;
  */
 final class ChafaRenderer implements Renderer
 {
+    /** Memoised result of {@see available()} (null = not probed yet). */
+    private static ?bool $available = null;
+
     /**
-     * @param list<string> $options  Additional chafa CLI options (e.g. ['--colors=256', '--work=n'])
+     * @param list<string> $options Additional chafa CLI options (e.g. ['--colors=256', '--work=n'])
+     * @param string|null  $format  chafa output format: 'sixels', 'iterm', 'kitty', or
+     *                              'symbols'. null leaves chafa's own default (symbols)
+     *                              — the high-quality character-art mode. Pass 'sixels'
+     *                              to drive a fast, full-quality sixel encode in C
+     *                              (far faster than the pure-PHP {@see SixelRenderer}).
      */
     public function __construct(
         private readonly array $options = [],
+        private readonly ?string $format = null,
     ) {}
+
+    /**
+     * Whether the `chafa` binary is on PATH. Probed once per process (the result
+     * is memoised) so a per-frame video render does not spawn a probe each frame.
+     */
+    public static function available(): bool
+    {
+        if (self::$available !== null) {
+            return self::$available;
+        }
+
+        $proc = @proc_open(
+            ['chafa', '--version'],
+            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        if (!is_resource($proc)) {
+            return self::$available = false;
+        }
+        foreach ($pipes as $pipe) {
+            if (is_resource($pipe)) {
+                fclose($pipe);
+            }
+        }
+
+        return self::$available = (proc_close($proc) === 0);
+    }
 
     public function render(ImageSource $image, int $width, ?int $height = null): string
     {
@@ -42,7 +78,11 @@ final class ChafaRenderer implements Renderer
         }
 
         $size = "{$width}x{$effectiveHeight}";
-        $cmd = array_merge(['chafa', '--size=' . $size], $this->options, []);
+        $cmd = ['chafa', '--size=' . $size];
+        if ($this->format !== null) {
+            $cmd[] = '--format=' . $this->format;
+        }
+        $cmd = array_merge($cmd, $this->options);
 
         $tempFile = tempnam(sys_get_temp_dir(), 'chafa');
         if ($tempFile === false) {

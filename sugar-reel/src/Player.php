@@ -69,6 +69,8 @@ final class Player implements Model
      * @param bool                        $loop         When true, restart from frame 0 at end instead of stopping
      * @param string                      $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
      * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs): AudioPlayer
+     * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
+     * @param int                         $cellPxH      Pixel height of a terminal cell
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -89,6 +91,8 @@ final class Player implements Model
         private readonly bool $loop,
         private readonly string $ramp = 'standard',
         private readonly ?\Closure $audioFactory = null,
+        public readonly int $cellPxW = 10,
+        public readonly int $cellPxH = 20,
     ) {
     }
 
@@ -105,8 +109,11 @@ final class Player implements Model
      * @param Mode       $mode         Rendering mode (decoder resolution matches it)
      * @param bool       $loop         Restart from the beginning at end-of-stream instead of stopping
      * @param string     $ramp         Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param int        $cellPxW      Pixel width of a terminal cell — graphics modes decode at
+     *                                 cells·cellPx for full resolution (caller probes it; 10×20 default)
+     * @param int        $cellPxH      Pixel height of a terminal cell
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard'): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): self
     {
         $source = VideoSource::probe($videoPath);
 
@@ -118,8 +125,9 @@ final class Player implements Model
             ? (int)round($source->duration * $fps) : 0;
 
         // Decoder resolution is keyed to the render mode (HalfBlock decodes at
-        // 2× cell height). Seek recreates the decoder with the current mode.
-        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode);
+        // 2× cell height; graphics modes at cells·cellPx). Seek recreates the
+        // decoder with the current mode and the same cell geometry.
+        $decoder = DecoderFactory::create($videoPath, $cellsW, $cellsH, $fps, $mode, 0.0, $cellPxW, $cellPxH);
 
         // Audio companion factory: creates AudioPlayer on demand. The factory
         // is threaded through the Player so tests can inject a spy subclass.
@@ -151,6 +159,8 @@ final class Player implements Model
             loop: $loop,
             ramp: $ramp,
             audioFactory: $audioFactory,
+            cellPxW: $cellPxW,
+            cellPxH: $cellPxH,
         );
     }
 
@@ -185,6 +195,8 @@ final class Player implements Model
         ?\Closure $audioFactory = null,
         ?AudioPlayer $audioPlayer = null,
         bool $paused = true,
+        int $cellPxW = 10,
+        int $cellPxH = 20,
     ): self {
         // Default factory when none supplied (produces a real AudioPlayer — fine
         // for openForTest since audio is not started in the paused initial state).
@@ -210,6 +222,8 @@ final class Player implements Model
             loop: $loop,
             ramp: $ramp,
             audioFactory: $factory,
+            cellPxW: $cellPxW,
+            cellPxH: $cellPxH,
         );
     }
 
@@ -808,7 +822,7 @@ final class Player implements Model
      */
     private function renderDirect(RgbFrame $frame): string
     {
-        $renderer = RendererFactory::create($this->mode, $this->ramp);
+        $renderer = RendererFactory::create($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH);
         return $renderer->render($frame, $this->mode);
     }
 
@@ -858,7 +872,7 @@ final class Player implements Model
             $decoder = $this->decoder;
         } else {
             $this->decoder->close();                 // F21: never leak the old ffmpeg process
-            $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode);
+            $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, 0.0, $this->cellPxW, $this->cellPxH);
         }
         $frame = null;
         for ($i = 0; $i <= $frameIndex; $i++) {
@@ -919,6 +933,8 @@ final class Player implements Model
                 loop: $this->loop,
                 ramp: $this->ramp,
                 audioFactory: $this->audioFactory,
+                cellPxW: $this->cellPxW,
+                cellPxH: $this->cellPxH,
             );
         }
 
@@ -959,6 +975,8 @@ final class Player implements Model
             loop: $this->loop,
             ramp: $this->ramp,
             audioFactory: $this->audioFactory,
+            cellPxW: $this->cellPxW,
+            cellPxH: $this->cellPxH,
         );
     }
 
@@ -1035,7 +1053,7 @@ final class Player implements Model
         if ($this->videoPath === '' || $this->videoPath === '/fake') {
             return null;
         }
-        $decoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec));
+        $decoder = DecoderFactory::create($this->videoPath, $this->cellsW, $this->cellsH, $this->fps, $this->mode, max(0.0, $sec), $this->cellPxW, $this->cellPxH);
         $frame = $decoder->next(); // with -ss, the first frame is at/near $sec
         $decoder->close();
 
@@ -1071,7 +1089,7 @@ final class Player implements Model
         }
 
         $this->decoder->close(); // never leak the old ffmpeg process
-        $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec));
+        $decoder = DecoderFactory::create($this->videoPath, $cellsW, $cellsH, $this->fps, $mode, max(0.0, $startSec), $this->cellPxW, $this->cellPxH);
         $frame = $decoder->next(); // with -ss, the first frame IS the seek target
 
         return [$decoder, $frame];
@@ -1107,6 +1125,8 @@ final class Player implements Model
             loop: $this->loop,
             ramp: $this->ramp,
             audioFactory: $this->audioFactory,
+            cellPxW: $this->cellPxW,
+            cellPxH: $this->cellPxH,
         );
     }
 
@@ -1138,6 +1158,8 @@ final class Player implements Model
             loop: $changes['loop'] ?? $this->loop,
             ramp: $this->ramp,
             audioFactory: $this->audioFactory,
+            cellPxW: $this->cellPxW,
+            cellPxH: $this->cellPxH,
         );
     }
 

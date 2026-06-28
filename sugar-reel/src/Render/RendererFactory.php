@@ -89,9 +89,12 @@ final class RendererFactory
     /**
      * Return the renderer for the given explicit mode.
      *
-     * @param string $ramp Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param string $ramp    Luma ramp name: 'minimal', 'standard', 'dense'
+     * @param int    $cellPxW Pixel width of a terminal cell (graphics modes only — used to
+     *                        recover the cell footprint and size the sixel canvas)
+     * @param int    $cellPxH Pixel height of a terminal cell
      */
-    public static function create(Mode $mode, string $ramp = 'standard'): FrameRenderer
+    public static function create(Mode $mode, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): FrameRenderer
     {
         return match ($mode) {
             Mode::Ascii     => new AsciiRenderer($ramp),
@@ -99,9 +102,9 @@ final class RendererFactory
             Mode::TrueColor => new AsciiRenderer($ramp),
             Mode::HalfBlock => new HalfBlockRenderer(),
             Mode::QuarterBlock => new QuarterBlockRenderer(),
-            Mode::Sixel     => new GraphicsRenderer(Mode::Sixel),
-            Mode::Kitty     => new GraphicsRenderer(Mode::Kitty),
-            Mode::Iterm2    => new GraphicsRenderer(Mode::Iterm2),
+            Mode::Sixel     => new GraphicsRenderer(Mode::Sixel, $cellPxW, $cellPxH),
+            Mode::Kitty     => new GraphicsRenderer(Mode::Kitty, $cellPxW, $cellPxH),
+            Mode::Iterm2    => new GraphicsRenderer(Mode::Iterm2, $cellPxW, $cellPxH),
         };
     }
 }
