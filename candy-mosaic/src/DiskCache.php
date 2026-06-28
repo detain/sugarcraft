@@ -56,8 +56,10 @@ final class DiskCache
      *     v2-era sixel blobs were unparseable and printed as text.
      * v4: iTerm2 OSC 1337 fixed — base64 now follows `File=<args>:`, and the PNG
      *     re-encode no longer leaks to stdout; v3 iterm2 blobs were malformed.
+     * v5: quarter-block renderer rewritten to real 2-colour sub-cell glyphs (was a
+     *     fake shade renderer with fg==bg, i.e. solid blocks).
      */
-    private const FORMAT_VERSION = 4;
+    private const FORMAT_VERSION = 5;
 
     /**
      * @param string $dir         Directory that holds the cache entries
