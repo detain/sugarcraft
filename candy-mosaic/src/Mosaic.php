@@ -41,6 +41,14 @@ use SugarCraft\Palette\Probe\Capability as PaletteCapability;
  */
 final class Mosaic
 {
+    /**
+     * Approximate height:width ratio of a terminal cell (cells are ~twice as
+     * tall as they are wide in a typical monospace font). Used by cover scaling
+     * to crop to the cell box's true display aspect rather than treating cells
+     * as square.
+     */
+    private const CELL_ASPECT = 2.0;
+
     public function __construct(
         private readonly Renderer $renderer,
         private readonly Capability $capability,
@@ -353,9 +361,13 @@ final class Mosaic
             }
 
             $image = $this->applyScale($image, $w, $h);
-            // After scaling, the image fits exactly — no further aspect-ratio
-            // derivation is needed; pass the computed dimensions directly.
-            $h = null;
+            // Cover modes (Fill/Crop) keep their cropped full-resolution image and
+            // render exactly $w×$h cells, so the explicit height is preserved. The
+            // other modes resized the image to fit, so re-derive height from its
+            // (now-final) aspect ratio.
+            if ($this->scale !== Scale::Fill && $this->scale !== Scale::Crop) {
+                $h = null;
+            }
         }
 
         return $this->renderer->render($image, $w, $h);
@@ -366,11 +378,17 @@ final class Mosaic
      */
     private function applyScale(ImageSource $image, int $cellW, int $cellH): ImageSource
     {
-        if ($cellH === null) {
-            $cellH = (int) round($cellW / $image->aspectRatio());
-        }
+        $cover = $this->scale === Scale::Fill || $this->scale === Scale::Crop;
 
-        $dims = $this->scale->computeDimensions($image->width, $image->height, $cellW, $cellH);
+        // A terminal cell is about CELL_ASPECT× taller than it is wide. Cover
+        // modes therefore crop to the cell box's *display* aspect (cellW : cellH·
+        // CELL_ASPECT), not to cellW:cellH — otherwise a portrait poster is
+        // squashed into a near-square crop. The renderer's own sub-pixel grid
+        // (half-block cellH·2, quarter-block cellH·2, sixel cellH·fontH) lines up
+        // with this, so the result is undistorted.
+        $cropCellH = $cover ? (int) round($cellH * self::CELL_ASPECT) : $cellH;
+
+        $dims = $this->scale->computeDimensions($image->width, $image->height, $cellW, $cropCellH);
 
         // No transformation needed — return original.
         if ($dims['srcX'] === 0 && $dims['srcY'] === 0
@@ -380,13 +398,18 @@ final class Mosaic
             return $image;
         }
 
-        // Apply crop first (if any), then resize to destination dimensions.
+        // Apply crop first (if any).
         $img = $image;
         if ($dims['srcW'] < $image->width || $dims['srcH'] < $image->height) {
             $img = $img->crop($dims['srcX'], $dims['srcY'], $dims['srcW'], $dims['srcH']);
         }
 
-        if ($dims['dstW'] !== $img->width || $dims['dstH'] !== $img->height) {
+        // Cover modes keep FULL resolution: every renderer downsamples the image
+        // to its own pixel grid, so pre-resizing to the cell count here would
+        // throw away all detail and leave each renderer upscaling a tiny image
+        // (the reason posters looked like coarse blocks in every mode). The
+        // non-cover modes still resize as the scale dictates.
+        if (!$cover && ($dims['dstW'] !== $img->width || $dims['dstH'] !== $img->height)) {
             $img = $img->resize($dims['dstW'], $dims['dstH']);
         }
 

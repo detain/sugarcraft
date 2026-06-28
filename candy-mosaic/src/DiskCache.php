@@ -58,8 +58,11 @@ final class DiskCache
      *     re-encode no longer leaks to stdout; v3 iterm2 blobs were malformed.
      * v5: quarter-block renderer rewritten to real 2-colour sub-cell glyphs (was a
      *     fake shade renderer with fg==bg, i.e. solid blocks).
+     * v6: cover scaling (Fill/Crop) no longer pre-downscales the image to the cell
+     *     count and crops to the cell box's true display aspect — every renderer
+     *     now downsamples from full resolution, so all cached bytes changed.
      */
-    private const FORMAT_VERSION = 5;
+    private const FORMAT_VERSION = 6;
 
     /**
      * @param string $dir         Directory that holds the cache entries
