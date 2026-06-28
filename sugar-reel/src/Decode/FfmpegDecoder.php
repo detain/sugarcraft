@@ -40,6 +40,7 @@ final class FfmpegDecoder implements Decoder
     private int $cellsW = 0;
     private int $cellsH = 0;
     private int $frameBytes = 0;
+    private int $frameW = 0;
     private int $frameH = 0;
 
     /**
@@ -50,11 +51,13 @@ final class FfmpegDecoder implements Decoder
         $this->cellsW = $cellsW;
         $this->cellsH = $cellsH;
 
-        // Scale the frame height by rowsPerCell: HalfBlock packs 2 source rows
-        // per cell (cellsH*2); the 1-row modes scale to cellsH. $mode === null
-        // defaults to 2 (HalfBlock), matching DecoderFactory's null-default.
+        // Scale each axis by the mode's source-pixels-per-cell: HalfBlock packs
+        // 2 rows per cell (cellsH*2); QuarterBlock packs 2 rows AND 2 cols per
+        // cell (cellsW*2 × cellsH*2); the 1:1 modes use cellsW × cellsH. $mode ===
+        // null defaults to HalfBlock (2 rows, 1 col), matching DecoderFactory.
+        $this->frameW = $cellsW * ($mode?->colsPerCell() ?? 1);
         $this->frameH = $cellsH * ($mode?->rowsPerCell() ?? 2);
-        $this->frameBytes = $cellsW * $this->frameH * 3;
+        $this->frameBytes = $this->frameW * $this->frameH * 3;
 
         $ffmpegPath = Probe::ffmpeg();
         if ($ffmpegPath === null) {
@@ -63,7 +66,7 @@ final class FfmpegDecoder implements Decoder
 
         // Build command as array — never a shell string.
         // No escaping needed; proc_open passes args directly with no shell.
-        $cmd = self::buildCommand($ffmpegPath, $source, $this->cellsW, $this->frameH, $fps, $startSec);
+        $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec);
 
         // stderr goes to a file sink (the OS null device), never a pipe — an
         // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
@@ -182,7 +185,7 @@ final class FfmpegDecoder implements Decoder
             return null;
         }
 
-        return new RgbFrame($frameBytes, $this->cellsW, $this->frameH);
+        return new RgbFrame($frameBytes, $this->frameW, $this->frameH);
     }
 
     /**

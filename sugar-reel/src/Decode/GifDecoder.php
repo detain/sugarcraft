@@ -46,9 +46,14 @@ final class GifDecoder implements Decoder
         $this->cellsH = $cellsH;
         $this->frameIndex = 0;
 
-        // Decode the GIF using candy-flip's pure-PHP decoder. Scale the cell-grid
-        // height by rowsPerCell so the frame pixel resolution matches the mode.
-        $this->frames = FlipDecoder::decode($source, $cellsW, $cellsH * ($mode?->rowsPerCell() ?? 2));
+        // Decode the GIF using candy-flip's pure-PHP decoder. Scale the cell grid
+        // by the mode's source-pixels-per-cell (QuarterBlock packs 2 cols AND 2
+        // rows; HalfBlock 2 rows; the rest 1:1) so the frame resolution matches.
+        $this->frames = FlipDecoder::decode(
+            $source,
+            $cellsW * ($mode?->colsPerCell() ?? 1),
+            $cellsH * ($mode?->rowsPerCell() ?? 2),
+        );
 
         // Best-effort time seek: all GIF frames are already in memory, so advance
         // the cursor to the frame at $startSec (clamped). GIF timing is per-frame,
