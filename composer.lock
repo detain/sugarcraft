@@ -5629,12 +5629,12 @@
             "dist": {
                 "type": "path",
                 "url": "sugar-crush",
-                "reference": "e504a172a18ebede06385adc2123d93b5c9de458"
+                "reference": "20861e27ba5843f769aeb1efee87bf4b96479f80"
             },
             "require": {
                 "aws/aws-sdk-php": "^3.300",
                 "google/cloud-ai-platform": "^1.0",
-                "guzzlehttp/guzzle": "^7.9",
+                "guzzlehttp/guzzle": "^7.12.1",
                 "openai-php/client": "^0.10",
                 "php": "^8.3",
                 "react/promise": "^3.3",
