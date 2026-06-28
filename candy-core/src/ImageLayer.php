@@ -17,7 +17,7 @@ namespace SugarCraft\Core;
  * // wherever an image should sit, reserve its box and stash the bytes:
  * $cell = $mosaic->isInline() ? $blob : $layer->place($blob, $w, $h);
  * // …compose $cell into the frame like any other text…
- * return new View($frame, images: $layer->blobs());
+ * return new View($frame, images: $layer->placements());
  * ```
  *
  * Identical bytes register once (deduped by content hash), so the same image
