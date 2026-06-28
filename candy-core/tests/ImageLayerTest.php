@@ -7,10 +7,11 @@ namespace SugarCraft\Core\Tests;
 use PHPUnit\Framework\TestCase;
 use SugarCraft\Core\ImageLayer;
 use SugarCraft\Core\ImageOverlay;
+use SugarCraft\Core\ImagePlacement;
 
 final class ImageLayerTest extends TestCase
 {
-    public function testPlaceReturnsAMarkerBlockAndRegistersTheBytes(): void
+    public function testPlaceReturnsAMarkerBlockAndRegistersThePlacement(): void
     {
         $layer = new ImageLayer();
         $block = $layer->place('SIXELBYTES', 6, 3);
@@ -18,7 +19,13 @@ final class ImageLayerTest extends TestCase
         self::assertCount(3, explode("\n", $block));
         self::assertStringContainsString(ImageOverlay::marker(0), $block);
         self::assertStringNotContainsString('SIXELBYTES', $block, 'bytes stay out of the frame');
-        self::assertSame([0 => 'SIXELBYTES'], $layer->blobs());
+
+        $placements = $layer->placements();
+        self::assertArrayHasKey(0, $placements);
+        self::assertInstanceOf(ImagePlacement::class, $placements[0]);
+        self::assertSame('SIXELBYTES', $placements[0]->bytes);
+        self::assertSame(6, $placements[0]->widthCells);
+        self::assertSame(3, $placements[0]->heightCells);
         self::assertFalse($layer->isEmpty());
     }
 
@@ -29,7 +36,7 @@ final class ImageLayerTest extends TestCase
         $b = $layer->place('SAME', 4, 2);
 
         self::assertSame($a, $b, 'same content → same id → same block');
-        self::assertCount(1, $layer->blobs());
+        self::assertCount(1, $layer->placements());
     }
 
     public function testDistinctBytesGetDistinctIdsAndPaints(): void
@@ -39,10 +46,10 @@ final class ImageLayerTest extends TestCase
         $second = $layer->place('TWO', 4, 1);
 
         self::assertNotSame($first, $second);
-        self::assertSame([0 => 'ONE', 1 => 'TWO'], $layer->blobs());
+        self::assertSame(['ONE', 'TWO'], array_map(static fn (ImagePlacement $p): string => $p->bytes, $layer->placements()));
 
-        // Both markers resolve against the layer's blob map.
-        [, $paints] = ImageOverlay::resolve($first . "\n" . $second, $layer->blobs());
+        // Both markers resolve against the layer's placements.
+        [, $paints] = ImageOverlay::resolve($first . "\n" . $second, $layer->placements());
         self::assertSame('ONE', $paints[0]['bytes']);
         self::assertSame('TWO', $paints[1]['bytes']);
     }
@@ -50,6 +57,6 @@ final class ImageLayerTest extends TestCase
     public function testEmptyLayerByDefault(): void
     {
         self::assertTrue((new ImageLayer())->isEmpty());
-        self::assertSame([], (new ImageLayer())->blobs());
+        self::assertSame([], (new ImageLayer())->placements());
     }
 }

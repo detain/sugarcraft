@@ -30,8 +30,8 @@ final class ImageLayer
     /** @var array<string, int> content hash → image id. */
     private array $idByDigest = [];
 
-    /** @var array<int, string> image id → raw protocol bytes. */
-    private array $blobById = [];
+    /** @var array<int, ImagePlacement> image id → bytes + cell footprint. */
+    private array $placementById = [];
 
     /**
      * Register $bytes and return a $width × $height marker block to drop in the
@@ -47,26 +47,27 @@ final class ImageLayer
             return self::blankBlock($width, $height);
         }
 
-        $this->blobById[$id] = $bytes;
+        $this->placementById[$id] = new ImagePlacement($bytes, $width, $height);
 
         return ImageOverlay::markerBlock($id, $width, $height);
     }
 
     /**
-     * The accumulated image layer (id → bytes) to hand to a {@see View}. The
-     * runtime paints only the markers a given frame actually contains, so
-     * over-registering (e.g. images scrolled out of view) is harmless.
+     * The accumulated image layer (id → {@see ImagePlacement}) to hand to a
+     * {@see View}. The runtime paints only the markers a given frame actually
+     * contains, so over-registering (e.g. images scrolled out of view) is
+     * harmless.
      *
-     * @return array<int, string>
+     * @return array<int, ImagePlacement>
      */
-    public function blobs(): array
+    public function placements(): array
     {
-        return $this->blobById;
+        return $this->placementById;
     }
 
     public function isEmpty(): bool
     {
-        return $this->blobById === [];
+        return $this->placementById === [];
     }
 
     private static function blankBlock(int $width, int $height): string
