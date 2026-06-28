@@ -797,38 +797,32 @@ final class Program
         if ($images !== []) {
             [$body, $paints] = ImageOverlay::resolve($body, $images);
         }
+        $signature = ImageOverlay::signature($paints);
+
+        // Pixel-graphics images (sixel/kitty/iTerm2) stay on screen until the
+        // cells under them are repainted. When the image layer changes — a scroll
+        // moves the posters, or a screen push/pop swaps them out — the text frame
+        // often does NOT repaint the (blank) cells the old images occupied, so
+        // they linger as ghosts under the new content. Force a full repaint
+        // (cursor-home + erase, which also clears the terminal's graphics) before
+        // redrawing whenever the image set changes and any image is involved.
+        $imagesChanged = $signature !== $this->lastImageSignature;
+        if ($imagesChanged && ($paints !== [] || $this->lastImageSignature !== '')) {
+            $this->renderer->reset();
+            $this->lastRenderedBody = null;
+        }
 
         $bodyChanged = $body !== $this->lastRenderedBody;
         $this->lastRenderedBody = $body;
 
         $this->renderer->render($body);
-        $this->paintImageLayer($paints, $bodyChanged);
 
-        $this->lastFrameDuration = microtime(true) - $frameStart;
-    }
-
-    /**
-     * Paint the pixel-graphics image layer on top of the just-rendered text.
-     *
-     * Graphics blobs are re-emitted when the image set changed OR when the text
-     * frame changed — a text diff erases the cells it repaints, including any
-     * image pixels there, so an unchanged image still has to be redrawn over a
-     * changed frame. When neither changed, the images already on screen are
-     * left untouched (no flicker, no bandwidth) at idle.
-     *
-     * @param list<array{row: int, col: int, bytes: string}> $paints
-     */
-    private function paintImageLayer(array $paints, bool $bodyChanged): void
-    {
-        $signature = ImageOverlay::signature($paints);
-        if (!$bodyChanged && $signature === $this->lastImageSignature) {
-            return;
-        }
-
-        if ($paints !== []) {
+        if (($bodyChanged || $imagesChanged) && $paints !== []) {
             $this->writeOutput(ImageOverlay::paint($paints));
         }
         $this->lastImageSignature = $signature;
+
+        $this->lastFrameDuration = microtime(true) - $frameStart;
     }
 
     private function applyViewSideEffects(View $view): void
