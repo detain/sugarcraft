@@ -339,6 +339,41 @@ final class FfmpegDecoderTest extends TestCase
     }
 
     /**
+     * @testdox a letterbox box equal to the frame yields a single fit+pad (no extra scale)
+     */
+    public function testEqualLetterboxBoxStaysSingleStage(): void
+    {
+        // HalfBlock-style: padW/padH == frameW/frameH → one fit+pad, no trailing scale.
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 120, 72, 24.0, 0.0, false, 120, 72);
+
+        $vf = $cmd[array_search('-vf', $cmd, true) + 1];
+        $this->assertSame(
+            'fps=24,scale=120:72:force_original_aspect_ratio=decrease:flags=bilinear,pad=120:72:(ow-iw)/2:(oh-ih)/2',
+            $vf,
+        );
+        $this->assertSame(1, substr_count($vf, 'scale='), 'no second scale when the box matches the frame');
+    }
+
+    /**
+     * @testdox a differing letterbox box letterboxes then squashes to the frame grid (QuarterBlock aspect fix)
+     */
+    public function testDifferingLetterboxBoxAddsSquashScale(): void
+    {
+        // QuarterBlock 120x36: frame 240x72, but the display box is 240x144 (cellsW:2cellsH).
+        // The video is fitted+padded to 240x144 then squashed to 240x72; the cell grid
+        // stretches it back to true aspect, so the video no longer comes out half width.
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 240, 72, 24.0, 0.0, false, 240, 144);
+
+        $vf = $cmd[array_search('-vf', $cmd, true) + 1];
+        $this->assertStringContainsString(
+            'scale=240:144:force_original_aspect_ratio=decrease:flags=bilinear,pad=240:144:(ow-iw)/2:(oh-ih)/2',
+            $vf,
+        );
+        $this->assertStringEndsWith(',scale=240:72:flags=bilinear', $vf, 'final squash to the frame grid');
+        $this->assertSame(2, substr_count($vf, 'scale='), 'fit scale + final squash scale');
+    }
+
+    /**
      * @testdox a positive startSec adds a fast input seek (-ss) before -i
      */
     public function testStartSecAddsInputSeekBeforeInput(): void

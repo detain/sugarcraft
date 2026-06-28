@@ -44,6 +44,9 @@ final class FfmpegDecoder implements Decoder
     /** The 12-byte PNG IEND end-chunk (length 0 + "IEND" + fixed CRC) — every PNG ends with exactly these bytes. */
     private const PNG_IEND = "\x00\x00\x00\x00IEND\xae\x42\x60\x82";
 
+    /** A terminal cell is roughly twice as tall as it is wide — used to letterbox text-mode video to the true on-screen display aspect. */
+    private const CELL_ASPECT = 2;
+
     /** @var resource|\Process|null */
     private $process = null;
 
@@ -106,9 +109,25 @@ final class FfmpegDecoder implements Decoder
             throw new \RuntimeException('ffmpeg not found on this host');
         }
 
+        // Aspect-correct letterbox box. The on-screen display area for cellsW × cellsH
+        // cells has aspect cellsW : cellsH·CELL_ASPECT (cells are ~2× taller than wide).
+        // The video must be letterboxed to THAT aspect, not the raw frame-pixel aspect —
+        // they only coincide for HalfBlock. For QuarterBlock (cellsW·2 × cellsH·2) and the
+        // 1-px text modes the frame is squarer than the screen, so without this the video
+        // is squished horizontally (QuarterBlock came out ~half width). buildCommand
+        // letterboxes to (padW × padH) then squashes to the frame grid; the cell grid
+        // stretches it back to true aspect on screen. Graphics modes already encode the
+        // cell ratio via cellPx, so they letterbox to the frame directly.
+        if ($this->graphics) {
+            [$padW, $padH] = [$this->frameW, $this->frameH];
+        } else {
+            $padW = $this->frameW;
+            $padH = max(1, (int) round($this->frameW * $cellsH * self::CELL_ASPECT / max(1, $cellsW)));
+        }
+
         // Build command as array — never a shell string.
         // No escaping needed; proc_open passes args directly with no shell.
-        $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec, $this->graphics);
+        $cmd = self::buildCommand($ffmpegPath, $source, $this->frameW, $this->frameH, $fps, $startSec, $this->graphics, $padW, $padH);
 
         // stderr goes to a file sink (the OS null device), never a pipe — an
         // unread stderr pipe deadlocks ffmpeg once its ~64KB buffer fills.
@@ -155,10 +174,20 @@ final class FfmpegDecoder implements Decoder
      * (fast, full resolution), and the reader splits the stream on the PNG IEND
      * marker. `-compression_level 1` keeps the per-frame encode cheap.
      *
+     * $padW × $padH is the aspect-correct LETTERBOX box (the on-screen display
+     * aspect). When it differs from the frame grid (QuarterBlock, 1-px text modes)
+     * the video is fitted+padded to that box and then squashed to $frameW×$frameH,
+     * so the cell grid stretches it back to true aspect on screen. When it equals
+     * the frame (HalfBlock, graphics) it collapses to the original single fit+pad.
+     * Defaults to the frame size, preserving the old behaviour for callers that
+     * don't pass it.
+     *
      * @return list<string>
      */
-    public static function buildCommand(string $ffmpegPath, string $source, int $frameW, int $frameH, float $fps, float $startSec = 0.0, bool $graphics = false): array
+    public static function buildCommand(string $ffmpegPath, string $source, int $frameW, int $frameH, float $fps, float $startSec = 0.0, bool $graphics = false, ?int $padW = null, ?int $padH = null): array
     {
+        $padW ??= $frameW;
+        $padH ??= $frameH;
         $cmd = [$ffmpegPath, '-hide_banner', '-loglevel', 'error'];
 
         if (self::isNetworkSource($source)) {
@@ -185,24 +214,25 @@ final class FfmpegDecoder implements Decoder
             array_push($cmd, '-f', 'rawvideo', '-pix_fmt', 'rgb24');
         }
 
-        array_push(
-            $cmd,
-            // Preserve the source aspect ratio: scale to FIT within the frame
-            // (force_original_aspect_ratio=decrease) then pad to the exact frame
-            // size, centring the image with black bars. The frame is sized to the
-            // terminal's display aspect, so a 4:3 video is pillarboxed and centred
-            // instead of stretched edge-to-edge (and the bars are clean black, not
-            // leftover noise).
-            '-vf', sprintf(
-                'fps=%s,scale=%d:%d:force_original_aspect_ratio=decrease:flags=bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2',
-                (string) $fps,
-                $frameW,
-                $frameH,
-                $frameW,
-                $frameH,
-            ),
-            '-',
+        // Preserve the source aspect ratio: scale to FIT within the letterbox box
+        // (force_original_aspect_ratio=decrease) then pad to it, centring the image
+        // with clean black bars — so a 4:3 video is pillarboxed, not edge-to-edge
+        // stretched. When the letterbox box differs from the frame grid, a final
+        // unconditional scale squashes it onto the grid (the cell grid stretches it
+        // back to true aspect on screen — fixes QuarterBlock's half-width look).
+        $vf = sprintf(
+            'fps=%s,scale=%d:%d:force_original_aspect_ratio=decrease:flags=bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2',
+            (string) $fps,
+            $padW,
+            $padH,
+            $padW,
+            $padH,
         );
+        if ($padW !== $frameW || $padH !== $frameH) {
+            $vf .= sprintf(',scale=%d:%d:flags=bilinear', $frameW, $frameH);
+        }
+
+        array_push($cmd, '-vf', $vf, '-');
 
         return $cmd;
     }
