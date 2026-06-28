@@ -129,6 +129,7 @@ final class FfmpegDecoderTest extends TestCase
         foreach ([
             'stdout' => $stream,
             'cellsW' => $cellsW,
+            'frameW' => $cellsW, // 1 source col per cell in these (half-block-style) fixtures
             'frameH' => $frameH,
             'frameBytes' => $frameBytes,
         ] as $prop => $value) {
