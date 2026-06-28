@@ -498,7 +498,7 @@ final class Player implements Model
         // Build the cycle dynamically based on Mosaic::diagnose() capabilities (F2 tail).
         if ($msg->type === KeyType::Char && $msg->rune === 'm') {
             // Always present: text modes.
-            $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock];
+            $textModes = [Mode::Ascii, Mode::Ansi256, Mode::TrueColor, Mode::HalfBlock, Mode::QuarterBlock];
             // Graphics modes only if the terminal reports the capability.
             $report = Mosaic::diagnose();
             $graphicsModes = [];
@@ -642,6 +642,26 @@ final class Player implements Model
                     $buffer = $buffer->withCellAt($cx, $cy, $cell);
                 }
             }
+        } elseif ($mode === Mode::QuarterBlock) {
+            // QuarterBlock: each cell is a 2×2 pixel group. The four quadrant
+            // colours are split into two groups and drawn with a quadrant glyph
+            // (fg = brighter group, bg = the other) — two colours across four
+            // sub-pixel positions, sharper than half-block.
+            for ($cy = 0; $cy < $bufH; $cy++) {
+                for ($cx = 0; $cx < $bufW; $cx++) {
+                    $x0 = $cx * 2;
+                    $y0 = $cy * 2;
+                    $quads = [
+                        $this->pixelRgb($bytes, $w, $byteLen, $x0,     $y0),     // UL
+                        $this->pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0),     // UR
+                        $this->pixelRgb($bytes, $w, $byteLen, $x0,     $y0 + 1), // LL
+                        $this->pixelRgb($bytes, $w, $byteLen, $x0 + 1, $y0 + 1), // LR
+                    ];
+                    [$glyph, $fgInt, $bgInt] = self::quarterCell($quads);
+                    $cell = Cell::new($glyph, new Style($fgInt, $bgInt), null, 1);
+                    $buffer = $buffer->withCellAt($cx, $cy, $cell);
+                }
+            }
         } else {
             // Ascii / Ansi256 / TrueColor: one pixel per cell.
             for ($cy = 0; $cy < $bufH; $cy++) {
@@ -665,6 +685,81 @@ final class Player implements Model
         }
 
         return $buffer;
+    }
+
+    /**
+     * 16 quadrant glyphs indexed by a 4-bit foreground mask
+     * (bit0=UL, bit1=UR, bit2=LL, bit3=LR).
+     *
+     * @var array<int, string>
+     */
+    private const QUARTER_GLYPHS = [
+        0 => ' ', 1 => '▘', 2 => '▝', 3 => '▀', 4 => '▖', 5 => '▌', 6 => '▞', 7 => '▛',
+        8 => '▗', 9 => '▚', 10 => '▐', 11 => '▜', 12 => '▄', 13 => '▙', 14 => '▟', 15 => '█',
+    ];
+
+    /**
+     * Pick a quadrant glyph + fg/bg colours for one 2×2 cell. The four quadrant
+     * colours are split into two groups (a one-step 2-means around the
+     * most-distant pair); the glyph marks the brighter foreground group and each
+     * group's average colour becomes fg/bg (0xRRGGBB).
+     *
+     * @param list<array{int,int,int}> $quads ul, ur, ll, lr
+     * @return array{0: string, 1: int, 2: int} glyph, fg, bg
+     */
+    private static function quarterCell(array $quads): array
+    {
+        $dist = static fn (array $a, array $b): int =>
+            ($a[0] - $b[0]) ** 2 + ($a[1] - $b[1]) ** 2 + ($a[2] - $b[2]) ** 2;
+        $luma = static fn (array $c): int => (($c[0] * 77) + ($c[1] * 150) + ($c[2] * 29)) >> 8;
+        $pack = static fn (array $c): int => (($c[0] & 0xFF) << 16) | (($c[1] & 0xFF) << 8) | ($c[2] & 0xFF);
+
+        $maxD = -1;
+        $a = 0;
+        $b = 0;
+        for ($i = 0; $i < 4; $i++) {
+            for ($j = $i + 1; $j < 4; $j++) {
+                $d = $dist($quads[$i], $quads[$j]);
+                if ($d > $maxD) {
+                    $maxD = $d;
+                    $a = $i;
+                    $b = $j;
+                }
+            }
+        }
+
+        if ($maxD === 0) {
+            return [self::QUARTER_GLYPHS[15], $pack($quads[0]), $pack($quads[0])];
+        }
+
+        [$fgSeed, $bgSeed] = $luma($quads[$a]) >= $luma($quads[$b])
+            ? [$quads[$a], $quads[$b]]
+            : [$quads[$b], $quads[$a]];
+
+        $mask = 0;
+        $fgSum = [0, 0, 0];
+        $bgSum = [0, 0, 0];
+        $fgN = 0;
+        $bgN = 0;
+        for ($i = 0; $i < 4; $i++) {
+            if ($dist($quads[$i], $fgSeed) <= $dist($quads[$i], $bgSeed)) {
+                $mask |= (1 << $i);
+                $fgSum[0] += $quads[$i][0];
+                $fgSum[1] += $quads[$i][1];
+                $fgSum[2] += $quads[$i][2];
+                $fgN++;
+            } else {
+                $bgSum[0] += $quads[$i][0];
+                $bgSum[1] += $quads[$i][1];
+                $bgSum[2] += $quads[$i][2];
+                $bgN++;
+            }
+        }
+
+        $fg = $fgN > 0 ? [intdiv($fgSum[0], $fgN), intdiv($fgSum[1], $fgN), intdiv($fgSum[2], $fgN)] : $fgSeed;
+        $bg = $bgN > 0 ? [intdiv($bgSum[0], $bgN), intdiv($bgSum[1], $bgN), intdiv($bgSum[2], $bgN)] : $bgSeed;
+
+        return [self::QUARTER_GLYPHS[$mask], $pack($fg), $pack($bg)];
     }
 
     /**

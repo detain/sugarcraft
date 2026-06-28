@@ -23,6 +23,9 @@ enum Mode: string
     /** Unicode half-block (▀) rendering two rows per cell. */
     case HalfBlock = 'halfblock';
 
+    /** Unicode quarter-block rendering a 2×2 pixel group per cell. */
+    case QuarterBlock = 'quarterblock';
+
     /** Sixel raster graphics protocol. */
     case Sixel = 'sixel';
 
@@ -32,16 +35,16 @@ enum Mode: string
     /** iTerm2 inline image protocol. */
     case Iterm2 = 'iterm2';
 
-    /** Source pixel-rows consumed per terminal cell. HalfBlock packs 2; graphics modes resolve in the renderer (treated as 1 here). */
+    /** Source pixel-rows consumed per terminal cell. Half/quarter-block pack 2; graphics modes resolve in the renderer (treated as 1 here). */
     public function rowsPerCell(): int
     {
-        return $this === self::HalfBlock ? 2 : 1;
+        return $this === self::HalfBlock || $this === self::QuarterBlock ? 2 : 1;
     }
 
-    /** Source pixel-cols per terminal cell. */
+    /** Source pixel-cols per terminal cell. Quarter-block packs 2 across. */
     public function colsPerCell(): int
     {
-        return 1;
+        return $this === self::QuarterBlock ? 2 : 1;
     }
 
     /**
@@ -50,13 +53,14 @@ enum Mode: string
     public function label(): string
     {
         return match ($this) {
-            self::Ascii     => 'Plain ASCII (no color)',
-            self::Ansi256   => 'ANSI 256-color',
-            self::TrueColor => 'TrueColor 24-bit',
-            self::HalfBlock => 'Unicode half-block (▀)',
-            self::Sixel    => 'Sixel raster graphics',
-            self::Kitty     => 'Kitty inline images',
-            self::Iterm2    => 'iTerm2 inline images',
+            self::Ascii        => 'Plain ASCII (no color)',
+            self::Ansi256      => 'ANSI 256-color',
+            self::TrueColor    => 'TrueColor 24-bit',
+            self::HalfBlock    => 'Unicode half-block (▀)',
+            self::QuarterBlock => 'Unicode quarter-block (▚)',
+            self::Sixel        => 'Sixel raster graphics',
+            self::Kitty        => 'Kitty inline images',
+            self::Iterm2       => 'iTerm2 inline images',
         };
     }
 }

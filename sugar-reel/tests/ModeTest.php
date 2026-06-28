@@ -93,15 +93,16 @@ final class ModeTest extends TestCase
     }
 
     /**
-     * @testdox Mode::HalfBlock packs 2 source pixel-rows per cell, all others 1
+     * @testdox Half/quarter-block pack 2 source pixel-rows per cell, all others 1
      */
     public function testRowsPerCell(): void
     {
         $this->assertSame(2, Mode::HalfBlock->rowsPerCell());
+        $this->assertSame(2, Mode::QuarterBlock->rowsPerCell());
 
-        // Every non-HalfBlock case consumes a single source pixel-row per cell.
+        // Every other case consumes a single source pixel-row per cell.
         foreach (Mode::cases() as $case) {
-            if ($case === Mode::HalfBlock) {
+            if ($case === Mode::HalfBlock || $case === Mode::QuarterBlock) {
                 continue;
             }
             $this->assertSame(1, $case->rowsPerCell(), "Mode::{$case->name} should consume 1 row per cell");
@@ -109,11 +110,16 @@ final class ModeTest extends TestCase
     }
 
     /**
-     * @testdox Mode::colsPerCell is 1 for every case
+     * @testdox Mode::colsPerCell is 2 for quarter-block and 1 for every other case
      */
     public function testColsPerCell(): void
     {
+        $this->assertSame(2, Mode::QuarterBlock->colsPerCell());
+
         foreach (Mode::cases() as $case) {
+            if ($case === Mode::QuarterBlock) {
+                continue;
+            }
             $this->assertSame(1, $case->colsPerCell(), "Mode::{$case->name} should consume 1 col per cell");
         }
     }
