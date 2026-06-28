@@ -104,6 +104,41 @@ final class RendererFactoryTest extends TestCase
         $this->assertInstanceOf(FrameRenderer::class, $renderer);
     }
 
+    /**
+     * @testdox create() accepts explicit cellPx args and still yields a GraphicsRenderer for graphics modes
+     *
+     * The trailing $cellPxW/$cellPxH args (used by graphics modes to recover the
+     * cell footprint and size the sixel canvas) must not change the renderer type.
+     *
+     * @dataProvider graphicsModeProvider
+     */
+    public function testCreateWithExplicitCellPxReturnsGraphicsRenderer(Mode $mode): void
+    {
+        $renderer = RendererFactory::create($mode, 'standard', 12, 24);
+
+        $this->assertInstanceOf(GraphicsRenderer::class, $renderer);
+        $this->assertInstanceOf(FrameRenderer::class, $renderer);
+    }
+
+    /** @return list<array{Mode}> */
+    public static function graphicsModeProvider(): array
+    {
+        return [
+            'Sixel'  => [Mode::Sixel],
+            'Kitty'  => [Mode::Kitty],
+            'Iterm2' => [Mode::Iterm2],
+        ];
+    }
+
+    /**
+     * @testdox create() with explicit cellPx leaves the text modes as their normal renderers
+     */
+    public function testCreateWithExplicitCellPxTextModesUnchanged(): void
+    {
+        $this->assertInstanceOf(AsciiRenderer::class, RendererFactory::create(Mode::Ascii, 'standard', 12, 24));
+        $this->assertInstanceOf(HalfBlockRenderer::class, RendererFactory::create(Mode::HalfBlock, 'standard', 12, 24));
+    }
+
     // -------------------------------------------------------------------------
     // auto() selection
     // -------------------------------------------------------------------------

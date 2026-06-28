@@ -203,4 +203,47 @@ final class DecoderFactoryTest extends TestCase
             }
         }
     }
+
+    // -------------------------------------------------------------------------
+    // Explicit cell pixel geometry is threaded to the decoder (graphics modes)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox create() accepts explicit cellPx args and returns a GifDecoder for a .gif
+     *
+     * The trailing $cellPxW/$cellPxH args are forwarded to the decoder constructor
+     * (used by graphics modes to decode at full pixel resolution). For a .gif the
+     * GifDecoder is selected regardless of ffmpeg, so this is deterministic in CI.
+     */
+    public function testCreateWithExplicitCellPxReturnsGifDecoder(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required to build a test GIF');
+        }
+
+        $tempFile = sys_get_temp_dir() . '/decoder-factory-cellpx-' . uniqid('', true) . '.gif';
+        $img = imagecreatetruecolor(4, 3);
+        imagefilledrectangle($img, 0, 0, 3, 2, (int) imagecolorallocate($img, 10, 20, 30));
+        imagegif($img, $tempFile);
+        imagedestroy($img);
+
+        try {
+            $decoder = DecoderFactory::create($tempFile, 4, 3, 10.0, \SugarCraft\Reel\Render\Mode::Sixel, 0.0, 12, 24);
+
+            $this->assertInstanceOf(GifDecoder::class, $decoder);
+
+            // The cellPx args reached the decoder: a Sixel (graphics) frame is sized
+            // at cellsW*cellPxW × cellsH*cellPxH.
+            $frame = $decoder->next();
+            $this->assertNotNull($frame);
+            $this->assertSame(4 * 12, $frame->w);
+            $this->assertSame(3 * 24, $frame->h);
+
+            $decoder->close();
+        } finally {
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
+        }
+    }
 }

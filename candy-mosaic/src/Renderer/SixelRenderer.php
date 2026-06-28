@@ -189,8 +189,11 @@ final class SixelRenderer implements Renderer
                 if (($i++ % $step) !== 0) {
                     continue;
                 }
-                $c = imagecolorsforindex($img, imagecolorat($img, $x, $y));
-                $pixels[] = [$c['red'], $c['green'], $c['blue']];
+                // The canvas is truecolor, so imagecolorat returns a packed
+                // 0xAARRGGBB int — extract channels directly rather than paying for
+                // an imagecolorsforindex associative-array allocation per pixel.
+                $rgb = imagecolorat($img, $x, $y);
+                $pixels[] = [($rgb >> 16) & 0xFF, ($rgb >> 8) & 0xFF, $rgb & 0xFF];
             }
         }
 
@@ -343,13 +346,17 @@ final class SixelRenderer implements Renderer
         for ($y = 0; $y < $h; $y++) {
             $row = [];
             for ($x = 0; $x < $w; $x++) {
-                $idx = imagecolorat($img, $x, $y);
-                $c   = imagecolorsforindex($img, $idx);
+                // Truecolor canvas → packed int; extract channels directly (no
+                // per-pixel imagecolorsforindex associative-array allocation).
+                $rgb = imagecolorat($img, $x, $y);
+                $r = ($rgb >> 16) & 0xFF;
+                $g = ($rgb >> 8) & 0xFF;
+                $b = $rgb & 0xFF;
                 // Key the memo on a coarse 5-bit-per-channel cube so it caps at
                 // 32768 entries — nearestColor runs O(distinct cubes), not
                 // O(pixels), bounding cost regardless of image size.
-                $key = (($c['red'] >> 3) << 10) | (($c['green'] >> 3) << 5) | ($c['blue'] >> 3);
-                $row[] = $cache[$key] ??= $this->nearestColor($c['red'], $c['green'], $c['blue'], $palette);
+                $key = (($r >> 3) << 10) | (($g >> 3) << 5) | ($b >> 3);
+                $row[] = $cache[$key] ??= $this->nearestColor($r, $g, $b, $palette);
             }
             $grid[] = $row;
         }
@@ -383,9 +390,13 @@ final class SixelRenderer implements Renderer
         for ($y = 0; $y < $h; $y++) {
             $accum[$y] = [];
             for ($x = 0; $x < $w; $x++) {
-                $idx = imagecolorat($img, $x, $y);
-                $c   = imagecolorsforindex($img, $idx);
-                $accum[$y][$x] = [(float) $c['red'], (float) $c['green'], (float) $c['blue']];
+                // Truecolor canvas → packed int; extract channels directly.
+                $rgb = imagecolorat($img, $x, $y);
+                $accum[$y][$x] = [
+                    (float) (($rgb >> 16) & 0xFF),
+                    (float) (($rgb >> 8) & 0xFF),
+                    (float) ($rgb & 0xFF),
+                ];
             }
         }
 

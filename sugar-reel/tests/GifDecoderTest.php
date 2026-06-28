@@ -279,4 +279,63 @@ final class GifDecoderTest extends TestCase
         $this->assertSame(8, $asciiFrame->w, 'width must equal cellsW');
         $this->assertSame(6, $asciiFrame->h, 'Ascii height must equal cellsH == 6');
     }
+
+    // -------------------------------------------------------------------------
+    // Graphics modes decode at the terminal's FULL pixel resolution
+    // -------------------------------------------------------------------------
+
+    /**
+     * A graphics Mode (Sixel/Kitty/iTerm2) must decode the GIF at
+     * cellsW·cellPxW × cellsH·cellPxH so the image protocols get real detail,
+     * not one pixel per cell. The decoder is built with explicit cell pixel
+     * geometry (new GifDecoder($cellPxW, $cellPxH)).
+     *
+     * @testdox GifDecoder sizes a graphics-mode frame to cellsW*cellPxW x cellsH*cellPxH
+     */
+    public function testGifDecodeGraphicsModeUsesFullPixelResolution(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(8, 6);
+
+        $cellsW = 8;
+        $cellsH = 6;
+        $cellPxW = 10;
+        $cellPxH = 20;
+
+        $decoder = new GifDecoder($cellPxW, $cellPxH);
+        $decoder->open($path, $cellsW, $cellsH, 10.0, Mode::Sixel);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame);
+        $this->assertSame($cellsW * $cellPxW, $frame->w, 'graphics width = cellsW * cellPxW');
+        $this->assertSame($cellsH * $cellPxH, $frame->h, 'graphics height = cellsH * cellPxH');
+    }
+
+    /**
+     * The cell pixel geometry is configurable per decoder; a different cellPx
+     * box yields a proportionally different graphics-mode frame size.
+     *
+     * @testdox GifDecoder honours a custom cellPx box for graphics modes
+     */
+    public function testGifDecodeGraphicsModeHonoursCustomCellPx(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD extension required to build a test GIF');
+        }
+
+        $path = $this->createTempColorGif(4, 3);
+
+        $decoder = new GifDecoder(6, 8);
+        $decoder->open($path, 4, 3, 10.0, Mode::Kitty);
+        $frame = $decoder->next();
+        $decoder->close();
+
+        $this->assertNotNull($frame);
+        $this->assertSame(4 * 6, $frame->w);
+        $this->assertSame(3 * 8, $frame->h);
+    }
 }

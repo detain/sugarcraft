@@ -48,6 +48,18 @@ enum Mode: string
     }
 
     /**
+     * Whether this is a pixel-graphics protocol (Sixel/Kitty/iTerm2) rather than
+     * a text/cell mode. Graphics modes decode at the terminal's full pixel
+     * resolution (cells × cell-pixel-size) and emit a real image, so the decoder
+     * sizes their frames from the cell pixel geometry — not the 1-/2-rows-per-cell
+     * packing the block modes use.
+     */
+    public function isGraphics(): bool
+    {
+        return $this === self::Sixel || $this === self::Kitty || $this === self::Iterm2;
+    }
+
+    /**
      * Human-readable description of the rendering mode.
      */
     public function label(): string

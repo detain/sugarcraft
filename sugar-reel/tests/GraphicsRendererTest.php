@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Reel\Tests;
 
 use PHPUnit\Framework\TestCase;
+use SugarCraft\Mosaic\Renderer\ChafaRenderer;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Render\GraphicsRenderer;
 use SugarCraft\Reel\Render\Mode;
@@ -173,5 +174,101 @@ final class GraphicsRendererTest extends TestCase
 
         // iTerm2 OSC: ESC ] 1337 ; (\x1b]1337;)
         $this->assertStringStartsWith("\x1b]1337;", $output, 'iTerm2 output should begin with OSC 1337 header');
+    }
+
+    // -------------------------------------------------------------------------
+    // PNG-payload frames — the real graphics decode path (no re-encode)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Build a real PNG blob at runtime via GD.
+     */
+    private static function makePng(int $w, int $h): string
+    {
+        $img = \imagecreatetruecolor($w, $h);
+        \imagefilledrectangle($img, 0, 0, $w - 1, $h - 1, (int) \imagecolorallocate($img, 200, 60, 40));
+        \ob_start();
+        \imagepng($img);
+        $png = (string) \ob_get_clean();
+        \imagedestroy($img);
+
+        return $png;
+    }
+
+    /**
+     * @testdox a PNG-payload frame renders to the iTerm2 OSC envelope
+     */
+    public function testPngFrameRendersIterm2Envelope(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        $png = self::makePng(40, 40);
+        $frame = new RgbFrame('', 40, 40, $png);
+
+        $output = (new GraphicsRenderer(Mode::Iterm2))->render($frame, Mode::Iterm2);
+
+        $this->assertStringStartsWith("\x1b]1337;", $output);
+    }
+
+    /**
+     * @testdox a PNG-payload frame renders to the Kitty graphics envelope
+     */
+    public function testPngFrameRendersKittyEnvelope(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        $png = self::makePng(40, 40);
+        $frame = new RgbFrame('', 40, 40, $png);
+
+        $output = (new GraphicsRenderer(Mode::Kitty))->render($frame, Mode::Kitty);
+
+        $this->assertStringStartsWith("\x1b_Ga=", $output);
+    }
+
+    /**
+     * @testdox a PNG-payload Sixel frame contains the DCS intro when chafa is available
+     */
+    public function testPngFrameRendersSixelDcsWhenChafaAvailable(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+        if (!ChafaRenderer::available()) {
+            $this->markTestSkipped('chafa binary not available — sixel falls back to pure-PHP encoder');
+        }
+
+        $png = self::makePng(40, 40);
+        $frame = new RgbFrame('', 40, 40, $png);
+
+        $output = (new GraphicsRenderer(Mode::Sixel))->render($frame, Mode::Sixel);
+
+        $this->assertStringContainsString("\x1bP", $output, 'sixel output carries the DCS intro');
+    }
+
+    /**
+     * @testdox the cell pixel geometry round-trips: an 800x480 frame requests ~80 cells wide
+     *
+     * GraphicsRenderer recovers cellsW = round(frame->w / cellPxW). With a 10px
+     * cell box, an 800px-wide frame resolves to 80 cells — which the iTerm2
+     * envelope echoes as `width=80` (cells, see Iterm2Renderer + Ansi::iterm2InlineImage).
+     */
+    public function testCellPxRoundTripRequestsExpectedCellWidth(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        $png = self::makePng(800, 480);
+        $frame = new RgbFrame('', 800, 480, $png);
+
+        $output = (new GraphicsRenderer(Mode::Iterm2, 10, 20))->render($frame, Mode::Iterm2);
+
+        // 800 / 10 = 80 cells wide, 480 / 20 = 24 cells tall.
+        $this->assertStringContainsString('width=80', $output);
+        $this->assertStringContainsString('height=24', $output);
     }
 }

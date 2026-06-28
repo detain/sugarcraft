@@ -361,6 +361,168 @@ final class FfmpegDecoderTest extends TestCase
         $this->assertNotContains('-ss', FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 80, 48, 24.0));
     }
 
+    // -------------------------------------------------------------------------
+    // Graphics variant — buildCommand($graphics = true) emits a PNG image2pipe
+    // -------------------------------------------------------------------------
+
+    /**
+     * @testdox graphics buildCommand emits an image2pipe PNG stream (not rawvideo)
+     *
+     * For graphics modes (Sixel/Kitty/iTerm2) the decoder produces full-resolution
+     * PNG frames via `-f image2pipe -vcodec png -compression_level 1`, and must NOT
+     * carry the rawvideo/rgb24 args used by the text/cell renderers. The scale/pad
+     * filter still uses the exact frameW:frameH, and the output still goes to `-`.
+     */
+    public function testGraphicsCommandEmitsImage2PipePng(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 200, 120, 24.0, 0.0, true);
+
+        // PNG image2pipe encode flags are present (as adjacent argv pairs).
+        $this->assertContains('-f', $cmd);
+        $this->assertContains('image2pipe', $cmd);
+        $this->assertContains('-vcodec', $cmd);
+        $this->assertContains('png', $cmd);
+        $this->assertContains('-compression_level', $cmd);
+
+        // -f image2pipe must be an adjacent flag/value pair.
+        $fIdx = array_search('-f', $cmd, true);
+        $this->assertIsInt($fIdx);
+        $this->assertSame('image2pipe', $cmd[$fIdx + 1]);
+
+        // The rawvideo path's args must be absent on the graphics variant.
+        $this->assertNotContains('rawvideo', $cmd);
+        $this->assertNotContains('rgb24', $cmd);
+
+        // The scale/pad filter still targets the exact frame pixel size.
+        $joined = implode(' ', $cmd);
+        $this->assertStringContainsString('scale=200:120', $joined);
+
+        // Output still ends with the stdout pipe marker.
+        $this->assertSame('-', $cmd[array_key_last($cmd)], 'graphics output still goes to the stdout pipe (-)');
+    }
+
+    /**
+     * @testdox graphics buildCommand still inserts -ss / reconnect like the rawvideo path
+     */
+    public function testGraphicsCommandKeepsSeekAndReconnect(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', 'https://srv/s.mkv?sig=x', 320, 200, 24.0, 7.5, true);
+
+        $this->assertContains('-reconnect', $cmd);
+        $ssIdx = array_search('-ss', $cmd, true);
+        $this->assertIsInt($ssIdx);
+        $this->assertSame('7.500', $cmd[$ssIdx + 1]);
+        // Still an image2pipe stream despite the seek/reconnect options.
+        $this->assertContains('image2pipe', $cmd);
+    }
+
+    /**
+     * @testdox the default ($graphics = false) buildCommand stays a rawvideo stream (no image2pipe)
+     *
+     * Guards the text-mode path against the graphics branch leaking in: the
+     * default argv must keep rawvideo/rgb24 and must NOT carry image2pipe/png.
+     */
+    public function testDefaultCommandStaysRawvideo(): void
+    {
+        $cmd = FfmpegDecoder::buildCommand('/usr/bin/ffmpeg', '/tmp/m.mkv', 80, 48, 24.0);
+
+        $this->assertContains('rawvideo', $cmd);
+        $this->assertContains('rgb24', $cmd);
+        $this->assertNotContains('image2pipe', $cmd);
+        $this->assertNotContains('-compression_level', $cmd);
+        $this->assertSame('-', $cmd[array_key_last($cmd)]);
+    }
+
+    // The PNG IEND framing in next()/nextPng() (split on the 12-byte IEND marker)
+    // is exercised end-to-end by the live integration test below
+    // (testLiveGraphicsDecodeYieldsPngFrames) — the PNG pipe cannot be injected
+    // as cheaply as the rawvideo stream, so we drive it through real ffmpeg and
+    // skip when the binary is absent (matching the existing style).
+
+    /**
+     * @testdox a live graphics-mode decode yields full-resolution PNG-payload frames
+     *
+     * Integration coverage for the image2pipe + IEND-framing path: open a real
+     * clip in a graphics Mode (Sixel), and assert each RgbFrame carries a PNG
+     * blob ($png) at the terminal's full pixel resolution (cells·cellPx) with an
+     * empty raw byte buffer. Skipped when ffmpeg is absent (CI may lack it).
+     */
+    public function testLiveGraphicsDecodeYieldsPngFrames(): void
+    {
+        if (!Probe::hasFFmpeg()) {
+            $this->markTestSkipped('ffmpeg not present');
+        }
+
+        $clip = sys_get_temp_dir() . '/sugar-reel-test-gfx-' . getmypid() . '.mp4';
+
+        // Watchdog: SIGKILL any test ffmpeg children after 20s so a regression
+        // that deadlocks the PNG pipe can't wedge the suite.
+        $wd = proc_open(
+            ['sh', '-c', 'sleep 20; pkill -9 -f sugar-reel-test-gfx'],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+            $wdPipes,
+        );
+
+        try {
+            $gen = proc_open(
+                [
+                    Probe::ffmpeg(),
+                    '-hide_banner', '-loglevel', 'error',
+                    '-f', 'lavfi',
+                    '-i', 'testsrc=duration=1:size=64x48:rate=10',
+                    '-y', $clip,
+                ],
+                [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']],
+                $genPipes,
+            );
+            $this->assertIsResource($gen, 'ffmpeg clip generation must start');
+            foreach ($genPipes as $p) {
+                if (is_resource($p)) {
+                    \fclose($p);
+                }
+            }
+            proc_close($gen);
+            $this->assertFileExists($clip);
+
+            $cellsW = 8;
+            $cellsH = 6;
+            $cellPxW = 10;
+            $cellPxH = 20;
+
+            $decoder = new FfmpegDecoder($cellPxW, $cellPxH);
+            $decoder->open($clip, $cellsW, $cellsH, 10.0, Mode::Sixel);
+
+            $frame = $decoder->next();
+            $this->assertInstanceOf(RgbFrame::class, $frame);
+
+            // Graphics frames carry a self-contained PNG blob; the raw grid is empty.
+            $this->assertNotNull($frame->png, 'graphics decode must fill $png');
+            $this->assertSame('', $frame->bytes, 'graphics decode leaves $bytes empty');
+            $this->assertStringStartsWith("\x89PNG\r\n\x1a\n", (string) $frame->png, 'payload is a real PNG');
+
+            // Frame is sized at the terminal's FULL pixel resolution.
+            $this->assertSame($cellsW * $cellPxW, $frame->w);
+            $this->assertSame($cellsH * $cellPxH, $frame->h);
+
+            // The PNG decodes and its pixel size matches the requested frame size.
+            $gd = $frame->toGd();
+            $this->assertSame($cellsW * $cellPxW, imagesx($gd));
+            $this->assertSame($cellsH * $cellPxH, imagesy($gd));
+            imagedestroy($gd);
+
+            $decoder->close();
+            $this->assertNull($decoder->next());
+        } finally {
+            if (isset($wd) && is_resource($wd)) {
+                proc_terminate($wd);
+                proc_close($wd);
+            }
+            if (is_file($clip)) {
+                @unlink($clip);
+            }
+        }
+    }
+
     /**
      * @testdox reconnect flags and -ss coexist for a seeked network stream, both before -i
      */
