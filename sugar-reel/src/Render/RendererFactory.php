@@ -98,6 +98,7 @@ final class RendererFactory
             Mode::Ansi256   => new AsciiRenderer($ramp),
             Mode::TrueColor => new AsciiRenderer($ramp),
             Mode::HalfBlock => new HalfBlockRenderer(),
+            Mode::QuarterBlock => new QuarterBlockRenderer(),
             Mode::Sixel     => new GraphicsRenderer(Mode::Sixel),
             Mode::Kitty     => new GraphicsRenderer(Mode::Kitty),
             Mode::Iterm2    => new GraphicsRenderer(Mode::Iterm2),
