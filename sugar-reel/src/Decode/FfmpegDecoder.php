@@ -133,7 +133,20 @@ final class FfmpegDecoder implements Decoder
             '-i', $source,
             '-f', 'rawvideo',
             '-pix_fmt', 'rgb24',
-            '-vf', sprintf('fps=%s,scale=%d:%d:flags=bilinear', (string) $fps, $cellsW, $frameH),
+            // Preserve the source aspect ratio: scale to FIT within the cell grid
+            // (force_original_aspect_ratio=decrease) then pad to the exact frame
+            // size, centring the image with black bars. The grid is sized to the
+            // terminal's display aspect, so a 4:3 video is pillarboxed and centred
+            // instead of stretched edge-to-edge (and the bars are clean black, not
+            // leftover noise).
+            '-vf', sprintf(
+                'fps=%s,scale=%d:%d:force_original_aspect_ratio=decrease:flags=bilinear,pad=%d:%d:(ow-iw)/2:(oh-ih)/2',
+                (string) $fps,
+                $cellsW,
+                $frameH,
+                $cellsW,
+                $frameH,
+            ),
             '-',
         );
 
