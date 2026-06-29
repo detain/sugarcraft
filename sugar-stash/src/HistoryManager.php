@@ -8,50 +8,77 @@ namespace SugarCraft\Stash;
  * Manages undo/redo stacks for command history.
  *
  * Tracks operations and their inverses so the user can undo mistakes.
+ * Immutable: all mutation methods return a NEW HistoryManager.
+ *
+ * @readonly
  */
-final class HistoryManager
+final readonly class HistoryManager
 {
-    /** @var list<HistoryEntry> */
-    private array $undoStack = [];
-
-    /** @var list<HistoryEntry> */
-    private array $redoStack = [];
+    /**
+     * @param list<HistoryEntry> $undoStack
+     * @param list<HistoryEntry> $redoStack
+     */
+    public function __construct(
+        public array $undoStack = [],
+        public array $redoStack = [],
+    ) {}
 
     /**
      * Push a new entry onto the history. Clears the redo stack.
+     * Returns a NEW HistoryManager with the entry added.
      */
-    public function push(HistoryEntry $entry): void
+    public function push(HistoryEntry $entry): self
     {
-        $this->undoStack[] = $entry;
-        $this->redoStack = [];
+        return new self(
+            undoStack: [...$this->undoStack, $entry],
+            redoStack: [],
+        );
     }
 
     /**
      * Pop and return the most recent entry for undo, or null if empty.
      * The popped entry is moved to the redo stack.
+     * Returns BOTH the popped entry AND the new manager.
+     *
+     * @return array{entry: ?HistoryEntry, manager: self}
      */
-    public function undo(): ?HistoryEntry
+    public function undo(): array
     {
         if ($this->undoStack === []) {
-            return null;
+            return ['entry' => null, 'manager' => $this];
         }
-        $entry = array_pop($this->undoStack);
-        $this->redoStack[] = $entry;
-        return $entry;
+        $idx = array_key_last($this->undoStack);
+        $entry = $this->undoStack[$idx];
+        $newUndoStack = $this->undoStack;
+        array_pop($newUndoStack);
+        $newManager = new self(
+            undoStack: $newUndoStack,
+            redoStack: [...$this->redoStack, $entry],
+        );
+        return ['entry' => $entry, 'manager' => $newManager];
     }
 
     /**
      * Pop and return the most recent entry for redo, or null if empty.
      * The popped entry is moved back to the undo stack.
+     * Returns BOTH the popped entry AND the new manager.
+     *
+     * @return array{entry: ?HistoryEntry, manager: self}
      */
-    public function redo(): ?HistoryEntry
+    public function redo(): array
     {
         if ($this->redoStack === []) {
-            return null;
+            return ['entry' => null, 'manager' => $this];
         }
-        $entry = array_pop($this->redoStack);
-        $this->undoStack[] = $entry;
-        return $entry;
+        $idx = array_key_last($this->redoStack);
+        $entry = $this->redoStack[$idx];
+        $newRedoStack = $this->redoStack;
+        array_pop($newRedoStack);
+        $newManager = new self(
+            undoStack: [...$this->undoStack, $entry],
+            redoStack: $newRedoStack,
+        );
+        return ['entry' => $entry, 'manager' => $newManager];
     }
 
     /**

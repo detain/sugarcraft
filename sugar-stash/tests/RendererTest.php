@@ -76,10 +76,12 @@ final class RendererTest extends TestCase
             public function checkout(string $branch): void {}
             public function commit(string $message): void {}
             public function stageAll(): void {}
+            public function unstageAll(): void {}
             public function diff(string $path): array { return []; }
             public function discard(string $path): void {}
             public function amend(): void {}
             public function stagePatch(string $path, string $hunk): void {}
+            public function unstagePatch(string $path, string $hunk): void {}
             public function createBranch(string $name): void {}
             public function deleteBranch(string $name): void {}
             public function merge(string $branch): void {}
