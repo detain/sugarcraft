@@ -69,4 +69,28 @@ final class SanitizeTest extends TestCase
         $this->assertStringNotContainsString("\x1b[31m", $rendered);
         $this->assertStringNotContainsString("\x1b[0m", $rendered);
     }
+
+    public function testHyperlinkUrlEscStripped(): void
+    {
+        // ESC ]2; is the OSC-8 opener; BEL terminates it — neither belongs in URL.
+        $input = "[x](http://e\x1b]2;evil\x07)";
+        $rendered = Renderer::ansi()->withHyperlinks(true)->render($input);
+        $this->assertStringNotContainsString("\x1b]2;", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+    }
+
+    public function testImageUrlEscStripped(): void
+    {
+        $input = "![alt](http://e\x1b]2;evil\x07)";
+        $rendered = Renderer::ansi()->withHyperlinks(true)->render($input);
+        $this->assertStringNotContainsString("\x1b]2;", $rendered);
+        $this->assertStringNotContainsString("\x07", $rendered);
+    }
+
+    public function testNormalUrlUnaffected(): void
+    {
+        $input = "[link](https://example.com/a?b=1#c)";
+        $rendered = Renderer::ansi()->withHyperlinks(true)->render($input);
+        $this->assertStringContainsString("https://example.com/a?b=1#c", $rendered);
+    }
 }

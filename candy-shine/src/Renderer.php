@@ -511,17 +511,34 @@ final class Renderer
     /**
      * Apply {@see withBaseURL()} to a relative link / image target.
      * Absolute URLs (any scheme, or `//host/...`) pass through unchanged.
+     * URLs always have control bytes stripped before return — C0 / ESC /
+     * BEL can break the OSC-8 envelope so they are removed unconditionally
+     * (URLs never legitimately contain them).
      */
     private function resolveUrl(string $url): string
     {
         if ($this->baseUrl === null || $url === '') {
-            return $url;
+            return self::safeUrl($url);
         }
         if (preg_match('#^(?:[a-z][a-z0-9+.\-]*:|//)#i', $url) || str_starts_with($url, '#')) {
             // Has scheme, protocol-relative, or fragment-only — leave alone.
-            return $url;
+            return self::safeUrl($url);
         }
-        return $this->baseUrl . ltrim($url, '/');
+        return self::safeUrl($this->baseUrl . ltrim($url, '/'));
+    }
+
+    /**
+     * Strip C0 / ESC / BEL from a URL. These bytes cannot appear in a
+     * well-formed URI and would break the OSC-8 hyperlink envelope or
+     * inject spurious control sequences into the terminal. Applied
+     * unconditionally in resolveUrl for defence-in-depth.
+     *
+     * Mirrors charmbracelet/glamour URL sanitisation.
+     */
+    private static function safeUrl(string $url): string
+    {
+        // Remove C0 controls + ESC + BEL.
+        return preg_replace('/[\x00-\x1f\x7f]/', '', $url);
     }
 
     private function renderHtmlBlock(HtmlBlock $node): string
