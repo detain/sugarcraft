@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Glow\Tests;
 
+use SugarCraft\Glow\GlowModel;
 use SugarCraft\Glow\RenderCommand;
 use SugarCraft\Shine\Theme;
 use PHPUnit\Framework\TestCase;
@@ -497,5 +498,23 @@ final class RenderCommandTest extends TestCase
         } finally {
             unlink($tmp);
         }
+    }
+
+    public function testBuildPagerModelWiresContentAndSize(): void
+    {
+        $rendered = "line1\nline2\nline3";
+        $cols = 80;
+        $rows = 5;
+
+        $method = new \ReflectionMethod(RenderCommand::class, 'buildPagerModel');
+        $method->setAccessible(true);
+
+        $model = $method->invoke(null, $rendered, $cols, $rows);
+
+        $this->assertInstanceOf(GlowModel::class, $model);
+        // View should contain the rendered content.
+        $this->assertStringContainsString('line1', $model->view());
+        // The model should not be exited initially.
+        $this->assertFalse($model->isExited());
     }
 }

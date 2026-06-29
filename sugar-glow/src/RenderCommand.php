@@ -94,7 +94,7 @@ final class RenderCommand extends Command
 
         // Pager mode: drop into a Program with a Viewport-backed Model.
         $size  = (new Tty())->size();
-        $model = GlowModel::fromContent($rendered, $size['cols'], $size['rows']);
+        $model = self::buildPagerModel($rendered, $size['cols'], $size['rows']);
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,
@@ -163,5 +163,13 @@ final class RenderCommand extends Command
         // Color decision now lives entirely in execute(); loadInput just reads stdin.
         $raw = stream_get_contents($stream);
         return is_string($raw) && $raw !== '' ? $raw : null;
+    }
+
+    /**
+     * Build the GlowModel for pager mode from rendered content and terminal size.
+     */
+    private static function buildPagerModel(string $rendered, int $cols, int $rows): GlowModel
+    {
+        return GlowModel::fromContent($rendered, $cols, $rows);
     }
 }
