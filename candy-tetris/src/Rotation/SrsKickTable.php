@@ -24,18 +24,40 @@ final class SrsKickTable
 {
     /** @var array<string,list<array{int,int}>> J/L/S/T/Z kicks */
     private const array JLSTZ_KICKS = [
+        // Clockwise transitions
         '0→R' => [[0, 0], [-1, 0], [-1, +1], [0, -2], [-1, -2]],
         'R→2' => [[0, 0], [+1, 0], [+1, -1], [0, +2], [+1, +2]],
         '2→L' => [[0, 0], [+1, 0], [+1, +1], [0, -2], [+1, -2]],
         'L→0' => [[0, 0], [-1, 0], [-1, -1], [0, +2], [-1, +2]],
+        // Counter-clockwise transitions (SRS spec: negation of reverse cw pair)
+        'R→0' => [[0, 0], [+1, 0], [+1, -1], [0, +2], [+1, +2]],
+        '0→L' => [[0, 0], [+1, 0], [+1, +1], [0, -2], [+1, -2]],
+        'L→2' => [[0, 0], [-1, 0], [-1, -1], [0, +2], [-1, +2]],
+        '2→R' => [[0, 0], [-1, 0], [-1, +1], [0, -2], [-1, -2]],
+        // 180-degree (no spec entry — falls back to naive via kicks())
+        '0→2' => [[0, 0]],
+        'R→L' => [[0, 0]],
+        '2→0' => [[0, 0]],
+        'L→R' => [[0, 0]],
     ];
 
     /** @var array<string,list<array{int,int}>> I-piece kicks */
     private const array I_KICKS = [
+        // Clockwise transitions
         '0→R' => [[0, 0], [-2, 0], [+1, 0], [-2, -1], [+1, +2]],
         'R→2' => [[0, 0], [-1, 0], [+2, 0], [-1, +2], [+2, -1]],
         '2→L' => [[0, 0], [+2, 0], [-1, 0], [+2, +1], [-1, -2]],
         'L→0' => [[0, 0], [+1, 0], [-2, 0], [+1, -2], [-2, +1]],
+        // Counter-clockwise transitions (SRS spec: negation of reverse cw pair)
+        'R→0' => [[0, 0], [+2, 0], [-1, 0], [+2, +1], [-1, -2]],
+        '0→L' => [[0, 0], [-1, 0], [+2, 0], [-1, -2], [+2, +1]],
+        'L→2' => [[0, 0], [+1, 0], [-2, 0], [+1, +2], [-2, -1]],
+        '2→R' => [[0, 0], [-2, 0], [+1, 0], [-2, +1], [+1, +2]],
+        // 180-degree (no spec entry — falls back to naive via kicks())
+        '0→2' => [[0, 0]],
+        'R→L' => [[0, 0]],
+        '2→0' => [[0, 0]],
+        'L→R' => [[0, 0]],
     ];
 
     /**
@@ -47,9 +69,12 @@ final class SrsKickTable
     {
         $key = self::transitionKey($from, $to);
 
+        // Defensive: if the computed key is absent (e.g. a direct 0↔2 180
+        // with no spec entry), return naive-only so the caller still gets
+        // the rotated piece without throwing.
         return match ($piece) {
-            Tetromino::I => self::I_KICKS[$key],
-            default => self::JLSTZ_KICKS[$key],
+            Tetromino::I => self::I_KICKS[$key] ?? [[0, 0]],
+            default => self::JLSTZ_KICKS[$key] ?? [[0, 0]],
         };
     }
 

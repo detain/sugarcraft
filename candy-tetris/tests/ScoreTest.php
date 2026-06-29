@@ -63,4 +63,51 @@ final class ScoreTest extends TestCase
         );
         $this->assertSame(1, $level29->framesPerRow());
     }
+
+    /**
+     * @dataProvider framesPerRowBoundaryProvider
+     */
+    public function testFramesPerRowBoundaryLevels(int $level, int $expected): void
+    {
+        $this->assertSame($expected, (new Score(0, 0, $level))->framesPerRow());
+    }
+
+    /** @return array<string, array{0:int, 1:int}> */
+    public static function framesPerRowBoundaryProvider(): array
+    {
+        return [
+            'level_0'  => [0, 48],
+            'level_8'  => [8, 8],
+            'level_9'  => [9, 6],
+            'level_12' => [12, 5],
+            'level_15' => [15, 4],
+            'level_18' => [18, 3],
+            'level_28' => [28, 2],
+            'level_29' => [29, 1],
+        ];
+    }
+
+    public function testWithDropPointsAddsPointsPreservesLinesAndLevel(): void
+    {
+        $s = new Score(100, 5, 2);
+        $s2 = $s->withDropPoints(42);
+        $this->assertSame(142, $s2->points);
+        $this->assertSame(5, $s2->lines);
+        $this->assertSame(2, $s2->level);
+    }
+
+    public function testWithDropPointsZeroIsNoop(): void
+    {
+        $s = new Score(999, 3, 1);
+        $this->assertEquals($s, $s->withDropPoints(0));
+    }
+
+    public function testWithLinesTriggersLevelUpAtExactlyTenLines(): void
+    {
+        // 9 lines → level 0; 10 lines → level 1
+        $at9  = (new Score())->withLines(9);
+        $at10 = $at9->withLines(1);
+        $this->assertSame(0, $at9->level);
+        $this->assertSame(1, $at10->level);
+    }
 }

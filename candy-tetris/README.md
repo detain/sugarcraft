@@ -99,17 +99,6 @@ Consecutive line clears (regardless of type) build a **combo counter** — each 
 
 When all lines are cleared at once and the board becomes completely empty, an additional **+5000 × (level + 1)** bonus is awarded.
 
-### DAS / ARR keyboard timing
-
-Horizontal movement uses **Delayed Auto Shift (DAS)** and **Auto Repeat Rate (ARR)** for precise key repeat:
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| DAS delay | 167 ms  | Time a direction key must be held before auto-repeat begins |
-| ARR interval | 50 ms | Interval between repeated actions once DAS threshold is passed |
-
-This gives precise single-tap control (release before DAS) and smooth continuous movement (hold past DAS threshold). Defaults can be overridden via `Das::create($dasMicroseconds, $arrMicroseconds)`. See `Input\Das`.
-
 ## Architecture
 
 Nine pure-state classes, each individually testable without booting the runtime:
@@ -154,7 +143,7 @@ foreach ($candidates as $candidate) {
 
 ## Architecture
 
-Nine pure-state classes + one rotation table, each individually testable without booting the runtime:
+Nine pure-state classes, each individually testable without booting the runtime:
 
 ```
 Tetromino    enum   ─►  shape data + colour for each of the 7 pieces
@@ -167,8 +156,6 @@ Computer     ──►    AI opponent with board-evaluation heuristics
 VsGame       Model  ─►  VS mode combining two Games with garbage row passing
 Renderer     ──►    pure view function from Game to frame string
 VsRenderer   ──►    split-screen view for VS mode
-Rotation/
-  SrsKickTable  ──►  official SRS kick-offset tables (J/L/S/T/Z + I piece)
 ```
 
 ## Shared foundations
