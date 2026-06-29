@@ -164,9 +164,13 @@ final class HermitTest extends TestCase
             ->setMatchStyle("\x1b[33m")
             ->setWindowHeight(5)
             ->setWindowWidth(40)
-            ->setOffset(5, 3);
+            ->show();
 
-        $this->assertTrue($h->isShown()); // setPrompt doesn't auto-show
+        $this->assertTrue($h->isShown()); // show() does set isShown
+
+        // setOffset is a pure position setter — does NOT auto-show
+        $h2 = $this->makeHermit()->setOffset(5, 3);
+        $this->assertFalse($h2->isShown(), 'setOffset alone must not show the overlay');
     }
 
     public function testWithItemsReturnsNewInstance(): void

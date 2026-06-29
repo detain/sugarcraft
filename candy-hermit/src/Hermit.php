@@ -161,7 +161,6 @@ final class Hermit
         $clone = clone $this;
         $clone->xOffset = $x;
         $clone->yOffset = $y;
-        $clone->isShown = true;
         return $clone;
     }
 
