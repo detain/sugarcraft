@@ -33,7 +33,7 @@
 | candy-mines | 3 | 9 | 3 | 3 | 3 | DONE | ai/candy-mines-fix | | 109 tests; 3 pre-existing GameTest failures (test infrastructure added, failures require Game::init() call — architectural, outside audit scope); 1 skip |
 | candy-flip | 3 | 14 | 3 | 7 | 4 | MERGED | | dd5d0bef | full — player adaptive, orphaned classes removed |
 | candy-hermit | 3 | 15 | 3 | 7 | 5 | MERGED | | 47ec6847 | full — missing tests, applyRankedFilter fix |
-| candy-tetris | 3 | 13 | 4 | 6 | 3 | PENDING | | | |
+| candy-tetris | 3 | 13 | 4 | 6 | 3 | MERGED | | 6f3f42f9 | full — SRS, immutability, AI, DAS removal, lock-delay, drop points |
 | candy-vt | 3 | 11 | 3 | 6 | 2 | MERGED | | 66aeea3f | full — security caps, COW→in-place, protocol fixes |
 | sugar-boxer | 3 | 12 | 5 | 5 | 2 | MERGED | | c25b55d1 | full — withContent structural, margin collapse, layout wiring |
 | sugar-crumbs | 3 | 9 | 3 | 4 | 2 | MERGED | | 83b9ead2 | full — truncate returns array, ::new() factories, Builder fix |
