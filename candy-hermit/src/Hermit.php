@@ -96,7 +96,7 @@ final class Hermit
         ?\Closure $itemFormatter = null,
         ?\Closure $filterFn = null,
     ) {
-        $this->allItems     = \array_values($items);
+        $this->allItems      = $this->coerceItems($items);
         $this->filteredItems = $this->allItems;
         $this->itemFormatter = $itemFormatter
             ?? fn(string $item, bool $selected): string =>
@@ -121,7 +121,7 @@ final class Hermit
     public function withItems(array $items): self
     {
         $clone = clone $this;
-        $clone->allItems = \array_values($items);
+        $clone->allItems = $clone->coerceItems($items);
         $clone->filteredItems = $clone->applyFilter($clone->filterText);
         $clone->cursor = 0;
         return $clone;
@@ -164,6 +164,13 @@ final class Hermit
         return $clone;
     }
 
+    /**
+     * Set the formatter for item display lines.
+     *
+     * The closure receives the item's value (string), a bool indicating
+     * whether it is currently selected, and optionally the item's number
+     * (int, default 0) — it always returns the formatted display string.
+     */
     public function setItemFormatter(\Closure $fn): self
     {
         $clone = clone $this;
@@ -499,6 +506,26 @@ final class Hermit
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Coerce a mixed input array into a list of Item objects.
+     *
+     * Strings are wrapped as FilteredItem with a 1-based ordinal.
+     * Items already implementing Item are passed through unchanged.
+     *
+     * @param array<Item|string> $items
+     * @return list<Item>
+     */
+    private function coerceItems(array $items): array
+    {
+        $result = [];
+        foreach (\array_values($items) as $i => $item) {
+            $result[] = $item instanceof Item
+                ? $item
+                : new FilteredItem($i + 1, (string) $item);
+        }
+        return $result;
+    }
 
     /**
      * Filter allItems using the configured filter function.
