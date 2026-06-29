@@ -754,6 +754,40 @@ final class Ansi
     }
 
     /**
+     * Emit the Kitty graphics protocol begin sequence.
+     *
+     * Format: DCS q <key>=<value>,<key>=<value>,... ST
+     *
+     * Common keys:
+     *   - a: action (T=inline transmit, p=place, d=delete)
+     *   - i: image id
+     *   - f: compression (100=none, 1=gzip)
+     *   - c: width in terminal cells
+     *   - r: height in terminal cells
+     *   - x: x offset (cells)
+     *   - y: y offset (cells)
+     *   - z: z-index (layer)
+     *   - s: source width (pixels)
+     *   - v: source height (pixels)
+     *   - q: quantization (0-100, 2 is default)
+     *
+     * Mirrors charmbracelet/x/ansi. KittyRenderer.
+     *
+     * @param array<string, mixed> $opts  Key-value pairs for the begin sequence
+     */
+    public static function kittyGraphicsBegin(array $opts): string
+    {
+        $pairs = [];
+        foreach ($opts as $key => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $pairs[] = $key . '=' . $value;
+        }
+        return self::DCS . 'q' . implode(',', $pairs) . self::ST;
+    }
+
+    /**
      * Emit the final end-of-transmission chunk for Kitty graphics.
      *
      * Mirrors charmbracelet/x/ansi. KittyRenderer.
