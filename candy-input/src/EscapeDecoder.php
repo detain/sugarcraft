@@ -163,13 +163,13 @@ final class EscapeDecoder
         if ($nextOrd === 0x1b) {
             return [
                 'events' => [new KeyEvent('Escape', KeyModifier::alt(), "\x1b\x1b")],
-                'remaining' => '',
+                'remaining' => substr($stream, 2),
             ];
         }
 
         // ESC <non-[> — Alt+key
         return [
-            'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b")],
+            'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b" . $next)],
             'remaining' => substr($stream, 2),
         ];
     }
