@@ -94,11 +94,16 @@ final class Log
     ): void {
         $formatter ??= PanicFormatter::pretty($showLocals, $redactPaths);
 
-        // Register exception handler.
-        set_exception_handler(static function (\Throwable $e) use ($formatter): void {
+        // Register exception handler, capturing the previous one for optional chaining.
+        $previousHandler = set_exception_handler(static function (\Throwable $e) use ($formatter, $previousHandler): void {
             self::restoreTerminal();
             $report = $formatter->format($e);
             \fwrite(\STDERR, "\n{$report}\n");
+
+            // Chain to previous handler if one was registered
+            if ($previousHandler !== null) {
+                $previousHandler($e);
+            }
         });
 
         // Register shutdown function for fatal errors.
