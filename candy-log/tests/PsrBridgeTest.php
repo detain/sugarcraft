@@ -113,4 +113,67 @@ final class PsrBridgeTest extends TestCase
 
         $this->assertStringContainsString('via log method', $content);
     }
+
+    public function testAlertMapsToFatal(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        try {
+            $bridge->alert('alert message');
+        } catch (\RuntimeException $e) {
+            \fclose($this->tempFile);
+            $content = \file_get_contents($this->tempPath);
+            $this->assertStringContainsString('alert message', $content);
+            $this->assertStringContainsString('FTL', $content);
+            return;
+        }
+        $this->fail('Expected RuntimeException was not thrown');
+    }
+
+    public function testCriticalMapsToFatal(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        try {
+            $bridge->critical('critical message');
+        } catch (\RuntimeException $e) {
+            \fclose($this->tempFile);
+            $content = \file_get_contents($this->tempPath);
+            $this->assertStringContainsString('critical message', $content);
+            $this->assertStringContainsString('FTL', $content);
+            return;
+        }
+        $this->fail('Expected RuntimeException was not thrown');
+    }
+
+    public function testNoticeMapsToInfoLevel(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        $bridge->notice('notice message');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('notice message', $content);
+        $this->assertStringContainsString('INF', $content);
+    }
+
+    public function testUnknownPsrLevelFallsBackToInfo(): void
+    {
+        $logger = Logger::new(stream: $this->tempFile, level: Level::Debug, reportTimestamp: false);
+        $bridge = new PsrBridge($logger);
+
+        // 'madeupstring' doesn't match any PSR level - falls back to Level::Info
+        $bridge->log('madeupstring', 'fallback message');
+
+        \fclose($this->tempFile);
+        $content = \file_get_contents($this->tempPath);
+
+        $this->assertStringContainsString('fallback message', $content);
+        $this->assertStringContainsString('INF', $content);
+    }
 }
