@@ -35,15 +35,16 @@ final class Palette
      *  2. FORCE_COLOR=0..3   → profile by level (SugarCraft extension)
      *  3. NO_COLOR=          → NoTTY
      *  4. CLICOLOR=0         → NoTTY
-     *  5. TERM=dumb          → NoTTY
-     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  7. WT_SESSION set     → TrueColor
-     *  8. GOOGLE_CLOUD_SHELL=true → TrueColor
-     *  9. TMUX||STY + TERM screen/tmux → ANSI256
-     * 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
-     * 11. TERM=xterm*|screen*|tmux* → ANSI
-     * 12. TTY detection      → NoTTY if not a TTY
-     * 13. Default            → ANSI
+     *  5. COLORTERM=24bit|truecolor|yes → TrueColor
+     *  6. TERM_PROGRAM=iTerm.app → TrueColor
+     *  7. TERM=dumb          → NoTTY
+     *  8. WT_SESSION set     → TrueColor
+     *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
+     * 10. TMUX||STY + TERM screen/tmux → ANSI256
+     * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
+     * 12. TERM=xterm*|screen*|tmux* → ANSI
+     * 13. TTY detection      → NoTTY if not a TTY
+     * 14. Default            → ANSI
      *
      * @param resource|null $stream  Stream to check for TTY (default: STDOUT)
      * @param array<string,string|null> $env     Environment map (default: $_ENV)
@@ -178,28 +179,28 @@ final class Palette
      *  2. FORCE_COLOR           → SugarCraft extension level override (0=Ascii, 1=ANSI, 2=ANSI256, 3=TC)
      *  3. NO_COLOR (any value) → NoTTY
      *  4. CLICOLOR=0            → NoTTY
-     *  5. TERM=dumb             → NoTTY
-     *  6. COLORTERM=24bit|truecolor|yes → TrueColor
-     *  7. WT_SESSION set        → TrueColor (Windows Terminal)
-     *  8. GOOGLE_CLOUD_SHELL=true → TrueColor
-     *  9. TMUX||STY + screen/tmux base TERM → ANSI256
-     * 10. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
-     * 11. TERM=xterm*|screen*|tmux* → ANSI
-     * 12. isatty()              → NoTTY if not a TTY
-     * 13. Default               → ANSI
+     *  5. COLORTERM=24bit|truecolor|yes → TrueColor (before TERM=dumb, per Probe)
+     *  6. TERM_PROGRAM=iTerm.app → TrueColor
+     *  7. TERM=dumb             → NoTTY
+     *  8. WT_SESSION set        → TrueColor (Windows Terminal)
+     *  9. GOOGLE_CLOUD_SHELL=true → TrueColor
+     * 10. TMUX||STY + base TERM screen/tmux → ANSI256
+     * 11. TERM=*-256color|xterm-kitty|xterm-ghostty → ANSI256
+     * 12. TERM=xterm*|screen*|tmux* → ANSI
+     * 13. isatty()              → NoTTY if not a TTY
+     * 14. Default               → ANSI
      */
     private static function detectProfile($stream, array $env): Profile
     {
-        // Only use the explicit env; fall back to getenv() for missing keys.
-        // This prevents setUp's putenv state from leaking into tests that
-        // don't explicitly set those vars.
+        // 1. CLICOLOR_FORCE=1 → TrueColor (overrides everything below)
         $cliclorForce = $env['CLICOLOR_FORCE'] ?? \getenv('CLICOLOR_FORCE');
         if ($cliclorForce === '1') {
             return Profile::TrueColor;
         }
 
         // 2. FORCE_COLOR: SugarCraft extension (level-based)
-        $force = $env['FORCE_COLOR'] ?? \getenv('FORCE_COLOR');
+        // Use isset() so explicitly-passed '0' is honored and parent state can't leak.
+        $force = isset($env['FORCE_COLOR']) ? $env['FORCE_COLOR'] : (isset($_ENV['FORCE_COLOR']) ? $_ENV['FORCE_COLOR'] : \getenv('FORCE_COLOR'));
         if ($force !== null && $force !== '' && $force !== false) {
             $level = \intval($force);
             return match (true) {
@@ -215,38 +216,44 @@ final class Palette
             return Profile::NoTTY;
         }
 
-        // 4. CLICOLOR=0 → NoTTY (only from explicit env, not process getenv)
+        // 4. CLICOLOR=0 → NoTTY
         if (isset($env['CLICOLOR']) && $env['CLICOLOR'] === '0') {
             return Profile::NoTTY;
         }
 
-        // 5. TERM=dumb → NoTTY
-        $term = $env['TERM'] ?? \getenv('TERM') ?? '';
+        // 5. COLORTERM=24bit|truecolor|yes → TrueColor
+        $ct = $env['COLORTERM'] ?? $_ENV['COLORTERM'] ?? \getenv('COLORTERM') ?: null;
+        if (\is_string($ct) && \in_array(\strtolower($ct), ['24bit', 'truecolor', 'yes'], true)) {
+            return Profile::TrueColor;
+        }
+
+        // 6. TERM_PROGRAM=iTerm.app → TrueColor (iTerm2 supports TrueColor)
+        $termProgram = $env['TERM_PROGRAM'] ?? $_ENV['TERM_PROGRAM'] ?? \getenv('TERM_PROGRAM') ?: null;
+        if ($termProgram === 'iTerm.app') {
+            return Profile::TrueColor;
+        }
+
+        // 7. TERM=dumb → NoTTY
+        $term = $env['TERM'] ?? \getenv('TERM') ?: '';
         if ($term === 'dumb') {
             return Profile::NoTTY;
         }
 
-        // 6. COLORTERM=24bit|truecolor|yes → TrueColor
-        $ct = $env['COLORTERM'] ?? \getenv('COLORTERM') ?: null;
-        if ($ct !== null && \in_array(\strtolower($ct), ['24bit', 'truecolor', 'yes'], true)) {
-            return Profile::TrueColor;
-        }
-
-        // 7. WT_SESSION set → TrueColor (Windows Terminal)
-        $wtSession = $env['WT_SESSION'] ?? \getenv('WT_SESSION');
+        // 8. WT_SESSION set → TrueColor (Windows Terminal)
+        $wtSession = $env['WT_SESSION'] ?? \getenv('WT_SESSION') ?: null;
         if ($wtSession !== null && $wtSession !== '') {
             return Profile::TrueColor;
         }
 
-        // 8. GOOGLE_CLOUD_SHELL=true → TrueColor
-        $gcs = $env['GOOGLE_CLOUD_SHELL'] ?? \getenv('GOOGLE_CLOUD_SHELL');
+        // 9. GOOGLE_CLOUD_SHELL=true → TrueColor
+        $gcs = $env['GOOGLE_CLOUD_SHELL'] ?? \getenv('GOOGLE_CLOUD_SHELL') ?: null;
         if ($gcs === 'true') {
             return Profile::TrueColor;
         }
 
-        // 9. TMUX||STY + base TERM screen/tmux → ANSI256
-        $tmux = $env['TMUX'] ?? \getenv('TMUX');
-        $sty = $env['STY'] ?? \getenv('STY');
+        // 10. TMUX||STY + base TERM screen/tmux → ANSI256
+        $tmux = $env['TMUX'] ?? \getenv('TMUX') ?: null;
+        $sty = $env['STY'] ?? \getenv('STY') ?: null;
         $termLower = \strtolower($term);
         if (($tmux !== null && $tmux !== '') || ($sty !== null && $sty !== '')) {
             if (\str_starts_with($termLower, 'screen') || \str_starts_with($termLower, 'tmux')) {

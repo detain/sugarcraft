@@ -103,11 +103,10 @@ final class ProfileWriterTest extends TestCase
         $ansiWriter = $writer->withProfile(Profile::ANSI);
         $this->assertSame(Profile::ANSI, $ansiWriter->profile());
 
-        $mem2 = \fopen('php://memory', 'r+');
+        // Note: withProfile shares the same stream, so this writes to $mem
         $ansiWriter->write("\x1b[38;2;255;0;0mred\x1b[0m");
-        \rewind($mem2);
-        $out = \stream_get_contents($mem2);
-        \fclose($mem2);
+        \rewind($mem);
+        $out = \stream_get_contents($mem);
 
         $this->assertStringStartsWith("\x1b[3", $out);
         $this->assertStringNotContainsString("\x1b[38;2;", $out);
