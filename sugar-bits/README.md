@@ -14,9 +14,12 @@
 ![demo](.vhs/spinners.gif)
 
 PHP port of [charmbracelet/bubbles](https://github.com/charmbracelet/bubbles) —
-15 pre-built TUI components for SugarCraft, including the interactive
-`Tree` (mirrors upstream Bubbles #233), dynamic-height `TextArea`
-(mirrors #910), and per-cell `Table::styleFunc(...)` (mirrors #246).
+17 components total: 9 first-party TUI components (Table, Tabs, Tree,
+Progress, Paginator, Help, Key, Timer, Stopwatch) and 8 deprecated
+alias re-exports from `sugarcraft/candy-forms` (TextInput, TextArea,
+Viewport, Cursor, ItemList, FilePicker, Scrollbar, Spinner). Includes
+the interactive `Tree` (mirrors upstream Bubbles #233) and per-cell
+`Table::styleFunc(...)` (mirrors #246).
 
 ```sh
 composer require sugarcraft/sugar-bits
@@ -29,13 +32,15 @@ composer require sugarcraft/sugar-bits
 
 ## Components
 
-Upstream Bubbles ships 13 components; SugarBits ships those 13 plus
-`AnimatedProgress` (the spring-physics variant lives in its own class
-to keep the static `Progress` lean).
+9 first-party components: Help, Key, Progress (includes AnimatedProgress
+spring-variant), Timer, Stopwatch, Paginator, Tree, Table, Tabs.
+8 deprecated alias re-exports from `sugarcraft/candy-forms`:
+Cursor, TextInput, TextArea, Viewport, ItemList, FilePicker, Scrollbar,
+Spinner.
 
 | Component | What it does | Notable msgs |
 |---|---|---|
-| `Cursor\Cursor` | Animated text cursor | `BlinkMsg` |
+| `Cursor\Cursor` | Animated text cursor _(deprecated alias — re-exported from `SugarCraft\Forms\Cursor`)_ | `BlinkMsg` |
 | `Help\Help` | Render short / full key-help footer from a `KeyMap`; `Help::updateWithBinding($msg, $toggle)` flips show-all in response to a key | — |
 | `Key\Binding` | One key + label + help row; `Binding::new(...)`, `Binding::withDisabled(...)` factories | — |
 | `Spinner\Spinner` | Animated loading glyph — 12 built-in styles _(deprecated alias — re-exported from `SugarCraft\Forms\Spinner` in `sugarcraft/candy-forms`)_ | `Spinner\TickMsg` |
@@ -43,15 +48,16 @@ to keep the static `Progress` lean).
 | `Progress\AnimatedProgress` | Spring-physics-animated progress bar (HoneyBounce-driven) | `SpringTickMsg` |
 | `Timer\Timer` | Countdown timer; `interval()`, `timeout()`, `withInterval(float)` | `Timer\TickMsg`, `TimeoutMsg` |
 | `Stopwatch\Stopwatch` | Elapsed-time counter; `interval()`, `withInterval(float)` | `Stopwatch\TickMsg` |
-| `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` | — |
-| `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) | `TextArea\TextAreaEditedMsg` |
-| `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` | — |
+| `TextInput\TextInput` | Single-line input with autocomplete + validators + `ValidateOn` timing + restrict pattern + vim mode + placeholder styling + prefix/suffix + `Styles` _(deprecated alias — re-exported from `SugarCraft\Forms\TextInput`)_ | — |
+| `TextArea\TextArea` | Multi-line editor with line numbers / set-prompt-func / `focused()` / `cursor()` / `line()` / `column()`; `Ctrl+O` opens the buffer in `$EDITOR` (`withEditorExtension('.md')` to control the syntax-highlight suffix) _(deprecated alias — re-exported from `SugarCraft\Forms\TextArea`)_ | `TextArea\TextAreaEditedMsg` |
+| `Viewport\Viewport` | Scrollable text region with mouse-wheel, scrollbar, horizontal scroll, `setWidth(int)` / `setHeight(int)` _(deprecated alias — re-exported from `SugarCraft\Forms\Viewport`)_ | — |
 | `Paginator\Paginator` | Dot / arabic page indicator | — |
-| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages | — |
+| `ItemList\ItemList` | Selectable / scrollable / filterable list with status messages _(deprecated alias — re-exported from `SugarCraft\Forms\ItemList`)_ | — |
 | `Tree\Tree` | Interactive tree — cursor, expand/collapse, viewport scroll. Mirrors upstream Bubbles #233. | — |
 | `Table\Table` | Selectable data table with `Column` struct + nav + multi-column sort | — |
 | `Tabs\Tabs` | Tabbed panel — keyboard (`Tab`/`Shift+Tab`/`1-9`) + mouse navigation, wrap/clamp modes, scrollable overflow | — |
-| `FilePicker\FilePicker` | Directory browser with icons / size / sort modes | — |
+| `FilePicker\FilePicker` | Directory browser with icons / size / sort modes _(deprecated alias — re-exported from `SugarCraft\Forms\FilePicker`)_ | — |
+| `Scrollbar\Scrollbar` | Scrollbar indicator for scrollable viewports _(deprecated alias — re-exported from `SugarCraft\Forms\Scrollbar`)_ | — |
 
 ### Vim mode
 
