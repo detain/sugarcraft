@@ -606,8 +606,8 @@ final class Veil
             $byteLen = \strlen($line);
             $chars = \mb_str_split($line);              // O(len) ONCE per line (was mb_substr per cell)
             for ($col = 0; $col < $width; $col++) {
-                // EXACT replication of the old `isset($line[$col]) ? mb_substr($line,$col,1) : ' '`:
-                //   col <  byteLen  -> the col-th char, or '' for the multibyte byte-tail
+                // Corrected from the old `isset($line[$col]) ? mb_substr($line,$col,1) : ' '`:
+                //   col <  byteLen  -> the col-th character via mb_str_split (handles multibyte correctly)
                 //   col >= byteLen  -> ' '
                 $char = $col < $byteLen ? ($chars[$col] ?? '') : ' ';
                 $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
