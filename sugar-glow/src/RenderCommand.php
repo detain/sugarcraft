@@ -61,9 +61,22 @@ final class RenderCommand extends Command
         // Theme selection: --theme-config (JSON) wins over --theme/--style.
         $configPath = (string) $input->getOption('theme-config');
         $themeName  = (string) ($input->getOption('style') ?? $input->getOption('theme'));
-        $theme      = $configPath !== ''
-            ? Theme::fromJson($configPath)
-            : self::pickTheme($themeName);
+
+        // Determine whether the user explicitly chose a theme (vs. accepting the 'ansi' default).
+        // 'ansi' default from configure() means "no explicit choice" — auto-downgrade when
+        // the terminal has no color capability.
+        $explicitTheme = $configPath !== ''
+            || $input->getOption('style') !== null
+            || (string) $input->getOption('theme') !== 'ansi';
+
+        if ($configPath !== '') {
+            $theme = Theme::fromJson($configPath);
+        } elseif (!$explicitTheme && !self::terminalSupportsColor()) {
+            // No explicit theme AND terminal cannot render color → use notty.
+            $theme = Theme::notty();
+        } else {
+            $theme = self::pickTheme($themeName);
+        }
 
         $width      = (int) $input->getOption('width');
         $renderer   = (new Renderer($theme))
@@ -110,6 +123,7 @@ final class RenderCommand extends Command
     /**
      * Probe the terminal for ANSI color capability.
      *
+     * Honors NO_COLOR and CLICOLOR=0 env vars before probing.
      * Falls back to true (assume color capable) on any probe error
      * so we never incorrectly refuse input due to a broken probe.
      */
@@ -118,6 +132,10 @@ final class RenderCommand extends Command
         try {
             if (self::$colorProbeCallback !== null) {
                 return (self::$colorProbeCallback)();
+            }
+            // Honor standard color-disabling env vars before probing the terminal.
+            if (getenv('NO_COLOR') !== '' || getenv('CLICOLOR') === '0') {
+                return false;
             }
             $report = TerminalProbe::run();
             return !$report->has(Capability::NoColor);
