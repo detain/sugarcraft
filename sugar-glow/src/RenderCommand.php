@@ -70,6 +70,9 @@ final class RenderCommand extends Command
             || (string) $input->getOption('theme') !== 'ansi';
 
         if ($configPath !== '') {
+            if (!is_readable($configPath)) {
+                throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $configPath]));
+            }
             $theme = Theme::fromJson($configPath);
         } elseif (!$explicitTheme && !self::terminalSupportsColor()) {
             // No explicit theme AND terminal cannot render color → use notty.
