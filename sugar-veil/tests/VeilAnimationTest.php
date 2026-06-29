@@ -59,8 +59,8 @@ final class VeilAnimationTest extends TestCase
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
 
-        // Result should contain dim ANSI codes
-        $this->assertStringContainsString("\x1b[2m", $result);
+        // Result should contain truecolor dim codes (black = 0;0;0 for 100% backdrop)
+        $this->assertStringContainsString("38;2;0;0;0", $result);
         // Foreground X should still be present
         $this->assertStringContainsString('X', $result);
     }
@@ -102,7 +102,8 @@ final class VeilAnimationTest extends TestCase
         $fg = "X";
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        $this->assertStringContainsString("\x1b[2m", $result);
+        // truecolor 128;128;128 for 50% (PHP rounds 127.5 to 128)
+        $this->assertStringContainsString("38;2;128;128;128", $result);
     }
 
     public function testBackdropWithHighOpacity(): void
@@ -115,8 +116,8 @@ final class VeilAnimationTest extends TestCase
         $fg = "X";
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        // Should have multiple dim passes
-        $this->assertStringContainsString("\x1b[2m", $result);
+        // Should have truecolor dim (black for 100% backdrop)
+        $this->assertStringContainsString("38;2;0;0;0", $result);
     }
 
     public function testApplyBackdropInnerLoopWithDimPassesThree(): void
@@ -129,8 +130,7 @@ final class VeilAnimationTest extends TestCase
         $fg = "X";
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        $this->assertStringContainsString("\x1b[2m", $result);
-        // With 3 dim passes, the wrapping occurs multiple times
+        $this->assertStringContainsString("38;2;0;0;0", $result);
     }
 
     public function testApplyBackdropInnerLoopWithDimPassesTwo(): void
@@ -142,7 +142,7 @@ final class VeilAnimationTest extends TestCase
         $fg = "X";
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        $this->assertStringContainsString("\x1b[2m", $result);
+        $this->assertStringContainsString("38;2;128;128;128", $result);
     }
 
     public function testBackdropMultiLineContent(): void
@@ -154,8 +154,8 @@ final class VeilAnimationTest extends TestCase
         $fg = "X";
 
         $result = $v->composite($fg, $bg, Position::TOP, Position::LEFT);
-        // Dim codes should be present (multiple passes applied to each line)
-        $this->assertStringContainsString("\x1b[2m", $result);
+        // Truecolor dim codes present (multiple passes applied to each line)
+        $this->assertStringContainsString("38;2;0;0;0", $result);
     }
 
     // ─── withAnimation ──────────────────────────────────────────────────────

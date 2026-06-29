@@ -85,7 +85,9 @@ final class VeilStack implements \Countable
         $sorted = $this->sorted();
         $result = $background;
         foreach ($sorted as $veil) {
-            $result = $veil->composite($result, $vertical, $horizontal, $xOffset, $yOffset);
+            // Use withoutSession() so inner compositing always emits full frame
+            // output, not a delta that would corrupt the chaining computation.
+            $result = $veil->withoutSession()->composite($result, $background, $vertical, $horizontal, $xOffset, $yOffset);
         }
         return $result;
     }
@@ -107,7 +109,16 @@ final class VeilStack implements \Countable
         $sorted = $this->sorted();
         $result = $background;
         foreach ($sorted as $veil) {
-            $result = $veil->composite($result, $background, Position::TOP, Position::LEFT);
+            // Use withoutSession() so inner compositing always emits full frame
+            // output, not a delta that would corrupt the chaining computation.
+            $result = $veil->withoutSession()->composite(
+                $result,
+                $background,
+                $veil->vPosition() ?? Position::CENTER,
+                $veil->hPosition() ?? Position::CENTER,
+                $veil->positionX(),
+                $veil->positionY(),
+            );
         }
         return $result;
     }

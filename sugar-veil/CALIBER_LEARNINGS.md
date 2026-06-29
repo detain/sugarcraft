@@ -3,9 +3,11 @@
 ## Backdrop Dimming
 
 - Backdrop opacity 0–100 is clamped internally via `max(0, min(100, $opacity))`
-- Converts to ANSI SGR dim passes: 0–100 maps to 0–3 `"\x1b[2m"` wrap passes
-- Applied per-line before compositing; each wrap adds `\x1b[2m`…`\x1b[0m` around the line
-- Dim codes nest cleanly — triple-wrap at 100% gives maximum dimming
+- Uses truecolor foreground blend toward black: `\e[38;2;R;G;Bm` where each channel = 255 * (1 - opacity/100)
+- Applied per-line before compositing; each dimmed line is wrapped as `\e[38;2;R;G;Bm`…`\e[39m`
+- This replaces the old nested `\e[2m` FAINT approach which only produced ~2 visual states; the truecolor blend gives a smooth gradient across 0–100%
+- At opacity 0, no dimming is applied (line returned unchanged)
+- Applies to all lines uniformly; for backdrop lines (typically terminal-default foreground) the gray blend achieves visible dimming; for styled overlay content the truecolor blends with existing colors
 
 ## Animation System
 
@@ -61,7 +63,8 @@
 ## Immutable Pattern
 
 - `withBackdrop()` and `withAnimation()` return new instances via private `mutate()`
-- `withZIndex()`, `withClickOutsideDismiss()`, `withAutoSize()`, `withBorder()`, and `withManager()` also return new instances via `mutate()`
+- `withZIndex()`, `withClickOutsideDismiss()`, `withAutoSize()`, `withBorder()`, `withManager()`, and `withPosition()` also return new instances via `mutate()`
+- `withoutSession()` returns a copy with a fresh `RenderSession`, used by `VeilStack` to ensure inner compositing always emits full frames
 - `animate()` delegates to `composite()` after applying animation transforms
 - All state held in `readonly` private properties
 - `mutate()` accepts nulls for optional parameters and falls back to `$this->property`

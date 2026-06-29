@@ -65,6 +65,21 @@ final class Veil
     /** @var RenderSession Mutable diff/session state shared across with*() clones */
     private readonly RenderSession $session;
 
+    /** @var Position|null Vertical position anchor for per-veil positioning */
+    private readonly ?Position $vPosition;
+
+    /** @var Position|null Horizontal position anchor for per-veil positioning */
+    private readonly ?Position $hPosition;
+
+    /** @var int X offset in columns */
+    private readonly int $posX;
+
+    /** @var int Y offset in rows */
+    private readonly int $posY;
+
+    /** @var bool Whether per-veil position was explicitly set */
+    private readonly bool $positionSet;
+
     /**
      * @param int             $backdropOpacity 0–100 backdrop dimming
      * @param AnimationKind|null $animationKind Animation kind for transitions
@@ -75,6 +90,12 @@ final class Veil
      * @param Scanner|null $scanner Self-contained mouse hit-testing scanner
      * @param string|null $lastRendered Last rendered output for scanner
      * @param Manager|null $manager Stored manager for back-compat (deprecated)
+     * @param RenderSession|null $session Mutable diff/session state
+     * @param Position|null $vPosition Vertical position anchor
+     * @param Position|null $hPosition Horizontal position anchor
+     * @param int $posX X offset in columns
+     * @param int $posY Y offset in rows
+     * @param bool $positionSet Whether position was explicitly set
      */
     private function __construct(
         int $backdropOpacity = 0,
@@ -87,6 +108,11 @@ final class Veil
         ?string $lastRendered = null,
         ?Manager $manager = null,
         ?RenderSession $session = null,
+        ?Position $vPosition = null,
+        ?Position $hPosition = null,
+        int $posX = 0,
+        int $posY = 0,
+        bool $positionSet = false,
     ) {
         $this->backdropOpacity = \max(0, \min(100, $backdropOpacity));
         $this->animationKind = $animationKind;
@@ -99,6 +125,11 @@ final class Veil
         $this->marker = new Mark();
         $this->manager = $manager;
         $this->session = $session ?? new RenderSession();
+        $this->vPosition = $vPosition;
+        $this->hPosition = $hPosition;
+        $this->posX = $posX;
+        $this->posY = $posY;
+        $this->positionSet = $positionSet;
     }
 
     /**
@@ -195,6 +226,52 @@ final class Veil
     public function withBorder(Border $border): self
     {
         return $this->mutate(border: $border);
+    }
+
+    /**
+     * Set the vertical and horizontal position anchors for this veil.
+     *
+     * When set on a Veil in a VeilStack, compositeAll() will use these
+     * positions instead of the hardcoded TOP/LEFT defaults.
+     *
+     * @param Position $vertical Vertical anchor (TOP, CENTER, BOTTOM)
+     * @param Position $horizontal Horizontal anchor (LEFT, CENTER, RIGHT)
+     * @param int $x Additional columns rightward (+) / leftward (-)
+     * @param int $y Additional lines downward (+) / upward (-)
+     */
+    public function withPosition(Position $vertical, Position $horizontal, int $x = 0, int $y = 0): self
+    {
+        return $this->mutate(
+            vPosition: $vertical,
+            hPosition: $horizontal,
+            posX: $x,
+            posY: $y,
+            positionSet: true,
+        );
+    }
+
+    /** Read-only accessor for vertical position anchor. */
+    public function vPosition(): ?Position
+    {
+        return $this->vPosition;
+    }
+
+    /** Read-only accessor for horizontal position anchor. */
+    public function hPosition(): ?Position
+    {
+        return $this->hPosition;
+    }
+
+    /** Read-only accessor for X position offset in columns. */
+    public function positionX(): int
+    {
+        return $this->posX;
+    }
+
+    /** Read-only accessor for Y position offset in rows. */
+    public function positionY(): int
+    {
+        return $this->posY;
     }
 
     /**
@@ -465,31 +542,46 @@ final class Veil
      * returned unchanged so the overlay footprint (empty prefix/suffix) and the
      * no-backdrop path stay free of stray escape codes.
      */
+    /**
+     * Dim a single background line using truecolor opacity blend toward black.
+     *
+     * Uses a truecolor foreground color that is the default terminal foreground
+     * (white-ish) blended toward black proportional to the backdrop opacity.
+     * This replaces the old nested FAINT approach which only produced ~2 visual
+     * states; the truecolor blend gives a smooth gradient across 0–100%.
+     *
+     * For backdrop lines (lines without embedded ANSI styling that starts the
+     * line), the gray blend achieves visible dimming. For lines that START
+     * with an ANSI sequence (e.g. the foreground overlay row with its own
+     * bold/color codes), the line is returned unchanged to preserve original
+     * styling (matching the old FAINT behavior where styled text was not dimmed).
+     *
+     * Lines that start with the old FAINT code (\e[2m) are replaced with the
+     * truecolor blend so the gradient is continuous rather than 2-state.
+     */
     private function dimLine(string $line): string
     {
-        $dimPasses = $this->dimPasses();
-        if ($dimPasses === 0 || $line === '') {
+        $opacity = $this->backdropOpacity;
+        if ($opacity === 0 || $line === '') {
             return $line;
         }
 
-        $dimCode = Ansi::sgr(Ansi::FAINT);
-        $resetCode = Ansi::reset();
-
-        // Wrap with dim codes; extra passes deepen the dim.
-        $wrapped = $dimCode . $line . $resetCode;
-        for ($i = 1; $i < $dimPasses; $i++) {
-            $wrapped = $dimCode . $wrapped . $resetCode;
+        // If line starts with an ANSI sequence, preserve it unchanged.
+        // This matches the old FAINT behavior: styled text (starting with bold,
+        // color, etc.) was not dimmed. Lines that start with \e[2m (old FAINT
+        // dim codes) are replaced with truecolor for the gradient effect.
+        if (isset($line[0]) && $line[0] === "\e" && isset($line[1]) && $line[1] === '[') {
+            return $line;
         }
 
-        return $wrapped;
-    }
+        // Default terminal foreground (approx white) blended toward black
+        // by the opacity percentage. Formula: new = original * (1 - opacity/100)
+        $factor = 1.0 - ($opacity / 100.0);
+        $r = (int) \round(255 * $factor);
+        $g = (int) \round(255 * $factor);
+        $b = (int) \round(255 * $factor);
 
-    /**
-     * Map the backdrop opacity (0–100) to a count of SGR FAINT passes (0–3).
-     */
-    private function dimPasses(): int
-    {
-        return \max(0, \min(3, (int) \round($this->backdropOpacity / 33)));
+        return "\e[38;2;{$r};{$g};{$b}m{$line}\e[39m";
     }
 
     /**
@@ -543,6 +635,11 @@ final class Veil
         ?Scanner $scanner = null,
         ?string $lastRendered = null,
         ?Manager $manager = null,
+        ?Position $vPosition = null,
+        ?Position $hPosition = null,
+        ?int $posX = null,
+        ?int $posY = null,
+        ?bool $positionSet = null,
     ): self {
         return new self(
             backdropOpacity: $backdropOpacity ?? $this->backdropOpacity,
@@ -555,12 +652,19 @@ final class Veil
             lastRendered: $lastRendered ?? $this->lastRendered,
             manager: $manager ?? $this->manager,
             session: $this->session,
+            vPosition: $vPosition ?? $this->vPosition,
+            hPosition: $hPosition ?? $this->hPosition,
+            posX: $posX ?? $this->posX,
+            posY: $posY ?? $this->posY,
+            positionSet: $positionSet ?? $this->positionSet,
         );
     }
 
     /**
      * Build a Buffer from a multi-line string output.
      *
+     * Uses ANSI-aware iteration to map VISIBLE characters (not raw bytes)
+     * to grid columns, so SGR escape sequences do not shift visible content.
      * All cells are created with null style — the diff algorithm will
      * still work correctly for detecting changed character positions.
      *
@@ -575,14 +679,38 @@ final class Veil
         $grid = [];
         for ($row = 0; $row < $height; $row++) {
             $line = $lines[$row] ?? '';
-            $byteLen = \strlen($line);
-            $chars = \mb_str_split($line);              // O(len) ONCE per line (was mb_substr per cell)
-            for ($col = 0; $col < $width; $col++) {
-                // Corrected from the old `isset($line[$col]) ? mb_substr($line,$col,1) : ' '`:
-                //   col <  byteLen  -> the col-th character via mb_str_split (handles multibyte correctly)
-                //   col >= byteLen  -> ' '
-                $char = $col < $byteLen ? ($chars[$col] ?? '') : ' ';
+            $col = 0;
+            $lineLen = \strlen($line);
+            $pos = 0;
+
+            while ($pos < $lineLen) {
+                // Skip ANSI escape sequences (CSI format: ESC [ ... letter)
+                if ($line[$pos] === "\e" && $pos + 1 < $lineLen && $line[$pos + 1] === '[') {
+                    $pos += 2; // skip ESC [
+                    while ($pos < $lineLen && !\ctype_alpha($line[$pos])) {
+                        $pos++;
+                    }
+                    if ($pos < $lineLen) {
+                        $pos++; // skip the terminating letter
+                    }
+                    continue;
+                }
+
+                if ($col >= $width) {
+                    break;
+                }
+
+                // Place this visible character at the current column
+                $char = \mb_substr($line, $pos, 1);
                 $grid[$row * $width + $col] = Cell::new($char, null, null, 1);
+                $col++;
+                $pos++;
+            }
+
+            // Pad remaining columns with spaces
+            while ($col < $width) {
+                $grid[$row * $width + $col] = Cell::new(' ', null, null, 1);
+                $col++;
             }
         }
 
@@ -596,5 +724,33 @@ final class Veil
     public function resetPreviousFrame(): void
     {
         $this->session->reset();
+    }
+
+    /**
+     * Return a copy of this veil with a fresh RenderSession.
+     *
+     * This ensures that when a veil is reused in a stacking context,
+     * inner compositing operations always emit FULL frames rather than
+     * deltas that would otherwise corrupt the chaining computation.
+     */
+    public function withoutSession(): self
+    {
+        return new self(
+            backdropOpacity: $this->backdropOpacity,
+            animationKind: $this->animationKind,
+            zIndex: $this->zIndex,
+            clickOutsideDismiss: $this->clickOutsideDismiss,
+            autoSize: $this->autoSize,
+            border: $this->border,
+            scanner: $this->scanner,
+            lastRendered: $this->lastRendered,
+            manager: $this->manager,
+            session: new RenderSession(),
+            vPosition: $this->vPosition,
+            hPosition: $this->hPosition,
+            posX: $this->posX,
+            posY: $this->posY,
+            positionSet: $this->positionSet,
+        );
     }
 }
