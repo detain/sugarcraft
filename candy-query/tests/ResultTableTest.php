@@ -220,4 +220,117 @@ final class ResultTableTest extends TestCase
         $t->scrollRight();
         $this->assertSame(0, $t->offset);
     }
+
+    // ── Bounded column measurement (page-size) ───────────────────────────────
+
+    public function testColWidthBoundedToRenderedPageSize(): void
+    {
+        // Create a table where the first row has a short value but a later row (beyond
+        // DEFAULT_PAGE_SIZE=25) has a very long value. The column width should be
+        // determined by the first 25 rows only, not the full set.
+        $shortValue = 'short';
+        $longValue = str_repeat('x', 200); // Very long value
+
+        // Row 0 has short value
+        $rows = [['col' => $shortValue]];
+        // Add rows 1-24 with short values
+        for ($i = 1; $i < 25; $i++) {
+            $rows[] = ['col' => 'medium'];
+        }
+        // Row 25 has the very long value — beyond DEFAULT_PAGE_SIZE=25
+        $rows[] = ['col' => $longValue];
+
+        $t = ResultTable::fromRows($rows);
+        $widths = $t->colWidths();
+
+        // Width should be based on short/medium values in rows 0-24, not the
+        // very long value in row 25 which is beyond the rendered page.
+        $this->assertLessThan(200, $widths['col']);
+    }
+
+    public function testColWidthWithRowsChangeRecomputes(): void
+    {
+        $t = ResultTable::fromRows([['col' => 'short']]);
+        $widths1 = $t->colWidths();
+
+        $t2 = $t->withRows([['col' => str_repeat('x', 100)]]);
+        $widths2 = $t2->colWidths();
+
+        // withRows changed the rows — colWidths should be recomputed
+        $this->assertNotEquals($widths1['col'], $widths2['col']);
+    }
+
+    // ── Memoization — scroll/with* preserve colWidths ───────────────────────
+
+    public function testScrollRightPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows())->withVisibleWidth(20);
+        $widthsBefore = $t->colWidths();
+
+        $scrolled = $t->scrollRight();
+        $widthsAfter = $scrolled->colWidths();
+
+        // scrollRight() doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testScrollLeftPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows())->withOffset(2)->withVisibleWidth(20);
+        $widthsBefore = $t->colWidths();
+
+        $scrolled = $t->scrollLeft();
+        $widthsAfter = $scrolled->colWidths();
+
+        // scrollLeft() doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testWithVisibleWidthPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows());
+        $widthsBefore = $t->colWidths();
+
+        $wider = $t->withVisibleWidth(200);
+        $widthsAfter = $wider->colWidths();
+
+        // withVisibleWidth doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testWithJsonPrettyPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows());
+        $widthsBefore = $t->colWidths();
+
+        $toggled = $t->withJsonPretty(false);
+        $widthsAfter = $toggled->colWidths();
+
+        // withJsonPretty doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testWithNullTokenPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows());
+        $widthsBefore = $t->colWidths();
+
+        $toggled = $t->withNullToken('NULL');
+        $widthsAfter = $toggled->colWidths();
+
+        // withNullToken doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
+
+    public function testWithOffsetPreservesColWidths(): void
+    {
+        $t = ResultTable::fromRows($this->rows())->withVisibleWidth(20);
+        $widthsBefore = $t->colWidths();
+
+        $offset = $t->withOffset(1);
+        $widthsAfter = $offset->colWidths();
+
+        // withOffset doesn't change rows — colWidths should be reused
+        $this->assertSame($widthsBefore, $widthsAfter);
+    }
 }

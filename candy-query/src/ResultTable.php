@@ -62,6 +62,9 @@ final class ResultTable
 
     /**
      * @param list<array<string,mixed>> $rows
+     * @param list<string,int>|null $precomputedColWidths Optional pre-computed column
+     *        widths from an existing instance (used by with* builders that don't change
+     *        rows to avoid recomputation). When provided, bypasses computeColWidths().
      */
     public function __construct(
         array $rows = [],
@@ -71,6 +74,7 @@ final class ResultTable
         bool $jsonPretty = true,
         string $nullToken = self::NULL_TOKEN,
         int $colSpacing = 2,
+        ?array $precomputedColWidths = null,
     ) {
         $this->rows = $rows;
         $this->offset = $offset;
@@ -85,7 +89,9 @@ final class ResultTable
         // below. Casting keeps width/pad/lookup uniform ($row["1"] still hits
         // the int key 1 thanks to PHP key normalization).
         $this->columns = $rows === [] ? [] : array_map('strval', array_keys($rows[0]));
-        $this->colWidths = $this->computeColWidths();
+        // Use pre-computed widths when passed (memoization via with* builders that
+        // don't change rows), otherwise compute fresh (bounded to rendered page size).
+        $this->colWidths = $precomputedColWidths ?? $this->computeColWidths();
     }
 
     // ── Factories ──────────────────────────────────────────────────────────────
@@ -111,6 +117,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -126,6 +133,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -142,6 +150,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            // rows changed — must recompute colWidths
         );
     }
 
@@ -155,6 +164,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -168,6 +178,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -181,6 +192,7 @@ final class ResultTable
             jsonPretty: $pretty,
             nullToken: $this->nullToken,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -194,6 +206,7 @@ final class ResultTable
             jsonPretty: $this->jsonPretty,
             nullToken: $token,
             colSpacing: $this->colSpacing,
+            precomputedColWidths: $this->colWidths,
         );
     }
 
@@ -437,9 +450,12 @@ final class ResultTable
     private function computeColWidths(): array
     {
         $widths = [];
+        // Bound measurement to the rows that can actually be rendered (page size).
+        // Wide values beyond row 25 no longer influence column widths.
+        $renderedRows = array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE);
         foreach ($this->columns as $col) {
             $max = mb_strlen($col);
-            foreach ($this->rows as $row) {
+            foreach ($renderedRows as $row) {
                 $val = $this->formatValuePlain($row[$col] ?? null);
                 $len = mb_strlen($val);
                 if ($len > $max) {
