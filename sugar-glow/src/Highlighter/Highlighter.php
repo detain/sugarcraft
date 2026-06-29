@@ -38,9 +38,10 @@ final class Highlighter
         return preg_replace_callback(
             '/```(\w+)?\n([\s\S]*?)```/',
             function (array $matches): string {
-                $lang = $matches[1] ?? 'text';
+                $lang = $matches[1] ?? '';
                 $code = $matches[2];
-                if ($this->inner !== null && $this->inner->supports($lang)) {
+                // Only highlight when a language is specified AND the inner highlighter supports it.
+                if ($lang !== '' && $this->inner !== null && $this->inner->supports($lang)) {
                     $code = $this->inner->highlight(rtrim($code), $lang);
                 }
                 return $code;

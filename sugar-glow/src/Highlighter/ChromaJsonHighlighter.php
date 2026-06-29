@@ -112,7 +112,8 @@ final class ChromaJsonHighlighter implements HighlighterInterface
 
     public function supports(string $language): bool
     {
-        // Simple regex-based highlighter supports all languages
-        return true;
+        // Supports any language except empty-string (no language specified)
+        // and the generic 'text' sentinel (plain text, not to be highlighted).
+        return $language !== '' && $language !== 'text';
     }
 }

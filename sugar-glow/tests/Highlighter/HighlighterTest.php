@@ -103,6 +103,30 @@ MD;
         self::assertStringContainsString('some code without a language', $result);
     }
 
+    public function testLanguagelessBlockIsNotHighlighted(): void
+    {
+        // A fenced block with no language tag (empty string) must not be highlighted.
+        $highlighter = Highlighter::new();
+        $markdown = "```\n\$x = 1;\n```";
+        $result = $highlighter->highlightMarkdown($markdown);
+        // No SGR escape sequences should be present.
+        self::assertStringNotContainsString("\x1b[", $result);
+        // The code content is preserved.
+        self::assertStringContainsString('$x = 1;', $result);
+    }
+
+    public function testTaggedBlockIsHighlighted(): void
+    {
+        // A fenced block with a recognized language tag should be highlighted.
+        $highlighter = Highlighter::new();
+        $markdown = "```php\necho 'hello';\n```";
+        $result = $highlighter->highlightMarkdown($markdown);
+        // ANSI SGR codes must be present in the output.
+        self::assertStringContainsString("\x1b[", $result);
+        // The code block fences are stripped.
+        self::assertStringNotContainsString('```php', $result);
+    }
+
     public function testWithHighlighterReturnsNewInstance(): void
     {
         $highlighter = Highlighter::new();
