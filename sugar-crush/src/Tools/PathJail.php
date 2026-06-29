@@ -13,12 +13,16 @@ final class PathJail
             return null;
         }
 
-        $fullPath = $rootReal . '/' . ltrim($path, '/');
+        if (str_starts_with($path, '/')) {
+            $fullPath = $path;
+        } else {
+            $fullPath = $rootReal . '/' . ltrim($path, '/');
+        }
         $resolved = realpath($fullPath);
 
         if ($resolved === false) {
             $resolvedDir = realpath(dirname($fullPath));
-            if ($resolvedDir !== false && str_starts_with($resolvedDir, $rootReal)) {
+            if ($resolvedDir !== false && (str_starts_with($resolvedDir, $rootReal . '/') || $resolvedDir === $rootReal)) {
                 return $fullPath;
             }
             return null;
@@ -38,7 +42,11 @@ final class PathJail
             return null;
         }
 
-        $fullPath = $rootReal . '/' . ltrim($path, '/');
+        if (str_starts_with($path, '/')) {
+            $fullPath = $path;
+        } else {
+            $fullPath = $rootReal . '/' . ltrim($path, '/');
+        }
         $resolved = realpath($fullPath);
 
         if ($resolved === false) {
