@@ -560,6 +560,9 @@ final class Theme
      */
     public static function fromJson(string $path): self
     {
+        if (!is_file($path)) {
+            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
         $raw = @file_get_contents($path);
         if ($raw === false) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));

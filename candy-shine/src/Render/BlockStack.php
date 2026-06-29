@@ -11,7 +11,7 @@ namespace SugarCraft\Shine\Render;
  * Available width = wordWrap - accumulatedIndent - marginCount * 2
  * computed from root on each call, not running subtraction.
  */
-class BlockStack
+final class BlockStack
 {
     /** @var BlockContext[] */
     private array $stack = [];
