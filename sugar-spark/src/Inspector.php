@@ -143,8 +143,7 @@ final class Inspector
             'K' => 'erase line '      . ($params === '' ? '0' : $params),
             'L' => 'insert lines '    . ($params === '' ? '1' : $params),
             'M' => 'delete lines '    . ($params === '' ? '1' : $params),
-            'P' => 'F1',
-            'Q' => 'F2',
+            'P' => 'delete chars ' . ($params === '' ? '1' : $params),
             'R' => 'cursor position report ' . $params,
             'S' => 'scroll up ' . ($params === '' ? '1' : $params),
             'T' => 'scroll down ' . ($params === '' ? '1' : $params),
@@ -176,7 +175,7 @@ final class Inspector
         }
         $codes = explode(';', $params);
         $parts = [];
-        for ($i = 0; $i < count($codes); $i++) {
+        for ($i = 0, $n = count($codes); $i < $n; $i++) {
             $codeStr = $codes[$i];
             $code = (int) $codeStr;
             // Handle SGR 4:N underline styles - either standalone "4:2" or embedded in codeStr "4:2".
@@ -201,14 +200,29 @@ final class Inspector
                 $kind = $code === 38 ? 'foreground' : 'background';
                 $sub  = (int) ($codes[$i + 1] ?? 0);
                 if ($sub === 5) {
-                    $parts[] = sprintf('%s 256-color %d', $kind, (int) ($codes[$i + 2] ?? 0));
-                    $i += 2;
+                    if (!isset($codes[$i + 2])) {
+                        $parts[] = "$kind truncated 256-color";
+                        $i += 1; // Only the sub (5) was present.
+                    } else {
+                        $parts[] = sprintf('%s 256-color %d', $kind, (int) $codes[$i + 2]);
+                        $i += 2;
+                    }
                 } elseif ($sub === 2) {
-                    $parts[] = sprintf('%s rgb(%d,%d,%d)', $kind,
-                        (int) ($codes[$i + 2] ?? 0),
-                        (int) ($codes[$i + 3] ?? 0),
-                        (int) ($codes[$i + 4] ?? 0));
-                    $i += 4;
+                    if (!isset($codes[$i + 2]) || !isset($codes[$i + 3]) || !isset($codes[$i + 4])) {
+                        $parts[] = "$kind truncated truecolor";
+                        // Advance past only the params that were present.
+                        $present = 1; // the '2' sub-param itself.
+                        if (isset($codes[$i + 2])) { $present++; }
+                        if (isset($codes[$i + 3])) { $present++; }
+                        if (isset($codes[$i + 4])) { $present++; }
+                        $i += $present;
+                    } else {
+                        $parts[] = sprintf('%s rgb(%d,%d,%d)', $kind,
+                            (int) $codes[$i + 2],
+                            (int) $codes[$i + 3],
+                            (int) $codes[$i + 4]);
+                        $i += 4;
+                    }
                 } else {
                     $parts[] = "$kind unknown";
                     $i += 1;
@@ -310,19 +324,20 @@ final class Inspector
     public static function describeOsc(string $payload): string
     {
         if (preg_match('/^(\d+);(.*)$/s', $payload, $m) === 1) {
+            $safe = self::sanitizeLabelBytes($m[2]);
             return match ($m[1]) {
-                '0', '2'  => 'set window title to "' . $m[2] . '"',
-                '1'       => 'set icon name to "' . $m[2] . '"',
-                '4'       => 'palette ' . $m[2],
-                '7'       => 'cwd ' . $m[2],
-                '8'       => 'hyperlink ' . $m[2],
+                '0', '2'  => 'set window title to "' . $safe . '"',
+                '1'       => 'set icon name to "' . $safe . '"',
+                '4'       => 'palette ' . $safe,
+                '7'       => 'cwd ' . $safe,
+                '8'       => 'hyperlink ' . $safe,
                 '9'       => str_starts_with($m[2], '4;')
-                                ? 'progress ' . substr($m[2], 2)
-                                : 'iTerm2 ' . $m[2],
-                '10'      => 'set foreground colour ' . $m[2],
-                '11'      => 'set background colour ' . $m[2],
-                '12'      => 'set cursor colour ' . $m[2],
-                '52'      => 'clipboard ' . $m[2],
+                                ? 'progress ' . self::sanitizeLabelBytes(substr($m[2], 2))
+                                : 'iTerm2 ' . $safe,
+                '10'      => 'set foreground colour ' . $safe,
+                '11'      => 'set background colour ' . $safe,
+                '12'      => 'set cursor colour ' . $safe,
+                '52'      => 'clipboard ' . $safe,
                 '110'     => 'reset foreground colour',
                 '111'     => 'reset background colour',
                 '112'     => 'reset cursor colour',
@@ -354,8 +369,12 @@ final class Inspector
             return 'terminal version (XTVERSION reply): ' . substr($payload, 2);
         }
         // sixel: DCS P q data ST
-        // The 'q' is consumed as final byte, data starts directly with sixel pixels
-        if ($final === ord('q') || str_contains($payload, 'sixel')) {
+        // The 'q' is consumed as final byte, data starts directly with sixel pixels.
+        // NOTE: streaming sixel (Step 9) currently calls describeDcs($payload) with
+        // no $final — after Step 9 $final will be threaded through, restoring sixel
+        // detection for streaming.  The str_contains 'sixel' check was dropped as
+        // unreliable (real sixel data never contains the literal ASCII "sixel").
+        if ($final === ord('q')) {
             return 'sixel image (' . strlen($payload) . ' bytes)';
         }
         // DECRPSS reply: candy-ansi parses '1$r0$p' as:
@@ -379,12 +398,12 @@ final class Inspector
     public static function describeApc(string $payload): string
     {
         if (str_starts_with($payload, 'candyzone:')) {
-            return 'CandyZone marker ' . substr($payload, strlen('candyzone:'));
+            return 'CandyZone marker ' . self::sanitizeLabelBytes(substr($payload, strlen('candyzone:')));
         }
         if (str_starts_with($payload, 'G')) {
             return 'kitty graphics (' . strlen($payload) . ' bytes)';
         }
-        return 'APC ' . $payload;
+        return 'APC ' . self::sanitizeLabelBytes($payload);
     }
 
     public static function describeSs3(string $final): string
@@ -429,5 +448,33 @@ final class Inspector
             5 => 'underline dashed',
             default => 'underline style ' . $n,
         };
+    }
+
+    /**
+     * Replace C0 control bytes in a label interpolation with visible tokens.
+     *
+     * Prevents an embedded ESC in a captured OSC/APC payload from re-arming
+     * a sequence when the report is rendered to a live terminal.
+     *
+     * @param string $s Raw payload string interpolated into a human-readable label.
+     */
+    private static function sanitizeLabelBytes(string $s): string
+    {
+        return preg_replace_callback(
+            '/[\x00-\x1F\x7F]/',
+            static fn(array $m): string => match ($m[0][0]) {
+                "\x1b" => 'ESC',
+                "\x00" => 'NUL', "\x01" => 'SOH', "\x02" => 'STX', "\x03" => 'ETX',
+                "\x04" => 'EOT', "\x05" => 'ENQ', "\x06" => 'ACK', "\x07" => 'BEL',
+                "\x08" => 'BS',  "\x09" => 'HT',  "\x0a" => 'LF',  "\x0b" => 'VT',
+                "\x0c" => 'FF',  "\x0d" => 'CR',  "\x0e" => 'SO',  "\x0f" => 'SI',
+                "\x10" => 'DLE', "\x11" => 'DC1', "\x12" => 'DC2', "\x13" => 'DC3',
+                "\x14" => 'DC4', "\x15" => 'NAK', "\x16" => 'SYN', "\x17" => 'ETB',
+                "\x18" => 'CAN', "\x19" => 'EM',  "\x1a" => 'SUB', "\x1c" => 'FS',
+                "\x1d" => 'GS',  "\x1e" => 'RS',  "\x1f" => 'US',  "\x7f" => 'DEL',
+                default => sprintf('\\x%02X', ord($m[0])),
+            },
+            $s,
+        );
     }
 }

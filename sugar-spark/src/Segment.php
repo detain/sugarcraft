@@ -13,6 +13,10 @@ namespace SugarCraft\Spark;
  *   - {@see TextSegment}     — visible payload between escape sequences.
  *   - {@see SequenceSegment} — a single ANSI escape sequence with a
  *     decoded label.
+ *
+ * @note Sequences are rendered in normalized form by {@see raw()}.  OSC/DCS
+ *   terminators are normalized to BEL/ST and may differ byte-for-byte from
+ *   the original input (e.g. OSC ST \x1b\\ becomes BEL \x07).
  */
 abstract class Segment
 {
