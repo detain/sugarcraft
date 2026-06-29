@@ -6,10 +6,8 @@ namespace SugarCraft\Stash;
 
 /**
  * Represents a single git worktree.
- *
- * @readonly
  */
-final class WorktreeEntry
+final readonly class WorktreeEntry
 {
     public function __construct(
         public readonly string $path,

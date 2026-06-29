@@ -112,4 +112,103 @@ final class RendererTest extends TestCase
         // The 'long-subject-line' subject is 90 chars; should be cut to 25 + '…'.
         $this->assertStringContainsString('…', $out);
     }
+
+    public function testSanitizesControlBytes(): void
+    {
+        // Create a git that returns paths and subjects with control bytes
+        $g = new class implements \SugarCraft\Stash\GitDriver {
+            public function status(): array {
+                return [
+                    ['branch_summary' => 'main'],
+                    ['index_status' => 'M', 'work_status' => ' ', 'path' => "src/\x07bell.php"],
+                ];
+            }
+            public function branches(): array {
+                return [['name' => "branch-\x07bell", 'sha' => 'abc', 'current' => true]];
+            }
+            public function log(int $limit = 25): array {
+                return [['sha' => 'abc', 'subject' => "evil\x07bell", 'author' => 'Joe', 'ago' => '5m']];
+            }
+            public function stage(string $path): void {}
+            public function unstage(string $path): void {}
+            public function checkout(string $branch): void {}
+            public function commit(string $message): void {}
+            public function stageAll(): void {}
+            public function unstageAll(): void {}
+            public function diff(string $path): array { return []; }
+            public function discard(string $path): void {}
+            public function amend(): void {}
+            public function stagePatch(string $path, string $hunk): void {}
+            public function unstagePatch(string $path, string $hunk): void {}
+            public function createBranch(string $name): void {}
+            public function deleteBranch(string $name): void {}
+            public function merge(string $branch): void {}
+            public function rebaseContinue(): void {}
+            public function rebaseAbort(): void {}
+            public function rebaseSkip(): void {}
+            public function reset(): void {}
+            public function stashList(): array { return []; }
+            public function stashApply(string $stashRef): void {}
+            public function stashDrop(string $stashRef): void {}
+            public function cherryPick(string $commit): void {}
+            public function cherryPickContinue(): void {}
+            public function cherryPickAbort(): void {}
+            public function worktreeList(): array { return []; }
+            public function worktreeAdd(string $path, string $branch): void {}
+            public function worktreeRemove(string $path): void {}
+            public function rebaseInProgress(): bool { return false; }
+        };
+        $a = App::start($g);
+        $out = Renderer::render($a);
+        // Control bytes (bell \x07) must be stripped from rendered output
+        $this->assertStringNotContainsString("\x07", $out);
+    }
+
+    public function testTruncatesLongPath(): void
+    {
+        $longPath = str_repeat('a', 200);
+        $g = new class($longPath) implements \SugarCraft\Stash\GitDriver {
+            private string $path;
+            public function __construct(string $path) { $this->path = $path; }
+            public function status(): array {
+                return [['branch_summary' => 'main'], ['index_status' => 'M', 'work_status' => ' ', 'path' => $this->path]];
+            }
+            public function branches(): array { return [['name' => 'main', 'sha' => 'abc', 'current' => true]]; }
+            public function log(int $limit = 25): array { return [['sha' => 'abc', 'subject' => 'short', 'author' => 'Joe', 'ago' => '5m']]; }
+            public function stage(string $path): void {}
+            public function unstage(string $path): void {}
+            public function checkout(string $branch): void {}
+            public function commit(string $message): void {}
+            public function stageAll(): void {}
+            public function unstageAll(): void {}
+            public function diff(string $path): array { return []; }
+            public function discard(string $path): void {}
+            public function amend(): void {}
+            public function stagePatch(string $path, string $hunk): void {}
+            public function unstagePatch(string $path, string $hunk): void {}
+            public function createBranch(string $name): void {}
+            public function deleteBranch(string $name): void {}
+            public function merge(string $branch): void {}
+            public function rebaseContinue(): void {}
+            public function rebaseAbort(): void {}
+            public function rebaseSkip(): void {}
+            public function reset(): void {}
+            public function stashList(): array { return []; }
+            public function stashApply(string $stashRef): void {}
+            public function stashDrop(string $stashRef): void {}
+            public function cherryPick(string $commit): void {}
+            public function cherryPickContinue(): void {}
+            public function cherryPickAbort(): void {}
+            public function worktreeList(): array { return []; }
+            public function worktreeAdd(string $path, string $branch): void {}
+            public function worktreeRemove(string $path): void {}
+            public function rebaseInProgress(): bool { return false; }
+        };
+        $a = App::start($g);
+        $out = Renderer::render($a);
+        // Long path should be truncated with ellipsis
+        $this->assertStringContainsString('…', $out);
+        // The long string of 'a' characters should not appear in full - it should be truncated
+        $this->assertStringNotContainsString(str_repeat('a', 50), $out);
+    }
 }
