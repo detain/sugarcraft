@@ -374,6 +374,40 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
+        // Modified keys: CSI 1;<mod><final> (xterm format)
+        // e.g., CSI 1;2A = Shift+ArrowUp, CSI 1;5C = Ctrl+ArrowRight
+        if (preg_match('/^(\d+)(?:;(\d+))?([A-DF-HJ-KP-T])$/', $csi, $m)) {
+            $num = (int)$m[1];
+            $modRaw = isset($m[2]) ? (int)$m[2] : 1;
+            $final = $m[3];
+
+            // xterm modified keys always have num=1 and a modifier parameter
+            if ($num === 1 && isset($m[2]) && $modRaw > 1) {
+                $modifiers = KeyModifier::fromXtermParam($modRaw);
+
+                $keyMap = [
+                    'A' => 'ArrowUp',
+                    'B' => 'ArrowDown',
+                    'C' => 'ArrowRight',
+                    'D' => 'ArrowLeft',
+                    'H' => 'Home',
+                    'F' => 'End',
+                    'P' => 'F1',
+                    'Q' => 'F2',
+                    'R' => 'F3',
+                    'S' => 'F4',
+                ];
+
+                if (isset($keyMap[$final])) {
+                    $matched = $m[0];
+                    return [
+                        'events' => [new KeyEvent($keyMap[$final], $modifiers, "\x1b[" . $matched)],
+                        'remaining' => substr($csi, strlen($matched)),
+                    ];
+                }
+            }
+        }
+
         // Arrow keys: CSI A/B/C/D (or SS3 O{A/B/C/D})
         $arrowMap = ['A' => 'ArrowUp', 'B' => 'ArrowDown', 'C' => 'ArrowRight', 'D' => 'ArrowLeft'];
         if (isset($arrowMap[$csi[0]])) {

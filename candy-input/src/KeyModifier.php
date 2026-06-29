@@ -122,6 +122,25 @@ final class KeyModifier
     }
 
     /**
+     * Build a modifier mask from an xterm modified-key parameter.
+     *
+     * Xterm encodes modifiers as 1 + bitmask where bit 0=Shift,
+     * bit 1=Alt, bit 2=Ctrl, bit 3=Meta.
+     *
+     * @see Mirrors xterm modifier key sequence format
+     */
+    public static function fromXtermParam(int $xtermParam): self
+    {
+        $mask = 0;
+        if (($xtermParam - 1) & 1) { $mask |= self::SHIFT; }
+        if (($xtermParam - 1) & 2) { $mask |= self::ALT; }
+        if (($xtermParam - 1) & 4) { $mask |= self::CTRL; }
+        if (($xtermParam - 1) & 8) { $mask |= self::META; }
+
+        return new self($mask);
+    }
+
+    /**
      * Check if a specific modifier flag is set.
      *
      * @param int $flag One of the KeyModifier::SHIFT, ::ALT, ::CTRL, etc. constants
