@@ -809,7 +809,10 @@ final class Renderer
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
 
         if ($text === '' || $text === $url) {
-            $rendered = $this->theme->link->render($url);
+            // Autolink case: bare URL rendered as link text.
+            // Prefer the dedicated autolink slot; fall back to link style.
+            $style = $this->theme->autolink ?? $this->theme->link;
+            $rendered = $style->render($url);
             return $hyperlinks
                 ? Ansi::hyperlink($url, $rendered)
                 : $rendered;

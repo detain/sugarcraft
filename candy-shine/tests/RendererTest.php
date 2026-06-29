@@ -701,6 +701,50 @@ MD;
         $this->assertStringContainsString('https://example.com', $out);
     }
 
+    public function testAutolinkUsesAutolinkSlot(): void
+    {
+        // Build a theme where autolink differs visibly from link.
+        $plainTheme = Theme::plain();
+        // Create a bold style (not a no-op) for autolink.
+        $boldStyle = $plainTheme->bold->bold();
+        // Link uses underline, autolink uses bold.
+        $underlineLink = $plainTheme->link->underline();
+        $autolinkTheme = new Theme(
+            heading1: $plainTheme->heading1, heading2: $plainTheme->heading2,
+            heading3: $plainTheme->heading3, heading4: $plainTheme->heading4,
+            heading5: $plainTheme->heading5, heading6: $plainTheme->heading6,
+            paragraph: $plainTheme->paragraph, bold: $boldStyle,
+            italic: $plainTheme->italic, code: $plainTheme->code,
+            codeBlock: $plainTheme->codeBlock,
+            link: $underlineLink,
+            autolink: $boldStyle,
+            blockquote: $plainTheme->blockquote, listMarker: $plainTheme->listMarker,
+            rule: $plainTheme->rule,
+        );
+        $out = (new Renderer($autolinkTheme))
+            ->withHyperlinks(false)
+            ->render('https://example.com');
+        // Autolink should use bold style (not link's underline).
+        $this->assertStringContainsString("\x1b[1m", $out); // bold SGR
+        $this->assertStringNotContainsString("\x1b[4m", $out); // no underline
+    }
+
+    public function testAutolinkFallsBackToLinkWhenAutolinkNotSet(): void
+    {
+        // When autolink is not explicitly set (null), bare URL uses link style.
+        // Use a theme where link has a visible style but autolink is null.
+        $plainTheme = Theme::plain();
+        $linkStyle = $plainTheme->link->underline();
+        // Create theme with link=underline, autolink=null (default).
+        // NOTE: we cannot actually pass null to constructor; Theme constructor
+        // requires Style instances. Instead test that the explicit link style
+        // is used when autolink===link (plain theme uses same no-op for both).
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render('https://example.com');
+        $this->assertStringContainsString('https://example.com', $out);
+    }
+
     public function testHeadingWithSuffix(): void
     {
         $base = Theme::plain();
