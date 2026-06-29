@@ -1150,16 +1150,16 @@ final class Player implements Model
             totalFrames: $changes['totalFrames'] ?? $this->totalFrames,
             cellsW: $changes['cellsW'] ?? $this->cellsW,
             cellsH: $changes['cellsH'] ?? $this->cellsH,
-            videoPath: $this->videoPath,
+            videoPath: $this->videoPath, // pinned — videoPath is immutable for the player's lifetime
             audioPlayer: $changes['audioPlayer'] ?? $this->audioPlayer,
             // ?? is null-coalescing, so passing ended => false / frameIndex => 0
             // through mutate() is honourée (false/0 are not null).
             ended: $changes['ended'] ?? $this->ended,
             loop: $changes['loop'] ?? $this->loop,
-            ramp: $this->ramp,
-            audioFactory: $this->audioFactory,
-            cellPxW: $this->cellPxW,
-            cellPxH: $this->cellPxH,
+            ramp: $changes['ramp'] ?? $this->ramp,
+            audioFactory: $changes['audioFactory'] ?? $this->audioFactory,
+            cellPxW: $changes['cellPxW'] ?? $this->cellPxW,
+            cellPxH: $changes['cellPxH'] ?? $this->cellPxH,
         );
     }
 
