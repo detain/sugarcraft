@@ -25,6 +25,8 @@ final class Database
 {
     private \SQLite3 $db;
     private string $name;
+    private bool $closed = false;
+    private bool $inTransaction = false;
 
     public function __construct(string $path, string $name)
     {
@@ -199,20 +201,38 @@ final class Database
 
     /**
      * Count entries matching a pattern.
+     *
+     * @param string|null $pattern Glob pattern, or null for total count.
      */
     public function count(?string $pattern = null): int
     {
+        $now = (new \DateTimeImmutable())->format(\DATE_ATOM);
+
         if ($pattern === null) {
             $r = $this->db->query('SELECT COUNT(*) FROM entries');
+            if ($r === false) {
+                throw new \RuntimeException(Lang::t('database.query_failed'));
+            }
             $row = $r->fetchArray();
-            return $row[0] ?? 0;
+            return (int) ($row[0] ?? 0);
         }
 
-        $count = 0;
-        foreach ($this->list($pattern) as $_) {
-            $count++;
+        $like = $this->globToLike($pattern);
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
+                . ' AND (expires_at IS NULL OR expires_at >= :now)'
+        );
+        $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
+        $stmt->bindValue(':now', $now, \SQLITE3_TEXT);
+        $result = $stmt->execute();
+        if ($result === false) {
+            $stmt->close();
+            throw new \RuntimeException(Lang::t('database.query_failed'));
         }
-        return $count;
+        $row = $result->fetchArray(\SQLITE3_NUM);
+        $stmt->close();
+
+        return (int) ($row[0] ?? 0);
     }
 
     /**
@@ -221,14 +241,43 @@ final class Database
      */
     public function deleteMany(string $pattern): int
     {
-        $deleted = 0;
-        foreach ($this->list($pattern) as $entry) {
-            if ($entry instanceof Entry) {
-                $this->delete($entry->key);
-                $deleted++;
-            }
-        }
+        $like = $this->globToLike($pattern);
+        $stmt = $this->db->prepare(
+            'DELETE FROM entries WHERE key LIKE :pat ESCAPE \'\\\''
+        );
+        $stmt->bindValue(':pat', $like, \SQLITE3_TEXT);
+        $stmt->execute();
+        $deleted = $this->db->changes();
+        $stmt->close();
+
         return $deleted;
+    }
+
+    /**
+     * Convert a glob pattern (* and ?) to a SQL LIKE string.
+     */
+    private function globToLike(string $pattern): string
+    {
+        $like = '';
+        $i = 0;
+        $len = \strlen($pattern);
+
+        while ($i < $len) {
+            $c = $pattern[$i];
+            if ($c === '*') {
+                $like .= '%';
+            } elseif ($c === '?') {
+                $like .= '_';
+            } elseif ($c === '%' || $c === '_') {
+                // Escape SQL LIKE wildcards
+                $like .= '\\' . $c;
+            } else {
+                $like .= $c;
+            }
+            $i++;
+        }
+
+        return $like;
     }
 
     /**
@@ -289,15 +338,38 @@ final class Database
      */
     public function transaction(callable $fn): mixed
     {
-        $this->db->exec('BEGIN IMMEDIATE');
-        try {
-            $result = $fn();
-            $this->db->exec('COMMIT');
-            return $result;
-        } catch (\Throwable $e) {
-            $this->db->exec('ROLLBACK');
-            throw $e;
+        if ($this->inTransaction) {
+            throw new \RuntimeException('Nested transactions are not supported.');
         }
+        $this->inTransaction = true;
+        try {
+            $this->db->exec('BEGIN IMMEDIATE');
+            try {
+                $result = $fn();
+                $this->db->exec('COMMIT');
+                return $result;
+            } catch (\Throwable $e) {
+                $this->db->exec('ROLLBACK');
+                throw $e;
+            }
+        } finally {
+            $this->inTransaction = false;
+        }
+    }
+
+    /**
+     * Close the database connection.
+     *
+     * Idempotent: safe to call multiple times. After close() the database
+     * should not be used for further operations.
+     */
+    public function close(): void
+    {
+        if ($this->closed) {
+            return;
+        }
+        $this->db->close();
+        $this->closed = true;
     }
 
     // -------------------------------------------------------------------------
@@ -314,24 +386,7 @@ final class Database
      */
     private function buildGlobQuery(string $pattern, string $order, string $now): array
     {
-        $like = '';
-        $i = 0;
-        $len = \strlen($pattern);
-
-        while ($i < $len) {
-            $c = $pattern[$i];
-            if ($c === '*') {
-                $like .= '%';
-            } elseif ($c === '?') {
-                $like .= '_';
-            } elseif ($c === '%' || $c === '_') {
-                // Escape SQL LIKE wildcards
-                $like .= '\\' . $c;
-            } else {
-                $like .= $c;
-            }
-            $i++;
-        }
+        $like = $this->globToLike($pattern);
 
         return [
             "SELECT key, value, binary, created, modified, expires_at
