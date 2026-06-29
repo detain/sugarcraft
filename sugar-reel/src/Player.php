@@ -19,6 +19,7 @@ use SugarCraft\Reel\Decode\Decoder;
 use SugarCraft\Reel\Decode\DecoderFactory;
 use SugarCraft\Reel\Decode\RgbFrame;
 use SugarCraft\Reel\Msg\TickMsg;
+use SugarCraft\Reel\Render\FrameRenderer;
 use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
@@ -73,6 +74,7 @@ final class Player implements Model
      * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
      * @param int                         $cellPxH      Pixel height of a terminal cell
      * @param WebVtt|null                 $subtitles    Parsed subtitle track, or null when no subtitles
+     * @param FrameRenderer|null          $renderer     Cached renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256)
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -96,6 +98,7 @@ final class Player implements Model
         public readonly int $cellPxW = 10,
         public readonly int $cellPxH = 20,
         private readonly ?WebVtt $subtitles = null,
+        private readonly ?FrameRenderer $renderer = null,
     ) {
     }
 
@@ -143,6 +146,10 @@ final class Player implements Model
         // so audio and the video wall clock share the same t0.
         $audioPlayer = $source->hasAudio ? $audioFactory($videoPath, null) : null;
 
+        // Build and cache the renderer for direct-render modes (Sixel/Kitty/iTerm2/Ansi256).
+        // The renderer is rebuilt on mode change or resize via mutate(['renderer' => ...]).
+        $renderer = RendererFactory::create($mode, $ramp, $cellPxW, $cellPxH);
+
         // Player starts paused; the first tick is scheduled when playback begins.
         return new self(
             decoder: $decoder,
@@ -166,6 +173,7 @@ final class Player implements Model
             cellPxW: $cellPxW,
             cellPxH: $cellPxH,
             subtitles: $subtitles,
+            renderer: $renderer,
         );
     }
 
@@ -210,6 +218,9 @@ final class Player implements Model
         $factory = $audioFactory ?? static fn(string $path, ?int $startMs = null): AudioPlayer
             => new AudioPlayer($path, $startMs);
 
+        // Build and cache the renderer for direct-render modes.
+        $renderer = RendererFactory::create(Mode::HalfBlock, $ramp, $cellPxW, $cellPxH);
+
         return new self(
             decoder: $decoder,
             mode: Mode::HalfBlock,
@@ -232,6 +243,7 @@ final class Player implements Model
             cellPxW: $cellPxW,
             cellPxH: $cellPxH,
             subtitles: $subtitles,
+            renderer: $renderer,
         );
     }
 
@@ -355,12 +367,14 @@ final class Player implements Model
 
         [$decoder, $frame] = $this->rebuildDecoderAt($cols, $rows, $this->mode, $this->frameIndex);
 
+        // Rebuild the renderer to match the new cell dimensions (same mode/ramp/cellPx).
         $nextPlayer = $this->mutate([
             'cellsW' => $cols,
             'cellsH' => $rows,
             'decoder' => $decoder,
             'currentFrame' => $frame ?? $this->currentFrame,
             'lastTickTime' => microtime(true),
+            'renderer' => RendererFactory::create($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH),
         ]);
 
         $cmd = $nextPlayer->paused
@@ -552,6 +566,7 @@ final class Player implements Model
                 'mode' => $nextMode,
                 'decoder' => $decoder,
                 'currentFrame' => $frame ?? $this->currentFrame,
+                'renderer' => RendererFactory::create($nextMode, $this->ramp, $this->cellPxW, $this->cellPxH),
             ]);
             return [$nextPlayer, null];
         }
@@ -838,12 +853,11 @@ final class Player implements Model
     }
 
     /**
-     * Direct (non-delta) rendering via FrameRenderer.
+     * Direct (non-delta) rendering via cached FrameRenderer.
      */
     private function renderDirect(RgbFrame $frame): string
     {
-        $renderer = RendererFactory::create($this->mode, $this->ramp, $this->cellPxW, $this->cellPxH);
-        return $renderer->render($frame, $this->mode);
+        return $this->renderer->render($frame, $this->mode);
     }
 
     /**
@@ -956,6 +970,7 @@ final class Player implements Model
                 cellPxW: $this->cellPxW,
                 cellPxH: $this->cellPxH,
                 subtitles: $this->subtitles,
+                renderer: $this->renderer,
             );
         }
 
@@ -999,6 +1014,7 @@ final class Player implements Model
             cellPxW: $this->cellPxW,
             cellPxH: $this->cellPxH,
             subtitles: $this->subtitles,
+            renderer: $this->renderer,
         );
     }
 
@@ -1161,6 +1177,7 @@ final class Player implements Model
             cellPxW: $this->cellPxW,
             cellPxH: $this->cellPxH,
             subtitles: $this->subtitles,
+            renderer: $this->renderer,
         );
     }
 
@@ -1195,6 +1212,7 @@ final class Player implements Model
             cellPxW: $changes['cellPxW'] ?? $this->cellPxW,
             cellPxH: $changes['cellPxH'] ?? $this->cellPxH,
             subtitles: $changes['subtitles'] ?? $this->subtitles,
+            renderer: $changes['renderer'] ?? $this->renderer,
         );
     }
 
