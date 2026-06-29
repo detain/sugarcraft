@@ -250,9 +250,18 @@ final class Model
         if ($this->lessFunc === null) {
             return $this;
         }
+        $selected = $this->items[$this->cursorIndex] ?? null;
         \usort($this->items, fn(Item $a, Item $b) =>
             ($this->lessFunc)($a->value, $b->value)
         );
+        if ($selected !== null) {
+            foreach ($this->items as $i => $item) {
+                if ($item === $selected) {
+                    $this->cursorIndex = $i;
+                    break;
+                }
+            }
+        }
         return $this;
     }
 
