@@ -7,7 +7,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=candy-mold)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=candy-mold)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcraft/candy-mold?label=packagist)](https://packagist.org/packages/sugarcraft/candy-mold)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 
@@ -77,14 +77,23 @@ The included `tests/CounterTest.php` shows how to test `update()` deterministica
 
 ## Panic Handler (Optional)
 
-SugarCraft supports an opt-in panic handler that catches uncaught exceptions and displays a styled backtrace when the app crashes. To enable it, uncomment the panic handler block in `bin/start`:
+SugarCraft supports an opt-in panic handler that catches uncaught exceptions and displays a styled backtrace when the app crashes. To enable it:
+
+```sh
+composer require sugarcraft/candy-log
+```
+
+Then uncomment the panic handler block in `bin/start`:
 
 ```php
 // use SugarCraft\Log\Log;
 // Log::installPanicHandler();
 ```
 
-This feature requires `sugarcraft/candy-log` as a dependency.
+> **Note:** In a monorepo development setup, add a path-repo to `composer.json` `repositories[]` first:
+> ```json
+> { "type": "path", "url": "../candy-log", "options": { "symlink": true } }
+> ```
 
 ## License
 
