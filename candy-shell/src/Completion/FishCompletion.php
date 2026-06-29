@@ -29,7 +29,8 @@ final class FishCompletion
 
     public function generate(Application $application): string
     {
-        $appName = $application->getName();
+        $appNameRaw = $application->getName();
+        $appName = CompletionEscaper::safeName($appNameRaw) ?? '';
         $commands = $application->all();
 
         $lines = [];
@@ -39,11 +40,19 @@ final class FishCompletion
             if ($name === '') {
                 continue;
             }
-            $lines[] = "complete -c {$appName} -f -n '__fish_seen_subcommand_from {$name}' -l 'help'";
+            // Skip commands whose names could inject shell code.
+            $safeName = CompletionEscaper::safeName($name);
+            if ($safeName === null) {
+                continue;
+            }
+            $lines[] = "complete -c {$appName} -f -n '__fish_seen_subcommand_from {$safeName}' -l 'help'";
             $opts = $command->getDefinition()->getOptions();
             foreach ($opts as $opt) {
                 if (!$opt->isNegatable()) {
-                    $lines[] = "complete -c {$appName} -f -n '__fish_seen_subcommand_from {$name}' -l '{$opt->getName()}'";
+                    $optName = CompletionEscaper::safeName($opt->getName());
+                    if ($optName !== null) {
+                        $lines[] = "complete -c {$appName} -f -n '__fish_seen_subcommand_from {$safeName}' -l '{$optName}'";
+                    }
                 }
             }
         }
@@ -52,7 +61,11 @@ final class FishCompletion
             if ($name === '') {
                 continue;
             }
-            $lines[] = "complete -c {$appName} -f -n '__fish_use_subcommand' -a '{$name}'";
+            $safeName = CompletionEscaper::safeName($name);
+            if ($safeName === null) {
+                continue;
+            }
+            $lines[] = "complete -c {$appName} -f -n '__fish_use_subcommand' -a '{$safeName}'";
         }
 
         return implode("\n", $lines) . "\n";
