@@ -50,7 +50,8 @@ final readonly class DateRange
         }
         $s = $this->start->setTime(0, 0, 0);
         $e = ($this->end ?? new \DateTimeImmutable())->setTime(0, 0, 0);
-        return (int) round($e->diff($s)->days);
+        // Both endpoints are midnight; diff->days is always an integer day count.
+        return $e->diff($s)->days;
     }
 
     public function isComplete(): bool
