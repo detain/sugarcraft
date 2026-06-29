@@ -87,7 +87,7 @@ final class ChromaJsonHighlighter implements HighlighterInterface
         $theme = $this->theme;
         $pattern = $this->combinedPattern;
 
-        return (string) preg_replace_callback(
+        $result = preg_replace_callback(
             $pattern,
             static function (array $matches) use ($theme): string {
                 // Find the named group whose captured value equals the full match.
@@ -98,6 +98,10 @@ final class ChromaJsonHighlighter implements HighlighterInterface
                     if (!is_string($type) || $value === '' || $value !== $fullMatch) {
                         continue;
                     }
+                    // Strip any embedded ESC bytes from the source to prevent
+                    // terminal control-code injection (the CLI path uses CandyShine's
+                    // Renderer which sanitizes; this guards standalone consumers).
+                    $value = str_replace("\x1b", '', $value);
                     $color = $theme[$type] ?? null;
                     if ($color !== null) {
                         return Ansi::CSI . $color . 'm' . $value . Ansi::reset();
@@ -107,7 +111,15 @@ final class ChromaJsonHighlighter implements HighlighterInterface
                 return $fullMatch;
             },
             $code
-        ) ?: $code;
+        );
+
+        // If a backtrack/recursion limit was hit, preg_replace returns null/empty.
+        // Degrade gracefully to raw code rather than returning a partial highlight.
+        if ($result === null || preg_last_error() !== PREG_NO_ERROR) {
+            return $code;
+        }
+
+        return $result;
     }
 
     public function supports(string $language): bool
