@@ -12,6 +12,7 @@ return [
     // Mailer.php
     'mailer.no_recipient'        => 'Email must have at least one recipient (to, cc, or bcc)',
     'mailer.no_from'             => 'Email must have a from address',
+    'mailer.send_cancelled'      => 'Send cancelled before completion',
 
     // SmtpTransport.php
     'smtp.send_failed'           => 'SMTP send failed: {message}',

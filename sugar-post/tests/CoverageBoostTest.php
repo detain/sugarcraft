@@ -148,6 +148,6 @@ final class StubTransport implements Transport
 
     public function __construct(private readonly string $label = 'stub') {}
 
-    public function send(Email $email): void { $this->sent[] = $email; }
+    public function send(Email $email, ?\SugarCraft\Async\CancellationToken $token = null): void { $this->sent[] = $email; }
     public function name(): string { return $this->label; }
 }
