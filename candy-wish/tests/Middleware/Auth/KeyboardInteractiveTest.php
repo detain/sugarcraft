@@ -166,4 +166,109 @@ final class KeyboardInteractiveTest extends TestCase
         $this->assertSame('key', $derived->value('existing'));
         $this->assertSame(['x'], $derived->value('auth.ki.responses'));
     }
+
+    public function testWritesRfc4256WireFormatWithNameInstructionAndCount(): void
+    {
+        $stdin = $this->makeStdin("\n");
+        [$out, $readOut] = $this->stdout();
+        [$err] = $this->stderr();
+
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Enter PIN:', 'echo' => false]],
+            null,
+            'Login',
+            'Please enter your PIN',
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+
+        $ki->handle(Context::background(), $this->session(), function (): void {});
+
+        $output = $readOut();
+        $lines = explode("\n", rtrim($output, "\n"));
+
+        // RFC 4256: Name, Instruction, NumberOfPrompts, then per-prompt Prompt + Echo flag
+        $this->assertSame('Login', $lines[0]);
+        $this->assertSame('Please enter your PIN', $lines[1]);
+        $this->assertSame('1', $lines[2]);
+        $this->assertSame('Enter PIN:', $lines[3]);
+        $this->assertSame('false', $lines[4]);
+    }
+
+    public function testEchoFlagFalseWrittenForNonEchoPrompt(): void
+    {
+        $stdin = $this->makeStdin("\n");
+        [$out, $readOut] = $this->stdout();
+        [$err] = $this->stderr();
+
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Password:', 'echo' => false]],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+
+        $ki->handle(Context::background(), $this->session(), function (): void {});
+
+        $output = $readOut();
+        // The 'false' flag line must appear after the prompt line.
+        $this->assertStringContainsString("Password:\n", $output);
+        $this->assertStringContainsString("false\n", $output);
+    }
+
+    public function testEchoFlagTrueWrittenForEchoPrompt(): void
+    {
+        $stdin = $this->makeStdin("\n");
+        [$out, $readOut] = $this->stdout();
+        [$err] = $this->stderr();
+
+        $ki = new KeyboardInteractive(
+            [['prompt' => 'Username:', 'echo' => true]],
+            null,
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+
+        $ki->handle(Context::background(), $this->session(), function (): void {});
+
+        $output = $readOut();
+        $this->assertStringContainsString("Username:\n", $output);
+        $this->assertStringContainsString("true\n", $output);
+    }
+
+    public function testMultiPromptWireFormat(): void
+    {
+        $stdin = $this->makeStdin("a\nb\n");
+        [$out, $readOut] = $this->stdout();
+        [$err] = $this->stderr();
+
+        $ki = new KeyboardInteractive(
+            [
+                ['prompt' => 'First:', 'echo' => true],
+                ['prompt' => 'Second:', 'echo' => false],
+            ],
+            null,
+            'Auth',
+            'Step 1 of 2',
+            stdout: $out,
+            stdin: $stdin,
+            stderr: $err
+        );
+
+        $ki->handle(Context::background(), $this->session(), function (): void {});
+
+        $output = $readOut();
+        $lines = explode("\n", rtrim($output, "\n"));
+
+        $this->assertSame('Auth', $lines[0]);
+        $this->assertSame('Step 1 of 2', $lines[1]);
+        $this->assertSame('2', $lines[2]);
+        $this->assertSame('First:', $lines[3]);
+        $this->assertSame('true', $lines[4]);
+        $this->assertSame('Second:', $lines[5]);
+        $this->assertSame('false', $lines[6]);
+    }
 }
