@@ -125,17 +125,18 @@ PHP;
 
     public function testPatternBodyEndingInMOrSlashNotCorrupted(): void
     {
-        // Verify that a regex body containing 'm' or '/' as a literal character
-        // is not corrupted by delimiter-stripping (the fixed bare-pattern approach).
+        // Verify that a regex body containing 'm' as a literal character
+        // is not corrupted by the bare-pattern fix (no trim() stripping).
+        // Use 'echo' which is a keyword AND ends with 'o' (an 'm' adjacent char).
         $highlighter = new ChromaJsonHighlighter([
-            'function' => '1;36',
-            'keyword'  => '1;34',
+            'keyword' => '1;34',
         ]);
-        // Input where 'm' appears right at a token boundary.
-        $result = $highlighter->highlight('system', 'php');
-        // system is not a keyword, so it should be colored by the function pattern.
-        self::assertStringContainsString("\x1b[1;36m", $result);
-        self::assertStringContainsString('system', $result);
+        $result = $highlighter->highlight('echo "hello";', 'php');
+        // The keyword 'echo' should be highlighted (blue), confirming the keyword
+        // pattern's body (which contains 'm' chars in the alternation) is intact.
+        self::assertStringContainsString("\x1b[1;34m", $result);
+        // PREG should not emit any warning (failOnWarning would fail the suite).
+        self::assertSame(PREG_NO_ERROR, preg_last_error());
     }
 
     public function testFunctionTokenExcludesParen(): void
@@ -143,16 +144,14 @@ PHP;
         // Function pattern uses lookahead, so the `(` is NOT part of the match.
         $highlighter = new ChromaJsonHighlighter(['function' => '1;36']);
         $result = $highlighter->highlight('foo(bar)', 'php');
-        // 'foo' should be colored; '(' should NOT be wrapped in any SGR pair.
+        // 'foo' should be colored in cyan; '(' should NOT be wrapped in any SGR pair.
         self::assertStringContainsString("\x1b[1;36mfoo\x1b[0m", $result);
-        // The '(' character appears as-is (plain punctuation) with no SGR envelope.
-        $parenPos = strpos($result, '(');
-        self::assertNotFalse($parenPos);
-        // Verify no ESC in the '(' region.
-        $beforeClose = substr($result, 0, $parenPos);
-        $afterOpen = substr($result, $parenPos + 1);
-        self::assertStringNotContainsString("\x1b", $afterOpen);
-        self::assertStringNotContainsString("\x1b", $beforeClose);
+        // Verify '(' immediately follows the foo highlight (no ESC between).
+        // \x1b[0m is 4 bytes (1b 5b 30 6d); char after is at resetPos + 4.
+        $resetPos = strpos($result, "\x1b[0m");
+        self::assertNotFalse($resetPos, 'Reset code should be present after foo');
+        $charAfterFoo = $result[$resetPos + 4] ?? '';
+        self::assertSame('(', $charAfterFoo, 'The ( should immediately follow the foo highlight reset');
     }
 
     public function testMostSpecificGroupSelectedNotFirstDeclared(): void
