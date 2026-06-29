@@ -129,7 +129,7 @@ final class SyntaxHighlighter
         // can't match inside the former.
         $kw = implode('|', array_map(static fn(string $k): string => preg_quote($k, '/'), $keywords));
         $pattern = '/'
-            . '(?P<comment>\/\/[^\n]*|\#[^\n]*|\/\*.*?\*\/|<!--.*?-->)'
+            . '(?P<comment>\/\/[^\n]*|\#[^\n]*|\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\/|<!--(?:[^-]|-(?!->))*-->)'
             . '|(?P<string>"(?:\\\\.|[^"\\\\])*"|\'(?:\\\\.|[^\'\\\\])*\'|`(?:\\\\.|[^`\\\\])*`)'
             . '|(?P<keyword>\b(?:' . $kw . ')\b)'
             . '|(?P<number>\b\d+(?:\.\d+)?\b)'

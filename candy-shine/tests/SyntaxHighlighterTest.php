@@ -767,4 +767,41 @@ final class SyntaxHighlighterTest extends TestCase
 
         self::assertKeywordStyled('const', $out);
     }
+
+    /**
+     * An unclosed block-comment opener (opening marker only, no close)
+     * must not cause catastrophic backtracking. The possessive
+     * quantifier regex is linear O(n) and should complete in well
+     * under a second. Graceful degradation: no highlighting.
+     */
+    public function testUnterminatedBlockCommentDoesNotDegradeOrHang(): void
+    {
+        $code = '/* ' . str_repeat('x', 50000) . ' no close';
+        $start = microtime(true);
+        $out = SyntaxHighlighter::highlight($code, 'php', self::themed());
+        $elapsed = microtime(true) - $start;
+
+        // Possessive quantifier is O(n) — must complete in < 1 second.
+        $this->assertLessThan(1.0, $elapsed, 'Unterminated comment took too long — possible catastrophic backtracking');
+        // Should degrade to plain code (no SGR escapes from highlighting).
+        $this->assertStringNotContainsString("\x1b[1m", $out);
+        // Content is preserved.
+        $this->assertStringContainsString('no close', $out);
+    }
+
+    /**
+     * Unterminated HTML comment (<!-- without -->) must also degrade
+     * gracefully via the possessive quantifier in the comment regex.
+     */
+    public function testUnterminatedHtmlCommentDoesNotDegradeOrHang(): void
+    {
+        $code = '<!-- ' . str_repeat('x', 50000) . ' no close';
+        $start = microtime(true);
+        $out = SyntaxHighlighter::highlight($code, 'js', self::themed());
+        $elapsed = microtime(true) - $start;
+
+        $this->assertLessThan(1.0, $elapsed, 'Unterminated HTML comment took too long');
+        $this->assertStringNotContainsString("\x1b[1m", $out);
+        $this->assertStringContainsString('no close', $out);
+    }
 }

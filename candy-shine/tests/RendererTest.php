@@ -341,6 +341,30 @@ MD;
         $this->assertStringContainsString('(https://cdn.example.com/logo.png)', $out);
     }
 
+    /**
+     * Protocol-relative URL (//host/path) should pass through unchanged
+     * and be visible in the (url) suffix with hyperlinks disabled.
+     */
+    public function testProtocolRelativeUrlPassesThrough(): void
+    {
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render('[link](//example.com/path)');
+        $this->assertStringContainsString('(//example.com/path)', $out);
+    }
+
+    /**
+     * Fragment-only URL (#frag) should pass through unchanged and be
+     * visible in the (url) suffix with hyperlinks disabled.
+     */
+    public function testFragmentOnlyUrlPassesThrough(): void
+    {
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render('[link](#section)');
+        $this->assertStringContainsString('(#section)', $out);
+    }
+
     public function testWithTableWrapWrapsCells(): void
     {
         $md  = "| h |\n|---|\n| this is a long cell that should wrap |\n";
