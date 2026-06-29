@@ -39,6 +39,11 @@ final class Entry
      * "DIR", links render "LINK", regular files render their byte
      * size compacted to KB/MB/GB.
      */
+    /**
+     * Display string for the size column. Directories render
+     * "DIR", links render "LINK", regular files render their byte
+     * size compacted to KB/MB/GB.
+     */
     public function displaySize(): string
     {
         if ($this->isDir) {
@@ -57,5 +62,14 @@ final class Entry
         return $i === 0
             ? sprintf('%dB',  (int) $n)
             : sprintf('%.1f%s', $n, $units[$i]);
+    }
+
+    /**
+     * Strip C0/C1 control bytes and DEL so a filename is safe to
+     * render to the terminal without emitting ANSI escape sequences.
+     */
+    public static function sanitizeName(string $s): string
+    {
+        return preg_replace('/[\x00-\x1f\x7f\xc2\xc3]/u', '', $s);
     }
 }

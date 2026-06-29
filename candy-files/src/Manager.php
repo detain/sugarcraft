@@ -36,6 +36,8 @@ final class Manager implements Model
     /** @var \Closure(string): list<Entry> */
     private readonly \Closure $lister;
 
+    private const UNDO_LIMIT = 50;
+
     /**
      * @param \Closure(string): list<Entry>|null $lister
      * @param array<int,array{left:Pane,right:Pane,activeIdx:int}> $tabs
@@ -59,6 +61,7 @@ final class Manager implements Model
         public readonly array $redoStack = [],
         public readonly ?string $pendingOpDest = null,
         public readonly ?string $pendingOpType = null,
+        public readonly ?string $inputBuffer = null,
     ) {
         $this->lister = $lister ?? FsLister::lister();
     }
@@ -88,6 +91,7 @@ final class Manager implements Model
             redoStack: [],
             pendingOpDest: null,
             pendingOpType: null,
+            inputBuffer: null,
         );
     }
 
@@ -194,6 +198,8 @@ final class Manager implements Model
                 => $this->undo(),
             $msg->ctrl && $msg->rune === 'z'
                 => $this->undo(),
+            $msg->ctrl && $msg->rune === 'y'
+                => $this->redo(),
             // Tab management: t duplicates, Ctrl+w closes, Ctrl+Tab/Ctrl+Shift+Tab cycles
             $msg->ctrl && $msg->rune === 'w'
                 => $this->closeTab(),
@@ -219,14 +225,16 @@ final class Manager implements Model
                 $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
                 $newTabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+                $this->inputBuffer
             );
         }
         return new self(
             $this->left, $this->right, $idx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -246,13 +254,14 @@ final class Manager implements Model
             $newTabs = $this->tabs;
             $newTabs[$this->tabIndex] = $newTab;
             // Keep $this->left/$this->right in sync with the active tab's panes
-            $newLeft = $this->tabIndex === 0 ? $newTab['left'] : ($this->tabs[0]['left'] ?? $this->left);
-            $newRight = $this->tabIndex === 0 ? $newTab['right'] : ($this->tabs[0]['right'] ?? $this->right);
+            $newLeft = $newTab['left'];
+            $newRight = $newTab['right'];
             return new self(
                 $newLeft, $newRight, $this->activeIdx, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
                 $newTabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+                $this->inputBuffer
             );
         }
         if ($this->activeIdx === 0) {
@@ -260,14 +269,16 @@ final class Manager implements Model
                 $fn($this->left), $this->right, 0, $this->status, $this->confirm, $this->lister,
                 $this->searchQuery, $this->searchResults, $this->searchCursor,
                 $this->tabs, $this->tabIndex, $this->showTabBar,
-                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+                $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+                $this->inputBuffer
             );
         }
         return new self(
             $this->left, $fn($this->right), 1, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -278,8 +289,12 @@ final class Manager implements Model
 
     private function goUp(): self
     {
-        return $this->withActivePane(fn(Pane $p) =>
-            Pane::open(Pane::parentPath($p->cwd), $this->lister, $p->sort, $p->showHidden));
+        return $this->withActivePane(function (Pane $p): Pane {
+            $oldCwd = $p->cwd;
+            $parent = Pane::open(Pane::parentPath($oldCwd), $this->lister, $p->sort, $p->showHidden);
+            // Position cursor on the directory we came from (superfile/MC behavior)
+            return $parent->cursorOnName(basename($oldCwd));
+        });
     }
 
     private function cycleSort(): self
@@ -304,22 +319,65 @@ final class Manager implements Model
         }
         $names = $selectedCount > 0
             ? "{$selectedCount} selected entries"
-            : "'{$current->name}'";
-        return $this->withConfirm(ConfirmState::DeleteSelected, "delete {$names}? (y/n)");
+            : "'" . Entry::sanitizeName($current->name) . "'";
+        return $this->withConfirm(ConfirmState::DeleteSelected, Lang::t('confirm.delete', ['names' => $names]));
     }
 
     private function resolveConfirm(KeyMsg $msg): self
     {
+        // RenameSelected uses a text-entry sub-mode: characters accumulate
+        // in $inputBuffer; Enter commits; Escape cancels.
+        if ($this->confirm === ConfirmState::RenameSelected) {
+            // Backspace: drop last character from buffer
+            if ($msg->type === KeyType::Backspace) {
+                $buf = $this->inputBuffer ?? '';
+                $newBuf = $buf === '' ? '' : self::dropLast($buf);
+                return $this->withConfirm(ConfirmState::RenameSelected,
+                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
+                    $this->pendingOpDest, 'rename', $newBuf);
+            }
+            // Enter: commit the typed buffer as the new name
+            if ($msg->type === KeyType::Enter) {
+                $newName = $this->inputBuffer ?? '';
+                if ($newName === '') {
+                    return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                        ->withInputBuffer(null);
+                }
+                return $this->withConfirm(ConfirmState::RenameSelected,
+                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
+                    $this->pendingOpDest, 'rename', $newName)->performRenameWithBuffer();
+            }
+            // Escape: cancel
+            if ($msg->type === KeyType::Escape) {
+                return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                    ->withInputBuffer(null);
+            }
+            // Printable character: accumulate in buffer
+            if ($msg->type === KeyType::Char && !$msg->ctrl) {
+                $buf = $this->inputBuffer ?? '';
+                $newBuf = $buf . $msg->rune;
+                return $this->withConfirm(ConfirmState::RenameSelected,
+                    Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]) . $newBuf . '_',
+                    $this->pendingOpDest, 'rename', $newBuf);
+            }
+            // All other keys: no-op, stay in confirm state
+            return $this->withConfirm(ConfirmState::RenameSelected,
+                Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
+                $this->pendingOpDest, 'rename', $this->inputBuffer);
+        }
+
+        // Single-key y/n confirmation for delete/copy/move
         $confirmed = $msg->type === KeyType::Char && $msg->rune === 'y';
         if (!$confirmed) {
-            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
+            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null);
         }
         return match ($this->confirm) {
             ConfirmState::DeleteSelected => $this->performDelete(),
             ConfirmState::CopySelected => $this->performCopy(),
             ConfirmState::MoveSelected => $this->performMove(),
-            ConfirmState::RenameSelected => $this->performRename(),
-            default => $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled')),
+            default => $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null),
         };
     }
 
@@ -336,16 +394,21 @@ final class Manager implements Model
                 continue;
             }
             $full = Pane::join($pane->cwd, $name);
-            // Capture info before deletion for undo
+            // Move to trash for O(1) undo (no file content read) instead of unlinking directly.
+            $trashPath = $this->trashPath($full);
+            if ($trashPath === null || !@rename($full, $trashPath)) {
+                // Fall back to direct removal if rename fails (e.g. cross-device)
+                if (!self::removePath($full)) {
+                    $errors++;
+                    continue;
+                }
+                $trashPath = '';
+            }
             $deletedItems[] = [
                 'path' => $full,
-                'isDir' => is_dir($full),
-                'content' => is_file($full) ? @file_get_contents($full) : null,
-                'stat' => @stat($full) ?: [],
+                'isDir' => is_dir($trashPath),
+                'trash' => $trashPath,
             ];
-            if (!self::removePath($full)) {
-                $errors++;
-            }
         }
         $msg = $errors === 0
             ? Lang::t('status.deleted', ['count' => count($names)])
@@ -355,10 +418,22 @@ final class Manager implements Model
         if ($deletedItems !== []) {
             $newUndoStack[] = UndoAction::delete($deletedItems);
         }
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
             ->withConfirm(ConfirmState::None, $msg)
             ->withUndoRedoStacks($newUndoStack, []); // Clear redo on new action
+    }
+
+    /** Build a trash-directory path for a deleted entry. */
+    private function trashPath(string $originalPath): ?string
+    {
+        $trashDir = sys_get_temp_dir() . '/candyfiles-trash-' . getmypid();
+        $basename = basename($originalPath);
+        // Avoid collisions: use microtime + uniqid to make a unique filename
+        $trashName = sprintf('%s_%s_%s', microtime(true), uniqid('', true), $basename);
+        $trashDir = $trashDir . '/' . $trashName;
+        return $trashDir;
     }
 
     /** Arm copy confirmation — next KeyMsg triggers performCopy or cancel. */
@@ -373,10 +448,10 @@ final class Manager implements Model
         $inactive = $this->inactivePane();
         $names = $selectedCount > 0
             ? "{$selectedCount} selected entries"
-            : "'{$current->name}'";
+            : "'" . Entry::sanitizeName($current->name) . "'";
         return $this->withConfirm(
             ConfirmState::CopySelected,
-            "copy {$names} to {$inactive->cwd}? (y/n)",
+            Lang::t('confirm.copy', ['names' => $names, 'dest' => $inactive->cwd]),
             $inactive->cwd,
             'copy'
         );
@@ -394,10 +469,10 @@ final class Manager implements Model
         $inactive = $this->inactivePane();
         $names = $selectedCount > 0
             ? "{$selectedCount} selected entries"
-            : "'{$current->name}'";
+            : "'" . Entry::sanitizeName($current->name) . "'";
         return $this->withConfirm(
             ConfirmState::MoveSelected,
-            "move {$names} to {$inactive->cwd}? (y/n)",
+            Lang::t('confirm.move', ['names' => $names, 'dest' => $inactive->cwd]),
             $inactive->cwd,
             'move'
         );
@@ -413,7 +488,7 @@ final class Manager implements Model
         }
         return $this->withConfirm(
             ConfirmState::RenameSelected,
-            "rename '{$current->name}' to: ",
+            Lang::t('confirm.rename', ['name' => Entry::sanitizeName($current->name)]),
             $current->name,
             'rename'
         );
@@ -427,6 +502,9 @@ final class Manager implements Model
      */
     public function copy(string $src, string $dst): bool
     {
+        if (is_link($src)) {
+            return @symlink(readlink($src), $dst);
+        }
         if (is_dir($src)) {
             return $this->copyDir($src, $dst);
         }
@@ -470,7 +548,9 @@ final class Manager implements Model
             }
             $srcPath = Pane::join($src, $item);
             $dstPath = Pane::join($dst, $item);
-            if (is_dir($srcPath)) {
+            if (is_link($srcPath)) {
+                @symlink(readlink($srcPath), $dstPath);
+            } elseif (is_dir($srcPath)) {
                 if (!$this->copyDir($srcPath, $dstPath)) {
                     return false;
                 }
@@ -513,6 +593,7 @@ final class Manager implements Model
         if ($copiedItems !== []) {
             $newUndoStack[] = UndoAction::copy($copiedItems);
         }
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
             ->withConfirm(ConfirmState::None, $msg)
@@ -549,6 +630,7 @@ final class Manager implements Model
         if ($movedItems !== []) {
             $newUndoStack[] = UndoAction::move($movedItems);
         }
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
             ->withConfirm(ConfirmState::None, $msg)
@@ -560,38 +642,58 @@ final class Manager implements Model
         $pane = $this->activePane();
         $current = $pane->currentEntry();
         if ($current === null || $current->isParentSentinel()) {
-            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
+            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null);
         }
         $srcName = $current->name;
         $src = Pane::join($pane->cwd, $srcName);
-        $newName = $this->pendingOpDest;
-        if ($newName === null || $newName === '' || $newName === $srcName) {
+        // Read the new name from inputBuffer (set by typed-input confirm mode)
+        $newName = $this->inputBuffer ?? '';
+        if ($newName === '' || $newName === $srcName) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.cancelled'));
+                ->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null);
+        }
+        // Path-traversal guard: reject names containing directory separators
+        if (str_contains($newName, '/') || str_contains($newName, '\\') || str_contains($newName, '..')) {
+            return $this->withActivePane(fn(Pane $p) =>
+                Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withInputBuffer(null);
         }
         $renamedItems = [];
         $renamedItems[$src] = Pane::join($pane->cwd, $newName);
         if (!$this->rename($src, $newName)) {
             return $this->withActivePane(fn(Pane $p) =>
                 Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
-                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]));
+                ->withConfirm(ConfirmState::None, Lang::t('status.rename_failed', ['name' => $srcName]))
+                ->withInputBuffer(null);
         }
         $newUndoStack = $this->undoStack;
         $newUndoStack[] = UndoAction::rename($renamedItems);
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
         return $this->withActivePane(fn(Pane $p) =>
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
             ->withConfirm(ConfirmState::None, Lang::t('status.renamed', ['old' => $srcName, 'new' => $newName]))
+            ->withInputBuffer(null)
             ->withUndoRedoStacks($newUndoStack, []);
     }
 
-    private function withConfirm(ConfirmState $state, string $status, ?string $pendingOpDest = null, ?string $pendingOpType = null): self
+    /** Commit a rename from the typed input buffer. */
+    private function performRenameWithBuffer(): self
+    {
+        return $this->performRename();
+    }
+
+    private function withConfirm(ConfirmState $state, string $status, ?string $pendingOpDest = null, ?string $pendingOpType = null, ?string $inputBuffer = null): self
     {
         return new self(
             $this->left, $this->right, $this->activeIdx, $status, $state, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $pendingOpDest, $pendingOpType
+            $this->undoStack, $this->redoStack, $pendingOpDest, $pendingOpType,
+            $inputBuffer
         );
     }
 
@@ -601,7 +703,19 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
+        );
+    }
+
+    private function withInputBuffer(?string $inputBuffer): self
+    {
+        return new self(
+            $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
+            $this->searchQuery, $this->searchResults, $this->searchCursor,
+            $this->tabs, $this->tabIndex, $this->showTabBar,
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $inputBuffer
         );
     }
 
@@ -665,7 +779,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm,
             $this->lister, $query, $results, $cursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -713,7 +828,9 @@ final class Manager implements Model
         if ($s === '') {
             return '';
         }
-        return preg_replace('/.$/us', '', $s);
+        $out = preg_replace('/.$/us', '', $s);
+        // Fall back to mb_substr on PCRE error (returns null)
+        return $out ?? mb_substr($s, 0, -1);
     }
 
     /** Recursive delete. Empty dirs use rmdir; files use unlink. */
@@ -754,7 +871,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $newTabs, count($newTabs) - 1, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -772,7 +890,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $newTabs, $newIndex, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -786,7 +905,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $index, $this->showTabBar,
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -807,7 +927,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $newTabs, count($newTabs) - 1, $newTabs !== [],
-            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType
+            $this->undoStack, $this->redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -824,7 +945,8 @@ final class Manager implements Model
             $this->left, $this->right, $this->activeIdx, $this->status, $this->confirm, $this->lister,
             $this->searchQuery, $this->searchResults, $this->searchCursor,
             $this->tabs, $this->tabIndex, $this->showTabBar,
-            $undoStack, $redoStack, $this->pendingOpDest, $this->pendingOpType
+            $undoStack, $redoStack, $this->pendingOpDest, $this->pendingOpType,
+            $this->inputBuffer
         );
     }
 
@@ -840,6 +962,15 @@ final class Manager implements Model
             return $this->withStatus(Lang::t('status.nothing_to_undo'));
         }
         $errors = $this->reverseAction($action);
+        // Copy undo is informational only — original is preserved; report that explicitly
+        if ($action->type === UndoActionType::Copy) {
+            $msg = Lang::t('status.copy_undo_noop');
+            $newRedoStack = [...$this->redoStack, $action];
+            return $this
+                ->refresh()
+                ->withStatus($msg)
+                ->withUndoRedoStacks($newUndoStack, $newRedoStack);
+        }
         $msg = $errors === 0
             ? Lang::t('status.undone', ['description' => $action->description])
             : Lang::t('status.undo_with_errors', ['description' => $action->description, 'errors' => $errors]);
@@ -849,6 +980,128 @@ final class Manager implements Model
             ->refresh()
             ->withStatus($msg)
             ->withUndoRedoStacks($newUndoStack, $newRedoStack);
+    }
+
+    /** Redo the last undone operation */
+    public function redo(): self
+    {
+        if ($this->redoStack === []) {
+            return $this->withStatus(Lang::t('status.nothing_to_redo'));
+        }
+        $newRedoStack = $this->redoStack;
+        $action = array_pop($newRedoStack);
+        if ($action === null) {
+            return $this->withStatus(Lang::t('status.nothing_to_redo'));
+        }
+        $errors = $this->redoAction($action);
+        $msg = $errors === 0
+            ? Lang::t('status.redone', ['description' => $action->description])
+            : Lang::t('status.redo_with_errors', ['description' => $action->description, 'errors' => $errors]);
+        // Push back to undo stack
+        $newUndoStack = [...$this->undoStack, $action];
+        $newUndoStack = array_slice($newUndoStack, -self::UNDO_LIMIT);
+        return $this
+            ->refresh()
+            ->withStatus($msg)
+            ->withUndoRedoStacks($newUndoStack, $newRedoStack);
+    }
+
+    /** Re-apply an undone action (for redo) */
+    private function redoAction(UndoAction $action): int
+    {
+        $errors = 0;
+        match ($action->type) {
+            UndoActionType::Delete => $errors = $this->redoDelete($action->items),
+            UndoActionType::Move => $errors = $this->redoMove($action->items),
+            UndoActionType::Rename => $errors = $this->redoRename($action->items),
+            // Insert (mkdir): re-create the directory
+            UndoActionType::Insert => $errors = $this->redoInsert($action->items),
+            // Copy cannot be redone meaningfully — original is still there
+            UndoActionType::Copy, UndoActionType::Modify, UndoActionType::Custom => $errors = 0,
+        };
+        return $errors;
+    }
+
+    private function redoDelete(array $items): int
+    {
+        $errors = 0;
+        foreach ($items as $item) {
+            if (!isset($item['path'])) {
+                continue;
+            }
+            $path = $item['path'];
+            if (!file_exists($path)) {
+                // File doesn't exist — re-delete by moving to trash (it was restored by undo)
+                $trashPath = $this->trashPath($path);
+                if (@rename($path, $trashPath)) {
+                    continue;
+                }
+                $errors++;
+            } elseif (isset($item['isDir']) && $item['isDir']) {
+                // Directory still exists — re-delete by moving to trash
+                $trashPath = $this->trashPath($path);
+                if (@rename($path, $trashPath)) {
+                    continue;
+                }
+                $errors++;
+            } else {
+                // File exists — re-delete by moving to trash
+                $trashPath = $this->trashPath($path);
+                if (@rename($path, $trashPath)) {
+                    continue;
+                }
+                $errors++;
+            }
+        }
+        return $errors;
+    }
+
+    private function redoMove(array $moves): int
+    {
+        $errors = 0;
+        foreach ($moves as $oldPath => $newPath) {
+            if (!is_string($oldPath) || !is_string($newPath)) {
+                continue;
+            }
+            // Re-do the move: oldPath -> newPath (same as original move)
+            if (file_exists($oldPath) && !@rename($oldPath, $newPath)) {
+                $errors++;
+            }
+        }
+        return $errors;
+    }
+
+    private function redoRename(array $renames): int
+    {
+        $errors = 0;
+        foreach ($renames as $oldPath => $newPath) {
+            if (!is_string($oldPath) || !is_string($newPath)) {
+                continue;
+            }
+            // Re-do the rename: newPath -> oldName in newDir (reverse of undo's rename)
+            $oldName = basename($oldPath);
+            $newDir = dirname($newPath);
+            $targetPath = Pane::join($newDir, $oldName);
+            if (file_exists($newPath) && !@rename($newPath, $targetPath)) {
+                $errors++;
+            }
+        }
+        return $errors;
+    }
+
+    private function redoInsert(array $items): int
+    {
+        $errors = 0;
+        foreach ($items as $item) {
+            if (!isset($item['path'])) {
+                continue;
+            }
+            $path = $item['path'];
+            if (!is_dir($path) && !@mkdir($path, 0755, true)) {
+                $errors++;
+            }
+        }
+        return $errors;
     }
 
     /** Reverse an undo action (for restore on redo) */
@@ -869,7 +1122,7 @@ final class Manager implements Model
     }
 
     /**
-     * @param list<array{path:string,isDir:bool,content:?string,stat:array}> $items
+     * @param list<array{path:string,isDir:bool,trash:string}> $items
      */
     private function reverseDelete(array $items): int
     {
@@ -879,22 +1132,19 @@ final class Manager implements Model
                 continue;
             }
             $path = $item['path'];
-            if (isset($item['isDir']) && $item['isDir']) {
-                // Restore directory
+            $trash = $item['trash'] ?? '';
+            // If we have a trash path, restore via rename from trash
+            if ($trash !== '' && file_exists($trash)) {
+                if (!@rename($trash, $path)) {
+                    $errors++;
+                }
+            } elseif (isset($item['isDir']) && $item['isDir']) {
+                // Restore directory (fallback for old undo items without trash path)
                 if (!is_dir($path) && !@mkdir($path, 0755, true)) {
                     $errors++;
                 }
-            } elseif (isset($item['content']) && $item['content'] !== null) {
-                // Restore file
-                $dir = dirname($path);
-                if (!is_dir($dir) && !@mkdir($dir, 0755, true)) {
-                    $errors++;
-                    continue;
-                }
-                if (@file_put_contents($path, $item['content']) === false) {
-                    $errors++;
-                }
             }
+            // Files without a trash path and without content are unrecoverable — skip
         }
         return $errors;
     }

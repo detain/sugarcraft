@@ -12,6 +12,9 @@ return [
     // Confirmation prompts
     'confirm.delete'     => 'delete {names}? (y/n)',
     'confirm.delete_one' => "delete '{name}'? (y/n)",
+    'confirm.copy'       => 'copy {names} to {dest}? (y/n)',
+    'confirm.move'      => 'move {names} to {dest}? (y/n)',
+    'confirm.rename'     => "rename '{name}' to: ",
 
     // Status messages
     'status.nothing_to_delete' => 'nothing to delete',
@@ -31,6 +34,10 @@ return [
     'status.undone'            => 'undone: {description}',
     'status.undo_with_errors'  => 'undo {description} with {errors} error(s)',
     'status.cannot_close_last_tab' => 'Cannot close last tab',
+    'status.redone'            => 'redone: {description}',
+    'status.redo_with_errors'  => 'redo {description} with {errors} error(s)',
+    'status.nothing_to_redo'    => 'nothing to redo',
+    'status.copy_undo_noop'    => 'copy left in place (nothing to undo)',
 
     // Key help
     'keyhelp.default' => 'Tab swap · ↑↓ jk move · Enter open · ← h up · space select · s sort · . hidden · c copy · m move · R rename · d delete · r refresh · q quit · / search · t new tab · ^w close tab · ^tab cycle',
@@ -56,30 +63,6 @@ return [
     'sort.mtime_desc' => 'mtime-desc',
     'sort.size_asc'  => 'size-asc',
     'sort.size_desc' => 'size-desc',
-
-    // Preview pane
-    'preview.no_file'         => '(no file selected)',
-    'preview.file_not_found' => '(file not found)',
-    'preview.is_directory'   => '(is a directory)',
-    'preview.image_error'     => '(image error: {error})',
-    'preview.invalid_width'  => 'width must be positive',
-    'preview.invalid_height' => 'height must be positive',
-    'preview.metadata'       => 'Metadata',
-    'preview.size'           => 'Size',
-    'preview.mtime'          => 'Modified',
-    'preview.mode'           => 'Mode',
-    'preview.type'           => 'Type',
-    'preview.link_target'    => 'Link',
-    'preview.type_file'      => 'file',
-    'preview.stat_failed'    => 'stat failed',
-    'preview.unknown'       => 'unknown',
-
-    // Bulk rename
-    'bulk_rename.conflict' => 'duplicate names in output',
-    'bulk_rename.invalid_pattern' => 'invalid regex pattern',
-    'bulk_rename.empty_result' => 'resulting name is empty',
-    'bulk_rename.success' => 'renamed {count} files',
-    'bulk_rename.error'   => 'rename failed: {error}',
 
     // Error messages
     'error.remove_path' => 'failed to remove {path}',
