@@ -83,4 +83,39 @@ final class PositionMiddleTest extends TestCase
         $this->assertSame(3, Position::TopLeft->yOffset(3, 24, 3));
         $this->assertSame(18, Position::BottomLeft->yOffset(3, 24, 3));
     }
+
+    /**
+     * Regression test: Bottom/Middle positions must not return negative y
+     * when the stacked alert height exceeds the viewport. The toast must
+     * pin to y=0 (top visible edge) rather than rendering at a negative y
+     * that would silently clip it.
+     *
+     * Pre-fix example: viewportHeight=10, alertHeight=3, totalAlertLines=10
+     *   Bottom: 10 - 3 - 10 = -3 (CLIPPED)
+     *   Middle: floor((10-3)/2) - 10 = -7 (CLIPPED)
+     * Post-fix: both return max(0, ...) = 0 (VISIBLE at top edge)
+     */
+    public function testBottomYOffsetClampedToZeroWhenShortViewport(): void
+    {
+        // Short viewport (10) with cumulative stacked alerts (10) exceeding it
+        // Old formula: 10 - 3 - 10 = -3
+        $this->assertSame(0, Position::BottomLeft->yOffset(3, 10, 10));
+        $this->assertSame(0, Position::BottomCenter->yOffset(3, 10, 10));
+        $this->assertSame(0, Position::BottomRight->yOffset(3, 10, 10));
+
+        // Also verify normal case still works (non-negative)
+        $this->assertSame(7, Position::BottomLeft->yOffset(3, 10, 0));
+    }
+
+    public function testMiddleYOffsetClampedToZeroWhenShortViewport(): void
+    {
+        // Short viewport with stacking exceeding it
+        // Old formula: floor((10-3)/2) - 10 = 3 - 10 = -7
+        $this->assertSame(0, Position::MiddleLeft->yOffset(3, 10, 10));
+        $this->assertSame(0, Position::MiddleCenter->yOffset(3, 10, 10));
+        $this->assertSame(0, Position::MiddleRight->yOffset(3, 10, 10));
+
+        // Also verify normal case still works (non-negative)
+        $this->assertSame(3, Position::MiddleCenter->yOffset(3, 10, 0));
+    }
 }
