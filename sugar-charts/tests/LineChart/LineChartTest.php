@@ -345,4 +345,23 @@ final class LineChartTest extends TestCase
         $chart = LineChart::new([1, 2, 3], 10, 4)->fill(true);
         $this->assertSame(true, $chart->fill);
     }
+
+    // ─── legendItems() Regression Test ──────────────────────────────────
+    // Verifies that LineChart::legendItems() does NOT call Chart::copy()
+    // which would fatal with ArgumentCountError (LineChart needs data/min/max/point).
+
+    public function testLegendItemsAliasDoesNotFatalAndSetsItems(): void
+    {
+        $chart = LineChart::new([1, 2, 3], 20, 6)->legendItems([['label' => 'a', 'color' => 'red']]);
+
+        // Assert it returns a LineChart (not a parent Chart from copy())
+        $this->assertInstanceOf(LineChart::class, $chart);
+
+        // Assert that withLegend()->view() renders without throwing
+        $out = $chart->withLegend(true)->view();
+        $this->assertNotEmpty($out);
+
+        // Assert that legend label 'a' appears in output
+        $this->assertStringContainsString('a', $out);
+    }
 }
