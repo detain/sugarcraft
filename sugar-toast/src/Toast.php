@@ -646,34 +646,6 @@ final class Toast
         return ($c[0] << 16) | ($c[1] << 8) | $c[2];
     }
 
-    /**
-     * Place a string into the buffer at (col, row) with the given style.
-     */
-    private function placeStringAt(Buffer $buf, int $col, int $row, string $s, ?Style $style): Buffer
-    {
-        $clusters = function_exists('grapheme_str_split')
-            ? (grapheme_str_split($s) ?: \mb_str_split($s, 1, 'UTF-8'))
-            : \mb_str_split($s, 1, 'UTF-8');
-
-        $colCursor = $col;
-        foreach ($clusters as $cluster) {
-            if ($colCursor >= $buf->width()) {
-                break;
-            }
-            $gw = $this->graphemeWidth($cluster);
-            if ($gw === 0) {
-                $colCursor++;
-                continue;
-            }
-            $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
-            if ($gw === 2 && $colCursor + 1 < $buf->width()) {
-                $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
-            }
-            $colCursor += $gw;
-        }
-        return $buf;
-    }
-
     private function graphemeWidth(string $g): int
     {
         if ($g === '') return 0;
@@ -781,35 +753,5 @@ final class Toast
         $lines = \explode("\n", $text);
         if (\end($lines) === '') \array_pop($lines);
         return $lines;
-    }
-
-    /**
-     * @codeCoverageIgnore dead code — retained for reference until removed
-     */
-    private function compositeLines(array $bg, array $fg, int $x, int $y, int $w): array
-    {
-        $x = \max(0, $x);
-        for ($i = 0; $i < \count($fg); $i++) {
-            $destY = $y + $i;
-            if ($destY < 0 || $destY >= \count($bg)) continue;
-
-            $fgLine = $fg[$i];
-            $bgLine = $bg[$destY];
-
-            // Slice the background by DISPLAY CELLS, not bytes — multibyte
-            // content and inline ANSI must not be cut mid-grapheme.
-            $bgLine = Width::padRight($bgLine, $x + $w, ' ');
-            $pre  = Width::truncateAnsi($bgLine, $x);
-            $post = Width::dropAnsi($bgLine, $x + $w);
-
-            // The foreground (the toast box) is already exactly $w cells per
-            // line, but truncate defensively so a too-wide line can't bleed
-            // past the box column. truncateAnsi keeps multibyte box-drawing
-            // graphemes whole, fixing the border-truncation bug.
-            $fgSlice = Width::truncateAnsi($fgLine, $w);
-
-            $bg[$destY] = $pre . $fgSlice . $post;
-        }
-        return $bg;
     }
 }
