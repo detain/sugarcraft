@@ -159,18 +159,63 @@ final class EscapeDecoder
             return $this->handleCSI(substr($stream, 2));
         }
 
+        // ESC O — SS3 sequence
+        if ($nextOrd === 0x4f) {
+            return $this->handleSS3(substr($stream, 2));
+        }
+
         // ESC ESC — Alt+Escape
         if ($nextOrd === 0x1b) {
             return [
                 'events' => [new KeyEvent('Escape', KeyModifier::alt(), "\x1b\x1b")],
-                'remaining' => '',
+                'remaining' => substr($stream, 2),
             ];
         }
 
         // ESC <non-[> — Alt+key
         return [
-            'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b")],
+            'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b" . $next)],
             'remaining' => substr($stream, 2),
+        ];
+    }
+
+    /**
+     * Handle an SS3 (ESC O) sequence.
+     *
+     * @param string $afterO Bytes after "ESC O"
+     * @return array{events: list<Event>, remaining: string}
+     */
+    private function handleSS3(string $afterO): array
+    {
+        if ($afterO === '') {
+            // Incomplete SS3
+            return ['events' => [], 'remaining' => "\x1bO"];
+        }
+
+        $final = $afterO[0];
+        $ss3Map = [
+            'P' => 'F1',
+            'Q' => 'F2',
+            'R' => 'F3',
+            'S' => 'F4',
+            // App-cursor-mode arrows (some terminals use SS3 for arrows)
+            'A' => 'ArrowUp',
+            'B' => 'ArrowDown',
+            'C' => 'ArrowRight',
+            'D' => 'ArrowLeft',
+            'H' => 'Home',
+            'F' => 'End',
+        ];
+
+        if (!isset($ss3Map[$final])) {
+            // Unknown final byte — skip it
+            return ['events' => [], 'remaining' => substr($afterO, 1)];
+        }
+
+        $raw = "\x1bO" . $final;
+        return [
+            'events' => [new KeyEvent($ss3Map[$final], KeyModifier::none(), $raw)],
+            'remaining' => substr($afterO, 1),
         ];
     }
 
@@ -245,6 +290,9 @@ final class EscapeDecoder
         [$btnRaw, $x, $y] = $parts;
         $button = (int) $btnRaw;
 
+        // Save original button for motion detection (bit 5 = drag flag)
+        $originalButton = $button;
+
         // Scroll events: button 96 = scroll up, 97 = scroll down
         if ($button === 96) {
             return [
@@ -270,7 +318,9 @@ final class EscapeDecoder
 
         $modifiers = KeyModifier::fromSgrMouse($modifierBits);
         $isRelease = $isReleaseChar || $button === 3;
-        $action = $isRelease ? MouseEvent::ACTION_RELEASE : MouseEvent::ACTION_PRESS;
+        // Motion flag (bit 5 = 32) takes precedence over press
+        $isMotion = ($originalButton & 32) !== 0;
+        $action = $isRelease ? MouseEvent::ACTION_RELEASE : ($isMotion ? MouseEvent::ACTION_DRAG : MouseEvent::ACTION_PRESS);
 
         // Button number is already the base (0-2) after modifier extraction
 
@@ -329,22 +379,46 @@ final class EscapeDecoder
             return ['events' => [], 'remaining' => "\x1b["];
         }
 
+        // Modified keys: CSI 1;<mod><final> (xterm format)
+        // e.g., CSI 1;2A = Shift+ArrowUp, CSI 1;5C = Ctrl+ArrowRight
+        if (preg_match('/^(\d+)(?:;(\d+))?([A-DF-HJ-KP-T])$/', $csi, $m)) {
+            $num = (int)$m[1];
+            $modRaw = isset($m[2]) ? (int)$m[2] : 1;
+            $final = $m[3];
+
+            // xterm modified keys always have num=1 and a modifier parameter
+            if ($num === 1 && isset($m[2]) && $modRaw > 1) {
+                $modifiers = KeyModifier::fromXtermParam($modRaw);
+
+                $keyMap = [
+                    'A' => 'ArrowUp',
+                    'B' => 'ArrowDown',
+                    'C' => 'ArrowRight',
+                    'D' => 'ArrowLeft',
+                    'H' => 'Home',
+                    'F' => 'End',
+                    'P' => 'F1',
+                    'Q' => 'F2',
+                    'R' => 'F3',
+                    'S' => 'F4',
+                ];
+
+                if (isset($keyMap[$final])) {
+                    $matched = $m[0];
+                    return [
+                        'events' => [new KeyEvent($keyMap[$final], $modifiers, "\x1b[" . $matched)],
+                        'remaining' => substr($csi, strlen($matched)),
+                    ];
+                }
+            }
+        }
+
         // Arrow keys: CSI A/B/C/D (or SS3 O{A/B/C/D})
         $arrowMap = ['A' => 'ArrowUp', 'B' => 'ArrowDown', 'C' => 'ArrowRight', 'D' => 'ArrowLeft'];
         if (isset($arrowMap[$csi[0]])) {
             return [
                 'events' => [new KeyEvent($arrowMap[$csi[0]], KeyModifier::none(), "\x1b[" . $csi)],
                 'remaining' => substr($csi, 1),
-            ];
-        }
-
-        // SS3-style function keys: CSI OP/.../OS (some terminals use CSI O{P/Q/R/S})
-        $ss3Map = ['P' => 'F1', 'Q' => 'F2', 'R' => 'F3', 'S' => 'F4'];
-        // Also check if it starts with O and the second char is a function key
-        if (isset($csi[1]) && isset($ss3Map[$csi[1]])) {
-            return [
-                'events' => [new KeyEvent($ss3Map[$csi[1]], KeyModifier::none(), "\x1b[" . $csi)],
-                'remaining' => substr($csi, 2),
             ];
         }
 

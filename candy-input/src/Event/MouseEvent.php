@@ -52,14 +52,14 @@ final readonly class MouseEvent implements Event
     }
 
     /** Scroll up (button 96 encoding in SGR) */
-    public static function scrollUp(int $x, int $y, KeyModifier $modifiers = null): self
+    public static function scrollUp(int $x, int $y, ?KeyModifier $modifiers = null): self
     {
-        return new self($x, $y, 96, self::ACTION_SCROLL, $modifiers ?? KeyModifier::None);
+        return new self($x, $y, 96, self::ACTION_SCROLL, $modifiers ?? KeyModifier::none());
     }
 
     /** Scroll down (button 97 encoding in SGR) */
-    public static function scrollDown(int $x, int $y, KeyModifier $modifiers = null): self
+    public static function scrollDown(int $x, int $y, ?KeyModifier $modifiers = null): self
     {
-        return new self($x, $y, 97, self::ACTION_SCROLL, $modifiers ?? KeyModifier::None);
+        return new self($x, $y, 97, self::ACTION_SCROLL, $modifiers ?? KeyModifier::none());
     }
 }
