@@ -103,7 +103,9 @@ final class ModelTest extends TestCase
         $this->model->lessFunc = fn($a, $b) => \strcmp((string) $a, (string) $b);
         $this->model->sort();
 
-        $this->assertSame('a', (string) $this->model->cursorItem());
+        // After sort, cursor stays on the same logical item ('z' was at cursor index 0).
+        $this->assertSame('z', (string) $this->model->cursorItem());
+        // The first visible line is 'a' (alphabetically first) but cursor is on 'z'.
         $this->assertSame('a', $this->model->lines()[0]);
     }
 
