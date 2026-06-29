@@ -34,6 +34,9 @@ final class FileHistory
     /**
      * Read all items from the history file.
      *
+     * Malformed lines are skipped silently. The file handle is always closed,
+     * even if an exception escapes during JSON decoding.
+     *
      * @return list<Item>
      */
     public function all(): array
@@ -48,18 +51,25 @@ final class FileHistory
         }
 
         $items = [];
-        while (($line = \fgets($handle)) !== false) {
-            $line = \trim($line);
-            if ($line === '') {
-                continue;
+        try {
+            while (($line = \fgets($handle)) !== false) {
+                $line = \trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                try {
+                    $decoded = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
+                } catch (\JsonException) {
+                    continue; // skip malformed line
+                }
+                $items[] = new \SugarCraft\Hermit\FilteredItem(
+                    (int) ($decoded['n'] ?? 0),
+                    (string) ($decoded['v'] ?? ''),
+                );
             }
-            $decoded = \json_decode($line, true, 512, \JSON_THROW_ON_ERROR);
-            $items[] = new \SugarCraft\Hermit\FilteredItem(
-                (int) ($decoded['n'] ?? 0),
-                (string) ($decoded['v'] ?? ''),
-            );
+        } finally {
+            \fclose($handle);
         }
-        \fclose($handle);
 
         return $items;
     }
