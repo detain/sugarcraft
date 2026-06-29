@@ -33,8 +33,8 @@ final class KittyRendererTest extends TestCase
         $source = ImageSource::fromFile(__DIR__ . '/fixtures/8x4_red.png');
         $out    = $this->renderer->render($source, 8);
 
-        // Begins with APC G + width/height params.
-        $this->assertStringStartsWith("\x1b_G", $out);
+        // Begins with DCS q (Kitty graphics begin) + width/height params.
+        $this->assertStringStartsWith("\x1bPq", $out);
         $this->assertStringContainsString('c=8', $out);    // cell columns
         $this->assertStringContainsString('r=4', $out);    // cell rows
     }
