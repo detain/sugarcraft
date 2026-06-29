@@ -572,6 +572,17 @@ final class Table implements Model
         return $this->filteredRows($this->sortedRows());
     }
 
+    /**
+     * Strip C0 control characters from caller-supplied cell text so they
+     * cannot inject newlines or corrupt the TUI render. SGR escape
+     * sequences (\x1b[...) are preserved.
+     */
+    private function sanitizeCell(string $s): string
+    {
+        $s = str_replace(["\n", "\r", "\t"], ' ', $s);
+        return preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f]/', '', $s) ?? $s;
+    }
+
     /** @return list<int> */
     private function columnWidths(): array
     {
@@ -632,6 +643,7 @@ final class Table implements Model
         $cells = [];
         foreach ($widths as $i => $w) {
             $cell = $row[$i] ?? '';
+            $cell = $this->sanitizeCell($cell);
             $cell = Width::truncate($cell, $w);
             $pad  = $w - Width::string($cell);
             $padded = $cell . str_repeat(' ', max(0, $pad));
