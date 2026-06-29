@@ -19,55 +19,13 @@ declare(strict_types=1);
         if (is_file($path)) {
             require $path;
             return;
-        }
-    }
-    fwrite(STDERR, "wishlist: cannot find composer autoload.php\n");
-    exit(1);
-})($argv);
-
-use SugarCraft\Wishlist\Config;
-use SugarCraft\Wishlist\Lang;
-use SugarCraft\Wishlist\Launcher;
-use SugarCraft\Wishlist\Picker;
-
-$cfgPath = null;
-$sshBin  = '/usr/bin/ssh';
-for ($i = 1; $i < $argc; $i++) {
-    switch ($argv[$i]) {
-        case '--config':
-        case '-c':
-            $cfgPath = $argv[++$i] ?? null;
-            break;
-        case '--ssh':
-            $sshBin = $argv[++$i] ?? '/usr/bin/ssh';
-            break;
-        case '--help':
-        case '-h':
-            fwrite(STDOUT, Lang::t('cli.usage') . "\n");
-            exit(0);
-        default:
-            fwrite(STDERR, Lang::t('cli.unknown_arg', ['arg' => $argv[$i]]) . "\n");
-            exit(2);
     }
 }
 
-if ($cfgPath === null) {
-    foreach ([
-        getenv('HOME') . '/.config/wishlist.yml',
-        getenv('HOME') . '/.config/wishlist.yaml',
-        getenv('HOME') . '/.config/wishlist.json',
-        'wishlist.yml',
-        'wishlist.yaml',
-        'wishlist.json',
-    ] as $candidate) {
-        if (is_file($candidate)) {
-            $cfgPath = $candidate;
-            break;
-        }
-    }
-}
-if ($cfgPath === null || !is_file($cfgPath)) {
-    fwrite(STDERR, Lang::t('cli.no_config') . "\n");
+// Validate the --ssh binary before we try to dispatch.
+// An invalid path would fail into the generic exec_failed message.
+if (!is_file($sshBin) || !is_executable($sshBin)) {
+    fwrite(STDERR, Lang::t('cli.ssh_not_executable', ['bin' => $sshBin]) . "\n");
     exit(1);
 }
 

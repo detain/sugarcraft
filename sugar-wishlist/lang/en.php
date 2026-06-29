@@ -18,13 +18,14 @@ return [
     'config.yaml_unparseable'  => 'wishlist yaml: unparseable line: {line}',
     'config.entry_missing_field' => 'wishlist entry missing required field: name or host',
 
+    // endpoint security
+    'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
+
     // bin/wishlist
     'cli.usage'         => 'Usage: wishlist [--config <path>] [--ssh <ssh-binary>]',
     'cli.unknown_arg'   => 'wishlist: unknown arg: {arg}',
     'cli.no_config'     => 'wishlist: no config found. Pass --config <path>.',
     'cli.error'         => 'wishlist: {message}',
     'cli.cancelled'     => 'wishlist: cancelled.',
-
-    // endpoint security
-    'endpoint.option_injection' => 'wishlist endpoint: field [{field}] has unsafe leading-dash value [{value}]',
+    'cli.ssh_not_executable' => 'wishlist: ssh binary not found or not executable: {bin}',
 ];
