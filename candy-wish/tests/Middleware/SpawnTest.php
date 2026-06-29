@@ -41,6 +41,8 @@ final class SpawnTest extends TestCase
                 $this->env = $env;
                 return 0;
             }
+
+            public function signalChild(int $signal): void {}
         };
 
         $spawn = new Spawn(function (Session $s) use (&$observedSession): array {
@@ -71,6 +73,8 @@ final class SpawnTest extends TestCase
                 $this->env = $env;
                 return 0;
             }
+
+            public function signalChild(int $signal): void {}
         };
 
         $spawn = new Spawn(fn () => ['cmd' => ['/bin/true']]);
@@ -178,6 +182,8 @@ final class SpawnTest extends TestCase
             {
                 return 0;
             }
+
+            public function signalChild(int $signal): void {}
         };
     }
 }

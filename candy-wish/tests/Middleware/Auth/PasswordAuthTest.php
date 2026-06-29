@@ -113,4 +113,24 @@ final class PasswordAuthTest extends TestCase
         });
         $this->assertTrue($reached);
     }
+
+    public function testClearsSshPasswordAfterRead(): void
+    {
+        [$err] = $this->stderr();
+        $_SERVER['SSH_PASSWORD'] = 'secret123';
+        putenv('SSH_PASSWORD=secret123');
+        try {
+            $a = new PasswordAuth(fn($u, $p) => true, $err);
+            $reached = false;
+            $a->handle(Context::background(), $this->session('alice'), function () use (&$reached): void {
+                $reached = true;
+            });
+
+            $this->assertTrue($reached);
+            $this->assertArrayNotHasKey('SSH_PASSWORD', $_SERVER);
+            $this->assertFalse(getenv('SSH_PASSWORD'));
+        } finally {
+            putenv('SSH_PASSWORD');
+        }
+    }
 }

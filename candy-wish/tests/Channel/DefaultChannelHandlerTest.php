@@ -14,6 +14,7 @@ use SugarCraft\Wish\Channel\Msg\ShellMsg;
 use SugarCraft\Wish\Channel\Msg\SignalMsg;
 use SugarCraft\Wish\Channel\Msg\WindowChangeMsg;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\Transport\ChildSpawner;
 
 final class DefaultChannelHandlerTest extends TestCase
 {
@@ -120,6 +121,25 @@ final class DefaultChannelHandlerTest extends TestCase
         $this->assertSame(['echo', 'hello world'], $handler->pendingCommand());
     }
 
+    public function testHandleExecPreservesEmptyQuotedArg(): void
+    {
+        $handler = new DefaultChannelHandler();
+
+        $handler->handleExec(new ExecMsg("cmd ''"), $this->fakeSession());
+
+        $this->assertSame(['cmd', ''], $handler->pendingCommand());
+    }
+
+    public function testHandleExecBackslashEscapeOutsideQuotes(): void
+    {
+        $handler = new DefaultChannelHandler();
+
+        // `foo\ bar` → single token `foo bar`
+        $handler->handleExec(new ExecMsg('echo foo\ bar'), $this->fakeSession());
+
+        $this->assertSame(['echo', 'foo bar'], $handler->pendingCommand());
+    }
+
     public function testHandleSignalIsNoOp(): void
     {
         $handler = new DefaultChannelHandler();
@@ -180,5 +200,140 @@ final class DefaultChannelHandlerTest extends TestCase
 
         $this->assertFalse($handler->shellRequested());
         $this->assertFalse($handler->execRequested());
+    }
+
+    /**
+     * @return array{env: array<string,string>}
+     */
+    private function captureChildEnv(array $acceptEnv = []): array
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $handler = new DefaultChannelHandler($spy, null, $acceptEnv);
+        $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+
+        return ['env' => $capturedEnv];
+    }
+
+    public function testBuildEnvReturnsFloorWhenNoClientEnv(): void
+    {
+        $result = $this->captureChildEnv([]);
+
+        $this->assertArrayHasKey('TERM', $result['env']);
+        $this->assertArrayHasKey('USER', $result['env']);
+        $this->assertArrayHasKey('LANG', $result['env']);
+        $this->assertArrayHasKey('PATH', $result['env']);
+        $this->assertArrayHasKey('HOME', $result['env']);
+    }
+
+    public function testBuildEnvDropsDangerousVarsEvenIfAllowlisted(): void
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        // Include a dangerous var in acceptEnv — it must still be dropped.
+        $handler = new DefaultChannelHandler($spy, null, ['LD_PRELOAD', 'PATH']);
+        $handler->handleEnv(new EnvMsg('LD_PRELOAD', '/malicious.so'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg('FOO', 'bar'), $this->fakeSession());
+        $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+
+        $this->assertArrayNotHasKey('LD_PRELOAD', $capturedEnv);
+        // Floor PATH is always present (as a baseline), but client-supplied PATH
+        // from EnvMsg is never merged since PATH is in DANGEROUS_VARS.
+        // Verify the PATH value is the floor default, not '/usr/custom/bin'.
+        $this->assertSame('/usr/local/bin:/usr/bin:/bin', $capturedEnv['PATH']);
+    }
+
+    public function testBuildEnvPassesAllowlistedVars(): void
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $handler = new DefaultChannelHandler($spy, null, ['FOO', 'COLOR']);
+        $handler->handleEnv(new EnvMsg('FOO', 'bar'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg('COLOR', 'true'), $this->fakeSession());
+        $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+
+        $this->assertSame('bar', $capturedEnv['FOO']);
+        $this->assertSame('true', $capturedEnv['COLOR']);
+    }
+
+    public function testBuildEnvDropsNonAllowlistedVars(): void
+    {
+        $capturedEnv = [];
+        $spy = new class($capturedEnv) implements ChildSpawner {
+            /** @var array<string,string> */
+            private array $captured;
+
+            public function __construct(array &$captured)
+            {
+                $this->captured = &$captured;
+            }
+
+            public function runChild(Session $session, array $cmd, ?array $env = null): int
+            {
+                $this->captured = $env ?? [];
+                return 0;
+            }
+
+            public function signalChild(int $signal): void {}
+        };
+
+        $handler = new DefaultChannelHandler($spy, null, ['FOO']);
+        $handler->handleEnv(new EnvMsg('FOO', 'bar'), $this->fakeSession());
+        $handler->handleEnv(new EnvMsg('BAR', 'baz'), $this->fakeSession()); // not allowlisted
+        $handler->handleShell(new ShellMsg(wantShell: true), $this->fakeSession());
+
+        $this->assertSame('bar', $capturedEnv['FOO']);
+        $this->assertArrayNotHasKey('BAR', $capturedEnv);
     }
 }
