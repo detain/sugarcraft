@@ -203,9 +203,20 @@ final class SmtpTransport implements Transport
         $this->sendRaw("DATA\r\n");
         $this->readResponse(354);
 
-        $mime = $this->buildMimeMessage($email);
+        $mime = $this->dotStuff($this->buildMimeMessage($email));
         $this->sendRaw($mime . "\r\n.\r\n");
         $this->readResponse(250);
+    }
+
+    /**
+     * Apply RFC 5321 §4.5.2 dot-stuffing: prefix each line starting with
+     * a literal dot with an extra dot so it isn't interpreted as a terminator.
+     *
+     * Mirrors charmbracelet/pop dot-stuffing.
+     */
+    private function dotStuff(string $mime): string
+    {
+        return \preg_replace('/^\./m', '..', $mime);
     }
 
     // -------------------------------------------------------------------------
@@ -250,7 +261,9 @@ final class SmtpTransport implements Transport
             $lines[] = 'Content-Type: text/plain; charset="utf-8"';
             $lines[] = 'Content-Transfer-Encoding: 7bit';
             $lines[] = '';
-            $lines = \array_merge($lines, \explode("\n", $body));
+            // Normalize CRLF/CR to LF before splitting, then re-frame with CRLF
+            $normalized = \preg_replace('/\r\n|\r/', "\n", $body);
+            $lines = \array_merge($lines, \explode("\n", $normalized));
             $lines[] = '';
         }
 
@@ -259,7 +272,8 @@ final class SmtpTransport implements Transport
             $lines[] = 'Content-Type: text/html; charset="utf-8"';
             $lines[] = 'Content-Transfer-Encoding: 7bit';
             $lines[] = '';
-            $lines = \array_merge($lines, \explode("\n", $email->htmlBody));
+            $normalized = \preg_replace('/\r\n|\r/', "\n", $email->htmlBody);
+            $lines = \array_merge($lines, \explode("\n", $normalized));
             $lines[] = '';
             $lines[] = '--' . $bodyBoundary . '--';
             $lines[] = '';
