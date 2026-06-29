@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Table;
 
-use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\{Ansi, Width};
 
 /**
  * A table column with key, title, width, and optional style.
@@ -120,7 +120,8 @@ final class Column
     public function renderHeader(int $totalWidth = 0): string
     {
         $w = $totalWidth > 0 ? $totalWidth : $this->width;
-        $title = \substr($this->title, 0, $w);
+        // Sanitize title; pad() handles display-width truncation via Width helpers
+        $title = Sanitize::value($this->title, false);
         return $this->pad($title, $w, $this->alignLeft);
     }
 
@@ -134,6 +135,8 @@ final class Column
     {
         $w = $width > 0 ? $width : $this->width;
         $str = \is_object($value) && method_exists($value, '__toString') ? (string) $value : (\is_scalar($value) ? (string) $value : '');
+        // Sanitize before wrapping (multiline context preserves \n for explode callers)
+        $str = Sanitize::value($str, true);
 
         $lines = $this->wrapText($str, $w);
         $result = [];
@@ -178,10 +181,10 @@ final class Column
         if ($width <= 0) {
             return [''];
         }
-        if (\strlen($text) <= $width) {
+        if (Width::of($text) <= $width) {
             return [$text];
         }
-        return [\substr($text, 0, $width)];
+        return [Width::truncate($text, $width)];
     }
 
     /**
@@ -194,35 +197,13 @@ final class Column
         if ($width <= 0) {
             return [''];
         }
-        if (\strlen($text) <= $width) {
+        if (Width::of($text) <= $width) {
             return [$text];
         }
 
-        $lines = [];
-        $remaining = $text;
-
-        while ($remaining !== '') {
-            if (\strlen($remaining) <= $width) {
-                $lines[] = $remaining;
-                break;
-            }
-
-            // Find the last space within the width
-            $chunk = \substr($remaining, 0, $width);
-            $lastSpace = \strrpos($chunk, ' ');
-
-            if ($lastSpace === false || $lastSpace === 0) {
-                // No space found, force break at width
-                $lines[] = \substr($remaining, 0, $width);
-                $remaining = \substr($remaining, $width);
-            } else {
-                // Break at last space
-                $lines[] = \substr($chunk, 0, $lastSpace);
-                $remaining = \substr($remaining, $lastSpace + 1);
-            }
-        }
-
-        return $lines;
+        // Width::wrap returns the text with \n between lines
+        $wrapped = Width::wrap($text, $width);
+        return $wrapped === '' ? [''] : \explode("\n", $wrapped);
     }
 
     /**
@@ -236,26 +217,48 @@ final class Column
         if ($width <= 0) {
             return [''];
         }
-        if (\strlen($text) <= $width) {
+        if (Width::of($text) <= $width) {
             return [$text];
         }
 
+        $clusters = \function_exists('grapheme_str_split')
+            ? \grapheme_str_split($text)
+            : (\function_exists('mb_str_split')
+                ? \mb_str_split($text, 1, 'UTF-8')
+                : (\preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: []));
+
         $lines = [];
-        $chunks = \str_split($text, $width);
-        foreach ($chunks as $chunk) {
-            $lines[] = $chunk;
+        $currentLine = '';
+        $currentWidth = 0;
+
+        foreach ($clusters as $cluster) {
+            $clusterWidth = Width::of($cluster);
+            if ($currentWidth + $clusterWidth > $width) {
+                if ($currentLine !== '') {
+                    $lines[] = $currentLine;
+                }
+                $currentLine = $cluster;
+                $currentWidth = $clusterWidth;
+            } else {
+                $currentLine .= $cluster;
+                $currentWidth += $clusterWidth;
+            }
         }
-        return $lines;
+
+        if ($currentLine !== '') {
+            $lines[] = $currentLine;
+        }
+
+        return $lines === [] ? [''] : $lines;
     }
 
     private function pad(string $text, int $width, bool $leftAlign): string
     {
-        $len = \strlen($text);
-        if ($len >= $width) return \substr($text, 0, $width);
-        $pad = $width - $len;
+        // Truncate to display width first, then pad to fill the target width
+        $text = Width::truncate($text, $width);
         return $leftAlign
-            ? $text . \str_repeat(' ', $pad)
-            : \str_repeat(' ', $pad) . $text;
+            ? Width::padRight($text, $width)
+            : Width::padLeft($text, $width);
     }
 
     private function ansi(string $text, string $codes): string
