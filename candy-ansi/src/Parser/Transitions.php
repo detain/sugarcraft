@@ -74,7 +74,7 @@ final class Transitions
             // Anywhere -> Ground
             $setMany($state, [0x18, 0x1A, 0x99, 0x9A], Action::Execute->value, $g);
             $setRange($state, 0x80, 0x8F, Action::Execute->value, $g);
-            $setRange($state, 0x90, 0x97, Action::Execute->value, $g);
+            $setRange($state, 0x91, 0x97, Action::Execute->value, $g); // 0x90 is DCS (see :87)
             $set($state, 0x9C, Action::Execute->value, $g);
             // Anywhere -> Escape
             $set($state, 0x1B, Action::Clear->value, State::Escape->value);
