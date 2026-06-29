@@ -63,9 +63,12 @@ final class TapeToGif
     public function render(string $tapePath, ?string $outputPath = null, array $options = []): void
     {
         $fps = (float) ($options['fps'] ?? 30.0);
-        $fontSize = (int) ($options['fontSize'] ?? 14);
-        $fontFamily = $options['fontFamily'] ?? 'JetBrainsMono';
         $cliTheme = $options['theme'] ?? null;
+
+        // Prefer font settings from the cassette header (Set FontSize/FontFamily
+        // directives in the tape) over CLI defaults.
+        $fontSize = $cassette->header->fontSize ?? (int) ($options['fontSize'] ?? 14);
+        $fontFamily = $cassette->header->fontFamily ?? $options['fontFamily'] ?? 'JetBrainsMono';
 
         $source = @file_get_contents($tapePath);
         if ($source === false) {
@@ -74,10 +77,11 @@ final class TapeToGif
 
         $tokens = $this->lexer->tokenize($source);
         $ast = $this->parser->parse($tokens);
-        $cassette = $this->compiler->compile($ast, $tapePath);
+        $strict = (bool) ($options['strict'] ?? false);
+        $cassette = $this->compiler->compile($ast, $tapePath, $strict);
 
         $themeName = $cassette->header->theme ?? $cliTheme ?? 'TokyoNight';
-        $theme = $this->resolveTheme($themeName);
+        $theme = $this->resolveTheme($themeName, $strict);
         $rasterizer = $this->themedRasterizerWithFonts($theme, $fontFamily);
 
         $terminal = Terminal::new($cassette->header->cols, $cassette->header->rows, $theme);
@@ -91,6 +95,10 @@ final class TapeToGif
         $tempDir = $this->createTempDir();
         $pngPaths = [];
         $frameHoldsMs = [];
+
+        // Compute the output path early so screenshots can be confined to its directory
+        $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
+        $outputDir = dirname($output);
 
         try {
             foreach ($this->buildFramesWithHolds($frameStream, 1.0 / $fps) as $index => $frameInfo) {
@@ -116,16 +124,17 @@ final class TapeToGif
                 $pngPaths[] = $framePath;
                 $frameHoldsMs[] = (int) round($frameInfo['hold'] * 1000);
 
-                // Handle screenshot capture
+                // Handle screenshot capture — confined to output directory for safety
                 if (($frameInfo['screenshotPath'] ?? false) !== false) {
-                    $screenshotPath = $frameInfo['screenshotPath'];
+                    $rawScreenshotPath = $frameInfo['screenshotPath'];
+                    $confinedPath = $this->confineScreenshotPath($rawScreenshotPath, $outputDir);
                     $screenshotImage = $rasterizer->rasterize($frameInfo['snapshot'], $cellW, $cellH, null, $renderCursor);
                     try {
                         $written = $screenshotImage instanceof \Imagick
-                            ? $screenshotImage->writeImage($screenshotPath)
-                            : imagepng($screenshotImage, $screenshotPath);
+                            ? $screenshotImage->writeImage($confinedPath)
+                            : imagepng($screenshotImage, $confinedPath);
                         if ($written === false) {
-                            throw new \RuntimeException("Failed to write screenshot: {$screenshotPath}");
+                            throw new \RuntimeException("Failed to write screenshot: {$confinedPath}");
                         }
                     } finally {
                         if ($screenshotImage instanceof \Imagick) {
@@ -141,11 +150,49 @@ final class TapeToGif
                 throw new \RuntimeException("Tape produced no frames: {$tapePath}");
             }
 
-            $output = $outputPath ?? (preg_replace('/\.tape$/', '.gif', $tapePath) ?: $tapePath . '.gif');
             $this->encoder->encode($pngPaths, $output, (int) round($fps), $frameHoldsMs);
         } finally {
             $this->cleanupDir($tempDir);
         }
+    }
+
+    /**
+     * Confine a screenshot path to the output directory.
+     *
+     * Allows relative paths (joined under outputDir) and absolute paths that
+     * already reside inside outputDir. Rejects path traversal segments and
+     * absolute paths that escape the output directory.
+     */
+    private function confineScreenshotPath(string $rawPath, string $outputDir): string
+    {
+        // Reject path traversal
+        if (str_contains($rawPath, '..') || str_contains($rawPath, '\\')) {
+            throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");
+        }
+
+        // Absolute path: verify its directory lives under outputDir
+        if (str_starts_with($rawPath, '/') || (strlen($rawPath) >= 2 && $rawPath[1] === ':')) {
+            $rawDir = dirname($rawPath);
+            $rawDirReal = realpath($rawDir);
+            $outputDirReal = realpath($outputDir);
+            if ($rawDirReal === false || $outputDirReal === false) {
+                throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");
+            }
+            if (!str_starts_with($rawDirReal . DIRECTORY_SEPARATOR, $outputDirReal . DIRECTORY_SEPARATOR)) {
+                throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");
+            }
+            return $rawPath;
+        }
+
+        // Relative path: join under outputDir
+        $target = $outputDir . DIRECTORY_SEPARATOR . $rawPath;
+        $targetDir = dirname($target);
+        $targetDirReal = realpath($targetDir);
+        if ($targetDirReal === false || !str_starts_with($targetDirReal . DIRECTORY_SEPARATOR, $outputDir . DIRECTORY_SEPARATOR)) {
+            throw new \RuntimeException("Screenshot path escapes output directory: {$rawPath}");
+        }
+
+        return $target;
     }
 
     /**
@@ -196,7 +243,7 @@ final class TapeToGif
         }
     }
 
-    private function resolveTheme(string $name): Theme
+    private function resolveTheme(string $name, bool $strict = false): Theme
     {
         return match ($name) {
             'TokyoNight' => Theme::tokyoNight(),
@@ -204,8 +251,20 @@ final class TapeToGif
             'TokyoNightStorm' => Theme::tokyoNightStorm(),
             'Dracula' => Theme::dracula(),
             'SolarizedDark' => Theme::solarizedDark(),
-            default => Theme::tokyoNight(),
+            default => $this->handleUnknownTheme($name, $strict),
         };
+    }
+
+    private function handleUnknownTheme(string $name, bool $strict): Theme
+    {
+        if ($strict) {
+            throw new \InvalidArgumentException(
+                "Unknown theme '{$name}' (known: TokyoNight, TokyoNightLight, TokyoNightStorm, Dracula, SolarizedDark)",
+            );
+        }
+        // Non-strict: warn and fall back to TokyoNight
+        error_log("candy-vcr: unknown theme '{$name}', falling back to TokyoNight");
+        return Theme::tokyoNight();
     }
 
     /**
