@@ -265,31 +265,42 @@ final class Board
         $m = $p['m'] ?? null;
         $p2 = $p['p'] ?? null;
         $e = $p['e'] ?? null;
-        $r = $p['r'] ?? 0;
         $cells = $p['c'] ?? null;
         if ($w === null || $h === null || $m === null || $p2 === null || $e === null || $cells === null) {
             throw new \InvalidArgumentException('Invalid board serialization');
         }
+        if (!is_array($cells) || count($cells) !== $h) {
+            throw new \InvalidArgumentException('Invalid board serialization');
+        }
         $rows = [];
+        $revealedCount = 0;
         for ($y = 0; $y < $h; $y++) {
+            if (!is_array($cells[$y]) || count($cells[$y]) !== $w) {
+                throw new \InvalidArgumentException('Invalid board serialization');
+            }
             $row = [];
             for ($x = 0; $x < $w; $x++) {
                 $cellData = $cells[$y][$x] ?? null;
                 if (!is_array($cellData) || count($cellData) < 4) {
                     throw new \InvalidArgumentException('Invalid board serialization');
                 }
-                $row[] = new Cell(
-                    (bool) $cellData[0],
-                    (bool) $cellData[1],
-                    (bool) $cellData[2],
-                    (int) $cellData[3],
-                );
+                $mine     = (bool) $cellData[0];
+                $revealed = (bool) $cellData[1];
+                $flagged  = (bool) $cellData[2];
+                $adjacent = (int)  $cellData[3];
+                if ($revealed) {
+                    $revealedCount++;
+                }
+                $row[] = new Cell($mine, $revealed, $flagged, $adjacent);
             }
             $rows[] = $row;
         }
+        // Drop the persisted 'r' value entirely — recompute from live cell state
+        // so a tampered payload cannot inflate revealedCount to force a false win
+        // or deflate it to make a finished board un-winnable.
         return new self(
             (int) $w, (int) $h, (int) $m,
-            $rows, (bool) $p2, (bool) $e, (int) $r,
+            $rows, (bool) $p2, (bool) $e, $revealedCount,
         );
     }
 
