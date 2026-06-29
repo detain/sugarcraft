@@ -47,6 +47,20 @@ final readonly class PosterCard
     ) {
     }
 
+    /** Canonical factory — mirrors the public constructor. */
+    public static function new(
+        string $id,
+        string $title,
+        ?string $posterUrl = null,
+        ?float $progress = null,
+        ?string $poster = null,
+        ?string $styledTitle = null,
+        ?string $posterImage = null,
+        ?int $imageId = null,
+    ): self {
+        return new self($id, $title, $posterUrl, $progress, $poster, $styledTitle, $posterImage, $imageId);
+    }
+
     public function withPoster(string $ansi): self
     {
         return new self($this->id, $this->title, $this->posterUrl, $this->progress, $ansi, $this->styledTitle, $this->posterImage, $this->imageId);
@@ -114,9 +128,12 @@ final readonly class PosterCard
         }
 
         $marker = $focused ? '▸' : ' ';
+        // Plain titles are DB-sourced; strip C0 controls to prevent terminal
+        // corruption. styledTitle is pre-styled ANSI and goes through the
+        // ANSI-aware truncate path unchanged.
         $title = $this->styledTitle !== null
             ? Width::truncateAnsi($this->styledTitle, $width - 2)
-            : self::truncate($this->title, $width - 2);
+            : self::truncate(self::stripC0($this->title), $width - 2);
         $lines[] = Width::padRight($marker . ' ' . $title, $width);
 
         if ($this->progress !== null) {
@@ -141,7 +158,9 @@ final readonly class PosterCard
             $rows[] = str_repeat(' ', $width);
         }
 
-        return $rows;
+        // Safety net: route through fitWidth() so imageRows and posterRows are
+        // handled identically. The rows are already width-exact so this is no-op.
+        return array_map(static fn (string $row): string => self::fitWidth($row, $width), $rows);
     }
 
     /**
@@ -153,6 +172,8 @@ final readonly class PosterCard
      * The row count is then clamped to $posterHeight: a short poster is padded
      * with blank (width-wide) rows and a tall one is cropped, so the tile always
      * occupies the height the rail/grid reserved for it and cards stay aligned.
+     * Every row is then normalised to exactly $width cells (clamp/pad) so a
+     * rail or grid can stitch cards side-by-side without width misalignment.
      *
      * @return list<string>
      */
@@ -164,14 +185,29 @@ final readonly class PosterCard
         }
 
         if (count($rows) > $posterHeight) {
-            return array_slice($rows, 0, $posterHeight);
+            $rows = array_slice($rows, 0, $posterHeight);
         }
 
         while (count($rows) < $posterHeight) {
             $rows[] = str_repeat(' ', $width);
         }
 
-        return $rows;
+        // Width-normalise every row so the card upholds the render invariant:
+        // every card row is exactly $width visual cells, matching PosterGrid::box().
+        return array_map(static fn (string $row): string => self::fitWidth($row, $width), $rows);
+    }
+
+    /**
+     * Normalise a row to exactly $width visual cells: truncate over-wide rows
+     * and pad under-wide rows. Mirrors the per-line logic in PosterGrid::box().
+     */
+    private static function fitWidth(string $row, int $width): string
+    {
+        $w = Width::string($row);
+
+        return $w > $width
+            ? Width::truncateAnsi($row, $width)
+            : ($w < $width ? Width::padRight($row, $width) : $row);
     }
 
     /**
@@ -193,5 +229,19 @@ final readonly class PosterCard
         $filled = (int) round($progress * $width);
 
         return str_repeat('▓', $filled) . str_repeat('░', max(0, $width - $filled));
+    }
+
+    /**
+     * Strip C0 control bytes from a plain (non-ANSI) title before rendering.
+     * No C0 byte is needed in a title — this prevents cursor-move/clear/ESC
+     * sequences from untrusted DB titles reaching the terminal. The styledTitle
+     * path intentionally skips this (escapes are preserved there per contract).
+     */
+    private static function stripC0(string $text): string
+    {
+        // Remove C0 controls except CR/LF (which preg_replace handles separately).
+        // ESC (\x1B) and Bell (\x07) are also removed as they could corrupt the
+        // render even from a "plain" title that accidentally contains ANSI bytes.
+        return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $text) ?? $text;
     }
 }
