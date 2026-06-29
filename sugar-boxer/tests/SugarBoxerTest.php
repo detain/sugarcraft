@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Boxer\Tests;
 
 use SugarCraft\Boxer\{Node, SugarBoxer};
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Sprinkles\Align;
+use SugarCraft\Sprinkles\Style;
 use SugarCraft\Sprinkles\VAlign;
 use PHPUnit\Framework\TestCase;
 
@@ -423,5 +425,178 @@ final class SugarBoxerTest extends TestCase
         $full = $boxer->render($layout3, 20, 5);
         $this->assertStringContainsString('╭', $full, 'After reset, render re-emits full output');
         $this->assertGreaterThan(50, \strlen($full), 'After reset, render is full output, not a delta');
+    }
+
+    // -------------------------------------------------------------------------
+    // Steps 8-11: Regression & render-behaviour tests
+    // -------------------------------------------------------------------------
+
+    public function testWithContentPreservesNodeState(): void
+    {
+        // Leaf: withContent preserves border, padding, minWidth
+        $n = Node::leaf('x')->withBorder(true)->withMinWidth(5)->withPadding(2)->withContent('y');
+        $this->assertSame('y', $n->content);
+        $this->assertTrue($n->border);
+        $this->assertSame(5, $n->minWidth);
+        $this->assertSame(2, $n->padding);
+
+        // Horizontal: withContent on a non-leaf preserves kind and children
+        $n2 = Node::horizontal(Node::leaf('a'), Node::leaf('b'))->withContent('z');
+        $this->assertSame(Node::HORIZONTAL, $n2->kind);
+        $this->assertCount(2, $n2->children);
+        $this->assertSame('z', $n2->content);
+    }
+
+    public function testTitleRendersInTopBorder(): void
+    {
+        $layout = Node::leaf('content')->withBorder(true)->withTitle('Panel')->withMinWidth(12);
+        $result = $this->boxer->render($layout, 20, 5);
+
+        // Title should appear in the FIRST line (top border row)
+        $lines = \explode("\n", $result);
+        $this->assertStringContainsString('Panel', $lines[0]);
+    }
+
+    public function testAlignCenterPadsContent(): void
+    {
+        $layout = Node::leaf('ABC')->withBorder(false)->withAlignH(Align::Center);
+        $result = $this->boxer->render($layout, 10, 3);
+        $lines = \explode("\n", $result);
+
+        // In a 10-wide region, "ABC" (width 3) centered has left pad = (10-3)/2 = 3
+        // So 'A' should be at column 3 (0-indexed), meaning lines[0][3] === 'A'
+        $this->assertSame('A', $lines[0][3] ?? '', 'Centered text should have leading spaces');
+        // Column 0 should be a space (left pad)
+        $this->assertSame(' ', $lines[0][0] ?? '');
+    }
+
+    public function testAlignRightPadsContent(): void
+    {
+        $layout = Node::leaf('ABC')->withBorder(false)->withAlignH(Align::Right);
+        $result = $this->boxer->render($layout, 10, 3);
+        $lines = \explode("\n", $result);
+
+        // In a 10-wide region, "ABC" (width 3) right-aligned has left pad = 10-3 = 7
+        // So 'A' should be at column 7 (0-indexed)
+        $this->assertSame('A', $lines[0][7] ?? '', 'Right-aligned text should start at correct column');
+        // Column 0 should be a space (left pad of 7)
+        $this->assertSame(' ', $lines[0][0] ?? '');
+    }
+
+    public function testAlignVMiddle(): void
+    {
+        $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Middle);
+        $result = $this->boxer->render($layout, 10, 8);
+        $lines = \explode("\n", $result);
+
+        // In height 8 with 3 lines, middle gives topPad = (8-3)/2 = 2
+        // So L1 should be at line index 2, not 0
+        $this->assertSame('L1', \trim($lines[2] ?? ''));
+        $this->assertSame('', \trim($lines[0] ?? ''));
+    }
+
+    public function testAlignVBottom(): void
+    {
+        $layout = Node::leaf("L1\nL2\nL3")->withBorder(false)->withAlignV(VAlign::Bottom);
+        $result = $this->boxer->render($layout, 10, 8);
+        $lines = \explode("\n", $result);
+
+        // In height 8 with 3 lines, bottom gives topPad = 8-3 = 5
+        // So L1 should be at line index 5, not 0
+        $this->assertSame('L1', \trim($lines[5] ?? ''));
+        $this->assertSame('', \trim($lines[0] ?? ''));
+    }
+
+    public function testStyleEmitsSgrAndResets(): void
+    {
+        // Use Color::ansi(14) = cyan (ANSI 16 index 14 = RGB [0,255,255])
+        // Renders to \x1b[36m in basic ANSI mode
+        $layout = Node::leaf('test')->withBorder(false)->withStyle(Style::new()->fg(Color::ansi(14)));
+        $result = $this->boxer->render($layout, 10, 3);
+
+        // Should contain SGR reset after content
+        $this->assertStringContainsString("\x1b[0m", $result, 'Output should contain SGR reset');
+    }
+
+    public function testMaxWidthClampsContentWidth(): void
+    {
+        $layout = Node::leaf('1234567890')->withBorder(false)->withMaxWidth(6);
+        $result = $this->boxer->render($layout, 20, 3);
+        $lines = \explode("\n", $result);
+
+        // No line should exceed 6 visible content cols
+        foreach ($lines as $line) {
+            if (\trim($line) === '') continue;
+            // Count visible chars (strip ANSI escapes for measurement)
+            $stripped = \preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+            $visible = \ltrim($stripped);
+            $leadingSpaces = \strlen($stripped) - \strlen($visible);
+            $this->assertLessThanOrEqual(6, \strlen(\trim($stripped)), 'Content width should be clamped to maxWidth');
+        }
+    }
+
+    public function testMaxHeightClampsContentHeight(): void
+    {
+        $multiline = "L1\nL2\nL3\nL4\nL5";
+        $layout = Node::leaf($multiline)->withBorder(false)->withMaxHeight(3);
+        $result = $this->boxer->render($layout, 20, 10);
+        $lines = \explode("\n", $result);
+
+        // Count non-empty lines
+        $contentLines = \array_filter(\array_map('trim', $lines), static fn($l) => $l !== '');
+        $this->assertLessThanOrEqual(3, \count($contentLines), 'Content height should be clamped to maxHeight');
+    }
+
+    public function testNodeWithMarginExplicitZeroSides(): void
+    {
+        // Explicit zeros on right/bottom/left must be honored when passed as 4 args
+        $n = Node::leaf('x')->withMargin(2, 0, 0, 0);
+        $this->assertSame([2, 0, 0, 0], $n->margin);
+
+        // 3-arg shorthand: withMargin(0,5) uses CSS shorthand where left falls back to right
+        $n2 = Node::leaf('x')->withMargin(0, 5);
+        $this->assertSame([0, 5, 0, 5], $n2->margin);
+    }
+
+    public function testNumericFieldsCanBeResetToZero(): void
+    {
+        // padding reset
+        $n = Node::leaf('x')->withPadding(3)->withPadding(0);
+        $this->assertSame(0, $n->padding);
+
+        // spacing reset
+        $n = Node::leaf('x')->withSpacing(2)->withSpacing(0);
+        $this->assertSame(0, $n->spacing);
+
+        // minWidth reset
+        $n = Node::leaf('x')->withMinWidth(9)->withMinWidth(0);
+        $this->assertSame(0, $n->minWidth);
+
+        // flex reset (withGrow -> withFlex(0))
+        $n = Node::leaf('x')->withGrow()->withFlex(0);
+        $this->assertSame(0, $n->flex);
+    }
+
+    public function testManyFixedChildrenNarrowViewportNoVanish(): void
+    {
+        // Use 5 children (border=false) in width=12 to test distribute overflow.
+        // With borderPad=1 and contentSpan=10, 5 equal children each get ~2 cols.
+        // My clamp keeps offsets within bounds so the last child always gets space.
+        $children = [];
+        for ($i = 0; $i < 5; $i++) {
+            $children[] = Node::leaf('c' . $i)->withBorder(false);
+        }
+        $layout = Node::horizontal(...$children);
+        $boxer = SugarBoxer::new();
+
+        // Should not throw and should return a valid multi-line string
+        $result = $boxer->render($layout, 12, 3);
+        $this->assertIsString($result);
+        $this->assertGreaterThan(0, \strlen($result));
+        $lines = \explode("\n", $result);
+        $this->assertSame(3, \count($lines));
+
+        // The last child's content 'c4' should appear (trailing child never vanishes)
+        $this->assertStringContainsString('c4', $result);
     }
 }
