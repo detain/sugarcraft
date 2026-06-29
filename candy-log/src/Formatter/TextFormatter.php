@@ -7,6 +7,7 @@ namespace SugarCraft\Log\Formatter;
 use SugarCraft\Core\Util\Color;
 use SugarCraft\Log\Formatter;
 use SugarCraft\Log\Level;
+use SugarCraft\Log\Styles;
 use SugarCraft\Sprinkles\Style;
 
 /**
@@ -21,17 +22,20 @@ final class TextFormatter implements Formatter
     private ?string $timeFormat;
     private bool $reportCaller;
     private bool $useColors;
+    private Styles $styles;
 
     public function __construct(
         bool $reportTimestamp = true,
         ?string $timeFormat = null,
         bool $reportCaller = false,
         bool $useColors = true,
+        ?Styles $styles = null,
     ) {
         $this->reportTimestamp = $reportTimestamp;
         $this->timeFormat = $timeFormat;
         $this->reportCaller = $reportCaller;
         $this->useColors = $useColors;
+        $this->styles = $styles ?? Styles::default();
     }
 
     public function format(
@@ -76,24 +80,17 @@ final class TextFormatter implements Formatter
 
     private function styledLevel(Level $level): string
     {
-        $label = $level->shortLabel();
-        return match ($level) {
-            Level::Debug => Style::new()->foreground(Color::ansi(8))->render($label),   // grey
-            Level::Info  => Style::new()->foreground(Color::ansi(4))->render($label),   // blue
-            Level::Warn  => Style::new()->foreground(Color::ansi(3))->render($label),   // yellow
-            Level::Error => Style::new()->foreground(Color::ansi(1))->render($label),   // red
-            Level::Fatal => Style::new()->foreground(Color::ansi(7))->background(Color::ansi(1))->render($label),
-        };
+        return $this->styles->levels[$level->value]->render($level->shortLabel());
     }
 
     private function styledPrefix(string $prefix): string
     {
-        return Style::new()->foreground(Color::ansi(5))->render($prefix); // magenta
+        return $this->styles->prefix->render($prefix);
     }
 
     private function styledCaller(string $caller): string
     {
-        return Style::new()->foreground(Color::ansi(8))->render("<{$caller}>"); // grey
+        return $this->styles->caller->render("<{$caller}>");
     }
 
     private function formatContext(array $context): string
@@ -102,7 +99,7 @@ final class TextFormatter implements Formatter
         foreach ($context as $k => $v) {
             $val = $this->formatValue($v);
             $pairs[] = $this->useColors
-                ? Style::new()->foreground(Color::ansi(8))->render("{$k}={$val}")
+                ? $this->styles->keyStyle('key')->render("{$k}=") . $this->styles->keyStyle('value')->render($val)
                 : "{$k}={$val}";
         }
         return \implode(' ', $pairs);
@@ -111,5 +108,15 @@ final class TextFormatter implements Formatter
     private function formatValue(mixed $v): string
     {
         return ValueCoercion::stringify($v);
+    }
+
+    /**
+     * Create a new TextFormatter with different styles, preserving all other settings.
+     */
+    public function withStyles(Styles $styles): self
+    {
+        $child = clone $this;
+        $child->styles = $styles;
+        return $child;
     }
 }

@@ -62,6 +62,7 @@ final class Logger
             $timeFormat,
             $reportCaller,
             $useColors,
+            $this->styles,
         );
         $this->minLevel = $minLevel ?? Level::Info;
         $this->prefix = $prefix;
@@ -278,6 +279,9 @@ final class Logger
     public function setStyles(Styles $styles): void
     {
         $this->styles = $styles;
+        if ($this->formatter instanceof TextFormatter) {
+            $this->formatter = $this->formatter->withStyles($styles);
+        }
     }
 
     // -------------------------------------------------------------------------
