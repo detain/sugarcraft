@@ -32,11 +32,13 @@ interface FuzzyMatcher
      * Match a query against an iterable of candidates, returning ranked results.
      *
      * Results are sorted by score descending, then by candidate ascending as tiebreak.
-     * Only returns candidates with a score > 0.
+     * Only returns candidates with a score >= $minScore (default 1, i.e. > 0).
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates Candidate strings to score
-     * @return list<MatchResult> Ranked match results
+     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
+     * @return array<MatchResult> Ranked match results
      */
-    public function matchAll(string $query, iterable $candidates): array;
+    public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array;
 }

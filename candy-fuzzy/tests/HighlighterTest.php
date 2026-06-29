@@ -99,4 +99,18 @@ final class HighlighterTest extends TestCase
 
         $this->assertSame('中[文字]符', $output);
     }
+
+    public function testUnsortedDuplicateIndicesAreNormalized(): void
+    {
+        // MatchResult is publicly constructible — external callers may pass
+        // unsorted or duplicate indices; Highlighter must normalize them.
+        // After normalization [2,0,1,1] → [0,1,2] (sorted unique), all consecutive,
+        // forming a single run [0,2] — the entire string is styled.
+        $result = new MatchResult('ab', 'abc', 10, [2, 0, 1, 1]);
+
+        $output = $this->highlighter->highlight($result, fn($m) => "[$m]");
+
+        // Same output as sorted unique [0, 1, 2]
+        $this->assertSame('[abc]', $output);
+    }
 }

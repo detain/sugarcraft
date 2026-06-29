@@ -50,9 +50,11 @@ final class SmithWatermanMatcher implements FuzzyMatcher
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates Candidate strings to score
-     * @return list<MatchResult> Ranked match results
+     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
+     * @return array<MatchResult> Ranked match results
      */
-    public function matchAll(string $query, iterable $candidates): array
+    public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
     {
         if ($query === '') {
             return [];
@@ -61,7 +63,7 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         $results = [];
         foreach ($candidates as $candidate) {
             $result = $this->compute($query, $candidate);
-            if ($result !== null && $result->score > 0) {
+            if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
         }
@@ -72,6 +74,12 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         usort($results, static fn(MatchResult $a, MatchResult $b) =>
             ($b->score <=> $a->score) ?: ($a->haystack <=> $b->haystack)
         );
+
+        // Simple full-sort-then-slice — no heap/partial-sort needed for typical
+        // TUI list sizes; preserves the stable-tiebreak contract.
+        if ($limit !== null && $limit >= 0) {
+            $results = array_slice($results, 0, $limit);
+        }
 
         return $results;
     }
@@ -88,6 +96,17 @@ final class SmithWatermanMatcher implements FuzzyMatcher
             return null;
         }
 
+        // A full-query alignment requires every query char to appear in the candidate;
+        // if the query is longer than the candidate, no such alignment exists.
+        if ($queryLen > $candidateLen) {
+            return null;
+        }
+
+        // Pre-split once — lowercasing the whole string once is equivalent to
+        // lowercasing each char; eliminates per-cell mb_substr/mb_strtolower in the hot loop.
+        $q = mb_str_split(mb_strtolower($query, 'UTF-8'));
+        $c = mb_str_split(mb_strtolower($candidate, 'UTF-8'));
+
         // Build full scoring matrix for traceback
         // Matrix is (queryLen+1) x (candidateLen+1), initialized to 0
         $matrix = array_fill(0, $queryLen + 1, array_fill(0, $candidateLen + 1, 0));
@@ -100,20 +119,15 @@ final class SmithWatermanMatcher implements FuzzyMatcher
         $maxJ = 0;
 
         for ($i = 1; $i <= $queryLen; $i++) {
-            $qChar = mb_strtolower(mb_substr($query, $i - 1, 1, 'UTF-8'), 'UTF-8');
             for ($j = 1; $j <= $candidateLen; $j++) {
-                $cChar = mb_strtolower(mb_substr($candidate, $j - 1, 1, 'UTF-8'), 'UTF-8');
-
-                $match = $qChar === $cChar
+                $match = $q[$i - 1] === $c[$j - 1]
                     ? self::MATCH_SCORE
                     : self::MISMATCH_PENALTY;
 
                 // Add adjacent bonus for consecutive character matches in sequence
                 $adjBonus = 0;
                 if ($match > 0 && $i > 1 && $j > 1) {
-                    $prevQChar = mb_strtolower(mb_substr($query, $i - 2, 1, 'UTF-8'), 'UTF-8');
-                    $prevCChar = mb_strtolower(mb_substr($candidate, $j - 2, 1, 'UTF-8'), 'UTF-8');
-                    if ($prevQChar === $prevCChar) {
+                    if ($q[$i - 2] === $c[$j - 2]) {
                         $adjBonus = self::ADJACENT_BONUS;
                     }
                 }
