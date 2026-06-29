@@ -831,4 +831,34 @@ final class EscapeDecoderTest extends TestCase
         $events = $this->decoder->decode("xyz");
         $this->assertCount(3, $events);
     }
+
+    // ─── Step 11: ESC ESC trailing and Alt raw ───────────────────────────────
+
+    public function testEscEscTrailingByteNotDropped(): void
+    {
+        // ESC ESC X should produce two events: Alt+Escape, then X (uppercase preserved)
+        $events = $this->decoder->decode("\x1b\x1bX");
+        $this->assertCount(2, $events);
+
+        // First event: Alt+Escape
+        $this->assertSame('Escape', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1b\x1b", $events[0]->raw);
+
+        // Second event: plain X (uppercase preserved, not lowercased)
+        $this->assertSame('X', $events[1]->key);
+        $this->assertFalse($events[1]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame('X', $events[1]->raw);
+    }
+
+    public function testAltKeyRawIncludesLetter(): void
+    {
+        // Alt+A should have raw = "\x1ba" not just "\x1b"
+        $events = $this->decoder->decode("\x1ba");
+        $this->assertCount(1, $events);
+
+        $this->assertSame('a', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertSame("\x1ba", $events[0]->raw);
+    }
 }
