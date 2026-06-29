@@ -232,8 +232,8 @@ final class Parser
     {
         // ';' (0x3B) and ':' (0x3A) both start a new param slot.
         // ':' is the sub-parameter separator per VT500 spec.
+        $n = count($this->params);
         if ($byte === 0x3B || $byte === 0x3A) {
-            $n = count($this->params);
             if ($n >= self::MAX_PARAMS) {
                 return; // At cap, ignore separator
             }
@@ -245,7 +245,6 @@ final class Parser
         }
 
         $digit = $byte - 0x30;
-        $n = count($this->params);
         if ($n === 0) {
             $this->params[] = $digit;
             return;
