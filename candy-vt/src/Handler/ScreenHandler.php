@@ -116,12 +116,11 @@ final class ScreenHandler implements Handler
 
         $width = Width::string($rune);
         if ($width <= 0) {
-            // Zero-width: combining marks (U+0300–U+036F), ZWJ, etc.
-            // Attach combining marks to the previous cell so they
-            // render as a single composed glyph in that column.
-            if ($this->isCombiningChar($rune)) {
-                $this->attachCombiningChar($rune);
-            }
+            // Zero-width: combining marks, ZWJ, ZWNJ, variation selectors, etc.
+            // Width::string() correctly classifies all zero-width Unicode marks,
+            // including U+0300-U+036F, U+1DC0-U+1DFF, U+20D0-U+20FF, U+FE00-FE0F,
+            // U+FE20-U+FE2F, and zero-width joiners.
+            $this->attachCombiningChar($rune);
             return;
         }
 
@@ -198,7 +197,15 @@ final class ScreenHandler implements Handler
                 return;
             case 'A': case 'B': case 'C': case 'D': case 'E': case 'F': case 'G':
             case 'H': case 'd': case 'f': case 's': case 'u':
-                $this->cursor = $this->cursorHandler->apply($final, $params, $this->cursor, $this->buffer);
+                $this->cursor = $this->cursorHandler->apply(
+                    $final,
+                    $params,
+                    $this->cursor,
+                    $this->buffer,
+                    $this->scrollRegionTop,
+                    $this->scrollRegionBottom,
+                    $this->mode->originMode,
+                );
                 return;
             case 'K': case 'J': case 'X': case 'P': case '@':
                 $pending = $this->mode->syncUpdate ? $this->pendingMutations : null;
