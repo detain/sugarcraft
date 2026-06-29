@@ -194,6 +194,89 @@ final class ServeTest extends TestCase
         $this->assertSame('admin', AccessControl::permissionName(AccessControl::ACCESS_ADMIN));
     }
 
+    // ---- AccessControl matrix tests (Step 5, Step 18) ----
+
+    public function testAccessControlCanReadDeniesAuthedUserOnNonPublicNonPrivate(): void
+    {
+        $ac   = AccessControl::getInstance();
+        $user = User::new('alice');
+        $repo = Repo::new('semipub', '/tmp/semipub')->withPublic(false)->withPrivate(false);
+
+        $this->assertFalse($ac->canRead($user, $repo));
+    }
+
+    public function testAccessControlCanWriteDeniesAllowPushOnNonPublic(): void
+    {
+        $ac   = AccessControl::getInstance();
+        $user = User::new('alice');
+        $repo = Repo::new('pushpub', '/tmp/pushpub')->withPublic(false)->withAllowPush(true);
+
+        // allowPush only grants write if the repo is ALSO publicly visible
+        $this->assertFalse($ac->canWrite($user, $repo));
+    }
+
+    public function testAccessControlCanWriteAllowsPushOnPublic(): void
+    {
+        $ac   = AccessControl::getInstance();
+        $user = User::new('alice');
+        $repo = Repo::new('allowpush', '/tmp/allowpush')->withPublic(true)->withAllowPush(true);
+
+        $this->assertTrue($ac->canWrite($user, $repo));
+    }
+
+    public function testAccessControlCanAdminNonAdminFalse(): void
+    {
+        $ac   = AccessControl::getInstance();
+        $user = User::new('alice');
+        $repo = Repo::new('any', '/tmp/any');
+
+        $this->assertFalse($ac->canAdmin($user, $repo));
+    }
+
+    public function testRepoIsVisiblePublicTrueWhenPublicAndNotPrivate(): void
+    {
+        $repo = Repo::new('pub', '/tmp/pub')->withPublic(true)->withPrivate(false);
+        $this->assertTrue($repo->isVisiblePublic());
+    }
+
+    public function testRepoIsVisiblePublicFalseWhenNotPublic(): void
+    {
+        $repo = Repo::new('priv', '/tmp/priv')->withPublic(false)->withPrivate(false);
+        $this->assertFalse($repo->isVisiblePublic());
+    }
+
+    public function testRepoIsVisiblePublicFalseWhenPrivate(): void
+    {
+        $repo = Repo::new('priv', '/tmp/priv')->withPublic(true)->withPrivate(true);
+        $this->assertFalse($repo->isVisiblePublic());
+    }
+
+    // ---- User key type tests (Step 18) ----
+
+    public function testAddAuthorizedKeyAcceptsEcdsa(): void
+    {
+        $u = User::new('bob')
+            ->addAuthorizedKey('ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBFP7mA3Ra7w0dJfYZVGxPqLqJbqvM9vT6Z8wJxPz0Gf8GqnXwqHq8fM9a1b2c3D4e5F6g7H8i9J0K1L2M3N4O5P6Q7R8S9T0U= bob@ecdsa');
+        $keys = $u->authorizedKeysList();
+        $this->assertCount(1, $keys);
+        $this->assertStringContainsString('ecdsa-sha2-nistp256', $keys[0]);
+    }
+
+    public function testAddAuthorizedKeyAcceptsSk(): void
+    {
+        $u = User::new('carol')
+            ->addAuthorizedKey('sk-ssh-ed25519@openssh.com AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBGqvM9vT6Z8wJxPz0Gf8GqnXwqHq8fM9a1b2c3D4e5F6g7H8i9J0K1L2M3N4O5P6Q7R8S9T0U= carol@sk');
+        $keys = $u->authorizedKeysList();
+        $this->assertCount(1, $keys);
+        $this->assertStringContainsString('sk-ssh-ed25519@openssh.com', $keys[0]);
+    }
+
+    public function testAddAuthorizedKeyRejectsBogus(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        User::new('dave')->addAuthorizedKey('notakey AAAA');
+    }
+
     public function testAccessControlCanCreateRepos(): void
     {
         $ac    = AccessControl::getInstance();

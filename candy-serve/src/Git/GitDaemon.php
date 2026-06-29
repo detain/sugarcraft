@@ -284,7 +284,7 @@ final class GitDaemon
             }
 
             // Handle the request using stdio redirection
-            $this->handleGitRequest($client['socket'], $handler);
+            $this->handleGitRequest($client['socket'], $handler, $idx);
 
             $client['handled'] = true;
             $this->closeClient($idx);
@@ -296,17 +296,19 @@ final class GitDaemon
      *
      * @param resource $socket  Client socket
      */
-    private function handleGitRequest($socket, object $handler): void
+    private function handleGitRequest($socket, object $handler, int $clientIdx): void
     {
-        $buffer = $this->clients[\count($this->clients) - 1]['buffer'] ?? '';
+        $buffer = $this->clients[$clientIdx]['buffer'] ?? '';
 
         // Write client buffer to temp file for processing
         $tmpDir = $this->config->dataPath . '/tmp';
         if (!\is_dir($tmpDir)) {
-            \mkdir($tmpDir, 0755, true);
+            \mkdir($tmpDir, 0700, true);
         }
 
-        $stdinFile = $tmpDir . '/git-stdin-' . \uniqid();
+        $stdinFile = \tempnam($tmpDir, 'git-stdin-');
+        if ($stdinFile === false) return;
+        \chmod($stdinFile, 0600);
         \file_put_contents($stdinFile, $buffer);
 
         if ($handler instanceof UploadPack) {
@@ -326,13 +328,13 @@ final class GitDaemon
         $uploadPack = $handler;
         $ac = AccessControl::getInstance();
 
-        if (!$ac->canRead(null, $uploadPack->repo)) {
+        if (!$ac->canRead(null, $uploadPack->repo())) {
             $this->writePacket($socket, "err Access denied\n");
             return;
         }
 
         // Send refs advertisement (each ref as separate pkt-line)
-        $this->sendRefAdvertisement($socket, $uploadPack->repo);
+        $this->sendRefAdvertisement($socket, $uploadPack->repo());
 
         // Read wants from client
         $wants = $this->readWantsFromFile($stdinFile);
@@ -341,7 +343,7 @@ final class GitDaemon
         }
 
         // Send pack data
-        $this->sendPack($socket, $uploadPack->repo, $wants);
+        $this->sendPack($socket, $uploadPack->repo(), $wants);
     }
 
     /**
@@ -358,7 +360,7 @@ final class GitDaemon
 
         // Subsequent refs
         foreach ($repo->refs() as $ref => $hash) {
-            if (!\str_starts_with($ref, 'refs/heads/' . $head)) {
+            if ($ref !== 'refs/heads/' . $head) {
                 $this->writePacket($socket, "{$hash} {$ref}");
             }
         }
@@ -407,23 +409,32 @@ final class GitDaemon
         if ($wants === []) return;
 
         $repoPath = \escapeshellarg($repo->path());
-        $wantArgs = \implode(' ', \array_map(
-            fn($h) => '^' . \escapeshellarg($h),
-            $wants
-        ));
+        $cmd = "git -C {$repoPath} pack-objects --stdout --revs 2>/dev/null";
 
-        $cmd = "git -C {$repoPath} pack-objects --stdout {$wantArgs} 2>/dev/null";
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) return;
 
-        $handle = \popen($cmd, 'r');
-        if ($handle === false) return;
+        // Write want revs to stdin (one per line, no ^ prefix)
+        foreach ($wants as $hash) {
+            \fwrite($pipes[0], $hash . "\n");
+        }
+        \fclose($pipes[0]);
 
-        while (!\feof($handle)) {
-            $chunk = \fread($handle, 65536);
+        // Stream pack data to socket
+        while (!\feof($pipes[1])) {
+            $chunk = \fread($pipes[1], 65536);
             if ($chunk === false) break;
             @\socket_write($socket, $chunk);
         }
 
-        \pclose($handle);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
     }
 
     /**
@@ -432,7 +443,7 @@ final class GitDaemon
     private function handleReceivePack($socket, ReceivePack $handler, string $stdinFile): void
     {
         $receivePack = $handler;
-        $repo = $receivePack->repo;
+        $repo = $receivePack->repo();
 
         // Send refs advertisement
         $refs = $repo->refs();
@@ -456,14 +467,31 @@ final class GitDaemon
         // Process push
         $repoPath = \escapeshellarg($repo->path());
         foreach ($commands as $cmd) {
-            $oldHash = \escapeshellarg($cmd['old']);
-            $newHash = \escapeshellarg($cmd['new']);
-            $ref = \escapeshellarg($cmd['ref']);
+            $oldHash = $cmd['old'];
+            $newHash = $cmd['new'];
+            $ref = $cmd['ref'];
+            $escapedRef = \escapeshellarg($ref);
 
-            $updateRefCmd = "git -C {$repoPath} update-ref {$ref} {$newHash} {$oldHash} 2>&1";
             $out = [];
             $rc = 0;
-            \exec($updateRefCmd, $out, $rc);
+
+            if ($newHash === \str_repeat('0', 40)) {
+                // Delete: git update-ref -d <ref> <old>
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref -d {$escapedRef} {$escapedOld} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            } elseif ($oldHash === \str_repeat('0', 40)) {
+                // Create: git update-ref <ref> <new> (no old arg)
+                $escapedNew = \escapeshellarg($newHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            } else {
+                // Update: git update-ref <ref> <new> <old>
+                $escapedNew = \escapeshellarg($newHash);
+                $escapedOld = \escapeshellarg($oldHash);
+                $updateRefCmd = "git -C {$repoPath} update-ref {$escapedRef} {$escapedNew} {$escapedOld} 2>&1";
+                \exec($updateRefCmd, $out, $rc);
+            }
 
             if ($rc !== 0) {
                 $this->writePacket($socket, "ng {$cmd['ref']}: pre-receive hook declined");
@@ -498,7 +526,8 @@ final class GitDaemon
 
             [$oldHash, $newHash, $ref] = $parts;
 
-            if ($oldHash !== \str_repeat('0', 40) && $newHash !== \str_repeat('0', 40)) {
+            // Keep all commands: create (old=0), update, and delete (new=0)
+            if (\strlen($oldHash) === 40 && \strlen($newHash) === 40) {
                 $commands[] = ['old' => $oldHash, 'new' => $newHash, 'ref' => $ref];
             }
         }

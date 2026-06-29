@@ -28,6 +28,11 @@ final class UploadPack
         $this->user = $user;
     }
 
+    public function repo(): Repo
+    {
+        return $this->repo;
+    }
+
     /**
      * Serve a git-upload-pack session over stdio.
      *
@@ -77,7 +82,7 @@ final class UploadPack
 
         // All other refs
         foreach ($this->repo->refs() as $ref => $hash) {
-            if (!\str_starts_with($ref, 'refs/heads/' . $head)) {
+            if ($ref !== 'refs/heads/' . $head) {
                 $lines[] = "{$hash} {$ref}";
             }
         }
@@ -141,25 +146,31 @@ final class UploadPack
         if ($wants === []) return;
 
         $repoPath = \escapeshellarg($this->repo->path());
-        $wantArgs = \implode(' ', \array_map(
-            fn($h) => '^' . \escapeshellarg($h),
-            $wants
-        ));
+        $cmd = "git -C {$repoPath} pack-objects --stdout --revs 2>/dev/null";
 
-        // Use git pack-objects to generate a packfile
-        $cmd = "git -C {$repoPath} pack-objects --stdout {$wantArgs} 2>/dev/null";
+        $desc = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+        $proc = \proc_open($cmd, $desc, $pipes);
+        if ($proc === false) return;
 
-        $handle = \popen($cmd, 'r');
-        if ($handle === false) return;
+        // Write want revs to stdin (one per line, no ^ prefix)
+        foreach ($wants as $hash) {
+            \fwrite($pipes[0], $hash . "\n");
+        }
+        \fclose($pipes[0]);
 
-        // Read and forward pack data
-        while (!\feof($handle)) {
-            $chunk = \fread($handle, 65536);
+        // Stream pack data to stdout
+        while (!\feof($pipes[1])) {
+            $chunk = \fread($pipes[1], 65536);
             if ($chunk === false) break;
             \fwrite(\STDOUT, $chunk);
         }
-
-        \pclose($handle);
+        \fclose($pipes[1]);
+        \fclose($pipes[2]);
+        \proc_close($proc);
     }
 
     /**

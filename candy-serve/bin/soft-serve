@@ -285,8 +285,6 @@ function cmdRepoList(array $args): int
         if (!\is_dir($repoPath . '/.git')) continue;
 
         $found = true;
-        $size  = \filesize($repoPath . '/.git/objects/pack/pack-' . \array_values(\array_filter(\scandir($repoPath . '/.git/objects/pack'), fn($f) => \str_starts_with($f, 'pack-')))[0] ?? 'N/A') ?? 0;
-
         echo Lang::t('cli.repo_listing_plain', ['name' => $entry]) . "\n";
     }
 

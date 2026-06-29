@@ -79,7 +79,7 @@ final class User
         if ($key === '') return $this;
 
         // Validate format: type base64data [comment]
-        if (!\preg_match('/^(ssh-[a-z0-9-]+)\s+([A-Za-z0-9+\/=]+)(\s+.+)?$/', $key)) {
+        if (!\preg_match('/^((?:ssh|ecdsa|sk)-[A-Za-z0-9@.-]+)\s+([A-Za-z0-9+\/=]+)(\s+.+)?$/', $key)) {
             throw new \InvalidArgumentException(Lang::t('user.invalid_ssh_key'));
         }
 
