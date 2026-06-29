@@ -39,4 +39,31 @@ final class EntryTest extends TestCase
     {
         $this->assertSame('1.5MB', (new Entry('a', false, 1024 * 1024 * 3 / 2, 0))->displaySize());
     }
+
+    public function testSanitizeNameRemovesAnsiEscapeSequences(): void
+    {
+        // C0 control characters should be stripped
+        $this->assertSame('hello', Entry::sanitizeName("hello\x1b[31m"));
+        $this->assertSame('hello', Entry::sanitizeName("hello\x1b[0m"));
+        $this->assertSame('test', Entry::sanitizeName("test\x07")); // bell character
+
+        // DEL character should be stripped
+        $this->assertSame('hello', Entry::sanitizeName("hello\x7f"));
+
+        // C1 control characters (bytes 0x80-0x9F) should be stripped
+        $this->assertSame('hello', Entry::sanitizeName("hello\xc2\x80")); // U+0080
+        $this->assertSame('hello', Entry::sanitizeName("hello\xc2\x9f")); // U+009F
+
+        // Normal filenames pass through unchanged
+        $this->assertSame('normal_file.txt', Entry::sanitizeName('normal_file.txt'));
+        $this->assertSame('日本語', Entry::sanitizeName('日本語'));
+    }
+
+    public function testSanitizeNameStripsControlBytesOnly(): void
+    {
+        // Only control bytes should be removed, regular bytes preserved
+        $input = "file\x00name\x01with\x1fcontrols";
+        $output = Entry::sanitizeName($input);
+        $this->assertSame('filenamewithcontrols', $output);
+    }
 }

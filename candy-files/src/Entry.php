@@ -67,9 +67,18 @@ final class Entry
     /**
      * Strip C0/C1 control bytes and DEL so a filename is safe to
      * render to the terminal without emitting ANSI escape sequences.
+     * Also strips the full ANSI CSI sequences (ESC [ ... letter).
      */
     public static function sanitizeName(string $s): string
     {
-        return preg_replace('/[\x00-\x1f\x7f\xc2\xc3]/u', '', $s);
+        // Strip ANSI escape sequences (ESC [ params letter)
+        $s = preg_replace('/\x1b\[[0-9;]*[a-zA-Z]/', '', $s);
+        // Strip C0 control chars (excluding ESC\x1b which was handled above),
+        // and DEL
+        $s = preg_replace('/[\x00-\x1a\x1c-\x1f\x7f]/', '', $s);
+        // Strip C1 control chars (U+0080-U+009F, encoded as \xc2\x80-\xc2\x9f in UTF-8)
+        // Use separate pattern without /u to avoid PCRE UTF-8 mode conflicts
+        $s = preg_replace('/\xc2[\x80-\x9f]/', '', $s);
+        return $s;
     }
 }

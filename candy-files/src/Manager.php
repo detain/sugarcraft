@@ -13,6 +13,7 @@ use SugarCraft\Core\Subscriptions;
 use SugarCraft\Core\SubscriptionCapable;
 use SugarCraft\Core\Undo\UndoActionType;
 use SugarCraft\Files\Manager\ManagerBuilder;
+use SugarCraft\Files\Msg\CopyCompletedMsg;
 
 /**
  * The dual-pane file manager `Model`.
@@ -110,13 +111,23 @@ final class Manager implements Model
 
     public function update(Msg $msg): array
     {
+        // Handle async copy completion
+        if ($msg instanceof CopyCompletedMsg) {
+            $msg = $msg;  // unused for now, state already updated by the Cmd
+            // Refresh pane and finalize undo state
+            return $this
+                ->withActivePane(fn(Pane $p) => Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
+                ->withConfirm(ConfirmState::None, '');
+        }
+
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
 
         // Confirmation gate consumes the next keystroke entirely.
         if ($this->confirm !== ConfirmState::None) {
-            return [$this->resolveConfirm($msg), null];
+            [$resolved, $cmd] = $this->resolveConfirm($msg);
+            return [$resolved, $cmd];
         }
 
         // Search mode intercepts all keys
@@ -323,7 +334,13 @@ final class Manager implements Model
         return $this->withConfirm(ConfirmState::DeleteSelected, Lang::t('confirm.delete', ['names' => $names]));
     }
 
-    private function resolveConfirm(KeyMsg $msg): self
+    /**
+     * Resolve a confirmation keystroke.
+     * Returns [Manager, ?Cmd] — the Cmd is non-null for async operations like copy.
+     *
+     * @return array{0: self, 1: ?\Closure} [Manager, Cmd]
+     */
+    private function resolveConfirm(KeyMsg $msg): array
     {
         // RenameSelected uses a text-entry sub-mode: characters accumulate
         // in $inputBuffer; Enter commits; Escape cancels.
@@ -332,52 +349,54 @@ final class Manager implements Model
             if ($msg->type === KeyType::Backspace) {
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf === '' ? '' : self::dropLast($buf);
-                return $this->withConfirm(ConfirmState::RenameSelected,
+                return [$this->withConfirm(ConfirmState::RenameSelected,
                     Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
-                    $this->pendingOpDest, 'rename', $newBuf);
+                    $this->pendingOpDest, 'rename', $newBuf), null];
             }
             // Enter: commit the typed buffer as the new name
             if ($msg->type === KeyType::Enter) {
                 $newName = $this->inputBuffer ?? '';
                 if ($newName === '') {
-                    return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
-                        ->withInputBuffer(null);
+                    return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                        ->withInputBuffer(null), null];
                 }
-                return $this->withConfirm(ConfirmState::RenameSelected,
+                $renamed = $this->withConfirm(ConfirmState::RenameSelected,
                     Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
                     $this->pendingOpDest, 'rename', $newName)->performRenameWithBuffer();
+                return [$renamed, null];
             }
             // Escape: cancel
             if ($msg->type === KeyType::Escape) {
-                return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
-                    ->withInputBuffer(null);
+                return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                    ->withInputBuffer(null), null];
             }
             // Printable character: accumulate in buffer
             if ($msg->type === KeyType::Char && !$msg->ctrl) {
                 $buf = $this->inputBuffer ?? '';
                 $newBuf = $buf . $msg->rune;
-                return $this->withConfirm(ConfirmState::RenameSelected,
+                return [$this->withConfirm(ConfirmState::RenameSelected,
                     Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]) . $newBuf . '_',
-                    $this->pendingOpDest, 'rename', $newBuf);
+                    $this->pendingOpDest, 'rename', $newBuf), null];
             }
             // All other keys: no-op, stay in confirm state
-            return $this->withConfirm(ConfirmState::RenameSelected,
+            return [$this->withConfirm(ConfirmState::RenameSelected,
                 Lang::t('confirm.rename', ['name' => Entry::sanitizeName($this->pendingOpDest ?? '')]),
-                $this->pendingOpDest, 'rename', $this->inputBuffer);
+                $this->pendingOpDest, 'rename', $this->inputBuffer), null];
         }
 
         // Single-key y/n confirmation for delete/copy/move
         $confirmed = $msg->type === KeyType::Char && $msg->rune === 'y';
         if (!$confirmed) {
-            return $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
-                ->withInputBuffer(null);
+            return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null), null];
         }
+        // For copy, return an async Cmd; delete/move remain synchronous
         return match ($this->confirm) {
-            ConfirmState::DeleteSelected => $this->performDelete(),
-            ConfirmState::CopySelected => $this->performCopy(),
-            ConfirmState::MoveSelected => $this->performMove(),
-            default => $this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
-                ->withInputBuffer(null),
+            ConfirmState::DeleteSelected => [$this->performDelete(), null],
+            ConfirmState::CopySelected => $this->performCopyAsync(),
+            ConfirmState::MoveSelected => [$this->performMove(), null],
+            default => [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled'))
+                ->withInputBuffer(null), null],
         };
     }
 
@@ -598,6 +617,56 @@ final class Manager implements Model
             Pane::open($p->cwd, $this->lister, $p->sort, $p->showHidden))
             ->withConfirm(ConfirmState::None, $msg)
             ->withUndoRedoStacks($newUndoStack, []);
+    }
+
+    /**
+     * Async copy - runs through AsyncOps to avoid blocking the TUI event loop
+     * during the potentially slow file I/O of a large recursive copy.
+     *
+     * Returns [Manager, Cmd] where the Cmd wraps the async operation.
+     * When the promise resolves, a CopyCompletedMsg is broadcast.
+     *
+     * @return array{0: self, 1: \Closure}
+     */
+    private function performCopyAsync(): array
+    {
+        $pane = $this->activePane();
+        $names = $pane->selected !== []
+            ? array_keys($pane->selected)
+            : [$pane->currentEntry()?->name];
+        $dst = $this->pendingOpDest;
+        if ($dst === null) {
+            return [$this->withConfirm(ConfirmState::None, Lang::t('status.cancelled')), null];
+        }
+
+        // Build the source→destination map synchronously (we have the names now)
+        $copiedItems = [];
+        foreach ($names as $name) {
+            if ($name === null || $name === '..' || $name === '') {
+                continue;
+            }
+            $src = Pane::join($pane->cwd, $name);
+            $target = Pane::join($dst, $name);
+            $copiedItems[$src] = $target;
+        }
+
+        // Build the initial Manager state (before async op completes)
+        $pendingManager = $this->withConfirm(ConfirmState::None, Lang::t('status.copied', ['count' => count($names)]));
+
+        // Return a Cmd that runs the async copy via AsyncOps
+        // Note: Loop::futureTick defers the actual I/O to the next event loop tick,
+        // which keeps the TUI responsive. For very large copies, consider wiring
+        // copy through AsyncOps::copyAsync with progress reporting.
+        $asyncOps = new AsyncOps();
+        $cmd = Cmd::promise(static function () use ($asyncOps, $copiedItems, $names, $dst): \React\Promise\PromiseInterface {
+            return $asyncOps->copyManyAsync($copiedItems)
+                ->then(static function (array $results) use ($copiedItems, $names, $dst): CopyCompletedMsg {
+                    $errors = count(array_filter($results, static fn($ok) => $ok === false));
+                    return new CopyCompletedMsg($copiedItems, $errors, $names, $dst);
+                });
+        });
+
+        return [$pendingManager, $cmd];
     }
 
     private function performMove(): self
