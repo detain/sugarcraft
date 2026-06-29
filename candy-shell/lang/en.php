@@ -27,6 +27,7 @@ return [
 
     // Log/LogLevel.php
     'log.unknown_level'       => 'unknown log level: {name}',
+    'log.encode_failed'       => 'failed to encode log entry to json',
 
     // Command/SpinCommand.php
     'spinner.unknown_style'   => 'unknown spinner style: {name}',
@@ -34,4 +35,7 @@ return [
     // Command/FormatCommand.php
     'format.unknown_type'     => 'unknown --type: {type}',
     'format.unknown_theme'    => 'unknown theme: {name}',
+
+    // IO errors
+    'io.read_failed'         => 'could not read file: {path}',
 ];
