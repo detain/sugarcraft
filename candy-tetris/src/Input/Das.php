@@ -59,16 +59,14 @@ final class Das
      * A directional key has been pressed. Resets the DAS accumulator
      * for that direction (DAS delay restarts from zero on every fresh press).
      */
-    public function withKeyDown(self $state): self
+    public function withKeyDown(string $direction): self
     {
-        // Key down resets the accumulator for that direction
-        return new self(
-            $this->dasUs,
-            $this->arrUs,
-            0,
-            0,
-            0,
-        );
+        return match ($direction) {
+            'left'  => new self($this->dasUs, $this->arrUs, 0,      $this->rightAcc, $this->downAcc),
+            'right' => new self($this->dasUs, $this->arrUs, $this->leftAcc, 0,          $this->downAcc),
+            'down'  => new self($this->dasUs, $this->arrUs, $this->leftAcc, $this->rightAcc, 0),
+            default => $this,
+        };
     }
 
     /**

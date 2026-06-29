@@ -55,10 +55,37 @@ final class Game implements Model
         public readonly ?Tetromino    $hold = null,
         public readonly bool          $canHold = true,
         public readonly int            $lockDelayTicks = 0,
+        public readonly int           $lockDelayMax = 0,
         public readonly int           $combo = 0,
         public readonly bool          $backToBack = false,
         public readonly int           $preLockRotation = 0,
     ) {}
+
+    /**
+     * Construct a new Game from the current state with optional field overrides.
+     * Mirrors the canonical SugarCraft immutable/fluent pattern (see
+     * candy-sprinkles/src/Style.php, candy-core/src/Concerns/Mutable.php).
+     *
+     * @param array<string,mixed> $changes Field overrides
+     */
+    public function mutate(array $changes): self
+    {
+        return new self(
+            $changes['board']           ?? $this->board,
+            $changes['piece']           ?? $this->piece,
+            $changes['bag']             ?? $this->bag,
+            $changes['score']           ?? $this->score,
+            $changes['over']            ?? $this->over,
+            $changes['paused']          ?? $this->paused,
+            $changes['hold']            ?? $this->hold,
+            $changes['canHold']         ?? $this->canHold,
+            $changes['lockDelayTicks']  ?? $this->lockDelayTicks,
+            $changes['lockDelayMax']    ?? $this->lockDelayMax,
+            $changes['combo']           ?? $this->combo,
+            $changes['backToBack']      ?? $this->backToBack,
+            $changes['preLockRotation'] ?? $this->preLockRotation,
+        );
+    }
 
     public static function start(?Bag $bag = null): self
     {
@@ -84,6 +111,7 @@ final class Game implements Model
             $bag,
             new Score(),
             lockDelayTicks: $lockDelayTicks,
+            lockDelayMax: $lockDelayTicks,
             preLockRotation: $piece->rotation,
         );
     }
@@ -172,29 +200,12 @@ final class Game implements Model
     {
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
-            // Piece can move down - reset lock delay
-            $game = new self(
-                $this->board, $next, $this->bag, $this->score,
-                hold: $this->hold,
-                canHold: $this->canHold,
-                lockDelayTicks: $this->lockDelayTicks,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $this->preLockRotation,
-            );
+            // Piece can move down
+            $game = $this->mutate(['piece' => $next]);
         } else {
             // Piece can't move down - handle lock delay
             if ($this->lockDelayTicks > 0) {
-                $newLockDelay = $this->lockDelayTicks - 1;
-                $game = new self(
-                    $this->board, $this->piece, $this->bag, $this->score,
-                    hold: $this->hold,
-                    canHold: $this->canHold,
-                    lockDelayTicks: $newLockDelay,
-                    combo: $this->combo,
-                    backToBack: $this->backToBack,
-                    preLockRotation: $this->preLockRotation,
-                );
+                $game = $this->mutate(['lockDelayTicks' => $this->lockDelayTicks - 1]);
                 // Still return a tick to continue the lock delay countdown
                 return [$game, self::scheduleGravity($game->score)];
             }
@@ -211,39 +222,22 @@ final class Game implements Model
         $next = $this->piece->moved($dx, $dy);
         if ($this->board->fits($next)) {
             // SRS-style: successful move resets lock delay
-            return new self(
-                $this->board, $next, $this->bag, $this->score,
-                hold: $this->hold,
-                canHold: $this->canHold,
-                lockDelayTicks: $this->lockDelayTicks,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $this->preLockRotation,
-            );
+            return $this->mutate(['piece' => $next]);
         }
         return $this;
     }
 
     private function tryRotate(int $delta): self
     {
-        $candidate = $this->piece->rotated($delta);
-        // Tiny wall-kick: try ±1 / ±2 horizontal nudges if the
-        // bare rotation collides. Not full SRS but covers the
-        // most common stuck-in-corner cases.
-        foreach ([0, -1, 1, -2, 2] as $kick) {
-            $kicked = $candidate->moved($kick, 0);
-            if ($this->board->fits($kicked)) {
-                // Successful rotation resets lock delay and tracks
-                // the new rotation for T-Spin detection
-                return new self(
-                    $this->board, $kicked, $this->bag, $this->score,
-                    hold: $this->hold,
-                    canHold: $this->canHold,
-                    lockDelayTicks: $this->lockDelayTicks,
-                    combo: $this->combo,
-                    backToBack: $this->backToBack,
-                    preLockRotation: $kicked->rotation,
-                );
+        // Full SRS: try all rotation candidates (naive + wall kicks).
+        // The first candidate is always the naive rotation, so the
+        // "no kick needed" case is preserved automatically.
+        foreach ($this->piece->rotationsWithKicks($delta) as $candidate) {
+            if ($this->board->fits($candidate)) {
+                return $this->mutate([
+                    'piece' => $candidate,
+                    'preLockRotation' => $candidate->rotation,
+                ]);
             }
         }
         return $this;
@@ -253,16 +247,9 @@ final class Game implements Model
     {
         $next = $this->piece->moved(0, 1);
         if ($this->board->fits($next)) {
-            // Soft drop also resets lock delay
-            return new self(
-                $this->board, $next, $this->bag, $this->score,
-                hold: $this->hold,
-                canHold: $this->canHold,
-                lockDelayTicks: $this->lockDelayTicks,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $this->preLockRotation,
-            );
+            // Soft drop awards 1 point per cell and resets lock delay
+            $score = $this->score->withDropPoints(1);
+            return $this->mutate(['piece' => $next, 'score' => $score]);
         }
         return $this;
     }
@@ -273,19 +260,46 @@ final class Game implements Model
     private function hardDrop(): array
     {
         $resting = $this->board->dropPiece($this->piece);
-        $game = new self(
-            $this->board, $resting, $this->bag, $this->score,
-            hold: $this->hold,
-            lockDelayTicks: $this->lockDelayTicks,
-            combo: $this->combo,
-            backToBack: $this->backToBack,
-            preLockRotation: $this->preLockRotation,
-        );
+        // Hard drop awards 2 points per cell fallen
+        $dropDistance = $resting->y - $this->piece->y;
+        $game = $this->mutate([
+            'piece' => $resting,
+            'score' => $this->score->withDropPoints(2 * $dropDistance),
+        ]);
         $game = $game->lockAndSpawn();
         if ($game->over) {
             return [$game, null];
         }
         return [$game, self::scheduleGravity($game->score)];
+    }
+
+    /**
+     * Apply an AI move: rotate the current piece by $rotDelta times,
+     * shift it by $dx horizontally, lock it, and spawn the next piece.
+     *
+     * Mirrors the AI move path in charmbracelet/bubbletea Tetris:
+     * the AI computes bestMove() once per new piece, then applies
+     * that rotation+shift on each gravity tick until the piece locks.
+     *
+     * @param int $rotDelta Number of clockwise rotations (0-3)
+     * @param int $dx       Horizontal shift in cells
+     */
+    public function applyAiMove(int $rotDelta, int $dx): self
+    {
+        // Rotate the current piece
+        $piece = $this->piece;
+        for ($i = 0; $i < $rotDelta; $i++) {
+            $piece = $piece->rotated(1);
+        }
+        // Apply horizontal shift if it fits
+        $shifted = $piece->moved($dx, 0);
+        if ($this->board->fits($shifted)) {
+            $piece = $shifted;
+        }
+        // Hard-drop: find resting position and lock+spawn
+        $resting = $this->board->dropPiece($piece);
+        $afterDrop = $this->mutate(['piece' => $resting]);
+        return $afterDrop->lockAndSpawn();
     }
 
     private function lockAndSpawn(): self
@@ -317,17 +331,22 @@ final class Game implements Model
         $newCombo = $count > 0 ? $this->combo + 1 : 0;
         $comboBonus = $newCombo > 0 ? $newCombo * 10 : 0;
 
-        // Base score from lines cleared
+        // Base score from lines cleared (also updates level in $score object)
         $score = $this->score->withLines($count);
 
+        // Use the level AT WHICH THE CLEAR WAS PERFORMED for all bonus calculations.
+        // Per CALIBER learning b2b-combo-multiplier-stacking, the multiplier is
+        // the level when the lines were cleared (the old level), not the
+        // post-clear level that $score->level would return.
+        $levelForBonus = $this->score->level + 1;
+
         // Apply B2B multiplier and add T-Spin + combo points
-        $levelMultiplier = $score->level + 1;
         $b2bBonus = (int) (($score->points - $this->score->points) * ($b2bMultiplier - 1.0));
-        $bonus = $b2bBonus + (int) (($tspinPoints + $comboBonus) * $levelMultiplier);
+        $bonus = $b2bBonus + (int) (($tspinPoints + $comboBonus) * $levelForBonus);
 
         // Perfect clear bonus
         if ($cleared->isPerfectClear()) {
-            $bonus += self::PERFECT_CLEAR_BONUS * $levelMultiplier;
+            $bonus += self::PERFECT_CLEAR_BONUS * $levelForBonus;
         }
 
         $score = new Score(
@@ -338,46 +357,37 @@ final class Game implements Model
 
         $newPiece = self::spawn($this->bag->next());
         if (!$cleared->fits($newPiece)) {
-            return new self(
-                $cleared, $newPiece, $this->bag, $score,
-                over: true,
-                hold: $this->hold,
-                canHold: true,
-                combo: 0,
-                backToBack: false,
-                preLockRotation: $newPiece->rotation,
-            );
+            return $this->mutate([
+                'board' => $cleared,
+                'piece' => $newPiece,
+                'score' => $score,
+                'over' => true,
+                'canHold' => true,
+                'combo' => 0,
+                'backToBack' => false,
+                'preLockRotation' => $newPiece->rotation,
+            ]);
         }
 
-        // After locking, canHold is re-enabled and lock delay resets.
+        // After locking, canHold is re-enabled and lock delay resets to max.
         // B2B state persists only if the current clear was B2B-eligible.
-        return new self(
-            $cleared, $newPiece, $this->bag, $score,
-            hold: $this->hold,
-            canHold: true,
-            lockDelayTicks: $this->lockDelayTicks > 0 ? $this->lockDelayTicks : 0,
-            combo: $newCombo,
-            backToBack: $b2bEligible,
-            preLockRotation: $newPiece->rotation,
-        );
+        return $this->mutate([
+            'board' => $cleared,
+            'piece' => $newPiece,
+            'bag' => $this->bag,
+            'score' => $score,
+            'hold' => $this->hold,
+            'canHold' => true,
+            'lockDelayTicks' => $this->lockDelayMax,
+            'combo' => $newCombo,
+            'backToBack' => $b2bEligible,
+            'preLockRotation' => $newPiece->rotation,
+        ]);
     }
 
     private function withPaused(bool $paused): self
     {
-        return new self(
-            $this->board,
-            $this->piece,
-            $this->bag,
-            $this->score,
-            $this->over,
-            $paused,
-            $this->hold,
-            $this->canHold,
-            $this->lockDelayTicks,
-            $this->combo,
-            $this->backToBack,
-            $this->preLockRotation,
-        );
+        return $this->mutate(['paused' => $paused]);
     }
 
     /**
@@ -395,18 +405,12 @@ final class Game implements Model
         if ($this->hold === null) {
             // No held piece - spawn new piece and store current
             $newPiece = self::spawn($this->bag->next());
-            $game = new self(
-                $this->board,
-                $newPiece,
-                $this->bag,
-                $this->score,
-                hold: $currentKind,
-                canHold: false,
-                lockDelayTicks: $this->lockDelayTicks,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $newPiece->rotation,
-            );
+            $game = $this->mutate([
+                'piece' => $newPiece,
+                'hold' => $currentKind,
+                'canHold' => false,
+                'preLockRotation' => $newPiece->rotation,
+            ]);
         } else {
             // Swap current piece with held piece
             $swappedPiece = new Piece($this->hold, 0, $this->piece->x, Board::HIDDEN_ROWS - 4);
@@ -414,18 +418,12 @@ final class Game implements Model
                 // Can't place held piece - don't hold
                 return [$this, null];
             }
-            $game = new self(
-                $this->board,
-                $swappedPiece,
-                $this->bag,
-                $this->score,
-                hold: $currentKind,
-                canHold: false,
-                lockDelayTicks: $this->lockDelayTicks,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $swappedPiece->rotation,
-            );
+            $game = $this->mutate([
+                'piece' => $swappedPiece,
+                'hold' => $currentKind,
+                'canHold' => false,
+                'preLockRotation' => $swappedPiece->rotation,
+            ]);
         }
 
         if ($game->over) {
@@ -460,6 +458,24 @@ final class Game implements Model
         $rand ??= static fn(int $max): int => random_int(0, $max);
         $rows = $this->board->rows();
 
+        // Overflow check: before shifting, verify that the top $count rows
+        // (which will be displaced upward) contain no locked cells.
+        // If they do, the garbage would erase placed content → top-out.
+        for ($r = 0; $r < $count; $r++) {
+            foreach ($rows[$r] as $cell) {
+                if ($cell !== null) {
+                    // Locked content would be displaced — game over
+                    $newBoard = new Board($rows);
+                    return $this->mutate([
+                        'board' => $newBoard,
+                        'over' => true,
+                        'canHold' => true,
+                        'lockDelayTicks' => 0,
+                    ]);
+                }
+            }
+        }
+
         // Push existing rows down by $count (they shift to higher indices)
         // The bottom $count rows get replaced with garbage
         for ($row = Board::ROWS - 1; $row >= $count; $row--) {
@@ -480,45 +496,15 @@ final class Game implements Model
 
         // Check if the current piece is still valid after adding garbage
         if (!$newBoard->fits($this->piece)) {
-            return new self(
-                $newBoard, $this->piece, $this->bag, $this->score,
-                over: true,
-                hold: $this->hold,
-                canHold: true,
-                lockDelayTicks: 0,
-                combo: $this->combo,
-                backToBack: $this->backToBack,
-                preLockRotation: $this->preLockRotation,
-            );
+            return $this->mutate([
+                'board' => $newBoard,
+                'over' => true,
+                'canHold' => true,
+                'lockDelayTicks' => 0,
+            ]);
         }
 
-        return new self(
-            $newBoard,
-            $this->piece,
-            $this->bag,
-            $this->score,
-            $this->over,
-            $this->paused,
-            $this->hold,
-            $this->canHold,
-            $this->lockDelayTicks,
-            $this->combo,
-            $this->backToBack,
-            $this->preLockRotation,
-        );
-    }
-
-    /**
-     * Create a Game suitable for VS Computer mode with slightly faster gravity.
-     *
-     * The computer opponent gets a small speed disadvantage to keep it fair.
-     */
-    public static function vsComputer(?Bag $bag = null): self
-    {
-        $bag ??= new Bag();
-        $first = $bag->next();
-        $piece = self::spawn($first);
-        return new self(new Board(), $piece, $bag, new Score(), preLockRotation: $piece->rotation);
+        return $this->mutate(['board' => $newBoard]);
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
