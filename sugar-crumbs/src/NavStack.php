@@ -10,6 +10,13 @@ namespace SugarCraft\Crumbs;
  * Push new items to go deeper; pop to go back up.
  * The top of the stack is the "current" screen/section.
  *
+ * **Mutable by design** — `push`, `pop`, `updateTop`, `clear`, and
+ * `setItems` mutate `$this` and return `$this` for fluent chaining.
+ * This is a deliberate exception to the repo-wide immutable `with*()`
+ * convention: `filter()` correctly returns a new instance, but the
+ * push/pop/set family mutate in place. Callers must not assume
+ * copy-on-write for the push/pop/set family.
+ *
  * ## Click dispatch (step 10.21)
  *
  * When a {@see \SugarCraft\Zone\MsgZoneInBounds} is received for a crumb
@@ -26,11 +33,21 @@ final class NavStack
     /** Default separator used in view() and viewHtml() output. */
     private const SEPARATOR = ' > ';
 
+    /**
+     * Mirrors bubbleo NavStack constructor.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
     /** @var list<NavigationItem> */
     private array $items = [];
 
     /**
      * Push a new navigation item onto the stack.
+     *
+     * Mirrors bubbleo NavStack.push.
      */
     public function push(string $title, mixed $data = null): self
     {
@@ -41,6 +58,8 @@ final class NavStack
     /**
      * Pop the topmost item off the stack and return it.
      * Returns null if the stack is empty.
+     *
+     * Mirrors bubbleo NavStack.pop.
      */
     public function pop(): ?NavigationItem
     {
@@ -51,7 +70,34 @@ final class NavStack
     }
 
     /**
+     * Can the stack pop without going empty?
+     *
+     * Returns false when depth is 0 or 1 (popping would empty the stack).
+     */
+    public function canPop(): bool
+    {
+        return \count($this->items) > 1;
+    }
+
+    /**
+     * Truncate the stack to the item at $index (inclusive), removing everything newer.
+     * The item at position $index becomes the top.
+     *
+     * Out-of-range indices are clamped silently: negative clamps to empty,
+     * oversized clamps to current depth.
+     *
+     * Mirrors bubbleo NavStack truncation.
+     */
+    public function popTo(int $index): self
+    {
+        $this->items = \array_slice($this->items, 0, \max(0, $index + 1));
+        return $this;
+    }
+
+    /**
      * Peek at the top item without removing it.
+     *
+     * Mirrors bubbleo NavStack.current.
      */
     public function current(): ?NavigationItem
     {
@@ -60,6 +106,8 @@ final class NavStack
 
     /**
      * Peek at the item below the top.
+     *
+     * Mirrors bubbleo NavStack.parent.
      */
     public function parent(): ?NavigationItem
     {

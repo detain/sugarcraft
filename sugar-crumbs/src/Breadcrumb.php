@@ -20,17 +20,32 @@ use SugarCraft\Zone\Manager;
  * crumb item is wrapped in a named APC zone marker so the parent can
  * {@see Manager::scan()} to record bounding boxes for mouse routing.
  *
+ * **Mutable by design** — `setSeparator`, `setTruncator`, `setMaxWidth`,
+ * `setItemRenderer`, `withScanner`, and `withZoneManager` mutate `$this`
+ * and return `$this` for fluent chaining. This is a deliberate exception to
+ * the repo-wide immutable `with*()` convention: the `with*()` methods here
+ * DO return new instances, but the `set*` setters mutate in place.
+ * Callers must not assume copy-on-write for the `set*` family.
+ *
  * Port of KevM/bubbleo Breadcrumb.
  *
  * @see https://github.com/KevM/bubbleo
  */
 final class Breadcrumb
 {
+    /**
+     * Mirrors bubbleo Breadcrumb constructor.
+     */
+    public static function new(): self
+    {
+        return new self();
+    }
+
     private string $separator  = ' › ';
     private string $truncator  = '… ';
     private int    $maxWidth   = 0;  // 0 = no limit
 
-    /** @var \Closure(NavigationItem, int): string|null */
+    /** @var \Closure(NavigationItem, int): ?string|null */
     private ?\Closure $itemRenderer = null;
 
     /** Self-contained scanner for mouse-click hit-testing, or null if disabled. */
@@ -41,6 +56,12 @@ final class Breadcrumb
 
     public function setSeparator(string $s): self
     {
+        if ($s === '') {
+            throw new \InvalidArgumentException('Breadcrumb separator must be non-empty and single-line');
+        }
+        if (preg_match('/[\r\n]/', $s) === 1) {
+            throw new \InvalidArgumentException('Breadcrumb separator must be non-empty and single-line');
+        }
         $this->separator = $s;
         return $this;
     }
@@ -58,8 +79,11 @@ final class Breadcrumb
     }
 
     /**
-     * Custom per-item renderer: fn(NavigationItem $item, int $index): ?string
-     * Return null to use the default title-based rendering.
+     * Custom per-item renderer. The closure MUST return string|null:
+     * fn(NavigationItem $item, int $index): ?string.
+     * Return null to fall back to the default title-based rendering.
+     *
+     * @throws \InvalidArgumentException  If the closure returns a non-string, non-null value
      */
     public function setItemRenderer(\Closure $fn): self
     {
@@ -70,13 +94,19 @@ final class Breadcrumb
     /**
      * Attach a {@see Manager} for mouse-click zone tracking.
      *
-     * @deprecated Self-contained candy-mouse Scanner replaces external Manager.
-     *   The Manager parameter is ignored; use withScanner() or call
-     *   Scanner::scan() on the rendered output after rendering.
+     * @deprecated Internally delegates to a self-contained Scanner (same as
+     *   {@see withScanner()}). Pass a Manager instance to get zone markers
+     *   rendered; pass null to detach. Prefer {@see withScanner()} directly.
      */
     public function withZoneManager(?Manager $manager): self
     {
-        return $this;
+        $clone = clone $this;
+        if ($manager !== null) {
+            $clone->scanner = $clone->scanner ?? Scanner::new();
+        } else {
+            $clone->scanner = null;
+        }
+        return $clone;
     }
 
     /**
@@ -120,6 +150,8 @@ final class Breadcrumb
 
     /**
      * Render the current navigation stack as a breadcrumb string.
+     *
+     * Mirrors bubbleo Breadcrumb.render.
      */
     public function render(NavStack $stack): string
     {
@@ -133,6 +165,10 @@ final class Breadcrumb
             $title = $this->itemRenderer !== null
                 ? ($this->itemRenderer)($item, $i)
                 : null;
+
+            if ($title !== null && !\is_string($title)) {
+                throw new \InvalidArgumentException('itemRenderer must return string|null');
+            }
 
             if ($title === null) {
                 $title = $item->title;
@@ -162,13 +198,12 @@ final class Breadcrumb
      */
     private function doRender(array $titles): string
     {
-        $result = \implode($this->separator, $titles);
-
         // Truncate from the left if too wide
-        if ($this->maxWidth > 0 && $this->effectiveWidth($result) > $this->maxWidth) {
-            $result = $this->truncate($titles);
-            // After truncation, $titles may be reduced to fit; rebuild from result
-            $titles = $this->titlesFromTruncatedResult($result);
+        if ($this->maxWidth > 0 && $this->effectiveWidth(\implode($this->separator, $titles)) > $this->maxWidth) {
+            [$titles, $elided] = $this->truncate($titles);
+            $result = ($elided ? $this->truncator : '') . \implode($this->separator, $titles);
+        } else {
+            $result = \implode($this->separator, $titles);
         }
 
         // Wrap each crumb in a zone marker when a scanner is attached.
@@ -180,12 +215,15 @@ final class Breadcrumb
     }
 
     /**
-     * Truncate titles to fit within maxWidth, returning the formatted string.
+     * Truncate titles to fit within maxWidth, returning the surviving titles.
      * Items are kept from most-recent to oldest until they fit.
      *
-     * @param list<string> $titles
+     * Mirrors bubbleo Breadcrumb.truncate.
+     *
+     * @param list<string> $titles  Items in display order (oldest→newest)
+     * @return array{list<string>, bool}  [kept titles oldest→newest, whether any were elided]
      */
-    private function truncate(array $titles): string
+    private function truncate(array $titles): array
     {
         // Start from the end (most recent) and prepend older items until we fit
         $out = [\end($titles)];
@@ -200,29 +238,9 @@ final class Breadcrumb
 
         // $out is ordered newest→oldest; reverse to oldest→newest for output
         $reversed = \array_reverse($out);
-        $result = \implode($this->separator, $reversed);
+        $elided = \count($out) < \count($titles);
 
-        // If any titles were dropped, prefix the truncator so the elision is visible
-        if (\count($out) < \count($titles)) {
-            $result = $this->truncator . $result;
-        }
-
-        return $result;
-    }
-
-    /**
-     * Parse the truncated result string back into a titles array.
-     * Strips the leading truncator prefix if present, then splits on separator.
-     */
-    private function titlesFromTruncatedResult(string $result): array
-    {
-        if ($result !== '' && $result[0] === $this->truncator[0]) {
-            $result = \substr($result, \strlen($this->truncator));
-        }
-        if ($result === '') {
-            return [];
-        }
-        return \explode($this->separator, $result);
+        return [$reversed, $elided];
     }
 
     /**

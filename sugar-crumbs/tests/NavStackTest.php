@@ -272,4 +272,81 @@ final class NavStackTest extends TestCase
         $this->assertSame('home', $shell->stack->items()[0]->title);
         $this->assertSame('/home', $shell->stack->items()[0]->data);
     }
+
+    // ─── Step 5: ::new() factory ───────────────────────────────────────────────
+
+    public function testNewFactory(): void
+    {
+        $s = NavStack::new();
+        $s->push('Home');
+        $this->assertSame(1, $s->depth());
+        $this->assertFalse($s->isEmpty());
+    }
+
+    // ─── Step 7: canPop / popTo ───────────────────────────────────────────────
+
+    public function testCanPop(): void
+    {
+        $s = NavStack::new();
+        $this->assertFalse($s->canPop()); // 0 items
+
+        $s->push('Only');
+        $this->assertFalse($s->canPop()); // 1 item (root)
+
+        $s->push('Child');
+        $this->assertTrue($s->canPop()); // 2 items
+
+        $s->push('Grandchild');
+        $this->assertTrue($s->canPop()); // 3 items
+    }
+
+    public function testPopToTruncatesStack(): void
+    {
+        $s = NavStack::new();
+        $s->push('Home')->push('Settings')->push('Display')->push('Resolution');
+
+        // popTo(1) keeps items[0..1] → 2 items oldest-first
+        $result = $s->popTo(1);
+        $this->assertSame($s, $result); // mutates and returns $this
+        $this->assertSame(2, $s->depth());
+        $this->assertSame('Home', $s->items()[0]->title);
+        $this->assertSame('Settings', $s->items()[1]->title);
+    }
+
+    public function testPopToClampsOutOfRange(): void
+    {
+        $s = NavStack::new();
+        $s->push('Home')->push('Settings');
+
+        // popTo(99) clamps to current depth (2)
+        $s->popTo(99);
+        $this->assertSame(2, $s->depth());
+
+        // popTo(-5) clamps to 0 (empty stack)
+        $s->popTo(-5);
+        $this->assertSame(0, $s->depth());
+    }
+
+    public function testShellWithPopOnEmptyStackIsNoOp(): void
+    {
+        $shell = Shell::new();
+        $this->assertSame(0, $shell->stack->depth());
+
+        $popped = $shell->withPop();
+        // withPop on empty stack creates a new NavStack but it's still empty
+        $this->assertSame(0, $popped->stack->depth());
+    }
+
+    // ─── Step 8: Shell default breadcrumb construction ─────────────────────────
+
+    public function testShellNewWithoutBreadcrumbUsesDefault(): void
+    {
+        // Shell::new() uses new Breadcrumb() as default
+        // The default separator is ' › '
+        $shell = Shell::new();
+        $shell->stack->push('Home')->push('Settings');
+
+        $rendered = $shell->renderBreadcrumb();
+        $this->assertSame('Home › Settings', $rendered);
+    }
 }

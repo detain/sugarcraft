@@ -68,22 +68,27 @@ echo $bc->render($stack);  // "Home › Settings › Display"
 
 ### Click-Region Tracking
 
-Attach a `Manager` from `sugarcraft/candy-zone` to enable mouse-click routing:
+Attach a self-contained `Scanner` from `sugarcraft/candy-mouse` for mouse-click zone routing:
 
 ```php
 use SugarCraft\Crumbs\Breadcrumb;
-use SugarCraft\Zone\Manager;
+use SugarCraft\Mouse\Scanner;
 
-$manager = new Manager();
-$bc = (new Breadcrumb())->withZoneManager($manager);
+$bc = (new Breadcrumb())->withScanner(Scanner::new());
 
-echo $bc->render($stack);
-// Each crumb is wrapped in a named APC zone: "crumb-0", "crumb-1", …
-// The parent calls Manager::scan() on the output to record bounds,
-// then routes MouseMsg through Manager::anyInBoundsAndUpdate().
+$output = $bc->render($stack);
+// Each crumb is wrapped in a named zone marker: "crumb-0", "crumb-1", …
+
+$bc->scan($output);
+$zone = $bc->hit($col, $row); // returns Zone for clicked crumb-N or null
+
+if ($zone !== null && \preg_match('/crumb-(\d+)/', $zone->id, $m)) {
+    $index = (int) $m[1];
+    // route click on crumb-$index to the appropriate handler
+}
 ```
 
-Detach by passing `null`: `(new Breadcrumb())->withZoneManager(null)`.
+`withZoneManager()` is a deprecated back-compat wrapper that (post-Step-4) internally delegates to a Scanner. Prefer `withScanner()` directly.
 
 ## Shared foundations
 
