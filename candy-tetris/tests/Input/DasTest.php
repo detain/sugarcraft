@@ -35,11 +35,41 @@ final class DasTest extends TestCase
     public function testKeyDownResetsAccumulatorForDirection(): void
     {
         // This tests that a fresh key-press resets the DAS timer.
-        // We verify the new state has 0 accumulator.
+        // We verify the new state has 0 accumulator for the pressed direction.
         $das = Das::create(100_000, 50_000)->advance(50_000);
-        $fresh = $das->withKeyUp('left');
-        $this->assertSame(0, $fresh->leftAcc);
-        $this->assertSame(50_000, $fresh->rightAcc);
+        $fresh = $das->withKeyDown('left');
+        $this->assertSame(0, $fresh->leftAcc, 'left accumulator must be reset by key-down');
+        $this->assertSame(50_000, $fresh->rightAcc, 'right accumulator must be unchanged');
+    }
+
+    public function testKeyDownRightResetsRightAccumulator(): void
+    {
+        $das = Das::create(100_000, 50_000)->advance(80_000);
+        $fresh = $das->withKeyDown('right');
+        $this->assertSame(0, $fresh->rightAcc, 'right accumulator must be reset by key-down');
+        $this->assertSame(80_000, $fresh->leftAcc, 'left accumulator must be unchanged');
+    }
+
+    public function testKeyDownUnknownDirectionReturnsUnchanged(): void
+    {
+        $das = Das::create(100_000, 50_000)->advance(80_000);
+        $fresh = $das->withKeyDown('invalid');
+        $this->assertSame(80_000, $fresh->leftAcc);
+        $this->assertSame(80_000, $fresh->rightAcc);
+    }
+
+    public function testRightRepeatsReturnsOneAfterDasPlusArr(): void
+    {
+        // DAS = 100ms, ARR = 50ms, advance 160ms (past DAS + 1 ARR)
+        $das = Das::create(100_000, 50_000)->advance(160_000);
+        $this->assertSame(1, $das->rightRepeats(0));
+    }
+
+    public function testRightRepeatsReturnsZeroBeforeDas(): void
+    {
+        // DAS = 100ms, after 50ms → no repeat
+        $das = Das::create(100_000, 50_000)->advance(50_000);
+        $this->assertSame(0, $das->rightRepeats(0));
     }
 
     public function testKeyUpClearsAccumulator(): void

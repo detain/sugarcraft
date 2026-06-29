@@ -1,6 +1,6 @@
 {
     "name": "sugarcraft/candy-tetris",
-    "description": "Tetris clone built on the SugarCraft stack \u2014 SugarCraft runtime, CandySprinkles styling, HoneyBounce-driven smooth piece previews. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
+    "description": "Tetris clone built on the SugarCraft stack \u2014 SugarCraft runtime, CandySprinkles styling. Standard SRS rules (7-bag RNG, ghost piece, hard drop, hold, level/speed curve, line-clear scoring). A real demo of the runtime, not a toy.",
     "type": "project",
     "license": "MIT",
     "keywords": [

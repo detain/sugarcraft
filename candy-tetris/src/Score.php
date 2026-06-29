@@ -69,4 +69,17 @@ final class Score
     {
         return $this->framesPerRow() * 16_667;
     }
+
+    /**
+     * Add points from a hard-drop or soft-drop. Lines and level are
+     * unchanged (unlike {@see withLines()} which may level up).
+     */
+    public function withDropPoints(int $points): self
+    {
+        return new self(
+            $this->points + $points,
+            $this->lines,
+            $this->level,
+        );
+    }
 }
