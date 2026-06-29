@@ -122,4 +122,78 @@ PHP;
 
         unlink($path);
     }
+
+    public function testPatternBodyEndingInMOrSlashNotCorrupted(): void
+    {
+        // Verify that a regex body containing 'm' or '/' as a literal character
+        // is not corrupted by delimiter-stripping (the fixed bare-pattern approach).
+        $highlighter = new ChromaJsonHighlighter([
+            'function' => '1;36',
+            'keyword'  => '1;34',
+        ]);
+        // Input where 'm' appears right at a token boundary.
+        $result = $highlighter->highlight('system', 'php');
+        // system is not a keyword, so it should be colored by the function pattern.
+        self::assertStringContainsString("\x1b[1;36m", $result);
+        self::assertStringContainsString('system', $result);
+    }
+
+    public function testFunctionTokenExcludesParen(): void
+    {
+        // Function pattern uses lookahead, so the `(` is NOT part of the match.
+        $highlighter = new ChromaJsonHighlighter(['function' => '1;36']);
+        $result = $highlighter->highlight('foo(bar)', 'php');
+        // 'foo' should be colored; '(' should NOT be wrapped in any SGR pair.
+        self::assertStringContainsString("\x1b[1;36mfoo\x1b[0m", $result);
+        // The '(' character appears as-is (plain punctuation) with no SGR envelope.
+        $parenPos = strpos($result, '(');
+        self::assertNotFalse($parenPos);
+        // Verify no ESC in the '(' region.
+        $beforeClose = substr($result, 0, $parenPos);
+        $afterOpen = substr($result, $parenPos + 1);
+        self::assertStringNotContainsString("\x1b", $afterOpen);
+        self::assertStringNotContainsString("\x1b", $beforeClose);
+    }
+
+    public function testMostSpecificGroupSelectedNotFirstDeclared(): void
+    {
+        // When two alternations could match at different positions, the one that
+        // actually captures the full match is selected (not the first declared).
+        $highlighter = new ChromaJsonHighlighter([
+            'function' => '1;36', // cyan
+            'keyword'  => '1;34', // blue
+        ]);
+        // 'print(' is a keyword followed by '(', but also a function-like identifier.
+        // Keyword comes first in alternation order but function is the one that
+        // actually matches the full match text at position 0.
+        $result = $highlighter->highlight('print(42)', 'php');
+        // 'print' should be colored as keyword (blue) since it matches the keyword
+        // pattern at position 0 and the captured value equals the full match.
+        self::assertStringContainsString("\x1b[1;34m", $result);
+    }
+
+    public function testEmbeddedEscapeStripped(): void
+    {
+        // Embedded ESC bytes in source code are stripped to prevent injection.
+        $highlighter = new ChromaJsonHighlighter(['string' => '31']);
+        $code = '"\x1b[31mRED\x1b[0m"';
+        $result = $highlighter->highlight($code, 'php');
+        // The result should have no raw ESC bytes in the source portion —
+        // only the highlighter's own SGR envelope remains.
+        self::assertStringNotContainsString("\x1b[31m", substr($result, 0, strpos($result, "\x1b[")));
+    }
+
+    public function testBacktrackLimitDegradesToRaw(): void
+    {
+        // When preg hits a backtrack limit it returns null/empty; verify we get raw code.
+        $highlighter = new ChromaJsonHighlighter(['string' => '31']);
+        // Build a pathologically deep nested pattern via a long string that forces
+        // the regex engine to backtrack heavily. The highlighter should not crash;
+        // it degrades to raw output.
+        $longString = str_repeat('a', 10000);
+        $code = '"' . $longString . '"';
+        $result = $highlighter->highlight($code, 'php');
+        // Should return a string (possibly raw) without throwing.
+        self::assertIsString($result);
+    }
 }

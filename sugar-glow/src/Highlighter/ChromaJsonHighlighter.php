@@ -39,26 +39,23 @@ final class ChromaJsonHighlighter implements HighlighterInterface
 
     private function buildCombinedPattern(): string
     {
-        $parts = [];
-
-        // Order matters: more specific patterns first
-        // Note: string pattern uses simplistic non-greedy matching; real tokenization needs a proper lexer
+        // Order matters: more specific patterns first.
+        // Patterns are stored as BARE bodies (no surrounding /.../ delimiters).
+        // The `m` flag is applied once to the final combined pattern.
         $orderedTypes = [
-            'comment'     => "/(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#.*$)/",
-            'string'      => '/"[^"]*"|' . "'" . '[^' . "'" . ']*' . "'" . '/',
-            'keyword'     => "/\b(abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|new|or|print|private|protected|public|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|xor|yield|yield from|async|await|void|null|true|false|mixed)\b/",
-            'number'      => "/\b\d+\.?\d*\b/",
-            'function'   => "/\b([a-zA-Z_]\w*)\s*\(/",
-            'operator'   => '/[+\-*\/%=<>!&|^~]+/',
-            'punctuation' => '/[{}()\[\];,\.]/',
+            'comment'     => '(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#.*$)',
+            'string'      => '"[^"]*"|\'[^\']*\'',
+            'keyword'     => '\b(abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|die|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|eval|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|new|or|print|private|protected|public|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|xor|yield|yield from|async|await|void|null|true|false|mixed)\b',
+            'number'      => '\b\d+\.?\d*\b',
+            // Use lookahead so the `(` is not part of the captured function name.
+            'function'   => '\b[a-zA-Z_]\w*(?=\s*\()',
+            'operator'   => '[+\-*\/%=<>!&|^~]+',
+            'punctuation' => '[{}()\[\];,\.]',
         ];
 
-        // Build combined alternation pattern
         $alternations = [];
-        foreach ($orderedTypes as $type => $pattern) {
-            // Strip delimiters
-            $regex = trim($pattern, '/m');
-            $alternations[] = '(?<' . $type . '>' . $regex . ')';
+        foreach ($orderedTypes as $type => $body) {
+            $alternations[] = '(?<' . $type . '>' . $body . ')';
         }
 
         return '/(' . implode('|', $alternations) . ')/m';
@@ -93,19 +90,21 @@ final class ChromaJsonHighlighter implements HighlighterInterface
         return (string) preg_replace_callback(
             $pattern,
             static function (array $matches) use ($theme): string {
-                // Find which named group matched (skip integer keys - those are captured groups)
+                // Find the named group whose captured value equals the full match.
+                // PCRE fills ALL declared named groups; exactly one alternation matched,
+                // so exactly one named group equals $matches[0].
+                $fullMatch = $matches[0];
                 foreach ($matches as $type => $value) {
-                    if ($value === '' || is_int($type)) {
+                    if (!is_string($type) || $value === '' || $value !== $fullMatch) {
                         continue;
                     }
                     $color = $theme[$type] ?? null;
                     if ($color !== null) {
                         return Ansi::CSI . $color . 'm' . $value . Ansi::reset();
                     }
-                    // No color defined for this token type
                     return $value;
                 }
-                return $matches[0];
+                return $fullMatch;
             },
             $code
         ) ?: $code;
