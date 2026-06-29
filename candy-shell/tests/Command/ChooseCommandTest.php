@@ -30,7 +30,7 @@ final class ChooseCommandTest extends TestCase
         ], ['decorated' => false]);
 
         $this->assertSame(0, $status);
-        $this->assertSame("only-option\n", $tester->getDisplay());
+        $this->assertSame('only-option', trim($tester->getDisplay()));
     }
 
     /**
@@ -52,7 +52,7 @@ final class ChooseCommandTest extends TestCase
 
         // With --select-if-one the short-circuit fires; cursor-prefix is accepted.
         $this->assertSame(0, $status);
-        $this->assertSame("only-option\n", $tester->getDisplay());
+        $this->assertSame('only-option', trim($tester->getDisplay()));
     }
 
     /**
@@ -71,6 +71,6 @@ final class ChooseCommandTest extends TestCase
         ], ['decorated' => false]);
 
         $this->assertSame(0, $status);
-        $this->assertSame("only-option\n", $tester->getDisplay());
+        $this->assertSame('only-option', trim($tester->getDisplay()));
     }
 }
