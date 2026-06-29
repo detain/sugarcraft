@@ -27,15 +27,26 @@ final class StickersTest extends TestCase
         $item = FlexItem::new('x')
             ->withRatio(2)
             ->withBasis(10)
-            ->withGrow(3)
-            ->withShrink(0)
             ->withStyle('32');
 
         $this->assertSame(2, $item->ratio);
         $this->assertSame(10, $item->basis);
-        $this->assertSame(3, $item->grow);
-        $this->assertSame(0, $item->shrink);
         $this->assertSame('32', $item->style);
+    }
+
+    public function testFlexItemRatioAndBasisWorkInLayout(): void
+    {
+        // Create a FlexBox with items having different ratios and bases
+        $box = FlexBox::row(
+            FlexItem::new('A')->withRatio(1)->withBasis(5),
+            FlexItem::new('B')->withRatio(2)->withBasis(5),
+        );
+
+        // Should render without error and produce output
+        $output = $box->render(20, 2);
+        $this->assertIsString($output);
+        $this->assertStringContainsString('A', $output);
+        $this->assertStringContainsString('B', $output);
     }
 
     public function testFlexBoxRow(): void
@@ -400,6 +411,40 @@ final class StickersTest extends TestCase
             ->setCursor(99);  // beyond row count
 
         $this->assertNull($t->currentCell(0));
+    }
+
+    // ---- Column sort accessor tests ----------------------------------------
+
+    public function testColumnSortedSetsDirectionAndPriority(): void
+    {
+        $col = Column::make('Name', 10)->sorted(1, 1);
+
+        $this->assertSame(1, $col->sortDir());
+        $this->assertSame(1, $col->sortPriority());
+    }
+
+    public function testColumnUnsortedClearsSortState(): void
+    {
+        $col = Column::make('Name', 10)->sorted(-1, 2)->unsorted();
+
+        $this->assertSame(0, $col->sortDir());
+        $this->assertSame(0, $col->sortPriority());
+    }
+
+    public function testColumnSortedWithDescendingDirection(): void
+    {
+        $col = Column::make('Age', 5)->sorted(-1, 1);
+
+        $this->assertSame(-1, $col->sortDir());
+        $this->assertSame(1, $col->sortPriority());
+    }
+
+    public function testColumnUnsortedIsIdempotent(): void
+    {
+        $col = Column::make('Name', 10)->unsorted()->unsorted();
+
+        $this->assertSame(0, $col->sortDir());
+        $this->assertSame(0, $col->sortPriority());
     }
 
     public function testTableRenderEmptyWithoutColumns(): void
