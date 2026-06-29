@@ -74,7 +74,7 @@ final class SshConfigParser
             if ($currentHostPatterns !== null && preg_match('/^(\w+)\s+(.+)$/i', $line, $m)) {
                 $key = strtolower($m[1]);
                 $value = trim($m[2]);
-                $this->applyKeyword($currentOptions, $key, $value, $inGlobalBlock);
+                $this->applyKeyword($currentOptions, $key, $value);
                 continue;
             }
         }
@@ -106,7 +106,7 @@ final class SshConfigParser
     /**
      * @param array<string,string|list<string>> $options
      */
-    private function applyKeyword(array &$options, string $key, string $value, bool $inGlobalBlock): void
+    private function applyKeyword(array &$options, string $key, string $value): void
     {
         match ($key) {
             'hostname' => $options['hostname'] = $value,
