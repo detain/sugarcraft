@@ -19,7 +19,7 @@ final class AdaptiveSizeTest extends TestCase
 {
     public function testCreateReturnsUnconstrainedRenderer(): void
     {
-        $r = Renderer::create();
+        $r = Renderer::new();
         $f = new Frame([[[255, 0, 0]]]);
 
         // Without adaptive constraints, all cells are emitted.
