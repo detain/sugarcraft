@@ -381,4 +381,66 @@ final class DatePickerTest extends TestCase
         $this->assertSame('2026-05-05', $dp->rangeStart()->format('Y-m-d'));
         $this->assertSame('2026-05-10', $dp->rangeEnd()->format('Y-m-d'));
     }
+
+    // -------------------------------------------------------------------------
+    // Cursor rendering
+    // -------------------------------------------------------------------------
+
+    public function testWithCursorStyleAffectsView(): void
+    {
+        // May 2026: firstDow=5 (Fri), index 5 = May 1
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Move cursor to index 5 (May 1, a real day cell) to ensure cursor renders
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $viewDefault = $dp->View();
+
+        // Underline style (SGR 4) should produce different bytes than default (SGR 7 reverse)
+        $viewUnderline = $dp->WithCursorStyle('4')->View();
+
+        $this->assertNotSame($viewDefault, $viewUnderline,
+            'Different cursor styles must produce different View() output');
+    }
+
+    public function testCursorIndexReflectedInView(): void
+    {
+        // Pin today to May 2026 and move cursor to a real day cell (index 5 = May 1)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $view = $dp->View();
+
+        // The View() output must contain SGR [0;7m (Buffer emits reset+attrs)
+        // at the cursor cell (May 1 at index 5)
+        $this->assertStringContainsString("\x1b[0;7m", $view,
+            'View() must contain SGR 0;7 (reverse) at the cursor cell');
+    }
+
+    public function testCursorMovesHighlight(): void
+    {
+        // May 2026: firstDow=5 (Fri), index 5 = May 1, index 12 = May 8, index 13 = May 9
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Cursor at index 5 (May 1)
+        $view0 = $dp->View();
+
+        // Move cursor down (index 12) then right (index 13 = May 9)
+        $dp2 = $dp->MoveCursorDown()->MoveCursorRight();
+        $viewMoved = $dp2->View();
+
+        $this->assertNotSame($view0, $viewMoved,
+            'Moving the cursor must change the View() output');
+
+        // The moved-cursor output must contain the reverse SGR at the new cell
+        $this->assertStringContainsString("\x1b[0;7m", $viewMoved,
+            'Moved cursor position must carry SGR 0;7 in output');
+    }
 }
