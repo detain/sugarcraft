@@ -18,7 +18,8 @@ use SugarCraft\Wish\Session;
  * In a CLI/PHP-FPM context the "client" is the SSH client's stdin.
  * This middleware:
  *
- *   1. Writes each prompt to STDOUT (one per line, blank-line separated).
+ *   1. Writes Name, Instruction, prompt count, and per-prompt
+ *      prompt/echo-flag lines to STDOUT per RFC 4256.
  *   2. Reads newline-delimited responses from STDIN until all
  *      prompts have been answered.
  *   3. Optionally validates the responses via a callback. A validator
@@ -26,18 +27,23 @@ use SugarCraft\Wish\Session;
  *      stderr; a validator that returns `true` (or no validator)
  *      passes control to `$next`.
  *
- * Prompt/response format mirrors RFC 4256:
+ * Wire format (RFC 4256, SSH_MSG_USERAUTH_INFO_REQUEST):
  *
  *     Name\r\n
  *     Instruction\r\n
  *     NumberOfPrompts\r\n
  *     Prompt1\r\n
+ *     Echo1\r\n        <-- 'true' or 'false'
  *     Prompt2\r\n
+ *     Echo2\r\n        <-- 'true' or 'false'
  *     ...
  *
  *     Response1\r\n
  *     Response2\r\n
  *     ...
+ *
+ * @property string $name        RFC-4256 Name field (e.g. "Login")
+ * @property string $instruction RFC-4256 Instruction field
  */
 final class KeyboardInteractive implements Middleware
 {
@@ -56,9 +62,17 @@ final class KeyboardInteractive implements Middleware
     /** @var resource */
     private $stderr;
 
+    /** RFC-4256 Name field (written as first line of challenge output) */
+    private string $name;
+
+    /** RFC-4256 Instruction field (written as second line of challenge output) */
+    private string $instruction;
+
     /**
      * @param list<array{prompt: string, echo?: bool}> $challenges Prompt list
      * @param callable(list<string>): bool|null        $validate   Receives responses, returns true to accept
+     * @param string                                   $name       RFC-4256 Name (e.g. "Login")
+     * @param string                                   $instruction RFC-4256 Instruction
      * @param resource|null                           $stdout
      * @param resource|null                           $stdin
      * @param resource|null                           $stderr
@@ -66,12 +80,16 @@ final class KeyboardInteractive implements Middleware
     public function __construct(
         array $challenges,
         ?callable $validate = null,
+        string $name = '',
+        string $instruction = '',
         $stdout = null,
         $stdin = null,
         $stderr = null,
     ) {
         $this->challenges = $challenges;
         $this->validate = $validate;
+        $this->name = $name;
+        $this->instruction = $instruction;
         if ($stdout === null) {
             $stream = fopen('php://stdout', 'w');
             if ($stream === false) {
@@ -117,14 +135,19 @@ final class KeyboardInteractive implements Middleware
 
     /**
      * Write challenges to stdout in RFC 4256 format.
+     *
+     * Emits: Name, Instruction, Count, then per-challenge Prompt and Echo flag.
      */
     private function writeChallenges(): void
     {
         $count = \count($this->challenges);
+        fwrite($this->stdout, $this->name . "\n");
+        fwrite($this->stdout, $this->instruction . "\n");
         fwrite($this->stdout, (string) $count . "\n");
         foreach ($this->challenges as $challenge) {
-            $echo = $challenge['echo'] ?? true ? 'true' : 'false';
+            $echo = ($challenge['echo'] ?? true) ? 'true' : 'false';
             fwrite($this->stdout, $challenge['prompt'] . "\n");
+            fwrite($this->stdout, $echo . "\n");
         }
         fflush($this->stdout);
     }
