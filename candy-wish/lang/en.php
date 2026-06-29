@@ -20,5 +20,6 @@ return [
     'spawn.no_transport'             => 'Spawn middleware requires an InProcessTransport — set Server::withTransport(new InProcessTransport()) or use BubbleTea under HostSshd',
     'spawn.bad_factory_return'       => 'Spawn factory must return an array with cmd + optional env keys; got {got}',
     'spawn.bad_cmd'                  => 'Spawn factory cmd must be a non-empty list of argv strings',
+    'transport.async_timeout'       => 'Async operation timed out after {timeout} seconds',
     'keepalive.invalid_interval'     => 'Keepalive interval must be at least 1 second',
 ];

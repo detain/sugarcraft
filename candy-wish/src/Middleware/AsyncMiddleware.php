@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace SugarCraft\Wish\Middleware;
 
-use React\EventLoop\Loop;
 use React\Promise;
 use React\Promise\PromiseInterface;
 use SugarCraft\Wish\Context;
 use SugarCraft\Wish\Middleware as MiddlewareContract;
 use SugarCraft\Wish\Session;
+use SugarCraft\Wish\Transport\PromiseAwait;
 
 /**
  * Abstract base for middleware that needs to perform async I/O before
@@ -41,54 +41,14 @@ abstract class AsyncMiddleware implements MiddlewareContract
     public function handle(Context $ctx, Session $session, callable $next): PromiseInterface
     {
         $wrappedNext = function (Context $c, Session $s) use ($next): void {
-            $r = $next($c, $s);
-            if ($r instanceof PromiseInterface) {
-                self::await($r);
-            }
+            $next($c, $s);
         };
 
         $result = $this->handleAsync($ctx, $session, $wrappedNext);
         if ($result instanceof PromiseInterface) {
-            self::await($result);
+            PromiseAwait::settle($result);
         }
         return \React\Promise\resolve(null);
-    }
-
-    /**
-     * Synchronously wait for a promise to settle.
-     *
-     * @throws \Throwable if the promise rejects
-     */
-    private static function await(PromiseInterface $promise): void
-    {
-        $ex = null;
-        $done = false;
-        $promise->then(
-            function () use (&$done): void { $done = true; },
-            function (\Throwable $e) use (&$ex, &$done): void {
-                $ex = $e;
-                $done = true;
-            },
-        );
-
-        if ($done) {
-            if ($ex !== null) {
-                throw $ex;
-            }
-            return;
-        }
-
-        $deadline = microtime(true) + 30;
-        while (!$done) {
-            if (microtime(true) >= $deadline) {
-                throw new \RuntimeException('Async middleware timed out after 30 seconds');
-            }
-            Loop::run();
-        }
-
-        if ($ex !== null) {
-            throw $ex;
-        }
     }
 
     /**
