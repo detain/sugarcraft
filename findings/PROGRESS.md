@@ -41,10 +41,10 @@
 | sugar-gallery | 3 | 9 | 0 | 2 | 7 | MERGED | | e04ebf89 | full — poster row normalization, Rail scroll clamp, test coverage, C0 strip, ::new factories, withTitle |
 | sugar-stash | 3 | 16 | 5 | 8 | 3 | MERGED | | 01bbd007 | full — guardRef, worktree parsing, HistoryManager, unstageAll, sanitize, truncate, interactive rebase |
 | sugar-table | 3 | 9 | 2 | 4 | 3 | MERGED | | f1dc64a7 | full — sanitize, Width routing, filterable, footer math, border glyphs, memoization, multibyte tests |
-| candy-log | 4 | 13 | 5 | 5 | 3 | PENDING | | | |
-| candy-mosaic | 4 | 9 | 2 | 3 | 4 | PENDING | | | |
-| candy-shell | 4 | 11 | 3 | 3 | 5 | PENDING | | | |
-| candy-freeze | 4 | 11 | 2 | 4 | 5 | PENDING | | | |
+| candy-log | 4 | 13 | 5 | 5 | 3 | MERGED | | 96cc71d7 | full — panicHandler race fix, 148 tests |
+| candy-mosaic | 4 | 9 | 2 | 3 | 4 | MERGED | | 3aa807e2 | full — kittyGraphicsBegin() fix, 300 tests |
+| candy-shell | 4 | 11 | 3 | 3 | 5 | MERGED | | f5d4bcfd | full — interactive command tests, 274 tests |
+| candy-freeze | 4 | 11 | 2 | 4 | 5 | MERGED | | f1dc64a7 | already complete at wave 3 merge, 163 tests |
 | honey-bounce | 4 | 11 | 2 | 4 | 5 | MERGED | | f23a575c | full — Easing formula fixes, clamp removal, ElasticIn canonical formula |
 | sugar-charts | 4 | 12 | 2 | 5 | 5 | MERGED | | bf724b42 | full — legendItems crash fix, off-by-one axis, with*(null) clear semantics |
 | sugar-crush | 4 | 18 | 5 | 8 | 5 | MERGED | | 5d0d7ce7 | full — hook matching security, Chat render O(wxh) fix |
