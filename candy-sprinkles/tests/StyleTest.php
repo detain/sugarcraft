@@ -13,6 +13,7 @@ use SugarCraft\Sprinkles\CompleteAdaptiveColor;
 use SugarCraft\Sprinkles\CompleteColor;
 use SugarCraft\Sprinkles\LightDark;
 use SugarCraft\Sprinkles\Style;
+use SugarCraft\Sprinkles\UnderlineStyle;
 use SugarCraft\Sprinkles\VAlign;
 use PHPUnit\Framework\TestCase;
 
@@ -990,5 +991,147 @@ final class StyleTest extends TestCase
         $this->assertNotSame($a, $b);
         $this->assertNull($a->getBackground());
         $this->assertEquals(Color::hex('#0000ff'), $b->getBackground());
+    }
+
+    // ---- inherit() field-completeness regression tests --------------------
+
+    public function testInheritPreservesRapidBlink(): void
+    {
+        $child = Style::new()->rapidBlink();
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        // Rapid blink SGR 6 should survive the inherit. SGR 6 may be combined with others.
+        $this->assertStringContainsString("6m", $merged->render('x'));
+    }
+
+    public function testInheritPreservesHyperlink(): void
+    {
+        $child = Style::new()->hyperlink('https://example.com');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+    }
+
+    public function testInheritPreservesUnderlineColorAndStyle(): void
+    {
+        $child = Style::new()
+            ->underlineColor(Color::rgb(255, 0, 0))
+            ->underlineStyle(UnderlineStyle::Curly);
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertEquals(Color::rgb(255, 0, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Curly, $merged->getUnderlineStyle());
+    }
+
+    public function testInheritPreservesPaddingAndMarginChar(): void
+    {
+        $child = Style::new()->paddingChar('*')->marginChar('.');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('*', $merged->getPaddingChar());
+        $this->assertSame('.', $merged->getMarginChar());
+    }
+
+    public function testInheritPreservesBoundString(): void
+    {
+        $child = Style::new()->setString('bound');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('bound', $merged->value());
+    }
+
+    public function testInheritPreservesHyperlinkId(): void
+    {
+        $child = Style::new()->hyperlink('https://example.com', 'my-id');
+        $parent = Style::new();
+        $merged = $child->inherit($parent);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+        // hyperlinkId accessor if it exists; render output should contain OSC 8 with id.
+        $rendered = $merged->render('x');
+        // OSC 8 format: \x1b]8;id=<id>;<url>\x1b\\
+        $this->assertStringContainsString("\x1b]8;id=my-id;https://example.com", $rendered);
+    }
+
+    // ---- patch() field-completeness regression tests ----------------------
+
+    public function testPatchPreservesRapidBlink(): void
+    {
+        $base = Style::new()->rapidBlink();
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        // base's rapidBlink should survive when patcher doesn't set it.
+        $this->assertStringContainsString("6m", $merged->render('x'));
+    }
+
+    public function testPatchAppliesHyperlinkFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->hyperlink('https://example.com');
+        $merged = $base->patch($patcher);
+        $this->assertSame('https://example.com', $merged->getHyperlink());
+    }
+
+    public function testPatchPreservesHyperlinkWhenOtherHasNone(): void
+    {
+        $base = Style::new()->hyperlink('https://base.com');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('https://base.com', $merged->getHyperlink());
+    }
+
+    public function testPatchAppliesUnderlineColorAndStyleFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()
+            ->underlineColor(Color::rgb(0, 255, 0))
+            ->underlineStyle(UnderlineStyle::Double);
+        $merged = $base->patch($patcher);
+        $this->assertEquals(Color::rgb(0, 255, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Double, $merged->getUnderlineStyle());
+    }
+
+    public function testPatchPreservesUnderlineColorWhenOtherHasNone(): void
+    {
+        $base = Style::new()
+            ->underlineColor(Color::rgb(255, 0, 0))
+            ->underlineStyle(UnderlineStyle::Curly);
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertEquals(Color::rgb(255, 0, 0), $merged->getUnderlineColor());
+        $this->assertSame(UnderlineStyle::Curly, $merged->getUnderlineStyle());
+    }
+
+    public function testPatchAppliesPaddingAndMarginCharFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->paddingChar('*')->marginChar('.');
+        $merged = $base->patch($patcher);
+        $this->assertSame('*', $merged->getPaddingChar());
+        $this->assertSame('.', $merged->getMarginChar());
+    }
+
+    public function testPatchPreservesPaddingAndMarginCharWhenOtherHasNone(): void
+    {
+        $base = Style::new()->paddingChar('X')->marginChar('Y');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('X', $merged->getPaddingChar());
+        $this->assertSame('Y', $merged->getMarginChar());
+    }
+
+    public function testPatchAppliesBoundStringFromOther(): void
+    {
+        $base = Style::new()->bold();
+        $patcher = Style::new()->setString('patched');
+        $merged = $base->patch($patcher);
+        $this->assertSame('patched', $merged->value());
+    }
+
+    public function testPatchPreservesBoundStringWhenOtherHasNone(): void
+    {
+        $base = Style::new()->setString('original');
+        $patcher = Style::new()->bold();
+        $merged = $base->patch($patcher);
+        $this->assertSame('original', $merged->value());
     }
 }

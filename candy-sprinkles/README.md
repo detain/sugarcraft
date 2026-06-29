@@ -152,7 +152,7 @@ echo Tree::new()
 
 ## Public API
 
-- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `primary`/`secondary` are aliased as `accent`/`muted`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
+- **`Theme`** — 10 named factories (`dark()` / `light()` / `dracula()` / `tokyoNight()` / `oneDark()` / `githubDark()` / `solarizedDark()` / `solarizedLight()` / `ansi()` / `adaptive()`) and 13 colour slots (`foreground` / `background` / `primary` / `secondary` / `accent` / `muted` / `error` / `warning` / `success` / `info` / `border` / `separator` / `cursor`). `accent`/`muted` default to `primary`/`secondary` in the `dark()`/`light()`/`ansi()` themes, but are set to distinct colour values in the richer named themes (dracula, tokyoNight, oneDark, githubDark, solarizedDark/Light); consumers must NOT assume `$theme->accent === $theme->primary`. Every `with*($color)` setter returns a new `Theme`. `Theme::catalog()` enumerates the factory names as a `list<string>` for programmatic discovery. SSOT for theming across consumer libs (sugar-dash, sugar-charts in Phase 03).
 - **`Style`** — every lipgloss prop (~40 `with*()` methods): fg/bg/border
   colours (incl. per-side), bold/italic/underline/strikethrough/faint/blink/
   rapidBlink/reverse, padding/margin (1/2/4-arg shorthand + per-side), width/height,
@@ -357,8 +357,9 @@ Available factories:
 | `Theme::adaptive()` | Auto-detect via `COLORFGBG` env var |
 
 All themes expose 13 colour slots: `foreground`, `background`,
-`primary` (alias `accent`), `secondary` (alias `muted`), `error`,
-`warning`, `success`, `info`, `border`, `separator`, `cursor`.
+`primary`, `secondary`, `accent`/`muted` (default to primary/secondary in basic
+themes; distinct in richer named themes), `error`, `warning`, `success`,
+`info`, `border`, `separator`, `cursor`.
 
 ## Measurement utilities
 
