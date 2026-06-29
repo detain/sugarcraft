@@ -159,7 +159,10 @@ final readonly class Viewport
             : [];
 
         // Scrollable middle: window into the remaining content.
-        $middleStart = $headerCount + $yOffset;
+        // Clamp against the sticky-reduced scrollable range to prevent over-scroll
+        // from pulling footer lines into the middle window.
+        $maxMiddleStart = max($headerCount, $total - $footerCount - $scrollableHeight);
+        $middleStart = min($headerCount + $yOffset, $maxMiddleStart);
         $middleLines = $scrollableHeight > 0
             ? array_slice($lines, $middleStart, $scrollableHeight)
             : [];
@@ -225,15 +228,19 @@ final readonly class Viewport
         $scrollbarTrack = $this->inner->scrollbarTrack;
         $bodyWidth = max(0, $this->inner->width - 1);
 
-        $thumbHeight = $total > 0
+        // Correct thumb proportions relative to window size (not document size).
+        // The thumb is a fraction of the window that represents the viewport.
+        $thumbHeight = $total > 0 && $rendered > 0
             ? max(1, (int) round($rendered * ($rendered / $total)))
-            : $rendered;
+            : max(1, $rendered);
         $maxThumbStart = max(0, $rendered - $thumbHeight);
 
         $maxOffset = max(0, $total - $this->inner->height);
-        $thumbStart = $total > $rendered
-            ? (int) round($maxThumbStart * ($this->inner->yOffset / max(1, $maxOffset)))
+        // thumbStart maps the current yOffset onto the available thumb travel range.
+        $thumbStart = $maxOffset > 0 && $total > $rendered
+            ? (int) round($maxThumbStart * ($this->inner->yOffset / $maxOffset))
             : 0;
+        $thumbStart = max(0, min($thumbStart, $maxThumbStart));
 
         $out = [];
         foreach ($window as $i => $line) {

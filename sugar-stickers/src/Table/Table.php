@@ -4,9 +4,6 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Table;
 
-use SugarCraft\Buffer\Buffer;
-use SugarCraft\Buffer\Cell;
-use SugarCraft\Buffer\Diff\DiffEncoder;
 use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Width;
 
@@ -19,20 +16,14 @@ use SugarCraft\Core\Util\Width;
  * Port of 76creates/stickers Table.
  *
  * @see https://github.com/76creates/stickers
+ *
+ * NOTE: Diff-based emission has moved to TableRenderer. Call TableRenderer::render()
+ * for bandwidth-efficient delta output. Table::render() always returns the full frame.
  */
 final class Table
 {
     /** @var list<Column> */
     private array $columns = [];
-
-    /** @var Buffer|null Previous rendered frame for diff-based emission */
-    private ?Buffer $previousFrame = null;
-
-    /** @var int|null Previous output width for resize detection */
-    private ?int $prevWidth = null;
-
-    /** @var int|null Previous output height for resize detection */
-    private ?int $prevHeight = null;
 
     /**
      * Canonical, unfiltered, original-insertion-order rows.
@@ -70,7 +61,7 @@ final class Table
     {
         $clone = clone $this;
         $clone->columns[] = $col;
-        $clone->totalWidth = $this->computeTotalWidth();
+        $clone->totalWidth = $clone->computeTotalWidth();
         return $clone;
     }
 
@@ -177,16 +168,25 @@ final class Table
     // -------------------------------------------------------------------------
 
     /**
-     * Render the table to a string.
+     * Render the table to a full string (always full frame, never delta).
      *
-     * On the first render (or after a resize), emits the full output.
-     * On subsequent renders with the same dimensions, emits only the
-     * delta via Buffer::diff() + DiffEncoder for reduced SSH bandwidth.
+     * For bandwidth-efficient delta emission, use TableRenderer::render()
+     * which tracks diff state across frames.
      */
     public function render(): string
     {
+        return \implode("\n", $this->buildLines());
+    }
+
+    /**
+     * Build all rendered lines (header, separator, data rows).
+     *
+     * @return list<string>
+     */
+    public function buildLines(): array
+    {
         if ($this->columns === []) {
-            return '';
+            return [];
         }
 
         $lines = [];
@@ -232,38 +232,7 @@ final class Table
             $lines[] = \implode($this->separator, $rowCols);
         }
 
-        $fullOutput = \implode("\n", $lines);
-
-        // Compute output dimensions from the rendered content.
-        $height = \count($lines);
-        $width = 0;
-        foreach ($lines as $line) {
-            $w = Width::string($line);
-            if ($w > $width) {
-                $width = $w;
-            }
-        }
-
-        // Detect dimension change: reset diff state so we emit a full frame.
-        if ($this->prevWidth !== null && ($this->prevWidth !== $width || $this->prevHeight !== $height)) {
-            $this->previousFrame = null;
-        }
-        $this->prevWidth = $width;
-        $this->prevHeight = $height;
-
-        // First frame or resize: emit full output and store as previousFrame.
-        if ($this->previousFrame === null) {
-            $this->previousFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-            return $fullOutput;
-        }
-
-        // Subsequent frames with same dimensions: compute diff and emit delta.
-        $currentFrame = $this->bufferFromOutput($fullOutput, $width, $height);
-        $ops = $currentFrame->diff($this->previousFrame);
-        $this->previousFrame = $currentFrame;
-
-        $encoder = new DiffEncoder();
-        return $encoder->encode($ops);
+        return $lines;
     }
 
     // -------------------------------------------------------------------------
@@ -341,7 +310,7 @@ final class Table
         };
     }
 
-    private function computeTotalWidth(): int
+    public function computeTotalWidth(): int
     {
         $colWidths = \array_sum(\array_map(fn(Column $c) => $c->width, $this->columns));
         $sepWidth  = \strlen($this->separator) * (\count($this->columns) - 1);
@@ -352,41 +321,5 @@ final class Table
     {
         if ($style === '') return $s;
         return Ansi::CSI . $style . 'm' . $s . Ansi::reset();
-    }
-
-    /**
-     * Build a Buffer from a multi-line string output.
-     *
-     * All cells are created with null style — the diff algorithm will
-     * still work correctly for detecting changed character positions.
-     *
-     * @param string $output Multi-line string from render()
-     * @param int    $width  Buffer width in cells
-     * @param int    $height Buffer height in rows
-     */
-    private function bufferFromOutput(string $output, int $width, int $height): Buffer
-    {
-        $buffer = Buffer::new($width, $height);
-        $lines = \explode("\n", $output);
-
-        for ($row = 0; $row < $height; $row++) {
-            $line = $lines[$row] ?? '';
-            for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
-                $cell = Cell::new($char, null, null, 1);
-                $buffer = $buffer->withCellAt($col, $row, $cell);
-            }
-        }
-
-        return $buffer;
-    }
-
-    /**
-     * Reset the previous-frame buffer, forcing the next render to emit
-     * a full frame (used on window resize or cursor-position-lost events).
-     */
-    public function resetPreviousFrame(): void
-    {
-        $this->previousFrame = null;
     }
 }
