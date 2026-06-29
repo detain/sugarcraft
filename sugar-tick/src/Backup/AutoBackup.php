@@ -6,7 +6,7 @@ namespace SugarCraft\Tick\Backup;
 
 /**
  * Rotating backup manager for JSONL data files.
- * Keeps one backup per day for the last N days.
+ * Archives (copies) files whose mtime has aged past the keepDays threshold.
  */
 final class AutoBackup
 {
@@ -17,7 +17,7 @@ final class AutoBackup
     ) {}
 
     /**
-     * Rotate backups: keep one per day for the last N days.
+     * Rotate backups: archive files older than keepDays.
      *
      * @param int $keepDays number of days to keep
      * @return int number of files copied
@@ -27,8 +27,8 @@ final class AutoBackup
         $count = 0;
         $cutoff = time() - ($keepDays * 86400);
 
-        if (!is_dir($this->backupDir)) {
-            mkdir($this->backupDir, 0755, true);
+        if (!is_dir($this->backupDir) && !@mkdir($this->backupDir, 0755, true) && !is_dir($this->backupDir)) {
+            return 0;
         }
 
         foreach ($this->dirs as $dir) {
@@ -38,12 +38,16 @@ final class AutoBackup
 
             $files = glob($dir . '/*.jsonl') ?: [];
             foreach ($files as $file) {
-                $mtime = filemtime($file);
+                $mtime = @filemtime($file);
+                if ($mtime === false) {
+                    continue;
+                }
                 if ($mtime < $cutoff) {
                     $dest = $this->backupDir . '/' . basename($dir) . '_' . basename($file) . '.' . date('Y-m-d', $mtime);
                     if (!is_file($dest)) {
-                        copy($file, $dest);
-                        ++$count;
+                        if (@copy($file, $dest)) {
+                            ++$count;
+                        }
                     }
                 }
             }

@@ -87,4 +87,46 @@ final class StoreTest extends TestCase
         $this->assertSame('a', $loaded[0]->project);
         $this->assertSame('b', $loaded[1]->project);
     }
+
+    public function testDefaultDirXdgAndFallback(): void
+    {
+        $origXdg = getenv('XDG_DATA_HOME');
+        $origHome = getenv('HOME');
+
+        try {
+            // Test XDG_DATA_HOME branch
+            putenv('XDG_DATA_HOME=/custom/xdg/data');
+            $this->assertSame(
+                '/custom/xdg/data/sugar-tick',
+                Store::defaultDir(),
+            );
+
+            // Test HOME fallback branch
+            putenv('XDG_DATA_HOME');
+            putenv('HOME=/custom/home');
+            $this->assertSame(
+                '/custom/home/.local/share/sugar-tick',
+                Store::defaultDir(),
+            );
+
+            // Test fallback when neither is set (use cwd '.')
+            putenv('HOME');
+            $this->assertSame(
+                './.local/share/sugar-tick',
+                Store::defaultDir(),
+            );
+        } finally {
+            // Restore original environment
+            if ($origXdg !== false) {
+                putenv("XDG_DATA_HOME={$origXdg}");
+            } else {
+                putenv('XDG_DATA_HOME');
+            }
+            if ($origHome !== false) {
+                putenv("HOME={$origHome}");
+            } else {
+                putenv('HOME');
+            }
+        }
+    }
 }

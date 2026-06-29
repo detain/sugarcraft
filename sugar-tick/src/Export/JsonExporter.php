@@ -8,8 +8,11 @@ use SugarCraft\Tick\Heartbeat;
 
 /**
  * Exports heartbeats as a JSON array of objects.
+ *
+ * `rows()` returns positional arrays for the tabular contract.
+ * `encode()` returns a JSON array of objects keyed by headers().
  */
-final class JsonExporter implements ExporterInterface
+final class JsonExporter implements TabularExporterInterface
 {
     /** @return list<string> */
     public function headers(): array
@@ -34,6 +37,32 @@ final class JsonExporter implements ExporterInterface
             ],
             $heartbeats,
         );
+    }
+
+    /**
+     * Encode heartbeats as a JSON array of objects keyed by headers().
+     *
+     * @param array<Heartbeat> $heartbeats
+     */
+    public function encode(array $heartbeats): string
+    {
+        $objects = array_map(
+            static fn(Heartbeat $hb) => [
+                'time' => $hb->time,
+                'project' => $hb->project,
+                'language' => $hb->language,
+                'file' => $hb->file,
+                'duration' => $hb->duration,
+                'tags' => $hb->tags,
+            ],
+            $heartbeats,
+        );
+        return json_encode($objects, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+    }
+
+    public function export(string $name, array $heartbeats): string
+    {
+        return $this->encode($heartbeats);
     }
 
     public function format(): string
