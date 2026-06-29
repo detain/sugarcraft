@@ -54,7 +54,7 @@ final class Mosaic
         private readonly Capability $capability,
         private readonly ?int $forcedWidth,
         private readonly ?int $forcedHeight,
-        private ?Scale $scale,
+        private readonly ?Scale $scale,
     ) {}
 
     /**
@@ -460,9 +460,7 @@ final class Mosaic
      */
     public function withScale(Scale $scale): self
     {
-        $clone = clone $this;
-        $clone->scale = $scale;
-        return $clone;
+        return new self($this->renderer, $this->capability, $this->forcedWidth, $this->forcedHeight, $scale);
     }
 
     /**
@@ -501,16 +499,23 @@ final class MosaicBuilder
 
     public function withRenderer(Renderer $renderer): self
     {
-        $clone = clone $this;
+        $clone = new self();
         $clone->renderer = $renderer;
+        $clone->width    = $this->width;
+        $clone->height   = $this->height;
+        $clone->dither   = $this->dither;
+        $clone->scale    = $this->scale;
         return $clone;
     }
 
     public function withResize(int $width, ?int $height = null): self
     {
-        $clone = clone $this;
-        $clone->width  = $width;
-        $clone->height = $height;
+        $clone = new self();
+        $clone->renderer = $this->renderer;
+        $clone->width    = $width;
+        $clone->height   = $height;
+        $clone->dither   = $this->dither;
+        $clone->scale    = $this->scale;
         return $clone;
     }
 
@@ -520,8 +525,12 @@ final class MosaicBuilder
      */
     public function withDither(Dither $dither): self
     {
-        $clone = clone $this;
-        $clone->dither = $dither;
+        $clone = new self();
+        $clone->renderer = $this->renderer;
+        $clone->width    = $this->width;
+        $clone->height   = $this->height;
+        $clone->dither   = $dither;
+        $clone->scale    = $this->scale;
         return $clone;
     }
 
@@ -530,8 +539,12 @@ final class MosaicBuilder
      */
     public function withScale(Scale $scale): self
     {
-        $clone = clone $this;
-        $clone->scale = $scale;
+        $clone = new self();
+        $clone->renderer = $this->renderer;
+        $clone->width    = $this->width;
+        $clone->height   = $this->height;
+        $clone->dither   = $this->dither;
+        $clone->scale    = $scale;
         return $clone;
     }
 
