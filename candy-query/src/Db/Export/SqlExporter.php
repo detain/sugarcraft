@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Db\Export;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\Identifier;
 
 /**
  * SQL export service using a DatabaseInterface instance.
@@ -60,11 +62,12 @@ final class SqlExporter
                         array_values($row)
                     );
                     $columnsList = implode(', ', array_map(
-                        fn(string $col): string => "`{$col}`",
+                        fn(string $col): string => Identifier::quote(Flavor::MySQL, $col),
                         $columns
                     ));
                     $valuesList = implode(', ', $values);
-                    fwrite($handle, "INSERT INTO `{$table}` ({$columnsList}) VALUES ({$valuesList});\n");
+                    $safeTable = Identifier::quote(Flavor::MySQL, $table);
+                    fwrite($handle, "INSERT INTO {$safeTable} ({$columnsList}) VALUES ({$valuesList});\n");
                 }
                 fwrite($handle, "\n");
             }
@@ -103,7 +106,8 @@ final class SqlExporter
     private function getColumnNames(string $table): array
     {
         // LIMIT 1 returns first row with column keys we can extract
-        $result = $this->db->query("SELECT * FROM `{$table}` LIMIT 1");
+        $safeTable = Identifier::quote(Flavor::MySQL, $table);
+        $result = $this->db->query("SELECT * FROM {$safeTable} LIMIT 1");
         if ($result !== null && count($result) > 0) {
             return array_keys($result[0]);
         }

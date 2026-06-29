@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Query\Db\Export;
 
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Flavor;
+use SugarCraft\Query\Db\Identifier;
 
 /**
  * CSV import/export service using a DatabaseInterface instance.
@@ -54,9 +56,9 @@ final class CsvExporter
                 throw new \RuntimeException("CSV file has no columns: " . htmlspecialchars($path, ENT_QUOTES, 'UTF-8'));
             }
 
-            // Build column list with backtick quoting (SQLite standard)
+            // Build column list with identifier quoting (MySQL backtick standard)
             $columnList = implode(',', array_map(
-                fn(string $col): string => '`' . str_replace('`', '``', $col) . '`',
+                fn(string $col): string => Identifier::quote(Flavor::MySQL, $col),
                 $headers
             ));
 
@@ -74,7 +76,7 @@ final class CsvExporter
                     $row
                 ));
 
-                $this->db->exec("INSERT INTO `{$table}` ({$columnList}) VALUES ({$valuesList})");
+                $this->db->exec("INSERT INTO " . Identifier::quote(Flavor::MySQL, $table) . " ({$columnList}) VALUES ({$valuesList})");
             }
         } finally {
             fclose($handle);
@@ -201,7 +203,8 @@ final class CsvExporter
     {
         // LIMIT 0 query to get column names without fetching rows
         try {
-            $result = $this->db->query("SELECT * FROM `{$table}` LIMIT 0");
+            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $result = $this->db->query("SELECT * FROM {$safeTable} LIMIT 0");
             if ($result !== null && count($result) > 0) {
                 return array_keys($result[0]);
             }
@@ -211,7 +214,8 @@ final class CsvExporter
 
         // LIMIT 0 returned empty - try LIMIT 1 to get sample row
         try {
-            $sampleResult = $this->db->query("SELECT * FROM `{$table}` LIMIT 1");
+            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $sampleResult = $this->db->query("SELECT * FROM {$safeTable} LIMIT 1");
             if ($sampleResult !== null && count($sampleResult) > 0) {
                 return array_keys($sampleResult[0]);
             }
@@ -221,7 +225,8 @@ final class CsvExporter
 
         // Both returned empty - verify table exists
         try {
-            $this->db->query("SELECT 1 FROM `{$table}` LIMIT 1");
+            $safeTable = Identifier::quote(Flavor::MySQL, $table);
+            $this->db->query("SELECT 1 FROM {$safeTable} LIMIT 1");
         } catch (\PDOException $e) {
             throw new \RuntimeException("Table not found: " . htmlspecialchars($table, ENT_QUOTES, 'UTF-8'));
         }
