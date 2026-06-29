@@ -51,6 +51,34 @@ final class ToastTest extends TestCase
         }
     }
 
+    /**
+     * Regression test: every NerdFont icon must be exactly one valid codepoint.
+     * The pre-fix Error glyph was mojibake (U+FFFD + 佬 = 2 codepoints).
+     *
+     * @see https://github.com/charmbracelet/bubbleup
+     */
+    public function testNerdIconsAreSingleValidCodepoints(): void
+    {
+        foreach (ToastType::cases() as $type) {
+            $icon = $type->nerdIcon();
+
+            $this->assertNotEmpty($icon, "{$type->name} nerdIcon() must not be empty");
+            $this->assertSame(
+                1,
+                mb_strlen($icon, 'UTF-8'),
+                "{$type->name} nerdIcon() must be exactly 1 codepoint, got " . mb_strlen($icon, 'UTF-8')
+            );
+            $this->assertFalse(
+                str_contains($icon, "\xef\xbf\xbd"),
+                "{$type->name} nerdIcon() must not contain U+FFFD (replacement character)"
+            );
+            $this->assertTrue(
+                mb_check_encoding($icon, 'UTF-8'),
+                "{$type->name} nerdIcon() must be valid UTF-8"
+            );
+        }
+    }
+
     public function testAddAlertReturnsNewInstance(): void
     {
         $a = Toast::new(50);
