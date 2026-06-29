@@ -46,4 +46,40 @@ final class SpinnerTest extends TestCase
         $b = $a->withTitle('x');
         $this->assertNotSame($a, $b);
     }
+
+    public function testForkChildRunsActionViaSideChannel(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl required');
+        }
+        // On pcntl hosts the action runs in a forked child — in-memory
+        // mutations are not visible to the parent. Demonstrate the
+        // documented out-of-band communication pattern (tempfile).
+        $tmp = tempnam(sys_get_temp_dir(), 'spinner_test_');
+        $s = Spinner::new()
+            ->withTitle('working')
+            ->withStyle(SpinnerStyle::line())
+            ->withAction(static function () use ($tmp) {
+                file_put_contents($tmp, 'ran');
+            });
+        $s->run();
+        $this->assertFileExists($tmp);
+        $this->assertSame('ran', file_get_contents($tmp));
+        unlink($tmp);
+    }
+
+    public function testRunReraisesActionFailure(): void
+    {
+        if (!function_exists('pcntl_fork')) {
+            $this->markTestSkipped('pcntl required');
+        }
+        $s = Spinner::new()
+            ->withTitle('failing')
+            ->withStyle(SpinnerStyle::line())
+            ->withAction(static function () {
+                throw new \RuntimeException('boom');
+            });
+        $this->expectException(\RuntimeException::class);
+        $s->run();
+    }
 }
