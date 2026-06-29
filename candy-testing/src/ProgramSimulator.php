@@ -109,6 +109,10 @@ final class ProgramSimulator
      * The program loop is not used — we call the Model's methods directly
      * so tests remain deterministic and side-effect-free.
      *
+     * Subscriptions are pumped after each update cycle: each subscription's
+     * produce closure is invoked and any returned messages are enqueued for
+     * processing. This keeps tests deterministic (no real timers are started).
+     *
      * @return TestResult
      */
     public function run(): TestResult
@@ -126,9 +130,17 @@ final class ProgramSimulator
             [$model, ] = $this->applyMsg($model, $initMsg);
         }
 
+        // Pump subscriptions after init to collect any startup messages.
+        $model = $this->pumpSubscriptions($model);
+
         // Process queued messages in order.
-        foreach ($this->queue as $msg) {
+        // Use while + array_shift so subscription-pumped messages (appended
+        // mid-loop) are also processed in the same run cycle.
+        while (count($this->queue) > 0) {
+            $msg = array_shift($this->queue);
             [$model, ] = $this->applyMsg($model, $msg);
+            // Pump subscriptions after each message to capture produce output.
+            $model = $this->pumpSubscriptions($model);
         }
 
         // Final view call.
@@ -144,6 +156,33 @@ final class ProgramSimulator
             cmds: $this->capturedCmds,
             output: implode('', $this->outputBytes),
         );
+    }
+
+    /**
+     * Pump subscriptions and enqueue any produced messages.
+     *
+     * Calls $model->subscriptions(), iterates over the returned subscription
+     * set, and enqueues any messages produced by the subscription closures.
+     * This mirrors how Program reconciles subscriptions after each update cycle.
+     *
+     * @param Model $model
+     * @return Model The same model (subscriptions are processed for side-effects only)
+     */
+    private function pumpSubscriptions(Model $model): Model
+    {
+        $subs = $model->subscriptions();
+        if ($subs === null) {
+            return $model;
+        }
+
+        foreach ($subs->all() as $subscription) {
+            $msg = $subscription->produce();
+            if ($msg !== null) {
+                $this->queue[] = $msg;
+            }
+        }
+
+        return $model;
     }
 
     /**
@@ -163,7 +202,7 @@ final class ProgramSimulator
         while (true) {
             if ($cycleCount++ > $maxCycles) {
                 throw new \RuntimeException(
-                    'simulator.cmd_loop_overflow'
+                    Lang::t('simulator.cmd_loop_overflow', ['max' => $maxCycles])
                 );
             }
 
@@ -192,15 +231,24 @@ final class ProgramSimulator
 
     /**
      * Extract the model from a Program instance via its property.
+     *
      * PHP doesn't give us direct access, so we use a known property path.
+     * This method is robust against ReflectionException by checking for
+     * the property's existence before attempting to access it.
      *
      * @return Model
+     * @throws \RuntimeException If the program lacks a 'model' property
      */
     private function getModelFromProgram(): Model
     {
-        // Program stores the model as a private property.
-        // Use reflection to access it.
         $reflection = new \ReflectionClass($this->program);
+
+        if (!$reflection->hasProperty('model')) {
+            throw new \RuntimeException(
+                Lang::t('simulator.no_model_property')
+            );
+        }
+
         $modelProp = $reflection->getProperty('model');
         $modelProp->setAccessible(true);
         /** @var Model */

@@ -19,7 +19,7 @@ final readonly class TestResult
      * @param object          $model  Final model after all messages processed
      * @param string         $view   Last view() output string
      * @param list<\Closure> $cmds   All commands emitted during the run
-     * @param string         $output Raw accumulated ANSI output bytes
+     * @param string         $output Concatenated view() output across steps
      */
     public function __construct(
         public object $model,
