@@ -647,10 +647,26 @@ final class Theme
             return Color::hex($spec);
         }
         if (str_starts_with($spec, 'ansi256:')) {
-            return Color::ansi256((int) substr($spec, 8));
+            $num = substr($spec, 8);
+            if (!preg_match('/^\d+$/', $num)) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            $val = (int) $num;
+            if ($val < 0 || $val > 255) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            return Color::ansi256($val);
         }
         if (str_starts_with($spec, 'ansi:')) {
-            return Color::ansi((int) substr($spec, 5));
+            $num = substr($spec, 5);
+            if (!preg_match('/^\d+$/', $num)) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            $val = (int) $num;
+            if ($val < 0 || $val > 15) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            return Color::ansi($val);
         }
         return null;
     }
