@@ -26,7 +26,7 @@
 | sugar-spark | 2 | 11 | 2 | 5 | 4 | MERGED | #1162 | fe2ca2bf | 163 tests |
 | sugar-toast | 2 | 9 | 2 | 4 | 3 | MERGED | #1163 | 959efbb3 | 143 tests |
 | candy-forms | 3 | 12 | 3 | 6 | 3 | MERGED | | 3019d774 | full — async Cmd fix, revalidate hook, Form submit gate, validateAll, RenderSafe, i18n, sentinels |
-| candy-palette | 3 | 13 | 3 | 6 | 4 | PENDING | | | |
+| candy-palette | 3 | 13 | 3 | 6 | 4 | MERGED | | bcd970ec | full — detection consolidation, ProfileWriter fix, tests fixed |
 | candy-shine | 3 | 13 | 2 | 4 | 7 | PENDING | | | |
 | candy-kit | 3 | 9 | 0 | 4 | 5 | MERGED | | 724f49ec | full — Frame multi-cell, Stage clamping, intdiv fix |
 | candy-mold | 3 | 7 | 0 | 1 | 6 | PENDING | | | |
