@@ -235,8 +235,201 @@ final class FocusRingTest extends TestCase
         $ring->focus('c');
         $ring->register('d');
         $ring->unregister('a');
+        $ring->disable('b');
+        $ring->enable('a');
 
         self::assertSame(['a', 'b', 'c'], $ring->ids(), 'original ring is unchanged');
         self::assertSame('a', $ring->current());
+    }
+
+    // ─── Step 2: ofStrict() ─────────────────────────────────────────────────
+
+    public function testOfStrictBuildsRingFromUniqueIds(): void
+    {
+        $ring = FocusRing::ofStrict('a', 'b', 'c');
+
+        self::assertSame(['a', 'b', 'c'], $ring->ids());
+        self::assertSame('a', $ring->current());
+        self::assertSame(0, $ring->index());
+    }
+
+    public function testOfStrictThrowsOnDuplicate(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Duplicate region id "a" passed to FocusRing::ofStrict()');
+
+        FocusRing::ofStrict('a', 'b', 'a');
+    }
+
+    public function testOfStrictWithNoArgumentsIsEmpty(): void
+    {
+        $ring = FocusRing::ofStrict();
+
+        self::assertTrue($ring->isEmpty());
+        self::assertNull($ring->current());
+    }
+
+    // ─── Step 3: reorder() ─────────────────────────────────────────────────
+
+    public function testReorderPreservesFocusedRegionById(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('c');
+        $ring = $ring->reorder('c', 'a', 'b');
+
+        self::assertSame('c', $ring->current());
+        self::assertSame(0, $ring->index());
+    }
+
+    public function testReorderToSetWithoutFocusedRegionFocusesFirst(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b');
+        $ring = $ring->reorder('x', 'y');
+
+        self::assertSame('x', $ring->current());
+        self::assertSame(0, $ring->index());
+    }
+
+    public function testReorderToEmptyEmptiesTheRing(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->reorder();
+
+        self::assertTrue($ring->isEmpty());
+        self::assertNull($ring->current());
+        self::assertSame(-1, $ring->index());
+    }
+
+    public function testReorderDropsDuplicates(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->reorder('x', 'a', 'x', 'y');
+
+        self::assertSame(['x', 'a', 'y'], $ring->ids());
+    }
+
+    public function testReorderToIdenticalSetIsANoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b');
+        $same = $ring->reorder('a', 'b', 'c');
+
+        self::assertSame($ring, $same);
+    }
+
+    // ─── Step 4: disable / enable / skip-aware traversal ───────────────────
+
+    public function testDisableSkippedByNext(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b'); // focus 'a'
+
+        $ring = $ring->next(); // should skip 'b', land on 'c'
+        self::assertSame('c', $ring->current());
+    }
+
+    public function testDisableSkippedByPrevious(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('c')->disable('b');
+
+        $ring = $ring->previous(); // should skip 'b', land on 'a'
+        self::assertSame('a', $ring->current());
+    }
+
+    public function testEnableReinstatesRegionInTraversal(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->enable('b');
+
+        $ring = $ring->next(); // back to normal traversal
+        self::assertSame('b', $ring->current());
+    }
+
+    public function testNextIsNoOpWhenAllOtherRegionsDisabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('a')->disable('b')->disable('c');
+
+        self::assertSame($ring, $ring->next(), 'no other enabled regions to move to');
+    }
+
+    public function testNextIsNoOpWhenEveryRegionDisabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('a')->disable('b')->disable('c');
+
+        self::assertSame($ring, $ring->next(), 'all regions disabled — noOp');
+        self::assertSame('a', $ring->current(), 'focus stays where it is even when focused region is disabled');
+    }
+
+    public function testDisableUnknownRegionIsANoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b');
+
+        self::assertSame($ring, $ring->disable('unknown'));
+    }
+
+    public function testEnableAlreadyEnabledIsANoOp(): void
+    {
+        $ring = FocusRing::of('a', 'b');
+
+        self::assertSame($ring, $ring->enable('a'));
+    }
+
+    public function testUnregisterClearsDisabledFlag(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->unregister('b');
+
+        // 'b' is no longer in the ring, so isEnabled returns false even though
+        // the disabled flag was cleared (the flag only matters for ids in the ring)
+        self::assertFalse($ring->isEnabled('b'), ' unregistered id is not in ring so not enabled');
+        self::assertFalse($ring->has('b'), 'id is gone from ring');
+    }
+
+    public function testReRegisterAfterDisableReEnables(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b')->unregister('b');
+
+        $ring = $ring->register('b');
+
+        self::assertTrue($ring->isEnabled('b'), 're-registered id should be enabled');
+    }
+
+    public function testDisabledFocusedRegionStillReportedByCurrent(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b');
+
+        self::assertSame('b', $ring->current(), 'current() still names the focused id regardless of enabled state');
+        self::assertFalse($ring->isEnabled('b'));
+    }
+
+    public function testDisableThenNextMovesOffDisabledFocus(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->focus('b')->disable('b');
+
+        self::assertSame('b', $ring->current(), 'focus stays on disabled id until traversal');
+        $ring = $ring->next();
+        self::assertSame('c', $ring->current(), 'next() moves off the disabled focused region');
+    }
+
+    public function testIsEnabledReturnsTrueForRegisteredEnabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c');
+
+        self::assertTrue($ring->isEnabled('a'));
+        self::assertTrue($ring->isEnabled('b'));
+    }
+
+    public function testIsEnabledReturnsFalseForDisabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        self::assertFalse($ring->isEnabled('b'));
+    }
+
+    public function testIsEnabledReturnsFalseForUnregistered(): void
+    {
+        $ring = FocusRing::of('a', 'b');
+
+        self::assertFalse($ring->isEnabled('unknown'));
+    }
+
+    public function testEnabledIdsReturnsOnlyEnabled(): void
+    {
+        $ring = FocusRing::of('a', 'b', 'c')->disable('b');
+
+        self::assertSame(['a', 'c'], $ring->enabledIds());
     }
 }
