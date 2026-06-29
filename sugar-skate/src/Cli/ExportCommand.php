@@ -27,45 +27,57 @@ final class ExportCommand
     public function run(string $format, ?string $dbName = null, ?string $pattern = null): int
     {
         try {
-            $entries = [];
-            foreach ($this->store->list($pattern, $dbName) as $entry) {
-                if ($entry instanceof \SugarCraft\Skate\Entry) {
-                    $ttl = null;
-                    if ($entry->expiresAt !== null) {
-                        $diff = $entry->expiresAt->getTimestamp() - (new \DateTimeImmutable())->getTimestamp();
-                        if ($diff > 0) {
-                            $ttl = $diff;
-                        }
-                    }
-                    $key = $entry->key;
-                    if ($dbName !== null) {
-                        $key = "{$entry->key}@{$dbName}";
-                    }
-                    $entries[$key] = $entry->rawValue();
-                    if ($ttl !== null) {
-                        $entries['_ttl'] = $entries['_ttl'] ?? [];
-                        $entries['_ttl'][$key] = $ttl;
-                    }
-                }
-            }
-
-            $output = match ($format) {
-                'json' => $this->exportJson($entries),
-                'yaml', 'yml' => $this->exportYaml($entries),
-                default => null,
-            };
-
-            if ($output === null) {
-                \fwrite(STDERR, "Unknown export format: {$format}. Use 'json' or 'yaml'.\n");
-                return 1;
-            }
-
+            $output = $this->exportToString($format, $dbName, $pattern);
             \fwrite(STDOUT, $output);
             return 0;
         } catch (\Throwable $e) {
             \fwrite(STDERR, "Export failed: {$e->getMessage()}\n");
             return 1;
         }
+    }
+
+    /**
+     * Export entries to a string (does not write to STDOUT).
+     *
+     * @param string $format 'json' or 'yaml'
+     * @param string|null $dbName Database to export (null = default).
+     * @param string|null $pattern Optional glob pattern to filter keys.
+     * @return string The formatted export output.
+     * @throws \RuntimeException If the format is unknown.
+     */
+    public function exportToString(string $format, ?string $dbName = null, ?string $pattern = null): string
+    {
+        $entries = [];
+        foreach ($this->store->list($pattern, $dbName) as $entry) {
+            if ($entry instanceof \SugarCraft\Skate\Entry) {
+                $ttl = null;
+                if ($entry->expiresAt !== null) {
+                    $diff = $entry->expiresAt->getTimestamp() - (new \DateTimeImmutable())->getTimestamp();
+                    if ($diff > 0) {
+                        $ttl = $diff;
+                    }
+                }
+                $key = $entry->key;
+                if ($dbName !== null) {
+                    $key = "{$entry->key}@{$dbName}";
+                } else {
+                    $key = $entry->key;
+                }
+                $entries[$key] = $entry->rawValue();
+                if ($ttl !== null) {
+                    $entries['_ttl'] = $entries['_ttl'] ?? [];
+                    $entries['_ttl'][$key] = $ttl;
+                }
+            }
+        }
+
+        $output = match ($format) {
+            'json' => $this->exportJson($entries),
+            'yaml', 'yml' => $this->exportYaml($entries),
+            default => throw new \RuntimeException("Unknown export format: {$format}. Use 'json' or 'yaml'."),
+        };
+
+        return $output;
     }
 
     /**
@@ -127,7 +139,16 @@ final class ExportCommand
             \str_starts_with($value, '{') ||
             \str_starts_with($value, '&') ||
             \str_starts_with($value, '*') ||
-            \str_starts_with($value, '!')
+            \str_starts_with($value, '!') ||
+            \str_starts_with($value, ' ') ||
+            \str_ends_with($value, ' ') ||
+            \str_starts_with($value, '}') ||
+            \str_starts_with($value, ']') ||
+            \str_starts_with($value, ',') ||
+            \str_starts_with($value, '`') ||
+            \str_starts_with($value, '%') ||
+            \str_starts_with($value, '?') ||
+            \preg_match('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/', $value)
         ) {
             return '"' . \addcslashes($value, "\\\"\n") . '"';
         }
