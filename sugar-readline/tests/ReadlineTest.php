@@ -1000,4 +1000,320 @@ final class ReadlineTest extends TestCase
         $ctrlUEvent = new KeyEvent('u', KeyModifier::CTRL(), "\x15");
         $this->assertSame('ctrl_u', $method->invoke($readline, $ctrlUEvent));
     }
+
+    // =========================================================================
+    // Step 11 — Readline run-loop integration tests
+    // =========================================================================
+
+    /**
+     * Integration test: typed characters are inserted via handleChar in the run loop.
+     * Regression test for Step 1 (printable KeyEvents → handleChar).
+     */
+    public function testRunInsertsTypedCharacters(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $writeEnd = $pair[1];
+        $readEnd = $pair[0];
+
+        fwrite($writeEnd, "Alice\r");
+        fclose($writeEnd);
+
+        $driver = new StreamInputDriver($readEnd);
+        $readline = new Readline($driver);
+        $prompt = TextPrompt::new('> ');
+        $finalPrompt = $readline->run($prompt);
+
+        $this->assertSame('Alice', $finalPrompt->value());
+        $this->assertTrue($finalPrompt->isSubmitted());
+
+        fclose($readEnd);
+    }
+
+    /**
+     * Integration test: printable letter routes to Confirmation prompt's handleKey (y/n).
+     * Regression test for Step 1 (Confirmation routes letters through handleKey, not handleChar).
+     */
+    public function testRunConfirmationLetterStillSelects(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $writeEnd = $pair[1];
+        $readEnd = $pair[0];
+
+        fwrite($writeEnd, "n\r");
+        fclose($writeEnd);
+
+        $driver = new StreamInputDriver($readEnd);
+        $readline = new Readline($driver);
+        $prompt = ConfirmationPrompt::new('Continue?');
+        $finalPrompt = $readline->run($prompt);
+
+        $this->assertFalse($finalPrompt->result());
+        $this->assertTrue($finalPrompt->isSubmitted());
+
+        fclose($readEnd);
+    }
+
+    /**
+     * Integration test: run loop writes repaint sequences to injected output stream.
+     * Regression test for Step 3 (repaint via view() each loop iteration).
+     */
+    public function testRunWritesViewToInjectedOutput(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $writeEnd = $pair[1];
+        $readEnd = $pair[0];
+
+        fwrite($writeEnd, "hi\r");
+        fclose($writeEnd);
+
+        $output = fopen('php://memory', 'w');
+
+        $driver = new StreamInputDriver($readEnd);
+        $readline = new Readline($driver);
+        $prompt = TextPrompt::new('> ');
+        $finalPrompt = $readline->run($prompt, $output);
+
+        $this->assertSame('hi', $finalPrompt->value());
+
+        fclose($writeEnd);
+        fclose($readEnd);
+
+       rewind($output);
+        $captured = stream_get_contents($output);
+        fclose($output);
+
+        // Redraw sequence: \r\x1b[K followed by view() output + \n
+        $this->assertStringContainsString("\x1b[K", $captured);
+        // At least one character from the rendered buffer should appear
+        $this->assertStringContainsString('hi', $captured);
+    }
+
+    // =========================================================================
+    // Step 14 — Bracketed paste integration
+    // =========================================================================
+
+    /**
+     * Integration test: bracketed paste text is fed into handleChar per character.
+     * Regression test for Step 14 (onPaste content reaches the prompt).
+     */
+    public function testRunInsertsPastedText(): void
+    {
+        $pair = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+        $writeEnd = $pair[1];
+        $readEnd = $pair[0];
+
+        // Bracketed paste: ESC [ 2 0 0 ~ ... paste text ... ESC [ 2 0 1 ~
+        fwrite($writeEnd, "\x1b[200~hello\x1b[201~\r");
+        fclose($writeEnd);
+
+        $driver = new StreamInputDriver($readEnd);
+        $readline = new Readline($driver);
+        $prompt = TextPrompt::new('> ');
+        $finalPrompt = $readline->run($prompt);
+
+        $this->assertSame('hello', $finalPrompt->value());
+        $this->assertTrue($finalPrompt->isSubmitted());
+
+        fclose($readEnd);
+    }
+
+    // =========================================================================
+    // Step 15 — TextPrompt Ctrl+W default binding
+    // =========================================================================
+
+    /**
+     * Test that Ctrl+W in default (non-mode) TextPrompt deletes word before cursor.
+     */
+    public function testCtrlWDeletesWordBeforeCursor(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('f')->handleChar('o')->handleChar('o')
+            ->handleChar(' ')->handleChar('b')->handleChar('a')->handleChar('r');
+
+        // Ctrl+W should delete 'bar'
+        $result = $prompt->handleKey(Key::CtrlW);
+        $this->assertSame('foo ', $result->value());
+        $this->assertSame(4, $result->cursor());
+
+        // Second Ctrl+W should delete 'foo '
+        $result2 = $result->handleKey(Key::CtrlW);
+        $this->assertSame('', $result2->value());
+    }
+
+    /**
+     * Test that Ctrl+W deletes the word before the cursor even when cursor is at end of buffer.
+     * When buffer='foo' and cursor=3, CtrlW deletes 'foo' leaving empty buffer.
+     */
+    public function testCtrlWDeletesWordAtEndOfBuffer(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('f')->handleChar('o')->handleChar('o');
+        $result = $prompt->handleKey(Key::CtrlW);
+        // 'foo' is a word before cursor, so it gets deleted
+        $this->assertSame('', $result->value());
+        $this->assertSame(0, $result->cursor());
+    }
+
+    /**
+     * Test that Ctrl+W at cursor position 0 (buffer start) is a no-op.
+     */
+    public function testCtrlWAtCursorZeroIsNoOp(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('f')->handleChar('o')->handleChar('o');
+        // Move cursor to start
+        $prompt = $prompt->handleKey(Key::Home);
+        $this->assertSame(0, $prompt->cursor());
+        $result = $prompt->handleKey(Key::CtrlW);
+        // Nothing before cursor, so no-op
+        $this->assertSame('foo', $result->value());
+        $this->assertSame(0, $result->cursor());
+    }
+
+    // =========================================================================
+    // Step 13 — Textarea edge cases
+    // =========================================================================
+
+    /**
+     * Test that deleteUnderCursor at end of line merges the following line.
+     */
+    public function testTextareaDeleteUnderCursorMergesFollowingLine(): void
+    {
+        $prompt = TextareaPrompt::new('> ')
+            ->handleChar('a')->handleChar('l')->handleChar('i')->handleChar('c')->handleChar('e')
+            ->handleKey(Key::Enter)
+            ->handleChar('b')->handleChar('o')->handleChar('b');
+
+        // Move cursor to end of first line (after 'alice')
+        $prompt = $prompt->handleKey(Key::Home);
+        for ($i = 0; $i < 5; $i++) {
+            $prompt = $prompt->handleKey(Key::Right);
+        }
+
+        // Now at end of 'alice', pressing Delete should merge 'bob' onto same line
+        $result = $prompt->handleKey(Key::Delete);
+        $this->assertSame(["alicebob"], $result->lines());
+    }
+
+    /**
+     * Test that withDefault clamps to maxLines when default has too many lines.
+     */
+    public function testTextareaWithDefaultClampsToMaxLines(): void
+    {
+        $prompt = TextareaPrompt::new('> ')
+            ->withMaxLines(2)
+            ->withDefault("a\nb\nc");
+        $this->assertCount(2, $prompt->lines());
+    }
+
+    // =========================================================================
+    // Step 13 — Confirmation prompt edge cases
+    // =========================================================================
+
+    /**
+     * Test that withConfirmLabel/withCancelLabel/withHint are reflected in view().
+     */
+    public function testConfirmationViewRendersCustomLabels(): void
+    {
+        $prompt = ConfirmationPrompt::new('Proceed?')
+            ->withConfirmLabel('OK')
+            ->withCancelLabel('Cancel')
+            ->withHint('[tip]');
+        $view = $prompt->view();
+        $this->assertStringContainsString('OK', $view);
+        $this->assertStringContainsString('Cancel', $view);
+        $this->assertStringContainsString('[tip]', $view);
+    }
+
+    /**
+     * Test that result() is false before submit and decoupled from currentValue().
+     */
+    public function testConfirmationResultDecouplesFromCurrentValue(): void
+    {
+        $prompt = ConfirmationPrompt::new('Continue?');
+        $this->assertFalse($prompt->result()); // result() returns bool, false when not submitted
+        $this->assertFalse($prompt->currentValue());
+
+        $selected = $prompt->handleKey('y');
+        $this->assertTrue($selected->currentValue());
+        $this->assertFalse($selected->result()); // Not submitted yet
+
+        $submitted = $selected->handleKey(Key::Enter);
+        $this->assertTrue($submitted->result());
+    }
+
+    // =========================================================================
+    // Step 13 — MultiSelect hard cap
+    // =========================================================================
+
+    /**
+     * Test that withMaxSelections creates a hard cap and FIFO eviction kicks in.
+     */
+    public function testMultiSelectMaxSelectionsHardCap(): void
+    {
+        $choices = ['apple', 'banana', 'cherry', 'date'];
+        $prompt = MultiSelectPrompt::new('Pick fruits', $choices)
+            ->withMaxSelections(2);
+
+        // Select first two
+        $p = $prompt->handleKey(Key::Space); // apple
+        $p = $p->handleKey(Key::Down);
+        $p = $p->handleKey(Key::Space); // banana
+        $this->assertCount(2, $p->marked());
+
+        // Select a third — should evict the oldest (apple FIFO)
+        $p = $p->handleKey(Key::Down);
+        $p = $p->handleKey(Key::Space); // cherry
+        $this->assertCount(2, $p->marked());
+        $this->assertArrayNotHasKey(0, $p->marked()); // apple was evicted
+        $this->assertArrayHasKey(1, $p->marked()); // banana
+        $this->assertArrayHasKey(2, $p->marked()); // cherry
+    }
+
+    // =========================================================================
+    // Step 13 — Selection prompt Home/End and page slice
+    // =========================================================================
+
+    /**
+     * Test that Home jumps to first item and End jumps to last item.
+     */
+    public function testSelectionHomeEndJumps(): void
+    {
+        $choices = ['apple', 'banana', 'cherry'];
+        $prompt = SelectionPrompt::new('Pick fruit', $choices);
+
+        // Initially at index 0
+        $this->assertSame(0, $prompt->cursor());
+
+        // End → last item
+        $afterEnd = $prompt->handleKey(Key::End);
+        $this->assertSame(2, $afterEnd->cursor());
+
+        // Home → first item
+        $afterHome = $afterEnd->handleKey(Key::Home);
+        $this->assertSame(0, $afterHome->cursor());
+    }
+
+    /**
+     * Test that currentPageItems() returns the correct slice for the current page.
+     */
+    public function testSelectionCurrentPageItemsSlice(): void
+    {
+        $choices = ['a', 'b', 'c', 'd', 'e'];
+        $prompt = SelectionPrompt::new('Test', $choices)->withPageSize(3);
+
+        // Move to item at index 3 (page 1 at size 3)
+        $p = $prompt->handleKey(Key::Down);
+        $p = $p->handleKey(Key::Down);
+        $p = $p->handleKey(Key::Down);
+
+        $this->assertSame(3, $p->cursor());
+        $this->assertSame(1, $p->currentPage());
+
+        // Use reflection to check currentPageItems
+        $refl = new \ReflectionClass($prompt);
+        $method = $refl->getMethod('currentPageItems');
+        $method->setAccessible(true);
+        $items = $method->invoke($p);
+
+        // Page 1 with size 3 contains items at indices 3,4
+        $this->assertSame(['d', 'e'], $items);
+    }
 }

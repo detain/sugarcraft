@@ -120,4 +120,32 @@ final class EmacsModeTest extends TestCase
         // Original prompt has no mode, cloned has emacs mode
         $this->assertNotSame($a, $b);
     }
+
+    // =========================================================================
+    // Step 5 + Step 12 — Emacs word/delete ops (handleKeyDirect fix)
+    // =========================================================================
+
+    /**
+     * Test that Ctrl+W (delete word before) works correctly in emacs mode.
+     * This verifies that the handleKeyDirect fix in Step 5 correctly deletes
+     * a word before the cursor without re-entering EmacsMode::handleKey.
+     */
+    public function testCtrlWInEmacsModeDeletesWordBefore(): void
+    {
+        $prompt = TextPrompt::new('> ')
+            ->handleChar('h')->handleChar('e')->handleChar('l')->handleChar('l')->handleChar('o')
+            ->handleChar(' ')
+            ->handleChar('w')->handleChar('o')->handleChar('r')->handleChar('l')->handleChar('d');
+        $emacs = new EmacsMode();
+        $prompt = $prompt->withMode($emacs);
+
+        // Move to end
+        $prompt = $prompt->handleKey("\x05"); // Ctrl+E
+        $this->assertSame(11, $prompt->cursor());
+
+        // Ctrl+W → delete word before ('world')
+        $result = $prompt->handleKey("\x17"); // Ctrl+W = 0x17
+        $this->assertSame('hello ', $result->value());
+        $this->assertSame(6, $result->cursor());
+    }
 }

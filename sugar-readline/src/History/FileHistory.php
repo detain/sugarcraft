@@ -64,6 +64,9 @@ final class FileHistory extends InMemoryHistory
      * The file is oldest-first (append-only), so we read all lines and then
      * process them in reverse order so the newest entry ends up at index 0
      * (newest-first) in the in-memory array.
+     *
+     * Applies the same dedup rule as push(): skips entries already present
+     * in memory to ensure non-adjacent duplicates are collapsed consistently.
      */
     private function load(): void
     {
@@ -88,7 +91,11 @@ final class FileHistory extends InMemoryHistory
 
         // File is oldest→newest; parent::push() prepends (newest-first), so
         // iterating in normal (oldest→newest) order ends up with newest at [0].
+        // Apply same dedup guard as push() to skip entries already in memory.
         foreach ($lines as $entry) {
+            if ($this->inMemoryContains($entry)) {
+                continue;
+            }
             parent::push($entry);
         }
     }
@@ -119,14 +126,6 @@ final class FileHistory extends InMemoryHistory
         fclose($fp);
 
         return $last;
-    }
-
-    /**
-     * Return the most recent in-memory entry (newest), or null if empty.
-     */
-    private function getInMemoryLast(): ?string
-    {
-        return $this->getLastEntry();
     }
 
     /**

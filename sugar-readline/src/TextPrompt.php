@@ -92,8 +92,15 @@ final class TextPrompt
     public function withDefault(string $value): self
     {
         $clone = clone $this;
-        $clone->buffer = $value;
-        $clone->cursor = self::charCount($value);
+        // Clamp to charLimit if set (ordering caveat: withCharLimit() should precede
+        // withDefault() for the clamp to engage, matching upstream promptkit behavior).
+        if ($clone->charLimit > 0) {
+            $clone->buffer = self::sliceChars($value, 0, $clone->charLimit);
+            $clone->cursor = self::charCount($clone->buffer);
+        } else {
+            $clone->buffer = $value;
+            $clone->cursor = self::charCount($value);
+        }
         return $clone;
     }
 
@@ -245,6 +252,7 @@ final class TextPrompt
             Key::Undo      => $this->undo(),
             Key::Redo      => $this->redo(),
             Key::Escape, Key::CtrlC => $this->abort(),
+            Key::CtrlW     => $this->deleteWordBefore(),
             default        => $this,
         };
     }
@@ -419,7 +427,7 @@ final class TextPrompt
     {
         $display = $this->hidden
             ? str_repeat($this->hideMask, self::charCount($this->buffer))
-            : $this->buffer;
+            : Ansi::sanitize($this->buffer);
 
         $before = self::sliceChars($display, 0, $this->cursor);
         $under  = self::sliceChars($display, $this->cursor, 1);
@@ -442,10 +450,10 @@ final class TextPrompt
         // Compute fish-style autosuggestion from history.
         $autoSuggestText = '';
         if ($this->autoSuggestEnabled && $this->historyOriginal !== null && $this->buffer !== '') {
-            $autoSuggestText = $this->computeAutoSuggest();
+            $autoSuggestText = Ansi::sanitize($this->computeAutoSuggest());
         }
 
-        $line = Ansi::wrap($this->label, $this->labelStyle)
+        $line = Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
               . $before
               . Ansi::wrap($under === '' ? ' ' : $under, $this->cursorStyle)
               . $after;
@@ -453,14 +461,14 @@ final class TextPrompt
         $lines = [$line];
 
         if ($this->error !== '') {
-            $lines[] = Ansi::wrap($this->error, $this->errorStyle);
+            $lines[] = Ansi::wrap(Ansi::sanitize($this->error), $this->errorStyle);
         }
 
         $hint = $this->suggestion();
         if ($hint !== null && $hint !== $this->buffer) {
             $tail = substr($hint, strlen($this->buffer));
             $lines[] = str_repeat(' ', self::charCount($this->label) + $this->cursor)
-                     . Ansi::wrap($tail, $this->completionStyle);
+                     . Ansi::wrap(Ansi::sanitize($tail), $this->completionStyle);
         }
 
         // Render fish-style autosuggestion in dim gray.
@@ -551,6 +559,51 @@ final class TextPrompt
         $clone->buffer = self::sliceChars($clone->buffer, 0, $clone->cursor);
         $clone->error  = '';
         return $clone;
+    }
+
+    /**
+     * Delete the word before the cursor.
+     *
+     * Uses the same word-boundary classification as EmacsMode:
+     * word chars = [a-zA-Z0-9_\p{L}] (Unicode-aware letter).
+     */
+    private function deleteWordBefore(): self
+    {
+        if ($this->cursor === 0) {
+            return $this;
+        }
+        $buffer = $this->buffer;
+        $cursor = $this->cursor;
+
+        // Skip non-word chars before cursor
+        $start = $cursor;
+        while ($start > 0 && !$this->isWordChar($buffer, $start - 1)) {
+            $start--;
+        }
+        // Skip word chars
+        while ($start > 0 && $this->isWordChar($buffer, $start - 1)) {
+            $start--;
+        }
+
+        if ($start === $cursor) {
+            return $this;
+        }
+
+        $clone = clone $this;
+        if ($clone->undoManager !== null) {
+            $clone->undoManager = $clone->undoManager->push($clone->buffer);
+        }
+        $clone->buffer = self::sliceChars($buffer, 0, $start)
+                       . self::sliceChars($buffer, $cursor);
+        $clone->cursor = $start;
+        $clone->error = '';
+        return $clone;
+    }
+
+    private function isWordChar(string $buffer, int $pos): bool
+    {
+        $char = mb_substr($buffer, $pos, 1, 'UTF-8');
+        return $char !== '' && preg_match('/[a-zA-Z0-9_\p{L}]/u', $char) === 1;
     }
 
     private function applyCompletion(): self
