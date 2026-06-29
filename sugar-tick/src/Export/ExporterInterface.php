@@ -7,18 +7,16 @@ namespace SugarCraft\Tick\Export;
 use SugarCraft\Tick\Heartbeat;
 
 /**
- * Contract for heartbeat exporters (CSV, JSON, etc.).
+ * Base contract for heartbeat string exporters.
  */
 interface ExporterInterface
 {
-    /** @return list<string> column headers */
-    public function headers(): array;
-
     /**
-     * @param array<Heartbeat> $heartbeats
-     * @return list<list<string|int|float>> rows of scalar data
+     * Export heartbeats as a formatted string.
+     *
+     * @param list<Heartbeat> $heartbeats
      */
-    public function rows(array $heartbeats): array;
+    public function export(string $name, array $heartbeats): string;
 
     public function format(): string;
 

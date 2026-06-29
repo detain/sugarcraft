@@ -10,7 +10,7 @@ use SugarCraft\Tick\Heartbeat;
  * Exports heartbeats as iCalendar (RFC 5545) format.
  * Each heartbeat becomes a VEVENT with the file path as the summary.
  */
-final readonly class IcalExporter
+final readonly class IcalExporter implements ExporterInterface
 {
     public function __construct(
         private string $prodId = '-//SugarCraft//sugar-tick//EN',
@@ -60,5 +60,15 @@ final readonly class IcalExporter
 
         $lines[] = 'END:VCALENDAR';
         return implode("\r\n", $lines);
+    }
+
+    public function format(): string
+    {
+        return 'ics';
+    }
+
+    public function contentType(): string
+    {
+        return 'text/calendar';
     }
 }
