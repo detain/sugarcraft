@@ -14,9 +14,9 @@
 | candy-sprinkles | 2 | 8 | 4 | 3 | 1 | MERGED | #1151 | aaaf7c14 | 72 tests |
 | candy-mouse | 2 | 9 | 1 | 3 | 5 | MERGED | #1157 | a63b7930 | 88 tests |
 | candy-zone | 2 | 9 | 2 | 5 | 2 | MERGED | #1158 | 6c121184 | 93 tests |
-| candy-lister | 2 | 17 | 5 | 6 | 6 | MERGED | #1152 | c612bde8 | partial — AccessControl fix only; Steps 9-18 not done |
+| candy-lister | 2 | 17 | 5 | 6 | 6 | MERGED | #1152 | 2a24d387 | full — AccessControl + steps 9-18 integration tests |
 | candy-metrics | 2 | 13 | 4 | 5 | 4 | MERGED | #1153 | 03d9f7e5 | 90 tests |
-| candy-serve | 2 | 18 | 7 | 8 | 3 | MERGED | #1154 | e942eb29 | partial — AccessControl fix only; Steps 9-18 not done |
+| candy-serve | 2 | 18 | 7 | 8 | 3 | MERGED | #1154 | 03c63015 | full — AccessControl + steps 9-18 HTTP/pack fixes |
 | candy-testing | 2 | 11 | 4 | 5 | 2 | MERGED | #1159 | ccb2de0f | 72 tests |
 | candy-vcr | 2 | 13 | 3 | 4 | 6 | MERGED | #1155 | 4eddda1c | has uncommitted TapeToGif.php change in worktree |
 | candy-wish | 2 | 15 | 3 | 8 | 4 | MERGED | #1156 | 7573e0a3 | 96 tests |
@@ -28,15 +28,15 @@
 | candy-forms | 3 | 12 | 3 | 6 | 3 | PENDING | | | |
 | candy-palette | 3 | 13 | 3 | 6 | 4 | PENDING | | | |
 | candy-shine | 3 | 13 | 2 | 4 | 7 | PENDING | | | |
-| candy-kit | 3 | 9 | 0 | 4 | 5 | PENDING | | | |
+| candy-kit | 3 | 9 | 0 | 4 | 5 | MERGED | | 724f49ec | full — Frame multi-cell, Stage clamping, intdiv fix |
 | candy-mold | 3 | 7 | 0 | 1 | 6 | PENDING | | | |
 | candy-mines | 3 | 9 | 3 | 3 | 3 | DONE | ai/candy-mines-fix | | 109 tests; 3 pre-existing GameTest failures (test infrastructure added, failures require Game::init() call — architectural, outside audit scope); 1 skip |
-| candy-flip | 3 | 14 | 3 | 7 | 4 | PENDING | | | |
-| candy-hermit | 3 | 15 | 3 | 7 | 5 | PENDING | | | |
+| candy-flip | 3 | 14 | 3 | 7 | 4 | MERGED | | dd5d0bef | full — player adaptive, orphaned classes removed |
+| candy-hermit | 3 | 15 | 3 | 7 | 5 | MERGED | | 47ec6847 | full — missing tests, applyRankedFilter fix |
 | candy-tetris | 3 | 13 | 4 | 6 | 3 | PENDING | | | |
-| candy-vt | 3 | 11 | 3 | 6 | 2 | PENDING | | | |
-| sugar-boxer | 3 | 12 | 5 | 5 | 2 | PENDING | | | |
-| sugar-crumbs | 3 | 9 | 3 | 4 | 2 | PENDING | | | |
+| candy-vt | 3 | 11 | 3 | 6 | 2 | MERGED | | 66aeea3f | full — security caps, COW→in-place, protocol fixes |
+| sugar-boxer | 3 | 12 | 5 | 5 | 2 | MERGED | | c25b55d1 | full — withContent structural, margin collapse, layout wiring |
+| sugar-crumbs | 3 | 9 | 3 | 4 | 2 | MERGED | | 83b9ead2 | full — truncate returns array, ::new() factories, Builder fix |
 | sugar-dash | 3 | 12 | 4 | 6 | 2 | PENDING | | | |
 | sugar-gallery | 3 | 9 | 0 | 2 | 7 | PENDING | | | |
 | sugar-stash | 3 | 16 | 5 | 8 | 3 | PENDING | | | |
@@ -45,18 +45,18 @@
 | candy-mosaic | 4 | 9 | 2 | 3 | 4 | PENDING | | | |
 | candy-shell | 4 | 11 | 3 | 3 | 5 | PENDING | | | |
 | candy-freeze | 4 | 11 | 2 | 4 | 5 | PENDING | | | |
-| honey-bounce | 4 | 11 | 2 | 4 | 5 | PENDING | | | |
-| sugar-charts | 4 | 12 | 2 | 5 | 5 | PENDING | | | |
-| sugar-crush | 4 | 18 | 5 | 8 | 5 | PENDING | | | |
-| sugar-readline | 4 | 15 | 3 | 6 | 6 | PENDING | | | |
+| honey-bounce | 4 | 11 | 2 | 4 | 5 | MERGED | | f23a575c | full — Easing formula fixes, clamp removal, ElasticIn canonical formula |
+| sugar-charts | 4 | 12 | 2 | 5 | 5 | MERGED | | bf724b42 | full — legendItems crash fix, off-by-one axis, with*(null) clear semantics |
+| sugar-crush | 4 | 18 | 5 | 8 | 5 | MERGED | | 5d0d7ce7 | full — hook matching security, Chat render O(wxh) fix |
+| sugar-readline | 4 | 15 | 3 | 6 | 6 | MERGED | | 9408dec1 | full — run loop insert, busy-spin, vi dd/yy mode, emacs handleKeyDirect |
 | candy-files | 5 | 14 | 5 | 7 | 2 | PENDING | | | |
 | honey-flap | 5 | 11 | 2 | 6 | 3 | PENDING | | | |
 | sugar-bits | 5 | 9 | 4 | 2 | 3 | PENDING | | | |
 | sugar-reel | 5 | 9 | 0 | 3 | 6 | PENDING | | | |
 | sugar-tick | 5 | 14 | 0 | 8 | 6 | PENDING | | | |
-| sugar-veil | 5 | 13 | 2 | 6 | 5 | PENDING | | | |
-| candy-query | 6 | 11 | 3 | 5 | 3 | PENDING | | | |
-| sugar-glow | 6 | 11 | 2 | 6 | 3 | PENDING | | | |
+| sugar-veil | 5 | 13 | 2 | 6 | 5 | MERGED | | ca02edd6 | full — position system, truecolor dimming, buffer fix |
+| candy-query | 6 | 11 | 3 | 5 | 3 | MERGED | | 1a9e212a | full — unused MysqlDatabase::password() removed |
+| sugar-glow | 6 | 11 | 2 | 6 | 3 | MERGED | | f8679819 | full — theme_config_unreadable added to all 15 locale files |
 | sugar-prompt | 6 | 7 | 1 | 4 | 2 | PENDING | | | |
 | sugar-stickers | 6 | 13 | 4 | 6 | 3 | PENDING | | | |
 | sugar-wishlist | 6 | 13 | 1 | 4 | 8 | PENDING | | | |
