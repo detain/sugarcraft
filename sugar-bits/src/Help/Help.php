@@ -105,20 +105,17 @@ final class Help
     public function fullSeparator(string $s): self    { return $this->withFullSeparator($s); }
 
     /**
-     * Bubble-Tea-style update: when the supplied Msg is a KeyMsg whose
-     * keys match the binding returned by {@see KeyMap::getToggleHelp()},
-     * flip {@see $showAll} and return a new instance. Other messages
-     * pass through unchanged. Mirrors upstream Bubbles' `Help.Update`.
+     * Pass-through update — returns `$this` for every message unchanged.
      *
-     * The KeyMap interface declares `getToggleHelp()` as optional —
-     * implementations that don't expose it just won't trigger any
-     * toggling here (the message returns the existing instance).
+     * Help-toggle behaviour is available via {@see updateWithBinding()}
+     * which accepts the toggle binding directly. This base implementation
+     * cannot perform the toggle autonomously.
+     *
+     * Mirrors upstream Bubbles' `Help.Update` (which is also a no-op
+     * in the base library; toggle requires an explicit binding).
      */
     public function update(Msg $msg): self
     {
-        if (!$msg instanceof KeyMsg) {
-            return $this;
-        }
         return $this;
     }
 

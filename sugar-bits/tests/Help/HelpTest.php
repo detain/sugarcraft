@@ -240,4 +240,20 @@ final class HelpTest extends TestCase
         $h2 = $h->updateWithBinding(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, '?'), $toggle);
         $this->assertFalse($h2->showAll);
     }
+
+    public function testUpdateIsPassThrough(): void
+    {
+        $h = new Help();
+        $this->assertFalse($h->showAll);
+
+        // update() always returns $this unchanged; showAll is unaffected.
+        $h2 = $h->update(new \SugarCraft\Core\Msg\KeyMsg(\SugarCraft\Core\KeyType::Char, '?'));
+        $this->assertSame($h, $h2);
+        $this->assertFalse($h2->showAll);
+
+        // Non-KeyMsg also passes through.
+        $h3 = $h->update(new \SugarCraft\Core\Msg\MouseMsg(10, 1, \SugarCraft\Core\MouseButton::Left, \SugarCraft\Core\MouseAction::Press));
+        $this->assertSame($h, $h3);
+        $this->assertFalse($h3->showAll);
+    }
 }

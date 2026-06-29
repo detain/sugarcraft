@@ -9,6 +9,9 @@ use SugarCraft\Bits\Tabs\Tabs;
 use SugarCraft\Bits\Tabs\TabsKeyMap;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
+use SugarCraft\Sprinkles\Style;
 
 final class TabsTest extends TestCase
 {
@@ -168,9 +171,16 @@ final class TabsTest extends TestCase
 
     public function testViewTruncatesWhenWidthExceeded(): void
     {
-        $t = Tabs::new(['Home', 'Profile', 'Settings'])->withWidth(20);
+        // At width=12 with 4 tabs, the styled output visibly exceeds the budget
+        // and the final clip path (using Width::string/Width::truncateAnsi) must
+        // trigger to keep the output within the declared width.
+        $t = Tabs::new(['Home', 'Profile', 'Settings', 'Extras'], 12)
+            ->withActiveStyle(\SugarCraft\Sprinkles\Style::new()->bold())
+            ->withInactiveStyle(\SugarCraft\Sprinkles\Style::new()->faint());
         $view = $t->view();
-        $this->assertLessThanOrEqual(20, mb_strlen($view, 'UTF-8'));
+        // Visible width must not exceed the declared budget.
+        $this->assertLessThanOrEqual(12, Width::string($view));
+        // And the clipped output must end with the ellipsis.
         $this->assertSame('…', mb_substr($view, -1, 1, 'UTF-8'));
     }
 
@@ -491,5 +501,27 @@ final class TabsTest extends TestCase
         $t = $t->withActive(3);
         // scrollOffset should auto-adjust to bring tab 3 into view.
         $this->assertGreaterThanOrEqual(3, $t->scrollOffset);
+    }
+
+    public function testStyledTabsClipsWithoutSeveringAnsi(): void
+    {
+        $t = Tabs::new(['Home', 'Profile', 'Settings', 'Extras'], 12)
+            ->withActiveStyle(Style::new()->foreground(Color::hex('#ff0000')))
+            ->withInactiveStyle(Style::new()->faint());
+
+        $out = $t->view();
+
+        // Width must not exceed the budget.
+        $this->assertLessThanOrEqual(12, Width::string($out));
+
+        // No ANSI escape may be severed mid-sequence.
+        // An unterminated CSI ends with a raw ESC[... where the final byte
+        // is NOT in the 0x40-0x7e range. The pattern matches any \x1b[
+        // opener that reaches end-of-string without a terminating char.
+        $this->assertDoesNotMatchRegularExpression(
+            '/\x1b\[[0-9;]*$/',
+            $out,
+            'Output contains a severed ANSI escape sequence',
+        );
     }
 }
