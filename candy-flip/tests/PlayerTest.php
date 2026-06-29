@@ -6,6 +6,7 @@ namespace SugarCraft\Flip\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Flip\Frame;
 use SugarCraft\Flip\Player;
 use SugarCraft\Flip\Renderer;
@@ -87,5 +88,65 @@ final class PlayerTest extends TestCase
     {
         $p = new Player([]);
         $this->assertStringContainsString('no frames', $p->view());
+    }
+
+    /**
+     * Step 9 — when a constrained Renderer is passed to the Player,
+     * view() must clamp output so it never exceeds the column limit.
+     * A wide frame (4 cols) rendered with a 2-col constraint emits at most
+     * 2 columns of ANSI per row.
+     */
+    public function testViewClampsToRendererConstraints(): void
+    {
+        // 4-column frame with 4 distinct colours so each cell is different.
+        $frame = new Frame([
+            [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]],
+        ]);
+        // Clamp to 2 cols.
+        $renderer = Renderer::withConstraints(1, 2);
+        $p = new Player([$frame], renderer: $renderer);
+        $view = $p->view();
+
+        // The pic (ANSI output) ends before the first "\n" that starts the
+        // status line.  After that newline the status text begins.
+        $firstNl = strpos($view, "\n");
+        $pic = $firstNl !== false ? substr($view, 0, $firstNl) : $view;
+
+        // Strip ANSI escapes to count raw cell characters.
+        $cells = preg_replace('/\033\[[0-9;]+m/', '', $pic);
+        // The pic of a 1-row frame is a single line.
+        $this->assertLessThanOrEqual(2, strlen($cells),
+            'Clamped pic must be ≤ 2 chars, got ' . strlen($cells));
+    }
+
+    /**
+     * Step 10 — WindowSizeMsg received by update() must return a new Player
+     * carrying a Renderer re-clamped to the new dimensions (rows-1 for the
+     * status line), with no Cmd emitted.
+     */
+    public function testWindowSizeMsgReclampsRenderer(): void
+    {
+        $frame = new Frame([
+            [[255, 0, 0], [255, 0, 0], [255, 0, 0]],
+        ]);
+        // Start with unconstrained renderer.
+        $p = new Player([$frame]);
+        $this->assertNull($p->renderer);
+
+        // Simulate SIGWINCH: new size 80 cols × 10 rows.
+        [$next, $cmd] = $p->update(new WindowSizeMsg(80, 10));
+
+        $this->assertNotSame($p, $next, 'WindowSizeMsg must produce a new Player');
+        $this->assertNull($cmd, 'WindowSizeMsg must not emit a Cmd');
+        $this->assertNotNull($next->renderer, 'WindowSizeMsg must set a renderer on the Player');
+
+        // Verify the renderer clamped dimensions by checking that the rendered
+        // pic does not exceed 80 columns.
+        $view = $next->view();
+        $firstNl = strpos($view, "\n");
+        $pic = $firstNl !== false ? substr($view, 0, $firstNl) : $view;
+        $cells = preg_replace('/\033\[[0-9;]+m/', '', $pic);
+        $this->assertLessThanOrEqual(80, strlen($cells),
+            'Re-clamped renderer output must be ≤ 80 chars');
     }
 }
