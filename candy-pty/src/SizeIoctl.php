@@ -178,6 +178,10 @@ final class SizeIoctl
         ];
         $proc = \proc_open($cmd, $desc, $pipes);
 
+        if (!\is_resource($proc)) {
+            return -1;
+        }
+
         \fclose($pipes[0]);
         \fclose($pipes[1]);
         \fclose($pipes[2]);

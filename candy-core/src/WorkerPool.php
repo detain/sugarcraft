@@ -47,6 +47,9 @@ final class WorkerPool
 
     private int $jobCounter = 0;
 
+    /** Monotonic worker-id counter — never reuses ids after a worker's death. */
+    private int $workerCounter = 0;
+
     public function __construct(
         private readonly LoopInterface $loop,
         int $concurrency = self::DEFAULT_CONCURRENCY,
@@ -66,6 +69,9 @@ final class WorkerPool
      * @param callable|non-empty-string $task Named function or callable.
      *                                         PHP closures cannot be serialized;
      *                                         use named functions for cross-process work.
+     *                                         String tasks must be the name of a globally-
+     *                                         callable function; the worker validates via
+     *                                         function_exists() before invoking.
      * @return PromiseInterface<WorkerResultMsg>
      */
     public function dispatch(callable|string $task): PromiseInterface
@@ -160,7 +166,18 @@ final class WorkerPool
             return;
         }
 
-        $data = @unserialize(base64_decode($line, true));
+        // The peer is a local child process; allowed_classes is defense-in-depth
+        // against pipe corruption. We allow Throwable and common subclasses to
+        // support error round-trips from worker subprocesses.
+        $data = @unserialize(base64_decode($line, true), [
+            'allowed_classes' => [
+                \Throwable::class,
+                \Exception::class,
+                \Error::class,
+                \RuntimeException::class,
+                \InvalidArgumentException::class,
+            ],
+        ]);
         if (!is_array($data)) {
             $result = new WorkerResultMsg(
                 result: null,
@@ -213,7 +230,7 @@ final class WorkerPool
 
         try {
             if (is_string($task)) {
-                $payload = ['type' => 'eval', 'code' => $task];
+                $payload = ['type' => 'function', 'name' => $task];
             } else {
                 $payload = ['type' => 'callable', 'callable' => $task];
             }
@@ -256,7 +273,7 @@ final class WorkerPool
 
     private function spawnWorker(string $currentJobId, callable|string $task): void
     {
-        $workerId = count($this->workers);
+        $workerId = $this->workerCounter++;
 
         $scriptPath = $this->createWorkerScript();
         if ($scriptPath === false) {
@@ -301,6 +318,7 @@ final class WorkerPool
             stdout: $stdout,
             stderr: $stderr,
         );
+        $worker->scriptPath = $scriptPath;
 
         $this->loop->addReadStream($stderr, function ($stream): void {
             $chunk = fread($stream, 4096);
@@ -339,6 +357,8 @@ while (!feof($fd)) {
         fflush(STDOUT);
         continue;
     }
+    // Note: the peer is a local child process; allowed_classes is defense-in-depth
+    // against pipe corruption rather than an untrusted network peer.
     $payload = unserialize($decoded);
     if (!is_array($payload)) {
         $response = base64_encode(serialize(['result' => null, 'error' => new \RuntimeException('Malformed payload')]));
@@ -354,11 +374,13 @@ while (!feof($fd)) {
             }
             $result = $callable();
         } else {
-            $code = $payload['code'] ?? null;
-            if (!is_string($code)) {
-                throw new \RuntimeException('Missing code string in payload');
+            // String form is a function name — validated in the worker
+            // so the parent process does not need the function defined.
+            $name = $payload['name'] ?? null;
+            if (!is_string($name) || !function_exists($name)) {
+                throw new \RuntimeException('Unknown worker function: ' . var_export($name, true));
             }
-            $result = eval('return ' . $code . ';');
+            $result = $name();
         }
         $response = base64_encode(serialize(['result' => $result, 'error' => null]));
     } catch (\Throwable $e) {
@@ -425,6 +447,11 @@ PHP;
         if ($worker->process !== null && is_resource($worker->process)) {
             proc_close($worker->process);
         }
+
+        // Unlink the worker's temp script exactly once.
+        if ($worker->scriptPath !== null && is_file($worker->scriptPath)) {
+            @unlink($worker->scriptPath);
+        }
     }
 
     public function __destruct()
@@ -443,6 +470,9 @@ final class WorkerState
     public ?string $currentJobId = null;
 
     public string $buffer = '';
+
+    /** Path to the worker's temp script, for cleanup on close. */
+    public ?string $scriptPath = null;
 
     public function __construct(
         public readonly int $id,

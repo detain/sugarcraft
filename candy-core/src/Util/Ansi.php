@@ -268,8 +268,8 @@ final class Ansi
      */
     public static function hyperlinkOpen(string $uri, ?string $id = null): string
     {
-        $params = $id === null ? '' : 'id=' . $id;
-        return self::OSC . '8;' . $params . ';' . $uri . self::ST;
+        $params = $id === null ? '' : 'id=' . self::stripOscControlBytes($id);
+        return self::OSC . '8;' . $params . ';' . self::stripOscControlBytes($uri) . self::ST;
     }
 
     /**
@@ -546,13 +546,30 @@ final class Ansi
     }
 
     /**
+     * Strip C0 control bytes from a string destined for an OSC body.
+     * These bytes can terminate or escape the OSC sequence prematurely,
+     * enabling terminal-escape injection attacks.
+     *
+     * @param string $s Raw string
+     * @return string String with C0 controls and \x9c removed
+     */
+    private static function stripOscControlBytes(string $s): string
+    {
+        // \x00-\x1f (C0 controls) plus \x9c (8-bit ST terminator)
+        return preg_replace('/[\x00-\x1f\x9c]/', '', $s) ?? '';
+    }
+
+    /**
      * Set the terminal window title (and icon name when `$icon` is
      * true). Uses OSC 2 by default; pass `$icon: true` to additionally
      * emit OSC 1 / OSC 0 for terminals that distinguish icon vs title.
+     *
+     * Control bytes in `$title` are stripped before emission to prevent
+     * terminal-escape injection in the OSC body.
      */
     public static function setWindowTitle(string $title, bool $icon = false): string
     {
-        $out = self::OSC . ($icon ? '0' : '2') . ';' . $title . self::BEL;
+        $out = self::OSC . ($icon ? '0' : '2') . ';' . self::stripOscControlBytes($title) . self::BEL;
         return $out;
     }
 
@@ -562,6 +579,9 @@ final class Ansi
      * with same cwd" and split-pane clone semantics. `$host` is
      * optional and defaults to the local hostname (or empty if it
      * can't be determined).
+     *
+     * Control bytes in `$host` are stripped before emission; `$path`
+     * is already safe via rawurlencode().
      */
     public static function setWorkingDirectory(string $path, string $host = ''): string
     {
@@ -569,7 +589,7 @@ final class Ansi
             $host = gethostname() ?: '';
         }
         $encoded = str_replace('%2F', '/', rawurlencode($path));
-        return self::OSC . '7;file://' . $host . $encoded . self::BEL;
+        return self::OSC . '7;file://' . self::stripOscControlBytes($host) . $encoded . self::BEL;
     }
 
     /**
@@ -715,49 +735,6 @@ final class Ansi
     public static function iterm2Delete(): string
     {
         return self::OSC . '1337;Pop' . self::BEL;
-    }
-
-    /**
-     * Begin a Kitty graphics protocol (AGM) APC sequence.
-     *
-     * Mirrors charmbracelet/x/ansi. KittyRenderer.
-     *
-     * @param array $opts  Keys: a (action, default 'T'=transmit+display),
-     *                     f (format, default 100=PNG), q (compression, default 2),
-     *                     s/v (pixel width/height), c/r (cell columns/rows),
-     *                     i (image id), z (z-index)
-     */
-    public static function kittyGraphicsBegin(array $opts = []): string
-    {
-        $a = $opts['a'] ?? 'T';
-        $f = $opts['f'] ?? 100;
-        $q = $opts['q'] ?? 2;
-        $parts = ["a=$a", "f=$f", "q=$q"];
-        if (isset($opts['s'])) {
-            $parts[] = 's=' . $opts['s'];
-        }
-        if (isset($opts['v'])) {
-            $parts[] = 'v=' . $opts['v'];
-        }
-        if (isset($opts['c'])) {
-            $parts[] = 'c=' . $opts['c'];
-        }
-        if (isset($opts['r'])) {
-            $parts[] = 'r=' . $opts['r'];
-        }
-        if (isset($opts['i'])) {
-            $parts[] = 'i=' . $opts['i'];
-        }
-        if (isset($opts['z'])) {
-            $parts[] = 'z=' . $opts['z'];
-        }
-        if (isset($opts['x'])) {
-            $parts[] = 'x=' . $opts['x'];
-        }
-        if (isset($opts['y'])) {
-            $parts[] = 'y=' . $opts['y'];
-        }
-        return self::APC . 'G' . implode(',', $parts) . ';';
     }
 
     /**
