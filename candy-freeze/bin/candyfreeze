@@ -14,29 +14,6 @@ declare(strict_types=1);
  * stdout (or `--output <path>`).
  */
 
-const HELP = <<<'HELP'
-candyfreeze - render code or terminal output to an SVG screenshot
-
-Usage:
-  echo "hello" | candyfreeze --theme dracula > out.svg
-  candyfreeze input.txt --theme tokyo-night --no-window --line-numbers
-
-Options:
-  --theme <name>       Theme name: dark, light, dracula, tokyo-night, nord (default: dark)
-  --padding <n>        Padding around content (default: 24)
-  --no-window          Hide window chrome (traffic lights, title bar)
-  --no-shadow          Disable drop shadow
-  --no-border          Hide frame border
-  --line-numbers       Show line numbers in gutter
-  --border-radius <n>  Corner radius (default: 8)
-  -o, --output <path>  Write output to file instead of stdout
-  -h, --help           Show this help message
-
-Examples:
-  cat script.php | candyfreeze --theme dracula
-  candyfreeze script.php --theme tokyo-night --line-numbers -o out.svg
-HELP;
-
 $root = dirname(__DIR__, 2);
 foreach ([__DIR__ . '/../vendor/autoload.php', $root . '/vendor/autoload.php'] as $auto) {
     if (file_exists($auto)) {
@@ -52,15 +29,19 @@ use SugarCraft\Freeze\Theme;
 $argv = $_SERVER['argv'] ?? $argv ?? [];
 array_shift($argv);
 
-$themeName     = 'dark';
-$padding       = 24;
-$window        = true;
-$shadow        = true;
-$border        = true;
-$lineNumbers   = false;
-$borderRadius  = 8;
-$output        = null;
-$inputPath     = null;
+$themeName      = 'dark';
+$padding        = 24;
+$window         = true;
+$shadow         = true;
+$border         = true;
+$lineNumbers    = false;
+$borderRadius   = 8;
+$windowStyle    = null;
+$ligatures      = false;
+$fontPath       = null;
+$highlight      = null;
+$output         = null;
+$inputPath      = null;
 
 while (($arg = array_shift($argv)) !== null) {
     switch ($arg) {
@@ -71,11 +52,39 @@ while (($arg = array_shift($argv)) !== null) {
         case '--no-border':     $border       = false; break;
         case '--line-numbers':  $lineNumbers  = true;  break;
         case '--border-radius': $borderRadius = (int) array_shift($argv); break;
+        case '--window-style':
+            $styleRaw = (string) array_shift($argv);
+            $valid = ['macos', 'windows-terminal', 'iterm', 'hyper', 'none'];
+            if (!in_array($styleRaw, $valid, true)) {
+                fwrite(STDERR, Lang::t('cli.unknown_window_style', ['style' => $styleRaw]) . "\n");
+                exit(2);
+            }
+            $windowStyle = $styleRaw;
+            break;
+        case '--ligatures':     $ligatures    = true; break;
+        case '--font':
+            $fontPath = (string) array_shift($argv);
+            if (!file_exists($fontPath)) {
+                fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
+                exit(2);
+            }
+            break;
+        case '--highlight':
+            $format = (string) array_shift($argv);
+            if (!preg_match('/^(\d+):(\d+)(?::([^:]+))?$/', $format, $m)) {
+                fwrite(STDERR, Lang::t('cli.bad_highlight', ['format' => $format]) . "\n");
+                exit(2);
+            }
+            $start = (int) $m[1];
+            $end   = (int) $m[2];
+            $color = $m[3] ?? '#fffbe6';
+            $highlight = [$start, $end, $color];
+            break;
         case '-o':
         case '--output':        $output       = (string) array_shift($argv); break;
         case '-h':
         case '--help':
-            fwrite(STDERR, HELP . "\n");
+            fwrite(STDOUT, Lang::t('cli.usage') . "\n");
             exit(0);
         default:
             if ($inputPath === null && !str_starts_with($arg, '-')) {
@@ -108,7 +117,7 @@ if ($text === false || $text === null) {
     exit(1);
 }
 
-$svg = (new SvgRenderer(
+$renderer = (new SvgRenderer(
     theme:        $theme,
     padding:      $padding,
     window:       $window,
@@ -116,7 +125,27 @@ $svg = (new SvgRenderer(
     border:       $border,
     lineNumbers:  $lineNumbers,
     borderRadius: $borderRadius,
-))->render($text);
+));
+if ($windowStyle !== null) {
+    $renderer = $renderer->withWindowStyle($windowStyle);
+}
+if ($ligatures) {
+    $renderer = $renderer->withLigatures(true);
+}
+if ($fontPath !== null) {
+    try {
+        $renderer = $renderer->withFont($fontPath);
+    } catch (\InvalidArgumentException $e) {
+        fwrite(STDERR, Lang::t('cli.font_not_found', ['path' => $fontPath]) . "\n");
+        exit(2);
+    }
+}
+if ($highlight !== null) {
+    [$start, $end, $color] = $highlight;
+    $renderer = $renderer->withHighlight($start, $end, $color);
+}
+
+$svg = $renderer->render($text);
 
 if ($output !== null) {
     if (@file_put_contents($output, $svg) === false) {

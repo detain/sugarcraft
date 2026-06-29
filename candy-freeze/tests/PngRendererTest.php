@@ -100,4 +100,38 @@ final class PngRendererTest extends TestCase
         // Line numbers add gutter, so size is larger.
         $this->assertGreaterThan(strlen($noLineNums), strlen($withLineNums));
     }
+
+    public function testRenderTwiceInOneProcessProducesIdenticalOutput(): void
+    {
+        $first  = PngRenderer::dark()->withWindow(false)->withShadow(false)->render("hello\n");
+        $second = PngRenderer::dark()->withWindow(false)->withShadow(false)->render("hello\n");
+        $this->assertSame($first, $second);
+    }
+
+    public function testWindowStylesProduceDistinctOutput(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not loaded');
+        }
+
+        $styles = ['macos', 'windows-terminal', 'iterm', 'hyper'];
+        $outputs = [];
+        foreach ($styles as $style) {
+            $outputs[$style] = PngRenderer::dark()
+                ->withWindowStyle($style)
+                ->withShadow(false)
+                ->render("x\n");
+        }
+
+        $values = array_values($outputs);
+        for ($i = 0; $i < count($values); $i++) {
+            for ($j = $i + 1; $j < count($values); $j++) {
+                $this->assertNotSame(
+                    $values[$i],
+                    $values[$j],
+                    "Window style $styles[$i] and $styles[$j] produced identical output",
+                );
+            }
+        }
+    }
 }

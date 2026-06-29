@@ -26,6 +26,11 @@ final class LanguageDetector
         '#!/usr/bin/env perl' => 'perl',
     ];
 
+    private const SIGNATURE_PRIORITY = [
+        'php', 'python', 'javascript', 'ruby', 'bash', 'sql',
+        'html', 'css', 'json', 'yaml', 'markdown',
+    ];
+
     private const CONTENT_SIGNATURES = [
         'php' => [
             '<?php',
@@ -63,10 +68,10 @@ final class LanguageDetector
             'padding:', '.class', '#id', 'font-',
         ],
         'json' => [
-            '{"', '"}', '": ', 'null', 'true', 'false',
+            '{"', '"}', '": ',
         ],
         'yaml' => [
-            '---', ': ', '  - ', 'true', 'false', 'null',
+            '---', ': ', '  - ',
         ],
         'markdown' => [
             '# ', '## ', '### ', '- ', '* ', '```',
@@ -134,7 +139,6 @@ final class LanguageDetector
             'clj', 'cljs' => 'clojure',
             'ml', 'mli' => 'ocaml',
             'jl' => 'julia',
-            'sh' => 'bash',
             default => 'text',
         };
     }
@@ -155,16 +159,6 @@ final class LanguageDetector
         // Exact shebang match
         if (isset(self::SHEBANG_MAP[$firstLine])) {
             return self::SHEBANG_MAP[$firstLine];
-        }
-
-        // Partial shebang match (e.g., #!/usr/bin/env python3)
-        foreach (self::SHEBANG_MAP as $shebang => $lang) {
-            if (str_contains($firstLine, basename(explode(' ', $shebang)[0] ?? ''))) {
-                // More specific match wins
-                if ($lang === 'bash' && str_contains($firstLine, 'env ') && str_contains($firstLine, 'bash')) {
-                    return 'bash';
-                }
-            }
         }
 
         // Try to extract interpreter name
@@ -216,8 +210,17 @@ final class LanguageDetector
             return 'text';
         }
 
-        // Return language with highest score
         arsort($scores);
-        return array_key_first($scores);
+        $top = array_key_first($scores);
+        $topScore = $scores[$top];
+
+        // Tie-break by fixed priority order
+        foreach (self::SIGNATURE_PRIORITY as $lang) {
+            if (isset($scores[$lang]) && $scores[$lang] === $topScore) {
+                return $lang;
+            }
+        }
+
+        return $top;
     }
 }

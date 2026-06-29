@@ -231,10 +231,11 @@ final class PngRenderer
     private function allocateColor(\GdImage $img, string $hex): int
     {
         static $cache = [];
+        $oid = spl_object_id($img);
         $key = $hex;
 
-        if (isset($cache[$key])) {
-            return $cache[$key];
+        if (isset($cache[$oid][$key])) {
+            return $cache[$oid][$key];
         }
 
         $r = hexdec(substr($hex, 1, 2));
@@ -243,11 +244,10 @@ final class PngRenderer
 
         $color = imagecolorallocate($img, $r, $g, $b);
         if ($color === false) {
-            // Fallback to white if allocation fails.
             $color = imagecolorallocate($img, 255, 255, 255);
         }
 
-        $cache[$key] = $color;
+        $cache[$oid][$key] = $color;
         return $color;
     }
 
@@ -258,7 +258,7 @@ final class PngRenderer
             WindowStyle::WindowsTerminal => $this->buildWindowsTerminalWindow($img, $shadowMargin, $frameWidth),
             WindowStyle::ITerm2 => $this->buildITerm2Window($img, $shadowMargin),
             WindowStyle::Hyper => $this->buildHyperWindow($img, $shadowMargin, $frameWidth),
-            WindowStyle::None => '',
+            WindowStyle::None => null,
         };
     }
 
