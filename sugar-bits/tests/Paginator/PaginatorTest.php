@@ -147,4 +147,34 @@ final class PaginatorTest extends TestCase
             ->withType(Type::Arabic);
         $this->assertSame('1/3', $p->view());
     }
+
+    public function testFirstPageHelper(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30)->withPage(2);
+        $p2 = $p->firstPage();
+        $this->assertSame(0, $p2->page);
+        // Original unaffected.
+        $this->assertSame(2, $p->page);
+    }
+
+    public function testLastPageHelper(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30);
+        $p2 = $p->lastPage();
+        $this->assertSame(2, $p2->page); // 30 items / 10 per page = 3 pages (0,1,2)
+    }
+
+    public function testKeyHomeGoesToFirstPage(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30)->withPage(2);
+        [$next, ] = $p->update(new KeyMsg(KeyType::Home));
+        $this->assertSame(0, $next->page);
+    }
+
+    public function testKeyEndGoesToLastPage(): void
+    {
+        $p = Paginator::new()->withPerPage(10)->withTotalItems(30);
+        [$next, ] = $p->update(new KeyMsg(KeyType::End));
+        $this->assertSame(2, $next->page);
+    }
 }
