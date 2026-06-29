@@ -159,6 +159,10 @@ final class PhpGifEncoder implements GifEncoder
         $lzw = $this->lzwEncode($pixels, 8);
         $gif->fwrite(pack('C', 8));
         $gif->fwrite($lzw);
+        // GIF89a spec: each LZW image data sub-block is terminated by a
+        // zero-length sub-block (0x00). This ensures strict GIF parsers
+        // correctly identify where the image data ends.
+        $gif->fwrite("\x00");
     }
 
     private function lzwEncode(string $data, int $minCodeSize): string

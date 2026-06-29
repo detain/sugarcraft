@@ -117,20 +117,17 @@ final class FontLoader
                 $family,
                 $base . '-Bold',
                 $base . 'Bold',
-                $base . '-Bold.ttf',
                 $base . 'Bd',
             ],
             'italic' => [
                 $family,
                 $base . '-Italic',
                 $base . 'Italic',
-                $base . '-Italic.ttf',
             ],
             'bolditalic' => [
                 $family,
                 $base . '-BoldItalic',
                 $base . 'BoldItalic',
-                $base . '-BoldItalic.ttf',
                 $base . 'Bi',
             ],
             default => [

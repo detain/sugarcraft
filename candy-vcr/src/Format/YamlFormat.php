@@ -77,14 +77,40 @@ final class YamlFormat implements Format
             }
             $eventsArray[] = $row;
         }
+
+        $header = [
+            'v' => $cassette->header->version,
+            'created' => $cassette->header->createdAt,
+            'cols' => $cassette->header->cols,
+            'rows' => $cassette->header->rows,
+            'runtime' => $cassette->header->runtime,
+        ];
+
+        // Include optional fields when they differ from defaults
+        if ($cassette->header->timestampMode !== CassetteHeader::TIMESTAMP_MODE_ABSOLUTE) {
+            $header['timestampMode'] = $cassette->header->timestampMode;
+        }
+        if ($cassette->header->env !== []) {
+            $header['env'] = $cassette->header->env;
+        }
+        if ($cassette->header->typingSpeed !== null) {
+            $header['typingSpeed'] = $cassette->header->typingSpeed;
+        }
+        if ($cassette->header->theme !== null) {
+            $header['theme'] = $cassette->header->theme;
+        }
+        if ($cassette->header->playbackSpeed !== null) {
+            $header['playbackSpeed'] = $cassette->header->playbackSpeed;
+        }
+        if ($cassette->header->fontSize !== null) {
+            $header['fontSize'] = $cassette->header->fontSize;
+        }
+        if ($cassette->header->fontFamily !== null) {
+            $header['fontFamily'] = $cassette->header->fontFamily;
+        }
+
         $tree = [
-            'header' => [
-                'v' => $cassette->header->version,
-                'created' => $cassette->header->createdAt,
-                'cols' => $cassette->header->cols,
-                'rows' => $cassette->header->rows,
-                'runtime' => $cassette->header->runtime,
-            ],
+            'header' => $header,
             'events' => $eventsArray,
         ];
         // Inline level 3 keeps the per-event maps on one line each
@@ -139,6 +165,13 @@ final class YamlFormat implements Format
             cols: (int) $data['cols'],
             rows: (int) $data['rows'],
             runtime: (string) $data['runtime'],
+            timestampMode: $data['timestampMode'] ?? CassetteHeader::TIMESTAMP_MODE_ABSOLUTE,
+            env: is_array($data['env'] ?? null) ? $data['env'] : [],
+            typingSpeed: isset($data['typingSpeed']) ? (float) $data['typingSpeed'] : null,
+            theme: isset($data['theme']) ? (string) $data['theme'] : null,
+            playbackSpeed: isset($data['playbackSpeed']) ? (float) $data['playbackSpeed'] : null,
+            fontSize: isset($data['fontSize']) ? (int) $data['fontSize'] : null,
+            fontFamily: isset($data['fontFamily']) ? (string) $data['fontFamily'] : null,
         );
     }
 

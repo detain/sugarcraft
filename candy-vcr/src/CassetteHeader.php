@@ -49,6 +49,8 @@ final readonly class CassetteHeader
         public ?float $typingSpeed = null,
         public ?string $theme = null,
         public ?float $playbackSpeed = null,
+        public ?int $fontSize = null,
+        public ?string $fontFamily = null,
     ) {
         if ($version < 1) {
             throw new \InvalidArgumentException("CassetteHeader version must be >= 1, got {$version}");

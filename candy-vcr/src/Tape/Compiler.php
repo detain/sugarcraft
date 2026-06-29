@@ -40,6 +40,8 @@ final class Compiler
     /** @var array<string, string> */
     private array $env = [];
     private ?float $playbackSpeed = null;
+    private ?int $fontSize = null;
+    private ?string $fontFamily = null;
 
     private float $currentTime = 0.0;
 
@@ -48,16 +50,26 @@ final class Compiler
 
     private string $currentSourcePath = '';
 
+    private int $sourceDepth = 0;
+
+    /** @var array<string, true> */
+    private array $sourceStack = [];
+
+    private const MAX_SOURCE_DEPTH = 10;
+
     /**
      * @param list<Directive|ParseError> $ast
      */
-    public function compile(array $ast, string $sourcePath): Cassette
+    public function compile(array $ast, string $sourcePath, bool $strict = false): Cassette
     {
         $this->reset();
         $this->currentSourcePath = $sourcePath;
 
         foreach ($ast as $node) {
             if ($node instanceof ParseError) {
+                if ($strict) {
+                    throw new \RuntimeException("Parse error at line {$node->line}: {$node->message}");
+                }
                 continue;
             }
             $this->compileNode($node);
@@ -74,6 +86,8 @@ final class Compiler
             typingSpeed: $this->typingSpeed,
             theme: $this->theme,
             playbackSpeed: $this->playbackSpeed,
+            fontSize: $this->fontSize,
+            fontFamily: $this->fontFamily,
         );
 
         return new Cassette($header, $this->events);
@@ -112,9 +126,13 @@ final class Compiler
         $this->theme = 'TokyoNight';
         $this->env = [];
         $this->playbackSpeed = null;
+        $this->fontSize = null;
+        $this->fontFamily = null;
         $this->currentTime = 0.0;
         $this->events = [];
         $this->currentSourcePath = '';
+        $this->sourceDepth = 0;
+        $this->sourceStack = [];
     }
 
     private function compileNode(Directive $node): void
@@ -149,6 +167,9 @@ final class Compiler
             'Theme' => $this->theme = trim($node->value, '"\' '),
             'TypingSpeed' => $this->typingSpeed = $this->parseTypingSpeed($node->value),
             'PlaybackSpeed' => $this->playbackSpeed = $node->value !== '' ? (float) $node->value : null,
+            'FontSize' => $this->fontSize = (int) $node->value,
+            'FontFamily' => $this->fontFamily = trim($node->value, '"\' '),
+            // Padding and Margin are accepted but not enforced (documented no-ops)
             default => null,
         };
     }
@@ -259,26 +280,65 @@ final class Compiler
 
     private function compileSource(SourceDirective $node): void
     {
-        $baseDir = dirname($this->currentSourcePath ?: '');
+        $baseDir = dirname($this->currentSourcePath ?: '.');
         $fullPath = $baseDir !== '' && $baseDir !== '.'
             ? $baseDir . '/' . $node->path
             : $node->path;
 
-        if (!is_file($fullPath)) {
-            $fullPath = $node->path;
+        // Attempt realpath resolution; use the string path as the canonical
+        // stack key for cycle detection (realpath can return false for files
+        // that are currently being parsed via a sibling Source directive).
+        $realPath = realpath($fullPath);
+        if ($realPath === false) {
+            $realPath = realpath($node->path);
+        }
+        // Canonical stack key — always use the string path
+        $stackKey = $fullPath;
+
+        // Base-dir confinement: reject paths that escape the tape's directory
+        $baseReal = realpath($baseDir ?: '.');
+        if ($realPath !== false && $baseReal !== false) {
+            if (!str_starts_with($realPath, $baseReal . DIRECTORY_SEPARATOR)) {
+                return; // Path escapes base directory
+            }
         }
 
-        $source = @file_get_contents($fullPath);
+        // Cycle guard: skip if this string path is already being compiled
+        if (isset($this->sourceStack[$stackKey])) {
+            return;
+        }
+
+        // Depth guard
+        if ($this->sourceDepth >= self::MAX_SOURCE_DEPTH) {
+            throw new \RuntimeException("Source include depth exceeded (max " . self::MAX_SOURCE_DEPTH . "): {$fullPath}");
+        }
+
+        $source = $realPath !== false
+            ? @file_get_contents($realPath)
+            : @file_get_contents($fullPath);
+
         if ($source === false) {
             return;
         }
 
-        $this->currentSourcePath = $fullPath;
-        $subResult = Compiler::parseSource($source);
-        foreach ($subResult['ast'] as $subNode) {
-            if (!$subNode instanceof ParseError) {
-                $this->compileNode($subNode);
+        // Save state before recursion; restore in finally
+        $savedSourcePath = $this->currentSourcePath;
+        $this->sourceDepth++;
+        $this->sourceStack[$stackKey] = true;
+
+        try {
+            $this->currentSourcePath = $realPath !== false ? $realPath : $fullPath;
+
+            $subResult = Compiler::parseSource($source);
+            foreach ($subResult['ast'] as $subNode) {
+                if (!$subNode instanceof ParseError) {
+                    $this->compileNode($subNode);
+                }
             }
+        } finally {
+            unset($this->sourceStack[$stackKey]);
+            $this->sourceDepth--;
+            $this->currentSourcePath = $savedSourcePath;
         }
     }
 
