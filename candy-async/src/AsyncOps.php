@@ -123,11 +123,7 @@ final class AsyncOps
             return reject(new \RuntimeException('Retry cancelled'));
         }
 
-        return self::withTimeout(
-            \React\EventLoop\Loop::get(),
-            $operation(),
-            $backoff * 2, // Give operation at most backoff*2 seconds to complete
-        )->then(
+        return $operation()->then(
             static fn ($value) => $value,
             static function (\Throwable $e) use ($operation, $remaining, $backoff, $token, $attempt): PromiseInterface {
                 if ($token->isCancelled()) {
