@@ -67,6 +67,9 @@ final class JsonFormatter implements Formatter
         if (\is_bool($v) || \is_int($v) || \is_float($v)) {
             return $v;
         }
+        if (\is_string($v)) {
+            return $v;
+        }
         if (\is_array($v)) {
             // Recurse so nested objects/resources become strings for json_encode
             return \array_map(fn($i) => $this->coerceValue($i), $v);
