@@ -27,7 +27,11 @@ final class Renderer
         $header = self::header($d);
         $projects = self::ranking('Top projects',  $stats->perProject(),  '#fde68a', 26);
         $languages = self::ranking('By language',  $stats->perLanguage(), '#7dd3fc', 26);
-        $top = Layout::joinHorizontal(Position::TOP, $projects, '  ', $languages);
+
+        // Stack panes vertically when width is known and below side-by-side threshold (~56)
+        $top = ($d->width !== null && $d->width < 56)
+            ? $projects . "\n" . $languages
+            : Layout::joinHorizontal(Position::TOP, $projects, '  ', $languages);
 
         $timeline = self::timeline($d);
 
@@ -84,7 +88,8 @@ final class Renderer
     private static function timeline(Dashboard $d): string
     {
         $minutes = array_map(static fn(int $s): int => intdiv($s, 60), $d->stats->timeline());
-        $width   = max(20, count($minutes) * 4);
+        $computedWidth = max(20, count($minutes) * 4);
+        $width = ($d->width !== null) ? min($computedWidth, $d->width - 4) : $computedWidth;
         $sparkline = $minutes === []
             ? '(no data)'
             : Sparkline::new($minutes, $width)->view();
