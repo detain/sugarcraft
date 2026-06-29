@@ -52,15 +52,12 @@ final class Decoder
             throw new \RuntimeException(Lang::t('decoder.grid_too_large', ['max' => (string) self::MAX_CELLS]));
         }
         $header = self::parseHeader($bytes);
-        $frames = [];
-        foreach ($header['frameInfos'] as $info) {
-            $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH);
-            if ($frame !== null) {
-                $frames[] = $frame;
-            }
-        }
-        if ($frames === []) {
-            // Static fallback — still returns one frame.
+
+        $screenW = $header['width'];
+        $screenH = $header['height'];
+
+        // Static fallback — when no Image Descriptors were found.
+        if ($header['frameInfos'] === []) {
             $info = [
                 'offset' => 0,
                 'delay' => 10,
@@ -69,26 +66,217 @@ final class Decoder
                 'transparentIndex' => -1,
                 'hasLct' => false,
                 'lctBytes' => 0,
+                'left' => 0,
+                'top' => 0,
+                'frameW' => $screenW,
+                'frameH' => $screenH,
             ];
             $frame = self::renderSingleFrame($bytes, $info, $header, $cellsW, $cellsH);
-            if ($frame !== null) {
-                $frames[] = $frame;
-            }
+            return $frame !== null ? [$frame] : [];
         }
+
+        // Create a truecolor canvas at logical screen size for compositing.
+        $canvas = imagecreatetruecolor($screenW, $screenH);
+        imagesavealpha($canvas, true);
+        $transparentBg = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+        imagefill($canvas, 0, 0, $transparentBg);
+
+        // Snapshot for DISPOSAL_PREVIOUS.
+        $snapshot = null;
+
+        $frames = [];
+        $prevInfo = null;
+
+        foreach ($header['frameInfos'] as $info) {
+            // Before painting frame N, apply frame N-1's disposal.
+            if ($prevInfo !== null) {
+                $prevDisposal = $prevInfo['disposal'];
+                if ($prevDisposal === Frame::DISPOSAL_BACKGROUND) {
+                    // Clear the previous frame's rect to transparent.
+                    $prevLeft = $prevInfo['left'];
+                    $prevTop = $prevInfo['top'];
+                    $prevW = $prevInfo['frameW'];
+                    $prevH = $prevInfo['frameH'];
+                    imagefilledrectangle($canvas, $prevLeft, $prevTop, $prevLeft + $prevW - 1, $prevTop + $prevH - 1, $transparentBg);
+                } elseif ($prevDisposal === Frame::DISPOSAL_PREVIOUS && $snapshot !== null) {
+                    // Restore to the snapshot taken before the previous frame.
+                    imagecopy($canvas, $snapshot, 0, 0, 0, 0, $screenW, $screenH);
+                }
+            }
+
+            // Snapshot before painting this frame (for DISPOSAL_PREVIOUS of next frame).
+            $snapshot = imagecreatetruecolor($screenW, $screenH);
+            imagesavealpha($snapshot, true);
+            imagefill($snapshot, 0, 0, $transparentBg);
+            imagecopy($snapshot, $canvas, 0, 0, 0, 0, $screenW, $screenH);
+
+            // Decode this frame's LZW data to a GD image.
+            $frameImg = self::decodeFrameImage($bytes, $info, $header);
+            if ($frameImg === null) {
+                $prevInfo = $info;
+                continue;
+            }
+
+            // Composite the frame onto the canvas at (left, top), honoring transparency.
+            $left = $info['left'];
+            $top = $info['top'];
+            $frameImgW = imagesx($frameImg);
+            $frameImgH = imagesy($frameImg);
+
+            // Copy non-transparent pixels from frame to canvas.
+            $srcTransparentIndex = imagecolortransparent($frameImg);
+            for ($y = 0; $y < $frameImgH; $y++) {
+                for ($x = 0; $x < $frameImgW; $x++) {
+                    $pixelIndex = imagecolorat($frameImg, $x, $y);
+                    if ($srcTransparentIndex >= 0 && $pixelIndex === $srcTransparentIndex) {
+                        continue; // Transparent pixel — leave canvas unchanged.
+                    }
+                    $rgb = imagecolorsforindex($frameImg, $pixelIndex);
+                    imagesetpixel($canvas, $left + $x, $top + $y, imagecolorallocate($canvas, $rgb['red'], $rgb['green'], $rgb['blue']));
+                }
+            }
+            imagedestroy($frameImg);
+
+            // Downsample the composited canvas to produce this frame.
+            $f = self::sampleCanvas($canvas, $cellsW, $cellsH, $info['delay'], $info['disposal'], $info['transparent']);
+            $frames[] = $f;
+
+            $prevInfo = $info;
+        }
+
+        imagedestroy($canvas);
+        if ($snapshot !== null) {
+            imagedestroy($snapshot);
+        }
+
         return $frames;
+    }
+
+    /**
+     * Decode the LZW image data for a single frame into a GD image.
+     * Returns a palette or truecolor GD image at the frame's declared dimensions.
+     */
+    private static function decodeFrameImage(string $bytes, array $info, array $header): ?\GdImage
+    {
+        $offset = $info['offset'];
+        $delay = $info['delay'];
+        $disposal = $info['disposal'];
+        $transparent = $info['transparent'];
+        $transparentIndex = $info['transparentIndex'];
+        $hasLct = $info['hasLct'];
+        $lctBytes = $info['lctBytes'];
+
+        $hasGlobal = $header['hasGct'];
+        $globalBytes = $header['gctBytes'];
+
+        // Build a minimal single-frame GIF in memory.
+        $gifData = '';
+        $gifData .= substr($bytes, 0, 13);
+        if ($hasGlobal) {
+            $gifData .= substr($bytes, 13, $globalBytes);
+        }
+        // GCE block.
+        $delayLo = $delay & 0xFF;
+        $delayHi = ($delay >> 8) & 0xFF;
+        $disposalByte = ($disposal & 0x07) << 2;
+        $transparentByte = $transparent ? 0x01 : 0x00;
+        $gifData .= "\x21\xF9\x04"
+            . chr($disposalByte | $transparentByte)
+            . chr($delayLo) . chr($delayHi)
+            . chr($transparent && $transparentIndex >= 0 ? $transparentIndex : 0)
+            . "\x00";
+        // Local color table when present.
+        if ($hasLct) {
+            $lctOffset = $offset + 10;
+            $gifData .= substr($bytes, $lctOffset, $lctBytes);
+        }
+        // Image Descriptor.
+        $gifData .= substr($bytes, $offset, 10);
+        // LZW image data.
+        $lzwStart = $offset + 10 + ($hasLct ? $lctBytes : 0);
+        $imgDataEnd = self::findImageDataEnd($bytes, $lzwStart);
+        $frameData = substr($bytes, $lzwStart, $imgDataEnd - $lzwStart + 1);
+        $gifData .= $frameData;
+        $gifData .= "\x3B";
+
+        $img = @imagecreatefromstring($gifData);
+        return $img === false ? null : $img;
+    }
+
+    /**
+     * Downsample a GD image (the composited canvas) to a cell grid.
+     */
+    private static function sampleCanvas(\GdImage $canvas, int $cellsW, int $cellsH, int $delay, int $disposal, bool $transparent): Frame
+    {
+        $w = imagesx($canvas);
+        $h = imagesy($canvas);
+
+        $rows = [];
+        for ($cy = 0; $cy < $cellsH; $cy++) {
+            $row = [];
+            for ($cx = 0; $cx < $cellsW; $cx++) {
+                $x0 = (int) ($cx * $w / $cellsW);
+                $x1 = (int) (($cx + 1) * $w / $cellsW) - 1;
+                $y0 = (int) ($cy * $h / $cellsH);
+                $y1 = (int) (($cy + 1) * $h / $cellsH) - 1;
+                $x1 = max($x0, $x1);
+                $y1 = max($y0, $y1);
+
+                $sumR = 0;
+                $sumG = 0;
+                $sumB = 0;
+                $count = 0;
+                    $allTransparent = true;
+                    for ($sy = $y0; $sy <= $y1; $sy++) {
+                        for ($sx = $x0; $sx <= $x1; $sx++) {
+                            $pixel = imagecolorat($canvas, $sx, $sy);
+                            // For truecolor with alpha, the pixel is packed ARGB.
+                            // Alpha=0 means fully opaque, alpha=127 (0x7F) means fully transparent.
+                            // In PHP's GD, imagesavealpha preserves the full 8-bit alpha.
+                            $a = ($pixel >> 24) & 0xFF;
+                            if ($a !== 0) {
+                                // Transparent or semi-transparent pixel — skip in average.
+                                $allTransparent = false;
+                                continue;
+                            }
+                            $allTransparent = false;
+                            $r = ($pixel >> 16) & 0xFF;
+                            $g = ($pixel >> 8) & 0xFF;
+                            $b = $pixel & 0xFF;
+                            $sumR += $r;
+                            $sumG += $g;
+                            $sumB += $b;
+                            $count++;
+                        }
+                    }
+                if ($count > 0) {
+                    $row[] = [
+                        (int) round($sumR / $count),
+                        (int) round($sumG / $count),
+                        (int) round($sumB / $count),
+                    ];
+                } elseif ($allTransparent) {
+                    $row[] = null;
+                } else {
+                    $row[] = null;
+                }
+            }
+            $rows[] = $row;
+        }
+        return new Frame($rows, $delay, $disposal, $transparent);
     }
 
     /**
      * Parse the GIF header: logical screen dimensions, GCT flag + size,
      * and per-frame info (GCE delay + image descriptor offset + disposal
-     * + transparency).
+     * + transparency + image position/size).
      *
      * @return array{
      *   width: int,
      *   height: int,
      *   hasGct: bool,
      *   gctBytes: int,
-     *   frameInfos: list<array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int}>
+     *   frameInfos: list<array{offset: int, delay: int, disposal: int, transparent: bool, transparentIndex: int, hasLct: bool, lctBytes: int, left: int, top: int, frameW: int, frameH: int}>
      * }
      */
     private static function parseHeader(string $bytes): array
@@ -153,6 +341,10 @@ final class Decoder
             }
             if ($blockType === 0x2C) {
                 // Image Descriptor — record its offset and the last-seen GCE values.
+                $left   = ord($bytes[$i + 1]) | (ord($bytes[$i + 2]) << 8);
+                $top    = ord($bytes[$i + 3]) | (ord($bytes[$i + 4]) << 8);
+                $frameW = ord($bytes[$i + 5]) | (ord($bytes[$i + 6]) << 8);
+                $frameH = ord($bytes[$i + 7]) | (ord($bytes[$i + 8]) << 8);
                 $descPacked = ord($bytes[$i + 9] ?? '');
                 $hasLct = (bool) ($descPacked & 0x80);
                 $lctSizeExp = $descPacked & 0x07;
@@ -167,6 +359,10 @@ final class Decoder
                     'transparentIndex' => $lastTransparentIndex,
                     'hasLct' => $hasLct,
                     'lctBytes' => $lctBytes,
+                    'left' => $left,
+                    'top' => $top,
+                    'frameW' => $frameW,
+                    'frameH' => $frameH,
                 ];
                 // Skip image data: LZW sub-blocks (length-prefixed) until block terminator (0x00).
                 $j = $i + 10;
