@@ -8,7 +8,6 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style;
 use SugarCraft\Calendar\Lang;
-use SugarCraft\Core\Util\Ansi;
 
 /**
  * Interactive date picker component.
@@ -120,7 +119,7 @@ final class DatePicker
         } else {
             $clone->viewMonth--;
         }
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -133,7 +132,7 @@ final class DatePicker
         } else {
             $clone->viewMonth++;
         }
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -141,7 +140,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->viewYear--;
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -149,7 +148,7 @@ final class DatePicker
     {
         $clone = clone $this;
         $clone->viewYear++;
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -159,7 +158,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $today->format('n');
         $clone->viewYear  = (int) $today->format('Y');
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -185,7 +184,7 @@ final class DatePicker
         $clone = clone $this;
         $clone->viewMonth = (int) $t->format('n');
         $clone->viewYear  = (int) $t->format('Y');
-        $clone->clampCursor();
+        $clone->cursorIndex = $clone->clampedCursor($clone->cursorIndex);
         return $clone;
     }
 
@@ -425,23 +424,23 @@ final class DatePicker
      */
     public function View(): string
     {
-        $width = 24;  // "   Sun   Mon   Tue   Wed   Thu   Fri   Sat" is 24 chars (3 + 7*3)
+        $width = 21; // 7 days × 3 chars each: "Su Mo Tu We Th Fr Sa" is 21 chars (2 + 1) × 7
         $height = 9; // header + day-names + sep + 6 week rows
         $buffer = Buffer::new($width, $height);
 
-        // Row 0: header "    May 2026" (left-aligned)
+        // Row 0: header "May 2026" (left-aligned)
         $headerText = self::monthName($this->viewMonth) . ' ' . $this->viewYear;
         $buffer = $this->placeStringAt($buffer, 0, 0, $headerText, $this->sgrToBufferStyle($this->headerStyle));
 
         // Row 1: day-name row
         for ($dow = 0; $dow < 7; $dow++) {
-            $col = 3 + $dow * 3; // "   " prefix then each name at offset 3,6,9,12,15,18,21
+            $col = $dow * 3; // 3-char cells: "Su" at col 0, "Mo" at col 3, …
             $dayName = self::dayName($dow);
             $buffer = $this->placeStringAt($buffer, $col, 1, $dayName, $this->sgrToBufferStyle($this->dayNameStyle));
         }
 
         // Row 2: separator
-        for ($col = 3; $col < 24; $col++) {
+        for ($col = 0; $col < 21; $col++) {
             $buffer = $buffer->withCellAt($col, 2, Cell::new('─'));
         }
 
@@ -449,20 +448,16 @@ final class DatePicker
         $cells = $this->buildCells();
         for ($week = 0; $week < 6; $week++) {
             $row = 3 + $week;
-            // Week number: sprintf('%2d ', ...)  — left-aligned at col 0
-            $wkNum = $week * 7 - $this->firstDayOffset() + 1;
-            $buffer = $this->placeStringAt($buffer, 0, $row, \sprintf('%2d ', $wkNum), null);
 
-            // Day cells
+            // Day cells — each day is a 2-char number centered in a 3-char cell
             for ($dow = 0; $dow < 7; $dow++) {
                 $idx = $week * 7 + $dow;
                 [$plain, $style] = $cells[$idx] ?? ['  ', null];
                 if ($plain === '  ' && $style === null) {
                     continue;
                 }
-                // Place the 2-char day number at col+1 (the " X " cell format: space + number + space)
-                $col = 3 + $dow * 3;
-                $buffer = $this->placeStringAt($buffer, $col + 1, $row, $plain, $style);
+                $col = $dow * 3;
+                $buffer = $this->placeStringAt($buffer, $col, $row, $plain, $style);
             }
         }
 
@@ -475,6 +470,7 @@ final class DatePicker
 
     public function WithHeaderStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->headerStyle = $s;
         return $clone;
@@ -482,6 +478,7 @@ final class DatePicker
 
     public function WithTodayStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->todayStyle = $s;
         return $clone;
@@ -489,6 +486,7 @@ final class DatePicker
 
     public function WithSelectedStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->selectedStyle = $s;
         return $clone;
@@ -496,6 +494,7 @@ final class DatePicker
 
     public function WithCursorStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->cursorStyle = $s;
         return $clone;
@@ -503,6 +502,7 @@ final class DatePicker
 
     public function WithRangeStyle(string $s): self
     {
+        self::assertSgr($s);
         $clone = clone $this;
         $clone->rangeStyle = $s;
         return $clone;
@@ -511,6 +511,22 @@ final class DatePicker
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
+
+    /**
+     * Validate an SGR code string — must be empty or digits-only with optional
+     * semicolons (e.g. "1;31", "7", ""). Throws if a full escape sequence is
+     * passed, which would mangle explode(';') inside sgrToBufferStyle().
+     *
+     * @throws \InvalidArgumentException
+     */
+    private static function assertSgr(string $s): void
+    {
+        if ($s !== '' && !\preg_match('/^[0-9;]*$/', $s)) {
+            throw new \InvalidArgumentException(
+                'SGR code must be empty or digits/semicolons only, got: ' . $s
+            );
+        }
+    }
 
     /**
      * Place a string into the buffer at (col, row), handling wide chars.
@@ -633,26 +649,6 @@ final class DatePicker
         return 1;
     }
 
-    private function detectCellStyle(string $cell): ?Style
-    {
-        if (!\preg_match('/\x1b\[([0-9;]+)m/', $cell, $m)) {
-            return null;
-        }
-        return $this->sgrToBufferStyle($m[1]);
-    }
-
-    private function stripAnsi(string $s): string
-    {
-        return \preg_replace('/\x1b\[[0-9;]*m/', '', $s) ?? $s;
-    }
-
-    private function renderHeader(): string
-    {
-        $monthName = self::monthName($this->viewMonth);
-        $title = \sprintf('%s %d', $monthName, $this->viewYear);
-        return $this->ansi($title, $this->headerStyle);
-    }
-
     /**
      * Build 42-cell grid (6 weeks). Each cell is a 2-tuple: [plainText, ?Style].
      *
@@ -707,10 +703,34 @@ final class DatePicker
                 $style = $this->sgrToBufferStyle($this->todayStyle);
             }
 
+            // Apply cursor as final override — compose reverse attr onto existing style
+            // so the cursor is visible even on today/selected/range cells.
+            if ($i === $this->cursorIndex) {
+                $style = $this->applyCursorStyle($style);
+            }
+
             $cells[] = [$text, $style];
         }
 
         return $cells;
+    }
+
+    /**
+     * Compose the cursor's reverse attribute onto a base style, preserving
+     * fg/bg colours so the cursor is visible on today/selected/range cells.
+     */
+    private function applyCursorStyle(?Style $base): Style
+    {
+        $cursorStyle = $this->sgrToBufferStyle($this->cursorStyle);
+        if ($base === null) {
+            return $cursorStyle ?? Style::reverse();
+        }
+        // OR the cursor attrs into the base style, keeping base fg/bg
+        return new Style(
+            $base->fg(),
+            $base->bg(),
+            $base->attrs() | ($cursorStyle?->attrs() ?? Style::ATTR_REVERSE),
+        );
     }
 
     private function buildRange(): ?DateRange
@@ -718,9 +738,15 @@ final class DatePicker
         if ($this->rangeStart === null || $this->rangeEnd === null) {
             return null;
         }
-        // Only highlight range when start and end are in the view month/year
-        if ($this->rangeStart->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth
-            && $this->rangeEnd->format('Y-n') !== $this->viewYear . '-' . $this->viewMonth) {
+        // Highlight any portion of the range that overlaps the view month.
+        // Return null only when the range cannot possibly intersect this month:
+        // i.e. the range ends entirely before the first of this month, OR
+        // the range starts entirely after the last of this month.
+        $firstOfMonth = $this->firstOfViewMonth();
+        if ($firstOfMonth === null) return null;
+        $lastOfMonth = $firstOfMonth->modify('last day of this month')->setTime(23, 59, 59);
+
+        if ($this->rangeEnd < $firstOfMonth || $this->rangeStart > $lastOfMonth) {
             return null;
         }
         return new DateRange($this->rangeStart, $this->rangeEnd);
@@ -734,7 +760,11 @@ final class DatePicker
         return $firstOfMonth !== false ? (int) $firstOfMonth->format('w') : 0;
     }
 
-    private function clampCursor(): void
+    /**
+     * Compute the clamped cursor index for the current view month.
+     * Pure: returns the clamped value without mutating $this.
+     */
+    private function clampedCursor(int $idx): int
     {
         $daysInMonth = (int) \DateTimeImmutable::createFromFormat(
             'Y-m-d', \sprintf('%04d-%02d-01', $this->viewYear, $this->viewMonth)
@@ -743,12 +773,6 @@ final class DatePicker
         $firstDow = $this->firstDayOffset();
         $lastIndex = $firstDow + $daysInMonth - 1;
 
-        $this->cursorIndex = \min($this->cursorIndex, \max(0, $lastIndex));
-    }
-
-    private function ansi(string $text, string $codes): string
-    {
-        if ($codes === '') return $text;
-        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
+        return \min($idx, \max(0, $lastIndex));
     }
 }

@@ -77,4 +77,19 @@ final class NavigationTest extends TestCase
         $date = Navigation::gridIndexToDate(12, 5, 2026);
         $this->assertSame('2026-05-08', $date->format('Y-m-d'));
     }
+
+    public function testGridIndexToDateReturnsNullForOutOfMonthIndex(): void
+    {
+        // January 2026: firstDow=4 (Thu), index 0 maps to dayNum=-3 (Dec 28 prev month)
+        // which is outside the valid range 1-31 → return null.
+        $this->assertNull(Navigation::gridIndexToDate(0, 1, 2026),
+            'gridIndexToDate(0) must return null for Jan 2026 (out-of-month index)');
+    }
+
+    public function testGridIndexToDateReturnsValidDateForInMonthIndex(): void
+    {
+        // Index 4 maps to dayNum=1 (January 1, 2026) — in range.
+        $date = Navigation::gridIndexToDate(4, 1, 2026);
+        $this->assertSame('2026-01-01', $date?->format('Y-m-d'));
+    }
 }

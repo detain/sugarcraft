@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Calendar\Tests;
 
 use SugarCraft\Calendar\DatePicker;
+use SugarCraft\Calendar\Navigation;
 use PHPUnit\Framework\TestCase;
 
 final class DatePickerTest extends TestCase
@@ -103,8 +104,9 @@ final class DatePickerTest extends TestCase
 
     public function testCursorRightBoundary(): void
     {
-        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
-            ->MoveCursorRight(41);  // 42 steps = clamped to 41
+        // MoveCursorRight takes no parameter; index is clamped at 41.
+        // The 45-step loop exercises the clamp boundary.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'));
 
         for ($i = 0; $i < 45; $i++) {
             $dp = $dp->MoveCursorRight();
@@ -380,5 +382,146 @@ final class DatePickerTest extends TestCase
 
         $this->assertSame('2026-05-05', $dp->rangeStart()->format('Y-m-d'));
         $this->assertSame('2026-05-10', $dp->rangeEnd()->format('Y-m-d'));
+    }
+
+    // -------------------------------------------------------------------------
+    // Cursor rendering
+    // -------------------------------------------------------------------------
+
+    public function testWithCursorStyleAffectsView(): void
+    {
+        // May 2026: firstDow=5 (Fri), index 5 = May 1
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Move cursor to index 5 (May 1, a real day cell) to ensure cursor renders
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $viewDefault = $dp->View();
+
+        // Underline style (SGR 4) should produce different bytes than default (SGR 7 reverse)
+        $viewUnderline = $dp->WithCursorStyle('4')->View();
+
+        $this->assertNotSame($viewDefault, $viewUnderline,
+            'Different cursor styles must produce different View() output');
+    }
+
+    public function testCursorIndexReflectedInView(): void
+    {
+        // Pin today to May 2026 and move cursor to a real day cell (index 5 = May 1)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $view = $dp->View();
+
+        // The View() output must contain SGR [0;7m (Buffer emits reset+attrs)
+        // at the cursor cell (May 1 at index 5)
+        $this->assertStringContainsString("\x1b[0;7m", $view,
+            'View() must contain SGR 0;7 (reverse) at the cursor cell');
+    }
+
+    public function testCursorMovesHighlight(): void
+    {
+        // May 2026: firstDow=5 (Fri), index 5 = May 1, index 13 = May 9
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Cursor at index 5 (May 1)
+        $view0 = $dp->View();
+
+        // Move cursor down (index 12) then right (index 13 = May 9)
+        $dp2 = $dp->MoveCursorDown()->MoveCursorRight();
+        $viewMoved = $dp2->View();
+
+        $this->assertNotSame($view0, $viewMoved,
+            'Moving the cursor must change the View() output');
+
+        // The moved-cursor output must contain the reverse SGR at the new cell
+        $this->assertStringContainsString("\x1b[0;7m", $viewMoved,
+            'Moved cursor position must carry SGR 0;7 in output');
+    }
+
+    // -------------------------------------------------------------------------
+    // Edge-case coverage
+    // -------------------------------------------------------------------------
+
+    public function testHandleKeyEnterOutsideRangeModeIsNoOp(): void
+    {
+        // handleKey('enter') in non-range mode is a no-op (current behaviour)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Navigate to a valid day first
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $dp = $dp->handleKey('enter');
+
+        // Enter outside range mode should not select anything
+        $this->assertFalse($dp->IsSelecting(),
+            'Enter outside range mode must not enter selection mode');
+        $this->assertNull($dp->SelectedDate(),
+            'Enter outside range mode must not set a selected date');
+    }
+
+    public function testClampCursorAfterNavigatingToShorterMonth(): void
+    {
+        // Start on May 2026 (31 days, firstDow=5), cursor at index 41 (End)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'))
+            ->handleKey('end');  // cursorIndex = 41
+
+        $this->assertSame(41, $dp->CursorIndex());
+
+        // Navigate to April 2026 (30 days, firstDow=3)
+        // After navigation, clampCursor should pull index 41 back to 3 + 30 - 1 = 32
+        $dp2 = $dp->GoToPreviousMonth();
+
+        // April 30 is at index 3 + 29 = 32 (firstDow=3, lastDayIndex=32)
+        $this->assertSame(32, $dp2->CursorIndex(),
+            'Cursor must be clamped to last valid index of shorter month');
+    }
+
+    public function testCursorDateMappingsAgree(): void
+    {
+        // dateAtCursor() (uses viewMonth/viewYear) and Navigation::gridIndexToDate()
+        // must agree for every grid index 0-41 in May 2026.
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+        $month = $dp->ViewMonth();
+        $year = $dp->ViewYear();
+
+        for ($idx = 0; $idx <= 41; $idx++) {
+            // Simulate what dateAtCursor does for this index
+            $firstOfMonth = new \DateTimeImmutable("$year-$month-01");
+            $firstDow = (int) $firstOfMonth->format('w');
+            $daysInMonth = (int) $firstOfMonth->format('t');
+            $dayNum = $idx - $firstDow + 1;
+
+            if ($dayNum < 1 || $dayNum > $daysInMonth) {
+                $expected = null;
+            } else {
+                $expected = $firstOfMonth->modify('+' . ($dayNum - 1) . ' days');
+            }
+
+            $actual = Navigation::gridIndexToDate($idx, $month, $year);
+
+            if ($expected === null) {
+                $this->assertNull($actual,
+                    "Index $idx: expected null but gridIndexToDate returned a date");
+            } else {
+                $this->assertSame(
+                    $expected->format('Y-m-d'),
+                    $actual?->format('Y-m-d'),
+                    "Index $idx: dateAtCursor formula and gridIndexToDate must agree"
+                );
+            }
+        }
     }
 }
