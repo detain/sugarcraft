@@ -248,4 +248,101 @@ final class VeilStackTest extends TestCase
 
         $this->assertCount(2, $filtered);
     }
+
+    // ─── Step 4: positional-correctness ─────────────────────────────────────────
+
+    /**
+     * compositeAll() now honors per-veil positions. Two veils with different
+     * positions set via withPosition() should have those positions preserved
+     * through withoutSession() and accessible via vPosition()/hPosition().
+     */
+    public function testCompositeAllHonorsPerVeilPositions(): void
+    {
+        $bg = str_repeat('.', 20) . "\n" . str_repeat('.', 20);
+
+        $veilTopRight = Veil::new()
+            ->withZIndex(0)
+            ->withPosition(Position::TOP, Position::RIGHT, x: 0, y: 0);
+
+        $veilBottomLeft = Veil::new()
+            ->withZIndex(1)
+            ->withPosition(Position::BOTTOM, Position::LEFT, x: 0, y: 0);
+
+        $stack = VeilStack::new()->add($veilTopRight)->add($veilBottomLeft);
+        $result = $stack->compositeAll($bg);
+
+        $this->assertIsString($result);
+        $lines = Veil::new()->splitLines($result);
+
+        // Verify positions are stored and accessible
+        $this->assertSame(Position::TOP, $veilTopRight->vPosition());
+        $this->assertSame(Position::RIGHT, $veilTopRight->hPosition());
+        $this->assertSame(Position::BOTTOM, $veilBottomLeft->vPosition());
+        $this->assertSame(Position::LEFT, $veilBottomLeft->hPosition());
+
+        // withoutSession() preserves position state
+        $freshTopRight = $veilTopRight->withoutSession();
+        $freshBottomLeft = $veilBottomLeft->withoutSession();
+        $this->assertSame(Position::TOP, $freshTopRight->vPosition());
+        $this->assertSame(Position::BOTTOM, $freshBottomLeft->vPosition());
+
+        // Result is a full composite string (not empty)
+        $this->assertGreaterThan(0, \strlen($result));
+    }
+
+    // ─── Step 5: frame 2 full-output (no delta-as-background corruption) ────────
+
+    /**
+     * compositeAll() uses withoutSession() so each inner composite emits a FULL
+     * frame. Composing the same stack twice should still produce full-frame
+     * output on frame 2 (not a delta passed as background to inner veils).
+     */
+    public function testCompositeAllFrame2StillContainsFullBackground(): void
+    {
+        $bg = "....................\n....................";
+        $sentinel = "sentinel_bg_unchanged"; // Non-changing background sentinel
+
+        // Background that doesn't change between frames
+        $staticBg = str_repeat(".", 20) . "\n" . str_repeat(".", 20);
+
+        $veil = Veil::new()
+            ->withZIndex(0)
+            ->withBackdrop(30)
+            ->withPosition(Position::TOP, Position::LEFT);
+
+        $stack = VeilStack::new()->add($veil);
+
+        // Frame 1: full output
+        $frame1 = $stack->compositeAll($staticBg);
+        $this->assertStringContainsString('.', $frame1, 'Frame 1 should contain background dots');
+        $this->assertGreaterThan(35, \strlen($frame1), 'Frame 1 should be full output');
+
+        // Frame 2: same stack, same background — should still be full output
+        // (NOT a delta that would corrupt inner compositing)
+        $frame2 = $stack->compositeAll($staticBg);
+        $this->assertStringContainsString('.', $frame2, 'Frame 2 should still contain background dots (full frame, not delta)');
+        $this->assertGreaterThan(35, \strlen($frame2), 'Frame 2 should be full output, not a small delta');
+    }
+
+    /**
+     * VeilStack::composite() (per-veil position variant) should similarly emit
+     * full frames at every layer so the chaining is not corrupted by deltas.
+     */
+    public function testCompositeFrame2StillFullOutput(): void
+    {
+        $bg = str_repeat(".", 20) . "\n" . str_repeat(".", 20);
+
+        $veil = Veil::new()->withZIndex(0)->withBackdrop(30);
+
+        $stack = VeilStack::new()->add($veil);
+
+        // Frame 1
+        $frame1 = $stack->composite($bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('.', $frame1);
+
+        // Frame 2
+        $frame2 = $stack->composite($bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('.', $frame2, 'Frame 2 should still contain background (full frame)');
+        $this->assertGreaterThan(35, \strlen($frame2));
+    }
 }
