@@ -37,4 +37,14 @@ final class JsonStreamBackendTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new JsonStreamBackend(42);
     }
+
+    public function testWriteFailureThrows(): void
+    {
+        // A read-only stream rejects all writes.
+        $stream = fopen('php://memory', 'r');
+        $b = new JsonStreamBackend($stream);
+        $this->expectException(\RuntimeException::class);
+        $b->counter('hits', 1);
+        fclose($stream);
+    }
 }

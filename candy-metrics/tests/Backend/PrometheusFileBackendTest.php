@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Metrics\Tests\Backend;
 
 use SugarCraft\Metrics\Backend\PrometheusFileBackend;
+use SugarCraft\Metrics\Descriptor;
 use PHPUnit\Framework\TestCase;
 
 final class PrometheusFileBackendTest extends TestCase
@@ -84,5 +85,78 @@ final class PrometheusFileBackendTest extends TestCase
         $this->assertStringContainsString('first', $first);
         $this->assertStringNotContainsString('first',  $second);
         $this->assertStringContainsString('second',    $second);
+    }
+
+    public function testDottedNameSanitizedToUnderscores(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('http.request.duration', 1);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('http_request_duration 1', $content);
+        $this->assertStringContainsString('# TYPE http_request_duration counter', $content);
+        $this->assertStringNotContainsString('http.request.duration', $content);
+    }
+
+    public function testNameInjectionNeutralized(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        // A name containing newline + brace chars could inject extra metric lines
+        // if not sanitized. The sanitizer replaces \n and { } with underscores.
+        $b->counter("test\n{metric}\naline", 1);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // Exactly one sample line should exist under the sanitized name.
+        // Raw newlines in the name become underscores, so no line-break injection.
+        $this->assertStringContainsString('test__metric__aline 1', $content);
+        // The raw problematic name patterns must not appear literally.
+        $this->assertStringNotContainsString("test\n{", $content);
+        $this->assertStringNotContainsString("\n{", $content);
+        // Should have exactly one TYPE line (not one per injected line).
+        $this->assertSame(1, substr_count($content, '# TYPE test__metric__aline counter'));
+    }
+
+    public function testTypeEmittedOncePerFamily(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->counter('hits', 1, ['a' => '1']);
+        $b->counter('hits', 2, ['a' => '2']);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // Exactly one TYPE line for the 'hits' family despite two label sets.
+        $this->assertSame(1, substr_count($content, '# TYPE hits counter'));
+        // Both series lines must still be present.
+        $this->assertStringContainsString('hits{a="1"} 1', $content);
+        $this->assertStringContainsString('hits{a="2"} 2', $content);
+    }
+
+    public function testRegisteredDescriptorEmitsHelpBeforeSamples(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->describe(new Descriptor('request_latency', 'HTTP request latency in seconds', 'histogram'));
+        // Record nothing — this is a zero-sample descriptor.
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        $this->assertStringContainsString('# HELP request_latency HTTP request latency in seconds', $content);
+        $this->assertStringContainsString('# TYPE request_latency histogram', $content);
+    }
+
+    public function testDescriptorHelpForSampledMetric(): void
+    {
+        $b = new PrometheusFileBackend($this->path);
+        $b->describe(new Descriptor('hits', 'Total HTTP request count', 'counter'));
+        $b->counter('hits', 5);
+        $b->flush();
+
+        $content = (string) file_get_contents($this->path);
+        // Exactly one HELP and one TYPE for the 'hits' family.
+        $this->assertSame(1, substr_count($content, '# HELP hits Total HTTP request count'));
+        $this->assertSame(1, substr_count($content, '# TYPE hits counter'));
+        // Sample line must still be present.
+        $this->assertStringContainsString('hits 5', $content);
     }
 }
