@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Schema;
 
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Identifier;
 
 /**
  * PostgreSQL schema provider using information_schema and pg_catalog.
@@ -127,7 +128,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
      */
     public function dropTable(string $table): void
     {
-        $safeTable = $this->db->quote($table);
+        $safeTable = Identifier::quote(Flavor::Postgres, $table);
         $this->db->exec("DROP TABLE IF EXISTS {$safeTable}");
     }
 

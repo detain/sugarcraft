@@ -6,6 +6,7 @@ namespace SugarCraft\Query\Schema;
 
 use SugarCraft\Query\Db\Flavor;
 use SugarCraft\Query\Db\DatabaseInterface;
+use SugarCraft\Query\Db\Identifier;
 
 /**
  * MySQL schema provider using information_schema queries.
@@ -139,7 +140,7 @@ final class MysqlSchemaProvider implements SchemaProviderInterface
      */
     public function dropTable(string $table): void
     {
-        $safeTable = $this->db->quote($table);
+        $safeTable = Identifier::quote($this->flavor, $table);
         $this->db->exec("DROP TABLE IF EXISTS {$safeTable}");
     }
 

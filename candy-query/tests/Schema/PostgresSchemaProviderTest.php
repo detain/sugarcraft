@@ -175,14 +175,14 @@ final class PostgresSchemaProviderTest extends TestCase
     {
         $mock = $this->createMock(DatabaseInterface::class);
 
-        $mock->expects($this->once())
-            ->method('quote')
-            ->with('users')
-            ->willReturn("'users'");
+        // Identifier::quote() is used instead of DatabaseInterface::quote(),
+        // so no quote() call is expected on the database mock.
+        $mock->expects($this->never())
+            ->method('quote');
 
         $mock->expects($this->once())
             ->method('exec')
-            ->with("DROP TABLE IF EXISTS 'users'");
+            ->with('DROP TABLE IF EXISTS "users"');
 
         $provider = new PostgresSchemaProvider($mock);
         $provider->dropTable('users');
