@@ -26,13 +26,25 @@ final class HookRegistry
      *
      * @param Level        $level    Minimum level to trigger the callback.
      * @param callable     $callback (Level, string, string, array<mixed>): void
-     * @return int                         Unique registration ID.
+     * @return int                         Sequential registration index (not a removal handle).
      */
     public function onLevel(Level $level, callable $callback): int
     {
         $id = $this->nextId++;
         $this->handlers[$level->value][] = $callback;
         return $id;
+    }
+
+    /**
+     * Register a Hook object to be invoked for all events at or above $level.
+     *
+     * @param Level $level  Minimum level to trigger the hook.
+     * @param Hook  $hook   Hook implementation to register.
+     * @return int          Sequential registration index (not a removal handle).
+     */
+    public function addHook(Level $level, Hook $hook): int
+    {
+        return $this->onLevel($level, [$hook, 'onLevel']);
     }
 
     /**
