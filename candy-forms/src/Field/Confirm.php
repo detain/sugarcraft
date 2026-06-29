@@ -11,6 +11,7 @@ use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Forms\Field;
 use SugarCraft\Forms\HasDynamicLabels;
 use SugarCraft\Forms\HasHideFunc;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Yes / No question. The user toggles the answer with `←/→`, `h/l`, or
@@ -118,10 +119,10 @@ final class Confirm implements \SugarCraft\Forms\Field
         if ($title !== '') { $lines[] = $title; }
         if ($desc  !== '') { $lines[] = $desc; }
 
-        $yes = $this->value ? Ansi::sgr(Ansi::REVERSE) . " {$this->affirmative} " . Ansi::reset()
-                            : " {$this->affirmative} ";
-        $no  = $this->value ? " {$this->negative} "
-                            : Ansi::sgr(Ansi::REVERSE) . " {$this->negative} " . Ansi::reset();
+        $yes = $this->value ? Ansi::sgr(Ansi::REVERSE) . ' ' . RenderSafe::clean($this->affirmative) . ' ' . Ansi::reset()
+                            : ' ' . RenderSafe::clean($this->affirmative) . ' ';
+        $no  = $this->value ? ' ' . RenderSafe::clean($this->negative) . ' '
+                            : Ansi::sgr(Ansi::REVERSE) . ' ' . RenderSafe::clean($this->negative) . ' ' . Ansi::reset();
         $lines[] = $yes . '   ' . $no;
         return implode("\n", $lines);
     }
