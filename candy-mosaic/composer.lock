@@ -214,12 +214,13 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-async",
-                "reference": "da4cecf42d60c6d575dd7d088da78fb9516d180a"
+                "reference": "d59d32a5c563858d6b63684e2c5ea1f3c2235755"
             },
             "require": {
                 "php": "^8.3",
                 "react/event-loop": "^1.6",
-                "react/promise": "^3.3"
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -342,10 +343,11 @@
             "dist": {
                 "type": "path",
                 "url": "../candy-input",
-                "reference": "1d775d2cf576fd650b1940504ffd8057bbb93fed"
+                "reference": "8a55425345b9474869314fcd24f1ad22f8b31aea"
             },
             "require": {
-                "php": "^8.3"
+                "php": "^8.3",
+                "sugarcraft/candy-core": "dev-master"
             },
             "require-dev": {
                 "phpunit/phpunit": "^10.5"
@@ -512,12 +514,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/sugarcraft/candy-pty.git",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08"
+                "reference": "a445fc57928bd511f7f42eeb716b1598ca25a9ff"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
-                "reference": "58f9d4cfa7a04b6a2a8a793a40dad2b753cbae08",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/a445fc57928bd511f7f42eeb716b1598ca25a9ff",
+                "reference": "a445fc57928bd511f7f42eeb716b1598ca25a9ff",
                 "shasum": ""
             },
             "require": {
@@ -573,7 +575,7 @@
                 "issues": "https://github.com/sugarcraft/candy-pty/issues",
                 "source": "https://github.com/sugarcraft/candy-pty"
             },
-            "time": "2026-06-01T13:14:26+00:00"
+            "time": "2026-06-29T12:12:00+00:00"
         },
         {
             "name": "sugarcraft/candy-sprinkles",
@@ -2878,5 +2880,5 @@
         "ext-mbstring": "*"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
