@@ -93,8 +93,49 @@ final class SmtpTransportTest extends TestCase
         $mime = $buildMime->invoke($transport, $email);
 
         // Body section should have consistent CRLF framing - no bare CR
-        // Extract just the body lines (between Content-Type and boundary)
         $this->assertStringNotContainsString("\r\r", $mime);
         $this->assertStringContainsString("Line1\r\n", $mime);
+    }
+
+    public function testUtf8SubjectIsRfc2047Encoded(): void
+    {
+        $transport = new SmtpTransport('smtp.example.com', 587);
+
+        $reflection = new \ReflectionClass($transport);
+        $buildMime = $reflection->getMethod('buildMimeMessage');
+        $buildMime->setAccessible(true);
+
+        // Subject with non-ASCII (UTF-8 encoded)
+        $email = new Email(
+            from:    ['from@example.com'],
+            to:      ['to@example.com'],
+            subject: 'Héllo Wörld',
+        );
+
+        $mime = $buildMime->invoke($transport, $email);
+
+        $this->assertStringContainsString('Subject: =?UTF-8?B?', $mime);
+        // Should NOT contain raw non-ASCII in subject header
+        $this->assertDoesNotMatchRegularExpression('/Subject: [^\r\n]*[^\x00-\x7F]/', $mime);
+    }
+
+    public function testNonAsciiBodyDeclares8bit(): void
+    {
+        $transport = new SmtpTransport('smtp.example.com', 587);
+
+        $reflection = new \ReflectionClass($transport);
+        $buildMime = $reflection->getMethod('buildMimeMessage');
+        $buildMime->setAccessible(true);
+
+        // Body with non-ASCII UTF-8 characters
+        $email = new Email(
+            from:    ['from@example.com'],
+            to:      ['to@example.com'],
+            body:    "Café résumé",
+        );
+
+        $mime = $buildMime->invoke($transport, $email);
+
+        $this->assertStringContainsString("Content-Transfer-Encoding: 8bit\r\n", $mime);
     }
 }
