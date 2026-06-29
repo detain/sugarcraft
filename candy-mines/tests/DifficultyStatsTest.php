@@ -103,4 +103,26 @@ final class DifficultyStatsTest extends TestCase
         $loaded = DifficultyStats::load($this->persistencePath);
         $this->assertSame(99, $loaded->getStats()->easyGames);
     }
+
+    public function testLoadThrowsOnNonIntegerField(): void
+    {
+        // Write a valid v1 payload but with easyGames as a string instead of int.
+        $payload = json_encode([
+            'version' => 1,
+            'data' => [
+                'easyGames' => 'not-an-integer',
+                'easyWins' => 0,
+                'easyBest' => null,
+                'mediumGames' => 0,
+                'mediumWins' => 0,
+                'mediumBest' => null,
+                'expertGames' => 0,
+                'expertWins' => 0,
+                'expertBest' => null,
+            ],
+        ]);
+        file_put_contents($this->persistencePath, $payload);
+        $this->expectException(\RuntimeException::class);
+        DifficultyStats::load($this->persistencePath);
+    }
 }
