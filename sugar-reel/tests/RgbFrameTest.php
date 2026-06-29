@@ -277,4 +277,39 @@ final class RgbFrameTest extends TestCase
             restore_error_handler();
         }
     }
+
+    /**
+     * @testdox toGd() clamps trailing pixels to black (0x000000) when the
+     *           byte buffer is undersized (fewer than w*h*3 bytes)
+     *
+     * RgbFrame is a value object that trusts its caller to provide a
+     * well-formed byte buffer. When the buffer falls short, toGd() clamps
+     * missing bytes to black rather than reading garbage or emitting warnings
+     * (RgbFrame.php lines 71-77). This test verifies that contract:
+     * a 3x1 frame that only provides 3 bytes (1 pixel) must render the
+     * trailing 2 pixels as black.
+     */
+    public function testToGdClampsUndersizedBufferToBlack(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('GD required');
+        }
+
+        // 3×1 frame but only 3 bytes (1 pixel) — needs 9 bytes total.
+        // The single supplied pixel is red; the other 2 must clamp to black.
+        $bytes = "\xff\x00\x00"; // 1 red pixel
+        $frame = new RgbFrame($bytes, 3, 1);
+
+        // failOnWarning="true" in phpunit.xml means any PHP warning would fail the test.
+        $img = $frame->toGd();
+
+        // Pixel 0 (supplied) must be red.
+        $this->assertSame(0x00ff0000, imagecolorat($img, 0, 0), 'Pixel 0 must be red (RRGGBB)');
+
+        // Pixels 1 and 2 (clamped) must be black.
+        $this->assertSame(0x00000000, imagecolorat($img, 1, 0), 'Pixel 1 must be black (clamped)');
+        $this->assertSame(0x00000000, imagecolorat($img, 2, 0), 'Pixel 2 must be black (clamped)');
+
+        imagedestroy($img);
+    }
 }
