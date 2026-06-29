@@ -17,7 +17,6 @@ final readonly class BlockContext
     public function __construct(
         public BlockKind $kind,
         public int $depth,
-        public int $availableWidth,
         public int $accumulatedIndent,
         public Style $cascadedStyle,
     ) {}

@@ -19,7 +19,7 @@ final class BlockStackTest extends TestCase
         $this->assertNull($stack->peek());
         $this->assertNull($stack->peekKind());
 
-        $ctx = new BlockContext(BlockKind::Document, 0, 80, 0, Style::new());
+        $ctx = new BlockContext(BlockKind::Document, 0, 0, Style::new());
         $stack->push($ctx);
 
         $this->assertFalse($stack->isEmpty());
@@ -30,38 +30,6 @@ final class BlockStackTest extends TestCase
         $popped = $stack->pop();
         $this->assertSame($ctx, $popped);
         $this->assertTrue($stack->isEmpty());
-    }
-
-    public function testPopToFindsTargetKind(): void
-    {
-        $stack = new BlockStack();
-
-        $doc = new BlockContext(BlockKind::Document, 0, 80, 0, Style::new());
-        $quote = new BlockContext(BlockKind::BlockQuote, 1, 78, 2, Style::new());
-        $para = new BlockContext(BlockKind::Paragraph, 2, 76, 4, Style::new());
-
-        $stack->push($doc);
-        $stack->push($quote);
-        $stack->push($para);
-
-        // Pop until BlockQuote is found.
-        $found = $stack->popTo(BlockKind::BlockQuote);
-        $this->assertSame($quote, $found);
-
-        // Only Document remains (Paragraph was popped searching for BlockQuote).
-        $this->assertSame(1, $stack->depth());
-        $this->assertSame(BlockKind::Document, $stack->peekKind());
-    }
-
-    public function testPopToReturnsNullWhenNotFound(): void
-    {
-        $stack = new BlockStack();
-
-        $doc = new BlockContext(BlockKind::Document, 0, 80, 0, Style::new());
-        $stack->push($doc);
-
-        $found = $stack->popTo(BlockKind::BlockQuote);
-        $this->assertNull($found);
     }
 
     public function testPopEmptyThrowsUnderflow(): void
@@ -76,19 +44,19 @@ final class BlockStackTest extends TestCase
         $stack = new BlockStack();
 
         // Document at indent 0.
-        $stack->push(new BlockContext(BlockKind::Document, 0, 80, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Document, 0, 0, Style::new()));
         $this->assertSame(0, $stack->accumulatedIndent());
 
         // BlockQuote adds 2.
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 78, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 2, Style::new()));
         $this->assertSame(2, $stack->accumulatedIndent());
 
         // Nested BlockQuote adds another 2 = 4 total.
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 76, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 2, Style::new()));
         $this->assertSame(4, $stack->accumulatedIndent());
 
         // Paragraph adds 0, so still 4.
-        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 76, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 0, Style::new()));
         $this->assertSame(4, $stack->accumulatedIndent());
     }
 
@@ -98,19 +66,19 @@ final class BlockStackTest extends TestCase
 
         $this->assertSame(0, $stack->marginCount());
 
-        $stack->push(new BlockContext(BlockKind::Document, 0, 80, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Document, 0, 0, Style::new()));
         $this->assertSame(0, $stack->marginCount());
 
         // BlockQuote adds to margin count.
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 78, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 2, Style::new()));
         $this->assertSame(1, $stack->marginCount());
 
         // ListItem also adds.
-        $stack->push(new BlockContext(BlockKind::ListItem, 2, 76, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::ListItem, 2, 0, Style::new()));
         $this->assertSame(2, $stack->marginCount());
 
         // Paragraph does not.
-        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 76, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 0, Style::new()));
         $this->assertSame(2, $stack->marginCount());
     }
 
@@ -122,17 +90,17 @@ final class BlockStackTest extends TestCase
         $this->assertSame(80, $stack->availableWidth(80));
 
         // Add BlockQuote (adds 2 indent + 1 margin).
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 78, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 2, Style::new()));
         // availableWidth = 80 - 2 - 1*2 = 76.
         $this->assertSame(76, $stack->availableWidth(80));
 
         // Add nested BlockQuote (adds 2 more indent, 1 more margin).
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 76, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 2, Style::new()));
         // availableWidth = 80 - 4 - 2*2 = 72.
         $this->assertSame(72, $stack->availableWidth(80));
 
         // Add Paragraph (no indent, no margin).
-        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 72, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Paragraph, 3, 0, Style::new()));
         // availableWidth = 80 - 4 - 2*2 = 72 (same as before).
         $this->assertSame(72, $stack->availableWidth(80));
     }
@@ -142,10 +110,10 @@ final class BlockStackTest extends TestCase
         $stack = new BlockStack();
 
         // Force narrow width with deep nesting.
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 2, 2, Style::new()));
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 2, 2, Style::new()));
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 3, 2, 2, Style::new()));
-        $stack->push(new BlockContext(BlockKind::BlockQuote, 4, 2, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 1, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 2, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 3, 2, Style::new()));
+        $stack->push(new BlockContext(BlockKind::BlockQuote, 4, 2, Style::new()));
 
         // 10 - 8 - 4*2 = -6, but we clamp to 1.
         $this->assertSame(1, $stack->availableWidth(10));
@@ -155,10 +123,10 @@ final class BlockStackTest extends TestCase
     {
         $stack = new BlockStack();
 
-        $stack->push(new BlockContext(BlockKind::Document, 0, 80, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Document, 0, 0, Style::new()));
         $this->assertSame(1, $stack->depth());
 
-        $stack->push(new BlockContext(BlockKind::Paragraph, 1, 80, 0, Style::new()));
+        $stack->push(new BlockContext(BlockKind::Paragraph, 1, 0, Style::new()));
         $this->assertSame(2, $stack->depth());
 
         $stack->pop();
