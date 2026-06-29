@@ -162,10 +162,45 @@ final class SshConfigParser
 
     private function expandPath(string $path): string
     {
-        if (str_starts_with($path, '~')) {
-            $home = getenv('HOME') ?: (function_exists('posix_getpwuid') && posix_getpwuid(posix_geteuid()) !== false ? posix_getpwuid(posix_geteuid())['dir'] : '/root');
+        if (strncmp($path, '~', 1) !== 0) {
+            return $path;
+        }
+
+        // Parse ~user/path or ~/path using a simple string scan instead of regex
+        $len = strlen($path);
+        if ($len >= 2 && $path[1] === '/') {
+            // ~/path — current user's home
+            $home = getenv('HOME') ?? '/root';
             return $home . substr($path, 1);
         }
+
+        // ~user/path — find the first slash
+        $slashPos = strpos($path, '/');
+        if ($slashPos === false) {
+            // ~user with no slash — entire path is the user name
+            $user = substr($path, 1);
+            $rest = '';
+        } else {
+            $user = substr($path, 1, $slashPos - 1);
+            $rest = substr($path, $slashPos);
+        }
+
+        if ($user === '') {
+            // Edge case: just ~ or ~/... (already handled above)
+            $home = getenv('HOME') ?? '/root';
+            return $home . $rest;
+        }
+
+        // ~user/path — try to resolve via posix_getpwnam
+        if (function_exists('posix_getpwnam')) {
+            $pw = @posix_getpwnam($user);
+            if ($pw !== false && isset($pw['dir'])) {
+                return $pw['dir'] . $rest;
+            }
+        }
+
+        // Cannot resolve ~user — return path unchanged rather than
+        // producing garbage like <home>user/...
         return $path;
     }
 
