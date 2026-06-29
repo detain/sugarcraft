@@ -187,7 +187,7 @@ class AudioPlayer
 
         // Fall back to mpv. --no-video keeps it audio-only (no window);
         // --really-quiet suppresses its status output on our discarded pipes.
-        $mpvPath = $this->findMpv();
+        $mpvPath = Probe::mpv();
         if ($mpvPath !== null) {
             $cmd = [$mpvPath, '--no-video', '--really-quiet'];
             if ($this->startMs !== null) {
@@ -199,24 +199,6 @@ class AudioPlayer
         }
 
         return null;
-    }
-
-    /**
-     * Locate the mpv binary via `command -v` (Unix) or `where` (Windows).
-     *
-     * Mirrors the which() pattern from Probe::which() but specific to mpv.
-     */
-    private function findMpv(): ?string
-    {
-        $shell = DIRECTORY_SEPARATOR === '\\'
-            ? 'where mpv 2>NUL'
-            : 'command -v mpv 2>/dev/null';
-        $out = @shell_exec($shell);
-        if (!is_string($out) || trim($out) === '') {
-            return null;
-        }
-        $first = strtok(trim($out), "\r\n");
-        return $first ?: null;
     }
 
     /** @var resource|null */

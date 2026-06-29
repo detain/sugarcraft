@@ -50,6 +50,16 @@ class Probe
     }
 
     /**
+     * Path to the mpv binary, or null if not found.
+     *
+     * @see candy-core/src/Util/Editor.php:154
+     */
+    public static function mpv(): ?string
+    {
+        return static::which('mpv');
+    }
+
+    /**
      * True when the ffmpeg binary is available on this host.
      */
     public static function hasFFmpeg(): bool
