@@ -167,4 +167,18 @@ final class FrameTest extends TestCase
         self::assertStringContainsString('38;2;255;0;0', $out);
         self::assertStringNotContainsString('38;2;100;116;139', $out);
     }
+
+    /** Truncating an over-wide styled line must preserve its foreground colour. */
+    public function testStyledOverWideLineKeepsColor(): void
+    {
+        $styled = Style::new()->foreground(Color::hex('#ff0000'))->render(str_repeat('x', 500));
+        $out = Frame::new()->render($styled, 80, 24);
+
+        // The red SGR introducer (38;2;255;0;0) must survive the truncation.
+        self::assertStringContainsString('38;2;255;0;0', $out);
+        // Every line must still be exactly $cols cells (Width::string ignores SGR).
+        foreach (explode("\n", $out) as $line) {
+            self::assertSame(80, Width::string($line), 'truncated styled line must fill terminal exactly');
+        }
+    }
 }
