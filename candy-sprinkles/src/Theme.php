@@ -17,10 +17,10 @@ final class Theme
     /**
      * @param Color $foreground  Primary text colour
      * @param Color $background  Canvas colour
-     * @param Color $primary     Main interactive / brand colour  (alias: $accent)
-     * @param Color $secondary   Supporting colour (alias: $muted)
-     * @param Color $accent      Synonym for $primary
-     * @param Color $muted       Synonym for $secondary
+     * @param Color $primary     Main interactive / brand colour
+     * @param Color $secondary   Supporting colour
+     * @param Color $accent      Accent colour; defaults to $primary in basic themes, distinct in richer named themes
+     * @param Color $muted       Muted colour; defaults to $secondary in basic themes, distinct in richer named themes
      * @param Color $error      Error / danger state
      * @param Color $warning    Warning state
      * @param Color $success    Positive / confirmation state

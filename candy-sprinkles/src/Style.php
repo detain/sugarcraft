@@ -805,6 +805,14 @@ final class Style
             colorWhitespace:  $has('colorWhitespace')  ? $this->colorWhitespace  : $parent->colorWhitespace,
             tabWidth:         $has('tabWidth')         ? $this->tabWidth         : $parent->tabWidth,
             transform:        $has('transform')        ? $this->transform        : $parent->transform,
+            rapidBlink:       $has('rapidBlink')       ? $this->rapidBlink       : $parent->rapidBlink,
+            hyperlink:        $has('hyperlink')        ? $this->hyperlink        : $parent->hyperlink,
+            hyperlinkId:      $has('hyperlink')        ? $this->hyperlinkId      : $parent->hyperlinkId,
+            boundString:      $has('boundString')      ? $this->boundString      : $parent->boundString,
+            underlineColor:   $has('underlineColor')  ? $this->underlineColor   : $parent->underlineColor,
+            underlineStyle:  $has('underlineStyle')  ? $this->underlineStyle   : $parent->underlineStyle,
+            paddingChar:      $has('paddingChar')      ? $this->paddingChar      : $parent->paddingChar,
+            marginChar:       $has('marginChar')       ? $this->marginChar       : $parent->marginChar,
         );
     }
 
@@ -865,6 +873,13 @@ final class Style
         $mergedColorWhitespace = $other->isSet('colorWhitespace') ? $other->colorWhitespace : null;
         $mergedTabWidth     = $other->isSet('tabWidth')      ? $other->tabWidth     : null;
         $mergedTransform   = $applied('transform', $other->transform);
+        $mergedHyperlink   = $other->isSet('hyperlink')     ? $other->hyperlink   : null;
+        $mergedHyperlinkId = $other->isSet('hyperlink')     ? $other->hyperlinkId : null;
+        $mergedBoundString = $other->isSet('boundString')   ? $other->boundString : null;
+        $mergedUnderlineColor = $other->isSet('underlineColor') ? $other->underlineColor : null;
+        $mergedUnderlineStyle = $other->isSet('underlineStyle') ? $other->underlineStyle : null;
+        $mergedPaddingChar = $other->isSet('paddingChar')   ? $other->paddingChar : null;
+        $mergedMarginChar  = $other->isSet('marginChar')    ? $other->marginChar  : null;
 
         $newProps = $this->propsSet;
         foreach ($other->propsSet as $p => $v) {
@@ -909,6 +924,13 @@ final class Style
             colorWhitespace:  $mergedColorWhitespace ?? $this->colorWhitespace,
             tabWidth:         $mergedTabWidth     ?? $this->tabWidth,
             transform:        $mergedTransform   ?? $this->transform,
+            hyperlink:        $mergedHyperlink   ?? $this->hyperlink,
+            hyperlinkId:      $mergedHyperlinkId ?? $this->hyperlinkId,
+            boundString:      $mergedBoundString ?? $this->boundString,
+            underlineColor:   $mergedUnderlineColor ?? $this->underlineColor,
+            underlineStyle:   $mergedUnderlineStyle ?? $this->underlineStyle,
+            paddingChar:      $mergedPaddingChar  ?? $this->paddingChar,
+            marginChar:       $mergedMarginChar   ?? $this->marginChar,
         );
     }
 
