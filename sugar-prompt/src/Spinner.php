@@ -119,7 +119,14 @@ final class Spinner
             }
         }
         // Parent: animate until the child exits.
+        $frame = 0;
+        $titlePrefix = $this->title === '' ? '' : ' ' . $this->title;
+        $interval = $this->style->interval();
+        $usleepInterval = (int) round($interval * 1_000_000);
+        $isTty = TtyDetect::isAtty(STDERR);
         // Set up signal handlers to reap the child if the parent is interrupted.
+        // $isTty must be declared before the closures are created so it can be
+        // captured by use clause.
         $hadAsyncSignals = false;
         $prevSigintHandler = null;
         $prevSigtermHandler = null;
@@ -153,11 +160,6 @@ final class Spinner
                 }
             });
         }
-        $frame = 0;
-        $titlePrefix = $this->title === '' ? '' : ' ' . $this->title;
-        $interval = $this->style->interval();
-        $usleepInterval = (int) round($interval * 1_000_000);
-        $isTty = TtyDetect::isAtty(STDERR);
         while (true) {
             $glyph = $this->style->frames[$frame % count($this->style->frames)];
             if ($isTty) {
@@ -183,10 +185,9 @@ final class Spinner
         // Reap and check exit status — throw if the child action failed.
         // Note: the original exception type/message cannot cross the fork
         // boundary; only the exit code is available to the parent.
-        $childStatus = 0;
-        pcntl_waitpid($pid, $childStatus);
-        if (pcntl_wifexited($childStatus) && pcntl_wexitstatus($childStatus) !== 0) {
-            throw new \RuntimeException('Spinner action failed (exit code ' . pcntl_wexitstatus($childStatus) . ')');
+        // $waitStatus was captured in the loop when the child was reaped.
+        if (pcntl_wifexited($waitStatus) && pcntl_wexitstatus($waitStatus) !== 0) {
+            throw new \RuntimeException('Spinner action failed (exit code ' . pcntl_wexitstatus($waitStatus) . ')');
         }
     }
 }
