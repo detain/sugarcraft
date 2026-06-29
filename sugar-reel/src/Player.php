@@ -23,6 +23,7 @@ use SugarCraft\Reel\Render\LumaRamp;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
 use SugarCraft\Reel\Source\VideoSource;
+use SugarCraft\Reel\Subtitle\WebVtt;
 
 /**
  * TEA Model for terminal video playback.
@@ -71,6 +72,7 @@ final class Player implements Model
      * @param \Closure                    $audioFactory Factory fn(string $path, ?int $startMs): AudioPlayer
      * @param int                         $cellPxW      Pixel width of a terminal cell (graphics-mode resolution)
      * @param int                         $cellPxH      Pixel height of a terminal cell
+     * @param WebVtt|null                 $subtitles    Parsed subtitle track, or null when no subtitles
      */
     private function __construct(
         public readonly Decoder $decoder,
@@ -93,6 +95,7 @@ final class Player implements Model
         private readonly ?\Closure $audioFactory = null,
         public readonly int $cellPxW = 10,
         public readonly int $cellPxH = 20,
+        private readonly ?WebVtt $subtitles = null,
     ) {
     }
 
@@ -112,8 +115,9 @@ final class Player implements Model
      * @param int        $cellPxW      Pixel width of a terminal cell — graphics modes decode at
      *                                 cells·cellPx for full resolution (caller probes it; 10×20 default)
      * @param int        $cellPxH      Pixel height of a terminal cell
+     * @param WebVtt|null $subtitles  Parsed subtitle track, or null when no subtitles
      */
-    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20): self
+    public static function open(string $videoPath, int $cellsW, int $cellsH, ?float $fpsOverride = null, Mode $mode = Mode::HalfBlock, bool $loop = false, string $ramp = 'standard', int $cellPxW = 10, int $cellPxH = 20, ?WebVtt $subtitles = null): self
     {
         $source = VideoSource::probe($videoPath);
 
@@ -161,6 +165,7 @@ final class Player implements Model
             audioFactory: $audioFactory,
             cellPxW: $cellPxW,
             cellPxH: $cellPxH,
+            subtitles: $subtitles,
         );
     }
 
@@ -182,6 +187,7 @@ final class Player implements Model
      * @param \Closure     $audioFactory   Factory fn(string $path, ?int $startMs): AudioPlayer
      * @param AudioPlayer  $audioPlayer   Optional initial AudioPlayer instance (for spy injection)
      * @param bool         $paused         Start paused (default true)
+     * @param WebVtt|null  $subtitles      Parsed subtitle track for testing
      */
     public static function openForTest(
         Decoder $decoder,
@@ -197,6 +203,7 @@ final class Player implements Model
         bool $paused = true,
         int $cellPxW = 10,
         int $cellPxH = 20,
+        ?WebVtt $subtitles = null,
     ): self {
         // Default factory when none supplied (produces a real AudioPlayer — fine
         // for openForTest since audio is not started in the paused initial state).
@@ -224,6 +231,7 @@ final class Player implements Model
             audioFactory: $factory,
             cellPxW: $cellPxW,
             cellPxH: $cellPxH,
+            subtitles: $subtitles,
         );
     }
 
@@ -584,6 +592,18 @@ final class Player implements Model
             $out = $this->frameToBuffer($frame, $this->mode)->toAnsi();
         }
 
+        // Subtitle overlay: append a centered caption line at the bottom when
+        // a subtitle cue is active for the current videoTime.
+        if ($this->subtitles !== null) {
+            $caption = $this->subtitles->cueAt($this->videoTime);
+            if ($caption !== null) {
+                // Truncate to cellsW to respect the one-line-per-row invariant.
+                $caption = mb_strcut($caption, 0, $this->cellsW, 'UTF-8');
+                $caption = str_pad($caption, $this->cellsW, ' ', STR_PAD_RIGHT);
+                $out .= "\r\n" . $caption;
+            }
+        }
+
         // At end-of-stream (non-loop) append a status line so the user can see
         // playback stopped and how to restart. Normal playback output is
         // unchanged, so this adds no per-frame snapshot churn.
@@ -935,6 +955,7 @@ final class Player implements Model
                 audioFactory: $this->audioFactory,
                 cellPxW: $this->cellPxW,
                 cellPxH: $this->cellPxH,
+                subtitles: $this->subtitles,
             );
         }
 
@@ -977,6 +998,7 @@ final class Player implements Model
             audioFactory: $this->audioFactory,
             cellPxW: $this->cellPxW,
             cellPxH: $this->cellPxH,
+            subtitles: $this->subtitles,
         );
     }
 
@@ -1073,6 +1095,17 @@ final class Player implements Model
     }
 
     /**
+     * Attach a parsed subtitle track to the player.
+     *
+     * Returns a new Player (immutable) with the subtitle track set.
+     * The caption overlay appears in view() when videoTime falls within a cue.
+     */
+    public function withSubtitles(WebVtt $track): self
+    {
+        return $this->mutate(['subtitles' => $track]);
+    }
+
+    /**
      * Build a fresh decoder seeked to $startSec via fast ffmpeg input seeking
      * (`-ss`), returning the decoder and its first (target) frame. The real path
      * closes the old decoder first (F21: no leaked ffmpeg) and threads startSec
@@ -1127,6 +1160,7 @@ final class Player implements Model
             audioFactory: $this->audioFactory,
             cellPxW: $this->cellPxW,
             cellPxH: $this->cellPxH,
+            subtitles: $this->subtitles,
         );
     }
 
@@ -1160,6 +1194,7 @@ final class Player implements Model
             audioFactory: $changes['audioFactory'] ?? $this->audioFactory,
             cellPxW: $changes['cellPxW'] ?? $this->cellPxW,
             cellPxH: $changes['cellPxH'] ?? $this->cellPxH,
+            subtitles: $changes['subtitles'] ?? $this->subtitles,
         );
     }
 

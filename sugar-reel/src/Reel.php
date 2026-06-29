@@ -9,6 +9,7 @@ use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Reel\Render\AutoMode;
 use SugarCraft\Reel\Render\Mode;
 use SugarCraft\Reel\Render\RendererFactory;
+use SugarCraft\Reel\Subtitle\WebVtt;
 
 /**
  * Terminal video player facade — plays a video file by decoding frames on the
@@ -38,6 +39,7 @@ final class Reel
      * @param float|null   $fps   FPS override (null = auto from probe)
      * @param bool         $loop  When true, playback restarts at end instead of stopping
      * @param string       $ramp  Luma ramp name: 'minimal', 'standard', or 'dense'
+     * @param string|null  $subtitlePath  Path to a WebVTT/SRT subtitle file, or null
      */
     private function __construct(
         private readonly string $path,
@@ -47,6 +49,7 @@ final class Reel
         private readonly ?float $fps,
         private readonly bool $loop = false,
         private readonly string $ramp = 'standard',
+        private readonly ?string $subtitlePath = null,
     ) {
     }
 
@@ -207,6 +210,17 @@ final class Reel
     }
 
     /**
+     * Attach a subtitle file (WebVTT or SRT) to the player.
+     *
+     * Returns a new Reel (immutable). The file is read and parsed at play()
+     * time; a missing or unreadable file is silently ignored (no subtitles).
+     */
+    public function withSubtitles(string $path): self
+    {
+        return $this->with(subtitlePath: $path);
+    }
+
+    /**
      * Run the player: creates a Player from the configured options and
      * executes the TEA program loop via Program::run().
      *
@@ -226,8 +240,18 @@ final class Reel
         // Resolve auto-mode to the best available mode at runtime (F3).
         $resolvedMode = $this->mode ?? RendererFactory::autoMode();
 
+        // Parse the subtitle track if a subtitle file was configured.
+        // A missing/unreadable file is silently treated as no subtitles.
+        $subtitles = null;
+        if ($this->subtitlePath !== null) {
+            $raw = @file_get_contents($this->subtitlePath);
+            if (is_string($raw) && $raw !== '') {
+                $subtitles = WebVtt::parse($raw);
+            }
+        }
+
         // Create the Player with the configured dimensions, fps, render mode, loop flag and ramp.
-        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp);
+        $player = Player::open($path, $this->cols, $this->rows, $this->fps, $resolvedMode, $loop, $this->ramp, 10, 20, $subtitles);
 
         $options = new ProgramOptions(
             useAltScreen: true,
@@ -247,6 +271,7 @@ final class Reel
      * @param float|null         $fps   Leave null to keep current
      * @param bool|null          $loop  Leave null to keep current
      * @param string|null        $ramp  Leave null to keep current
+     * @param string|null        $subtitlePath  Path to subtitle file, leave null to keep current
      */
     private function with(
         ?string $path = null,
@@ -256,6 +281,7 @@ final class Reel
         ?float $fps = null,
         ?bool $loop = null,
         ?string $ramp = null,
+        ?string $subtitlePath = null,
     ): self {
         // AutoMode sentinel → null (play() will resolve to auto-detected mode).
         $resolvedMode = $mode instanceof AutoMode ? null : ($mode ?? $this->mode);
@@ -268,6 +294,7 @@ final class Reel
             $fps ?? $this->fps,
             $loop ?? $this->loop,
             $ramp ?? $this->ramp,
+            $subtitlePath ?? $this->subtitlePath,
         );
     }
 }
