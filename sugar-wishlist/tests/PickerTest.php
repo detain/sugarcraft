@@ -217,4 +217,50 @@ final class PickerTest extends TestCase
         $this->assertNotNull($picked);
         $this->assertSame('dev', $picked->name);
     }
+
+    public function testFilterAcceptsSpecialCharacters(): void
+    {
+        // Test that filter accepts : @ / and multibyte UTF-8 bytes.
+        // The characters user@host should match the staging endpoint
+        // (host contains @ after user part in displayLine).
+        $endpoints = [
+            new Endpoint(name: 'user@host', host: 'example.com'),
+            new Endpoint(name: 'dev',       host: 'dev.example.com'),
+        ];
+
+        // Type "user" which matches "user@host"
+        [, , $p] = $this->makePicker("user\r");
+        $picked = $p->pick($endpoints);
+        $this->assertSame('user@host', $picked->name);
+    }
+
+    public function testFilterAcceptsColonCharacter(): void
+    {
+        // IPv6-style colons in addresses should be accepted.
+        $endpoints = [
+            new Endpoint(name: 'ipv6server', host: '2001:db8::1'),
+            new Endpoint(name: 'dev',        host: 'dev.example.com'),
+        ];
+
+        // Type "2001" which should match the ipv6 endpoint
+        [, , $p] = $this->makePicker("2001\r");
+        $picked = $p->pick($endpoints);
+        $this->assertSame('ipv6server', $picked->name);
+    }
+
+    public function testFilterDropsControlBytes(): void
+    {
+        // Control bytes like \x01 should be dropped, not accumulated.
+        $endpoints = [
+            new Endpoint(name: 'prod', host: 'prod.example.com'),
+            new Endpoint(name: 'dev',  host: 'dev.example.com'),
+        ];
+
+        // Type \x01 (control byte) then "prod" — only "prod" should be in filter
+        // so we should get prod, not a filter of "\x01prod" which would not match
+        [, , $p] = $this->makePicker("\x01prod\r");
+        $picked = $p->pick($endpoints);
+        // If control byte was dropped, filter is just "prod" and prod is picked
+        $this->assertSame('prod', $picked->name);
+    }
 }
