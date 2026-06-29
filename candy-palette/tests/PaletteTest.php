@@ -12,6 +12,81 @@ use PHPUnit\Framework\TestCase;
 
 final class PaletteTest extends TestCase
 {
+    private array $savedEnv = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Save original env values so tearDown can restore them.
+        // This prevents parent-process env vars (NO_COLOR, CLICOLOR_FORCE, etc.)
+        // from leaking into tests and causing spurious NoTTY returns.
+        $this->savedEnv = [
+            'CLICOLOR_FORCE' => $_ENV['CLICOLOR_FORCE'] ?? null,
+            'NO_COLOR'       => $_ENV['NO_COLOR'] ?? null,
+            'CLICOLOR'       => $_ENV['CLICOLOR'] ?? null,
+            'TERM'           => $_ENV['TERM'] ?? null,
+            'COLORTERM'      => $_ENV['COLORTERM'] ?? null,
+            'WT_SESSION'     => $_ENV['WT_SESSION'] ?? null,
+            'GOOGLE_CLOUD_SHELL' => $_ENV['GOOGLE_CLOUD_SHELL'] ?? null,
+            'TMUX'           => $_ENV['TMUX'] ?? null,
+            'STY'            => $_ENV['STY'] ?? null,
+            'TERM_PROGRAM'   => $_ENV['TERM_PROGRAM'] ?? null,
+        ];
+
+        // Set known-safe values that won't trigger color forcing.
+        // putenv('VAR=value') sets, putenv('VAR') (no =) removes.
+        // CLICOLOR_FORCE=0 won't force TrueColor.
+        // NO_COLOR is REMOVED (not set to empty) because detection uses
+        //   array_key_exists which returns true even for null/empty.
+        // CLICOLOR=0 won't force NoTTY.
+        // NOTE: We do NOT set TERM here because tests that don't explicitly
+        //   set TERM rely on the parent environment's TERM value to determine
+        //   the appropriate color profile. Setting TERM=dumb would cause
+        //   an early NoTTY return before FORCE_COLOR/COLORTERM could be checked.
+        putenv('CLICOLOR_FORCE=0');
+        putenv('NO_COLOR');  // Remove from process env entirely
+        putenv('CLICOLOR=0');
+        // TERM is intentionally NOT set - let tests use parent env or explicit values
+        putenv('COLORTERM');  // Remove
+        putenv('WT_SESSION');  // Remove
+        putenv('GOOGLE_CLOUD_SHELL');  // Remove
+        putenv('TMUX');  // Remove
+        putenv('STY');  // Remove
+        putenv('TERM_PROGRAM');  // Remove
+
+        // Also update $_ENV superglobal to match putenv state.
+        // Use unset to truly remove keys (not set to empty) so that
+        // array_key_exists returns false for removed keys.
+        unset($_ENV['CLICOLOR_FORCE']);
+        unset($_ENV['NO_COLOR']);
+        unset($_ENV['CLICOLOR']);
+        // TERM is intentionally NOT unset - preserve parent env value for detection
+        unset($_ENV['COLORTERM']);
+        unset($_ENV['WT_SESSION']);
+        unset($_ENV['GOOGLE_CLOUD_SHELL']);
+        unset($_ENV['TMUX']);
+        unset($_ENV['STY']);
+        unset($_ENV['TERM_PROGRAM']);
+    }
+
+    protected function tearDown(): void
+    {
+        // Restore original env values from before setUp.
+        // Use putenv() to properly restore the process environment.
+        foreach ($this->savedEnv as $key => $value) {
+            if ($value === null) {
+                unset($_ENV[$key]);
+                putenv($key);  // Remove from process env
+            } else {
+                $_ENV[$key] = $value;
+                putenv("{$key}={$value}");
+            }
+        }
+
+        parent::tearDown();
+    }
+
     // -------------------------------------------------------------------------
     // Detection
     // -------------------------------------------------------------------------
