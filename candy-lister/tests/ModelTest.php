@@ -308,11 +308,13 @@ final class ModelTest extends TestCase
         $this->assertSame(1, $result->cursorIndex());
     }
 
-    public function testSetCursorOffsetSetsBothOffsetAndLineOffset(): void
+    public function testSetCursorOffsetIsIndependentOfLineOffset(): void
     {
+        // lineOffset is now an internal scroll anchor, no longer aliased to cursorOffset.
         $m = $this->model->setCursorOffset(7);
         $this->assertSame(7, $m->cursorOffset);
-        $this->assertSame(7, $m->lineOffset);
+        // lineOffset retains its default value (not overwritten by setCursorOffset).
+        $this->assertSame(5, $m->lineOffset);
     }
 
     public function testSetLineStyle(): void
