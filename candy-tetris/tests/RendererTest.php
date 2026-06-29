@@ -130,4 +130,60 @@ final class RendererTest extends TestCase
         $style = $method->invoke(null, Tetromino::T);
         $this->assertNotNull($style);
     }
+
+    public function testBlockReturnsAnsiBackgroundForTetrominoT(): void
+    {
+        $reflector = new \ReflectionClass(Renderer::class);
+        $method = $reflector->getMethod('block');
+        $method->setAccessible(true);
+
+        // Tetromino::T color is 129 → RGB from COLOR_MAP is 0xbd7dff
+        // Expected: ESC[48;2;189;125;255m  ESC[0m
+        $block = $method->invoke(null, Tetromino::T);
+        $this->assertSame(
+            "\x1b[48;2;189;125;255m  \x1b[0m",
+            $block,
+            'block(T) must return ANSI RGB background for T color (0xbd7dff = 189;125;255)',
+        );
+    }
+
+    public function testGhostReturnsFaintAnsiForegroundForTetrominoI(): void
+    {
+        $reflector = new \ReflectionClass(Renderer::class);
+        $method = $reflector->getMethod('ghost');
+        $method->setAccessible(true);
+
+        // Tetromino::I color is 51 → RGB from COLOR_MAP is 0x00d4ff (dimmed to 0x888888)
+        // ghost() uses 0x888888 as fallback for any color
+        $ghost = $method->invoke(null, Tetromino::I);
+        $this->assertStringContainsString("\x1b[38;2;", $ghost);
+        $this->assertStringContainsString("\x1b[2m", $ghost, 'ghost must use faint attribute');
+        $this->assertStringContainsString('▒▒', $ghost, 'ghost must render as ▒▒');
+    }
+
+    public function testRenderMiniOutputsColoredBlocksForI(): void
+    {
+        $reflector = new \ReflectionClass(Renderer::class);
+        $method = $reflector->getMethod('renderMini');
+        $method->setAccessible(true);
+
+        // Tetromino::I at rotation 0: cells at (0,1),(1,1),(2,1),(3,1) - horizontal bar at y=1
+        // In the 4×4 mini box: bottom row (y=1) filled, top row (y=0) empty
+        $mini = $method->invoke(null, Tetromino::I);
+        // Must contain ANSI block sequences in the bottom row
+        $this->assertStringContainsString("\x1b[48;2;", $mini);
+        // Should be 2 lines (y=0 empty, y=1 filled)
+        $lines = explode("\n", $mini);
+        $this->assertSame(2, count($lines), 'renderMini must return 2 lines');
+    }
+
+    public function testRenderMiniPlaceholderReturnsFourSpacesOnTwoLines(): void
+    {
+        $reflector = new \ReflectionClass(Renderer::class);
+        $method = $reflector->getMethod('renderMiniPlaceholder');
+        $method->setAccessible(true);
+
+        $placeholder = $method->invoke(null);
+        $this->assertSame("     \n     ", $placeholder, 'placeholder must be 5 spaces on 2 lines');
+    }
 }

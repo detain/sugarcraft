@@ -10,6 +10,8 @@ use SugarCraft\Tetris\Bag;
 use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
+use SugarCraft\Tetris\Piece;
+use SugarCraft\Tetris\Score;
 use SugarCraft\Tetris\Tetromino;
 use PHPUnit\Framework\TestCase;
 
@@ -317,5 +319,79 @@ final class GameTest extends TestCase
 
         $resultNeg = $g->addGarbageRows(-5, static fn(int $max): int => 0);
         $this->assertSame($originalBoard, $resultNeg->board, 'addGarbageRows(-5) should return same board');
+    }
+
+    public function testLockDelayReArmsOnMoveWhenGrounded(): void
+    {
+        // Use a simple approach: manually place the piece ON the floor (y where
+        // board->fits returns false for moved(0,1)) and verify re-arm.
+        // Tetromino::I at rotation 0 has cells at y=1 of the bounding box.
+        // With floor at row 23 and I height 1: I at y=22 → cells at row 23 (floor).
+        // So I at y=21 → cells at row 22 (one above floor), first gravity fits.
+        // I at y=22 → cells at row 23 (floor), can't move down → lock delay active.
+        $g = Game::startWithLockDelay(new Bag(static fn(int $max): int => 0), 2);
+
+        // Place I at y=22 (cells at floor row 23) with lockDelayTicks=1
+        $iAtFloor = new Piece(Tetromino::I, 0, 3, 22);
+        $game = $g->mutate(['piece' => $iAtFloor, 'lockDelayTicks' => 1]);
+        $this->assertSame(1, $game->lockDelayTicks);
+
+        // First gravity tick: piece can't move down, lock delay decrements to 0 → locks
+        [$afterGravity] = $game->update(new GravityMsg());
+        $this->assertSame(0, $afterGravity->lockDelayTicks,
+            'lock delay must decrement when piece is on floor');
+
+        // Now piece is locked. New piece spawns with lockDelayTicks=2.
+        // Move the new piece to y=22 (on floor) and decrement lock delay again.
+        $newPiece = $afterGravity->piece;
+        $pieceOnFloor = new Piece($newPiece->kind, $newPiece->rotation, $newPiece->x, 22);
+        $game2 = $afterGravity->mutate(['piece' => $pieceOnFloor, 'lockDelayTicks' => 1]);
+
+        // Gravity tick while on floor: lock delay decrements from 1 to 0
+        [$afterGravity2] = $game2->update(new GravityMsg());
+        $this->assertSame(0, $afterGravity2->lockDelayTicks,
+            'lock delay must decrement when new piece is on floor');
+
+        // Move the piece (now locked but game not over) with a successful left:
+        // Before fix: lockDelayTicks stays 0. After fix: re-arms to lockDelayMax.
+        [$afterMove] = $afterGravity2->update(new KeyMsg(KeyType::Left, ''));
+        $this->assertSame(2, $afterMove->lockDelayTicks,
+            'successful move while grounded must re-arm lock delay to max');
+    }
+
+    public function testHardDropAwardsTwoPointsPerCell(): void
+    {
+        // Create a fresh game, manually position piece at y=0, then hard drop.
+        // The board starts empty so no line clears happen.
+        // Tetromino::O at rot 0 (height 2, cells at y=0,1) spawns at y=0.
+        // It falls until bottom cell (y+1) hits floor at row 23 → lands at y=22.
+        // Fall distance = 22 cells × 2 = 44 points.
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $pieceAtY0 = new Piece(Tetromino::O, 0, 3, 0);
+        $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
+
+        $startPoints = $game->score->points;
+        [$dropped] = $game->update(new KeyMsg(KeyType::Char, ' '));
+
+        // Score increase = 2 × fall distance. Board is empty so no line-clear bonus.
+        // O falls from y=0 to y=22 (floor) = 22 cells → 44 points.
+        $this->assertSame(44, $dropped->score->points - $startPoints,
+            'Hard drop must award 2 points per cell fallen (44 = 22 cells × 2)');
+    }
+
+    public function testSoftDropAwardsOnePointPerCell(): void
+    {
+        // Create a game and manually set piece at y=0, then soft drop one cell.
+        // Verify 1 point is awarded when the move succeeds.
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $pieceAtY0 = new Piece(Tetromino::T, 0, 3, 0);
+        $game = $g->mutate(['piece' => $pieceAtY0, 'score' => new Score()]);
+
+        $startPoints = $game->score->points;
+
+        // Soft drop one cell - piece is at y=0, cell at y=1 is free (empty board)
+        [$dropped] = $game->update(new KeyMsg(KeyType::Down, ''));
+        $this->assertSame(1, $dropped->score->points - $startPoints,
+            'Soft drop must award 1 point per cell successfully moved');
     }
 }
