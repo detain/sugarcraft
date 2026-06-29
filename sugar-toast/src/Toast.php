@@ -73,30 +73,22 @@ final class Toast
 
     public function withMaxWidth(int $w): self
     {
-        $clone = clone $this;
-        $clone->maxWidth = $w;
-        return $clone;
+        return $this->mutate(['maxWidth' => $w]);
     }
 
     public function withMinWidth(int $w): self
     {
-        $clone = clone $this;
-        $clone->minWidth = $w;
-        return $clone;
+        return $this->mutate(['minWidth' => $w]);
     }
 
     public function withPosition(Position $pos): self
     {
-        $clone = clone $this;
-        $clone->position = $pos;
-        return $clone;
+        return $this->mutate(['position' => $pos]);
     }
 
     public function withSymbolSet(SymbolSet $set): self
     {
-        $clone = clone $this;
-        $clone->symbols = $set;
-        return $clone;
+        return $this->mutate(['symbols' => $set]);
     }
 
     /**
@@ -105,9 +97,7 @@ final class Toast
      */
     public function withDuration(?float $seconds): self
     {
-        $clone = clone $this;
-        $clone->duration = $seconds;
-        return $clone;
+        return $this->mutate(['duration' => $seconds]);
     }
 
     /**
@@ -119,9 +109,7 @@ final class Toast
      */
     public function withAllowEscToClose(bool $allow): self
     {
-        $clone = clone $this;
-        $clone->allowEscToClose = $allow;
-        return $clone;
+        return $this->mutate(['allowEscToClose' => $allow]);
     }
 
     /**
@@ -141,9 +129,7 @@ final class Toast
      */
     public function withMaxConcurrent(?int $max): self
     {
-        $clone = clone $this;
-        $clone->maxConcurrent = $max;
-        return $clone;
+        return $this->mutate(['maxConcurrent' => $max]);
     }
 
     /**
@@ -151,9 +137,7 @@ final class Toast
      */
     public function withOverflow(Overflow $overflow): self
     {
-        $clone = clone $this;
-        $clone->overflow = $overflow;
-        return $clone;
+        return $this->mutate(['overflow' => $overflow]);
     }
 
     /**
@@ -164,8 +148,21 @@ final class Toast
      */
     public function withAnimationDuration(float $seconds): self
     {
+        return $this->mutate(['animationDuration' => \max(0.0, $seconds)]);
+    }
+
+    /**
+     * Create a new instance with the given changes merged in.
+     *
+     * Mirrors the Mutable trait pattern from sugar-core but avoids requiring
+     * readonly fields or constructor-param-only initialization.
+     */
+    private function mutate(array $changes): self
+    {
         $clone = clone $this;
-        $clone->animationDuration = \max(0.0, $seconds);
+        foreach ($changes as $k => $v) {
+            $clone->{$k} = $v;
+        }
         return $clone;
     }
 
