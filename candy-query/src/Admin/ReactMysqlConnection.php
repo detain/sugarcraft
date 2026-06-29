@@ -85,13 +85,13 @@ final class ReactMysqlConnection implements AsyncConnection
 
     private function extractDsnValue(string $dsn, string $key): ?string
     {
-        // preg_match scans left-to-right and returns the first match, so for
-        // a DSN like "mysql:host=...;port=..." the pattern host=... matches
-        // at position 6 (after the "mysql:" prefix). A value containing the
-        // key as a substring (e.g. "xhost=foo") would match at its position
-        // in the value — but that requires the DSN to be malformed in a way
-        // that never occurs in practice from PDO.
-        if (preg_match("/{$key}=([^;]+)/", $dsn, $matches)) {
+        // The key is anchored so that a value containing the key as a
+        // substring (e.g. "xhost=foo") cannot produce a false match.
+        // The lookbehind (?<=\Amysql:|(?<=;)|(?<=\A)) matches the key when:
+        //   - preceded by the start-of-string + "mysql:" prefix (first key)
+        //   - preceded by ";" (subsequent keys)
+        //   - preceded by start-of-string alone (no-prefix DSNs)
+        if (preg_match("/(?:mysql:)?(?<=\Amysql:|(?<=;)|(?<=\A)){$key}=([^;]+)/", $dsn, $matches)) {
             return $matches[1];
         }
         return null;

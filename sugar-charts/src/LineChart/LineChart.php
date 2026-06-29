@@ -320,6 +320,17 @@ final class LineChart extends Chart
         return $this->lineChartCopy(theme: $theme);
     }
 
+    /**
+     * Set legend items. Overrides Chart::legendItems() to route through
+     * lineChartCopy() so LineChart-specific constructor args are preserved.
+     *
+     * @param list<array{label: string, color: string}> $items
+     */
+    public function legendItems(array $items): self
+    {
+        return $this->lineChartCopy(legendItems: $items);
+    }
+
     // ─── Animation Support ──────────────────────────────────────────────
 
     /**

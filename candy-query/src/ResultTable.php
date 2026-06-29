@@ -283,6 +283,14 @@ final class ResultTable
             $lines[] = $this->renderScrollHint();
         }
 
+        $totalRows = count($this->rows);
+        if ($totalRows > self::DEFAULT_PAGE_SIZE) {
+            $start = 1;
+            $end = min(self::DEFAULT_PAGE_SIZE, $totalRows);
+            $lines[] = Style::new()->foreground(Color::hex('#7d6e98'))
+                ->render("rows {$start}–{$end} of {$totalRows}");
+        }
+
         return implode("\n", $lines);
     }
 
@@ -300,6 +308,13 @@ final class ResultTable
 
         foreach (array_slice($this->rows, 0, self::DEFAULT_PAGE_SIZE) as $row) {
             $lines[] = $this->renderRowPlain($row);
+        }
+
+        $totalRows = count($this->rows);
+        if ($totalRows > self::DEFAULT_PAGE_SIZE) {
+            $start = 1;
+            $end = min(self::DEFAULT_PAGE_SIZE, $totalRows);
+            $lines[] = "rows {$start}–{$end} of {$totalRows}";
         }
 
         return implode("\n", $lines);
