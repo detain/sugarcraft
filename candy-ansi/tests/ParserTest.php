@@ -653,4 +653,17 @@ final class ParserTest extends TestCase
         $this->assertNotEmpty($csis);
         $this->assertSame([-1, 2], $csis[0]['detail']['params']);
     }
+
+    public function testParseCompleteFlushesTrailingOsc(): void
+    {
+        $handler = new DebugHandler();
+        $parser  = new Parser($handler);
+
+        // Unterminated OSC — parseComplete should still dispatch it
+        $parser->parseComplete("\x1b]2;Title");
+
+        $oscs = $handler->filter('osc');
+        $this->assertCount(1, $oscs, 'Unterminated OSC should be dispatched on parseComplete');
+        $this->assertSame('2;Title', $oscs[0]['detail']);
+    }
 }

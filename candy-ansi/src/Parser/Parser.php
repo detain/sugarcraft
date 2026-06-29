@@ -56,6 +56,19 @@ final class Parser
     }
 
     /**
+     * Feed a complete byte sequence and guarantee end-of-stream flush.
+     *
+     * This is the safe one-shot entry point: it calls feed() then flush()
+     * so a trailing unterminated OSC/DCS or in-flight rune is not silently
+     * lost. Use feed()+flush() separately for streaming (incremental) use.
+     */
+    public function parseComplete(string $bytes): void
+    {
+        $this->feed($bytes);
+        $this->flush();
+    }
+
+    /**
      * Force any in-flight string sequence (OSC/DCS/SOS/PM/APC) to
      * dispatch with whatever payload has been collected, and return
      * to ground. Useful at end-of-stream.
