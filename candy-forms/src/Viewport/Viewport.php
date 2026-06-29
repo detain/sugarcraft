@@ -221,6 +221,13 @@ final class Viewport implements Model
             );
         }
         if (!$this->showScrollbar) {
+            // Cap each line on the right to $this->width using ANSI-aware truncation.
+            if ($this->width > 0) {
+                $window = array_map(
+                    fn(string $l) => Width::truncateAnsi($l, $this->width),
+                    $window,
+                );
+            }
             return implode("\n", $window);
         }
 

@@ -214,8 +214,11 @@ final class ViewportTest extends TestCase
     public function testViewDropsLeftCellsOnXOffset(): void
     {
         // viewport must be narrower than the line for setXOffset to stick.
+        // After dropping left cells, the remaining content is also truncated
+        // to the viewport width (no-scrollbar overflow fix).
         $v = Viewport::new(5, 1)->setContent('abcdefghij')->setXOffset(3);
-        $this->assertSame('defghij', $v->view());
+        // 'abcdefghij' drop 3 cells → 'defghij' (7 chars). Truncate to width=5 → 'defgh'.
+        $this->assertSame('defgh', $v->view());
     }
 
     public function testSetWidthAndSetHeightAreIndependent(): void
@@ -411,5 +414,30 @@ final class ViewportTest extends TestCase
 
         // Original unchanged.
         $this->assertTrue($v->smoothScroll);
+    }
+
+    /**
+     * Step 8: lines wider than the viewport width must be truncated to
+     * width in the no-scrollbar render path. ANSI sequences are preserved
+     * (Width::truncateAnsi is ANSI-aware) but the visible content is clipped.
+     */
+    public function testLongLineTruncatedToWidth(): void
+    {
+        // Viewport with width=10, single line that's 20 chars wide (no ANSI).
+        $v = Viewport::new(10, 1)
+            ->setContent('0123456789ABCDEFGHIJ');  // 20 chars
+
+        $view = $v->view();
+
+        // Each output line must be at most 10 visible cells.
+        foreach (explode("\n", $view) as $line) {
+            // Count printable characters (no ANSI bytes).
+            $printable = preg_replace('/\x1b\[[0-9;]*m/', '', $line);
+            $this->assertLessThanOrEqual(
+                10,
+                mb_strlen($printable, 'UTF-8'),
+                "Line should be truncated to width 10 but was: '$printable'"
+            );
+        }
     }
 }
