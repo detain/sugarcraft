@@ -89,9 +89,8 @@ final class Column
             $result = $value;
         }
 
-        // Sanitize data-origin content before width-truncation.
-        $sanitized = $this->sanitize((string) $result);
-        return \substr($sanitized, 0, $this->width);
+        // Sanitize data-origin content. Width clamping is done in padded().
+        return $this->sanitize((string) $result);
     }
 
     /**
@@ -121,15 +120,15 @@ final class Column
     public function padded(string $value, int $rowIndex): string
     {
         $v = $this->format($value, $rowIndex);
-        $len = \strlen($v);
-        if ($len >= $this->width) {
-            return \substr($v, 0, $this->width);
-        }
-        $pad = $this->width - $len;
+
+        // Clamp to display width using ANSI-aware truncation (no mid-grapheme cuts).
+        $v = \SugarCraft\Core\Util\Width::truncateAnsi($v, $this->width);
+
+        // Pad using Width methods for correct visual alignment.
         return match ($this->align) {
-            'right'  => \str_repeat(' ', $pad) . $v,
-            'center' => \str_repeat(' ', (int) \floor($pad / 2)) . $v . \str_repeat(' ', (int) \ceil($pad / 2)),
-            default  => $v . \str_repeat(' ', $pad),
+            'right'  => \SugarCraft\Core\Util\Width::padLeft($v, $this->width),
+            'center' => \SugarCraft\Core\Util\Width::padCenter($v, $this->width),
+            default  => \SugarCraft\Core\Util\Width::padRight($v, $this->width),
         };
     }
 
