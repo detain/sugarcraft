@@ -46,12 +46,32 @@ final class DefaultChannelHandler implements ChannelHandler
     private bool $execRequested = false;
 
     /**
-     * @param ChildSpawner|null $spawner  injected so `handleShell` can call `runChild()`
-     * @param Session|null      $session  used to seed initial cols/rows when they're non-zero
+     * Known-dangerous env vars that are always excluded, even if
+     * a client lists them in `$acceptEnv`.
+     *
+     * @var list<string>
+     */
+    private const DANGEROUS_VARS = [
+        'LD_PRELOAD',
+        'LD_LIBRARY_PATH',
+        'BASH_ENV',
+        'ENV',
+        'IFS',
+        'PATH',
+        'SHELL',
+    ];
+
+    /**
+     * @param ChildSpawner|null $spawner   injected so `handleShell` can call `runChild()`
+     * @param Session|null      $session   used to seed initial cols/rows when they're non-zero
+     * @param list<string>      $acceptEnv allowlist of client env-var names that may be
+     *                                     passed to the child; empty (the default) means
+     *                                     accept none beyond the floor vars
      */
     public function __construct(
         private readonly ?ChildSpawner $spawner = null,
         ?Session $session = null,
+        private readonly array $acceptEnv = [],
     ) {
         if ($session !== null && $session->cols > 0) {
             $this->cols = $session->cols;
@@ -95,6 +115,22 @@ final class DefaultChannelHandler implements ChannelHandler
 
     public function handleSignal(SignalMsg $msg, Session $session): void
     {
+        // Map RFC-4254 signal names to PHP SIG* constants.
+        $map = [
+            'INT'  => \SIGINT  ?? (\defined('SIGINT')  ? \SIGINT  : 2),
+            'TERM' => \SIGTERM ?? (\defined('SIGTERM') ? \SIGTERM : 15),
+            'HUP'  => \SIGHUP  ?? (\defined('SIGHUP')  ? \SIGHUP  : 1),
+            'QUIT' => \SIGQUIT ?? (\defined('SIGQUIT') ? \SIGQUIT : 3),
+            'KILL' => \SIGKILL ?? (\defined('SIGKILL') ? \SIGKILL : 9),
+            'USR1' => \SIGUSR1 ?? (\defined('SIGUSR1') ? \SIGUSR1 : 10),
+            'USR2' => \SIGUSR2 ?? (\defined('SIGUSR2') ? \SIGUSR2 : 12),
+            'WINCH'=> \SIGWINCH?? (\defined('SIGWINCH')? \SIGWINCH: 28),
+        ];
+
+        $sig = $map[$msg->signalName] ?? null;
+        if ($sig !== null) {
+            $this->spawner?->signalChild($sig);
+        }
     }
 
     public function handleEnv(EnvMsg $msg, Session $session): void
@@ -186,25 +222,53 @@ final class DefaultChannelHandler implements ChannelHandler
     }
 
     /**
-     * @return array<string,string>|null
+     * Build the environment for the child process.
+     *
+     * Always returns a floor of safe vars (TERM, USER, LANG, PATH, HOME).
+     * Client-supplied env vars are merged only if their names appear in
+     * the $acceptEnv allowlist, and never includes known-dangerous vars
+     * (LD_PRELOAD, LD_LIBRARY_PATH, BASH_ENV, ENV, IFS, PATH, SHELL)
+     * even if explicitly allowlisted.
+     *
+     * @return array<string,string>
      */
-    private function buildEnv(Session $session): ?array
+    private function buildEnv(Session $session): array
     {
-        if ($this->envVars === []) {
-            return null;
+        // Start from the safe floor — never inherit the supervisor's env.
+        $env = [
+            'TERM'  => $session->term ?: 'xterm-256color',
+            'USER'  => $session->user,
+            'LANG'  => $session->lang ?: 'C.UTF-8',
+            'PATH'  => '/usr/local/bin:/usr/bin:/bin',
+            'HOME'  => '/home/' . $session->user,
+        ];
+
+        // Merge only allowlisted client vars; exclude dangerous ones unconditionally.
+        foreach ($this->envVars as $name => $value) {
+            if (\in_array($name, self::DANGEROUS_VARS, true)) {
+                continue;
+            }
+            if (\in_array($name, $this->acceptEnv, true)) {
+                $env[$name] = $value;
+            }
         }
-        $env = $this->envVars;
-        $env['TERM'] = $session->term;
-        $env['USER'] = $session->user;
-        $env['LANG'] = $session->lang;
+
         return $env;
     }
 
     /**
      * Split a command string into argv tokens.
      *
-     * Handles basic quoting (single and double) but does not perform
-     * full shell parsing. Intended for parsing SSH exec command strings.
+     * Handles basic quoting (single and double) and backslash escapes
+     * outside single quotes (consumes the next char literally so
+     * `foo\ bar` → one token `foo bar`). Inside single quotes a
+     * backslash is literal (POSIX). Empty quoted args (`cmd ''`) are
+     * preserved as empty-string tokens.
+     *
+     * This is a pragmatic tokenizer, NOT full POSIX word-splitting —
+     * no `$()`, backticks, variable expansion, or globbing. Tokens go
+     * to `runChild()` as argv with no shell, so the divergence is safe
+     * but documented.
      *
      * @return list<string>
      */
@@ -214,6 +278,7 @@ final class DefaultChannelHandler implements ChannelHandler
         $current = '';
         $inSingle = false;
         $inDouble = false;
+        $quoteOpened = false; // tracks whether current token had a quote open
         $i = 0;
         $len = \strlen($command);
 
@@ -223,27 +288,42 @@ final class DefaultChannelHandler implements ChannelHandler
             if (!$inDouble && !$inSingle) {
                 if ($ch === "'") {
                     $inSingle = true;
+                    $quoteOpened = true;
                 } elseif ($ch === '"') {
                     $inDouble = true;
+                    $quoteOpened = true;
+                } elseif ($ch === '\\') {
+                    // Backslash escape outside quotes: consume next char literally.
+                    $i++;
+                    if ($i < $len) {
+                        $current .= $command[$i];
+                    }
                 } elseif ($ch === ' ') {
-                    if ($current !== '') {
+                    if ($current !== '' || $quoteOpened) {
                         $tokens[] = $current;
                         $current = '';
+                        $quoteOpened = false;
                     }
                 } else {
                     $current .= $ch;
                 }
             } elseif ($inSingle && $ch === "'") {
+                // Inside single quotes, backslash is literal — no special handling.
                 $inSingle = false;
             } elseif ($inDouble && $ch === '"') {
+                // Emit empty-string token for `''` or `""` before clearing.
+                if ($quoteOpened && $current === '') {
+                    $tokens[] = '';
+                }
                 $inDouble = false;
+                $quoteOpened = false;
             } else {
                 $current .= $ch;
             }
             $i++;
         }
 
-        if ($current !== '') {
+        if ($current !== '' || $quoteOpened) {
             $tokens[] = $current;
         }
 

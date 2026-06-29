@@ -108,11 +108,11 @@ final class Session
      * keyFingerprint, clientVersion, and serverVersion.
      */
     public function withProtocolMetadata(
-        string $sessionId,
-        string $authMethod,
+        ?string $sessionId,
+        ?string $authMethod,
         ?string $keyFingerprint,
-        string $clientVersion,
-        string $serverVersion,
+        ?string $clientVersion,
+        ?string $serverVersion,
     ): self {
         return new self(
             user:             $this->user,

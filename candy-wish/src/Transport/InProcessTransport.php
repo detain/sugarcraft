@@ -69,6 +69,9 @@ final class InProcessTransport implements Transport, ChildSpawner
      */
     private $keepaliveCallback = null;
 
+    /** PID of the most recently spawned child, used for signal forwarding. */
+    private ?int $childPid = null;
+
     /**
      * The active master for the current session. Stored here so the
      * keepalive callback (registered by middleware via
@@ -164,12 +167,33 @@ final class InProcessTransport implements Transport, ChildSpawner
             }
         }
 
+        // Build real-or-null protocol metadata from the sshd environment.
+        // In a ForceCommand deployment these vars are set by sshd; in
+        // the in-process transport (testing) they may be absent and we
+        // pass null so we don't assert false facts about the session.
+        $authMethod = null;
+        $authEnv = $_SERVER['SSH_USER_AUTH'] ?? getenv('SSH_USER_AUTH') ?: '';
+        if ($authEnv !== '') {
+            // SSH_USER_AUTH may be "publickey,password" or a key blob.
+            // Extract the first method token as a hint.
+            if (str_contains($authEnv, 'publickey')) {
+                $authMethod = 'publickey';
+            } elseif (str_contains($authEnv, 'password')) {
+                $authMethod = 'password';
+            } elseif (str_contains($authEnv, 'keyboard-interactive')) {
+                $authMethod = 'keyboard-interactive';
+            }
+        }
+
+        $clientVersion = ($_SERVER['SSH_CLIENT_VERSION'] ?? getenv('SSH_CLIENT_VERSION')) ?: null;
+        $serverVersion = ($_SERVER['SSH_SERVER_VERSION'] ?? getenv('SSH_SERVER_VERSION')) ?: null;
+
         $authenticatedSession = $session->withProtocolMetadata(
             sessionId:      \bin2hex(\random_bytes(16)),
-            authMethod:     'publickey',
+            authMethod:     $authMethod,
             keyFingerprint: null,
-            clientVersion:  'SSH-2.0-PHP_candy-wish',
-            serverVersion:   'SSH-2.0-OpenSSH_9.6',
+            clientVersion:  $clientVersion,
+            serverVersion:  $serverVersion,
         );
 
         $this->dispatch($ctx, $authenticatedSession, $stack, 0);
@@ -235,6 +259,9 @@ final class InProcessTransport implements Transport, ChildSpawner
                 $rows,
                 controllingTerminal: true,
             );
+
+            // Track the child PID so handleSignal() can forward signals.
+            $this->childPid = $child->pid;
 
             // SIGWINCH forwarding — when sshd resizes the supervisor's
             // PTY, the kernel sends SIGWINCH to us; dispatch a
@@ -361,5 +388,16 @@ final class InProcessTransport implements Transport, ChildSpawner
         if ($result instanceof \React\Promise\PromiseInterface) {
             PromiseAwait::settle($result);
         }
+    }
+
+    public function signalChild(int $signal): void
+    {
+        if ($this->childPid === null) {
+            return;
+        }
+        if (!\function_exists('posix_kill')) {
+            return;
+        }
+        \posix_kill($this->childPid, $signal);
     }
 }

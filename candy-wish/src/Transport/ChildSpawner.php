@@ -31,4 +31,13 @@ interface ChildSpawner
      * @param array<string,string>|null $env  null inherits parent env
      */
     public function runChild(Session $session, array $cmd, ?array $env = null): int;
+
+    /**
+     * Forward a signal to the live child process.
+     *
+     * No-op for transports that do not spawn a child or when no child
+     * is currently running. Guarded with function_exists('posix_kill')
+     * and a null-check on the stored child PID.
+     */
+    public function signalChild(int $signal): void;
 }
