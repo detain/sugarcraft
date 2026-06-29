@@ -78,6 +78,8 @@ final class Attachment
 
     /**
      * Get the raw content bytes (reads from path if needed).
+     *
+     * @throws \RuntimeException if the path is set but the file cannot be read
      */
     public function getContent(): string
     {
@@ -89,7 +91,10 @@ final class Attachment
             $prev = \error_reporting(E_ALL & ~\E_WARNING);
             $c = @\file_get_contents($this->path);
             \error_reporting($prev);
-            return $c !== false ? $c : '';
+            if ($c === false) {
+                throw new \RuntimeException(Lang::t('attachment.unreadable', ['path' => $this->path]));
+            }
+            return $c;
         }
         return '';
     }
