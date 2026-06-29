@@ -13,6 +13,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Crush\Tui\Renderer as TuiRenderer;
 
 /**
  * The chat shell, as a SugarCraft {@see Model}.
@@ -48,6 +49,12 @@ final class Chat implements Model
 
     /** @var int|null Previous output height for dimension-change detection */
     private ?int $prevHeight = null;
+
+    /** @var int|null Previous terminal width for resize detection */
+    private ?int $prevWidth = null;
+
+    /** Terminal width for buffer rendering. Updated from Renderer on each view(). */
+    private int $width = 80;
 
     /**
      * @param list<Message> $history
@@ -196,16 +203,19 @@ final class Chat implements Model
 
     public function view(): string
     {
+        // Get actual terminal dimensions from TUI Renderer (queries Tty for real size).
+        $size = TuiRenderer::getTerminalSize();
+        $width = $size['cols'];
         $fullOutput = Renderer::render($this);
-
-        // Compute output height (number of lines).
         $height = substr_count($fullOutput, "\n") + 1;
-        $width = 80; // Assumed terminal width.
 
-        // Detect dimension change (e.g., history grew): reset diff state.
-        if ($this->prevHeight !== null && $this->prevHeight !== $height) {
+        // Detect terminal resize: reset diff state on width or height change.
+        if ($this->previousFrame !== null
+            && ($this->prevWidth !== null && $this->prevWidth !== $width)
+        ) {
             $this->previousFrame = null;
         }
+        $this->prevWidth = $width;
         $this->prevHeight = $height;
 
         // First frame or dimension change: emit full output and store as previousFrame.
@@ -385,25 +395,30 @@ final class Chat implements Model
      * All cells are created with null style — the diff algorithm will
      * still work correctly for detecting changed character positions.
      *
+     * Uses Buffer::fromGrid() for O(w×h) bulk construction instead of
+     * O(w²×h) repeated withCellAt() calls, and mb_str_split per row
+     * instead of per-cell mb_substr for O(w) vs O(w²) string ops.
+     *
      * @param string $output Multi-line string from Renderer::render()
      * @param int    $width  Buffer width in cells
      * @param int    $height Buffer height in rows
      */
     private function bufferFromOutput(string $output, int $width, int $height): Buffer
     {
-        $buffer = Buffer::new($width, $height);
         $lines = \explode("\n", $output);
+        $grid = [];
 
         for ($row = 0; $row < $height; $row++) {
             $line = $lines[$row] ?? '';
+            // mb_str_split is O(width) per row vs mb_substr called width×height times (O(width²×height))
+            $chars = \mb_str_split($line, 1) ?: [];
             for ($col = 0; $col < $width; $col++) {
-                $char = isset($line[$col]) ? \mb_substr($line, $col, 1) : ' ';
-                $cell = Cell::new($char, null, null, 1);
-                $buffer = $buffer->withCellAt($col, $row, $cell);
+                $char = $chars[$col] ?? ' ';
+                $grid[] = Cell::new($char, null, null, 1);
             }
         }
 
-        return $buffer;
+        return Buffer::fromGrid($width, $height, $grid);
     }
 
     /**
