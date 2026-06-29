@@ -20,8 +20,15 @@ return [
     'smtp.not_connected'         => 'Not connected',
     'smtp.no_response'           => 'Server sent no response',
     'smtp.unexpected_response'   => 'SMTP unexpected response: {response}',
+    'smtp.send_cancelled'        => 'SMTP send cancelled before completion',
+
+    // Email.php
+    'email.crlf_in_address'     => 'CRLF injection detected in email address',
+    'email.invalid_address'     => 'Invalid email address: {addr}',
+    'email.crlf_in_header'      => 'CRLF injection detected in {field} header',
 
     // ResendTransport.php
+    'resend.send_cancelled'     => 'Resend send cancelled before completion',
     'resend.network_error'       => 'Resend network error: {error}',
     'resend.api_error'           => 'Resend API error ({status}): {body}',
 

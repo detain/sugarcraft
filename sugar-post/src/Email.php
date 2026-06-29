@@ -50,16 +50,72 @@ final class Email
         array $attachments = [],
         ?string $signature = null,
     ) {
-        $this->from         = \array_values(\array_map('trim', $from));
-        $this->to           = \array_values(\array_map('trim', $to));
-        $this->subject      = $subject;
+        $this->from         = $this->sanitizeAddressList($from);
+        $this->to           = $this->sanitizeAddressList($to);
+        $this->subject      = $this->sanitizeHeader($subject, 'subject');
         $this->body         = $body;
-        $this->cc           = \array_values(\array_map('trim', $cc));
-        $this->bcc          = \array_values(\array_map('trim', $bcc));
+        $this->cc           = $this->sanitizeAddressList($cc);
+        $this->bcc          = $this->sanitizeAddressList($bcc);
         $this->htmlBody     = $htmlBody;
-        $this->replyTo      = $replyTo;
+        $this->replyTo      = $replyTo !== null ? $this->sanitizeAddr($replyTo) : null;
         $this->attachments  = $attachments;
         $this->signature    = $signature;
+    }
+
+    /**
+     * Sanitize a list of addresses (strip CRLF, validate format).
+     *
+     * @param list<string> $addrs
+     * @return list<string>
+     */
+    private function sanitizeAddressList(array $addrs): array
+    {
+        // Empty arrays are allowed; filter out empty strings first
+        $filtered = [];
+        foreach ($addrs as $addr) {
+            if ($addr !== '') {
+                $filtered[] = $this->sanitizeAddr($addr);
+            }
+        }
+        return \array_values($filtered);
+    }
+
+    /**
+     * Strip CRLF from an address and validate it as a bare email.
+     *
+     * Mirrors charmbracelet/pop address sanitization.
+     * Uses structural validation (has exactly one @, non-empty local part)
+     * rather than FILTER_VALIDATE_EMAIL which rejects short/informal TLDs.
+     */
+    private function sanitizeAddr(string $addr): string
+    {
+        if ($addr === '') {
+            return $addr;
+        }
+        // Reject any CRLF in the raw token
+        if (\preg_match('/[\r\n]/', $addr)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_address'));
+        }
+        $trimmed = \trim($addr);
+        // Structural validation: must have exactly one @ and non-empty local part
+        if (\substr_count($trimmed, '@') !== 1 || \str_starts_with($trimmed, '@') || \str_ends_with($trimmed, '@')) {
+            throw new \InvalidArgumentException(Lang::t('email.invalid_address', ['addr' => $trimmed]));
+        }
+        return $trimmed;
+    }
+
+    /**
+     * Reject CRLF in a header field value.
+     */
+    private function sanitizeHeader(?string $value, string $field): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+        if (\preg_match('/[\r\n]/', $value)) {
+            throw new \InvalidArgumentException(Lang::t('email.crlf_in_header', ['field' => $field]));
+        }
+        return $value;
     }
 
     /**
