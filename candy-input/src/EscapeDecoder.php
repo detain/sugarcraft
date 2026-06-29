@@ -290,6 +290,9 @@ final class EscapeDecoder
         [$btnRaw, $x, $y] = $parts;
         $button = (int) $btnRaw;
 
+        // Save original button for motion detection (bit 5 = drag flag)
+        $originalButton = $button;
+
         // Scroll events: button 96 = scroll up, 97 = scroll down
         if ($button === 96) {
             return [
@@ -315,7 +318,9 @@ final class EscapeDecoder
 
         $modifiers = KeyModifier::fromSgrMouse($modifierBits);
         $isRelease = $isReleaseChar || $button === 3;
-        $action = $isRelease ? MouseEvent::ACTION_RELEASE : MouseEvent::ACTION_PRESS;
+        // Motion flag (bit 5 = 32) takes precedence over press
+        $isMotion = ($originalButton & 32) !== 0;
+        $action = $isRelease ? MouseEvent::ACTION_RELEASE : ($isMotion ? MouseEvent::ACTION_DRAG : MouseEvent::ACTION_PRESS);
 
         // Button number is already the base (0-2) after modifier extraction
 
