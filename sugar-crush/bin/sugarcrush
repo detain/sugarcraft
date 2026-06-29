@@ -45,7 +45,15 @@ use SugarCraft\Crush\Tools\BuiltIn\WebFetch;
  *      binary launches with zero network and zero config.
  */
 $backend = (static function (): Backend {
-    $tools = [new Bash(), new Read(), new Edit(), new Glob(), new Grep(), new WebFetch()];
+    $root = getcwd();
+    $tools = [
+        new Bash($root),
+        new Read($root),
+        new Edit($root),
+        new Glob($root),
+        new Grep($root),
+        new WebFetch(),
+    ];
 
     $hooks = new HookManager(new HookRegistry());
     $hooks->registerBuiltIns(); // audit + confirm-rm + protect-files guards

@@ -6,9 +6,14 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Glob implements Tool
 {
+    public function __construct(
+        private ?string $root = null,
+    ) {}
+
     public function name(): string
     {
         return 'Glob';
@@ -42,7 +47,17 @@ final readonly class Glob implements Tool
             );
         }
 
-        if (!is_dir($path)) {
+        if ($this->root !== null) {
+            $resolved = PathJail::resolveDir($this->root, $path);
+            if ($resolved === null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'Error: path outside workspace root',
+                    isError: true,
+                );
+            }
+            $path = $resolved;
+        } elseif (!is_dir($path)) {
             return new ToolResult(
                 toolCallId: $args['id'] ?? '',
                 content: "Error: directory not found: $path",

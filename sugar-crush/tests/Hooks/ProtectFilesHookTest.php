@@ -37,7 +37,7 @@ final class ProtectFilesHookTest extends TestCase
     {
         $hook = new ProtectFilesHook();
 
-        $this->assertSame('^(bash|Edit)$', $hook->matcher());
+        $this->assertSame('^(Bash|Edit|Write|Read)$', $hook->matcher());
     }
 
     // =========================================================================
@@ -47,7 +47,7 @@ final class ProtectFilesHookTest extends TestCase
     public function testDenyEnvFile(): void
     {
         $hook = new ProtectFilesHook();
-        $context = $this->createContext('bash', 'echo $HOME && nano .env');
+        $context = $this->createContext('Bash', 'echo $HOME && nano .env');
 
         $result = $hook->execute($context);
 
@@ -188,11 +188,18 @@ final class ProtectFilesHookTest extends TestCase
 
     private function createContext(string $toolName, string $toolInput): HookContext
     {
+        $normalizedToolName = ucfirst(strtolower($toolName));
+        $toolArgs = match ($normalizedToolName) {
+            'Bash' => ['command' => $toolInput],
+            'Edit', 'Write', 'Read' => ['file_path' => $toolInput],
+            default => [],
+        };
+
         return new HookContext(
             sessionId: 'test-session-123',
             toolName: $toolName,
-            toolArgs: [],
-            toolInput: $toolInput,
+            toolArgs: $toolArgs,
+            toolInput: json_encode($toolArgs),
             toolOutput: '',
             model: 'test-model',
             provider: 'test-provider',
