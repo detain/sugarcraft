@@ -14,9 +14,14 @@ namespace SugarCraft\Vt\Parser;
 interface CsiHandler
 {
     /**
-     * Print a printable ASCII character (0x20-0x7E) to the current cell.
+     * Print a printable grapheme to the current cell.
+     *
+     * Handles ASCII, Latin-1, and multi-byte UTF-8 runes. Width
+     * awareness is applied: wide characters (e.g. CJK) occupy 2 cells
+     * with a continuation cell; combining marks (width 0) attach
+     * to the previous cell.
      */
-    public function printable(string $byte): void;
+    public function printable(string $grapheme): void;
 
     /**
      * Cursor Up — move cursor up $count rows.
@@ -104,6 +109,17 @@ interface CsiHandler
      * CBT — Cursor Backward Tab. Moves the cursor back $count tab stops.
      */
     public function cbt(int $count = 1): void;
+
+    /**
+     * CR — carriage return. Move cursor to column 0 (row unchanged).
+     */
+    public function cr(): void;
+
+    /**
+     * LF — line feed. Advance cursor down one row, scrolling if at
+     * the bottom of the scroll region. VT and FF behave identically.
+     */
+    public function lf(): void;
 
     /**
      * Number of rows in the cell grid (used as bottom-margin default).

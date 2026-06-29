@@ -15,10 +15,13 @@ final class CellGrid
     /** @var array<int, array<int, Cell>> */
     private array $grid;
 
-    private int $minRow = 0;
-    private int $maxRow = 0;
-    private int $minCol = 0;
-    private int $maxCol = 0;
+    // Dirty-region sentinels: PHP_INT_MAX/-1 mean "no dirty cells yet".
+    // Once any cell is written, minRow/minCol become the true minima
+    // and maxRow/maxCol become the true maxima.
+    private int $minRow = PHP_INT_MAX;
+    private int $maxRow = -1;
+    private int $minCol = PHP_INT_MAX;
+    private int $maxCol = -1;
 
     public function __construct(
         public readonly int $cols,
@@ -66,22 +69,13 @@ final class CellGrid
             return $this;
         }
 
-        $grid = array_map(fn (array $r) => $r, $this->grid);
-        $grid[$row][$col] = $cell;
+        $this->grid[$row][$col] = $cell;
+        $this->minRow = min($this->minRow, $row);
+        $this->maxRow = max($this->maxRow, $row);
+        $this->minCol = min($this->minCol, $col);
+        $this->maxCol = max($this->maxCol, $col);
 
-        $minRow = $this->minRow > 0 ? min($this->minRow, $row) : $row;
-        $maxRow = max($this->maxRow, $row);
-        $minCol = $this->minCol > 0 ? min($this->minCol, $col) : $col;
-        $maxCol = max($this->maxCol, $col);
-
-        $clone = new self($this->cols, $this->rows);
-        $clone->grid = $grid;
-        $clone->minRow = $minRow;
-        $clone->maxRow = $maxRow;
-        $clone->minCol = $minCol;
-        $clone->maxCol = $maxCol;
-
-        return $clone;
+        return $this;
     }
 
     public function clear(): self

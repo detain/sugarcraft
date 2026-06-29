@@ -45,9 +45,20 @@ final class Terminal
         $this->parser = new Parser($this->handler);
     }
 
+    /**
+     * Canonical factory — mirrors the constructor params directly.
+     */
+    public static function new(int $cols = 80, int $rows = 24, ?int $scrollbackSize = null): self
+    {
+        return new self($cols, $rows, null, null, null, $scrollbackSize ?? 1000);
+    }
+
+    /**
+     * @deprecated use `Terminal::new()` instead
+     */
     public static function create(int $cols = 80, int $rows = 24): self
     {
-        return new self($cols, $rows);
+        return self::new($cols, $rows);
     }
 
     public function feed(string $bytes): void

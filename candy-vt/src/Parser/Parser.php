@@ -20,6 +20,10 @@ namespace SugarCraft\Vt\Parser;
  */
 final class Parser
 {
+    private const MAX_PARAMS = 32;
+    private const MAX_PARAM_VALUE = 65535;
+    private const MAX_STRING_BYTES = 1_048_576; // 1 MiB
+
     private State $state = State::Ground;
 
     /** @var list<int> Numeric CSI/DCS params; -1 marks a default/missing slot. */
@@ -166,6 +170,11 @@ final class Parser
         // ';' (0x3B) and ':' (0x3A) both start a new param slot.
         // ':' is the sub-parameter separator per VT500 spec.
         if ($byte === 0x3B || $byte === 0x3A) {
+            // Silently drop overflow params beyond MAX_PARAMS (matches upstream
+            // charmbracelet/x/ansi behavior of ignoring overflow rather than throwing).
+            if (count($this->params) >= self::MAX_PARAMS) {
+                return;
+            }
             if (empty($this->params)) {
                 $this->params[] = -1; // implicit default before the separator
             }
@@ -176,14 +185,14 @@ final class Parser
         $digit = $byte - 0x30;
         if (empty($this->params) || $this->params[count($this->params) - 1] === -1) {
             if (empty($this->params)) {
-                $this->params[] = $digit;
+                $this->params[] = min(self::MAX_PARAM_VALUE, $digit);
             } else {
-                $this->params[count($this->params) - 1] = $digit;
+                $this->params[count($this->params) - 1] = min(self::MAX_PARAM_VALUE, $digit);
             }
             return;
         }
         $last = count($this->params) - 1;
-        $this->params[$last] = $this->params[$last] * 10 + $digit;
+        $this->params[$last] = min(self::MAX_PARAM_VALUE, $this->params[$last] * 10 + $digit);
     }
 
     private function start(int $byte, State $from): void
@@ -197,6 +206,12 @@ final class Parser
 
     private function put(int $byte): void
     {
+        // Silently drop overflow bytes once the buffer reaches MAX_STRING_BYTES.
+        // The in-flight sequence still dispatches with the truncated payload on
+        // terminator, matching upstream xterm behavior.
+        if (strlen($this->stringBuffer) >= self::MAX_STRING_BYTES) {
+            return;
+        }
         $this->stringBuffer .= chr($byte);
     }
 

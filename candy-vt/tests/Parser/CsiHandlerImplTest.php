@@ -380,4 +380,62 @@ final class CsiHandlerImplTest extends TestCase
 
         $this->assertSame(9, $this->csi->cursor()->row);
     }
+
+    public function testTbcMode0IsNoOp(): void
+    {
+        $this->cursor = new Cursor(row: 0, col: 10);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+
+        // tbc(0) should be a no-op in the renderer path (no tab-stop state)
+        $this->csi->tbc(0);
+
+        // Cursor position unchanged
+        $this->assertSame(0, $this->csi->cursor()->row);
+        $this->assertSame(10, $this->csi->cursor()->col);
+    }
+
+    public function testTbcMode3IsNoOp(): void
+    {
+        $this->cursor = new Cursor(row: 0, col: 10);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+
+        // tbc(3) should be a no-op in the renderer path
+        $this->csi->tbc(3);
+
+        $this->assertSame(0, $this->csi->cursor()->row);
+        $this->assertSame(10, $this->csi->cursor()->col);
+    }
+
+    public function testCrMovesCursorToColumnZero(): void
+    {
+        $this->cursor = new Cursor(row: 5, col: 40);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+
+        $this->csi->cr();
+
+        $this->assertSame(5, $this->csi->cursor()->row);
+        $this->assertSame(0, $this->csi->cursor()->col);
+    }
+
+    public function testLfAdvancesCursorDown(): void
+    {
+        $this->cursor = new Cursor(row: 5, col: 10);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+
+        $this->csi->lf();
+
+        $this->assertSame(6, $this->csi->cursor()->row);
+        $this->assertSame(10, $this->csi->cursor()->col);
+    }
+
+    public function testLfAtBottomScrollsRegion(): void
+    {
+        $this->cursor = new Cursor(row: 23, col: 10);
+        $this->csi = new CsiHandlerImpl($this->grid, $this->cursor, $this->theme);
+
+        $this->csi->lf();
+
+        // Should have scrolled, cursor stays at bottom row
+        $this->assertSame(23, $this->csi->cursor()->row);
+    }
 }

@@ -21,8 +21,11 @@ final class HandlerAdapter implements Handler
     public function printChar(string $rune): void
     {
         $byte = $rune[0] ?? '';
-        if ($byte !== '' && ord($byte) >= 0x20 && ord($byte) <= 0x7E) {
-            $this->csi->printable($byte);
+        // Accept any character except C0 controls (0x00-0x1F) and DEL (0x7F).
+        // This passes through Latin-1 printables (0xA0-0xFF) and all valid
+        // UTF-8 lead bytes (>= 0xC2) for multi-byte runes.
+        if ($byte !== '' && ord($byte) >= 0x20) {
+            $this->csi->printable($rune);
         }
     }
 
@@ -30,7 +33,8 @@ final class HandlerAdapter implements Handler
     {
         match ($byte) {
             0x09 => $this->csi->cht(1),
-            0x0D => null,
+            0x0A, 0x0B, 0x0C => $this->csi->lf(), // LF, VT, FF all advance cursor down
+            0x0D => $this->csi->cr(),
             0x08 => $this->csi->cub(1),
             default => null,
         };
