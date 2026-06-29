@@ -24,6 +24,8 @@ final class Shell
 
     /**
      * Push a new navigation item and return a new Shell (immutable).
+     *
+     * Mirrors bubbleo Shell.withPush.
      */
     public function withPush(string $title, mixed $data = null): self
     {
@@ -34,11 +36,26 @@ final class Shell
 
     /**
      * Pop the top item and return a new Shell (immutable).
+     * No-op when stack depth is 0 or 1 (root).
+     *
+     * Mirrors bubbleo Shell.withPop.
      */
     public function withPop(): self
     {
         $newStack = (new NavStack())->setItems($this->stack->items());
         $newStack->pop();
+        return new self($newStack, $this->breadcrumb);
+    }
+
+    /**
+     * Truncate the stack to the item at $index (inclusive), removing newer items.
+     *
+     * Mirrors bubbleo Shell truncation.
+     */
+    public function withPopTo(int $index): self
+    {
+        $newStack = (new NavStack())->setItems($this->stack->items());
+        $newStack->popTo($index);
         return new self($newStack, $this->breadcrumb);
     }
 
@@ -51,6 +68,8 @@ final class Shell
      * Parse a directory path and push each segment as a navigation item.
      * e.g. "/home/user/projects" pushes "home", then "user", then "projects"
      * Each segment's data is set to the full path up to that segment.
+     *
+     * Mirrors bubbleo Shell.pushDirectory.
      */
     public function pushDirectory(string $path): self
     {
