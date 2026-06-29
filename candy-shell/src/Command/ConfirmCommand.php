@@ -29,18 +29,14 @@ final class ConfirmCommand extends Command
     {
         $this
             ->addArgument('question', InputArgument::OPTIONAL, 'Prompt text.', '')
-            ->addOption('default-yes', null, InputOption::VALUE_NONE,     'Default to yes.')
+            ->addOption('default-yes', null, InputOption::VALUE_NONE,     'Default to yes (deprecated — use --default=yes|no).')
             ->addOption('default',     null, InputOption::VALUE_REQUIRED, 'Default answer (yes|no).', '')
             ->addOption('affirmative', null, InputOption::VALUE_REQUIRED, 'Label for the yes option.',  'Yes')
             ->addOption('negative',    null, InputOption::VALUE_REQUIRED, 'Label for the no option.',   'No')
             ->addOption('show-output', null, InputOption::VALUE_NONE,     'Print the chosen label on stdout.')
             ->addOption('header',      null, InputOption::VALUE_REQUIRED, 'Header banner rendered above the prompt.', '')
             ->addOption('show-help',   null, InputOption::VALUE_NONE,     'Alias for --help (gum compat).')
-            ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0)
-            ->addOption('style', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY,
-                "Per-element style: '<elem>.<prop>=<value>'. Elements: prompt, selected, unselected.",
-                []
-            );
+            ->addOption('timeout',     null, InputOption::VALUE_REQUIRED, 'Auto-abort after N seconds (0 = none).', 0);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
