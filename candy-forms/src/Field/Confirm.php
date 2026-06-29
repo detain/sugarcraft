@@ -70,7 +70,7 @@ final class Confirm implements \SugarCraft\Forms\Field
     public function validator(?\Closure $fn): self        { return $this->withValidator($fn); }
 
     /** @internal */
-    private function revalidate(): self
+    public function revalidate(): Field
     {
         $err = $this->validator !== null ? ($this->validator)($this->value) : null;
         if ($err === $this->error) {

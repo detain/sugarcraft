@@ -95,7 +95,8 @@ final class FilePicker implements \SugarCraft\Forms\Field
     public function getTitle(): string       { return $this->resolveTitle($this->title); }
     public function getDescription(): string { return $this->resolveDescription($this->description); }
     public function getError(): ?string      { return null; }
-    public function skippable(): bool        { return false; }
+    public function revalidate(): Field      { return $this; }
+    public function skippable(): bool       { return false; }
 
     /**
      * Enter (descend / select) and Backspace (ascend) are owned by the
