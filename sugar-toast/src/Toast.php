@@ -37,7 +37,7 @@ final class Toast
     /** Dismissed flag — if true, Toast won't render any alerts. */
     private bool $dismissed = false;
 
-    /** Whether Escape key dismisses the active alert. */
+    /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
     private bool $allowEscToClose = true;
 
     /** Maximum number of concurrent alerts (null = unlimited). */
@@ -111,13 +111,28 @@ final class Toast
     }
 
     /**
-     * Control whether pressing Escape dismisses the active alert.
+     * Set the allowEscToClose preference flag.
+     *
+     * This is a host-consumed flag — the renderer stores the preference and
+     * exposes it via allowEscToClose() so a host's key handler can decide
+     * whether Escape dismisses. The library itself does not handle input.
      */
     public function withAllowEscToClose(bool $allow): self
     {
         $clone = clone $this;
         $clone->allowEscToClose = $allow;
         return $clone;
+    }
+
+    /**
+     * Returns the allowEscToClose preference flag.
+     *
+     * Host code can read this to determine whether the user has requested
+     * Escape-to-dismiss behavior. The renderer itself does not act on it.
+     */
+    public function allowEscToClose(): bool
+    {
+        return $this->allowEscToClose;
     }
 
     /**
