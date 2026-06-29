@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace SugarCraft\Tick;
 
 use SugarCraft\Charts\Sparkline\Sparkline;
+use SugarCraft\Core\Util\Ansi;
 use SugarCraft\Core\Util\Color;
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Sprinkles\Border;
 use SugarCraft\Sprinkles\Layout;
 use SugarCraft\Sprinkles\Position;
@@ -60,11 +62,14 @@ final class Renderer
             foreach ($rows as $name => $secs) {
                 if ($i++ >= 6) break;
                 $duration = Stats::formatHours($secs);
-                $name = mb_strimwidth($name, 0, 14, '…');
+                $name = Ansi::strip($name);
+                $name = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', '', $name) ?? '';
+                $name = Width::truncate($name, 14);
+                $displayWidth = Width::string($name);
                 $lines[] = sprintf(
                     '  %s%s  %s',
-                    Style::new()->foreground(Color::hex($colour))->render(str_pad($name, 14)),
-                    str_repeat(' ', max(0, 16 - mb_strlen($name))),
+                    Style::new()->foreground(Color::hex($colour))->render(Width::padRight($name, 14)),
+                    str_repeat(' ', max(0, 16 - $displayWidth)),
                     Style::new()->bold()->render($duration),
                 );
             }
