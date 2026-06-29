@@ -24,12 +24,12 @@ final class ConfirmationPrompt
     private string $labelStyle    = '1;36';
     private string $selectedStyle = '1;32';
 
-    public function __construct(private readonly string $label, bool $defaultValue = true)
+    public function __construct(private readonly string $label, bool $defaultValue = false)
     {
         $this->value = $defaultValue;
     }
 
-    public static function new(string $label, bool $defaultValue = true): self
+    public static function new(string $label, bool $defaultValue = false): self
     {
         return new self($label, $defaultValue);
     }
