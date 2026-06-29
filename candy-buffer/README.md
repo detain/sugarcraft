@@ -97,12 +97,12 @@ use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style;
 use SugarCraft\Buffer\Diff\DiffEncoder;
 
-$prev = Buffer::new(5, 2);                           // all blanks
+$prev = Buffer::new(5, 2);                                          // all blanks
 $curr = $prev
-    ->withCellAt(0, 0, Cell::new('A', Style::fg(0xFF0000)))  // red A
-    ->withCellAt(1, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)))  // blue bold B
-    ->withCellAt(2, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)))
-    ->withCellAt(3, 0, Cell::new('B', Style::fg(0x0000FF)->withAttrs(Style::ATTR_BOLD)));
+    ->withCellAt(0, 0, Cell::new('A', Style::new(0xFF0000)))             // red A
+    ->withCellAt(1, 0, Cell::new('B', Style::new(0x0000FF)->withAttrs(Style::ATTR_BOLD)))  // blue bold B
+    ->withCellAt(2, 0, Cell::new('B', Style::new(0x0000FF)->withAttrs(Style::ATTR_BOLD)))
+    ->withCellAt(3, 0, Cell::new('B', Style::new(0x0000FF)->withAttrs(Style::ATTR_BOLD)));
 
 $ops = $curr->diff($prev);
 // [MoveCursorOp(0,0), SetStyleOp(red), SetCellOp([A]),
@@ -123,7 +123,7 @@ B                  # SetCellOp first 'B'
 \x1b[0m            # SGR reset             (DiffEncoder close)
 ```
 
-Total: ~38 bytes vs ~95 bytes for a full 5×2 repaint. The diff is round-trip verified: `$curr->diff($prev)->apply($prev)` equals `$curr`.
+Total: ~38 bytes vs ~95 bytes for a full 5×2 repaint. The diff is round-trip verified: `$prev->applyDiff($curr->diff($prev))` equals `$curr`.
 
 ## Upstream
 

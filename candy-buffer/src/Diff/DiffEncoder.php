@@ -24,8 +24,6 @@ use SugarCraft\Buffer\Style;
  *   - OSC 8;;\x1b\\        (hyperlink close)
  *
  * Mirrors ratatui's Buffer::diff encode logic.
- *
- * @readonly
  */
 final class DiffEncoder
 {
@@ -170,7 +168,7 @@ final class DiffEncoder
             $this->lastRune = $op->rune;
         }
 
-        $this->cursorCol += $op->count;
+        $this->cursorCol += $op->count * ($op->width > 0 ? $op->width : 1);
 
         return "\x1b[{$op->count}b";
     }
@@ -208,40 +206,6 @@ final class DiffEncoder
      */
     private function emitSgr(?Style $style): string
     {
-        if ($style === null) {
-            return "\x1b[0m";
-        }
-
-        $codes = ['0'];
-
-        if ($style->fg() !== null) {
-            $rgb = $style->fg();
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-            $codes[] = "38;2;{$r};{$g};{$b}";
-        }
-
-        if ($style->bg() !== null) {
-            $rgb = $style->bg();
-            $r = ($rgb >> 16) & 0xFF;
-            $g = ($rgb >> 8) & 0xFF;
-            $b = $rgb & 0xFF;
-            $codes[] = "48;2;{$r};{$g};{$b}";
-        }
-
-        $attrs = $style->attrs();
-        if ($attrs !== 0) {
-            if ($attrs & Style::ATTR_BOLD)       { $codes[] = '1'; }
-            if ($attrs & Style::ATTR_FAINT)     { $codes[] = '2'; }
-            if ($attrs & Style::ATTR_ITALIC)    { $codes[] = '3'; }
-            if ($attrs & Style::ATTR_UNDERLINE) { $codes[] = '4'; }
-            if ($attrs & Style::ATTR_BLINK)     { $codes[] = '5'; }
-            if ($attrs & Style::ATTR_REVERSE)  { $codes[] = '7'; }
-            if ($attrs & Style::ATTR_STRIKE)   { $codes[] = '9'; }
-            if ($attrs & Style::ATTR_OVERLINE) { $codes[] = '53'; }
-        }
-
-        return "\x1b[" . implode(';', $codes) . "m";
+        return SgrEmitter::emit($style);
     }
 }

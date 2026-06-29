@@ -142,4 +142,70 @@ final class StyleTest extends TestCase
         $this->assertTrue($style->hasUnderline());
         $this->assertFalse($style->hasStrike());
     }
+
+    // ─── Fluent builder tests ──────────────────────────────────────────
+
+    public function testWithFgReturnsNewInstance(): void
+    {
+        $original = Style::new(0xff0000);
+        $changed = $original->withFg(0x00ff00);
+
+        // New instance returned; original unchanged
+        $this->assertNotSame($original, $changed);
+        // Foreground updated
+        $this->assertSame(0x00ff00, $changed->fg());
+        // Original preserved
+        $this->assertSame(0xff0000, $original->fg());
+        // Other fields preserved
+        $this->assertNull($changed->bg());
+        $this->assertSame(0, $changed->attrs());
+    }
+
+    public function testWithBgReturnsNewInstance(): void
+    {
+        $original = Style::new(null, 0x0000ff);
+        $changed = $original->withBg(0xffff00);
+
+        $this->assertNotSame($original, $changed);
+        $this->assertSame(0xffff00, $changed->bg());
+        $this->assertSame(0x0000ff, $original->bg());
+    }
+
+    public function testWithAttrsReplaces(): void
+    {
+        $original = Style::new(null, null, Style::ATTR_BOLD);
+        $changed = $original->withAttrs(Style::ATTR_ITALIC | Style::ATTR_UNDERLINE);
+
+        $this->assertNotSame($original, $changed);
+        $this->assertSame(Style::ATTR_ITALIC | Style::ATTR_UNDERLINE, $changed->attrs());
+        // Bold removed, italic/underline added
+        $this->assertFalse($changed->hasBold());
+        $this->assertTrue($changed->hasItalic());
+        $this->assertTrue($changed->hasUnderline());
+    }
+
+    public function testWithBoldTogglesBit(): void
+    {
+        $original = Style::new();
+
+        $on = $original->withBold(true);
+        $this->assertTrue($on->hasBold());
+        $this->assertFalse($original->hasBold()); // original unchanged
+
+        $off = $on->withBold(false);
+        $this->assertFalse($off->hasBold());
+        $this->assertTrue($on->hasBold()); // previous unchanged
+    }
+
+    public function testWithReverseTogglesBit(): void
+    {
+        $original = Style::new();
+
+        $on = $original->withReverse(true);
+        $this->assertTrue($on->hasReverse());
+        $this->assertFalse($original->hasReverse());
+
+        $off = $on->withReverse(false);
+        $this->assertFalse($off->hasReverse());
+    }
 }

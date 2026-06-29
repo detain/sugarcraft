@@ -72,4 +72,19 @@ final class Cell
      * @return int 0 (continuation), 1 (normal), or 2 (wide/CJK/emoji)
      */
     public function width(): int { return $this->width; }
+
+    /**
+     * Structural equality: two cells are equal iff their rendered
+     * representation (rune, style, link, width) is identical.
+     *
+     * Used by Buffer::diff() for the diff hot-path and replaces the
+     * private Buffer::cellsEqual() helper.
+     */
+    public function equals(Cell $other): bool
+    {
+        return $this->rune() === $other->rune()
+            && $this->style() === $other->style()
+            && $this->link()?->url() === $other->link()?->url()
+            && $this->width() === $other->width();
+    }
 }
