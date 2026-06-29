@@ -9,8 +9,8 @@ use SugarCraft\Bits\Tabs\Tabs;
 use SugarCraft\Bits\Tabs\TabsKeyMap;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Util\Color;
 use SugarCraft\Core\Util\Width;
-use SugarCraft\Sprinkles\Color;
 use SugarCraft\Sprinkles\Style;
 
 final class TabsTest extends TestCase
@@ -171,9 +171,16 @@ final class TabsTest extends TestCase
 
     public function testViewTruncatesWhenWidthExceeded(): void
     {
-        $t = Tabs::new(['Home', 'Profile', 'Settings'])->withWidth(20);
+        // At width=12 with 4 tabs, the styled output visibly exceeds the budget
+        // and the final clip path (using Width::string/Width::truncateAnsi) must
+        // trigger to keep the output within the declared width.
+        $t = Tabs::new(['Home', 'Profile', 'Settings', 'Extras'], 12)
+            ->withActiveStyle(\SugarCraft\Sprinkles\Style::new()->bold())
+            ->withInactiveStyle(\SugarCraft\Sprinkles\Style::new()->faint());
         $view = $t->view();
-        $this->assertLessThanOrEqual(20, mb_strlen($view, 'UTF-8'));
+        // Visible width must not exceed the declared budget.
+        $this->assertLessThanOrEqual(12, Width::string($view));
+        // And the clipped output must end with the ellipsis.
         $this->assertSame('…', mb_substr($view, -1, 1, 'UTF-8'));
     }
 
