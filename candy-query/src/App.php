@@ -45,6 +45,7 @@ use SugarCraft\Query\Admin\QueryLogger;
 use SugarCraft\Query\Admin\StatusSnapshot;
 use SugarCraft\Query\Core\Msg\AdminDataLoadedMsg;
 use SugarCraft\Query\Core\Msg\AdminFetchStartedMsg;
+use SugarCraft\Query\Core\Msg\QueryRowsLoadedMsg;
 use SugarCraft\Query\Core\Msg\ReloadReportMsg;
 use SugarCraft\Query\Core\Msg\TableRowsLoadedMsg;
 
@@ -164,6 +165,10 @@ final class App implements Model
             // An async browse fetch finished — fold its rows (or error) in.
             return [$this->applyLoadedRows($msg), null];
         }
+        if ($msg instanceof QueryRowsLoadedMsg) {
+            // An async query finished — fold its rows (or error) into the result table.
+            return [$this->applyQueryRows($msg), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -184,6 +189,10 @@ final class App implements Model
             return [$this->withPane($nextPane), null];
         }
         if ($this->pane === Pane::Query) {
+            if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
+                || ($msg->type === KeyType::Enter && $msg->ctrl)) {
+                return $this->beginRunQuery();
+            }
             return [$this->editQuery($msg), null];
         }
         if ($this->pane === Pane::Tables) {
@@ -346,12 +355,8 @@ final class App implements Model
 
     private function editQuery(KeyMsg $msg): self
     {
-        // candy-query-specific shortcuts are intercepted before the widget
-        // sees them (Ctrl+E would otherwise be the TextArea's move-to-line-end).
-        if (($msg->ctrl && ($msg->rune === 'r' || $msg->rune === 'e'))
-            || ($msg->type === KeyType::Enter && $msg->ctrl)) {
-            return $this->runQuery();
-        }
+        // Ctrl+F / Ctrl+Shift+F favorite/unfavorite shortcuts are intercepted
+        // before the widget sees them.
         if ($msg->ctrl && !$msg->shift && $msg->rune === 'f') {
             return $this->favoriteQuery();
         }
@@ -378,6 +383,14 @@ final class App implements Model
         }
         try {
             $rows = $this->db->query($sql);
+            // Guard against null (e.g., connection lost after handled reconnect).
+            if ($rows === null) {
+                return $this->mutate([
+                    'error' => 'connection lost; retry',
+                    'status' => null,
+                    'queryHistory' => $history,
+                ]);
+            }
             return $this->mutate([
                 'selectedTable' => '(query)',
                 'rows' => $rows,
@@ -397,6 +410,136 @@ final class App implements Model
                 'queryHistory' => $history,
             ]);
         }
+    }
+
+    /**
+     * Begin executing a query, either synchronously (SQLite) or asynchronously
+     * (MySQL/Postgres).
+     *
+     * For SQLite: runs the query immediately and returns the updated model
+     * with no pending command. For async flavors: marks the model as loading,
+     * records history immediately, and returns a promise that resolves to a
+     * {@see QueryRowsLoadedMsg} which is folded back via applyQueryRows().
+     *
+     * @return array{self, ?Cmd}
+     */
+    private function beginRunQuery(): array
+    {
+        $sql = $this->editor()->value();
+        $trimmed = trim($sql);
+        if ($trimmed === '') {
+            return [$this, null];
+        }
+
+        // Record in history immediately (front = newest), de-duping consecutive repeats.
+        $history = $this->queryHistory;
+        if (($history[0] ?? '') !== $trimmed) {
+            array_unshift($history, $trimmed);
+        }
+
+        // SQLite runs synchronously — a local file cannot freeze the event loop
+        // and there is no React driver for it.
+        if (!$this->isAsyncFlavor()) {
+            // Run synchronously and return without a pending command.
+            // runQuery() handles null-safety and error state internally.
+            $updated = $this->runQuery();
+            // Preserve the history that was built above (runQuery uses its own
+            // history derivation, so we fold our提前-derived one in).
+            if ($updated === $this) {
+                // Empty query — runQuery returned unchanged; restore history.
+                return [$this->mutate(['queryHistory' => $history]), null];
+            }
+            // runQuery already built the correct state including history.
+            return [$updated, null];
+        }
+
+        // Async flavor (MySQL/Postgres): mark loading and dispatch promise.
+        $loading = $this->mutate([
+            'selectedTable' => '(query)',
+            'rows' => [],
+            'rowCursor' => 0,
+            'resultTable' => null,
+            'rowsLoading' => false,
+            'error' => null,
+            'status' => 'running query…',
+            'queryHistory' => $history,
+        ]);
+        return [$loading, Cmd::promise(fn () => $this->createQueryPromise($trimmed))];
+    }
+
+    /**
+     * Build the async query execution promise for MySQL/Postgres.
+     *
+     * Runs the query on the React loop via the same pooled async connection
+     * used by createRowsPromise/admin (same DSN → same connection key).
+     * Always resolves (never rejects) to prevent unhandled promise rejections.
+     *
+     * @return \React\Promise\PromiseInterface<QueryRowsLoadedMsg>
+     */
+    private function createQueryPromise(string $sql): \React\Promise\PromiseInterface
+    {
+        try {
+            $context = $this->serverContext ?? $this->createContext();
+        } catch (\Throwable $e) {
+            return \React\Promise\resolve(new QueryRowsLoadedMsg($sql, [], $e->getMessage()));
+        }
+        if ($context === null) {
+            return \React\Promise\resolve(
+                new QueryRowsLoadedMsg($sql, [], 'Async query unsupported for this driver'),
+            );
+        }
+
+        $dsn = $context->connection()->dsn();
+        $username = $context->connection()->username();
+        $password = $context->password();
+        $isPostgres = $context instanceof PostgresServerContext;
+
+        $cache = AdminQueryCache::instance();
+        $connKey = ($isPostgres ? 'pgsql' : 'mysql') . '|' . $dsn . '|' . $username;
+        $connection = $cache->connection($connKey, static function () use ($isPostgres, $dsn, $username, $password) {
+            return $isPostgres
+                ? new ReactPostgresConnection($dsn, $username, $password)
+                : new ReactMysqlConnection($dsn, $username, $password);
+        });
+
+        return $connection->query($sql)
+            ->then(
+                static fn (array $rows): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, $rows, null),
+            )
+            ->otherwise(
+                static fn (\Throwable $e): QueryRowsLoadedMsg => new QueryRowsLoadedMsg($sql, [], $e->getMessage()),
+            );
+    }
+
+    /**
+     * Fold an async query result into the model.
+     *
+     * Mirrors applyLoadedRows for the table-browse path. A result that arrives
+     * after the user has since run another query is considered stale and
+     * dropped — the in-flight result for the old query must not overwrite a
+     * fresh result.
+     */
+    private function applyQueryRows(QueryRowsLoadedMsg $msg): self
+    {
+        // Stale result: another query was issued after this one was dispatched.
+        if (($this->queryHistory[0] ?? '') !== $msg->sql) {
+            return $this;
+        }
+        if ($msg->error !== null) {
+            return $this->mutate([
+                'rows' => [],
+                'resultTable' => null,
+                'error' => $msg->error,
+                'status' => null,
+            ]);
+        }
+        return $this->mutate([
+            'rows' => $msg->rows,
+            'rowCursor' => 0,
+            'resultTable' => ResultTable::fromRows($msg->rows),
+            'error' => null,
+            'status' => count($msg->rows) . ' rows',
+        ]);
     }
 
     /**
