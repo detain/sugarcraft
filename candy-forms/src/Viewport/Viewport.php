@@ -219,24 +219,28 @@ final class Viewport implements Model
                 fn(string $l) => Width::dropAnsi($l, $this->xOffset),
                 $window,
             );
-        }
-        if (!$this->showScrollbar) {
+        } elseif (!$this->showScrollbar) {
             // Cap each line on the right to $this->width using ANSI-aware truncation.
+            // When xOffset > 0 the dropAnsi above already positioned the window;
+            // we do not apply further width truncation so the remaining content
+            // (past the offset) is shown in full.
             if ($this->width > 0) {
                 $window = array_map(
                     fn(string $l) => Width::truncateAnsi($l, $this->width),
                     $window,
                 );
             }
-            return implode("\n", $window);
         }
 
-        // Use the injected Scrollbar component if available.
-        if ($this->verticalScrollbar !== null) {
-            return $this->renderWithScrollbarComponent($window);
+        if ($this->showScrollbar) {
+            // Use the injected Scrollbar component if available.
+            if ($this->verticalScrollbar !== null) {
+                return $this->renderWithScrollbarComponent($window);
+            }
+            return $this->paintScrollbar($window);
         }
 
-        return $this->paintScrollbar($window);
+        return implode("\n", $window);
     }
 
     // ---- content + dimensions ----------------------------------------

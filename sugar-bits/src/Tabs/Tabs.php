@@ -226,7 +226,9 @@ final class Tabs implements Model
                     $nextCursor += $dividerWidth;
                 }
 
-                if ($nextCursor > $available && $cursor > 0) {
+                $rightWillNeedEllipsis = ($i < $count - 1);
+                $ellipsisReserve = $rightWillNeedEllipsis ? $ellipsisWidth : 0;
+                if ($nextCursor + $ellipsisReserve > $available && $cursor > 0) {
                     break;
                 }
                 $cursor = $nextCursor;
@@ -246,7 +248,7 @@ final class Tabs implements Model
         // Build output: optional left ellipsis + visible tabs + optional right ellipsis.
         $parts = [];
         if ($leftEllipsis) {
-            $parts[] = $this->inactiveStyle->render('…');
+            $parts[] = '…';
         }
 
         for ($i = $visibleStart; $i <= $visibleEnd; $i++) {
@@ -255,7 +257,7 @@ final class Tabs implements Model
         }
 
         if ($rightEllipsis) {
-            $parts[] = $this->inactiveStyle->render('…');
+            $parts[] = '…';
         }
 
         $inactiveDivider = $this->inactiveStyle->render($this->divider);
