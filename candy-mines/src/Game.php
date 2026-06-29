@@ -6,9 +6,13 @@ namespace SugarCraft\Mines;
 
 use SugarCraft\Core\Cmd;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\MouseMode;
 
 /**
  * Minesweeper as a SugarCraft Model. Keys:
@@ -82,6 +86,10 @@ final class Game implements Model
 
     public function update(Msg $msg): array
     {
+        // Wire mouse before the KeyMsg guard so clicks are handled first.
+        if ($msg instanceof MouseMsg) {
+            return [$this->onMouse($msg), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -112,6 +120,8 @@ final class Game implements Model
                 => $this->reveal(),
             $msg->type === KeyType::Char && $msg->rune === 'f'
                 => $this->flag(),
+            $msg->type === KeyType::Char && $msg->rune === 'c'
+                => $this->chord(),
             default => $this,
         };
         return [$next, null];
@@ -158,6 +168,97 @@ final class Game implements Model
             rand: $this->rand,
             startedAt: $this->startedAt,
             elapsedSeconds: $this->elapsedSeconds,
+            stats: $this->stats,
+        );
+    }
+
+    private function chord(): self
+    {
+        $now = $this->startedAt ?? microtime(true);
+        return new self(
+            board: $this->board->chord($this->cursorX, $this->cursorY),
+            cursorX: $this->cursorX,
+            cursorY: $this->cursorY,
+            rand: $this->rand,
+            startedAt: $now,
+            elapsedSeconds: null,
+            stats: $this->stats,
+        );
+    }
+
+    /**
+     * Dispatch a mouse message into a board action (reveal / flag / chord).
+     *
+     * MouseMsg coordinates are 1-based absolute terminal positions.
+     * The interior scanner starts after the rounded border (1 col/row) and
+     * the padding(0,1) layer (1 extra col on each side), so:
+     *   interior_col = msg.x - 3  (1 border + 1 padding = 2, plus 1 for 1-based)
+     *   interior_row = msg.y - 2  (1 border, plus 1 for 1-based)
+     *
+     * Ignores clicks outside the board and does nothing after game ends.
+     */
+    private function onMouse(MouseMsg $msg): self
+    {
+        // Only handle press events to avoid double-firing on release.
+        if (!$msg instanceof MouseClickMsg) {
+            return $this;
+        }
+        if ($this->board->exploded || $this->board->isWon()) {
+            return $this;
+        }
+        // Convert absolute terminal coords → interior-relative cell coords.
+        $col = $msg->x - 3;
+        $row = $msg->y - 2;
+        $cell = Renderer::resolveClick($this, $col, $row);
+        if ($cell === null) {
+            return $this;
+        }
+        [$cx, $cy] = $cell;
+        return match ($msg->button) {
+            MouseButton::Left   => $this->revealAt($cx, $cy),
+            MouseButton::Right  => $this->flagAt($cx, $cy),
+            MouseButton::Middle => $this->chordAt($cx, $cy),
+            default             => $this,
+        };
+    }
+
+    private function revealAt(int $x, int $y): self
+    {
+        $now = $this->startedAt ?? microtime(true);
+        return new self(
+            board: $this->board->reveal($x, $y, $this->rand),
+            cursorX: $x,
+            cursorY: $y,
+            rand: $this->rand,
+            startedAt: $now,
+            elapsedSeconds: null,
+            stats: $this->stats,
+        );
+    }
+
+    private function flagAt(int $x, int $y): self
+    {
+        return new self(
+            board: $this->board->toggleFlag($x, $y),
+            cursorX: $x,
+            cursorY: $y,
+            rand: $this->rand,
+            startedAt: $this->startedAt,
+            elapsedSeconds: $this->elapsedSeconds,
+            stats: $this->stats,
+        );
+    }
+
+    private function chordAt(int $x, int $y): self
+    {
+        $now = $this->startedAt ?? microtime(true);
+        return new self(
+            board: $this->board->chord($x, $y),
+            cursorX: $x,
+            cursorY: $y,
+            rand: $this->rand,
+            startedAt: $now,
+            elapsedSeconds: null,
             stats: $this->stats,
         );
     }

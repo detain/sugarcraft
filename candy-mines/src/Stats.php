@@ -11,9 +11,6 @@ namespace SugarCraft\Mines;
  */
 final class Stats
 {
-    /** @var array<Difficulty, array{games:int, wins:int, best:int|null}> */
-    private array $byDifficulty;
-
     public function __construct(
         public readonly int $easyGames = 0,
         public readonly int $easyWins = 0,
