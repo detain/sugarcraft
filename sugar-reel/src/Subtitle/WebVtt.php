@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace SugarCraft\Reel\Subtitle;
 
 /**
- * A parsed WebVTT subtitle track — a time-ordered list of {@see Cue}s with an
- * O(n) `cueAt()` lookup for the caption showing at a given playback time.
+ * A parsed WebVTT subtitle track — a time-sorted list of {@see Cue}s with an
+ * O(log n) `cueAt()` lookup for the caption showing at a given playback time.
  *
  * Parsing is lenient: it skips the `WEBVTT` header and any `NOTE`/`STYLE`/
  * `REGION` blocks, ignores per-cue identifiers and cue settings, strips inline
@@ -54,19 +54,44 @@ final class WebVtt
             }
         }
 
+        // Sort by start time ascending so binary search is valid and the
+        // "last matching cue wins" semantics are well-defined for overlapping cues.
+        usort($cues, static fn(Cue $a, Cue $b): int => $a->start <=> $b->start);
+
         return new self($cues);
     }
 
     /**
-     * The caption text showing at $seconds, or null when nothing is. The first
-     * matching cue wins (cues are kept in source order).
+     * The caption text showing at $seconds, or null when nothing is.
+     * Uses binary search over the sorted cue list (O(log n)).
+     * When multiple overlapping cues contain $seconds, the one with the
+     * latest start time is returned (first matching cue from the end).
      */
     public function cueAt(float $seconds): ?string
     {
-        foreach ($this->cues as $cue) {
-            if ($cue->contains($seconds)) {
-                return $cue->text;
+        $cues = $this->cues;
+        $lo = 0;
+        $hi = count($cues) - 1;
+        $result = null;
+
+        // Binary search for the rightmost cue with start <= $seconds.
+        while ($lo <= $hi) {
+            $mid = ($lo + $hi) >> 1;
+            if ($cues[$mid]->start <= $seconds) {
+                $result = $mid;
+                $lo = $mid + 1;
+            } else {
+                $hi = $mid - 1;
             }
+        }
+
+        // Walk back to find the first cue that actually contains $seconds.
+        // This handles gaps between cues and overlapping cue tie-breaking.
+        while ($result !== null && $result >= 0) {
+            if ($cues[$result]->contains($seconds)) {
+                return $cues[$result]->text;
+            }
+            $result--;
         }
 
         return null;
