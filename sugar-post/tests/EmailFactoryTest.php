@@ -9,13 +9,13 @@ use SugarCraft\Post\Email;
 use SugarCraft\Post\ResendTransport;
 
 /**
- * Tests for Email::make() static factory and withAttachment().
+ * Tests for Email::new() static factory and withAttachment().
  */
 final class EmailFactoryTest extends TestCase
 {
-    public function testMakeCreatesEmail(): void
+    public function testNewCreatesEmail(): void
     {
-        $email = Email::make('from@example.com', 'to@example.com', 'Subject', 'Body');
+        $email = Email::new('from@example.com', 'to@example.com', 'Subject', 'Body');
 
         $this->assertSame(['from@example.com'], $email->from);
         $this->assertSame(['to@example.com'], $email->to);
@@ -23,9 +23,9 @@ final class EmailFactoryTest extends TestCase
         $this->assertSame('Body', $email->body);
     }
 
-    public function testMakeWithMinimalArgs(): void
+    public function testNewWithMinimalArgs(): void
     {
-        $email = Email::make('a@b.com', 'c@d.com');
+        $email = Email::new('a@b.com', 'c@d.com');
 
         $this->assertSame(['a@b.com'], $email->from);
         $this->assertSame(['c@d.com'], $email->to);
@@ -38,7 +38,7 @@ final class EmailFactoryTest extends TestCase
         $tmp = \tempnam(\sys_get_temp_dir(), 'sp-');
         \file_put_contents($tmp, 'attach-me');
         try {
-            $email = Email::make('a@b.com', 'c@d.com')
+            $email = Email::new('a@b.com', 'c@d.com')
                 ->withAttachment('document.pdf', $tmp);
 
             $this->assertCount(1, $email->attachments);
@@ -54,7 +54,7 @@ final class EmailFactoryTest extends TestCase
         $tmp = \tempnam(\sys_get_temp_dir(), 'sp-');
         \file_put_contents($tmp, 'plain text content');
         try {
-            $email = Email::make('a@b.com', 'c@d.com')
+            $email = Email::new('a@b.com', 'c@d.com')
                 ->withAttachment('readme.txt', $tmp);
 
             $this->assertCount(1, $email->attachments);
@@ -64,14 +64,12 @@ final class EmailFactoryTest extends TestCase
         }
     }
 
-    public function testWithAttachmentWithoutPathUsesFilenameOnly(): void
+    public function testWithAttachmentNullPathThrows(): void
     {
-        $email = Email::make('a@b.com', 'c@d.com')
-            ->withAttachment('data.json');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('path must be provided');
 
-        $this->assertCount(1, $email->attachments);
-        $this->assertSame('data.json', $email->attachments[0]->filename);
-        $this->assertNull($email->attachments[0]->path);
-        $this->assertSame('', $email->attachments[0]->getContent());
+        Email::new('a@b.com', 'c@d.com')
+            ->withAttachment('data.json');
     }
 }

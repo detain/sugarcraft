@@ -73,6 +73,8 @@ $email = $email->withAttachment('invoice.pdf', '/path/to/invoice.pdf');
 $mailer->send($email);
 ```
 
+> **Note:** `--attach` / `withAttachment()` read arbitrary local paths. The caller is responsible for validating that passed paths are trusted. No path allow-list is enforced by design, matching upstream behavior.
+
 ## CLI
 
 ```bash
