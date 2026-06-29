@@ -31,6 +31,8 @@ final class ModelTest extends TestCase
         $m = $this->model->addItem(new StringItem('hello'));
         $this->assertSame(1, $m->length());
         $this->assertFalse($m->isEmpty());
+        // Original model unchanged (immutable addItem)
+        $this->assertSame(0, $this->model->length());
     }
 
     public function testFluentSetters(): void
@@ -52,15 +54,15 @@ final class ModelTest extends TestCase
     {
         $m = $this->model;
         foreach (['a', 'b', 'c'] as $v) {
-            $m->addItem(new StringItem($v));
+            $m = $m->addItem(new StringItem($v));
         }
 
         $this->assertSame(0, $m->cursorIndex());
-        $m->cursorDown();
+        $m = $m->cursorDown();
         $this->assertSame(1, $m->cursorIndex());
-        $m->cursorDown();
+        $m = $m->cursorDown();
         $this->assertSame(2, $m->cursorIndex());
-        $m->cursorUp();
+        $m = $m->cursorUp();
         $this->assertSame(1, $m->cursorIndex());
     }
 
@@ -76,32 +78,32 @@ final class ModelTest extends TestCase
     public function testRemoveItem(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
         $this->assertSame(3, $this->model->length());
 
-        $this->model->removeItem(1);
+        $this->model = $this->model->removeItem(1);
         $this->assertSame(2, $this->model->length());
     }
 
     public function testClear(): void
     {
         foreach (['a', 'b'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
         $this->assertSame(2, $this->model->length());
-        $this->model->clear();
+        $this->model = $this->model->clear();
         $this->assertTrue($this->model->isEmpty());
     }
 
     public function testSortWithLessFunc(): void
     {
         foreach (['z', 'a', 'm'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $this->model->lessFunc = fn($a, $b) => \strcmp((string) $a, (string) $b);
-        $this->model->sort();
+        $this->model = $this->model->sort();
 
         // After sort, cursor stays on the same logical item ('z' was at cursor index 0).
         $this->assertSame('z', (string) $this->model->cursorItem());
@@ -112,7 +114,7 @@ final class ModelTest extends TestCase
     public function testFindItem(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $this->assertSame(1, $this->model->find(new StringItem('banana')));
@@ -122,7 +124,7 @@ final class ModelTest extends TestCase
     public function testFindWithEqualsFunc(): void
     {
         foreach (['aa', 'bb', 'cc'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $this->model->equalsFunc = fn($a, $b) => (string) $a === (string) $b;
@@ -133,10 +135,10 @@ final class ModelTest extends TestCase
     public function testSetCursor(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
-        $this->model->setCursor(2);
+        $this->model = $this->model->setCursor(2);
         $this->assertSame(2, $this->model->cursorIndex());
     }
 
@@ -155,13 +157,13 @@ final class ModelTest extends TestCase
 
     public function testViewReturnsString(): void
     {
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem('item one'))
             ->addItem(new StringItem('item two'))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $view = $this->model->View();
+        $view = $m->View();
         $this->assertIsString($view);
         $this->assertStringContainsString('item one', $view);
         $this->assertStringContainsString('item two', $view);
@@ -169,13 +171,13 @@ final class ModelTest extends TestCase
 
     public function testPrefixerInterface(): void
     {
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem('test item'))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(80, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertNotEmpty($lines);
     }
 
@@ -189,21 +191,26 @@ final class ModelTest extends TestCase
     public function testWrapLimitsLines(): void
     {
         $longText = \str_repeat('word ', 50);  // long enough to wrap
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem($longText))
             ->setViewport(20, 24)
             ->setWrap(3)
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer());
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertLessThanOrEqual(3, \count($lines));
     }
 
-    public function testAddItemReturnsSelf(): void
+    public function testAddItemReturnsNewInstance(): void
     {
         $m = $this->model->addItem(new StringItem('x'));
-        $this->assertSame($this->model, $m);
+        // Returns a new instance, not the same object.
+        $this->assertNotSame($this->model, $m);
+        // Original is unchanged.
+        $this->assertSame(0, $this->model->length());
+        // New instance has the item.
+        $this->assertSame(1, $m->length());
     }
 
     // -------------------------------------------------------------------------
@@ -213,7 +220,7 @@ final class ModelTest extends TestCase
     public function testWithFilterFnReturnsNewInstance(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'b'));
@@ -233,7 +240,7 @@ final class ModelTest extends TestCase
     public function testWithFilterFnFiltersItemsCorrectly(): void
     {
         foreach (['apple', 'apricot', 'banana', 'cherry'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => str_starts_with((string) $v, 'a'));
@@ -241,14 +248,14 @@ final class ModelTest extends TestCase
         $this->assertSame(2, $filtered->length());
         // Verify by navigating through cursorItem
         $this->assertSame('apple', (string) $filtered->cursorItem());
-        $filtered->cursorDown();
+        $filtered = $filtered->cursorDown();
         $this->assertSame('apricot', (string) $filtered->cursorItem());
     }
 
     public function testWithoutFilterRestoresOriginalItems(): void
     {
         foreach (['apple', 'banana', 'cherry'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
 
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'banana');
@@ -262,17 +269,18 @@ final class ModelTest extends TestCase
 
     public function testWithoutFilterOnUnfilteredModelReturnsSelf(): void
     {
-        $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->addItem(new StringItem('apple'));
         $result = $this->model->withoutFilter();
+        // On an unfiltered model, withoutFilter is a no-op and returns $this unchanged.
         $this->assertSame($this->model, $result);
     }
 
     public function testWithFilterFnCursorClampedToFilteredLength(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
-        $this->model->setCursor(2);  // cursor on 'c'
+        $this->model = $this->model->setCursor(2);  // cursor on 'c'
 
         // Filter out 'c' — cursor should clamp to index 1 (last remaining item 'b')
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'c');
@@ -282,7 +290,7 @@ final class ModelTest extends TestCase
 
     public function testFilterStateIsFilteringAfterSet(): void
     {
-        $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->addItem(new StringItem('apple'));
         $this->assertNull($this->model->filterState);
 
         $filtered = $this->model->withFilterFn(fn($v) => true);
@@ -300,12 +308,13 @@ final class ModelTest extends TestCase
 
     public function testCursorDownClampsToLastIndex(): void
     {
+        $m = $this->model;
         foreach (['a', 'b'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $m = $m->addItem(new StringItem($v));
         }
-        $this->model->setCursor(0);
-        $result = $this->model->cursorDown(100);
-        $this->assertSame(1, $result->cursorIndex());
+        $m = $m->setCursor(0);
+        $m = $m->cursorDown(100);
+        $this->assertSame(1, $m->cursorIndex());
     }
 
     public function testSetCursorOffsetIsIndependentOfLineOffset(): void
@@ -358,13 +367,13 @@ final class ModelTest extends TestCase
 
     public function testMultilineItemRendersMultipleLines(): void
     {
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem("line1\nline2\nline3"))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(80, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertGreaterThan(1, count($lines));
     }
 
@@ -388,7 +397,7 @@ final class ModelTest extends TestCase
 
     public function testLinesWithStyleApplied(): void
     {
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem('styled'))
             ->setLineStyle("\x1b[2m")
             ->setCurrentStyle("\x1b[1m")
@@ -396,13 +405,13 @@ final class ModelTest extends TestCase
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(80, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertNotEmpty($lines);
     }
 
     public function testFilterWithNoMatchingItems(): void
     {
-        $this->model->addItem(new StringItem('apple'));
+        $this->model = $this->model->addItem(new StringItem('apple'));
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v !== 'apple');
         $this->assertSame(0, $filtered->length());
     }
@@ -410,9 +419,9 @@ final class ModelTest extends TestCase
     public function testFilterCursorsToLastItemWhenOnlyOneMatches(): void
     {
         foreach (['a', 'b', 'c'] as $v) {
-            $this->model->addItem(new StringItem($v));
+            $this->model = $this->model->addItem(new StringItem($v));
         }
-        $this->model->setCursor(2); // cursor on 'c'
+        $this->model = $this->model->setCursor(2); // cursor on 'c'
         $filtered = $this->model->withFilterFn(fn($v) => (string) $v === 'a');
         // After filtering to just 'a', cursor should be 0
         $this->assertSame(0, $filtered->cursorIndex());
@@ -424,13 +433,13 @@ final class ModelTest extends TestCase
     {
         // A single word longer than content width should be split
         $longWord = \str_repeat('a', 100);
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem($longWord))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(20, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertNotEmpty($lines);
         // The long word should be split into multiple lines
         $this->assertGreaterThan(1, \count($lines));
@@ -439,40 +448,40 @@ final class ModelTest extends TestCase
     public function testLinesWithMultiParagraphTextExercisingHardWrap(): void
     {
         // Multi-paragraph text (contains \n) exercises hardWrap
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem("para1\n\npara2"))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(80, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertNotEmpty($lines);
     }
 
     public function testLinesWithWrapLimitExercisingRenderItemWrapLogic(): void
     {
         $multiline = "line1\nline2\nline3\nline4\nline5";
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem($multiline))
             ->setWrap(2) // limit to 2 lines
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(80, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         // Should be limited to 2 lines due to wrap setting
         $this->assertLessThanOrEqual(2, \count($lines));
     }
 
     public function testLinesWithContentWidthTooNarrowExercisingHardWrapEdgeCase(): void
     {
-        $this->model
+        $m = $this->model
             ->addItem(new StringItem('word'))
             ->setPrefixer(new DefaultPrefixer())
             ->setSuffixer(new DefaultSuffixer())
             ->setViewport(5, 24);
 
-        $lines = $this->model->lines();
+        $lines = $m->lines();
         $this->assertNotEmpty($lines);
     }
 

@@ -88,6 +88,24 @@ final class Model
     private ?int $prevHeight = null;
 
     // -------------------------------------------------------------------------
+    // Immutable mutation helper
+    // -------------------------------------------------------------------------
+
+    /**
+     * Create a new instance by cloning and applying changes via $fn.
+     *
+     * Mirrors the candy-sprinkles/Style.php mutate() pattern.
+     *
+     * @param callable(self): void $fn
+     */
+    private function mutate(callable $fn): self
+    {
+        $clone = clone $this;
+        $fn($clone);
+        return $clone;
+    }
+
+    // -------------------------------------------------------------------------
     // Factory
     // -------------------------------------------------------------------------
 
@@ -108,58 +126,47 @@ final class Model
 
     public function setWidth(int $width): self
     {
-        $this->width = $width;
-        return $this;
+        return $this->mutate(fn($m) => $m->width = $width);
     }
 
     public function setHeight(int $height): self
     {
-        $this->height = $height;
-        return $this;
+        return $this->mutate(fn($m) => $m->height = $height);
     }
 
     public function setViewport(int $width, int $height): self
     {
-        $this->width  = $width;
-        $this->height = $height;
-        return $this;
+        return $this->mutate(fn($m) => [$m->width, $m->height] = [$width, $height]);
     }
 
     public function setCursorOffset(int $n): self
     {
-        $this->cursorOffset = $n;
-        // lineOffset is now an internal scroll anchor; do NOT alias cursorOffset onto it.
-        return $this;
+        return $this->mutate(fn($m) => $m->cursorOffset = $n);
     }
 
     public function setWrap(int $maxLines): self
     {
-        $this->wrap = $maxLines;
-        return $this;
+        return $this->mutate(fn($m) => $m->wrap = $maxLines);
     }
 
     public function setPrefixer(Prefixer $p): self
     {
-        $this->prefixer = $p;
-        return $this;
+        return $this->mutate(fn($m) => $m->prefixer = $p);
     }
 
     public function setSuffixer(Suffixer $s): self
     {
-        $this->suffixer = $s;
-        return $this;
+        return $this->mutate(fn($m) => $m->suffixer = $s);
     }
 
     public function setLineStyle(string $ansiStyle): self
     {
-        $this->lineStyle = $ansiStyle;
-        return $this;
+        return $this->mutate(fn($m) => $m->lineStyle = $ansiStyle);
     }
 
     public function setCurrentStyle(string $ansiStyle): self
     {
-        $this->currentStyle = $ansiStyle;
-        return $this;
+        return $this->mutate(fn($m) => $m->currentStyle = $ansiStyle);
     }
 
     /**
@@ -215,8 +222,8 @@ final class Model
      */
     public function addItem(\Stringable $value): self
     {
-        $this->items[] = new Item($value, $this->idCounter++);
-        return $this;
+        $id = $this->idCounter++;
+        return $this->mutate(fn($m) => $m->items[] = new Item($value, $id));
     }
 
     /**
@@ -227,9 +234,10 @@ final class Model
         if ($index < 0 || $index >= \count($this->items)) {
             return $this;
         }
-        \array_splice($this->items, $index, 1);
-        $this->cursorIndex = \min($this->cursorIndex, \max(0, \count($this->items) - 1));
-        return $this;
+        return $this->mutate(function ($m) use ($index) {
+            \array_splice($m->items, $index, 1);
+            $m->cursorIndex = \min($m->cursorIndex, \max(0, \count($m->items) - 1));
+        });
     }
 
     /**
@@ -237,9 +245,7 @@ final class Model
      */
     public function clear(): self
     {
-        $this->items = [];
-        $this->cursorIndex = 0;
-        return $this;
+        return $this->mutate(fn($m) => [$m->items, $m->cursorIndex] = [[], 0]);
     }
 
     /**
@@ -251,18 +257,20 @@ final class Model
             return $this;
         }
         $selected = $this->items[$this->cursorIndex] ?? null;
-        \usort($this->items, fn(Item $a, Item $b) =>
+        $items = $this->items;
+        \usort($items, fn(Item $a, Item $b) =>
             ($this->lessFunc)($a->value, $b->value)
         );
+        $cursorIndex = $this->cursorIndex;
         if ($selected !== null) {
-            foreach ($this->items as $i => $item) {
+            foreach ($items as $i => $item) {
                 if ($item === $selected) {
-                    $this->cursorIndex = $i;
+                    $cursorIndex = $i;
                     break;
                 }
             }
         }
-        return $this;
+        return $this->mutate(fn($m) => [$m->items, $m->cursorIndex] = [$items, $cursorIndex]);
     }
 
     // -------------------------------------------------------------------------
@@ -291,8 +299,7 @@ final class Model
 
     public function setCursor(int $index): self
     {
-        $this->cursorIndex = \max(0, \min($index, \count($this->items) - 1));
-        return $this;
+        return $this->mutate(fn($m) => $m->cursorIndex = \max(0, \min($index, \count($m->items) - 1)));
     }
 
     public function cursorUp(int $n = 1): self
