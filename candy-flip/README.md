@@ -41,19 +41,16 @@ The decoder uses PHP's built-in `imagecreatefromstring()` for in-memory single-f
 4. Reassemble a minimal single-frame GIF payload in memory and pass it to `imagecreatefromstring()`.
 5. Area-average downsample the resulting `GdImage` to the requested cell grid, skipping transparent pixels in the average.
 
-GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently so memory usage stays bounded regardless of input size.
+GIF parsing is hand-rolled to avoid loading the entire animation into a `GdImage` at once; each frame is decoded independently. The decoder caps at 256 frames so memory usage stays bounded for typical animations.
 
 ## Architecture
 
 | File              | Role                                                                                                  |
 |-------------------|------------------------------------------------------------------------------------------------------|
-| `Decoder`         | Reads the GIF, extracts per-frame GCE delay + disposal + transparency + local color table, hands each frame to GD via `imagecreatefromstring()`, area-average downsamples to a cell grid, returns a list of {@see Frame}. |
+| `Decoder`         | Reads the GIF, extracts per-frame GCE delay + disposal + transparency + local color table + image left/top offset, hands each frame to GD via `imagecreatefromstring()`, area-average downsamples the composited canvas to a cell grid, returns a list of {@see Frame}. Compositing handles DISPOSAL_NONE/KEEP (0/1) to leave the canvas, DISPOSAL_BACKGROUND (2) to clear the prior rect, and DISPOSAL_PREVIOUS (3) to restore a canvas snapshot. |
 | `Frame`           | Pure value — 2-D RGB grid in cell coordinates with per-frame `$delay` (centiseconds), `$disposal` method (0–3), and `$transparent` flag. |
-| `Downsampler`     | Image downsampler with two modes: `NEAREST` (center-pixel sample) and `AREA_AVERAGE` (area-weighted RGB average — higher quality, default). |
-| `Dither\FloydSteinberg` | Floyd-Steinberg error-diffusion dithering against a fixed palette. Source image is not modified; returns a new `GdImage`. |
 | `Renderer`        | ANSI emitter. Two presets: `solid` (24-bit `█` blocks) or `density` (luminance ramp). `withAdaptiveSize()` queries the TTY via `SizeIoctl` so the output never overflows the viewport; `withConstraints()` accepts explicit row/col limits for testing. |
-| `Cache/FrameCache` | WeakMap-backed memoization cache keyed by `Frame` object identity. Identical frames skip the rendering step on re-playback, and entries are dropped automatically when the `Frame` is garbage-collected. |
-| `Player`          | SugarCraft Model — index + paused + preset state. `Cmd::tick(...)` schedules frame advance using per-frame delays. |
+| `Player`          | SugarCraft Model — index + paused + preset + renderer state. `Cmd::tick(...)` schedules frame advance using per-frame delays. Handles `WindowSizeMsg` by re-clamping the renderer to the new viewport (rows-1 for the status line). |
 | `TickMsg`         | Frame-tick message produced by the Cmd.                                                            |
 
 The decoder caps at 256 frames so a runaway file can't OOM the runtime; pause + manual step are always available even on long animations.

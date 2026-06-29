@@ -21,6 +21,7 @@ use SugarCraft\Flip\Decoder;
 use SugarCraft\Flip\Lang;
 use SugarCraft\Flip\Player;
 use SugarCraft\Flip\Renderer;
+use SugarCraft\Pty\SizeIoctl;
 
 $argv = $argv ?? [];
 $path  = $argv[1] ?? null;
@@ -30,7 +31,19 @@ if ($path === null) {
     exit(1);
 }
 
-$frames = Decoder::decode($path, cellsW: 60, cellsH: 24);
-$player = new Player($frames, preset: $preset);
+// Size the decode grid to the terminal viewport (cols, rows-1 for status line).
+// Fall back to 60x24 when not running in a TTY (e.g. piped/CI).
+if (posix_isatty(STDOUT)) {
+    $size = SizeIoctl::query((int) STDOUT);
+    $cellsW = $size['cols'];
+    $cellsH = max(1, $size['rows'] - 1); // reserve 1 row for the status line
+} else {
+    $cellsW = 60;
+    $cellsH = 24;
+}
+
+$frames = Decoder::decode($path, cellsW: $cellsW, cellsH: $cellsH);
+$renderer = Renderer::withConstraints($cellsH, $cellsW);
+$player = new Player($frames, preset: $preset, renderer: $renderer);
 
 (new Program($player, new ProgramOptions(useAltScreen: true)))->run();
