@@ -97,7 +97,21 @@ final class ProfileWriter
         if ($this->profile === Profile::NoTTY) {
             $data = Palette::stripAnsi($data);
         } elseif ($this->profile !== Profile::TrueColor) {
-            $palette = (new Palette($this->stream, ['NO_COLOR' => '1']))->withProfile($this->profile);
+            // Pin to the configured profile — do NOT re-detect from ambient env.
+            // Use null values to block parent state from leaking via $_ENV/getenv.
+            // NO_COLOR=1 forces the intermediate Palette to NoTTY; then
+            // withProfile() overrides to the configured profile for degradation.
+            $palette = (new Palette($this->stream, [
+                'NO_COLOR' => '1',
+                'CLICOLOR_FORCE' => null,
+                'FORCE_COLOR' => null,
+                'COLORTERM' => null,
+                'TERM_PROGRAM' => null,
+                'WT_SESSION' => null,
+                'GOOGLE_CLOUD_SHELL' => null,
+                'TMUX' => null,
+                'STY' => null,
+            ]))->withProfile($this->profile);
             $data = $palette->degrade($data);
         }
 
