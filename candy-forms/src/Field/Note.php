@@ -118,7 +118,8 @@ final class Note implements \SugarCraft\Forms\Field
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
     public function getDescription(): string  { return $this->resolveDescription($this->description); }
     public function getError(): ?string       { return null; }
-    /** Notes are skippable unless they expose a Next button. */
+    public function revalidate(): Field        { return $this; }
+
     public function skippable(): bool         { return !$this->next; }
     public function consumes(Msg $msg): bool  { return false; }
 }

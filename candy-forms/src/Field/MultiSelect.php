@@ -159,6 +159,10 @@ final class MultiSelect implements \SugarCraft\Forms\Field
     public function getTitle(): string        { return $this->resolveTitle($this->title); }
     public function getDescription(): string  { return $this->resolveDescription($this->description); }
     public function getError(): ?string       { return $this->error; }
+    public function revalidate(): Field
+    {
+        return $this->mutate(error: $this->computeConstraintError(self::countTrue($this->selected)), touchError: true);
+    }
     public function skippable(): bool         { return false; }
 
     /**
@@ -199,17 +203,13 @@ final class MultiSelect implements \SugarCraft\Forms\Field
         if (!empty($next[$idx])) {
             unset($next[$idx]);
         } else {
-            // Honour max cap.
+            // Honour max cap before adding.
             if ($this->max > 0 && self::countTrue($next) >= $this->max) {
                 return $this->mutate(error: "Pick at most {$this->max}.", touchError: true);
             }
             $next[$idx] = true;
         }
-        $err = null;
-        if ($this->min > 0 && self::countTrue($next) < $this->min) {
-            $err = "Pick at least {$this->min}.";
-        }
-        return $this->mutate(selected: $next, error: $err, touchError: true);
+        return $this->mutate(selected: $next, error: $this->computeConstraintError(self::countTrue($next)), touchError: true);
     }
 
     /** @param array<int,bool> $set */
@@ -220,6 +220,22 @@ final class MultiSelect implements \SugarCraft\Forms\Field
             if ($v) $n++;
         }
         return $n;
+    }
+
+    /**
+     * Compute the min/max constraint error for a given selection count.
+     * Used by both toggle() (for immediate user feedback) and revalidate()
+     * (for submit-time / validateAll enforcement).
+     */
+    private function computeConstraintError(int $count): ?string
+    {
+        if ($this->min > 0 && $count < $this->min) {
+            return "Pick at least {$this->min}.";
+        }
+        if ($this->max > 0 && $count > $this->max) {
+            return "Pick at most {$this->max}.";
+        }
+        return null;
     }
 
     /**

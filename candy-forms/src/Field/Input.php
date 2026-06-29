@@ -495,6 +495,7 @@ final class Input implements \SugarCraft\Forms\Field
     public function getTitle(): string       { return $this->resolveTitle($this->title); }
     public function getDescription(): string { return $this->resolveDescription($this->description); }
     public function getError(): ?string      { return $this->error; }
+    public function revalidate(): Field      { return $this->validate(); }
     public function skippable(): bool        { return false; }
     public function consumes(Msg $msg): bool { return false; }
 
