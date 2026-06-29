@@ -67,6 +67,8 @@ final class Renderer
     private readonly bool $inlineTableLinks;
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
+    private readonly bool $sanitize;
+    private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
     /** Active block context stack for indent/width computation. */
@@ -84,6 +86,7 @@ final class Renderer
         bool $inlineTableLinks = true,
         bool $preservedNewLines = false,
         bool $expandEmoji = false,
+        bool $sanitize = true,
     ) {
         $this->theme = $theme ?? Theme::ansi();
         $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
@@ -93,6 +96,8 @@ final class Renderer
         $this->inlineTableLinks = $inlineTableLinks;
         $this->preservedNewLines = $preservedNewLines;
         $this->expandEmoji = $expandEmoji;
+        $this->sanitize = $sanitize;
+        $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
 
         $env = new Environment();
         $env->addExtension(new CommonMarkCoreExtension());
@@ -233,6 +238,24 @@ final class Renderer
         return $this->copy(expandEmoji: $on);
     }
 
+    /**
+     * Strip C0 / ESC control bytes from source-derived text before
+     * emitting it. Enabled by default; disable when rendering trusted
+     * input where control characters must be preserved. Mirrors the
+     * TUI render invariant that renderer output contains only intended
+     * SGR escapes, not raw ANSI controls from the source document.
+     */
+    public function withSanitize(bool $on = true): self
+    {
+        return $this->copy(sanitize: $on);
+    }
+
+    // Short-form alias.
+    public function sanitize(bool $on = true): self
+    {
+        return $this->withSanitize($on);
+    }
+
     // Short-form aliases.
     public function theme(Theme $theme): self            { return $this->withTheme($theme); }
     public function wordWrap(?int $cols): self           { return $this->withWordWrap($cols); }
@@ -254,6 +277,7 @@ final class Renderer
         ?bool $inlineTableLinks = null,
         ?bool $preservedNewLines = null,
         ?bool $expandEmoji = null,
+        ?bool $sanitize = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -264,6 +288,7 @@ final class Renderer
             $inlineTableLinks ?? $this->inlineTableLinks,
             $preservedNewLines ?? $this->preservedNewLines,
             $expandEmoji      ?? $this->expandEmoji,
+            $sanitize         ?? $this->sanitize,
         );
     }
 
@@ -392,7 +417,7 @@ final class Renderer
             $node instanceof Heading       => $this->renderHeading($node),
             $node instanceof Paragraph     => $this->renderParagraph($node),
             $node instanceof FencedCode    => $this->renderFencedCode($node) . "\n\n",
-            $node instanceof IndentedCode  => $this->theme->codeBlock->render(rtrim($node->getLiteral(), "\n")) . "\n\n",
+            $node instanceof IndentedCode  => $this->renderIndent($node),
             $node instanceof BlockQuote    => $this->renderBlockQuote($node),
             $node instanceof ListBlock     => $this->renderList($node),
             $node instanceof ListItem      => $this->renderListItem($node),
@@ -403,7 +428,7 @@ final class Renderer
             $node instanceof Strong        => $this->theme->bold->render($this->renderChildren($node)),
             $node instanceof Emphasis      => $this->theme->italic->render($this->renderChildren($node)),
             $node instanceof Strikethrough => $this->renderStrike($node),
-            $node instanceof Code          => $this->theme->code->render($node->getLiteral()),
+            $node instanceof Code          => $this->renderCode($node),
             $node instanceof Link          => $this->renderLink($node),
             $node instanceof Image         => $this->renderImage($node),
             $node instanceof HtmlBlock     => $this->renderHtmlBlock($node),
@@ -416,12 +441,43 @@ final class Renderer
         };
     }
 
+    /**
+     * Strip C0 control bytes (except tab / newline) and ESC from a
+     * source-derived string. This closes the ANSI-injection vector
+     * while preserving legitimate formatting whitespace.
+     *
+     * Mirrors charmbracelet/glamour TUI render invariant.
+     */
+    private static function stripControls(string $s): string
+    {
+        // Remove C0 controls except \t (0x09) and \n (0x0a); also strip ESC (0x1b).
+        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/', '', $s);
+    }
+
     private function renderText(string $literal): string
     {
-        if ($this->theme->text !== null && !$this->isPlainStyle($this->theme->text)) {
-            return $this->theme->text->render($literal);
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
         }
-        return $literal;
+        return $this->textIsPlain ? $literal : $this->theme->text->render($literal);
+    }
+
+    private function renderCode(Code $node): string
+    {
+        $literal = $node->getLiteral();
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        return $this->theme->code->render($literal);
+    }
+
+    private function renderIndent(IndentedCode $node): string
+    {
+        $literal = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        return $this->theme->codeBlock->render($literal) . "\n\n";
     }
 
     private function isPlainStyle(\SugarCraft\Sprinkles\Style $s): bool
@@ -471,14 +527,21 @@ final class Renderer
     private function renderHtmlBlock(HtmlBlock $node): string
     {
         $literal = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
         $style = $this->theme->htmlBlock ?? \SugarCraft\Sprinkles\Style::new();
         return $style->render($literal) . "\n\n";
     }
 
     private function renderHtmlSpan(HtmlInline $node): string
     {
+        $literal = $node->getLiteral();
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
         $style = $this->theme->htmlSpan ?? \SugarCraft\Sprinkles\Style::new();
-        return $style->render($node->getLiteral());
+        return $style->render($literal);
     }
 
     private function renderParagraph(Paragraph $node): string
@@ -524,6 +587,9 @@ final class Renderer
     private function renderFencedCode(FencedCode $node): string
     {
         $body = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $body = self::stripControls($body);
+        }
         $lang = trim($node->getInfo() ?? '');
         // No language hint → emit as plain code-block. With a hint,
         // route through the syntax highlighter; unknown languages
