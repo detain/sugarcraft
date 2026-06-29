@@ -10,6 +10,7 @@ use SugarCraft\Core\Msg\MouseMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
 use SugarCraft\Core\KeyType;
+use SugarCraft\Testing\Lang;
 
 /**
  * Builder for sequences of input messages to feed a {@see \SugarCraft\Testing\ProgramSimulator}.
@@ -139,7 +140,7 @@ final readonly class ScriptedInput
             'down' => KeyType::Down,
             'left' => KeyType::Left,
             'right' => KeyType::Right,
-            default => throw new \InvalidArgumentException("Invalid arrow direction: " . htmlspecialchars($dir, ENT_QUOTES, 'UTF-8')),
+            default => throw new \InvalidArgumentException(Lang::t('input.invalid_arrow', ['dir' => $dir])),
         };
         return $this->namedKey($type);
     }
@@ -148,6 +149,8 @@ final readonly class ScriptedInput
      * Append $count tick messages with $seconds interval each.
      *
      * Used to advance the virtual clock and trigger subscription handlers.
+     * Emits {@see TickMsg} instances so models can match on them via
+     * instanceof rather than relying on anonymous class identity.
      *
      * @param int   $count   Number of ticks
      * @param float $seconds Interval between ticks
@@ -157,9 +160,7 @@ final readonly class ScriptedInput
     {
         $messages = $this->messages;
         for ($i = 0; $i < $count; $i++) {
-            $messages[] = new class ($seconds) implements \SugarCraft\Core\Msg {
-                public function __construct(public float $seconds) {}
-            };
+            $messages[] = new TickMsg($seconds);
         }
         return new self($messages);
     }

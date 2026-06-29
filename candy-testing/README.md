@@ -64,7 +64,7 @@ $sim->withFakeCmdRunner(fn($cmd) => null);
 $result = $sim->run();
 echo $result->view;   // Last view() output
 echo $result->model;  // Final model state
-echo $result->output; // Raw accumulated ANSI bytes
+ echo $result->output; // Concatenated view() output across steps
 ```
 
 ### Assertions

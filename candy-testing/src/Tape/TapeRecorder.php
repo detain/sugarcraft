@@ -7,6 +7,7 @@ namespace SugarCraft\Testing\Tape;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Msg\QuitMsg;
 use SugarCraft\Core\Msg\WindowSizeMsg;
+use SugarCraft\Testing\Lang;
 
 /**
  * Records a Program's output stream to a VHS-compatible `.tape` file.
@@ -161,7 +162,7 @@ final class TapeRecorder
         $result = \file_put_contents($this->outputPath, $content);
 
         if ($result === false) {
-            throw new \RuntimeException("Failed to write tape file: {$this->outputPath}");
+            throw new \RuntimeException(Lang::t('tape.write_failed', ['path' => $this->outputPath]));
         }
     }
 
@@ -176,8 +177,8 @@ final class TapeRecorder
         $rune = $msg->rune;
 
         if ($rune !== '') {
-            // Character key — escape double quotes.
-            return '"' . str_replace('"', '\\"', $rune) . '"';
+            // Character key — escape for VHS Type command.
+            return '"' . self::escapeVhsRune($rune) . '"';
         }
 
         // Named key — map to VHS syntax.
@@ -195,6 +196,31 @@ final class TapeRecorder
     }
 
     /**
+     * Escape a rune (character key) for safe inclusion in VHS Type command.
+     *
+     * Both double-quotes and backslashes must be escaped so a rune like
+     * `\` produces valid VHS output.
+     *
+     * @param string $rune
+     * @return string
+     */
+    private static function escapeVhsRune(string $rune): string
+    {
+        $result = '';
+        for ($i = 0; $i < strlen($rune); $i++) {
+            $c = $rune[$i];
+            if ($c === '\\') {
+                $result .= '\\\\'; // escape backslash as \\
+            } elseif ($c === '"') {
+                $result .= '\\"';  // escape quote as \"
+            } else {
+                $result .= $c;
+            }
+        }
+        return $result;
+    }
+
+    /**
      * Escape a string for safe inclusion in VHS Type command.
      *
      * @param string $input
@@ -202,6 +228,6 @@ final class TapeRecorder
      */
     private function escapeVhs(string $input): string
     {
-        return str_replace(['"', '\\'], ['\\"', '\\\\'], $input);
+        return self::escapeVhsRune($input);
     }
 }
