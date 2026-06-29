@@ -119,17 +119,53 @@ final class CommandScanner
 
     /**
      * @param class-string $class
+     * @return object|false False if the class cannot be safely constructed
+     *                      (has required non-nullable typed parameters we cannot fill).
      */
-    private function instantiate(string $class): object
+    private function instantiate(string $class): object|false
     {
         $rc = new ReflectionClass($class);
         $ctor = $rc->getConstructor();
 
-        if ($ctor === null || !$ctor->getNumberOfRequiredParameters()) {
+        if ($ctor === null) {
             return $rc->newInstance();
         }
 
-        $args = array_fill(0, $ctor->getNumberOfRequiredParameters(), null);
+        $params = $ctor->getParameters();
+        if ($ctor->getNumberOfRequiredParameters() === 0) {
+            return $rc->newInstance();
+        }
+
+        $args = [];
+        foreach ($params as $param) {
+            if ($param->allowsNull()) {
+                $args[] = null;
+                continue;
+            }
+
+            $type = $param->getType();
+            if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+                // Non-builtin type (e.g. a class) — we cannot instantiate safely.
+                return false;
+            }
+
+            $typeName = $type instanceof \ReflectionNamedType ? $type->getName() : null;
+            $args[] = match ($typeName) {
+                'string' => '',
+                'int'    => 0,
+                'float'  => 0.0,
+                'bool'   => false,
+                'array'  => [],
+                default  => null,
+            };
+        }
+
+        // If any required param has a type we couldn't fill (e.g. union types,
+        // external class types), skip this class.
+        if (in_array(null, $args, true)) {
+            return false;
+        }
+
         return $rc->newInstanceArgs($args);
     }
 
