@@ -34,6 +34,7 @@ return [
     'renderer.invalid_width'  => 'Width must be positive, got {width}',
     'renderer.invalid_height' => 'Height must be positive, got {height}',
     'renderer.gd_load_failed' => 'GD failed to load image',
+    'renderer.gzcompress_failed' => 'gzcompress() failed — image data could not be compressed',
 
     // Chafa
     'chafa.command_failed' => 'Chafa command failed: {error}',

@@ -76,4 +76,25 @@ final class KittyVirtualImageTest extends TestCase
         $b64 = base64_encode($pngBytes);
         $this->assertStringContainsString($b64, $out);
     }
+
+    public function testPlaceBranchEmitsZIndex(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
+        $opts  = KittyOptions::place(1, 5, 10)->withZIndex(5);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        $this->assertStringContainsString('z=5', $out);
+    }
+
+    public function testPlaceBranchOmitsZeroZIndex(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
+        $opts  = KittyOptions::place(1);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // z= should not appear when z-index is 0 (sentinel = no z field).
+        $this->assertDoesNotMatchRegularExpression('/\bz=/', $out);
+    }
 }

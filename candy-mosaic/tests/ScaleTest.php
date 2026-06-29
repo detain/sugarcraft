@@ -146,6 +146,38 @@ final class ScaleTest extends TestCase
         $this->assertSame(8, $r['dstH']);
     }
 
+    public function testCropRectForPortraitSource(): void
+    {
+        // 100×300 portrait source → 40×20 cells.
+        // PHP integer arithmetic: 100*40/20*300/100 = 600 → clamped (600 > 100)
+        // srcCropW = 100 (clamped), srcCropH = 50
+        // srcX = (100-100)/2 = 0, srcY = (300-50)/2 = 125
+        $r = Scale::Crop->computeDimensions(100, 300, 40, 20);
+
+        $this->assertSame(0,   $r['srcX']);
+        $this->assertSame(125, $r['srcY']);
+        $this->assertSame(100, $r['srcW']);
+        $this->assertSame(50,  $r['srcH']);
+        $this->assertSame(40,  $r['dstW']);
+        $this->assertSame(20,  $r['dstH']);
+    }
+
+    public function testCropRectForLandscapeSource(): void
+    {
+        // 300×100 landscape source → 40×20 cells.
+        // PHP integer arithmetic: 300*40/20*100/300 = 200 (not clamped, 200 ≤ 300)
+        // srcCropW = 200, srcCropH = 150 → clamped to 100 (150 > 100)
+        // srcX = (300-200)/2 = 50, srcY = (100-100)/2 = 0
+        $r = Scale::Crop->computeDimensions(300, 100, 40, 20);
+
+        $this->assertSame(50,  $r['srcX']);
+        $this->assertSame(0,   $r['srcY']);
+        $this->assertSame(200, $r['srcW']);
+        $this->assertSame(100, $r['srcH']);
+        $this->assertSame(40,  $r['dstW']);
+        $this->assertSame(20,  $r['dstH']);
+    }
+
     // ─── Edge cases ────────────────────────────────────────────────────────
 
     public function testZeroOrNegativeDimensionsReturnsSafeDefaults(): void
