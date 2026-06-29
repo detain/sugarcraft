@@ -123,8 +123,6 @@ final class DragTracker
         // --- Press: start a new drag if inside a zone ---
         if ($msg->action === \SugarCraft\Core\MouseAction::Press) {
             if ($hit !== null) {
-                $this->originZoneId = $hit->id;
-                $this->currentZoneId = $hit->id;
                 return [$this->mutate($hit->id, $hit->id), new ZoneDragStartMsg($hit, $hit)];
             }
             return [$this, null];
@@ -140,7 +138,6 @@ final class DragTracker
             if ($hit === null) {
                 // Dragged outside any zone — keep tracking with null current.
                 if ($this->currentZoneId !== null) {
-                    $this->currentZoneId = null;
                     return [$this->mutate($this->originZoneId, null), null];
                 }
                 return [$this, null];
@@ -154,9 +151,6 @@ final class DragTracker
             // Zone boundary crossing during drag.
             $origin = $this->manager->get($this->originZoneId);
             if ($origin !== null) {
-                // Update currentZoneId so the next motion event is a no-op
-                // until another boundary crossing occurs.
-                $this->currentZoneId = $hit->id;
                 return [$this->mutate($this->originZoneId, $hit->id), new ZoneDragMoveMsg($origin, $hit)];
             }
         }
