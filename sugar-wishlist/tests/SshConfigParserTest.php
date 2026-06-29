@@ -302,4 +302,37 @@ CONF;
         $this->assertSame('web.example.com', $endpoints[0]->host);
         $this->assertNotEmpty($endpoints[0]->identityFiles);
     }
+
+    public function testExpandPathBareTilde(): void
+    {
+        // ~/.ssh/key should expand to $HOME/.ssh/key
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $expectedHome = getenv('HOME') ?? '/root';
+        $this->assertSame($expectedHome . '/.ssh/key', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testExpandPathTildeUser(): void
+    {
+        // ~root/.ssh/key should resolve to root's home if posix is available,
+        // OR be left as literal ~root/.ssh/key if root user doesn't exist.
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~root/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $path = $endpoints[0]->identityFiles[0];
+        // Either root's home or the literal path — never a mangled path
+        $this->assertTrue(
+            $path === '/root/.ssh/key' || $path === '~root/.ssh/key',
+            "Expected /root/.ssh/key or ~root/.ssh/key, got: $path"
+        );
+    }
 }
