@@ -12,7 +12,7 @@ final class TableBorderStyleTest extends TestCase
 {
     public function testWithBorderReturnsNewInstance(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))]);
 
         $bordered = $t->withBorder(Border::normal());
@@ -22,7 +22,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderNormalRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -42,7 +42,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderRoundedRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -61,7 +61,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderThickRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -80,7 +80,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderDoubleRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -99,7 +99,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderBlockRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -113,7 +113,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderAsciiRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -129,7 +129,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderHiddenRendersOnlySpaces(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -147,7 +147,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderMarkdownBorderRendersCorrectCharacters(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -166,7 +166,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderNormalWithHeaderSeparator(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -182,7 +182,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testBorderAndBorderStyleCanBothBeApplied(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),
@@ -198,7 +198,7 @@ final class TableBorderStyleTest extends TestCase
 
     public function testDefaultBorderCharsPreservedWhenNoBorderSet(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([
             Row::new(RowData::from(['id' => '1'])),

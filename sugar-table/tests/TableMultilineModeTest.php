@@ -11,7 +11,7 @@ final class TableMultilineModeTest extends TestCase
 {
     public function testMultilineModeDefaultsToFalse(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 20),
         ])->withRows([
@@ -26,7 +26,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testWithMultilineModeReturnsNewInstance(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))]);
 
         $a = $t->withMultilineMode(false);
@@ -39,7 +39,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeRendersAllWrappedLines(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('desc', 'Desc', 10)->withWrapMode(WrapMode::Character),
         ])->withRows([
             Row::new(RowData::from(['desc' => 'ABCDEFGHIJK'])),
@@ -53,7 +53,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeFalseRendersFirstLineOnly(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('desc', 'Desc', 5)->withWrapMode(WrapMode::Character),
         ])->withRows([
             Row::new(RowData::from(['desc' => 'ABCDEFGHI'])),
@@ -67,7 +67,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeRowHeightEqualsMaxCellHeight(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('short', 'Short', 5),
             Column::new('long', 'Long', 5)->withWrapMode(WrapMode::Character),
         ])->withRows([
@@ -88,7 +88,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeWithWordWrap(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('text', 'Text', 8)->withWrapMode(WrapMode::WordWrap),
         ])->withRows([
             Row::new(RowData::from(['text' => 'one two three four'])),
@@ -102,7 +102,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeWithStyledCells(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 10),
         ])->withRows([
@@ -120,7 +120,7 @@ final class TableMultilineModeTest extends TestCase
 
     public function testMultilineModeWithMultipleRows(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('desc', 'Desc', 8)->withWrapMode(WrapMode::Character),
         ])->withRows([

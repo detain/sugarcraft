@@ -85,7 +85,7 @@ final class TableWrappingTest extends TestCase
 
     public function testTableViewRendersWrappedCells(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('desc', 'Description', 10)->withWrapMode(WrapMode::Character),
         ])->withRows([
             Row::new(RowData::from(['desc' => 'This is a long description'])),
@@ -209,7 +209,7 @@ final class TableWrappingTest extends TestCase
 
     public function testMultibyteInTableView(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('name', '名前', 8),
         ])->withRows([
             Row::new(RowData::from(['name' => '日本語'])),
@@ -225,7 +225,7 @@ final class TableWrappingTest extends TestCase
 
     public function testMultibyteTruncationInTableView(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('name', '名前', 6),
         ])->withRows([
             Row::new(RowData::from(['name' => '日本語学習'])), // 10 cells, truncated to 6

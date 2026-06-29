@@ -13,7 +13,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use SugarCraft\Table\{Column, Row, RowData, StyledCell, Table};
 
 echo "=== Basic Table ===\n";
-$t = Table::withColumns([
+$t = Table::fromColumns([
     Column::new('id',   'ID',     5),
     Column::new('name', 'Name',  20),
     Column::new('city', 'City',  15),
@@ -51,7 +51,7 @@ echo $t5->View() . "\n";
 
 // Missing data
 echo "\n=== Missing Data Indicator ===\n";
-$t6 = Table::withColumns([
+$t6 = Table::fromColumns([
     Column::new('id',   'ID',   5),
     Column::new('name', 'Name', 15),
     Column::new('note', 'Note', 20),

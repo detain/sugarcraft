@@ -24,7 +24,7 @@ final class TableGlobalSearchTest extends TestCase
      */
     private function makeSearchTable(): Table
     {
-        return Table::withColumns([
+        return Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  20),
             Column::new('city', 'City',  15),
@@ -405,7 +405,7 @@ final class TableGlobalSearchTest extends TestCase
      */
     public function testSearchOnEmptyTable(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5),
         ])->withRows([]);
 
@@ -417,7 +417,7 @@ final class TableGlobalSearchTest extends TestCase
      */
     public function testSearchOnSingleRowTable(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('name', 'Name', 10),
         ])->withRows([
             Row::new(RowData::from(['name' => 'Solo'])),
