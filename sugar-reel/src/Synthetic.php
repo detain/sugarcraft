@@ -20,6 +20,9 @@ final class Synthetic
     /** Default on-disk path for the generated demo GIF. */
     public const DEFAULT_PATH = '/tmp/sugar-reel-synthetic.gif';
 
+    /** 1×1 transparent GIF used when GD is absent or no frames were produced. */
+    private const FALLBACK_GIF = "GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x01\x00;";
+
     /**
      * Generate an animated rainbow-gradient GIF and return its path.
      *
@@ -45,15 +48,17 @@ final class Synthetic
         // Reel.php has used historically.  Callers treat any returned path
         // as a valid GIF, so this single-frame fallback is safe.
         if (!extension_loaded('gd')) {
-            $gif = "GIF89a\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x01\x00;";
-            file_put_contents($path, $gif);
+            self::writeAtomic($path, self::FALLBACK_GIF);
             return $path;
         }
 
         // ── Build frame payloads via GD + output-buffer ──────────────────────
         $frameBytes = [];
         for ($f = 0; $f < $frames; $f++) {
-            $im = imagecreatetruecolor($w, $h);
+            $im = @imagecreatetruecolor($w, $h);
+            if ($im === false) {
+                continue;
+            }
             // Phase-shifted hue sweep: B channel varies with x+y+frame offset
             // so each frame is a different moment in the color cycle.
             for ($y = 0; $y < $h; $y++) {
@@ -61,14 +66,26 @@ final class Synthetic
                     $r = (int) min(255, 255 * $x / $w);
                     $g = (int) min(255, 255 * $y / $h);
                     $b = (int) min(255, 255 * (($x + $y + $f * (int) ($w / $frames)) % $w) / $w);
-                    $col = imagecolorallocate($im, $r, $g, $b);
-                    imagesetpixel($im, $x, $y, $col);
+                    $col = @imagecolorallocate($im, $r, $g, $b);
+                    if ($col !== false) {
+                        imagesetpixel($im, $x, $y, $col);
+                    }
                 }
             }
             ob_start();
-            imagegif($im);
-            $frameBytes[] = ob_get_clean();
+            imagegif($im, null);
+            $bytes = ob_get_clean();
             imagedestroy($im);
+            if (!is_string($bytes)) {
+                continue;
+            }
+            $frameBytes[] = $bytes;
+        }
+
+        // If GD produced no usable frames, fall back to the 1×1 transparent GIF.
+        if ($frameBytes === []) {
+            self::writeAtomic($path, self::FALLBACK_GIF);
+            return $path;
         }
 
         // ── Assemble GIF89a ──────────────────────────────────────────────────
@@ -112,9 +129,42 @@ final class Synthetic
         // Close with a single GIF trailer.
         $gif .= "\x3B";
 
-        file_put_contents($path, $gif);
+        self::writeAtomic($path, $gif);
 
         return $path;
+    }
+
+    /**
+     * Write data atomically to a path using O_EXCL + rename.
+     *
+     * First attempts to create a temp file with `fopen($path.'.'.getmypid().'.tmp', 'xb')`
+     * which fails if the file already exists (prevents symlink attacks). On failure,
+     * falls back to tempnam() so the function never fatals.
+     *
+     * The final rename() is atomic on POSIX so the path always holds complete data.
+     */
+    private static function writeAtomic(string $path, string $data): void
+    {
+        $dir = dirname($path) ?: sys_get_temp_dir();
+        $tmp = $path . '.' . getmypid() . '.tmp';
+        $fp = @fopen($tmp, 'xb');
+        if ($fp === false) {
+            // Path already exists or O_EXCL failed — fall back to tempnam.
+            $tmp = (string) @tempnam($dir, 'reel');
+            if ($tmp === '' || $fp === false) {
+                // tempnam also failed — last resort: direct write (non-atomic, but better than fatal).
+                file_put_contents($path, $data);
+                return;
+            }
+            $fp = fopen($tmp, 'wb');
+            if ($fp === false) {
+                file_put_contents($path, $data);
+                return;
+            }
+        }
+        fwrite($fp, $data);
+        fclose($fp);
+        rename($tmp, $path);
     }
 
     /**
