@@ -425,7 +425,7 @@ final class DatePickerTest extends TestCase
 
     public function testCursorMovesHighlight(): void
     {
-        // May 2026: firstDow=5 (Fri), index 5 = May 1, index 12 = May 8, index 13 = May 9
+        // May 2026: firstDow=5 (Fri), index 5 = May 1, index 13 = May 9
         $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
             ->withToday(new \DateTimeImmutable('2026-05-15'));
 
@@ -442,5 +442,47 @@ final class DatePickerTest extends TestCase
         // The moved-cursor output must contain the reverse SGR at the new cell
         $this->assertStringContainsString("\x1b[0;7m", $viewMoved,
             'Moved cursor position must carry SGR 0;7 in output');
+    }
+
+    // -------------------------------------------------------------------------
+    // Edge-case coverage
+    // -------------------------------------------------------------------------
+
+    public function testHandleKeyEnterOutsideRangeModeIsNoOp(): void
+    {
+        // handleKey('enter') in non-range mode is a no-op (current behaviour)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'));
+
+        // Navigate to a valid day first
+        for ($i = 0; $i < 5; $i++) {
+            $dp = $dp->MoveCursorRight();
+        }
+
+        $dp = $dp->handleKey('enter');
+
+        // Enter outside range mode should not select anything
+        $this->assertFalse($dp->IsSelecting(),
+            'Enter outside range mode must not enter selection mode');
+        $this->assertNull($dp->SelectedDate(),
+            'Enter outside range mode must not set a selected date');
+    }
+
+    public function testClampCursorAfterNavigatingToShorterMonth(): void
+    {
+        // Start on May 2026 (31 days, firstDow=5), cursor at index 41 (End)
+        $dp = DatePicker::new(new \DateTimeImmutable('2026-05-01'))
+            ->withToday(new \DateTimeImmutable('2026-05-15'))
+            ->handleKey('end');  // cursorIndex = 41
+
+        $this->assertSame(41, $dp->CursorIndex());
+
+        // Navigate to April 2026 (30 days, firstDow=3)
+        // After navigation, clampCursor should pull index 41 back to 3 + 30 - 1 = 32
+        $dp2 = $dp->GoToPreviousMonth();
+
+        // April 30 is at index 3 + 29 = 32 (firstDow=3, lastDayIndex=32)
+        $this->assertSame(32, $dp2->CursorIndex(),
+            'Cursor must be clamped to last valid index of shorter month');
     }
 }
