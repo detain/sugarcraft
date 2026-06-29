@@ -269,4 +269,45 @@ final class AsyncOpsTest extends TestCase
             baseBackoffSeconds: 0.0,
         );
     }
+
+    public function testRetryDoesNotImposePerAttemptTimeout(): void
+    {
+        // A slow healthy operation (60ms) must NOT be force-failed by the
+        // retry logic. With baseBackoffSeconds=0.01 (10ms), the old code's
+        // backoff*2=20ms deadline would have killed this before it completed.
+        // After Step 6, retry() imposes no per-attempt timeout.
+        $loop = Loop::get();
+        $attempts = 0;
+        $deferred = new Deferred();
+
+        $promise = AsyncOps::retry(
+            function () use (&$attempts, $deferred): PromiseInterface {
+                $attempts++;
+                // Return a promise that resolves after 60ms
+                return $deferred->promise();
+            },
+            attempts: 3,
+            baseBackoffSeconds: 0.01,
+        );
+
+        $result = null;
+        $promise->then(function ($v) use (&$result, $loop): void {
+            $result = $v;
+            $loop->stop();
+        });
+
+        // Resolve the deferred after 60ms (slow operation)
+        $loop->addTimer(0.06, static function () use ($deferred): void {
+            $deferred->resolve('slow_success');
+        });
+
+        // Run for 150ms total (enough for the 60ms op + loop overhead)
+        $loop->addTimer(0.15, static function () use ($loop): void {
+            $loop->stop();
+        });
+        $loop->run();
+
+        $this->assertSame('slow_success', $result);
+        $this->assertSame(1, $attempts);
+    }
 }
