@@ -29,7 +29,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
             "SELECT table_name FROM information_schema.tables "
             . "WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
             . "ORDER BY table_name",
-        );
+        ) ?? [];
 
         $names = [];
         foreach ($result as $row) {
@@ -51,7 +51,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
             . "FROM information_schema.columns "
             . "WHERE table_schema = 'public' AND table_name = {$safeTable} "
             . "ORDER BY ordinal_position",
-        );
+        ) ?? [];
 
         $columns = [];
         foreach ($result as $row) {
@@ -77,7 +77,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
             "SELECT indexname, indexdef FROM pg_indexes "
             . "WHERE schemaname = 'public' AND tablename = {$safeTable} "
             . "ORDER BY indexname",
-        );
+        ) ?? [];
 
         $indexes = [];
         foreach ($result as $row) {
@@ -107,7 +107,7 @@ final class PostgresSchemaProvider implements SchemaProviderInterface
             . "unnest(confkey) AS foreign_column_id "
             . "FROM pg_constraint "
             . "WHERE contype = 'f' AND conrelid = {$safeTable}::regclass",
-        );
+        ) ?? [];
 
         $fks = [];
         foreach ($result as $row) {
