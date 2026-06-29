@@ -352,4 +352,22 @@ final class HermitTest extends TestCase
         $hNoCb = $this->makeHermit();
         $this->assertFalse($hNoCb->attachSigwinch());
     }
+
+    public function testAttachSigwinchInstallsHandler(): void
+    {
+        // attachSigwinch returns true only when SIGWINCH + pcntl are available.
+        if (!\function_exists('pcntl_signal') || !\defined('SIGWINCH')) {
+            $this->markTestSkipped('SIGWINCH or pcntl not available');
+        }
+
+        $h = $this->makeHermit()->withOnResize(
+            static function (int $cols, int $rows): void {
+                // no-op callback for testing attachSigwinch install
+            },
+        );
+
+        $result = $h->attachSigwinch();
+
+        $this->assertTrue($result, 'attachSigwinch should return true when callback set and signals available');
+    }
 }

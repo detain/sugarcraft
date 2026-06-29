@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Hermit;
 
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Core\Util\Tty;
 use SugarCraft\Core\Util\Width;
 use SugarCraft\Fuzzy\Highlighter;
 use SugarCraft\Fuzzy\FuzzyMatcher;
@@ -255,15 +256,14 @@ final class Hermit
     }
 
     /**
-     * Attach a SIGWINCH handler via SignalForwarder that forwards
-     * terminal resize events to the stored $onResize callback.
+     * Attach a SIGWINCH handler via SignalForwarder that queries the live
+     * TTY dimensions and forwards (cols, rows) to the stored $onResize callback.
      *
-     * Requires ext-pcntl. Installs a SIGWINCH handler that calls
-     * SizeIoctl against /dev/tty and then invokes the $onResize
-     * closure with (cols, rows) if one was registered via withOnResize().
-     *
-     * Returns true if the handler was installed; false if pcntl
-     * is unavailable or SIGWINCH is not defined.
+     * Requires ext-pcntl. Queries SugarCraft\Core\Util\Tty::size() on \STDIN
+     * to get the current terminal geometry, then invokes the $onResize closure
+     * with the fresh dimensions. Falls back to 80x24 if the query fails (e.g.
+     * non-interactive context). Returns true if the handler was installed;
+     * false if pcntl/SIGWINCH is unavailable.
      *
      * Mirrors SignalForwarder::attachSigwinchToFd pattern.
      */
@@ -275,11 +275,8 @@ final class Hermit
 
         $hermit = $this;
         return SignalForwarder::attachSigwinchToFd(
-            \STDIN,
-            static fn(): array => [
-                'cols' => (int) (\getenv('COLUMNS') ?: 80),
-                'rows' => (int) (\getenv('LINES') ?: 24),
-            ],
+            (int) \STDIN, // int fd, not resource (PHP 8+ casts resource to its fd number)
+            static fn(): array => $hermit->ttySize(),
             static function (int $cols, int $rows) use ($hermit): void {
                 $cb = $hermit->onResize;
                 if ($cb !== null) {
@@ -287,6 +284,25 @@ final class Hermit
                 }
             },
         );
+    }
+
+    /**
+     * Query the TTY geometry via SugarCraft\Core\Util\Tty.
+     * Falls back to 80×24 if the query fails (non-interactive context).
+     *
+     * @return array{cols: int, rows: int}
+     */
+    private function ttySize(): array
+    {
+        try {
+            $size = (new Tty(\STDIN))->size();
+            return [
+                'cols' => $size['cols'] ?: 80,
+                'rows' => $size['rows'] ?: 24,
+            ];
+        } catch (\Throwable) {
+            return ['cols' => 80, 'rows' => 24];
+        }
     }
 
     // -------------------------------------------------------------------------
