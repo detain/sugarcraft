@@ -19,16 +19,66 @@ final class WorktreeEntry
     ) {}
 
     /**
-     * Parse a line from `git worktree list --porcelain`.
+     * Parse `git worktree list --porcelain` output into WorktreeEntry list.
      *
-     * @return self|null
+     * Porcelain output is blank-line separated records like:
+     *   worktree /path/to/worktree
+     *   HEAD abc123
+     *   branch refs/heads/main
+     *   bare
+     *
+     * @param list<string> $lines Raw output lines from `git worktree list --porcelain`
+     * @return list<WorktreeEntry>
      */
-    public static function fromPorcelainLine(string $line): ?self
+    public static function fromGitOutput(array $lines): array
     {
-        if ($line === '') return null;
-        $path = trim($line);
-        if (!is_dir($path)) return null;
-        return new self(path: $path, branch: '', isBare: false, HEAD: '');
+        $worktrees = [];
+        $pending = ['path' => '', 'HEAD' => '', 'branch' => '', 'isBare' => false];
+
+        foreach ($lines as $line) {
+            if ($line === '') {
+                // Flush completed record
+                if ($pending['path'] !== '') {
+                    $worktrees[] = new self(
+                        path: $pending['path'],
+                        branch: $pending['branch'],
+                        isBare: $pending['isBare'],
+                        HEAD: $pending['HEAD'],
+                    );
+                    $pending = ['path' => '', 'HEAD' => '', 'branch' => '', 'isBare' => false];
+                }
+                continue;
+            }
+
+            if (str_starts_with($line, 'worktree ')) {
+                $pending['path'] = trim(substr($line, 9));
+            } elseif (str_starts_with($line, 'HEAD ')) {
+                $pending['HEAD'] = trim(substr($line, 5));
+            } elseif (str_starts_with($line, 'branch ')) {
+                $branch = trim(substr($line, 7));
+                // Strip "refs/heads/" prefix to get short name
+                if (str_starts_with($branch, 'refs/heads/')) {
+                    $branch = substr($branch, 11);
+                }
+                $pending['branch'] = $branch;
+            } elseif ($line === 'bare') {
+                $pending['isBare'] = true;
+            } elseif (str_starts_with($line, 'detached')) {
+                $pending['branch'] = '';
+            }
+        }
+
+        // Flush final record (no trailing blank line)
+        if ($pending['path'] !== '') {
+            $worktrees[] = new self(
+                path: $pending['path'],
+                branch: $pending['branch'],
+                isBare: $pending['isBare'],
+                HEAD: $pending['HEAD'],
+            );
+        }
+
+        return $worktrees;
     }
 }
 
@@ -64,14 +114,7 @@ final readonly class Worktrees
      */
     public static function fromGitOutput(array $lines): array
     {
-        $worktrees = [];
-        foreach ($lines as $line) {
-            $entry = WorktreeEntry::fromPorcelainLine($line);
-            if ($entry !== null) {
-                $worktrees[] = $entry;
-            }
-        }
-        return $worktrees;
+        return WorktreeEntry::fromGitOutput($lines);
     }
 
     /**
