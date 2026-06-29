@@ -15,12 +15,20 @@ final class BlockStack
 {
     /** @var BlockContext[] */
     private array $stack = [];
+    /** Running total of accumulatedIndent values — updated incrementally in push/pop. */
+    private int $indentTotal = 0;
+    /** Running count of margin-bearing blocks — updated incrementally in push/pop. */
+    private int $marginCount = 0;
 
     /**
      * Push a context onto the stack.
      */
     public function push(BlockContext $ctx): void
     {
+        $this->indentTotal += $ctx->accumulatedIndent;
+        if ($ctx->kind === BlockKind::BlockQuote || $ctx->kind === BlockKind::ListItem) {
+            $this->marginCount++;
+        }
         $this->stack[] = $ctx;
     }
 
@@ -34,24 +42,12 @@ final class BlockStack
         if ($this->stack === []) {
             throw new \UnderflowException('BlockStack is empty');
         }
-        return array_pop($this->stack);
-    }
-
-    /**
-     * Pop contexts until the given kind is found (or stack is empty).
-     *
-     * Returns the matching context, or null if not found.
-     */
-    public function popTo(BlockKind $kind): ?BlockContext
-    {
-        $found = null;
-        while (($ctx = array_pop($this->stack)) !== null) {
-            if ($ctx->kind === $kind) {
-                $found = $ctx;
-                break;
-            }
+        $ctx = array_pop($this->stack);
+        $this->indentTotal -= $ctx->accumulatedIndent;
+        if ($ctx->kind === BlockKind::BlockQuote || $ctx->kind === BlockKind::ListItem) {
+            $this->marginCount--;
         }
-        return $found;
+        return $ctx;
     }
 
     /**
@@ -72,31 +68,21 @@ final class BlockStack
 
     /**
      * The sum of accumulated indents across all blocks in the stack.
-     * Additive — every block in stack contributes its indent.
+     * O(1) — maintained incrementally via $indentTotal.
      */
     public function accumulatedIndent(): int
     {
-        $total = 0;
-        foreach ($this->stack as $ctx) {
-            $total += $ctx->accumulatedIndent;
-        }
-        return $total;
+        return $this->indentTotal;
     }
 
     /**
      * Number of blocks in the stack that carry a margin (typically
      * blockquotes and list items that add vertical spacing).
+     * O(1) — maintained incrementally via $marginCount.
      */
     public function marginCount(): int
     {
-        // Currently only BlockQuote and ListItem are considered margin-bearing.
-        $count = 0;
-        foreach ($this->stack as $ctx) {
-            if ($ctx->kind === BlockKind::BlockQuote || $ctx->kind === BlockKind::ListItem) {
-                $count++;
-            }
-        }
-        return $count;
+        return $this->marginCount;
     }
 
     /**
@@ -110,9 +96,7 @@ final class BlockStack
         if ($wordWrap <= 0) {
             return 0;
         }
-        $indent = $this->accumulatedIndent();
-        $margins = $this->marginCount();
-        $result = $wordWrap - $indent - ($margins * 2);
+        $result = $wordWrap - $this->indentTotal - ($this->marginCount * 2);
         return max(1, $result);
     }
 

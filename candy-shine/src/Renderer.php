@@ -311,7 +311,6 @@ final class Renderer
         $this->blockStack->push(new BlockContext(
             BlockKind::Document,
             depth: 0,
-            availableWidth: $this->wrapWidth ?? 80,
             accumulatedIndent: 0,
             cascadedStyle: $this->theme->paragraph ?? Style::new(),
         ));
@@ -581,7 +580,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::Paragraph,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
@@ -637,7 +635,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::Heading,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
@@ -693,7 +690,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::BlockQuote,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentIndent + 2,
             cascadedStyle: $cascadedStyle,
         );
@@ -728,7 +724,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::ListItem,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: ($parentCtx?->accumulatedIndent ?? 0),
             cascadedStyle: $cascadedStyle,
         );
@@ -753,7 +748,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::List,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
