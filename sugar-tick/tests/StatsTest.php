@@ -76,4 +76,11 @@ final class StatsTest extends TestCase
             new \DateTimeImmutable('@0'), new \DateTimeImmutable('@86400'));
         $this->assertSame(180, $s->totalSeconds());
     }
+
+    public function testTimelineEmptyDaysReturnsEmpty(): void
+    {
+        // Mirrors Stats.php timeline() guard against empty $days
+        $s = new Stats([], []);
+        $this->assertSame([], $s->timeline());
+    }
 }

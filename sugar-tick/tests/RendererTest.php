@@ -59,4 +59,25 @@ final class RendererTest extends TestCase
         $out = Renderer::render($this->dashboard());
         $this->assertStringContainsString('Daily activity', $out);
     }
+
+    public function testControlBytesStrippedFromNames(): void
+    {
+        // Mirrors Renderer::ranking() sanitization of untrusted heartbeat strings
+        // Project name with BEL control char that survives Ansi::strip (not a CSI sequence)
+        $beats = [
+            new Heartbeat(
+                (new \DateTimeImmutable('2024-06-07'))->getTimestamp(),
+                "x\x07y",  // BEL control char - not a CSI sequence, survives Ansi::strip
+                "clean",
+                "file.php",
+                600,
+            ),
+        ];
+        $out = Renderer::render($this->dashboard($beats));
+
+        // BEL should be stripped by the regex pass, leaving just "xy"
+        $this->assertStringNotContainsString("\x07", $out);
+        // Project name should appear as "xy" not "x y" or with embedded control chars
+        $this->assertStringContainsString('xy', $out);
+    }
 }

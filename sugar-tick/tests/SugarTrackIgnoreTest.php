@@ -86,4 +86,26 @@ final class SugarTrackIgnoreTest extends TestCase
         $this->assertTrue($ignore->isIgnored('cache.tmp'));
         $this->assertFalse($ignore->isIgnored('main.php'));
     }
+
+    public function testLeadingWhitespacePatternMatches(): void
+    {
+        // Mirrors SugarTrackIgnore::load() trim before pattern matching
+        file_put_contents($this->tmpFile, "  *.log\n  vendor/*\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+
+        // Leading whitespace should be trimmed so patterns match correctly
+        $this->assertTrue($ignore->isIgnored('foo.log'));
+        $this->assertTrue($ignore->isIgnored('vendor/autoload.php'));
+    }
+
+    public function testIndentedCommentIgnored(): void
+    {
+        // Mirrors SugarTrackIgnore::load() trim before comment detection
+        file_put_contents($this->tmpFile, "   # this is a comment\n*.log\n");
+        $ignore = SugarTrackIgnore::load($this->tmpFile);
+
+        // Indented comment should still be recognized as comment and ignored
+        $this->assertFalse($ignore->isIgnored('# this is a comment'));  // comment itself not a pattern
+        $this->assertTrue($ignore->isIgnored('debug.log'));  // *.log still works
+    }
 }

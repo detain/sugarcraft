@@ -154,4 +154,32 @@ final class HeartbeatTest extends TestCase
         ];
         $this->assertSame($row, Heartbeat::fromArray($row)->toArray());
     }
+
+    public function testNegativeDurationThrows(): void
+    {
+        // Mirrors Heartbeat::__construct() validation - negative duration throws
+        $this->expectException(\InvalidArgumentException::class);
+        new Heartbeat(time: 0, project: 'p', language: 'l', file: 'f', duration: -1);
+    }
+
+    public function testNegativeTimeThrows(): void
+    {
+        // Mirrors Heartbeat::__construct() validation - negative time throws
+        $this->expectException(\InvalidArgumentException::class);
+        new Heartbeat(time: -1, project: 'p', language: 'l', file: 'f', duration: 60);
+    }
+
+    public function testFromArrayClampsNegativeDuration(): void
+    {
+        // Mirrors Heartbeat::fromArray() clamping for untrusted JSONL input
+        $hb = Heartbeat::fromArray(['time' => 1, 'duration' => -5, 'project' => 'p', 'language' => 'l', 'file' => 'f']);
+        $this->assertSame(0, $hb->duration);
+    }
+
+    public function testFromArrayClampsNegativeTime(): void
+    {
+        // Mirrors Heartbeat::fromArray() clamping for untrusted JSONL input
+        $hb = Heartbeat::fromArray(['time' => -100, 'duration' => 60, 'project' => 'p', 'language' => 'l', 'file' => 'f']);
+        $this->assertSame(0, $hb->time);
+    }
 }
