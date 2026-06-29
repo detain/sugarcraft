@@ -37,6 +37,12 @@ $form = Form::new(
 > upstream-mirroring long forms (`withTitle`, `withDescription`, …)
 > work identically — pick whichever reads better at the call site.
 
+> **Namespace note:** `SugarCraft\Prompt\*` is a maintained back-compat
+> facade over `SugarCraft\Forms\*`. New code may use either namespace;
+> `SugarCraft\Forms\*` is canonical. The `@deprecated` doc-comments on
+> sugar-prompt shims exist to signal the primary namespace and are not
+> accompanied by PHP `E_USER_DEPRECATED` triggers (no removal timeline).
+
 ## Shared foundations
 
 sugar-prompt is built on top of five shared foundation packages:
@@ -303,6 +309,38 @@ $form = Form::new(
 
 When enabled and the form is submitted with errors, an error summary
 renders above the form listing every failed field and its error message.
+
+## Spinner
+
+A standalone blocking spinner for scripts and CLIs that need a visible
+"working…" indicator without a full Bubble Tea program:
+
+```php
+use SugarCraft\Bits\Spinner\Style as SpinnerStyle;
+use SugarCraft\Prompt\Spinner;
+
+Spinner::new()
+    ->withTitle('Crunching numbers...')
+    ->withStyle(SpinnerStyle::dot())
+    ->withAction(static function () {
+        // ... long-running work ...
+        // Communicate results out-of-band: the action runs in a forked
+        // child on pcntl hosts; in-memory mutations are not visible to
+        // the parent after run() returns.
+    })
+    ->run();
+```
+
+**Fork semantics on pcntl hosts:** the action is executed in a forked
+child process. This means:
+- Return values and in-memory mutations are **not** visible to the parent.
+- If the action throws, `run()` throws a `\RuntimeException` (the original
+  exception type/message cannot cross the fork boundary).
+- Communicate results via tempfile, pipe, database, or other out-of-band
+  mechanism.
+
+On hosts without `pcntl_fork`, the action runs inline (no animation, no
+fork) and exceptions propagate normally.
 
 ## Snapshot tests
 
