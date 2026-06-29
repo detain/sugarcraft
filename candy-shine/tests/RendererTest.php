@@ -816,4 +816,26 @@ MD;
         $this->assertStringContainsString('first', $out);
         $this->assertStringContainsString('last', $out);
     }
+
+    public function testTableSeparatorGlyphsOverride(): void
+    {
+        // Custom separator glyphs should appear in table output.
+        $plain = Theme::plain();
+        $theme = new Theme(
+            heading1: $plain->heading1, heading2: $plain->heading2, heading3: $plain->heading3,
+            heading4: $plain->heading4, heading5: $plain->heading5, heading6: $plain->heading6,
+            paragraph: $plain->paragraph, bold: $plain->bold, italic: $plain->italic,
+            code: $plain->code, codeBlock: $plain->codeBlock, link: $plain->link,
+            blockquote: $plain->blockquote, listMarker: $plain->listMarker, rule: $plain->rule,
+            tableColumnSeparator: '!',
+            tableRowSeparator: '#',
+            tableCenterSeparator: '@',
+        );
+        $md = "| A | B |\n| --- | --- |\n| 1 | 2 |\n";
+        $out = (new Renderer($theme))->render($md);
+        // Custom separator glyphs should appear in the table border.
+        $this->assertStringContainsString('!', $out);  // column separator
+        $this->assertStringContainsString('#', $out);  // row separator
+        $this->assertStringContainsString('@', $out);  // center intersection
+    }
 }
