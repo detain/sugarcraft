@@ -45,10 +45,14 @@ enum Position
         return match ($this) {
             self::TopLeft, self::TopCenter, self::TopRight
                 => $totalAlertLines,
+            // WHY: candy-buffer clamps negative y but the silent disappearance
+            // (toast rendering at negative y = clipped) is the real defect.
+            // Pinning to top edge (y=0) makes the toast visible rather than
+            // vanishing when the viewport is too short for the requested stack.
             self::BottomLeft, self::BottomCenter, self::BottomRight
-                => $viewportHeight - $alertHeight - $totalAlertLines,
+                => \max(0, $viewportHeight - $alertHeight - $totalAlertLines),
             self::MiddleLeft, self::MiddleCenter, self::MiddleRight
-                => (int) \floor(($viewportHeight - $alertHeight) / 2) - $totalAlertLines,
+                => \max(0, (int) \floor(($viewportHeight - $alertHeight) / 2) - $totalAlertLines),
         };
     }
 }

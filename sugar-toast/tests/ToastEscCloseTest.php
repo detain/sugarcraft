@@ -94,6 +94,24 @@ final class ToastEscCloseTest extends TestCase
         $this->assertFalse($this->getAllowEscToClose($t));
     }
 
+    /**
+     * Regression test: allowEscToClose() is now a public accessor.
+     * Before the sugar-toast-8 fix it was write-only (readable only via
+     * reflection). Host code can now read the flag directly.
+     */
+    public function testAllowEscToCloseAccessor(): void
+    {
+        $t = Toast::new(50)->withAllowEscToClose(false);
+        $this->assertFalse($t->allowEscToClose());
+
+        $t2 = Toast::new(50)->withAllowEscToClose(true);
+        $this->assertTrue($t2->allowEscToClose());
+
+        // Default is true
+        $t3 = Toast::new(50);
+        $this->assertTrue($t3->allowEscToClose());
+    }
+
     // Helper to access private property
     private function getAllowEscToClose(Toast $t): bool
     {

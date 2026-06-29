@@ -37,7 +37,7 @@ final class Toast
     /** Dismissed flag — if true, Toast won't render any alerts. */
     private bool $dismissed = false;
 
-    /** Whether Escape key dismisses the active alert. */
+    /** Host-consumed flag: whether the host should dismiss on Escape key press. The renderer stores this preference; it does not handle input itself. */
     private bool $allowEscToClose = true;
 
     /** Maximum number of concurrent alerts (null = unlimited). */
@@ -73,30 +73,22 @@ final class Toast
 
     public function withMaxWidth(int $w): self
     {
-        $clone = clone $this;
-        $clone->maxWidth = $w;
-        return $clone;
+        return $this->mutate(['maxWidth' => $w]);
     }
 
     public function withMinWidth(int $w): self
     {
-        $clone = clone $this;
-        $clone->minWidth = $w;
-        return $clone;
+        return $this->mutate(['minWidth' => $w]);
     }
 
     public function withPosition(Position $pos): self
     {
-        $clone = clone $this;
-        $clone->position = $pos;
-        return $clone;
+        return $this->mutate(['position' => $pos]);
     }
 
     public function withSymbolSet(SymbolSet $set): self
     {
-        $clone = clone $this;
-        $clone->symbols = $set;
-        return $clone;
+        return $this->mutate(['symbols' => $set]);
     }
 
     /**
@@ -105,19 +97,30 @@ final class Toast
      */
     public function withDuration(?float $seconds): self
     {
-        $clone = clone $this;
-        $clone->duration = $seconds;
-        return $clone;
+        return $this->mutate(['duration' => $seconds]);
     }
 
     /**
-     * Control whether pressing Escape dismisses the active alert.
+     * Set the allowEscToClose preference flag.
+     *
+     * This is a host-consumed flag — the renderer stores the preference and
+     * exposes it via allowEscToClose() so a host's key handler can decide
+     * whether Escape dismisses. The library itself does not handle input.
      */
     public function withAllowEscToClose(bool $allow): self
     {
-        $clone = clone $this;
-        $clone->allowEscToClose = $allow;
-        return $clone;
+        return $this->mutate(['allowEscToClose' => $allow]);
+    }
+
+    /**
+     * Returns the allowEscToClose preference flag.
+     *
+     * Host code can read this to determine whether the user has requested
+     * Escape-to-dismiss behavior. The renderer itself does not act on it.
+     */
+    public function allowEscToClose(): bool
+    {
+        return $this->allowEscToClose;
     }
 
     /**
@@ -126,9 +129,7 @@ final class Toast
      */
     public function withMaxConcurrent(?int $max): self
     {
-        $clone = clone $this;
-        $clone->maxConcurrent = $max;
-        return $clone;
+        return $this->mutate(['maxConcurrent' => $max]);
     }
 
     /**
@@ -136,9 +137,7 @@ final class Toast
      */
     public function withOverflow(Overflow $overflow): self
     {
-        $clone = clone $this;
-        $clone->overflow = $overflow;
-        return $clone;
+        return $this->mutate(['overflow' => $overflow]);
     }
 
     /**
@@ -149,8 +148,21 @@ final class Toast
      */
     public function withAnimationDuration(float $seconds): self
     {
+        return $this->mutate(['animationDuration' => \max(0.0, $seconds)]);
+    }
+
+    /**
+     * Create a new instance with the given changes merged in.
+     *
+     * Mirrors the Mutable trait pattern from sugar-core but avoids requiring
+     * readonly fields or constructor-param-only initialization.
+     */
+    private function mutate(array $changes): self
+    {
         $clone = clone $this;
-        $clone->animationDuration = \max(0.0, $seconds);
+        foreach ($changes as $k => $v) {
+            $clone->{$k} = $v;
+        }
         return $clone;
     }
 
@@ -391,6 +403,13 @@ final class Toast
         $bgLines = $this->splitLines($background);
         $bgRowCount = \count($bgLines);
 
+        // WHY: Bottom/Middle yOffset depends on the total height. We must
+        // decide the canonical height BEFORE computing any yOffset so both
+        // the sizing pass and placement pass agree on the same coordinate
+        // system. The viewport must be at least as tall as the background
+        // and the caller's viewportHeight.
+        $h = max($bgRowCount, $viewportHeight);
+
         $cumulativeHeight = 0;
         $lastAlertY = 0;
         $lastAlertHeight = 0;
@@ -398,16 +417,15 @@ final class Toast
             $alertStr = $this->renderAlert($alert);
             $alertLines = $this->splitLines($alertStr);
             $alertHeight = \count($alertLines);
-            $lastAlertY = $this->position->yOffset($alertHeight, $viewportHeight, $cumulativeHeight - $alertHeight);
+            $lastAlertY = $this->position->yOffset($alertHeight, $h, $cumulativeHeight - $alertHeight);
             $lastAlertHeight = $alertHeight;
             $cumulativeHeight += $alertHeight;
         }
 
-        $contentHeight = $bgRowCount;
-        $alertExtent = $lastAlertY + $lastAlertHeight;
-        if ($alertExtent > $contentHeight) {
-            $contentHeight = $alertExtent;
-        }
+        // Use the canonical height as the base, growing only if alerts
+        // extend beyond it. Bottom/Middle anchored to this larger height
+        // will only move further down/center — no need to re-derive.
+        $contentHeight = max($h, $lastAlertY + $lastAlertHeight);
 
         $contentWidth = $this->maxWidth;
 
@@ -640,34 +658,6 @@ final class Toast
         return ($c[0] << 16) | ($c[1] << 8) | $c[2];
     }
 
-    /**
-     * Place a string into the buffer at (col, row) with the given style.
-     */
-    private function placeStringAt(Buffer $buf, int $col, int $row, string $s, ?Style $style): Buffer
-    {
-        $clusters = function_exists('grapheme_str_split')
-            ? (grapheme_str_split($s) ?: \mb_str_split($s, 1, 'UTF-8'))
-            : \mb_str_split($s, 1, 'UTF-8');
-
-        $colCursor = $col;
-        foreach ($clusters as $cluster) {
-            if ($colCursor >= $buf->width()) {
-                break;
-            }
-            $gw = $this->graphemeWidth($cluster);
-            if ($gw === 0) {
-                $colCursor++;
-                continue;
-            }
-            $buf = $buf->withCellAt($colCursor, $row, new Cell($cluster, $style, null, $gw));
-            if ($gw === 2 && $colCursor + 1 < $buf->width()) {
-                $buf = $buf->withCellAt($colCursor + 1, $row, Cell::continuation());
-            }
-            $colCursor += $gw;
-        }
-        return $buf;
-    }
-
     private function graphemeWidth(string $g): int
     {
         if ($g === '') return 0;
@@ -722,7 +712,12 @@ final class Toast
         if ($this->minWidth <= 0) {
             return $this->maxWidth;
         }
-        $iconSpace = \strlen($this->symbols->name) + 2;
+        // WHY: NerdFont/Unicode icons are 1 display cell; ASCII "[E]" is 3 cells.
+        // The +1 accounts for the trailing space after the icon in renderAlert().
+        $iconSpace = match ($this->symbols) {
+            SymbolSet::Ascii => 3,
+            default => 1,
+        } + 1;
         $needed = $messageLen + $iconSpace + 4;  // + borders + padding
         return \max($this->minWidth, \min($needed, $this->maxWidth));
     }
@@ -770,35 +765,5 @@ final class Toast
         $lines = \explode("\n", $text);
         if (\end($lines) === '') \array_pop($lines);
         return $lines;
-    }
-
-    /**
-     * @codeCoverageIgnore dead code — retained for reference until removed
-     */
-    private function compositeLines(array $bg, array $fg, int $x, int $y, int $w): array
-    {
-        $x = \max(0, $x);
-        for ($i = 0; $i < \count($fg); $i++) {
-            $destY = $y + $i;
-            if ($destY < 0 || $destY >= \count($bg)) continue;
-
-            $fgLine = $fg[$i];
-            $bgLine = $bg[$destY];
-
-            // Slice the background by DISPLAY CELLS, not bytes — multibyte
-            // content and inline ANSI must not be cut mid-grapheme.
-            $bgLine = Width::padRight($bgLine, $x + $w, ' ');
-            $pre  = Width::truncateAnsi($bgLine, $x);
-            $post = Width::dropAnsi($bgLine, $x + $w);
-
-            // The foreground (the toast box) is already exactly $w cells per
-            // line, but truncate defensively so a too-wide line can't bleed
-            // past the box column. truncateAnsi keeps multibyte box-drawing
-            // graphemes whole, fixing the border-truncation bug.
-            $fgSlice = Width::truncateAnsi($fgLine, $w);
-
-            $bg[$destY] = $pre . $fgSlice . $post;
-        }
-        return $bg;
     }
 }

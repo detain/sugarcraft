@@ -148,6 +148,10 @@ All translatable strings live in `lang/en.php` under the `'toast'` namespace.
 | `dismiss`        | `Press any key to dismiss`        | —            |
 | `count`           | `{count} notification(s)`         | `{count}`    |
 
+> **Note:** The `dismiss` and `count` keys are provided as convenience strings
+> for host-rendered dismiss-hint and counter UI. They are **not** emitted or
+> rendered by `View()` itself — the library outputs only the alert overlay.
+
 To add a locale, copy `lang/en.php` to `lang/<code>.php` and translate the
 values. The lookup chain follows `SugarCraft\Core\I18n\T`:
 exact locale → base language → `en` → raw key.
@@ -252,7 +256,7 @@ for now.
 | `->withMaxWidth(int)` | Maximum alert width in cells |
 | `->withMinWidth(int)` | Minimum alert width in cells |
 | `->withSymbolSet(SymbolSet)` | NerdFont, Unicode, or ASCII symbols |
-| `->withAllowEscToClose(bool)` | Allow Escape key to dismiss |
+| `->withAllowEscToClose(bool)` | Preference flag the host reads to decide if Escape dismisses (the renderer does not handle input) |
 | `->withMaxConcurrent(?int $n)` | Cap concurrent alerts (`null` = unlimited) |
 | `->withOverflow(Overflow)` | Strategy when cap exceeded: DropOldest, DropNewest, Enqueue |
 | `->withAnimationDuration(float $seconds)` | Fade animation duration (stub; CubicBezier deferred) |
