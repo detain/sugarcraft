@@ -184,4 +184,52 @@ final class SmtpMimeTest extends TestCase
 
         $this->assertStringContainsString("Content-Transfer-Encoding: 7bit", $mime);
     }
+
+    /**
+     * Verifies that display-name addresses are preserved in headers (header-formatted)
+     * while the envelope uses the bare address only.
+     *
+     * formatAddressForHeader() must keep "Name <a@b>" intact for the To:/From:/Cc:
+     * header lines, while bareAddr() must extract only "a@b" for the SMTP envelope.
+     */
+    public function testDisplayNameInHeaderBareInEnvelope(): void
+    {
+        $transport = new SmtpTransport('smtp.example.com', 587);
+
+        $reflection = new \ReflectionClass($transport);
+
+        $formatHeader = $reflection->getMethod('formatAddressForHeader');
+        $formatHeader->setAccessible(true);
+
+        $bare = $reflection->getMethod('bareAddr');
+        $bare->setAccessible(true);
+
+        // formatAddressForHeader preserves the "Name <addr>" form for header use
+        $headerFormatted = $formatHeader->invoke($transport, 'Name <a@b>');
+        $this->assertSame('Name <a@b>', $headerFormatted);
+
+        // bareAddr extracts only the address portion for the SMTP envelope
+        $bareAddr = $bare->invoke($transport, 'Name <a@b>');
+        $this->assertSame('a@b', $bareAddr);
+
+        // Non-display-name address passes through both unchanged
+        $plain = 'plain@example.com';
+        $this->assertSame('plain@example.com', $formatHeader->invoke($transport, $plain));
+        $this->assertSame('plain@example.com', $bare->invoke($transport, $plain));
+    }
+
+    /**
+     * Verifies that a custom HELO host can be supplied via the constructor and is
+     * returned by getHeloHost() when set.
+     */
+    public function testHeloOverride(): void
+    {
+        $transport = new SmtpTransport('smtp.example.com', 587, '', '', 30, 'my-custom-helo');
+
+        $reflection = new \ReflectionClass($transport);
+        $getHelo = $reflection->getMethod('getHeloHost');
+        $getHelo->setAccessible(true);
+
+        $this->assertSame('my-custom-helo', $getHelo->invoke($transport));
+    }
 }
