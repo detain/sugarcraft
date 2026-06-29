@@ -193,4 +193,90 @@ final class ScanTest extends TestCase
         self::assertArrayHasKey('comb', $zones);
         self::assertCount(1, $zones);
     }
+
+    /**
+     * Zone closing at col 1 of a non-empty trailing row: the close sentinel
+     * lands at column 1 of a fresh row after content.  The $endRow > $startRow
+     * && $col === 1 branch (Scan.php:84-86) should anchor endCol to the
+     * previous row's maxCol (not collapse to 0 or 1).
+     *
+     * Case 1: "AAA\nBBB" — close lands after BBB (col > 1).  Zone should
+     * span row 1–2, col 1–3.
+     *
+     * Case 2: "AAA\n" with immediate close at col 1 of the fresh row.
+     * Zone should still land on the populated row (row 1, col 3) because
+     * col 1 at row 2 is before any visible character in that row.
+     */
+    public function testParseZoneClosingAtColOneOfNonEmptyRow(): void
+    {
+        $mark = new Mark();
+
+        // Case 1: content with trailing row, close after content (col > 1).
+        $rendered1 = $mark->wrap('multi', "AAA\nBBB");
+        $scan1 = new Scan();
+        $zones1 = $scan1->parse($rendered1);
+
+        self::assertArrayHasKey('multi', $zones1);
+        $z1 = $zones1['multi'];
+        // AAA = col 1–3 at row 1; BBB = col 1–3 at row 2.
+        self::assertSame(1, $z1->startCol);
+        self::assertSame(1, $z1->startRow);
+        self::assertSame(3, $z1->endCol);
+        self::assertSame(2, $z1->endRow);
+
+        // Case 2: content with newline-only trailing row, close at col 1.
+        $rendered2 = $mark->wrap('nlonly2', "AAA\n");
+        $scan2 = new Scan();
+        $zones2 = $scan2->parse($rendered2);
+
+        self::assertArrayHasKey('nlonly2', $zones2);
+        $z2 = $zones2['nlonly2'];
+        // Close at col 1 of row 2 triggers the $endRow > $startRow && $col === 1
+        // branch — endCol should be maxCol of the open (row 1, col 3),
+        // endRow should be row 1.
+        self::assertSame(1, $z2->startCol);
+        self::assertSame(1, $z2->startRow);
+        self::assertSame(3, $z2->endCol);
+        self::assertSame(1, $z2->endRow);
+    }
+
+    /**
+     * When a width is supplied, endCol must not exceed that boundary.
+     * startCol is left unclamped (where the zone began is unaffected).
+     */
+    public function testParseWithWidthClampsEndCol(): void
+    {
+        $mark = new Mark();
+        // "HELLO" occupies 5 columns starting at col 1.
+        $rendered = $mark->wrap('wide', 'HELLO');
+
+        $scan = new Scan();
+        $zones = $scan->parse($rendered, 3); // Clamp to 3 columns.
+
+        self::assertArrayHasKey('wide', $zones);
+        $zone = $zones['wide'];
+        // startCol stays at 1 (zone started at column 1).
+        self::assertSame(1, $zone->startCol);
+        // endCol is clamped to width 3.
+        self::assertSame(3, $zone->endCol);
+        self::assertSame(1, $zone->startRow);
+        self::assertSame(1, $zone->endRow);
+    }
+
+    /**
+     * Without a width parameter, endCol reflects the full content width.
+     */
+    public function testParseWithoutWidthUnchanged(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('normal', 'HELLO');
+
+        $scan = new Scan();
+        $zones = $scan->parse($rendered); // No width.
+
+        self::assertArrayHasKey('normal', $zones);
+        $zone = $zones['normal'];
+        self::assertSame(1, $zone->startCol);
+        self::assertSame(5, $zone->endCol); // Full width, unclamped.
+    }
 }
