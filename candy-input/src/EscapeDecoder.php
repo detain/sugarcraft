@@ -159,6 +159,11 @@ final class EscapeDecoder
             return $this->handleCSI(substr($stream, 2));
         }
 
+        // ESC O — SS3 sequence
+        if ($nextOrd === 0x4f) {
+            return $this->handleSS3(substr($stream, 2));
+        }
+
         // ESC ESC — Alt+Escape
         if ($nextOrd === 0x1b) {
             return [
@@ -171,6 +176,46 @@ final class EscapeDecoder
         return [
             'events' => [new KeyEvent($this->mapChar($next), KeyModifier::alt(), "\x1b" . $next)],
             'remaining' => substr($stream, 2),
+        ];
+    }
+
+    /**
+     * Handle an SS3 (ESC O) sequence.
+     *
+     * @param string $afterO Bytes after "ESC O"
+     * @return array{events: list<Event>, remaining: string}
+     */
+    private function handleSS3(string $afterO): array
+    {
+        if ($afterO === '') {
+            // Incomplete SS3
+            return ['events' => [], 'remaining' => "\x1bO"];
+        }
+
+        $final = $afterO[0];
+        $ss3Map = [
+            'P' => 'F1',
+            'Q' => 'F2',
+            'R' => 'F3',
+            'S' => 'F4',
+            // App-cursor-mode arrows (some terminals use SS3 for arrows)
+            'A' => 'ArrowUp',
+            'B' => 'ArrowDown',
+            'C' => 'ArrowRight',
+            'D' => 'ArrowLeft',
+            'H' => 'Home',
+            'F' => 'End',
+        ];
+
+        if (!isset($ss3Map[$final])) {
+            // Unknown final byte — skip it
+            return ['events' => [], 'remaining' => substr($afterO, 1)];
+        }
+
+        $raw = "\x1bO" . $final;
+        return [
+            'events' => [new KeyEvent($ss3Map[$final], KeyModifier::none(), $raw)],
+            'remaining' => substr($afterO, 1),
         ];
     }
 
@@ -335,16 +380,6 @@ final class EscapeDecoder
             return [
                 'events' => [new KeyEvent($arrowMap[$csi[0]], KeyModifier::none(), "\x1b[" . $csi)],
                 'remaining' => substr($csi, 1),
-            ];
-        }
-
-        // SS3-style function keys: CSI OP/.../OS (some terminals use CSI O{P/Q/R/S})
-        $ss3Map = ['P' => 'F1', 'Q' => 'F2', 'R' => 'F3', 'S' => 'F4'];
-        // Also check if it starts with O and the second char is a function key
-        if (isset($csi[1]) && isset($ss3Map[$csi[1]])) {
-            return [
-                'events' => [new KeyEvent($ss3Map[$csi[1]], KeyModifier::none(), "\x1b[" . $csi)],
-                'remaining' => substr($csi, 2),
             ];
         }
 
