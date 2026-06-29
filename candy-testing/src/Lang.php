@@ -17,6 +17,6 @@ use SugarCraft\Core\I18n\Lang as BaseLang;
  */
 final class Lang extends BaseLang
 {
-    private const NAMESPACE = 'testing';
-    private const DIR = __DIR__ . '/../lang';
+    protected const NAMESPACE = 'testing';
+    protected const DIR = __DIR__ . '/../lang';
 }
