@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "84162ace004f36014020a862e45cf97a",
+    "content-hash": "de8d9434ffcfa53f92ad5ba09e9d2798",
     "packages": [
         {
             "name": "react/event-loop",
@@ -150,6 +150,261 @@
                 }
             ],
             "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-ansi",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-ansi.git",
+                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/d44eb9444acd73436783e78b6a7ca502b64d5aca",
+                "reference": "d44eb9444acd73436783e78b6a7ca502b64d5aca",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Ansi\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+            "homepage": "https://github.com/sugarcraft/candy-ansi",
+            "keywords": [
+                "ansi",
+                "charmbracelet",
+                "ecma-48",
+                "parser",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt500"
+            ],
+            "support": {
+                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md",
+                "issues": "https://github.com/sugarcraft/candy-ansi/issues",
+                "source": "https://github.com/sugarcraft/candy-ansi"
+            },
+            "time": "2026-05-31T00:53:12+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-core",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-core",
+                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Core\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Core\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "analyse": [
+                    "vendor/bin/phpstan analyse src --no-progress"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/bubbletea — Elm-architecture TUI runtime.",
+            "homepage": "https://github.com/sugarcraft/candy-core",
+            "keywords": [
+                "ansi",
+                "bubble-tea",
+                "bubbletea",
+                "cli",
+                "console",
+                "elm",
+                "elm-architecture",
+                "react-php",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-core/issues",
+                "source": "https://github.com/sugarcraft/candy-core",
+                "docs": "https://sugarcraft.github.io/lib/candy-core.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-input",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-input.git",
+                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-input/zipball/d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
+                "reference": "d3a2a8ef9d5c56b1541ec89523590c0a9bc72ae0",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Input\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Terminal escape sequence decoder for keyboard (legacy + Kitty progressive) and mouse (SGR 1006). Provides InputDriver interface and EscapeDecoder implementation. Unblocks sugar-readline migration to real-TTY input.",
+            "homepage": "https://github.com/sugarcraft/candy-input",
+            "keywords": [
+                "escape-sequences",
+                "input",
+                "keyboard",
+                "kitty",
+                "mouse",
+                "sgr",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "docs": "https://sugarcraft.github.io/lib/candy-input.html",
+                "issues": "https://github.com/sugarcraft/candy-input/issues",
+                "source": "https://github.com/sugarcraft/candy-input"
+            },
+            "time": "2026-06-02T17:46:00+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-pty",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-pty.git",
+                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/27eb7e3e157b618c107e2bb36ff873467866ce4d",
+                "reference": "27eb7e3e157b618c107e2bb36ff873467866ce4d",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-input": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "react/event-loop": "^1.6",
+                "sugarcraft/candy-vcr": "dev-master",
+                "sugarcraft/candy-vt": "dev-master"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/candy-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html",
+                "issues": "https://github.com/sugarcraft/candy-pty/issues",
+                "source": "https://github.com/sugarcraft/candy-pty"
+            },
+            "time": "2026-06-01T13:14:26+00:00"
         }
     ],
     "packages-dev": [
@@ -1825,12 +2080,14 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "sugarcraft/candy-core": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
