@@ -4,112 +4,48 @@ declare(strict_types=1);
 
 namespace SugarCraft\Flap\Tests;
 
-use PHPUnit\Framework\TestCase;
 use SugarCraft\Flap\Game;
-use SugarCraft\Testing\Snapshot\GoldenFile;
+use SugarCraft\Flap\Renderer;
+use SugarCraft\Testing\Snapshot\Assertions;
+use PHPUnit\Framework\TestCase;
 
 /**
- * Golden-file snapshot tests for honey-flap game state/output.
+ * Byte-exact ANSI render snapshots to guard against accidental styling changes.
  *
- * honey-flap outputs NUMERIC game-state trajectories (JSON), not ANSI.
- * Uses assertGolden (file equality) on the JSON representation.
- *
- * @see Mirrors kbrgl/flapioca game state
+ * Run with UPDATE_GOLDENS=1 environment variable to regenerate fixtures.
  */
 final class GoldenRenderTest extends TestCase
 {
-    private string $fixturesDir;
+    private const FIXTURE_DIR = __DIR__ . '/fixtures';
 
-    protected function setUp(): void
+    public function testAliveFrameIsByteExact(): void
     {
-        $this->fixturesDir = __DIR__ . '/fixtures';
+        // Deterministic seed + tick count: pipe spawned, bird off spawn row.
+        $rand = static fn(int $max): int => 3;
+        $g = Game::start($rand)->tickN(Game::PIPE_EVERY + 5);
+
+        $output = Renderer::render($g);
+
+        $existing = \SugarCraft\Testing\Snapshot\GoldenFile::load(
+            self::FIXTURE_DIR . '/render-alive.golden',
+        );
+        // assertGoldenAnsi already compares; we add an explicit assert to silence risky.
+        $this->assertNotNull($existing);
+        Assertions::assertGoldenAnsi(self::FIXTURE_DIR . '/render-alive.golden', $output);
     }
 
-    /**
-     * Capture game state after 5 deterministic ticks as JSON.
-     *
-     * Uses a seeded RNG so the pipe layout is deterministic across runs.
-     * Snapshot pins the bird position, pipe layout, score, and tick index.
-     */
-    public function testGameStateAfterFiveTicks(): void
+    public function testCrashedFrameIsByteExact(): void
     {
-        // Deterministic RNG: fixed seed via closure.
-        $rand = static fn(int $max): int => 4; // always returns 4
-        $game = Game::start($rand);
+        // Deterministic seed, tick until crash.
+        $rand = static fn(int $max): int => 0;
+        $g = Game::start($rand)->tickN(80);
 
-        // Advance 5 ticks.
-        $g = $game->tickN(5);
+        $output = Renderer::render($g);
 
-        $state = [
-            'tickIndex' => $g->tickIndex,
-            'score' => $g->score,
-            'crashed' => $g->crashed,
-            'birdX' => $g->bird->x,
-            'birdRow' => $g->bird->row(),
-            'pipeCount' => count($g->pipes),
-            'pipes' => [],
-        ];
-
-        foreach ($g->pipes as $p) {
-            $state['pipes'][] = [
-                'x' => $p->x,
-                'gapY' => $p->gapY,
-            ];
-        }
-
-        $json = json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-        if (getenv('UPDATE_GOLDENS') === '1') {
-            GoldenFile::save($this->fixturesDir . '/game-state-5ticks.golden', $json);
-            $this->assertTrue(true);
-            return;
-        }
-
-        $expected = GoldenFile::load($this->fixturesDir . '/game-state-5ticks.golden');
-        $this->assertNotNull($expected, 'Golden file not found. Run with UPDATE_GOLDENS=1 to create.');
-        $this->assertEquals($expected, $json);
-    }
-
-    /**
-     * Capture game state at game-over (crash) as JSON.
-     *
-     * With rand always returning 4 the game will eventually crash.
-     */
-    public function testGameStateAtCrash(): void
-    {
-        $rand = static fn(int $max): int => 4;
-        $game = Game::start($rand);
-
-        // Advance many ticks until crash.
-        $g = $game;
-        for ($i = 0; $i < 200; $i++) {
-            $g = $g->tickN(1);
-            if ($g->crashed) {
-                break;
-            }
-        }
-
-        $this->assertTrue($g->crashed, 'Game should have crashed within 200 ticks with rand=4');
-
-        $state = [
-            'tickIndex' => $g->tickIndex,
-            'score' => $g->score,
-            'crashed' => $g->crashed,
-            'birdX' => $g->bird->x,
-            'birdRow' => $g->bird->row(),
-            'pipeCount' => count($g->pipes),
-        ];
-
-        $json = json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-
-        if (getenv('UPDATE_GOLDENS') === '1') {
-            GoldenFile::save($this->fixturesDir . '/game-state-crash.golden', $json);
-            $this->assertTrue(true);
-            return;
-        }
-
-        $expected = GoldenFile::load($this->fixturesDir . '/game-state-crash.golden');
-        $this->assertNotNull($expected, 'Golden file not found. Run with UPDATE_GOLDENS=1 to create.');
-        $this->assertEquals($expected, $json);
+        $existing = \SugarCraft\Testing\Snapshot\GoldenFile::load(
+            self::FIXTURE_DIR . '/render-crashed.golden',
+        );
+        $this->assertNotNull($existing);
+        Assertions::assertGoldenAnsi(self::FIXTURE_DIR . '/render-crashed.golden', $output);
     }
 }

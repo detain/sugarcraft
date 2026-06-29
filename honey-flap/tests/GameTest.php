@@ -95,77 +95,130 @@ final class GameTest extends TestCase
 
     public function testHighScoreReturnsZeroWhenNoScores(): void
     {
-        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         $g = new Game(
             bird: Game::start(static fn(int $max): int => 0)->bird,
             pipes: [],
-            configDir: $tmp,
+            highScores: [],
         );
         $this->assertSame(0, $g->highScore());
-        // Clean up.
-        @rmdir($tmp . '/.honey-flap');
-        @rmdir($tmp);
     }
 
-    public function testSaveHighScoreOnlySavesWhenHigher(): void
+    public function testWithHighScoreIsImmutable(): void
     {
-        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
-        mkdir($tmp . '/.honey-flap', 0755, true);
         $g = new Game(
             bird: Game::start(static fn(int $max): int => 0)->bird,
             pipes: [],
-            configDir: $tmp,
+            highScores: [5, 10],
         );
-        // Score of 5 should be saved.
-        $this->assertTrue($g->saveHighScore(5));
-        $this->assertSame(5, $g->highScore());
-        // Score of 3 should NOT be saved (lower than current high).
-        $this->assertFalse($g->saveHighScore(3));
-        $this->assertSame(5, $g->highScore());
-        // Score of 10 should be saved (new high).
-        $this->assertTrue($g->saveHighScore(10));
-        $this->assertSame(10, $g->highScore());
-        // Clean up.
-        unlink($tmp . '/.honey-flap/scores.json');
-        @rmdir($tmp . '/.honey-flap');
-        @rmdir($tmp);
+        $g2 = $g->withHighScore(99);
+        // Returns a NEW instance.
+        $this->assertNotSame($g, $g2);
+        // Original is unchanged.
+        $this->assertSame([5, 10], $g->highScores());
+        $this->assertFalse($g->newRecord);
+        // New instance has the merged list.
+        $this->assertSame([5, 10, 99], $g2->highScores());
+        $this->assertTrue($g2->newRecord);
     }
 
-    public function testHighScoresReturnsSortedList(): void
+    public function testWithHighScoreOnlyMergesWhenHigher(): void
     {
-        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
-        mkdir($tmp . '/.honey-flap', 0755, true);
         $g = new Game(
             bird: Game::start(static fn(int $max): int => 0)->bird,
             pipes: [],
-            configDir: $tmp,
+            highScores: [5, 10],
         );
-        $g->saveHighScore(5);
-        $g->saveHighScore(15);
-        $g->saveHighScore(10);  // 10 is NOT a new high (15 > 10), so not saved
-        $scores = $g->highScores();
-        $this->assertSame([5, 15], $scores);
-        // Clean up.
-        unlink($tmp . '/.honey-flap/scores.json');
-        @rmdir($tmp . '/.honey-flap');
-        @rmdir($tmp);
+        // Score of 3 is NOT higher than current best (10) — returns same instance.
+        $g2 = $g->withHighScore(3);
+        $this->assertSame($g, $g2);
+        $this->assertSame([5, 10], $g->highScores());
+        $this->assertFalse($g->newRecord);
+
+        // Score of 15 IS a new record — returns new instance.
+        $g3 = $g->withHighScore(15);
+        $this->assertNotSame($g, $g3);
+        $this->assertSame([5, 10, 15], $g3->highScores());
+        $this->assertTrue($g3->newRecord);
+
+        // Score of 0 or negative — no change.
+        $g4 = $g->withHighScore(0);
+        $this->assertSame($g, $g4);
+        $g5 = $g->withHighScore(-5);
+        $this->assertSame($g, $g5);
     }
 
-    public function testLoadHighScoresOnConstruction(): void
+    public function testWithHighScoreKeepsSortedOrder(): void
+    {
+        $g = new Game(
+            bird: Game::start(static fn(int $max): int => 0)->bird,
+            pipes: [],
+            highScores: [5, 15],
+        );
+        $g2 = $g->withHighScore(10);  // 10 is NOT a new high (15 > 10)
+        $this->assertSame($g, $g2);   // no change
+
+        $g3 = $g->withHighScore(20);  // 20 IS a new high
+        $this->assertNotSame($g, $g3);
+        $this->assertSame([5, 15, 20], $g3->highScores());
+        $this->assertTrue($g3->newRecord);
+    }
+
+    public function testRandAccessorReturnsInjectedClosure(): void
+    {
+        $sentinel = static fn(int $max): int => 42;
+        $g = Game::start($sentinel);
+        $this->assertSame($sentinel, $g->rand());
+    }
+
+    public function testScoresAreSeededViaStart(): void
     {
         $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
         mkdir($tmp . '/.honey-flap', 0755, true);
         file_put_contents($tmp . '/.honey-flap/scores.json', json_encode([3, 7, 5]));
-        $g = new Game(
-            bird: Game::start(static fn(int $max): int => 0)->bird,
-            pipes: [],
-            configDir: $tmp,
-        );
+        $g = Game::start(static fn(int $max): int => 0, $tmp);
         $this->assertSame(7, $g->highScore());
         $this->assertSame([3, 5, 7], $g->highScores());
         // Clean up.
         unlink($tmp . '/.honey-flap/scores.json');
         @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
+
+    public function testReadScoresThrowsOnNonArrayJson(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        file_put_contents($tmp . '/.honey-flap/scores.json', '42');
+        $this->expectException(\RuntimeException::class);
+        Game::start(static fn(int $max): int => 0, $tmp);
+    }
+
+    public function testReadScoresFiltersNonIntEntries(): void
+    {
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp . '/.honey-flap', 0755, true);
+        file_put_contents($tmp . '/.honey-flap/scores.json', json_encode([1, 'x', 2, null, 3]));
+        $g = Game::start(static fn(int $max): int => 0, $tmp);
+        $this->assertSame([1, 2, 3], $g->highScores());
+        // Clean up.
+        unlink($tmp . '/.honey-flap/scores.json');
+        @rmdir($tmp . '/.honey-flap');
+        @rmdir($tmp);
+    }
+
+    public function testUpdateWithUnwritableDirDoesNotThrow(): void
+    {
+        // Create an unwritable config dir.
+        $tmp = sys_get_temp_dir() . '/honey-flap-test-' . uniqid();
+        mkdir($tmp, 0000, true);
+        $g = Game::start(static fn(int $max): int => 0, $tmp)->tickN(80);
+        $this->assertTrue($g->crashed);
+        // update() should not throw even though the dir is unwritable.
+        // The persist runs via Cmd which swallows exceptions.
+        [$next, $cmd] = $g->update(new TickMsg());
+        $this->assertSame($g, $next);
+        // Clean up (use ignore for root permission issues).
+        @chmod($tmp, 0755);
         @rmdir($tmp);
     }
 }
