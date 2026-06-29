@@ -678,11 +678,14 @@ final class Ansi
                 }
                 continue;
             }
-            if ($next !== '') {
-                $i += 2;
-                continue;
-            }
+            // Not [, not ], not empty — lone ESC (e.g. stray 0x1b).
+            // Only skip the ESC itself; the following byte is processed
+            // normally so we don't accidentally eat valid UTF-8 continuation
+            // bytes that happen to land after an ESC (see issue: bytes like
+            // \x1b followed by a continuation byte 0x80-0xbf were being
+            // skipped as a pair, corrupting multi-byte characters).
             $i++;
+            continue;
         }
         return $out;
     }
