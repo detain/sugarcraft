@@ -6,6 +6,7 @@ namespace SugarCraft\Metrics\Backend;
 
 use SugarCraft\Metrics\Lang;
 use SugarCraft\Metrics\Backend;
+use SugarCraft\Metrics\Descriptor;
 
 /**
  * Atomically rewrites a Prometheus textfile-collector file
@@ -18,8 +19,17 @@ use SugarCraft\Metrics\Backend;
  * their last set value, histograms emit the full set of bucket
  * lines (`*_bucket{le="..."}`) plus `_count` and `_sum`.
  *
- * Call {@see flush()} manually after a batch, or rely on the
- * destructor (which calls it automatically).
+ * **Always call {@see flush()} explicitly** for guaranteed delivery
+ * and error visibility. The destructor calls flush() but silently
+ * drops all errors (failed rename/permission issues are swallowed
+ * in __destruct to avoid throwing from destructors). If you need
+ * to know whether flush succeeded, call it explicitly and catch
+ * the RuntimeException.
+ *
+ * **summary descriptors**: the "summary" TYPE is accepted and emits
+ * a `# HELP` / `# TYPE` header, but quantile lines and exemplars
+ * are not rendered (no `observe()` path exists for summary in this
+ * library). This is consistent with the OpenTelemetry API shape.
  *
  * Atomicity: write to `<path>.tmp`, then `rename()` over `<path>`.
  * Concurrent writers serialise via `flock(LOCK_EX)` on the temp
@@ -42,6 +52,9 @@ final class PrometheusFileBackend implements Backend
     private array $asyncCounters = [];
     /** @var array<string,float> */
     private array $asyncGauges = [];
+
+    /** @var array<string, Descriptor> Metric descriptors indexed by sanitized name. */
+    private array $descriptors = [];
 
     public function __construct(private readonly string $path)
     {}
@@ -69,12 +82,7 @@ final class PrometheusFileBackend implements Backend
     public function histogram(string $name, float $value, array $tags = []): void
     {
         $key = $this->key($name, $tags);
-        $buckets = [];
-        foreach (self::BUCKETS as $b) {
-            $buckets[(string) $b] = 0;
-        }
-        $buckets['+Inf'] = 0;
-        $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0, 'buckets' => $buckets];
+        $h = $this->histograms[$key] ?? ['count' => 0, 'sum' => 0.0, 'buckets' => self::emptyBuckets()];
         $h['count']++;
         $h['sum'] += $value;
         foreach (self::BUCKETS as $b) {
@@ -85,6 +93,17 @@ final class PrometheusFileBackend implements Backend
         // +Inf bucket always gets the sample
         $h['buckets']['+Inf']++;
         $this->histograms[$key] = $h;
+    }
+
+    /** Returns a fresh zeroed bucket array for use in new histogram series. */
+    private static function emptyBuckets(): array
+    {
+        $buckets = [];
+        foreach (self::BUCKETS as $b) {
+            $buckets[(string) $b] = 0;
+        }
+        $buckets['+Inf'] = 0;
+        return $buckets;
     }
 
     public function upDownCounter(string $name, float $amount, array $tags = []): void
@@ -103,32 +122,119 @@ final class PrometheusFileBackend implements Backend
         $this->asyncGauges[$this->key($name, $tags)] = $value;
     }
 
+    public function describe(Descriptor $descriptor): void
+    {
+        // Store keyed by sanitized name so flush() can look up by the same key
+        // that is used when emitting TYPE/HELP headers.
+        $this->descriptors[self::sanitizeName($descriptor->name)] = $descriptor;
+    }
+
     public function flush(): void
     {
         $body = '';
+        // Track which sanitized names have had TYPE emitted (to avoid duplicates per family).
+        $typeEmitted = [];
+        // Track which names were actually sampled (for unsampled-descriptor emission below).
+        $sampledNames = [];
+        // Track which descriptors were already emitted (descriptor type wins over inferred).
+        $descriptorEmitted = [];
+
+        // --- Sampled metrics: emit HELP+TYPE once per family (descriptor wins), then sample lines ---
         foreach ($this->counters as $key => $val) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} counter\n{$name}{$labels} " . self::fmt($val) . "\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} counter\n";
+                }
+            }
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->upDownCounters as $key => $val) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} gauge\n{$name}{$labels} " . self::fmt($val) . "\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} gauge\n";
+                }
+            }
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->asyncCounters as $key => $val) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} counter\n{$name}{$labels} " . self::fmt($val) . "\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} counter\n";
+                }
+            }
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->asyncGauges as $key => $val) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} gauge\n{$name}{$labels} " . self::fmt($val) . "\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} gauge\n";
+                }
+            }
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->gauges as $key => $val) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} gauge\n{$name}{$labels} " . self::fmt($val) . "\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} gauge\n";
+                }
+            }
+            $body .= "{$name}{$labels} " . self::fmt($val) . "\n";
         }
         foreach ($this->histograms as $key => $h) {
             [$name, $labels] = self::splitKey($key);
-            $body .= "# TYPE {$name} histogram\n";
+            $sampledNames[$name] = true;
+            if (!isset($typeEmitted[$name])) {
+                $typeEmitted[$name] = true;
+                if (isset($this->descriptors[$name])) {
+                    $d = $this->descriptors[$name];
+                    $body .= "# HELP {$name} " . self::escapeHelp($d->help) . "\n";
+                    $body .= "# TYPE {$name} {$d->type}\n";
+                    $descriptorEmitted[$name] = true;
+                } else {
+                    $body .= "# TYPE {$name} histogram\n";
+                }
+            }
+            // Bucket lines (must use sanitized $name as base)
             foreach (self::BUCKETS as $b) {
                 $leAttr = $labels !== '' ? substr($labels, 0, -1) . ',le="' . $b . '"}' : '{le="' . $b . '"}';
                 $body .= "{$name}_bucket{$leAttr} {$h['buckets'][(string) $b]}\n";
@@ -137,6 +243,14 @@ final class PrometheusFileBackend implements Backend
             $body .= "{$name}_bucket{$infAttr} {$h['buckets']['+Inf']}\n";
             $body .= "{$name}_count{$labels} {$h['count']}\n";
             $body .= "{$name}_sum{$labels} " . self::fmt($h['sum']) . "\n";
+        }
+
+        // --- Un-sampled descriptors: emit HELP + TYPE for descriptors with no samples ---
+        foreach ($this->descriptors as $name => $descriptor) {
+            if (!isset($descriptorEmitted[$name])) {
+                $body .= "# HELP {$name} " . self::escapeHelp($descriptor->help) . "\n";
+                $body .= "# TYPE {$name} {$descriptor->type}\n";
+            }
         }
 
         $tmp = $this->path . '.tmp';
@@ -163,13 +277,14 @@ final class PrometheusFileBackend implements Backend
      */
     private function key(string $name, array $tags): string
     {
+        $name = self::sanitizeName($name);
         if ($tags === []) {
             return $name;
         }
         ksort($tags);
         $parts = [];
         foreach ($tags as $k => $v) {
-            $parts[] = $k . '="' . self::escapeLabel((string) $v) . '"';
+            $parts[] = self::sanitizeKey($k) . '="' . self::escapeLabel((string) $v) . '"';
         }
         return $name . "\0{" . implode(',', $parts) . '}';
     }
@@ -184,6 +299,52 @@ final class PrometheusFileBackend implements Backend
             return [$key, ''];
         }
         return [substr($key, 0, $pos), substr($key, $pos + 1)];
+    }
+
+    /**
+     * Sanitize a metric name to match Prometheus's allowed charset
+     * `[a-zA-Z_:][a-zA-Z0-9_:]*`. Replaces illegal chars with `_` and
+     * prefixes with `_` if the first character is a digit.
+     */
+    private static function sanitizeName(string $name): string
+    {
+        $s = preg_replace('/[^a-zA-Z0-9_:]/', '_', $name);
+        if ($s === null) {
+            return $name;
+        }
+        // First char must not be a digit
+        if ($s !== '' && is_numeric($s[0])) {
+            $s = '_' . $s;
+        }
+        return $s;
+    }
+
+    /**
+     * Sanitize a label key to match Prometheus's allowed charset
+     * `[a-zA-Z_][a-zA-Z0-9_]*`. Replaces illegal chars with `_` and
+     * prefixes with `_` if the first character is a digit.
+     */
+    private static function sanitizeKey(string $key): string
+    {
+        $s = preg_replace('/[^a-zA-Z0-9_]/', '_', $key);
+        if ($s === null) {
+            return $key;
+        }
+        // First char must not be a digit
+        if ($s !== '' && is_numeric($s[0])) {
+            $s = '_' . $s;
+        }
+        return $s;
+    }
+
+    /**
+     * Escape text for inclusion in a # HELP line.
+     * Prometheus requires only `\\` → `\\` and `\<newline>` → `\\n`.
+     * Quotation marks are NOT escaped in HELP text (unlike label values).
+     */
+    private static function escapeHelp(string $s): string
+    {
+        return str_replace(["\\", "\n"], ["\\\\", "\\n"], $s);
     }
 
     private static function escapeLabel(string $s): string

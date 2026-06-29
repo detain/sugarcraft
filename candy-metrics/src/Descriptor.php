@@ -16,10 +16,11 @@ namespace SugarCraft\Metrics;
 final class Descriptor
 {
     /**
-     * @param non-empty-string            $name      Fully-qualified metric name.
-     * @param non-empty-string            $help      Human-readable description.
-     * @param 'counter'|'gauge'|'histogram'|'summary' $type     Prometheus metric type.
-     * @param list<non-empty-string>      $labelKeys Ordered list of label names for this metric.
+     * @param non-empty-string                           $name      Fully-qualified metric name.
+     * @param non-empty-string                           $help      Human-readable description.
+     * @param 'counter'|'gauge'|'histogram'|'summary'   $type      Prometheus metric type.
+     *                                                                      "summary" emits a TYPE header only (quantiles / exemplars unsupported).
+     * @param list<non-empty-string>                     $labelKeys Ordered list of label names for this metric.
      */
     public function __construct(
         public readonly string $name,
