@@ -229,7 +229,7 @@ final class FlexBox
                     $lineStr .= \str_repeat(' ', $gap);
                 }
             }
-            $resultLines[] = \substr($lineStr, 0, $totalWidth);
+            $resultLines[] = \SugarCraft\Core\Util\Width::truncateAnsi($lineStr, $totalWidth);
         }
 
         return \implode("\n", $resultLines);
@@ -249,7 +249,8 @@ final class FlexBox
         ], $items);
 
         $totalRatio   = \array_sum(\array_column($measured, 'ratio'));
-        $totalBasis   = \array_sum(\array_filter(\array_column($measured, 'item'), fn($it) => $it->basis > 0));
+        $itemsWithBasis = \array_filter($measured, fn($m) => $m['item']->basis > 0);
+        $totalBasis   = \array_sum(\array_column($itemsWithBasis, 'basis'));
         $freeHeight   = $totalHeight - $totalBasis - ($gap * (\count($items) - 1));
 
         foreach ($measured as $i => $m) {
@@ -302,7 +303,7 @@ final class FlexBox
     private function measureWidth(FlexItem $item): int
     {
         $lines = \explode("\n", $item->content);
-        $widths = \array_map('strlen', $lines);
+        $widths = \array_map(\SugarCraft\Core\Util\Width::string(...), $lines);
         return $widths === [] ? 0 : \max($widths);
     }
 
@@ -313,16 +314,18 @@ final class FlexBox
 
     private function alignCell(string $text, int $width, Align $align): string
     {
-        $len = \strlen($text);
-        if ($len >= $width) {
-            return \substr($text, 0, $width);
+        // Truncate to display width if needed (ANSI-aware).
+        $truncated = \SugarCraft\Core\Util\Width::truncateAnsi($text, $width);
+        $visualWidth = \SugarCraft\Core\Util\Width::string($truncated);
+        if ($visualWidth >= $width) {
+            return $truncated;
         }
-        $pad = $width - $len;
+        $pad = $width - $visualWidth;
         return match ($align) {
-            Align::Start    => $text . \str_repeat(' ', $pad),
-            Align::End      => \str_repeat(' ', $pad) . $text,
-            Align::Center   => \str_repeat(' ', (int) \floor($pad / 2)) . $text . \str_repeat(' ', (int) \ceil($pad / 2)),
-            Align::Stretch  => $text . \str_repeat(' ', $pad),
+            Align::Start    => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
+            Align::End      => \SugarCraft\Core\Util\Width::padLeft($truncated, $width),
+            Align::Center   => \SugarCraft\Core\Util\Width::padCenter($truncated, $width),
+            Align::Stretch  => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
         };
     }
 
