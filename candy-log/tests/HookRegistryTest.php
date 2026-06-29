@@ -98,4 +98,34 @@ final class HookRegistryTest extends TestCase
         $this->assertSame('msg', $receivedMessage);
         $this->assertSame(['key' => 'val'], $receivedContext);
     }
+
+    public function testAddHookRegistersStructuredHook(): void
+    {
+        $registry = new HookRegistry();
+
+        // Create a concrete Hook implementation
+        $receivedLevel = null;
+        $receivedMessage = null;
+
+        $hook = new class($receivedLevel, $receivedMessage) implements Hook {
+            public function __construct(
+                private mixed &$levelRef,
+                private mixed &$msgRef,
+            ) {}
+
+            public function onLevel(Level $level, string $psrLevel, string $message, array $context): void
+            {
+                $this->levelRef = $level;
+                $this->msgRef = $message;
+            }
+        };
+
+        $id = $registry->addHook(Level::Info, $hook);
+        $this->assertIsInt($id);
+
+        $registry->fire(Level::Info, 'info', 'hello hook', []);
+
+        $this->assertSame(Level::Info, $receivedLevel);
+        $this->assertSame('hello hook', $receivedMessage);
+    }
 }
