@@ -9,6 +9,7 @@ use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\WindowSizeMsg;
 
 /**
  * Read-only dashboard Model. Loads the last `$days` days of
@@ -22,6 +23,8 @@ final class Dashboard implements Model
         public readonly \DateTimeImmutable $endDay,
         public readonly int $days = 7,
         public readonly Stats $stats = new Stats([], []),
+        public readonly ?int $width = null,
+        public readonly ?int $height = null,
     ) {}
 
     public static function start(Store $store, ?\DateTimeImmutable $endDay = null, int $days = 7): self
@@ -37,6 +40,16 @@ final class Dashboard implements Model
 
     public function update(Msg $msg): array
     {
+        if ($msg instanceof WindowSizeMsg) {
+            return [new self(
+                $this->store,
+                $this->endDay,
+                $this->days,
+                $this->stats,
+                $msg->cols,
+                $msg->rows,
+            ), null];
+        }
         if (!$msg instanceof KeyMsg) {
             return [$this, null];
         }
@@ -64,6 +77,12 @@ final class Dashboard implements Model
 
     public function reload(): self
     {
+        $this->store->invalidate();
+        return $this->recompute();
+    }
+
+    private function recompute(): self
+    {
         $from = $this->endDay->modify('-' . ($this->days - 1) . ' days');
         $beats = $this->store->loadRange($from, $this->endDay);
         return new self(
@@ -71,6 +90,8 @@ final class Dashboard implements Model
             $this->endDay,
             $this->days,
             Stats::compute($beats, $from, $this->endDay),
+            $this->width,
+            $this->height,
         );
     }
 
@@ -81,7 +102,7 @@ final class Dashboard implements Model
         if ($next > $today) {
             $next = $today;
         }
-        return (new self($this->store, $next, $this->days))->reload();
+        return (new self($this->store, $next, $this->days))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions

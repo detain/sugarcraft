@@ -10,11 +10,21 @@ use SugarCraft\Tick\Heartbeat;
  * Exports heartbeats as iCalendar (RFC 5545) format.
  * Each heartbeat becomes a VEVENT with the file path as the summary.
  */
-final readonly class IcalExporter
+final readonly class IcalExporter implements ExporterInterface
 {
     public function __construct(
         private string $prodId = '-//SugarCraft//sugar-tick//EN',
     ) {}
+
+    /**
+     * Escape a TEXT field value per RFC 5545.
+     */
+    private static function escapeText(string $v): string
+    {
+        $v = str_replace(['\\', ';', ','], ['\\\\', '\\;', '\\,'], $v);
+        $v = preg_replace('/\r\n|\r|\n/', '\\n', $v) ?? $v;
+        return $v;
+    }
 
     /**
      * Export heartbeats as iCal format.
@@ -40,15 +50,25 @@ final readonly class IcalExporter
             $lines[] = 'DTSTAMP:' . gmdate('Ymd\THis\Z');
             $lines[] = 'DTSTART:' . $start;
             $lines[] = 'DTEND:' . $end;
-            $lines[] = 'SUMMARY:' . $hb->file;
-            $lines[] = 'DESCRIPTION:Project: ' . $hb->project . ' | Language: ' . $hb->language;
+            $lines[] = 'SUMMARY:' . self::escapeText($hb->file);
+            $lines[] = 'DESCRIPTION:Project: ' . self::escapeText($hb->project) . ' | Language: ' . self::escapeText($hb->language);
             if ($hb->tags !== []) {
-                $lines[] = 'CATEGORIES:' . implode(',', $hb->tags);
+                $lines[] = 'CATEGORIES:' . implode(',', array_map(self::escapeText(...), $hb->tags));
             }
             $lines[] = 'END:VEVENT';
         }
 
         $lines[] = 'END:VCALENDAR';
         return implode("\r\n", $lines);
+    }
+
+    public function format(): string
+    {
+        return 'ics';
+    }
+
+    public function contentType(): string
+    {
+        return 'text/calendar';
     }
 }

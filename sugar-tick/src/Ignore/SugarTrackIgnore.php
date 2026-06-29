@@ -30,14 +30,15 @@ final class SugarTrackIgnore
             return new self([]);
         }
 
-        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $lines = file($path, FILE_IGNORE_NEW_LINES);
         if ($lines === false) {
             return new self([]);
         }
 
+        $lines = array_map('trim', $lines);
         $patterns = array_filter(
             $lines,
-            static fn(string $line): bool => !str_starts_with($line, '#'),
+            static fn(string $line): bool => $line !== '' && !str_starts_with($line, '#'),
         );
 
         return new self(array_values($patterns));

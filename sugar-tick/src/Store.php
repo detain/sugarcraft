@@ -19,6 +19,9 @@ use SugarCraft\Async\CancellationToken;
  */
 final class Store
 {
+    // memoization, not observable state
+    private array $dayCache = [];
+
     public function __construct(public readonly string $dir)
     {}
 
@@ -35,7 +38,11 @@ final class Store
     /** @return list<Heartbeat> */
     public function loadDay(\DateTimeImmutable $day): array
     {
-        $file = $this->dir . '/' . $day->format('Y-m-d') . '.jsonl';
+        $key = $day->format('Y-m-d');
+        if (isset($this->dayCache[$key])) {
+            return $this->dayCache[$key];
+        }
+        $file = $this->dir . '/' . $key . '.jsonl';
         if (!is_file($file)) {
             return [];
         }
@@ -48,6 +55,7 @@ final class Store
                 $rows[] = Heartbeat::fromArray($decoded);
             }
         }
+        $this->dayCache[$key] = $rows;
         return $rows;
     }
 
@@ -58,14 +66,20 @@ final class Store
      */
     public function loadRange(\DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
-        $rows = [];
+        $chunks = [];
         $cur = $from->setTime(0, 0);
         $end = $to->setTime(0, 0);
         while ($cur <= $end) {
-            $rows = array_merge($rows, $this->loadDay($cur));
+            $chunks[] = $this->loadDay($cur);
             $cur  = $cur->modify('+1 day');
         }
-        return $rows;
+        return array_merge([], ...$chunks);
+    }
+
+    /** Invalidate the day cache (forces reload on next loadDay). */
+    public function invalidate(): void
+    {
+        $this->dayCache = [];
     }
 
     /**
@@ -75,10 +89,9 @@ final class Store
      * @param CancellationToken|null $token  Optional cancellation token to abort the write
      * @throws \RuntimeException  If the write is cancelled or fails
      *
-     * @note CancellationToken provides best-effort detection only. PHP cannot
-     *       interrupt a blocking `file_put_contents()` mid-write — the token is
-     *       checked before the call and the callback fires after the I/O completes.
-     *       True pre-emptive cancellation requires a non-blocking/async rewrite.
+     * @note CancellationToken is checked immediately before the write.
+     *       If cancelled at that point the write is skipped and an exception is thrown.
+     *       PHP cannot interrupt a blocking `file_put_contents()` mid-write.
      */
     public function append(Heartbeat $hb, ?CancellationToken $token = null): void
     {
@@ -92,18 +105,11 @@ final class Store
         $file = $this->dir . '/' . date('Y-m-d', $hb->time) . '.jsonl';
         $line = json_encode($hb->toArray(), JSON_UNESCAPED_SLASHES) . "\n";
 
-        // Register cancellation callback before blocking I/O
-        $cancelled = false;
-        if ($token !== null) {
-            $token->onCancel(static function () use (&$cancelled): void {
-                $cancelled = true;
-            });
+        // Re-check cancellation immediately before the write
+        if ($token !== null && $token->isCancelled()) {
+            throw new \RuntimeException('Heartbeat append cancelled');
         }
 
         file_put_contents($file, $line, FILE_APPEND);
-
-        if ($cancelled) {
-            throw new \RuntimeException('Heartbeat append cancelled during I/O');
-        }
     }
 }

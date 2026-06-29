@@ -13,6 +13,7 @@ final class Heartbeat
 {
     /**
      * @param array<string> $tags  optional labels for this activity beat
+     * @throws \InvalidArgumentException  if time or duration is negative
      */
     public function __construct(
         public readonly int $time,        // unix seconds
@@ -21,7 +22,14 @@ final class Heartbeat
         public readonly string $file,
         public readonly int $duration = 60,  // seconds attributed to this beat
         public readonly array $tags = [],
-    ) {}
+    ) {
+        if ($time < 0) {
+            throw new \InvalidArgumentException('Heartbeat time must be non-negative');
+        }
+        if ($duration < 0) {
+            throw new \InvalidArgumentException('Heartbeat duration must be non-negative');
+        }
+    }
 
     public static function fromArray(array $row): self
     {
@@ -33,11 +41,11 @@ final class Heartbeat
         }
 
         return new self(
-            time:     (int)   ($row['time']     ?? time()),
+            time:     max(0, (int)   ($row['time']     ?? time())),
             project:  (string)($row['project']  ?? 'unknown'),
             language: (string)($row['language'] ?? 'unknown'),
             file:     (string)($row['file']     ?? ''),
-            duration: (int)   ($row['duration'] ?? 60),
+            duration: max(0, (int)   ($row['duration'] ?? 60)),
             tags:     $tags,
         );
     }
