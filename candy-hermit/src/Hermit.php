@@ -512,6 +512,8 @@ final class Hermit
             // ANSI-aware truncate + pad: a matchStyle-highlighted item keeps its
             // escape sequences and the box edge stays straight (the old
             // mb_substr/str_pad counted escape bytes as visible columns).
+            // Sanitize: strip control bytes (newline/cr) that break one-line-per-row invariant
+            $itemStr = \str_replace(["\r\n", "\r", "\n"], ' ', $itemStr);
             $itemStr = Width::padRight(Width::truncateAnsi($itemStr, $winWidth), $winWidth);
             $lines[] = $itemStr;
         }

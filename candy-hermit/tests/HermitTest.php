@@ -445,4 +445,24 @@ final class HermitTest extends TestCase
         $this->assertStringContainsString('Esc: close', $result, 'HelpBar content should appear');
         $this->assertStringContainsString('3 of 12', $result, 'StatusBar content should appear');
     }
+
+    public function testItemWithEmbeddedNewlineDoesNotInjectRows(): void
+    {
+        // An item value containing an embedded newline should be sanitized
+        // to a space, so it doesn't inject extra rows in the output.
+        $h = Hermit::new([new FilteredItem(1, "foo\nbar")])
+            ->setWindowHeight(3)
+            ->setWindowWidth(40)
+            ->show();
+
+        $bg = implode("\n", array_fill(0, 3, str_repeat(' ', 40)));
+        $result = $h->View($bg);
+        $resultLines = explode("\n", rtrim($result, "\n"));
+
+        // The overlay should not inject extra rows - still 3 lines like the background.
+        $this->assertSame(3, count($resultLines), 'overlay should not inject rows from embedded newline');
+        // The sanitized item should show 'foo' (newline replaced with space, becoming 'foo bar')
+        $this->assertStringContainsString('foo', $result, 'item value should be present');
+        $this->assertStringNotContainsString("foo\nbar", $result, 'raw newline should not appear in output');
+    }
 }
