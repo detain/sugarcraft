@@ -4,8 +4,409 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d0c96e0a68bc8785461f9ed28dbfda53",
-    "packages": [],
+    "content-hash": "9851cf2d43b75b9e62b7cd1050fad4a6",
+    "packages": [
+        {
+            "name": "react/event-loop",
+            "version": "v1.6.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/event-loop.git",
+                "reference": "ba276bda6083df7e0050fd9b33f66ad7a4ac747a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/event-loop/zipball/ba276bda6083df7e0050fd9b33f66ad7a4ac747a",
+                "reference": "ba276bda6083df7e0050fd9b33f66ad7a4ac747a",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=5.3.0"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^9.6 || ^5.7 || ^4.8.36"
+            },
+            "suggest": {
+                "ext-pcntl": "For signal handling support when using the StreamSelectLoop"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "React\\EventLoop\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "ReactPHP's core reactor event loop that libraries can use for evented I/O.",
+            "keywords": [
+                "asynchronous",
+                "event-loop"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/event-loop/issues",
+                "source": "https://github.com/reactphp/event-loop/tree/v1.6.0"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2025-11-17T20:46:25+00:00"
+        },
+        {
+            "name": "react/promise",
+            "version": "v3.3.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/reactphp/promise.git",
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/reactphp/promise/zipball/23444f53a813a3296c1368bb104793ce8d88f04a",
+                "reference": "23444f53a813a3296c1368bb104793ce8d88f04a",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=7.1.0"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "1.12.28 || 1.4.10",
+                "phpunit/phpunit": "^9.6 || ^7.5"
+            },
+            "type": "library",
+            "autoload": {
+                "files": [
+                    "src/functions_include.php"
+                ],
+                "psr-4": {
+                    "React\\Promise\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jan Sorgalla",
+                    "email": "jsorgalla@gmail.com",
+                    "homepage": "https://sorgalla.com/"
+                },
+                {
+                    "name": "Christian Lück",
+                    "email": "christian@clue.engineering",
+                    "homepage": "https://clue.engineering/"
+                },
+                {
+                    "name": "Cees-Jan Kiewiet",
+                    "email": "reactphp@ceesjankiewiet.nl",
+                    "homepage": "https://wyrihaximus.net/"
+                },
+                {
+                    "name": "Chris Boden",
+                    "email": "cboden@gmail.com",
+                    "homepage": "https://cboden.dev/"
+                }
+            ],
+            "description": "A lightweight implementation of CommonJS Promises/A for PHP",
+            "keywords": [
+                "promise",
+                "promises"
+            ],
+            "support": {
+                "issues": "https://github.com/reactphp/promise/issues",
+                "source": "https://github.com/reactphp/promise/tree/v3.3.0"
+            },
+            "funding": [
+                {
+                    "url": "https://opencollective.com/reactphp",
+                    "type": "open_collective"
+                }
+            ],
+            "time": "2025-08-19T18:57:03+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-ansi",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-ansi.git",
+                "reference": "06dd5d6717ac0eebcb6103a71e9e1134ffb61b93"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-ansi/zipball/06dd5d6717ac0eebcb6103a71e9e1134ffb61b93",
+                "reference": "06dd5d6717ac0eebcb6103a71e9e1134ffb61b93",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Ansi\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "ECMA-48 VT500 state machine — ANSI byte-stream parser with abstract Handler interface. Shared extraction from candy-vt.",
+            "homepage": "https://github.com/sugarcraft/candy-ansi",
+            "keywords": [
+                "ansi",
+                "charmbracelet",
+                "ecma-48",
+                "parser",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "vt500"
+            ],
+            "support": {
+                "docs": "https://github.com/sugarcraft/candy-ansi/blob/master/README.md",
+                "issues": "https://github.com/sugarcraft/candy-ansi/issues",
+                "source": "https://github.com/sugarcraft/candy-ansi"
+            },
+            "time": "2026-06-29T01:21:12+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-async",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-async.git",
+                "reference": "e683cfb71168845eb1a27f73deb8e10cde95bf1e"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-async/zipball/e683cfb71168845eb1a27f73deb8e10cde95bf1e",
+                "reference": "e683cfb71168845eb1a27f73deb8e10cde95bf1e",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-core": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5"
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Async\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "Shared async utilities for SugarCraft — cancellation tokens, subscriptions, and AsyncOps helpers (withTimeout, retry, debounce, throttle) built on ReactPHP.",
+            "homepage": "https://github.com/sugarcraft/candy-async",
+            "keywords": [
+                "async",
+                "cancellation",
+                "event-loop",
+                "promise",
+                "reactphp",
+                "sugarcraft"
+            ],
+            "support": {
+                "docs": "https://github.com/sugarcraft/candy-async/blob/master/README.md",
+                "issues": "https://github.com/sugarcraft/candy-async/issues",
+                "source": "https://github.com/sugarcraft/candy-async"
+            },
+            "time": "2026-06-29T01:21:48+00:00"
+        },
+        {
+            "name": "sugarcraft/candy-core",
+            "version": "dev-master",
+            "dist": {
+                "type": "path",
+                "url": "../candy-core",
+                "reference": "d400b0a062454887b52c008dc781542948ed50b1"
+            },
+            "require": {
+                "php": "^8.3",
+                "react/event-loop": "^1.6",
+                "react/promise": "^3.3",
+                "sugarcraft/candy-async": "dev-master",
+                "sugarcraft/candy-pty": "dev-master"
+            },
+            "require-dev": {
+                "phpstan/phpstan": "^2.1",
+                "phpstan/phpstan-phpunit": "^2.0",
+                "phpunit/phpunit": "^10.5"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Core\\": "src/"
+                }
+            },
+            "autoload-dev": {
+                "psr-4": {
+                    "SugarCraft\\Core\\Tests\\": "tests/"
+                }
+            },
+            "scripts": {
+                "analyse": [
+                    "vendor/bin/phpstan analyse src --no-progress"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/bubbletea — Elm-architecture TUI runtime.",
+            "homepage": "https://github.com/sugarcraft/candy-core",
+            "keywords": [
+                "ansi",
+                "bubble-tea",
+                "bubbletea",
+                "cli",
+                "console",
+                "elm",
+                "elm-architecture",
+                "react-php",
+                "sugarcraft",
+                "terminal",
+                "tui"
+            ],
+            "support": {
+                "issues": "https://github.com/sugarcraft/candy-core/issues",
+                "source": "https://github.com/sugarcraft/candy-core",
+                "docs": "https://sugarcraft.github.io/lib/candy-core.html"
+            },
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "sugarcraft/candy-pty",
+            "version": "dev-master",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/sugarcraft/candy-pty.git",
+                "reference": "d54786314366b5452d99744e9450033af9cdfa7b"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/sugarcraft/candy-pty/zipball/d54786314366b5452d99744e9450033af9cdfa7b",
+                "reference": "d54786314366b5452d99744e9450033af9cdfa7b",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ffi": "*",
+                "php": "^8.3",
+                "sugarcraft/candy-ansi": "dev-master",
+                "sugarcraft/candy-core": "dev-master",
+                "sugarcraft/candy-input": "dev-master"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^10.5",
+                "react/event-loop": "^1.6",
+                "sugarcraft/candy-vcr": "dev-master",
+                "sugarcraft/candy-vt": "dev-master"
+            },
+            "suggest": {
+                "ext-pcntl": "Enables cleaner SIGCHLD reaping and signal-driven resize forwarding; the lib polls waitpid() when pcntl is absent."
+            },
+            "default-branch": true,
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "SugarCraft\\Pty\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Joe Huss",
+                    "email": "detain@interserver.net",
+                    "role": "Maintainer"
+                }
+            ],
+            "description": "PHP port of charmbracelet/x/xpty — pseudo-terminal abstraction (open / spawn / resize) for SugarCraft. Linux + macOS via FFI to libc.",
+            "homepage": "https://github.com/sugarcraft/candy-pty",
+            "keywords": [
+                "cli",
+                "ffi",
+                "libc",
+                "posix",
+                "pseudo-terminal",
+                "pty",
+                "sugarcraft",
+                "terminal",
+                "tui",
+                "xpty"
+            ],
+            "support": {
+                "docs": "https://sugarcraft.github.io/lib/candy-pty.html",
+                "issues": "https://github.com/sugarcraft/candy-pty/issues",
+                "source": "https://github.com/sugarcraft/candy-pty"
+            },
+            "time": "2026-06-29T02:08:09+00:00"
+        }
+    ],
     "packages-dev": [
         {
             "name": "myclabs/deep-copy",
@@ -1679,12 +2080,14 @@
     ],
     "aliases": [],
     "minimum-stability": "dev",
-    "stability-flags": {},
+    "stability-flags": {
+        "sugarcraft/candy-core": 20
+    },
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
         "php": "^8.3"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.6.0"
+    "plugin-api-version": "2.9.0"
 }
