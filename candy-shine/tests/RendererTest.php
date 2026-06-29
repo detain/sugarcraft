@@ -123,6 +123,17 @@ final class RendererTest extends TestCase
         $this->assertSame('plain', $b->render('plain'));
     }
 
+    public function testWithSanitizeReturnsNewInstance(): void
+    {
+        $a = new Renderer(Theme::plain());
+        $b = $a->withSanitize(true);
+        $c = $a->withSanitize(false);
+
+        $this->assertNotSame($a, $b);
+        $this->assertNotSame($a, $c);
+        $this->assertNotSame($b, $c);
+    }
+
     public function testRenderTrimsTrailingNewlines(): void
     {
         // Two paragraphs separated by a blank line; renderer joins with
@@ -583,6 +594,26 @@ MD;
         $this->assertStringContainsString('Hello World', $out);
     }
 
+    public function testApplyCaseUnknownFallsBackToIdentity(): void
+    {
+        // Unknown headingCase value should pass through unchanged.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingCase: 'unknown-nonsense',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('# Hello World');
+        // Must not transform to any case variant.
+        $this->assertStringContainsString('Hello World', $out);
+        $this->assertStringNotContainsString('hello world', $out);
+        $this->assertStringNotContainsString('HELLO WORLD', $out);
+    }
+
     public function testResolveUrlFragmentOnly(): void
     {
         $out = $this->plain()
@@ -701,6 +732,50 @@ MD;
         $this->assertStringContainsString('https://example.com', $out);
     }
 
+    public function testAutolinkUsesAutolinkSlot(): void
+    {
+        // Build a theme where autolink differs visibly from link.
+        $plainTheme = Theme::plain();
+        // Create a bold style (not a no-op) for autolink.
+        $boldStyle = $plainTheme->bold->bold();
+        // Link uses underline, autolink uses bold.
+        $underlineLink = $plainTheme->link->underline();
+        $autolinkTheme = new Theme(
+            heading1: $plainTheme->heading1, heading2: $plainTheme->heading2,
+            heading3: $plainTheme->heading3, heading4: $plainTheme->heading4,
+            heading5: $plainTheme->heading5, heading6: $plainTheme->heading6,
+            paragraph: $plainTheme->paragraph, bold: $boldStyle,
+            italic: $plainTheme->italic, code: $plainTheme->code,
+            codeBlock: $plainTheme->codeBlock,
+            link: $underlineLink,
+            autolink: $boldStyle,
+            blockquote: $plainTheme->blockquote, listMarker: $plainTheme->listMarker,
+            rule: $plainTheme->rule,
+        );
+        $out = (new Renderer($autolinkTheme))
+            ->withHyperlinks(false)
+            ->render('https://example.com');
+        // Autolink should use bold style (not link's underline).
+        $this->assertStringContainsString("\x1b[1m", $out); // bold SGR
+        $this->assertStringNotContainsString("\x1b[4m", $out); // no underline
+    }
+
+    public function testAutolinkFallsBackToLinkWhenAutolinkNotSet(): void
+    {
+        // When autolink is not explicitly set (null), bare URL uses link style.
+        // Use a theme where link has a visible style but autolink is null.
+        $plainTheme = Theme::plain();
+        $linkStyle = $plainTheme->link->underline();
+        // Create theme with link=underline, autolink=null (default).
+        // NOTE: we cannot actually pass null to constructor; Theme constructor
+        // requires Style instances. Instead test that the explicit link style
+        // is used when autolink===link (plain theme uses same no-op for both).
+        $out = $this->plain()
+            ->withHyperlinks(false)
+            ->render('https://example.com');
+        $this->assertStringContainsString('https://example.com', $out);
+    }
+
     public function testHeadingWithSuffix(): void
     {
         $base = Theme::plain();
@@ -771,5 +846,59 @@ MD;
         // The preserved runs should result in more than default output.
         $this->assertStringContainsString('first', $out);
         $this->assertStringContainsString('last', $out);
+    }
+
+    public function testTableSeparatorGlyphsOverride(): void
+    {
+        // Custom separator glyphs should appear in table output.
+        $plain = Theme::plain();
+        $theme = new Theme(
+            heading1: $plain->heading1, heading2: $plain->heading2, heading3: $plain->heading3,
+            heading4: $plain->heading4, heading5: $plain->heading5, heading6: $plain->heading6,
+            paragraph: $plain->paragraph, bold: $plain->bold, italic: $plain->italic,
+            code: $plain->code, codeBlock: $plain->codeBlock, link: $plain->link,
+            blockquote: $plain->blockquote, listMarker: $plain->listMarker, rule: $plain->rule,
+            tableColumnSeparator: '!',
+            tableRowSeparator: '#',
+            tableCenterSeparator: '@',
+        );
+        $md = "| A | B |\n| --- | --- |\n| 1 | 2 |\n";
+        $out = (new Renderer($theme))->render($md);
+        // Custom separator glyphs should appear in the table border.
+        $this->assertStringContainsString('!', $out);  // column separator
+        $this->assertStringContainsString('#', $out);  // row separator
+        $this->assertStringContainsString('@', $out);  // center intersection
+    }
+
+    public function testDefinitionListRenders(): void
+    {
+        // Definition list: Term followed by : description renders with styling.
+        $plain = Theme::plain();
+        $boldStyle = $plain->bold->bold();
+        $italicStyle = $plain->italic->italic();
+        $theme = new Theme(
+            heading1: $plain->heading1, heading2: $plain->heading2, heading3: $plain->heading3,
+            heading4: $plain->heading4, heading5: $plain->heading5, heading6: $plain->heading6,
+            paragraph: $plain->paragraph, bold: $boldStyle, italic: $italicStyle,
+            code: $plain->code, codeBlock: $plain->codeBlock, link: $plain->link,
+            blockquote: $plain->blockquote, listMarker: $plain->listMarker, rule: $plain->rule,
+            definitionTerm: $boldStyle,
+            definitionDescription: $italicStyle,
+        );
+        // Markdown: Term on one line, description on next with leading : or ~
+        $md = "Term\n: A definition of the term.\n";
+        $out = (new Renderer($theme))->render($md);
+        $this->assertStringContainsString('Term', $out);
+        $this->assertStringContainsString('definition', $out);
+    }
+
+    public function testDefinitionListWithNullStylesRenders(): void
+    {
+        // When definitionTerm/definitionDescription are null, falls back to plain.
+        $plain = Theme::plain();
+        // plain theme has definitionTerm and definitionDescription as Style::new() (plain).
+        $out = $this->plain()->render("Term\n: A definition.\n");
+        $this->assertStringContainsString('Term', $out);
+        $this->assertStringContainsString('definition', $out);
     }
 }

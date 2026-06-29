@@ -170,12 +170,6 @@ final class Theme
          * Block-level suffix appended once after the document body.
          */
         public readonly string $documentBlockSuffix = '',
-        /**
-         * Per-element conceal flag: when true, suppresses the element
-         * type from emit. Used by Notty / ASCII themes to skip emoji.
-         * Currently a no-op placeholder that callers can branch on.
-         */
-        public readonly bool $conceal = false,
     ) {}
 
     /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
@@ -560,6 +554,9 @@ final class Theme
      */
     public static function fromJson(string $path): self
     {
+        if (!is_file($path)) {
+            throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
+        }
         $raw = @file_get_contents($path);
         if ($raw === false) {
             throw new \RuntimeException(Lang::t('theme.read_failed', ['path' => $path]));
@@ -647,10 +644,26 @@ final class Theme
             return Color::hex($spec);
         }
         if (str_starts_with($spec, 'ansi256:')) {
-            return Color::ansi256((int) substr($spec, 8));
+            $num = substr($spec, 8);
+            if (!preg_match('/^\d+$/', $num)) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            $val = (int) $num;
+            if ($val < 0 || $val > 255) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            return Color::ansi256($val);
         }
         if (str_starts_with($spec, 'ansi:')) {
-            return Color::ansi((int) substr($spec, 5));
+            $num = substr($spec, 5);
+            if (!preg_match('/^\d+$/', $num)) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            $val = (int) $num;
+            if ($val < 0 || $val > 15) {
+                throw new \InvalidArgumentException(Lang::t('theme.bad_color', ['spec' => $spec]));
+            }
+            return Color::ansi($val);
         }
         return null;
     }

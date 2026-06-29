@@ -41,6 +41,10 @@ use League\CommonMark\Extension\Table\TableRow;
 use League\CommonMark\Extension\Table\TableSection;
 use League\CommonMark\Extension\TaskList\TaskListExtension;
 use League\CommonMark\Extension\TaskList\TaskListItemMarker;
+use League\CommonMark\Extension\DescriptionList\DescriptionList as MdDescriptionList;
+use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
+use League\CommonMark\Extension\DescriptionList\Node\Description;
+use League\CommonMark\Extension\DescriptionList\Node\DescriptionTerm;
 use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Newline;
 use League\CommonMark\Node\Inline\Text;
@@ -67,6 +71,8 @@ final class Renderer
     private readonly bool $inlineTableLinks;
     private readonly bool $preservedNewLines;
     private readonly bool $expandEmoji;
+    private readonly bool $sanitize;
+    private readonly bool $textIsPlain;
     private bool $inTableCell = false;
 
     /** Active block context stack for indent/width computation. */
@@ -84,6 +90,7 @@ final class Renderer
         bool $inlineTableLinks = true,
         bool $preservedNewLines = false,
         bool $expandEmoji = false,
+        bool $sanitize = true,
     ) {
         $this->theme = $theme ?? Theme::ansi();
         $this->wrapWidth = ($wrapWidth !== null && $wrapWidth > 0) ? $wrapWidth : null;
@@ -93,6 +100,8 @@ final class Renderer
         $this->inlineTableLinks = $inlineTableLinks;
         $this->preservedNewLines = $preservedNewLines;
         $this->expandEmoji = $expandEmoji;
+        $this->sanitize = $sanitize;
+        $this->textIsPlain = $this->theme->text === null || $this->isPlainStyle($this->theme->text);
 
         $env = new Environment();
         $env->addExtension(new CommonMarkCoreExtension());
@@ -100,6 +109,7 @@ final class Renderer
         $env->addExtension(new TaskListExtension());
         $env->addExtension(new StrikethroughExtension());
         $env->addExtension(new AutolinkExtension());
+        $env->addExtension(new DescriptionListExtension());
         $this->parser = new MarkdownParser($env);
     }
 
@@ -223,7 +233,7 @@ final class Renderer
     /**
      * Expand `:smile:`-style emoji shortcodes in source Markdown
      * before parsing. Default off; on, the renderer rewrites every
-     * `:shortcode:` token using the {@see EmojiMap} catalogue. Unknown
+     * `:shortcode:` token using the built-in shortcode map. Unknown
      * shortcodes pass through verbatim.
      *
      * Mirrors glamour's `WithEmoji`.
@@ -231,6 +241,24 @@ final class Renderer
     public function withEmoji(bool $on = true): self
     {
         return $this->copy(expandEmoji: $on);
+    }
+
+    /**
+     * Strip C0 / ESC control bytes from source-derived text before
+     * emitting it. Enabled by default; disable when rendering trusted
+     * input where control characters must be preserved. Mirrors the
+     * TUI render invariant that renderer output contains only intended
+     * SGR escapes, not raw ANSI controls from the source document.
+     */
+    public function withSanitize(bool $on = true): self
+    {
+        return $this->copy(sanitize: $on);
+    }
+
+    // Short-form alias.
+    public function sanitize(bool $on = true): self
+    {
+        return $this->withSanitize($on);
     }
 
     // Short-form aliases.
@@ -254,6 +282,7 @@ final class Renderer
         ?bool $inlineTableLinks = null,
         ?bool $preservedNewLines = null,
         ?bool $expandEmoji = null,
+        ?bool $sanitize = null,
     ): self {
         return new self(
             $theme            ?? $this->theme,
@@ -264,6 +293,7 @@ final class Renderer
             $inlineTableLinks ?? $this->inlineTableLinks,
             $preservedNewLines ?? $this->preservedNewLines,
             $expandEmoji      ?? $this->expandEmoji,
+            $sanitize         ?? $this->sanitize,
         );
     }
 
@@ -281,7 +311,6 @@ final class Renderer
         $this->blockStack->push(new BlockContext(
             BlockKind::Document,
             depth: 0,
-            availableWidth: $this->wrapWidth ?? 80,
             accumulatedIndent: 0,
             cascadedStyle: $this->theme->paragraph ?? Style::new(),
         ));
@@ -319,14 +348,6 @@ final class Renderer
     }
 
     /**
-     * Extract sequences of 3+ consecutive newlines from the source,
-     * recording the count for each match. Used by
-     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
-     * collapses on parse.
-     *
-     * @return list<int> list of blank-line counts, in source order
-     */
-    /**
      * Replace `:shortcode:` tokens with their Unicode equivalent
      * before parsing. Mirrors glamour's `WithEmoji` expansion. Unknown
      * shortcodes pass through verbatim. Map matches the gum format
@@ -352,6 +373,14 @@ final class Renderer
         );
     }
 
+    /**
+     * Extract sequences of 3+ consecutive newlines from the source,
+     * recording the count for each match. Used by
+     * {@see withPreservedNewLines()} to re-inflate runs that CommonMark
+     * collapses on parse.
+     *
+     * @return list<int> list of blank-line counts, in source order
+     */
     private static function extractBlankRuns(string $source): array
     {
         $out = [];
@@ -392,18 +421,21 @@ final class Renderer
             $node instanceof Heading       => $this->renderHeading($node),
             $node instanceof Paragraph     => $this->renderParagraph($node),
             $node instanceof FencedCode    => $this->renderFencedCode($node) . "\n\n",
-            $node instanceof IndentedCode  => $this->theme->codeBlock->render(rtrim($node->getLiteral(), "\n")) . "\n\n",
+            $node instanceof IndentedCode  => $this->renderIndent($node),
             $node instanceof BlockQuote    => $this->renderBlockQuote($node),
             $node instanceof ListBlock     => $this->renderList($node),
             $node instanceof ListItem      => $this->renderListItem($node),
             $node instanceof MdTable       => $this->renderTable($node),
+            $node instanceof MdDescriptionList => $this->renderDescriptionList($node),
+            $node instanceof DescriptionTerm => $this->renderDescriptionTerm($node),
+            $node instanceof Description    => $this->renderDescription($node),
             $node instanceof ThematicBreak => $this->theme->rule->render(
                 str_repeat($this->theme->horizontalRuleGlyph, max(1, $this->theme->horizontalRuleLength))
             ) . "\n\n",
             $node instanceof Strong        => $this->theme->bold->render($this->renderChildren($node)),
             $node instanceof Emphasis      => $this->theme->italic->render($this->renderChildren($node)),
             $node instanceof Strikethrough => $this->renderStrike($node),
-            $node instanceof Code          => $this->theme->code->render($node->getLiteral()),
+            $node instanceof Code          => $this->renderCode($node),
             $node instanceof Link          => $this->renderLink($node),
             $node instanceof Image         => $this->renderImage($node),
             $node instanceof HtmlBlock     => $this->renderHtmlBlock($node),
@@ -416,12 +448,43 @@ final class Renderer
         };
     }
 
+    /**
+     * Strip C0 control bytes (except tab / newline) and ESC from a
+     * source-derived string. This closes the ANSI-injection vector
+     * while preserving legitimate formatting whitespace.
+     *
+     * Mirrors charmbracelet/glamour TUI render invariant.
+     */
+    private static function stripControls(string $s): string
+    {
+        // Remove C0 controls except \t (0x09) and \n (0x0a); also strip ESC (0x1b).
+        return preg_replace('/[\x00-\x08\x0b-\x1f\x7f]/', '', $s);
+    }
+
     private function renderText(string $literal): string
     {
-        if ($this->theme->text !== null && !$this->isPlainStyle($this->theme->text)) {
-            return $this->theme->text->render($literal);
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
         }
-        return $literal;
+        return $this->textIsPlain ? $literal : $this->theme->text->render($literal);
+    }
+
+    private function renderCode(Code $node): string
+    {
+        $literal = $node->getLiteral();
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        return $this->theme->code->render($literal);
+    }
+
+    private function renderIndent(IndentedCode $node): string
+    {
+        $literal = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
+        return $this->theme->codeBlock->render($literal) . "\n\n";
     }
 
     private function isPlainStyle(\SugarCraft\Sprinkles\Style $s): bool
@@ -455,30 +518,54 @@ final class Renderer
     /**
      * Apply {@see withBaseURL()} to a relative link / image target.
      * Absolute URLs (any scheme, or `//host/...`) pass through unchanged.
+     * URLs always have control bytes stripped before return — C0 / ESC /
+     * BEL can break the OSC-8 envelope so they are removed unconditionally
+     * (URLs never legitimately contain them).
      */
     private function resolveUrl(string $url): string
     {
         if ($this->baseUrl === null || $url === '') {
-            return $url;
+            return self::safeUrl($url);
         }
         if (preg_match('#^(?:[a-z][a-z0-9+.\-]*:|//)#i', $url) || str_starts_with($url, '#')) {
             // Has scheme, protocol-relative, or fragment-only — leave alone.
-            return $url;
+            return self::safeUrl($url);
         }
-        return $this->baseUrl . ltrim($url, '/');
+        return self::safeUrl($this->baseUrl . ltrim($url, '/'));
+    }
+
+    /**
+     * Strip C0 / ESC / BEL from a URL. These bytes cannot appear in a
+     * well-formed URI and would break the OSC-8 hyperlink envelope or
+     * inject spurious control sequences into the terminal. Applied
+     * unconditionally in resolveUrl for defence-in-depth.
+     *
+     * Mirrors charmbracelet/glamour URL sanitisation.
+     */
+    private static function safeUrl(string $url): string
+    {
+        // Remove C0 controls + ESC + BEL.
+        return preg_replace('/[\x00-\x1f\x7f]/', '', $url);
     }
 
     private function renderHtmlBlock(HtmlBlock $node): string
     {
         $literal = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
         $style = $this->theme->htmlBlock ?? \SugarCraft\Sprinkles\Style::new();
         return $style->render($literal) . "\n\n";
     }
 
     private function renderHtmlSpan(HtmlInline $node): string
     {
+        $literal = $node->getLiteral();
+        if ($this->sanitize) {
+            $literal = self::stripControls($literal);
+        }
         $style = $this->theme->htmlSpan ?? \SugarCraft\Sprinkles\Style::new();
-        return $style->render($node->getLiteral());
+        return $style->render($literal);
     }
 
     private function renderParagraph(Paragraph $node): string
@@ -493,7 +580,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::Paragraph,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
@@ -524,6 +610,9 @@ final class Renderer
     private function renderFencedCode(FencedCode $node): string
     {
         $body = rtrim($node->getLiteral(), "\n");
+        if ($this->sanitize) {
+            $body = self::stripControls($body);
+        }
         $lang = trim($node->getInfo() ?? '');
         // No language hint → emit as plain code-block. With a hint,
         // route through the syntax highlighter; unknown languages
@@ -546,7 +635,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::Heading,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
@@ -602,7 +690,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::BlockQuote,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentIndent + 2,
             cascadedStyle: $cascadedStyle,
         );
@@ -637,7 +724,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::ListItem,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: ($parentCtx?->accumulatedIndent ?? 0),
             cascadedStyle: $cascadedStyle,
         );
@@ -662,7 +748,6 @@ final class Renderer
         $newCtx = new BlockContext(
             BlockKind::List,
             depth: $depth + 1,
-            availableWidth: $this->blockStack->availableWidth($this->wrapWidth ?? 80),
             accumulatedIndent: $parentCtx?->accumulatedIndent ?? 0,
             cascadedStyle: $cascadedStyle,
         );
@@ -726,7 +811,10 @@ final class Renderer
         $showSuffix  = !$insideTable || $this->inlineTableLinks;
 
         if ($text === '' || $text === $url) {
-            $rendered = $this->theme->link->render($url);
+            // Autolink case: bare URL rendered as link text.
+            // Prefer the dedicated autolink slot; fall back to link style.
+            $style = $this->theme->autolink ?? $this->theme->link;
+            $rendered = $style->render($url);
             return $hyperlinks
                 ? Ansi::hyperlink($url, $rendered)
                 : $rendered;
@@ -791,7 +879,7 @@ final class Renderer
                 }
             }
         }
-        $st = SprinklesTable::new()->border(Border::rounded());
+        $st = SprinklesTable::new()->border($this->buildTableBorder());
         if ($headers !== []) {
             $st = $st->headers(...$headers);
         }
@@ -799,6 +887,52 @@ final class Renderer
             $st = $st->row(...$r);
         }
         return $st->render() . "\n\n";
+    }
+
+    /**
+     * Build a Border using theme table-separator glyphs but preserving
+     * the rounded corner style from Border::rounded().
+     */
+    private function buildTableBorder(): Border
+    {
+        $r = Border::rounded();
+        return new Border(
+            $r->top,
+            $r->bottom,
+            $r->left,
+            $r->right,
+            $r->topLeft,
+            $r->topRight,
+            $r->bottomLeft,
+            $r->bottomRight,
+            // Override interior separators from theme glyphs.
+            middleLeft: $this->theme->tableColumnSeparator,
+            middleRight: $this->theme->tableColumnSeparator,
+            middle: $this->theme->tableCenterSeparator,
+            middleTop: $this->theme->tableRowSeparator,
+            middleBottom: $this->theme->tableRowSeparator,
+        );
+    }
+
+    private function renderDescriptionList(MdDescriptionList $list): string
+    {
+        $inner = $this->renderChildren($list);
+        $style = $this->theme->definitionList;
+        return $style !== null ? $style->render($inner) : $inner;
+    }
+
+    private function renderDescriptionTerm(DescriptionTerm $term): string
+    {
+        $body = $this->renderChildren($term);
+        $style = $this->theme->definitionTerm ?? Style::new();
+        return $style->render($body);
+    }
+
+    private function renderDescription(Description $desc): string
+    {
+        $body = $this->renderChildren($desc);
+        $style = $this->theme->definitionDescription ?? Style::new();
+        return $style->render($body) . "\n\n";
     }
 
     /**
