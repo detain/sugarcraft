@@ -365,4 +365,57 @@ final class BoardTest extends TestCase
         // revealedCount must grow beyond the pre-chord baseline of 1.
         $this->assertGreaterThan(1, $next->revealedCount, 'Cascade must reveal more than one cell');
     }
+
+    // ─── Serialization hardening (Step 7) ─────────────────────────────────
+
+    public function testUnserializeRejectsShortRow(): void
+    {
+        // Row 0 has only 2 cells instead of the declared width 3.
+        $payload = json_encode([
+            'v' => 1, 'w' => 3, 'h' => 2, 'm' => 1,
+            'p' => true, 'e' => false, 'r' => 0,
+            'c' => [
+                [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+                [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            ],
+        ]);
+        $this->expectException(\InvalidArgumentException::class);
+        Board::unserialize($payload);
+    }
+
+    public function testUnserializeRejectsWrongRowCount(): void
+    {
+        // Declares h=3 but only provides 2 rows.
+        $payload = json_encode([
+            'v' => 1, 'w' => 3, 'h' => 3, 'm' => 1,
+            'p' => true, 'e' => false, 'r' => 0,
+            'c' => [
+                [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+                [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            ],
+        ]);
+        $this->expectException(\InvalidArgumentException::class);
+        Board::unserialize($payload);
+    }
+
+    public function testUnserializeRecomputesRevealedCount(): void
+    {
+        // Serialize a board, then tamper the 'r' field to a wrong value.
+        $rand = static fn(int $max): int => 0;
+        $original = Board::blank(5, 5, 3)->reveal(2, 2, $rand);
+        $this->assertFalse($original->isWon());  // baseline: not won
+
+        $serialized = $original->serialize();
+        $decoded = json_decode($serialized, true);
+        // Inflate revealedCount to try to force a false win.
+        $decoded['r'] = 999;
+        $tampered = json_encode($decoded);
+
+        $restored = Board::unserialize($tampered);
+
+        // The tampered value must be ignored; revealedCount reflects actual cell state.
+        $this->assertSame($original->revealedCount, $restored->revealedCount);
+        // isWon() must reflect reality, not the tampered counter.
+        $this->assertSame($original->isWon(), $restored->isWon());
+    }
 }
