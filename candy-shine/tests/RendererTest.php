@@ -838,4 +838,36 @@ MD;
         $this->assertStringContainsString('#', $out);  // row separator
         $this->assertStringContainsString('@', $out);  // center intersection
     }
+
+    public function testDefinitionListRenders(): void
+    {
+        // Definition list: Term followed by : description renders with styling.
+        $plain = Theme::plain();
+        $boldStyle = $plain->bold->bold();
+        $italicStyle = $plain->italic->italic();
+        $theme = new Theme(
+            heading1: $plain->heading1, heading2: $plain->heading2, heading3: $plain->heading3,
+            heading4: $plain->heading4, heading5: $plain->heading5, heading6: $plain->heading6,
+            paragraph: $plain->paragraph, bold: $boldStyle, italic: $italicStyle,
+            code: $plain->code, codeBlock: $plain->codeBlock, link: $plain->link,
+            blockquote: $plain->blockquote, listMarker: $plain->listMarker, rule: $plain->rule,
+            definitionTerm: $boldStyle,
+            definitionDescription: $italicStyle,
+        );
+        // Markdown: Term on one line, description on next with leading : or ~
+        $md = "Term\n: A definition of the term.\n";
+        $out = (new Renderer($theme))->render($md);
+        $this->assertStringContainsString('Term', $out);
+        $this->assertStringContainsString('definition', $out);
+    }
+
+    public function testDefinitionListWithNullStylesRenders(): void
+    {
+        // When definitionTerm/definitionDescription are null, falls back to plain.
+        $plain = Theme::plain();
+        // plain theme has definitionTerm and definitionDescription as Style::new() (plain).
+        $out = $this->plain()->render("Term\n: A definition.\n");
+        $this->assertStringContainsString('Term', $out);
+        $this->assertStringContainsString('definition', $out);
+    }
 }
