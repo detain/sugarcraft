@@ -21,7 +21,6 @@ PHP port of [76creates/stickers](https://github.com/76creates/stickers) — Lipg
 - **Align** items: start/center/end/stretch
 - **Gap** between items
 - **Ratio-based sizing** — items with grow ratios fill available space
-- **Wrap** — items wrap to next line/column when they exceed available space
 
 ### Table
 - **Sortable columns** — click to sort by any column, ascending/descending

@@ -23,8 +23,7 @@ enum Align {
 /**
  * CSS flexbox-like layout for terminal UIs.
  *
- * Supports row/column direction, align, gap, wrapping, and ratio-based sizing.
- * Note: `wrap` and `border` are stored but not yet implemented in rendering.
+ * Supports row/column direction, align, gap, and ratio-based sizing.
  *
  * Port of 76creates/stickers FlexBox.
  *
@@ -39,8 +38,6 @@ final class FlexBox
         public readonly Direction $direction = Direction::Row,
         public readonly Align $align = Align::Stretch,
         public readonly int $gap = 0,
-        public readonly bool $wrap = false,
-        public readonly bool $border = false,
         private array $items = [],
     ) {}
 
@@ -50,12 +47,12 @@ final class FlexBox
 
     public static function row(FlexItem ...$items): self
     {
-        return new self(Direction::Row, Align::Stretch, 0, false, false, $items);
+        return new self(Direction::Row, Align::Stretch, 0, $items);
     }
 
     public static function column(FlexItem ...$items): self
     {
-        return new self(Direction::Column, Align::Stretch, 0, false, false, $items);
+        return new self(Direction::Column, Align::Stretch, 0, $items);
     }
 
     // -------------------------------------------------------------------------
@@ -64,34 +61,24 @@ final class FlexBox
 
     public function withDirection(Direction $d): self
     {
-        return new self($d, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
+        return new self($d, $this->align, $this->gap, $this->items);
     }
 
     public function withAlign(Align $a): self
     {
-        return new self($this->direction, $a, $this->gap, $this->wrap, $this->border, $this->items);
+        return new self($this->direction, $a, $this->gap, $this->items);
     }
 
     public function withGap(int $cells): self
     {
-        return new self($this->direction, $this->align, $cells, $this->wrap, $this->border, $this->items);
-    }
-
-    public function withWrap(bool $w = true): self
-    {
-        return new self($this->direction, $this->align, $this->gap, $w, $this->border, $this->items);
-    }
-
-    public function withBorder(bool $b = true): self
-    {
-        return new self($this->direction, $this->align, $this->gap, $this->wrap, $b, $this->items);
+        return new self($this->direction, $this->align, $cells, $this->items);
     }
 
     public function addItem(FlexItem $item): self
     {
         $newItems = $this->items;
         $newItems[] = $item;
-        return new self($this->direction, $this->align, $this->gap, $this->wrap, $this->border, $newItems);
+        return new self($this->direction, $this->align, $this->gap, $newItems);
     }
 
     // -------------------------------------------------------------------------

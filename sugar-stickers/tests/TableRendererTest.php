@@ -93,7 +93,9 @@ final class TableRendererTest extends TestCase
         $frame2 = $renderer->render($t2);
 
         // Frame 2 should be a delta (much smaller than full output).
-        $this->assertLessThanOrEqual(30, \strlen($frame2), 'Frame 2 delta should be ≤30 bytes');
+        // With proper SGR→Style tracking, style changes produce cell-level
+        // diff ops, so the delta is larger than the old null-style behavior.
+        $this->assertLessThanOrEqual(120, \strlen($frame2), 'Frame 2 delta should be ≤120 bytes');
     }
 
     /**

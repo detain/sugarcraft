@@ -91,10 +91,8 @@ final class TableRenderer
      * Uses bulk fromGrid construction for O(w·h) instead of O((w·h)²).
      * Iterates by display column using grapheme clusters so multibyte
      * separators and arrows (│, ▲, ▼, ─, ┬) land at correct grid columns.
-     *
-     * NOTE: Style tracking via SGR parsing is not yet implemented (style
-     * fidelity limitation documented in the remediation plan). Cells are
-     * created with null style.
+     * Style tracking via SGR parsing maps inline ANSI styles to cells
+     * so style-only diffs are visible in the diff output.
      *
      * @param string $output Multi-line string from render()
      * @param int    $width  Buffer width in cells
@@ -113,12 +111,45 @@ final class TableRenderer
             $stripped = \SugarCraft\Core\Util\Ansi::strip($line);
             $graphemes = self::graphemes($stripped);
 
-            // Track active SGR style by scanning the original line byte-by-byte.
-            // Then map byte offsets to grapheme positions.
-            $styleAtByte = $this->scanStylesByByteOffset($line);
+            // Build a map from stripped-character offset to active SGR style.
+            // We scan the original (ANSI) line, tracking both the original byte
+            // offset and the stripped-character position — so each grapheme's
+            // position in the stripped string maps back to the style that was
+            // active at the corresponding position in the original string.
+            $strippedPosToStyle = [];
+            $strippedPos = 0;
+            $len = \strlen($line);
+            $currentStyle = null;
 
-            $byteOffset = 0;
-            $strippedByteOffset = 0;
+            for ($i = 0; $i < $len; $i++) {
+                if ($line[$i] === "\x1b" && ($line[$i + 1] ?? '') === '[') {
+                    // CSI escape sequence — scan to the end.
+                    $j = $i + 2;
+                    while ($j < $len && !\ctype_alpha($line[$j])) {
+                        $j++;
+                    }
+                    $seq = \substr($line, $i, $j - $i + 1);
+
+                    // Check if it's SGR (Select Graphic Rendition) sequence.
+                    if (\preg_match('/^\x1b\[([0-9;]*)m$/', $seq, $m)) {
+                        $params = $m[1];
+                        if ($params === '' || $params === '0') {
+                            $currentStyle = null;
+                        } else {
+                            $currentStyle = \rtrim($params, 'm');
+                        }
+                    }
+                    // Mark no stripped position for escape sequence bytes.
+                    $i = $j;
+                    continue;
+                }
+
+                // Normal byte — it corresponds to one position in the stripped string.
+                $strippedPosToStyle[$strippedPos] = $currentStyle;
+                $strippedPos++;
+            }
+
+            $strippedPos = 0;
 
             foreach ($graphemes as $grapheme) {
                 if ($col >= $width) {
@@ -128,24 +159,26 @@ final class TableRenderer
                 // Skip zero-width combining characters.
                 $gw = self::graphemeWidthInternal($grapheme);
                 if ($gw === 0) {
-                    // Advance byte offset for stripped content.
-                    $strippedByteOffset += \strlen($grapheme);
+                    $strippedPos++;
                     continue;
                 }
 
+                // Look up the style that was active at this grapheme's position
+                // in the original ANSI string.
+                $sgr = $strippedPosToStyle[$strippedPos] ?? null;
+                $cellStyle = self::sgrToStyle($sgr);
+
                 if ($gw === 2 && $col + 1 < $width) {
                     // Wide character: occupies two columns.
-                    $grid[] = Cell::new($grapheme, null, null, 2);
+                    $grid[] = Cell::new($grapheme, $cellStyle, null, 2);
                     $col += 2;
-                    // Continuation cell for the second column.
                     $grid[] = Cell::continuation();
-                } elseif ($gw === 1) {
-                    $grid[] = Cell::new($grapheme, null, null, 1);
+                } else {
+                    $grid[] = Cell::new($grapheme, $cellStyle, null, 1);
                     $col++;
                 }
 
-                // Advance byte offset for stripped content.
-                $strippedByteOffset += \strlen($grapheme);
+                $strippedPos++;
             }
 
             // Pad to full width with blank cells.
@@ -159,49 +192,45 @@ final class TableRenderer
     }
 
     /**
-     * Scan an ANSI string and build a map of byte-offset → active SGR style.
+     * Convert an SGR parameter string (e.g. "7", "1;32") into a Style object.
      *
-     * @return array<int, string|null> Map of byte offset to active style string (e.g. "1;32")
+     * Parses SGR codes and builds a minimal Style:
+     *   - Attribute codes 1-9 map to ATTR_* constants (bold, faint, italic, etc.)
+     *   - 256-color and RGB colors are not yet supported (stored as null)
+     *
+     * @param string|null $sgr SGR parameter string or null for default style
+     * @return \SugarCraft\Buffer\Style|null
      */
-    private function scanStylesByByteOffset(string $line): array
+    private static function sgrToStyle(?string $sgr): ?\SugarCraft\Buffer\Style
     {
-        $styles = [];
-        $currentStyle = null;
-        $len = \strlen($line);
-        $i = 0;
-
-        while ($i < $len) {
-            // Check for CSI escape sequence.
-            if ($line[$i] === "\x1b" && ($line[$i + 1] ?? '') === '[') {
-                // Found CSI. Scan to find the final byte.
-                $j = $i + 2;
-                while ($j < $len && !\ctype_alpha($line[$j])) {
-                    $j++;
-                }
-                $seq = \substr($line, $i, $j - $i + 1);
-
-                // Check if it's SGR (Select Graphic Rendition) sequence.
-                if (\preg_match('/^\x1b\[([0-9;]*)m$/', $seq, $m)) {
-                    $params = $m[1];
-                    if ($params === '' || $params === '0') {
-                        $currentStyle = null;
-                    } else {
-                        $currentStyle = \rtrim($params, 'm');
-                    }
-                    // Mark all positions in this sequence as having no visible character.
-                    for ($k = $i; $k <= $j; $k++) {
-                        $styles[$k] = null; // No visible char at escape sequence bytes.
-                    }
-                }
-                $i = $j + 1;
-                continue;
-            }
-
-            $styles[$i] = $currentStyle;
-            $i++;
+        if ($sgr === null || $sgr === '' || $sgr === '0') {
+            return null;
         }
 
-        return $styles;
+        $attrs = 0;
+        $fg = null;
+        $bg = null;
+
+        $codes = \array_map('intval', \explode(';', $sgr));
+        foreach ($codes as $code) {
+            switch ($code) {
+                case 1:  $attrs |= \SugarCraft\Buffer\Style::ATTR_BOLD;       break;
+                case 2:  $attrs |= \SugarCraft\Buffer\Style::ATTR_FAINT;      break;
+                case 3:  $attrs |= \SugarCraft\Buffer\Style::ATTR_ITALIC;     break;
+                case 4:  $attrs |= \SugarCraft\Buffer\Style::ATTR_UNDERLINE;  break;
+                case 5:  $attrs |= \SugarCraft\Buffer\Style::ATTR_BLINK;      break;
+                case 7:  $attrs |= \SugarCraft\Buffer\Style::ATTR_REVERSE;    break;
+                case 9:  $attrs |= \SugarCraft\Buffer\Style::ATTR_STRIKE;     break;
+                case 22: $attrs &= ~(\SugarCraft\Buffer\Style::ATTR_BOLD | \SugarCraft\Buffer\Style::ATTR_FAINT); break;
+                case 23: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_ITALIC;    break;
+                case 24: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_UNDERLINE; break;
+                case 25: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_BLINK;     break;
+                case 27: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_REVERSE;   break;
+                case 29: $attrs &= ~\SugarCraft\Buffer\Style::ATTR_STRIKE;    break;
+            }
+        }
+
+        return \SugarCraft\Buffer\Style::new($fg, $bg, $attrs);
     }
 
     /**
