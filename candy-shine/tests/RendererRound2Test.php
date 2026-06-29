@@ -116,7 +116,7 @@ final class RendererRound2Test extends TestCase
             'orderedListMarkerFormat','unorderedListMarkerGlyph',
             'tableCenterSeparator','tableColumnSeparator','tableRowSeparator',
             'definitionList',
-            'documentBlockPrefix','documentBlockSuffix','conceal',
+            'documentBlockPrefix','documentBlockSuffix',
         ] as $slot) {
             $args[$slot] = $overrides[$slot] ?? $base->{$slot};
         }
