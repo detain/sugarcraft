@@ -21,12 +21,15 @@ final class FixtureGit implements GitDriver
     public array $checkouts = [];
     public array $commits = [];
     public bool $stageAllCalled = false;
+    public bool $unstageAllCalled = false;
     /** @var list<string> */
     public array $diffs = [];
     public array $discards = [];
     public bool $amendCalled = false;
     /** @var array<string, string> path => hunk patch */
     public array $stagePatches = [];
+    /** @var array<string, string> path => hunk patch */
+    public array $unstagePatches = [];
     public array $branchCreations = [];
     public array $branchDeletions = [];
     public array $merges = [];
@@ -69,6 +72,8 @@ final class FixtureGit implements GitDriver
     public function discard(string $path): void   { $this->discards[] = $path; }
     public function amend(): void                 { $this->amendCalled = true; }
     public function stagePatch(string $path, string $hunk): void { $this->stagePatches[$path] = $hunk; }
+    public function unstageAll(): void { $this->unstageAllCalled = true; }
+    public function unstagePatch(string $path, string $hunk): void { $this->unstagePatches[$path] = $hunk; }
     public function createBranch(string $name): void { $this->branchCreations[] = $name; }
     public function deleteBranch(string $name): void { $this->branchDeletions[] = $name; }
     public function merge(string $branch): void { $this->merges[] = $branch; }
