@@ -48,4 +48,74 @@ final class PieceTest extends TestCase
         $this->assertSame(3, $q->x);
         $this->assertSame(7, $q->y);
     }
+
+    /**
+     * @dataProvider tetrominoKindsProvider
+     */
+    public function testRotationsWithKicksClockwise(Tetromino $kind): void
+    {
+        $p = new Piece($kind, 0, 3, 3);
+        $candidates = $p->rotationsWithKicks(1);
+
+        // First element is the naive rotation (same x/y, rotation == 1)
+        $this->assertSame($p->x, $candidates[0]->x);
+        $this->assertSame($p->y, $candidates[0]->y);
+        $this->assertSame(1, $candidates[0]->rotation);
+        $this->assertSame($kind, $candidates[0]->kind);
+
+        // JLSTZ/O have 5 kick offsets → 6 candidates; I has 5 offsets → 6 candidates
+        $expectedCount = $kind === Tetromino::I ? 6 : 6;
+        $this->assertCount($expectedCount, $candidates);
+    }
+
+    /**
+     * @dataProvider tetrominoKindsProvider
+     */
+    public function testRotationsWithKicksCounterClockwise(Tetromino $kind): void
+    {
+        $p = new Piece($kind, 1, 3, 3);
+        $candidates = $p->rotationsWithKicks(-1);
+
+        // First element is the naive rotation (same x/y, rotation == 0)
+        $this->assertSame($p->x, $candidates[0]->x);
+        $this->assertSame($p->y, $candidates[0]->y);
+        $this->assertSame(0, $candidates[0]->rotation);
+        $this->assertSame($kind, $candidates[0]->kind);
+
+        $expectedCount = $kind === Tetromino::I ? 6 : 6;
+        $this->assertCount($expectedCount, $candidates);
+    }
+
+    public function testCounterClockwiseDoesNotThrowForAllPieces(): void
+    {
+        $kinds = [Tetromino::I, Tetromino::O, Tetromino::T, Tetromino::S, Tetromino::Z, Tetromino::J, Tetromino::L];
+        foreach ($kinds as $kind) {
+            for ($fromRot = 0; $fromRot < 4; $fromRot++) {
+                $p = new Piece($kind, $fromRot, 3, 3);
+                $candidates = $p->rotationsWithKicks(-1);
+                $this->assertIsArray($candidates);
+                $this->assertNotEmpty($candidates);
+            }
+        }
+    }
+
+    public function testRotationsWithKicksDoesNotThrow(): void
+    {
+        $p = new Piece(Tetromino::T, 0, 3, 3);
+        $this->assertNotEmpty($p->rotationsWithKicks(1));
+        $this->assertNotEmpty($p->rotationsWithKicks(-1));
+    }
+
+    public static function tetrominoKindsProvider(): array
+    {
+        return [
+            'I' => [Tetromino::I],
+            'O' => [Tetromino::O],
+            'T' => [Tetromino::T],
+            'S' => [Tetromino::S],
+            'Z' => [Tetromino::Z],
+            'J' => [Tetromino::J],
+            'L' => [Tetromino::L],
+        ];
+    }
 }

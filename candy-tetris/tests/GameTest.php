@@ -7,6 +7,7 @@ namespace SugarCraft\Tetris\Tests;
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Tetris\Bag;
+use SugarCraft\Tetris\Board;
 use SugarCraft\Tetris\Game;
 use SugarCraft\Tetris\GravityMsg;
 use SugarCraft\Tetris\Tetromino;
@@ -235,5 +236,86 @@ final class GameTest extends TestCase
         // Hard drop should lock piece and start fresh with new piece
         [$dropped] = $g->update(new KeyMsg(KeyType::Char, ' '));
         $this->assertNotSame($g->piece, $dropped->piece);
+    }
+
+    public function testAddGarbageShiftsExistingRowsUp(): void
+    {
+        // Create a game and manually place a row of blocks on the board
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $rows = $g->board->rows();
+        // Place a complete row near the bottom (row 20, second-to-last visible row).
+        // With ROWS=24 and HIDDEN_ROWS=2, visible rows are 0-21. Row 20 is visible.
+        // After adding 1 garbage row, it shifts to row 21 (last visible row).
+        for ($col = 0; $col < Board::COLS; $col++) {
+            $rows[20][$col] = Tetromino::I;
+        }
+        $boardWithRow = new Board($rows);
+        $gWithRow = $g->mutate(['board' => $boardWithRow]);
+
+        // Add 1 garbage row
+        $result = $gWithRow->addGarbageRows(1, static fn(int $max): int => 3);
+        $resultRows = $result->board->rows();
+
+        // The previously placed row should now be at row 21 (shifted up by 1)
+        $this->assertNotNull($resultRows[21][0], 'Original row should be shifted up to row 21');
+        // The garbage row (row 0) should have a hole at column 3
+        $this->assertNull($resultRows[0][3], 'Garbage row should have a hole at column 3');
+    }
+
+    public function testAddGarbageInsertsOneHolePerRow(): void
+    {
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        // Use deterministic rand that returns 2 for the hole position
+        $result = $g->addGarbageRows(2, static fn(int $max): int => 2);
+        $rows = $result->board->rows();
+
+        // Each garbage row should have exactly one null (the hole)
+        for ($r = 0; $r < 2; $r++) {
+            $holeCount = 0;
+            $filledCount = 0;
+            foreach ($rows[$r] as $col => $cell) {
+                if ($cell === null) {
+                    $holeCount++;
+                    $this->assertSame(2, $col, "Hole should be at column 2 for row $r");
+                } else {
+                    $filledCount++;
+                }
+            }
+            $this->assertSame(1, $holeCount, "Row $r should have exactly one hole");
+            $this->assertSame(Board::COLS - 1, $filledCount, "Row $r should have COLS-1 filled cells");
+        }
+    }
+
+    public function testAddGarbageTopsOutWhenStackOverflows(): void
+    {
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $rows = $g->board->rows();
+
+        // Fill rows 0 and 1 (the topmost rows that will be displaced by 2 garbage rows)
+        for ($r = 0; $r < 2; $r++) {
+            for ($col = 0; $col < Board::COLS; $col++) {
+                $rows[$r][$col] = Tetromino::I;
+            }
+        }
+
+        $boardWithTopRows = new Board($rows);
+        $gWithTopRows = $g->mutate(['board' => $boardWithTopRows]);
+
+        // Adding 2 garbage rows should top-out because rows 0 and 1 have content
+        $result = $gWithTopRows->addGarbageRows(2, static fn(int $max): int => 0);
+
+        $this->assertTrue($result->over, 'Adding garbage when top rows are filled should set over=true');
+    }
+
+    public function testAddGarbageZeroOrNegativeCountIsNoOp(): void
+    {
+        $g = Game::start(new Bag(static fn(int $max): int => 0));
+        $originalBoard = $g->board;
+
+        $resultZero = $g->addGarbageRows(0, static fn(int $max): int => 0);
+        $this->assertSame($originalBoard, $resultZero->board, 'addGarbageRows(0) should return same board');
+
+        $resultNeg = $g->addGarbageRows(-5, static fn(int $max): int => 0);
+        $this->assertSame($originalBoard, $resultNeg->board, 'addGarbageRows(-5) should return same board');
     }
 }
