@@ -889,11 +889,7 @@ final class App implements Model
     /** Check if a rebase is currently in progress. */
     private function isRebaseInProgress(): bool
     {
-        $gitDir = $this->git instanceof Git ? $this->git->cwd . '/.git' : null;
-        if ($gitDir === null || !is_dir($gitDir)) {
-            return false;
-        }
-        return is_dir($gitDir . '/rebase-merge') || is_dir($gitDir . '/rebase-apply');
+        return $this->git->rebaseInProgress();
     }
 
     private function executeRebaseContinue(): self
@@ -1007,13 +1003,8 @@ final class App implements Model
         if ($current === null) return $this;
         try {
             $this->git->stashDrop($current->stashRef());
-            $newStashes = array_filter($sm->stashes, fn($s) => $s->index !== $current->index);
-            // Reindex
-            $reindexed = [];
-            foreach ($newStashes as $s) {
-                $reindexed[] = $s;
-            }
-            return $this->withStashManager(new StashManager($reindexed))->withAll(
+            $freshStashes = $this->git->stashList();
+            return $this->withStashManager(new StashManager($freshStashes))->withAll(
                 successMessage: Lang::t('stash.dropped', ['ref' => $current->stashRef()])
             );
         } catch (\RuntimeException $e) {

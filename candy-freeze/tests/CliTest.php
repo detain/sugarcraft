@@ -137,4 +137,12 @@ final class CliTest extends TestCase
         $this->assertStringStartsWith('<?xml', $result['stdout']);
         $this->assertSame(0, substr_count($result['stdout'], '<circle'));
     }
+
+    public function testLigaturesEmitsLigatureAttribute(): void
+    {
+        $result = $this->runCli(['--ligatures', '--no-window', '--no-shadow'], "x\n");
+
+        $this->assertSame(0, $result['exitCode']);
+        $this->assertStringContainsString('font-variant-ligatures="normal"', $result['stdout']);
+    }
 }

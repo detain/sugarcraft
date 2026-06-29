@@ -52,6 +52,7 @@ final class FixtureGit implements GitDriver
     public array $worktreeAdds = [];
     /** @var list<string> */
     public array $worktreeRemoves = [];
+    public bool $rebaseInProgressResult = false;
 
     public function __construct(array $statusRows, array $branchRows, array $logRows)
     {
@@ -91,6 +92,7 @@ final class FixtureGit implements GitDriver
     public function worktreeList(): array { return $this->worktreeListResult; }
     public function worktreeAdd(string $path, string $branch): void { $this->worktreeAdds[] = ['path' => $path, 'branch' => $branch]; }
     public function worktreeRemove(string $path): void { $this->worktreeRemoves[] = $path; }
+    public function rebaseInProgress(): bool { return $this->rebaseInProgressResult; }
 }
 
 final class AppTest extends TestCase

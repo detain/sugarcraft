@@ -10,10 +10,41 @@ use PHPUnit\Framework\TestCase;
 
 final class WorktreesTest extends TestCase
 {
-    public function testWorktreeEntryFromPorcelainLine(): void
+    public function testWorktreeEntryFromGitOutputParsesMultiLineRecords(): void
     {
-        // This test requires a real directory, so we skip the actual parsing
-        $this->markTestSkipped('WorktreeEntry::fromPorcelainLine requires a real directory');
+        $lines = [
+            'worktree /path/one',
+            'HEAD abc1234',
+            'branch refs/heads/main',
+            '',
+            'worktree /path/two',
+            'HEAD def5678',
+            'detached',
+            '',
+        ];
+        $entries = WorktreeEntry::fromGitOutput($lines);
+        $this->assertCount(2, $entries);
+        $this->assertSame('/path/one', $entries[0]->path);
+        $this->assertSame('main', $entries[0]->branch);
+        $this->assertSame('abc1234', $entries[0]->HEAD);
+        $this->assertFalse($entries[0]->isBare);
+        $this->assertSame('/path/two', $entries[1]->path);
+        $this->assertSame('', $entries[1]->branch);
+        $this->assertSame('def5678', $entries[1]->HEAD);
+        $this->assertFalse($entries[1]->isBare);
+    }
+
+    public function testWorktreeEntryFromGitOutputHandlesBare(): void
+    {
+        $lines = [
+            'worktree /path/bare',
+            'HEAD abc1234',
+            'bare',
+            '',
+        ];
+        $entries = WorktreeEntry::fromGitOutput($lines);
+        $this->assertCount(1, $entries);
+        $this->assertTrue($entries[0]->isBare);
     }
 
     public function testWorktreesFromGitOutputWithEmptyLines(): void

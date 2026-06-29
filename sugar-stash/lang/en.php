@@ -124,4 +124,5 @@ return [
     'rebase_i.todo_list'    => 'todo list:',
     'rebase_i.cycle_action'  => 'cycle action',
     'rebase_i.drop'          => 'drop commit',
+    'rebase_i.preview_only'  => 'preview only — not yet executed',
 ];
