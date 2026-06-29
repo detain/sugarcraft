@@ -123,6 +123,17 @@ final class RendererTest extends TestCase
         $this->assertSame('plain', $b->render('plain'));
     }
 
+    public function testWithSanitizeReturnsNewInstance(): void
+    {
+        $a = new Renderer(Theme::plain());
+        $b = $a->withSanitize(true);
+        $c = $a->withSanitize(false);
+
+        $this->assertNotSame($a, $b);
+        $this->assertNotSame($a, $c);
+        $this->assertNotSame($b, $c);
+    }
+
     public function testRenderTrimsTrailingNewlines(): void
     {
         // Two paragraphs separated by a blank line; renderer joins with
@@ -581,6 +592,26 @@ MD;
         $r = new Renderer($custom);
         $out = $r->render('# hello world');
         $this->assertStringContainsString('Hello World', $out);
+    }
+
+    public function testApplyCaseUnknownFallsBackToIdentity(): void
+    {
+        // Unknown headingCase value should pass through unchanged.
+        $base = Theme::plain();
+        $custom = new Theme(
+            heading1: $base->heading1, heading2: $base->heading2, heading3: $base->heading3,
+            heading4: $base->heading4, heading5: $base->heading5, heading6: $base->heading6,
+            paragraph: $base->paragraph, bold: $base->bold, italic: $base->italic,
+            code: $base->code, codeBlock: $base->codeBlock, link: $base->link,
+            blockquote: $base->blockquote, listMarker: $base->listMarker, rule: $base->rule,
+            headingCase: 'unknown-nonsense',
+        );
+        $r = new Renderer($custom);
+        $out = $r->render('# Hello World');
+        // Must not transform to any case variant.
+        $this->assertStringContainsString('Hello World', $out);
+        $this->assertStringNotContainsString('hello world', $out);
+        $this->assertStringNotContainsString('HELLO WORLD', $out);
     }
 
     public function testResolveUrlFragmentOnly(): void
