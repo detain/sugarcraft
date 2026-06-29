@@ -20,6 +20,12 @@ use SugarCraft\Pty\Posix\PosixProcess;
  */
 final class ExternalModule implements LegacyModule
 {
+    /** Maximum line length read from plugin stdout (1 MiB). Prevents a runaway plugin from exhausting memory. */
+    private const MAX_LINE_BYTES = 1048576;
+
+    /** Read timeout in seconds for each fgets() call. */
+    private const READ_TIMEOUT_SECS = 5;
+
     private array $state = [];
     private int $interval = 0;
 
@@ -64,11 +70,11 @@ final class ExternalModule implements LegacyModule
             throw new \RuntimeException("Expected init response, got: {$response->type}");
         }
 
-        $this->interval = $response->data['interval'] ?? 0;
+        $this->interval = self::clampInterval($response->data['interval'] ?? 0);
 
         return [
             'name' => $response->data['name'] ?? $this->name,
-            'minSize' => $response->data['minSize'] ?? [30, 4],
+            'minSize' => self::clampMinSize($response->data['minSize'] ?? null),
             'interval' => $this->interval,
         ];
     }
@@ -89,6 +95,11 @@ final class ExternalModule implements LegacyModule
             return $response->data['state'] ?? $state;
         }
 
+        // Protocol error: unexpected response type or error from plugin.
+        // Disable the plugin so a misbehaving subprocess cannot desync
+        // the dashboard loop. Per Step 8, we surface the error rather
+        // than silently falling back to prior state.
+        $this->running = false;
         return $state;
     }
 
@@ -108,6 +119,9 @@ final class ExternalModule implements LegacyModule
             return Sanitize::untrusted($response->data['content'] ?? '');
         }
 
+        // Protocol error — disable the plugin rather than returning
+        // stale/empty state silently.
+        $this->running = false;
         return '';
     }
 
@@ -178,11 +192,25 @@ final class ExternalModule implements LegacyModule
             return Response::error('Process not running');
         }
 
-        $line = fgets($this->stdout);
+        // Set per-read timeout so a hung plugin cannot freeze the loop forever.
+        stream_set_timeout($this->stdout, self::READ_TIMEOUT_SECS);
+
+        $line = fgets($this->stdout, self::MAX_LINE_BYTES);
 
         if ($line === false) {
+            $meta = stream_get_meta_data($this->stdout);
             $this->running = false;
+            if ($meta['timed_out'] ?? false) {
+                return Response::error('read timeout');
+            }
             return Response::error('EOF from process');
+        }
+
+        // Enforce the line length cap. A line exceeding MAX_LINE_BYTES without
+        // a newline is a protocol violation (runaway plugin); treat as error.
+        if (strlen($line) >= self::MAX_LINE_BYTES && strpos($line, "\n") === false) {
+            $this->running = false;
+            return Response::error('protocol error: line exceeds maximum length');
         }
 
         return Response::fromJson(trim($line));
@@ -218,6 +246,40 @@ final class ExternalModule implements LegacyModule
             fclose($this->stdout);
             $this->stdout = null;
         }
+    }
+
+    /**
+     * Clamp and sanitize a plugin-supplied interval to a safe range.
+     * Guards against absurd values (negative, massive) from a plugin.
+     */
+    private static function clampInterval(mixed $interval): int
+    {
+        if (!is_int($interval)) {
+            return 0;
+        }
+        return max(0, min($interval, 86400));
+    }
+
+    /**
+     * Validate and clamp a plugin-supplied minSize to a safe default.
+     * Must be a two-element array of positive integers; otherwise [30, 4].
+     */
+    private static function clampMinSize(mixed $minSize): array
+    {
+        if (
+            is_array($minSize)
+            && count($minSize) === 2
+            && is_int($minSize[0] ?? null)
+            && is_int($minSize[1] ?? null)
+            && ($minSize[0] ?? 0) > 0
+            && ($minSize[1] ?? 0) > 0
+        ) {
+            return [
+                max(1, min((int) $minSize[0], 10000)),
+                max(1, min((int) $minSize[1], 1000)),
+            ];
+        }
+        return [30, 4];
     }
 
     private function closeStderr(): void

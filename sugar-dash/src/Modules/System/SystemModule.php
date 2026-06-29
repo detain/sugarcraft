@@ -181,8 +181,22 @@ final class SystemModule extends BaseModule
 
     private function readGpuLoad(): float
     {
-        $output = @shell_exec('nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null');
+        // Memoize "no GPU present" so nvidia-smi is not re-spawned every 2s.
+        // Once we get -1.0 (null output or non-numeric), we remember it forever
+        // for this process lifetime and never spawn the subprocess again.
+        /** @var bool */
+        static $gpuAbsent = false;
+
+        if ($gpuAbsent) {
+            return -1.0;
+        }
+
+        $output = @shell_exec(
+            'nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null'
+        );
+
         if ($output === null) {
+            $gpuAbsent = true;
             return -1.0;
         }
 
@@ -191,6 +205,7 @@ final class SystemModule extends BaseModule
             return (float) $value;
         }
 
+        $gpuAbsent = true;
         return -1.0;
     }
 
