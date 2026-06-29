@@ -28,10 +28,7 @@
     "require": {
         "php": "^8.3",
         "sugarcraft/candy-ansi": "dev-master",
-        "sugarcraft/candy-buffer": "dev-master",
-        "sugarcraft/candy-core": "dev-master",
-        "sugarcraft/candy-sprinkles": "dev-master",
-        "sugarcraft/candy-shine": "dev-master"
+        "sugarcraft/candy-core": "dev-master"
     },
     "suggest": {
         "ext-gd": "Required for PNG output in PngRenderer"
@@ -64,49 +61,7 @@
         },
         {
             "type": "path",
-            "url": "../candy-buffer",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
             "url": "../candy-core",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-sprinkles",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-shine",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-layout",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-async",
-            "options": {
-                "symlink": true
-            }
-        },
-        {
-            "type": "path",
-            "url": "../candy-input",
             "options": {
                 "symlink": true
             }

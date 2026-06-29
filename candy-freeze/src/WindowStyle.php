@@ -16,9 +16,4 @@ enum WindowStyle: string
     case ITerm2 = 'iterm';
     case Hyper = 'hyper';
     case None = 'none';
-
-    public static function default(): self
-    {
-        return self::Macos;
-    }
 }

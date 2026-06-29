@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SugarCraft\Freeze\Tests;
 
 use SugarCraft\Freeze\LanguageDetector;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 final class LanguageDetectorTest extends TestCase
@@ -180,5 +181,66 @@ final class LanguageDetectorTest extends TestCase
     {
         $content = "#!/bin/bash\n<?php\necho 'hello';\n";
         $this->assertSame('bash', LanguageDetector::detect($content));
+    }
+
+    public static function extensionProvider(): array
+    {
+        return [
+            'typescript ts' => ['test.ts', 'typescript'],
+            'typescript tsx' => ['Component.tsx', 'typescript'],
+            'css scss' => ['style.scss', 'css'],
+            'css sass' => ['style.sass', 'css'],
+            'css less' => ['style.less', 'css'],
+            'xml' => ['data.xml', 'xml'],
+            'cpp cpp' => ['main.cpp', 'cpp'],
+            'cpp cc' => ['main.cc', 'cpp'],
+            'cpp cxx' => ['main.cxx', 'cpp'],
+            'cpp hpp' => ['main.hpp', 'cpp'],
+            'c c' => ['main.c', 'c'],
+            'c h' => ['main.h', 'c'],
+            'java' => ['Main.java', 'java'],
+            'csharp' => ['Program.cs', 'csharp'],
+            'swift' => ['main.swift', 'swift'],
+            'kotlin kt' => ['main.kt', 'kotlin'],
+            'kotlin kts' => ['main.kts', 'kotlin'],
+            'scala' => ['main.scala', 'scala'],
+            'r' => ['script.r', 'r'],
+            'lua' => ['script.lua', 'lua'],
+            'perl pl' => ['script.pl', 'perl'],
+            'perl pm' => ['script.pm', 'perl'],
+            'tcl' => ['script.tcl', 'tcl'],
+            'elixir ex' => ['main.ex', 'elixir'],
+            'elixir exs' => ['main.exs', 'elixir'],
+            'erlang' => ['main.erl', 'erlang'],
+            'haskell' => ['main.hs', 'haskell'],
+            'clojure clj' => ['main.clj', 'clojure'],
+            'clojure cljs' => ['main.cljs', 'clojure'],
+            'ocaml ml' => ['main.ml', 'ocaml'],
+            'ocaml mli' => ['main.mli', 'ocaml'],
+            'julia' => ['main.jl', 'julia'],
+            'zsh' => ['script.zsh', 'zsh'],
+            'fish' => ['script.fish', 'fish'],
+            'powershell' => ['script.ps1', 'powershell'],
+            'markdown md' => ['README.md', 'markdown'],
+            'markdown markdown' => ['README.markdown', 'markdown'],
+            'go' => ['main.go', 'go'],
+            'rust' => ['main.rs', 'rust'],
+        ];
+    }
+
+    #[DataProvider('extensionProvider')]
+    public function testDetectFromFilenameWithDataProvider(string $filename, string $expected): void
+    {
+        $this->assertSame($expected, LanguageDetector::detectFromFilename($filename));
+    }
+
+    public function testShFilenameResolvesToBash(): void
+    {
+        $this->assertSame('bash', LanguageDetector::detectFromFilename('script.sh'));
+    }
+
+    public function testJsonContentNotConfusedWithProse(): void
+    {
+        $this->assertNotSame('json', LanguageDetector::detect('This is some prose that mentions null and true and false values in a sentence.'));
     }
 }
