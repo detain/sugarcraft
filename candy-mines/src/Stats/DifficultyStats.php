@@ -61,18 +61,50 @@ final class DifficultyStats
         $data = $decoded['data'];
 
         $stats = new Stats(
-            easyGames: $data['easyGames'] ?? 0,
-            easyWins: $data['easyWins'] ?? 0,
-            easyBest: $data['easyBest'] ?? null,
-            mediumGames: $data['mediumGames'] ?? 0,
-            mediumWins: $data['mediumWins'] ?? 0,
-            mediumBest: $data['mediumBest'] ?? null,
-            expertGames: $data['expertGames'] ?? 0,
-            expertWins: $data['expertWins'] ?? 0,
-            expertBest: $data['expertBest'] ?? null,
+            easyGames:   self::expectInt($data['easyGames']   ?? null, 0, $path),
+            easyWins:    self::expectInt($data['easyWins']    ?? null, 0, $path),
+            easyBest:    self::expectNullableInt($data['easyBest']    ?? null, $path),
+            mediumGames: self::expectInt($data['mediumGames'] ?? null, 0, $path),
+            mediumWins:  self::expectInt($data['mediumWins']  ?? null, 0, $path),
+            mediumBest:  self::expectNullableInt($data['mediumBest']  ?? null, $path),
+            expertGames: self::expectInt($data['expertGames'] ?? null, 0, $path),
+            expertWins:  self::expectInt($data['expertWins']  ?? null, 0, $path),
+            expertBest:  self::expectNullableInt($data['expertBest']  ?? null, $path),
         );
 
         return new self($stats);
+    }
+
+    /**
+     * Validate and coerce a required integer field.
+     *
+     * @throws \RuntimeException if the value is present but not an int
+     */
+    private static function expectInt(mixed $v, int $default, string $path): int
+    {
+        if ($v === null) {
+            return $default;
+        }
+        if (!is_int($v)) {
+            throw new \RuntimeException("Invalid persistence format in: {$path}");
+        }
+        return $v;
+    }
+
+    /**
+     * Validate and coerce a nullable integer field.
+     *
+     * @throws \RuntimeException if the value is present but not an int or null
+     */
+    private static function expectNullableInt(mixed $v, string $path): ?int
+    {
+        if ($v === null) {
+            return null;
+        }
+        if (!is_int($v)) {
+            throw new \RuntimeException("Invalid persistence format in: {$path}");
+        }
+        return $v;
     }
 
     /**
