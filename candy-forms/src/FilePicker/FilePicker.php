@@ -9,6 +9,7 @@ use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Msg\KeyMsg;
 use SugarCraft\Core\Util\Ansi;
+use SugarCraft\Forms\Util\RenderSafe;
 
 /**
  * Directory browser. Lists the entries under {@see $cwd}, lets the user
@@ -108,7 +109,7 @@ final class FilePicker implements Model
     /** Render the component as a multi-line ANSI string. */
     public function view(): string
     {
-        $lines = [$this->cwd];
+        $lines = [RenderSafe::clean($this->cwd)];
         if ($this->error !== null) {
             $lines[] = '! ' . $this->error;
         }
@@ -123,7 +124,7 @@ final class FilePicker implements Model
             $idx = $top + $i;
             $iconPart = $this->showIcons ? $entry->icon() . ' ' : '';
             $sizePart = $this->showSize  ? '  ' . $entry->formatSize() : '';
-            $body     = $iconPart . $entry->display() . $sizePart;
+            $body     = $iconPart . RenderSafe::clean($entry->display()) . $sizePart;
             $line = ($idx === $this->cursor && $this->focused ? '> ' : '  ') . $body;
             if ($idx === $this->cursor && $this->focused) {
                 $line = Ansi::sgr(Ansi::REVERSE) . $line . Ansi::reset();
