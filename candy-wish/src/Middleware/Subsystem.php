@@ -69,7 +69,7 @@ final class Subsystem implements Middleware
             return;
         }
 
-        $name = substr($command, 10);
+        $name = strtok(trim(substr($command, 10)), " \t") ?: '';
 
         if ($name === '' || !isset($this->handlers[$name])) {
             $next($ctx, $session);
