@@ -391,6 +391,13 @@ final class Toast
         $bgLines = $this->splitLines($background);
         $bgRowCount = \count($bgLines);
 
+        // WHY: Bottom/Middle yOffset depends on the total height. We must
+        // decide the canonical height BEFORE computing any yOffset so both
+        // the sizing pass and placement pass agree on the same coordinate
+        // system. The viewport must be at least as tall as the background
+        // and the caller's viewportHeight.
+        $h = max($bgRowCount, $viewportHeight);
+
         $cumulativeHeight = 0;
         $lastAlertY = 0;
         $lastAlertHeight = 0;
@@ -398,16 +405,15 @@ final class Toast
             $alertStr = $this->renderAlert($alert);
             $alertLines = $this->splitLines($alertStr);
             $alertHeight = \count($alertLines);
-            $lastAlertY = $this->position->yOffset($alertHeight, $viewportHeight, $cumulativeHeight - $alertHeight);
+            $lastAlertY = $this->position->yOffset($alertHeight, $h, $cumulativeHeight - $alertHeight);
             $lastAlertHeight = $alertHeight;
             $cumulativeHeight += $alertHeight;
         }
 
-        $contentHeight = $bgRowCount;
-        $alertExtent = $lastAlertY + $lastAlertHeight;
-        if ($alertExtent > $contentHeight) {
-            $contentHeight = $alertExtent;
-        }
+        // Use the canonical height as the base, growing only if alerts
+        // extend beyond it. Bottom/Middle anchored to this larger height
+        // will only move further down/center — no need to re-derive.
+        $contentHeight = max($h, $lastAlertY + $lastAlertHeight);
 
         $contentWidth = $this->maxWidth;
 
