@@ -12,11 +12,11 @@ use SugarCraft\Crush\Hooks\HookResult;
 final readonly class ProtectFilesHook implements HookInterface
 {
     private const PROTECTED_PATTERNS = [
-        '/\.env$/',
-        '/composer\.json$/',
-        '/composer\.lock$/',
-        '/\.git\/config$/',
-        '/config\/.*\.php$/',
+        '/(^|[\s\/])\.env(\s|$)/',
+        '/composer\.json\b/',
+        '/composer\.lock\b/',
+        '/\.git\/config\b/',
+        '/(^|\/)config\/[^\s]*\.php\b/',
     ];
 
     public function name(): string
@@ -31,12 +31,17 @@ final readonly class ProtectFilesHook implements HookInterface
 
     public function matcher(): string
     {
-        return '^(bash|Edit)$';
+        return '^(Bash|Edit|Write|Read)$';
     }
 
     public function execute(HookContext $context): HookResult
     {
-        $input = $context->toolInput;
+        $toolName = ucfirst(strtolower($context->toolName));
+        $input = match ($toolName) {
+            'Bash' => $context->toolArgs['command'] ?? '',
+            'Edit', 'Write', 'Read' => $context->toolArgs['file_path'] ?? '',
+            default => $context->toolInput,
+        };
 
         foreach (self::PROTECTED_PATTERNS as $pattern) {
             if (preg_match($pattern, $input)) {

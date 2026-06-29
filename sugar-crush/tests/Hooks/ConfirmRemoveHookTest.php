@@ -37,7 +37,7 @@ final class ConfirmRemoveHookTest extends TestCase
     {
         $hook = new ConfirmRemoveHook();
 
-        $this->assertSame('^rm$', $hook->matcher());
+        $this->assertSame('^Bash$', $hook->matcher());
     }
 
     // =========================================================================
@@ -181,13 +181,13 @@ final class ConfirmRemoveHookTest extends TestCase
     // Helper Methods
     // =========================================================================
 
-    private function createContext(string $toolInput): HookContext
+    private function createContext(string $command): HookContext
     {
         return new HookContext(
             sessionId: 'test-session-456',
-            toolName: 'rm',
-            toolArgs: [],
-            toolInput: $toolInput,
+            toolName: 'Bash',
+            toolArgs: ['command' => $command],
+            toolInput: json_encode(['command' => $command]),
             toolOutput: '',
             model: 'test-model',
             provider: 'test-provider',

@@ -6,9 +6,17 @@ namespace SugarCraft\Crush\Tools\BuiltIn;
 
 use SugarCraft\Crush\Tools\Tool;
 use SugarCraft\Crush\Tools\ToolResult;
+use SugarCraft\Crush\Tools\PathJail;
 
 final readonly class Edit implements Tool
 {
+    private const DEFAULT_MAX_BYTES = 1024 * 1024;
+
+    public function __construct(
+        private ?string $root = null,
+        private int $maxBytes = self::DEFAULT_MAX_BYTES,
+    ) {}
+
     public function name(): string
     {
         return 'Edit';
@@ -25,6 +33,7 @@ final readonly class Edit implements Tool
             'file_path' => ['type' => 'string', 'description' => 'Path to file to edit'],
             'old_string' => ['type' => 'string', 'description' => 'The text to replace'],
             'new_string' => ['type' => 'string', 'description' => 'The replacement text'],
+            'replace_all' => ['type' => 'bool', 'description' => 'Replace all occurrences'],
         ],
         'required' => ['file_path', 'old_string', 'new_string'],
         ];
@@ -35,6 +44,7 @@ final readonly class Edit implements Tool
         $path = $args['file_path'] ?? '';
         $oldString = $args['old_string'] ?? '';
         $newString = $args['new_string'] ?? '';
+        $replaceAll = $args['replace_all'] ?? false;
 
         if ($oldString === '') {
             return new ToolResult(
@@ -42,6 +52,18 @@ final readonly class Edit implements Tool
                 content: 'Error: old_string cannot be empty',
                 isError: true,
             );
+        }
+
+        if ($this->root !== null) {
+            $resolved = PathJail::resolve($this->root, $path);
+            if ($resolved === null) {
+                return new ToolResult(
+                    toolCallId: $args['id'] ?? '',
+                    content: 'Error: path outside workspace root',
+                    isError: true,
+                );
+            }
+            $path = $resolved;
         }
 
         if (!file_exists($path)) {
@@ -61,7 +83,15 @@ final readonly class Edit implements Tool
             );
         }
 
-        // str_replace replaces ALL occurrences; consider str_replace(..., 1) if first-match only is needed.
+        $count = substr_count($content, $oldString);
+        if ($count > 1 && !$replaceAll) {
+            return new ToolResult(
+                toolCallId: $args['id'] ?? '',
+                content: "Error: old_string is not unique ($count matches); include more context",
+                isError: true,
+            );
+        }
+
         $newContent = str_replace($oldString, $newString, $content);
         $result = file_put_contents($path, $newContent);
 
