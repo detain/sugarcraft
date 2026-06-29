@@ -37,11 +37,14 @@ final class PagerCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $file = $input->getOption('file');
-        $raw  = is_string($file) && $file !== ''
-            ? @file_get_contents($file)
-            : self::readStdin();
-        if (!is_string($raw)) {
-            return Command::FAILURE;
+        if (is_string($file) && $file !== '') {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                return Command::FAILURE;
+            }
+        } else {
+            $raw = self::readStdin();
         }
 
         // --soft-wrap pre-wraps lines at the pager width before

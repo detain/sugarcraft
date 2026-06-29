@@ -50,10 +50,16 @@ final class TableCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $file = $input->getOption('file');
-        $raw  = is_string($file) && $file !== ''
-            ? @file_get_contents($file)
-            : self::readStdin();
-        if (!is_string($raw) || $raw === '') {
+        if (is_string($file) && $file !== '') {
+            $raw = @file_get_contents($file);
+            if ($raw === false) {
+                $output->writeln('<error>' . Lang::t('io.read_failed', ['path' => $file]) . '</error>');
+                return Command::FAILURE;
+            }
+        } else {
+            $raw = self::readStdin();
+        }
+        if ($raw === '') {
             return Command::SUCCESS;
         }
 
@@ -74,7 +80,8 @@ final class TableCommand extends Command
 
         // --widths truncates each cell to the corresponding budget.
         /** @var list<int> $widths */
-        $widths = array_map('intval', is_array($input->getOption('widths')) ? $input->getOption('widths') : []);
+        $rawWidths = $input->getOption('widths');
+        $widths = array_map('intval', is_array($rawWidths) ? $rawWidths : []);
         if ($widths !== []) {
             $rows = array_map(
                 static fn (array $row) => array_map(
