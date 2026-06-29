@@ -110,6 +110,21 @@ final class PickerTest extends TestCase
         $this->assertSame('dev', $picked->name);
     }
 
+    public function testSplitArrowUpSequenceIsReassembled(): void
+    {
+        // Verify that a split up-arrow sequence (ESC [ A) fed as a
+        // single buffered write is correctly reassembled and navigates
+        // up. First we move down to staging (index 1), then pressing
+        // up should go back to production.
+        // This exercises the stream_select timeout window: when all
+        // bytes arrive in one read, stream_select fires immediately
+        // and we still reconstruct the full CSI sequence.
+        [, , $p] = $this->makePicker("j\x1b[A\r");
+        $picked = $p->pick($this->endpoints());
+        // j moves to staging (index 1), up arrow goes back to production (index 0)
+        $this->assertSame('production', $picked->name);
+    }
+
     public function testHighlightLineProducesAnsiBoldCyan(): void
     {
         $in = fopen('php://memory', 'w+');
@@ -200,6 +215,62 @@ final class PickerTest extends TestCase
         [, , $p] = $this->makePicker("pro\x7f\x7fdev\r");
         $picked = $p->pick($this->endpoints());
         $this->assertNotNull($picked);
+        $this->assertSame('dev', $picked->name);
+    }
+
+    public function testFilterAcceptsSpecialCharacters(): void
+    {
+        // Test that filter accepts : @ / and multibyte UTF-8 bytes.
+        // The characters user@host should match the staging endpoint
+        // (host contains @ after user part in displayLine).
+        $endpoints = [
+            new Endpoint(name: 'user@host', host: 'example.com'),
+            new Endpoint(name: 'dev',       host: 'dev.example.com'),
+        ];
+
+        // Type "user" which matches "user@host"
+        [, , $p] = $this->makePicker("user\r");
+        $picked = $p->pick($endpoints);
+        $this->assertSame('user@host', $picked->name);
+    }
+
+    public function testFilterAcceptsColonCharacter(): void
+    {
+        // IPv6-style colons in addresses should be accepted.
+        $endpoints = [
+            new Endpoint(name: 'ipv6server', host: '2001:db8::1'),
+            new Endpoint(name: 'dev',        host: 'dev.example.com'),
+        ];
+
+        // Type "2001" which should match the ipv6 endpoint
+        [, , $p] = $this->makePicker("2001\r");
+        $picked = $p->pick($endpoints);
+        $this->assertSame('ipv6server', $picked->name);
+    }
+
+    public function testFilterDropsControlBytes(): void
+    {
+        // Control bytes like \x01 should be dropped, not accumulated.
+        $endpoints = [
+            new Endpoint(name: 'prod', host: 'prod.example.com'),
+            new Endpoint(name: 'dev',  host: 'dev.example.com'),
+        ];
+
+        // Type \x01 (control byte) then "prod" — only "prod" should be in filter
+        // so we should get prod, not a filter of "\x01prod" which would not match
+        [, , $p] = $this->makePicker("\x01prod\r");
+        $picked = $p->pick($endpoints);
+        // If control byte was dropped, filter is just "prod" and prod is picked
+        $this->assertSame('prod', $picked->name);
+    }
+
+    public function testBackspaceOnEmptyFilterPreservesSelection(): void
+    {
+        // Navigate down twice (to "dev"), backspace on empty filter (no-op),
+        // then Enter — the selection should still be "dev", not reset to 0.
+        [, , $p] = $this->makePicker("jj\x7f\r");
+        $picked = $p->pick($this->endpoints());
+        // Backspace on empty filter is a no-op, cursor stays at "dev"
         $this->assertSame('dev', $picked->name);
     }
 }

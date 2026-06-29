@@ -251,4 +251,88 @@ CONF;
         $this->assertSame('myhost.example.com', $endpoints[0]->host);
         $this->assertSame('myuser', $endpoints[0]->user);
     }
+
+    public function testMultiPatternHostWithoutHostName(): void
+    {
+        // Host a b c with no HostName should create 3 endpoints where
+        // each name/host is the pattern itself.
+        $raw = <<<CONF
+Host a b c
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(3, $endpoints);
+        $this->assertSame('a', $endpoints[0]->name);
+        $this->assertSame('a', $endpoints[0]->host);
+        $this->assertSame('b', $endpoints[1]->name);
+        $this->assertSame('b', $endpoints[1]->host);
+        $this->assertSame('c', $endpoints[2]->name);
+        $this->assertSame('c', $endpoints[2]->host);
+    }
+
+    public function testMultiPatternHostWithSharedHostName(): void
+    {
+        // Host a b + HostName shared.com should create 2 endpoints
+        // both resolving to shared.com but named a and b.
+        $raw = <<<CONF
+Host a b
+    HostName shared.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(2, $endpoints);
+        $this->assertSame('a', $endpoints[0]->name);
+        $this->assertSame('shared.com', $endpoints[0]->host);
+        $this->assertSame('b', $endpoints[1]->name);
+        $this->assertSame('shared.com', $endpoints[1]->host);
+    }
+
+    public function testMixedHostStarAndPattern(): void
+    {
+        // Host * web — the * feeds global options (no endpoint),
+        // web should emit one endpoint.
+        $raw = <<<CONF
+Host *
+    IdentityFile ~/.ssh/default
+
+Host web
+    HostName web.example.com
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $this->assertSame('web', $endpoints[0]->name);
+        $this->assertSame('web.example.com', $endpoints[0]->host);
+        $this->assertNotEmpty($endpoints[0]->identityFiles);
+    }
+
+    public function testExpandPathBareTilde(): void
+    {
+        // ~/.ssh/key should expand to $HOME/.ssh/key
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $expectedHome = getenv('HOME') ?? '/root';
+        $this->assertSame($expectedHome . '/.ssh/key', $endpoints[0]->identityFiles[0]);
+    }
+
+    public function testExpandPathTildeUser(): void
+    {
+        // ~root/.ssh/key should resolve to root's home if posix is available,
+        // OR be left as literal ~root/.ssh/key if root user doesn't exist.
+        $raw = <<<CONF
+Host example
+    HostName example.com
+    IdentityFile ~root/.ssh/key
+CONF;
+        $endpoints = $this->parse($raw);
+        $this->assertCount(1, $endpoints);
+        $path = $endpoints[0]->identityFiles[0];
+        // Either root's home or the literal path — never a mangled path
+        $this->assertTrue(
+            $path === '/root/.ssh/key' || $path === '~root/.ssh/key',
+            "Expected /root/.ssh/key or ~root/.ssh/key, got: $path"
+        );
+    }
 }

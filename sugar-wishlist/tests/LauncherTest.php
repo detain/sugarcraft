@@ -21,7 +21,7 @@ final class LauncherTest extends TestCase
 
         $this->assertSame('/usr/bin/ssh', $captured['bin']);
         $this->assertSame(
-            ['-p', '2222', 'deploy@prod.test'],
+            ['-p', '2222', '--', 'deploy@prod.test'],
             $captured['args'],
         );
     }
@@ -53,7 +53,7 @@ final class LauncherTest extends TestCase
         $launcher->dispatch($e);
 
         // Port 22 is default, so -p should not be in args
-        $this->assertSame(['admin@prod.test'], $captured);
+        $this->assertSame(['--', 'admin@prod.test'], $captured);
     }
 
     public function testDispatchWithoutUserDefaultsToHostOnly(): void
@@ -65,6 +65,6 @@ final class LauncherTest extends TestCase
         $e = new Endpoint(name: 'bare', host: 'just-a-host.example.com');
         $launcher->dispatch($e);
 
-        $this->assertSame(['just-a-host.example.com'], $captured);
+        $this->assertSame(['--', 'just-a-host.example.com'], $captured);
     }
 }
