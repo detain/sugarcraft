@@ -275,4 +275,13 @@ final class HandlerAdapterTest extends TestCase
 
         $this->parser->feed("\x1b[1;2q");
     }
+
+    public function testPrintCharForwardsMultiByteRune(): void
+    {
+        $this->csi->expects($this->once())
+            ->method('printable')
+            ->with('é'); // Full UTF-8 rune, not just the lead byte
+
+        $this->parser->feed("\xc3\xa9"); // UTF-8 encoding of 'é'
+    }
 }

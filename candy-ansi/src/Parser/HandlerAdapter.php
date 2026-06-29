@@ -23,8 +23,10 @@ final class HandlerAdapter implements Handler
     public function printChar(string $rune): void
     {
         $byte = $rune[0] ?? '';
-        if ($byte !== '' && ord($byte) >= 0x20 && ord($byte) <= 0x7E) {
-            $this->csi->printable($byte);
+        // Forward printable ASCII OR any valid UTF-8 lead byte (>= 0xC2).
+        // Drop C0 (< 0x20) and C1 (0x80-0xBF continuation) control bytes.
+        if ($byte !== '' && ord($byte) >= 0x20) {
+            $this->csi->printable($rune);
         }
     }
 
