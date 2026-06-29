@@ -42,4 +42,12 @@ final class StageTest extends TestCase
         // ANSI accent style emits SGR; raw string contains ESC sequence.
         $this->assertStringContainsString("\x1b[", $out);
     }
+
+    /** GLYPH_BULLET is currently the only un-exercised constant — close that gap. */
+    public function testBulletGlyph(): void
+    {
+        $out = Stage::step(1, 0, 'init', Theme::plain(), Stage::GLYPH_BULLET);
+        $this->assertStringContainsString('•', $out);
+        $this->assertStringContainsString('init', $out);
+    }
 }

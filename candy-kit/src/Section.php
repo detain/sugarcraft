@@ -30,25 +30,33 @@ final class Section
         string $rune = '─',
     ): string {
         $theme   ??= Theme::ansi();
-        $left      = str_repeat($rune, max(0, $leftPad));
+        $runeW   = max(1, Width::string($rune));  // cell width of the fill rune
+        $left    = str_repeat($rune, intdiv(max(0, $leftPad), $runeW));
         $labelOut  = $label === '' ? '' : ' ' . $theme->accent->render($label) . ' ';
         $head      = $left . $labelOut;
         if ($width === null) {
-            return $head . $rune;
+            return $head . $rune;  // one trailing rune (may exceed for multi-cell runes)
         }
         $remaining = max(0, $width - Width::string($head));
-        return $head . str_repeat($rune, $remaining);
+        $repeat = intdiv($remaining, $runeW);
+        return $head . str_repeat($rune, $repeat);
     }
 
     /**
      * Render a horizontal rule — same as `header('')` but expressed
      * directly. Pass `width: null` to use a fixed two-rune dash.
+     * The rule is styled with the theme's `muted` style and accepts
+     * a custom fill rune (measured in cells for multi-cell glyphs).
      */
     public static function rule(
         ?Theme $theme = null,
         ?int $width = 80,
         string $rune = '─',
     ): string {
-        return str_repeat($rune, max(1, $width ?? 2));
+        $theme  ??= Theme::ansi();
+        $runeW  = max(1, Width::string($rune));
+        $repeat = intdiv(max(1, $width ?? 2), $runeW);
+        $bare   = str_repeat($rune, $repeat);
+        return $theme->muted->render($bare);
     }
 }

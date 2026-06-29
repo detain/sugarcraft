@@ -24,6 +24,8 @@ final class Stage
 
     /**
      * Render a stage line. Pass `total = 0` to omit the `/total` suffix.
+     * Counts are clamped to the range `[0, total]` (i.e. negative values
+     * become `0`, and `current > total` is capped at `total`).
      */
     public static function step(
         int $current,
@@ -32,7 +34,12 @@ final class Stage
         ?Theme $theme = null,
         string $glyph = self::GLYPH_ARROW,
     ): string {
-        $theme ??= Theme::ansi();
+        $theme  ??= Theme::ansi();
+        $current = max(0, $current);
+        $total   = max(0, $total);
+        if ($total > 0) {
+            $current = min($current, $total);
+        }
         $count = $total > 0
             ? $current . '/' . $total
             : (string) $current;
