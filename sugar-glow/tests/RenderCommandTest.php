@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Glow\Tests;
 
+use SugarCraft\Glow\GlowModel;
 use SugarCraft\Glow\RenderCommand;
 use SugarCraft\Shine\Theme;
 use PHPUnit\Framework\TestCase;
@@ -348,5 +349,172 @@ final class RenderCommandTest extends TestCase
         $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
         $method->setAccessible(true);
         $this->assertTrue($method->invoke(null));
+    }
+
+    public function testTerminalSupportsColorReturnsFalseWhenNoColorEnvSet(): void
+    {
+        $original = getenv('NO_COLOR');
+        try {
+            putenv('NO_COLOR=1');
+            $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+            $method->setAccessible(true);
+            $this->assertFalse($method->invoke(null));
+        } finally {
+            if ($original === false) {
+                putenv('NO_COLOR');
+            } else {
+                putenv("NO_COLOR=$original");
+            }
+        }
+    }
+
+    public function testTerminalSupportsColorReturnsFalseWhenClicolorZero(): void
+    {
+        $original = getenv('CLICOLOR');
+        try {
+            putenv('CLICOLOR=0');
+            $method = new \ReflectionMethod(RenderCommand::class, 'terminalSupportsColor');
+            $method->setAccessible(true);
+            $this->assertFalse($method->invoke(null));
+        } finally {
+            if ($original === false) {
+                putenv('CLICOLOR');
+            } else {
+                putenv("CLICOLOR=$original");
+            }
+        }
+    }
+
+    public function testExecuteAutoDowngradesToNottyWhenNoColor(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'glow-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello\n\nWorld");
+        try {
+            RenderCommand::setColorProbeCallback(fn () => false);
+
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'ansi'], // default — no explicit choice
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $capturedOutput = '';
+            $output->method('writeln')->willReturnCallback(function ($msg) use (&$capturedOutput) {
+                $capturedOutput .= $msg;
+            });
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+            // notty theme produces plain output with no SGR escapes
+            $this->assertStringNotContainsString("\x1b[", $capturedOutput);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testExecuteRespectsExplicitThemeEvenWhenNoColor(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'glow-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello\n\nWorld");
+        try {
+            RenderCommand::setColorProbeCallback(fn () => false);
+
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', ''],
+                ['style', null],
+                ['theme', 'dracula'], // explicit theme choice
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+            $output->expects($this->once())->method('writeln');
+
+            $command = new RenderCommand();
+            $result = $this->invokeExecute($command, $input, $output);
+            $this->assertSame(Command::SUCCESS, $result);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testLoadInputEmptyStdinReturnsNull(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        // Stream is seekable but empty → should return null.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertNull($result);
+    }
+
+    public function testLoadInputReadsStdin(): void
+    {
+        // Use a pipe that we control — php://temp is seekable and not a TTY.
+        $stream = fopen('php://temp', 'r+');
+        $this->assertNotFalse($stream);
+        fwrite($stream, "# Hello from stdin");
+        fseek($stream, 0); // Rewind to beginning so loadInput can read it.
+        $result = RenderCommand::loadInput('', $stream);
+        fclose($stream);
+        $this->assertSame("# Hello from stdin", $result);
+    }
+
+    public function testExecuteUnreadableThemeConfigThrows(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'glow-');
+        $this->assertNotFalse($tmp);
+        file_put_contents($tmp, "# Hello");
+        try {
+            $input = $this->createMock(InputInterface::class);
+            $input->method('getArgument')->with('file')->willReturn($tmp);
+            $input->method('getOption')->willReturnMap([
+                ['theme-config', '/no/such/theme.json'],
+                ['style', null],
+                ['theme', 'ansi'],
+                ['width', 0],
+                ['pager', false],
+                ['no-hyperlinks', false],
+            ]);
+
+            $output = $this->createMock(OutputInterface::class);
+
+            $command = new RenderCommand();
+            $this->expectException(\InvalidArgumentException::class);
+            $this->invokeExecute($command, $input, $output);
+        } finally {
+            unlink($tmp);
+        }
+    }
+
+    public function testBuildPagerModelWiresContentAndSize(): void
+    {
+        $rendered = "line1\nline2\nline3";
+        $cols = 80;
+        $rows = 5;
+
+        $method = new \ReflectionMethod(RenderCommand::class, 'buildPagerModel');
+        $method->setAccessible(true);
+
+        $model = $method->invoke(null, $rendered, $cols, $rows);
+
+        $this->assertInstanceOf(GlowModel::class, $model);
+        // View should contain the rendered content.
+        $this->assertStringContainsString('line1', $model->view());
+        // The model should not be exited initially.
+        $this->assertFalse($model->isExited());
     }
 }

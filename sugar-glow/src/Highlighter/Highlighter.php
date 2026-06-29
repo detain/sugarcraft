@@ -16,7 +16,7 @@ final class Highlighter
     /**
      * Create a highlighter with the default ChromaJsonHighlighter.
      */
-    public static function default(): self
+    public static function new(): self
     {
         return new self(new ChromaJsonHighlighter([
             'comment'     => '90',   // bright black
@@ -38,9 +38,10 @@ final class Highlighter
         return preg_replace_callback(
             '/```(\w+)?\n([\s\S]*?)```/',
             function (array $matches): string {
-                $lang = $matches[1] ?? 'text';
+                $lang = $matches[1] ?? '';
                 $code = $matches[2];
-                if ($this->inner !== null && $this->inner->supports($lang)) {
+                // Only highlight when a language is specified AND the inner highlighter supports it.
+                if ($lang !== '' && $this->inner !== null && $this->inner->supports($lang)) {
                     $code = $this->inner->highlight(rtrim($code), $lang);
                 }
                 return $code;

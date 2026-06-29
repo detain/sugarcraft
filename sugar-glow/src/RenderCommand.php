@@ -43,7 +43,7 @@ final class RenderCommand extends Command
         $this
             ->addArgument('file',     InputArgument::OPTIONAL, 'Markdown file. Default: stdin.')
             ->addOption('pager',         'p', InputOption::VALUE_NONE,     'Open the rendered output in a fullscreen pager.')
-            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | notty | dracula | tokyo-night | pink', 'ansi')
+            ->addOption('theme',         null, InputOption::VALUE_REQUIRED, 'ansi | plain | dark | light | notty | dracula | tokyo-night | pink | solarized | monokai | github', 'ansi')
             ->addOption('style',         's',  InputOption::VALUE_REQUIRED, 'Alias for --theme (glamour-compat).', null)
             ->addOption('theme-config',  null, InputOption::VALUE_REQUIRED, 'Load a custom JSON theme file (overrides --theme).', '')
             ->addOption('width',         'w',  InputOption::VALUE_REQUIRED, 'Wrap text at this column count. 0 = no wrap.', 0)
@@ -61,9 +61,25 @@ final class RenderCommand extends Command
         // Theme selection: --theme-config (JSON) wins over --theme/--style.
         $configPath = (string) $input->getOption('theme-config');
         $themeName  = (string) ($input->getOption('style') ?? $input->getOption('theme'));
-        $theme      = $configPath !== ''
-            ? Theme::fromJson($configPath)
-            : self::pickTheme($themeName);
+
+        // Determine whether the user explicitly chose a theme (vs. accepting the 'ansi' default).
+        // 'ansi' default from configure() means "no explicit choice" — auto-downgrade when
+        // the terminal has no color capability.
+        $explicitTheme = $configPath !== ''
+            || $input->getOption('style') !== null
+            || (string) $input->getOption('theme') !== 'ansi';
+
+        if ($configPath !== '') {
+            if (!is_readable($configPath)) {
+                throw new \InvalidArgumentException(Lang::t('render.theme_config_unreadable', ['path' => $configPath]));
+            }
+            $theme = Theme::fromJson($configPath);
+        } elseif (!$explicitTheme && !self::terminalSupportsColor()) {
+            // No explicit theme AND terminal cannot render color → use notty.
+            $theme = Theme::notty();
+        } else {
+            $theme = self::pickTheme($themeName);
+        }
 
         $width      = (int) $input->getOption('width');
         $renderer   = (new Renderer($theme))
@@ -78,7 +94,7 @@ final class RenderCommand extends Command
 
         // Pager mode: drop into a Program with a Viewport-backed Model.
         $size  = (new Tty())->size();
-        $model = GlowModel::fromContent($rendered, $size['cols'], $size['rows']);
+        $model = self::buildPagerModel($rendered, $size['cols'], $size['rows']);
         $program = new Program($model, new ProgramOptions(
             useAltScreen:    true,
             hideCursor:      true,
@@ -110,6 +126,7 @@ final class RenderCommand extends Command
     /**
      * Probe the terminal for ANSI color capability.
      *
+     * Honors NO_COLOR and CLICOLOR=0 env vars before probing.
      * Falls back to true (assume color capable) on any probe error
      * so we never incorrectly refuse input due to a broken probe.
      */
@@ -119,6 +136,10 @@ final class RenderCommand extends Command
             if (self::$colorProbeCallback !== null) {
                 return (self::$colorProbeCallback)();
             }
+            // Honor standard color-disabling env vars before probing the terminal.
+            if (getenv('NO_COLOR') !== '' || getenv('CLICOLOR') === '0') {
+                return false;
+            }
             $report = TerminalProbe::run();
             return !$report->has(Capability::NoColor);
         } catch (\Throwable) {
@@ -126,25 +147,29 @@ final class RenderCommand extends Command
         }
     }
 
-    /** @return string|null */
-    public static function loadInput(string $file): ?string
+    /**
+     * @param resource|null $stream Defaults to STDIN; allows unit-testing stdin paths.
+     */
+    public static function loadInput(string $file, $stream = null): ?string
     {
         if ($file !== '') {
             $contents = @file_get_contents($file);
             return is_string($contents) ? $contents : null;
         }
-        if (!defined('STDIN') || !is_resource(STDIN) || TtyDetect::isAtty(STDIN)) {
+        $stream = $stream ?? STDIN;
+        if (!defined('STDIN') || !is_resource($stream) || TtyDetect::isAtty($stream)) {
             return null;
         }
-        // Guard: if the terminal doesn't support color (NO_COLOR set or
-        // no-color capability detected), still read stdin but the caller
-        // will render with a non-color theme.  On probe failure, assume
-        // color is available (graceful degradation per step-29 brief).
-        if (!self::terminalSupportsColor()) {
-            $raw = stream_get_contents(STDIN);
-            return is_string($raw) && $raw !== '' ? $raw : null;
-        }
-        $raw = stream_get_contents(STDIN);
+        // Color decision now lives entirely in execute(); loadInput just reads stdin.
+        $raw = stream_get_contents($stream);
         return is_string($raw) && $raw !== '' ? $raw : null;
+    }
+
+    /**
+     * Build the GlowModel for pager mode from rendered content and terminal size.
+     */
+    private static function buildPagerModel(string $rendered, int $cols, int $rows): GlowModel
+    {
+        return GlowModel::fromContent($rendered, $cols, $rows);
     }
 }
