@@ -52,6 +52,12 @@ final class Color
     public static function parse(string $hex, int $a = 255): self
     {
         $hex = \ltrim($hex, '#');
+        if (\strlen($hex) !== 3 && \strlen($hex) !== 6) {
+            throw new \InvalidArgumentException("invalid hex color: {$hex}");
+        }
+        if (!\ctype_xdigit($hex)) {
+            throw new \InvalidArgumentException("invalid hex color: {$hex}");
+        }
         if (\strlen($hex) === 3) {
             $hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
         }
@@ -96,6 +102,13 @@ final class Color
      */
     public function toAnsi256Index(): int
     {
+        if ($this->r === 0 && $this->g === 0 && $this->b === 0) {
+            return 16;
+        }
+        if ($this->r === 255 && $this->g === 255 && $this->b === 255) {
+            return 231;
+        }
+
         // Greyscale: map to the 24-step grey ramp (232-255)
         if ($this->isGreyscale()) {
             $grey = (int) \round($this->luminance() / 255 * 23);
@@ -152,12 +165,56 @@ final class Color
     }
 
     /**
-     * Emit a 16-color ANSI foreground escape.
+     * Emit a 16-color ANSI foreground escape using 4-bit SGR.
+     *
+     * @see https://github.com/charmbracelet/colorprofile.Color.ToANSI16Foreground
      */
     public function toAnsi16Foreground(): string
     {
-        $idx = $this->toAnsi16Index();
-        return "\x1b[38;5;{$idx}m";
+        return "\x1b[" . self::ansi16Sgr($this->toAnsi16Index(), false) . "m";
+    }
+
+    /**
+     * Emit a 16-color ANSI background escape using 4-bit SGR.
+     */
+    public function toAnsi16Background(): string
+    {
+        return "\x1b[" . self::ansi16Sgr($this->toAnsi16Index(), true) . "m";
+    }
+
+    /**
+     * Map an ANSI 16-color index (0–15) to a 4-bit SGR code.
+     *
+     * Foreground: 0–7 → 30–37, 8–15 → 90–97
+     * Background: 0–7 → 40–47, 8–15 → 100–107
+     *
+     * @see https://github.com/charmbracelet/colorprofile.Color.ANSI16SGR
+     */
+    public static function ansi16Sgr(int $idx, bool $background): int
+    {
+        $base = $background ? 40 : 30;
+        if ($idx < 8) {
+            return $base + $idx;
+        }
+        $offsetBase = $background ? 100 : 90;
+        return $offsetBase + ($idx - 8);
+    }
+
+    /**
+     * Decode an ANSI 256-color index back to an RGB color.
+     *
+     * @see https://github.com/charmbracelet/colorprofile.Color.FromANSI256Index
+     */
+    public static function fromAnsi256Index(int $idx): self
+    {
+        if ($idx >= 232) {
+            $grey = ($idx - 232) * 10 + 8;
+            return new self($grey, $grey, $grey);
+        }
+        $r = (int) \round((($idx - 16) / 36) * 255 / 5);
+        $g = (int) \round(((($idx - 16) % 36) / 6) * 255 / 5);
+        $b = (int) \round((($idx - 16) % 6) * 255 / 5);
+        return new self($r, $g, $b);
     }
 
     /**

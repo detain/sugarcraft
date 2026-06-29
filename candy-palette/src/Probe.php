@@ -213,7 +213,7 @@ final class Probe
             return $profile;
         }
 
-        $output = @shell_exec('infocmp -1 ' . escapeshellarg($term) . ' 2>/dev/null');
+        $output = @shell_exec(self::$infocmpPath . ' -1 ' . escapeshellarg($term) . ' 2>/dev/null');
         if ($output === null) {
             return $profile;
         }
@@ -226,22 +226,25 @@ final class Probe
         return $profile;
     }
 
+    private static ?string $infocmpPath = null;
+
     private static function infocmpAvailable(): bool
     {
-        static $available = null;
-        return $available ??= is_file('/usr/bin/infocmp') || is_file('/bin/infocmp');
+        if (self::$infocmpPath !== null) {
+            return self::$infocmpPath !== '';
+        }
+        self::$infocmpPath = is_file('/usr/bin/infocmp') ? '/usr/bin/infocmp'
+            : (is_file('/bin/infocmp') ? '/bin/infocmp' : '');
+        return self::$infocmpPath !== '';
     }
 
     /**
      * Reset internal static state (for testing only).
      *
      * @internal
-     *
-     * @param array<string, string|null> $overrides
      */
     public static function _reset(array $overrides = []): void
     {
-        // No mutable state — env reads are idempotent.
-        // Keep for future static cache if needed.
+        self::$infocmpPath = null;
     }
 }

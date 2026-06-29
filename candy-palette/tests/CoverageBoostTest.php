@@ -138,9 +138,14 @@ final class CoverageBoostTest extends TestCase
 
     public function testColorAnsi16ForegroundEscape(): void
     {
-        $out = (new Color(255, 0, 0))->toAnsi16Foreground();
-        $this->assertStringContainsString("\x1b[", $out);
-        $this->assertStringContainsString('m', $out);
+        $this->assertSame("\x1b[91m", (new Color(255, 0, 0))->toAnsi16Foreground());
+        $this->assertSame("\x1b[34m", (new Color(0, 0, 205))->toAnsi16Foreground());
+    }
+
+    public function testColorAnsi16BackgroundEscape(): void
+    {
+        $this->assertSame("\x1b[101m", (new Color(255, 0, 0))->toAnsi16Background());
+        $this->assertSame("\x1b[44m", (new Color(0, 0, 205))->toAnsi16Background());
     }
 
     public function testColorAnsi256ForegroundEscape(): void
