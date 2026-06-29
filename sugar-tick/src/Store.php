@@ -19,6 +19,9 @@ use SugarCraft\Async\CancellationToken;
  */
 final class Store
 {
+    // memoization, not observable state
+    private array $dayCache = [];
+
     public function __construct(public readonly string $dir)
     {}
 
@@ -35,7 +38,11 @@ final class Store
     /** @return list<Heartbeat> */
     public function loadDay(\DateTimeImmutable $day): array
     {
-        $file = $this->dir . '/' . $day->format('Y-m-d') . '.jsonl';
+        $key = $day->format('Y-m-d');
+        if (isset($this->dayCache[$key])) {
+            return $this->dayCache[$key];
+        }
+        $file = $this->dir . '/' . $key . '.jsonl';
         if (!is_file($file)) {
             return [];
         }
@@ -48,6 +55,7 @@ final class Store
                 $rows[] = Heartbeat::fromArray($decoded);
             }
         }
+        $this->dayCache[$key] = $rows;
         return $rows;
     }
 
@@ -66,6 +74,12 @@ final class Store
             $cur  = $cur->modify('+1 day');
         }
         return array_merge([], ...$chunks);
+    }
+
+    /** Invalidate the day cache (forces reload on next loadDay). */
+    public function invalidate(): void
+    {
+        $this->dayCache = [];
     }
 
     /**

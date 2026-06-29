@@ -64,6 +64,12 @@ final class Dashboard implements Model
 
     public function reload(): self
     {
+        $this->store->invalidate();
+        return $this->recompute();
+    }
+
+    private function recompute(): self
+    {
         $from = $this->endDay->modify('-' . ($this->days - 1) . ' days');
         $beats = $this->store->loadRange($from, $this->endDay);
         return new self(
@@ -81,7 +87,7 @@ final class Dashboard implements Model
         if ($next > $today) {
             $next = $today;
         }
-        return (new self($this->store, $next, $this->days))->reload();
+        return (new self($this->store, $next, $this->days))->recompute();
     }
 
     public function subscriptions(): ?\SugarCraft\Core\Subscriptions
