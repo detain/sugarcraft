@@ -170,8 +170,11 @@ final class StyleParser
     /**
      * Parse a color value string to a Color, or null if unknown.
      */
-    private static function parseColor(string $value): ?Color
+    private static function parseColor(?string $value): ?Color
     {
+        if ($value === null) {
+            return null;
+        }
         $value = trim($value);
 
         // Named ANSI colors
