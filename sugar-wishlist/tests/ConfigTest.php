@@ -195,4 +195,22 @@ YAML;
         $this->expectException(\RuntimeException::class);
         Config::parse($raw, 'wishlist.yml');
     }
+
+    public function testRejectsJsonEntryObject(): void
+    {
+        // A top-level array whose entries are not objects (e.g. [1, 2])
+        // should throw config.json_entry_object.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('each entry must be an object');
+        Config::parse('[1, 2]', 'wishlist.json');
+    }
+
+    public function testRejectsYamlContinuationWithoutHeader(): void
+    {
+        // A YAML doc that begins with an indented continuation key
+        // (before any - name: header) should throw yaml_continuation.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage("continuation before any '- name:' block");
+        Config::parse("  port: 2222\n- name: prod", 'wishlist.yml');
+    }
 }
