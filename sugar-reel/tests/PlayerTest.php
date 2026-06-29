@@ -1716,6 +1716,50 @@ final class PlayerTest extends TestCase
             'When totalFrames>0 the ended hint must show "0 restart"'
         );
     }
+
+    /**
+     * @testdox view() with currentFrame === null renders exactly cellsH+1 lines:
+     *           cellsH blank rows + a status line (the placeholder)
+     *
+     * Player::openForTest starts with currentFrame = null (paused, before any
+     * tick). The placeholder must not crash and must produce exactly cellsH+1
+     * CRLF-separated lines: the first cellsH lines are all spaces (one line
+     * per cell row), and the last line is the fixed status text.
+     */
+    public function testPlaceholderViewIsBlankGridPlusStatusLine(): void
+    {
+        $cellsW = 4;
+        $cellsH = 3;
+        $decoder = $this->makeFakeDecoder(10);
+        $player = Player::openForTest($decoder, 1.0, 0, $cellsW, $cellsH, '/fake', false, 'standard');
+
+        // currentFrame starts null in openForTest — view() hits renderPlaceholder.
+        $view = $player->view();
+        $lines = explode("\r\n", $view);
+
+        $this->assertSame(
+            $cellsH + 1,
+            count($lines),
+            'Placeholder must produce exactly cellsH+1 lines (cellsH blank + status)'
+        );
+
+        // First cellsH lines must be exactly cellsW spaces.
+        for ($i = 0; $i < $cellsH; $i++) {
+            $this->assertSame(
+                $cellsW,
+                strlen($lines[$i]),
+                "Line $i must be exactly cellsW ({$cellsW}) spaces"
+            );
+            $this->assertSame(
+                str_repeat(' ', $cellsW),
+                $lines[$i],
+                "Line $i must be all spaces"
+            );
+        }
+
+        // Last line is the status text.
+        $this->assertSame('loading...  space play  q quit', $lines[$cellsH]);
+    }
 }
 
 /**
