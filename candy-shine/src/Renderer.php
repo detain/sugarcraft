@@ -41,6 +41,10 @@ use League\CommonMark\Extension\Table\TableRow;
 use League\CommonMark\Extension\Table\TableSection;
 use League\CommonMark\Extension\TaskList\TaskListExtension;
 use League\CommonMark\Extension\TaskList\TaskListItemMarker;
+use League\CommonMark\Extension\DescriptionList\DescriptionList as MdDescriptionList;
+use League\CommonMark\Extension\DescriptionList\DescriptionListExtension;
+use League\CommonMark\Extension\DescriptionList\Node\Description;
+use League\CommonMark\Extension\DescriptionList\Node\DescriptionTerm;
 use League\CommonMark\Node\Block\Paragraph;
 use League\CommonMark\Node\Inline\Newline;
 use League\CommonMark\Node\Inline\Text;
@@ -105,6 +109,7 @@ final class Renderer
         $env->addExtension(new TaskListExtension());
         $env->addExtension(new StrikethroughExtension());
         $env->addExtension(new AutolinkExtension());
+        $env->addExtension(new DescriptionListExtension());
         $this->parser = new MarkdownParser($env);
     }
 
@@ -422,6 +427,9 @@ final class Renderer
             $node instanceof ListBlock     => $this->renderList($node),
             $node instanceof ListItem      => $this->renderListItem($node),
             $node instanceof MdTable       => $this->renderTable($node),
+            $node instanceof MdDescriptionList => $this->renderDescriptionList($node),
+            $node instanceof DescriptionTerm => $this->renderDescriptionTerm($node),
+            $node instanceof Description    => $this->renderDescription($node),
             $node instanceof ThematicBreak => $this->theme->rule->render(
                 str_repeat($this->theme->horizontalRuleGlyph, max(1, $this->theme->horizontalRuleLength))
             ) . "\n\n",
@@ -910,6 +918,27 @@ final class Renderer
             middleTop: $this->theme->tableRowSeparator,
             middleBottom: $this->theme->tableRowSeparator,
         );
+    }
+
+    private function renderDescriptionList(MdDescriptionList $list): string
+    {
+        $inner = $this->renderChildren($list);
+        $style = $this->theme->definitionList;
+        return $style !== null ? $style->render($inner) : $inner;
+    }
+
+    private function renderDescriptionTerm(DescriptionTerm $term): string
+    {
+        $body = $this->renderChildren($term);
+        $style = $this->theme->definitionTerm ?? Style::new();
+        return $style->render($body);
+    }
+
+    private function renderDescription(Description $desc): string
+    {
+        $body = $this->renderChildren($desc);
+        $style = $this->theme->definitionDescription ?? Style::new();
+        return $style->render($body) . "\n\n";
     }
 
     /**
