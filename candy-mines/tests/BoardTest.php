@@ -317,4 +317,52 @@ final class BoardTest extends TestCase
         $this->assertTrue($r->cell(1, 1)->flagged);
         $this->assertTrue($r->cell(2, 2)->flagged);
     }
+
+    /**
+     * Regression test: chord into a zero-adjacent neighbour must cascade
+     * through the full empty pocket, not just reveal the single neighbour.
+     *
+     * Setup — 5×3 board, mines at (0,0) and (0,2):
+     *   Row 0: [mine@flagged, adj=2, mine,  adj=0,  adj=0 ]
+     *   Row 1: [adj=1,       revealed@adj=1, adj=1, adj=0,  adj=0 ]
+     *   Row 2: [adj=0,       adj=1,        adj=0, adj=0,  adj=0 ]
+     *
+     * (1,1) is revealed with adj=1 and has exactly one flagged neighbour at (0,0).
+     * (1,2) is an unrevealed safe cell with adj=0 — neither mine at (0,0) nor (0,2)
+     * touches it. When chord(1,1) fires, floodReveal runs on (1,2), sees adj=0, and
+     * cascades to its zero-adjacent neighbours including (2,2).
+     *
+     * This test fails before the flood-fill chord fix and passes after.
+     */
+    public function testChordCascadesIntoEmptyRegion(): void
+    {
+        // Build the 5×3 grid by hand with exact adjacent values.
+        // Rows[y][x] — y=0 is top row; mines are at (0,0) and (0,2).
+        // Cell (0,0): mine (flagged), so adj values of its neighbours are affected.
+        // Cell (0,2): mine (unflagged), affects adj values too.
+        $rows = [
+            // y=0: two mines (one flagged), the rest clear.
+            [new \SugarCraft\Mines\Cell(true,  false, true,  0), new \SugarCraft\Mines\Cell(false, false, false, 2), new \SugarCraft\Mines\Cell(true,  false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            // y=1: the satisfied revealed number; (1,2) is adj=0 zero-pocket.
+            [new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, true,  false, 1), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            // y=2: the cascading zero-adjacent pocket.
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+        ];
+
+        // minesPlaced=true, exploded=false, revealedCount=1 (only (1,1) revealed).
+        $board = new Board(5, 3, 2, $rows, true, false, 1);
+
+        // Chord at (1,1): adj=1, one flagged neighbour → satisfied.
+        $next = $board->chord(1, 1);
+
+        // The immediate unflagged neighbour (1,2) must be revealed.
+        $this->assertTrue($next->cell(1, 2)->revealed, 'Immediate neighbour must be revealed by chord');
+
+        // A cell two steps deeper — (2,2) — must also be revealed (proves cascade,
+        // not just single-cell reveal).
+        $this->assertTrue($next->cell(2, 2)->revealed, 'Cascade must reach deeper empty-pocket cells');
+
+        // revealedCount must grow beyond the pre-chord baseline of 1.
+        $this->assertGreaterThan(1, $next->revealedCount, 'Cascade must reveal more than one cell');
+    }
 }
