@@ -12,15 +12,6 @@ enum Direction {
     case Column;  // vertical
 }
 
-/** {@see FlexBox} main-axis distribution of free space — equivalent to CSS `justify-content`. */
-enum Justify {
-    case Start;
-    case Center;
-    case End;
-    case SpaceBetween;
-    case SpaceAround;
-}
-
 /** {@see FlexBox} cross-axis item alignment — equivalent to CSS `align-items`. */
 enum Align {
     case Start;
@@ -32,7 +23,8 @@ enum Align {
 /**
  * CSS flexbox-like layout for terminal UIs.
  *
- * Supports row/column direction, justify/align, gap, wrapping, and ratio-based sizing.
+ * Supports row/column direction, align, gap, wrapping, and ratio-based sizing.
+ * Note: `wrap` and `border` are stored but not yet implemented in rendering.
  *
  * Port of 76creates/stickers FlexBox.
  *
@@ -45,7 +37,6 @@ final class FlexBox
      */
     private function __construct(
         public readonly Direction $direction = Direction::Row,
-        public readonly Justify $justify = Justify::Start,
         public readonly Align $align = Align::Stretch,
         public readonly int $gap = 0,
         public readonly bool $wrap = false,
@@ -59,12 +50,12 @@ final class FlexBox
 
     public static function row(FlexItem ...$items): self
     {
-        return new self(Direction::Row, Justify::Start, Align::Stretch, 0, false, false, $items);
+        return new self(Direction::Row, Align::Stretch, 0, false, false, $items);
     }
 
     public static function column(FlexItem ...$items): self
     {
-        return new self(Direction::Column, Justify::Start, Align::Stretch, 0, false, false, $items);
+        return new self(Direction::Column, Align::Stretch, 0, false, false, $items);
     }
 
     // -------------------------------------------------------------------------
@@ -73,39 +64,34 @@ final class FlexBox
 
     public function withDirection(Direction $d): self
     {
-        return new self($d, $this->justify, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
-    }
-
-    public function withJustify(Justify $j): self
-    {
-        return new self($this->direction, $j, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
+        return new self($d, $this->align, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withAlign(Align $a): self
     {
-        return new self($this->direction, $this->justify, $a, $this->gap, $this->wrap, $this->border, $this->items);
+        return new self($this->direction, $a, $this->gap, $this->wrap, $this->border, $this->items);
     }
 
     public function withGap(int $cells): self
     {
-        return new self($this->direction, $this->justify, $this->align, $cells, $this->wrap, $this->border, $this->items);
+        return new self($this->direction, $this->align, $cells, $this->wrap, $this->border, $this->items);
     }
 
     public function withWrap(bool $w = true): self
     {
-        return new self($this->direction, $this->justify, $this->align, $this->gap, $w, $this->border, $this->items);
+        return new self($this->direction, $this->align, $this->gap, $w, $this->border, $this->items);
     }
 
     public function withBorder(bool $b = true): self
     {
-        return new self($this->direction, $this->justify, $this->align, $this->gap, $this->wrap, $b, $this->items);
+        return new self($this->direction, $this->align, $this->gap, $this->wrap, $b, $this->items);
     }
 
     public function addItem(FlexItem $item): self
     {
         $newItems = $this->items;
         $newItems[] = $item;
-        return new self($this->direction, $this->justify, $this->align, $this->gap, $this->wrap, $this->border, $newItems);
+        return new self($this->direction, $this->align, $this->gap, $this->wrap, $this->border, $newItems);
     }
 
     // -------------------------------------------------------------------------
@@ -175,12 +161,6 @@ final class FlexBox
             }
         }
 
-        // Compute start X for each item
-        $offsets = [0];
-        for ($i = 0; $i < \count($measured) - 1; $i++) {
-            $offsets[] = $offsets[$i] + $measured[$i]['allocated'] + $gap;
-        }
-
         $resultLines = [];
         $heights = \array_column($measured, 'height');
         $maxHeight = $this->align === Align::Stretch
@@ -244,11 +224,6 @@ final class FlexBox
                 : ($totalRatio > 0 ? (int) \round($freeHeight * $m['item']->ratio / $totalRatio) : 1);
         }
 
-        $offsets = [0];
-        for ($i = 0; $i < \count($measured) - 1; $i++) {
-            $offsets[] = $offsets[$i] + $measured[$i]['allocated'] + $gap;
-        }
-
         $resultLines = [];
         for ($i = 0; $i < \count($measured); $i++) {
             $m    = $measured[$i];
@@ -305,7 +280,6 @@ final class FlexBox
         if ($visualWidth >= $width) {
             return $truncated;
         }
-        $pad = $width - $visualWidth;
         return match ($align) {
             Align::Start    => \SugarCraft\Core\Util\Width::padRight($truncated, $width),
             Align::End      => \SugarCraft\Core\Util\Width::padLeft($truncated, $width),

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Stickers\Tests;
 
-use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem, Justify};
+use SugarCraft\Stickers\Flex\{Align, Direction, FlexBox, FlexItem};
 use SugarCraft\Stickers\Scrollbar;
 use SugarCraft\Stickers\Table\{Column, Table, TableRenderer};
 use SugarCraft\Stickers\Viewport;
@@ -85,13 +85,6 @@ final class StickersTest extends TestCase
         $this->assertIsString($result);
         $this->assertStringContainsString('TOP', $result);
         $this->assertStringContainsString('BOTTOM', $result);
-    }
-
-    public function testFlexBoxWithJustify(): void
-    {
-        $box = FlexBox::row(FlexItem::new('x'))
-            ->withJustify(Justify::Center);
-        $this->assertSame(Justify::Center, $box->justify);
     }
 
     public function testFlexBoxWithAlign(): void
