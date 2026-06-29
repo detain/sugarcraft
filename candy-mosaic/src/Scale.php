@@ -118,6 +118,10 @@ enum Scale
      */
     private function crop(int $srcW, int $srcH, int $dstW, int $dstH): array
     {
+        // The $srcW/$srcH factors cancel algebraically:
+        //   srcCropW = round(dstW/dstH * srcH)   — centre-crop width at source's display aspect
+        //   srcCropH = round(dstH/dstW * srcW)   — centre-crop height
+        // These produce aspect-correct crops regardless of source resolution.
         $srcCropW = (int) round($srcW * $dstW / $dstH * $srcH / $srcW);
         $srcCropH = (int) round($srcH * $dstH / $dstW * $srcW / $srcH);
 
