@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Shine\Tests;
 
+use SugarCraft\Shine\Renderer;
 use SugarCraft\Shine\Theme;
 use PHPUnit\Framework\TestCase;
 
@@ -181,5 +182,19 @@ final class ThemeTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         Theme::fromJsonString(json_encode(['code' => ['foreground' => 'ansi:xyz']]));
+    }
+
+    /**
+     * Strikethrough with a null strike slot should fall back to
+     * Style::new()->strikethrough() (the default from Renderer::renderStrike).
+     * Theme::ansi() has null strike by not specifying it.
+     */
+    public function testStrikethroughNullFallbackRenders(): void
+    {
+        $r = new Renderer(Theme::ansi());
+        $out = $r->render('~~strike~~');
+        // Fallback is Style::new()->strikethrough() which emits the strikethrough SGR code.
+        $this->assertStringContainsString("\x1b[9m", $out);
+        $this->assertStringContainsString('strike', $out);
     }
 }
