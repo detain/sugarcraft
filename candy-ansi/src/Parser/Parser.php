@@ -174,15 +174,16 @@ final class Parser
         }
 
         $digit = $byte - 0x30;
-        if (empty($this->params) || $this->params[count($this->params) - 1] === -1) {
-            if (empty($this->params)) {
-                $this->params[] = $digit;
-            } else {
-                $this->params[count($this->params) - 1] = $digit;
-            }
+        $n = count($this->params);
+        if ($n === 0) {
+            $this->params[] = $digit;
             return;
         }
-        $last = count($this->params) - 1;
+        $last = $n - 1;
+        if ($this->params[$last] === -1) {
+            $this->params[$last] = $digit;
+            return;
+        }
         $this->params[$last] = $this->params[$last] * 10 + $digit;
     }
 
