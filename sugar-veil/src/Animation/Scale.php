@@ -20,7 +20,7 @@ final class Scale
     }
 
     /**
-     * @codeCoverageIgnore
+     * Get the easing function, falling back to easeOut if not set.
      */
     private function easing(): CubicBezier
     {
