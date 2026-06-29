@@ -284,4 +284,12 @@ final class HandlerAdapterTest extends TestCase
 
         $this->parser->feed("\xc3\xa9"); // UTF-8 encoding of 'é'
     }
+
+    public function testOscClearTitle(): void
+    {
+        // "2;" is the legitimate OSC 2 clear-title sequence
+        $this->osc->expects($this->once())->method('title')->with('');
+
+        $this->parser->feed("\x1b]2;\x07"); // OSC 2 + BEL terminator
+    }
 }
