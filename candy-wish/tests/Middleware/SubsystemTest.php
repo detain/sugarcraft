@@ -104,6 +104,44 @@ final class SubsystemTest extends TestCase
         $this->assertFalse($sub->has('unknown'));
     }
 
+    public function testDispatchesWithTrailingSpace(): void
+    {
+        $stub = new SftpStub();
+        $sub = new Subsystem();
+        $sub->register('sftp', $stub);
+
+        $nextCalled = false;
+        $sub->handle(
+            Context::background(),
+            $this->session('subsystem sftp '),
+            function () use (&$nextCalled): void {
+                $nextCalled = true;
+            },
+        );
+
+        $this->assertTrue($stub->wasCalled());
+        $this->assertFalse($nextCalled);
+    }
+
+    public function testDispatchesWithArgs(): void
+    {
+        $stub = new SftpStub();
+        $sub = new Subsystem();
+        $sub->register('sftp', $stub);
+
+        $nextCalled = false;
+        $sub->handle(
+            Context::background(),
+            $this->session('subsystem sftp -v'),
+            function () use (&$nextCalled): void {
+                $nextCalled = true;
+            },
+        );
+
+        $this->assertTrue($stub->wasCalled());
+        $this->assertFalse($nextCalled);
+    }
+
     public function testMultipleHandlers(): void
     {
         $stub1 = new SftpStub();
