@@ -44,6 +44,16 @@ final class TmuxPassthroughDecorator implements Renderer
         return $this->inner->supportsAlpha();
     }
 
+    public function isInline(): bool
+    {
+        return $this->inner->isInline();
+    }
+
+    public function delete(string $imageId): string
+    {
+        return $this->wrap($this->inner->delete($imageId));
+    }
+
     /**
      * Wrap raw ANSI bytes in the tmux passthrough envelope.
      *
