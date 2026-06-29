@@ -41,6 +41,10 @@ final class Subscriptions implements Subscription
      */
     public function add(Subscription $subscription): void
     {
+        if ($subscription === $this) {
+            // Guard against self-composition to prevent infinite recursion.
+            return;
+        }
         if ($this->unsubscribed) {
             // Already disposed \u2014 dispose the new subscription immediately.
             $subscription->unsubscribe();
@@ -61,6 +65,16 @@ final class Subscriptions implements Subscription
     public function isActive(): bool
     {
         return !$this->unsubscribed;
+    }
+
+    public function count(): int
+    {
+        return count($this->subscriptions);
+    }
+
+    public function isEmpty(): bool
+    {
+        return $this->subscriptions === [];
     }
 
     /**
