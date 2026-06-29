@@ -287,6 +287,30 @@ final class HermitTest extends TestCase
         $this->assertStringContainsString("\x1b[31m", $view);
     }
 
+    public function testHighlightMatchesExactSGRBytes(): void
+    {
+        // 'banana' filtered by 'an' yields the highlighted fragment:
+        // "\x1b[33man\x1b[0m" embedded in the item line (yellow highlight).
+        // Use explicit windowWidth to avoid computeWidth() path and ensure
+        // no truncateAnsi truncation of the highlighted string.
+        $h = Hermit::new([new FilteredItem(1, 'banana')])
+            ->setWindowWidth(40)
+            ->setMatchStyle("\x1b[33m")
+            ->show()
+            ->type('an');
+
+        $bg = str_repeat(str_repeat(' ', 40) . "\n", 5);
+        $view = $h->View($bg);
+
+        // Assert the exact SGR placement: opening code, matched run, reset.
+        // strpos is used directly because PHPUnit's assertStringContainsString
+        // may represent non-printable bytes differently in failure output.
+        $this->assertNotFalse(
+            \strpos($view, "\x1b[33man\x1b[0m"),
+            'highlighted substring with SGR wrap should appear in View output',
+        );
+    }
+
     public function testSigwinchOnResizeCallback(): void
     {
         $receivedCols = -1;
