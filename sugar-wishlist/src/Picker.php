@@ -85,8 +85,14 @@ class Picker
                         break;
                     case "\x7f": /* backspace */
                     case "\x08":
+                        $before = $this->filter;
                         $this->filter = substr($this->filter, 0, -1);
-                        $this->cursor = 0;
+                        // Only reset cursor if the filter actually changed —
+                        // on an empty filter, backspace is a true no-op and
+                        // the current selection should be preserved.
+                        if ($this->filter !== $before) {
+                            $this->cursor = 0;
+                        }
                         break;
                     default:
                         // Accept any printable character: C0/DEL are rejected,

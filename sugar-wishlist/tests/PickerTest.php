@@ -263,4 +263,14 @@ final class PickerTest extends TestCase
         // If control byte was dropped, filter is just "prod" and prod is picked
         $this->assertSame('prod', $picked->name);
     }
+
+    public function testBackspaceOnEmptyFilterPreservesSelection(): void
+    {
+        // Navigate down twice (to "dev"), backspace on empty filter (no-op),
+        // then Enter — the selection should still be "dev", not reset to 0.
+        [, , $p] = $this->makePicker("jj\x7f\r");
+        $picked = $p->pick($this->endpoints());
+        // Backspace on empty filter is a no-op, cursor stays at "dev"
+        $this->assertSame('dev', $picked->name);
+    }
 }
