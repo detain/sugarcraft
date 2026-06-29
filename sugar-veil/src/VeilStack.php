@@ -15,6 +15,9 @@ final class VeilStack implements \Countable
     /** @var list<Veil> */
     private array $veils = [];
 
+    /** @var list<Veil>|null Cached sorted result, invalidated by mutators */
+    private ?array $sortedCache = null;
+
     /**
      * Create a new empty VeilStack.
      */
@@ -30,6 +33,7 @@ final class VeilStack implements \Countable
     {
         $next = clone $this;
         $next->veils[] = $veil;
+        $next->sortedCache = null;
         return $next;
     }
 
@@ -40,6 +44,7 @@ final class VeilStack implements \Countable
     {
         $next = clone $this;
         $next->veils = [];
+        $next->sortedCache = null;
         return $next;
     }
 
@@ -52,6 +57,7 @@ final class VeilStack implements \Countable
     {
         $next = clone $this;
         $next->veils = array_values(array_filter($next->veils, static fn(Veil $v): bool => !$predicate($v)));
+        $next->sortedCache = null;
         return $next;
     }
 
@@ -113,8 +119,12 @@ final class VeilStack implements \Countable
      */
     public function sorted(): array
     {
+        if ($this->sortedCache !== null) {
+            return $this->sortedCache;
+        }
         $veils = $this->veils;
         \usort($veils, static fn(Veil $a, Veil $b): int => $a->zIndex() <=> $b->zIndex());
+        $this->sortedCache = $veils;
         return $veils;
     }
 
@@ -145,6 +155,7 @@ final class VeilStack implements \Countable
     {
         $next = clone $this;
         $next->veils = array_values(array_filter($next->veils, $predicate));
+        $next->sortedCache = null;
         return $next;
     }
 

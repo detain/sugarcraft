@@ -5,7 +5,7 @@
 [![codecov](https://codecov.io/gh/detain/sugarcraft/branch/master/graph/badge.svg?flag=sugar-veil)](https://app.codecov.io/gh/detain/sugarcraft?flags%5B0%5D=sugar-veil)
 [![Packagist Version](https://img.shields.io/packagist/v/sugarcore/sugar-veil?label=packagist)](https://packagist.org/packages/sugarcore/sugar-veil)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![PHP](https://img.shields.io/badge/php-%E2%89%A58.1-8892bf.svg)](https://www.php.net/)
+[![PHP](https://img.shields.io/badge/php-%E2%89%A58.3-8892bf.svg)](https://www.php.net/)
 <!-- BADGES:END -->
 
 # SugarVeil
@@ -205,42 +205,37 @@ Accessors: `border(): ?Border`
 
 ## Click-Outside Dismiss
 
-Use `withClickOutsideDismiss(bool $enabled = true)` to flag a veil for dismissal when a mouse click falls outside its rendered zone. A `Manager` from candy-zone is required to perform hit testing.
+Use `withClickOutsideDismiss(bool $enabled = true)` to flag a veil for dismissal when a mouse click falls outside its rendered zone. The self-contained `Scanner` (from [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse)) handles hit testing locally — call `scan($rendered)` after rendering to register the veil zone, then use `isClickOutside()` or `hit()` to query it.
 
 ```php
 use SugarCraft\Veil\Veil;
-use SugarCraft\Zone\Manager;
-
-$manager = Manager::new();
 
 $veil = Veil::new()
-    ->withClickOutsideDismiss()
-    ->withManager($manager);
+    ->withClickOutsideDismiss();
+
+// ... after rendering the veil output ...
+$veiled = $veil->scan($renderedOutput);
 
 // Check if a mouse message is outside the veil's zone
-$outside = $veil->isClickOutside($mouseMsg);
+$outside = $veiled->isClickOutside($mouseMsg);
 if ($outside) {
     // dismiss the veil
 }
 ```
 
-Accessors: `clickOutsideDismiss(): bool`, `manager(): ?Manager`
+Accessors: `clickOutsideDismiss(): bool`
 
-The `isClickOutside(MouseMsg $mouse): bool` method uses `Manager::anyInBounds()` to determine if the click landed within any veil zone. Returns `true` when `clickOutsideDismiss` is enabled and the click is outside all tracked zones.
+The `isClickOutside(MouseMsg $mouse): bool` method returns `true` when `clickOutsideDismiss` is enabled, a rendered output has been scanned, and the click falls outside all tracked zones. Returns `false` when no scan data is available or when click-outside-dismiss is disabled.
 
-## Zone Manager Integration
+## Zone Manager Integration (deprecated)
 
-A `Manager` from candy-zone tracks regions and handles hit testing. Wire it into a veil via `withManager(Manager $manager)` for click-outside detection. This allows the veil to share a common spatial database with other zone-aware components.
+`withManager(Manager $manager)` is retained for backward compatibility only. It stores the manager but does **not** drive `isClickOutside()`. The self-contained `Scanner` is always used for hit-testing. New code should use `scan()` / `hit()` directly instead of wiring a `Manager`.
 
 ```php
 use SugarCraft\Veil\Veil;
-use SugarCraft\Zone\Manager;
 
-$manager = Manager::new();
-
-// Multiple veils can share the same manager
-$modal = Veil::new()->withManager($manager)->withClickOutsideDismiss();
-$tooltip = Veil::new()->withManager($manager)->withZIndex(5);
+$modal = Veil::new()->withClickOutsideDismiss();
+// Use scan()/hit() for hit-testing — Manager is not consulted by isClickOutside()
 ```
 
 ## Buffer diffing
@@ -260,7 +255,7 @@ behaviour is always correct.
 
 ## Shared foundations
 
-Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally — external Manager wiring is no longer needed for mouse-only use cases. `withManager()` is retained as a deprecated back-compat wrapper.
+Mouse hit-testing is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally via `scan()` / `hit()`. `withManager()` is retained as a deprecated back-compat wrapper and is not consulted by `isClickOutside()`.
 
 ## License
 
