@@ -8,7 +8,6 @@ use SugarCraft\Core\Cmd;
 use SugarCraft\Core\Model;
 use SugarCraft\Core\Msg;
 use SugarCraft\Core\Program;
-use SugarCraft\Core\ProgramOptions;
 
 /**
  * Drives a TEA {@see Program} with scripted input for deterministic testing.
@@ -91,22 +90,8 @@ final class ProgramSimulator
         $this->capturedCmds = [];
         $this->outputBytes = [];
 
-        // Use a memory stream pair so writes are captured.
-        [$input, $output] = $this->createMemoryStreamPair();
-
-        // Build a headless program options that avoids real TTY/signal setup.
-        $options = new ProgramOptions(
-            input: $input,
-            output: $output,
-            withoutSignalHandler: true,
-            withoutRenderer: false,
-            useAltScreen: false,
-            hideCursor: false,
-        );
-
-        // Re-create the program with our captured streams.
         // We use a simplified approach: just call init/update/view directly.
-        $model = $this->program instanceof Model ? $this->program : $this->getModelFromProgram();
+        $model = $this->getModelFromProgram();
 
         // Call init() once at startup.
         $initCmd = $model->init();
@@ -186,22 +171,5 @@ final class ProgramSimulator
             // For sync dispatching, we'd need the model.
             // Just record it for inspection.
         }
-    }
-
-    /**
-     * Create a pair of memory streams for input/output capture.
-     *
-     * @return array{0: resource, 1: resource}
-     */
-    private function createMemoryStreamPair(): array
-    {
-        $input = fopen('php://memory', 'r+');
-        $output = fopen('php://memory', 'w+');
-
-        if ($input === false || $output === false) {
-            throw new \RuntimeException('Failed to create memory streams');
-        }
-
-        return [$input, $output];
     }
 }
