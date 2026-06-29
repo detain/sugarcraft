@@ -231,4 +231,33 @@ final class SortTest extends TestCase
         $this->assertSame(['Alice'], $t2->rowsList()[0]);
         $this->assertSame(['Bob'], $t2->rowsList()[1]);
     }
+
+    public function testSelectedRowMatchesViewAfterSort(): void
+    {
+        $t = Table::new(
+            ['Name'],
+            [['Charlie'], ['Alice'], ['Bob']],
+        )->withSort('Name', SortDirection::Asc);
+
+        // After sort ascending, cursor=0 should point to 'Alice' (first alphabetically).
+        // selectedRow() must return the row that view() highlights at cursor position.
+        $this->assertSame(['Alice'], $t->selectedRow());
+    }
+
+    public function testCursorClampsToFilteredCount(): void
+    {
+        $t = Table::new(
+            ['Name'],
+            [['Alice'], ['Bob'], ['Carol']],
+        )
+            ->withFilterable(true)
+            ->withFilter('Alice')
+            ->focus()[0];
+
+        // Only Alice matches the filter — one visible row.
+        // setCursor(PHP_INT_MAX) should clamp to the single visible row.
+        $t2 = $t->setCursor(PHP_INT_MAX);
+        $this->assertSame(0, $t2->index());
+        $this->assertSame(['Alice'], $t2->selectedRow());
+    }
 }
