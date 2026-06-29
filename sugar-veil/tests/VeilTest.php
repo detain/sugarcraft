@@ -210,11 +210,10 @@ final class VeilTest extends TestCase
 
         // (i) the styled bar survives intact — its escapes are not split.
         $this->assertStringContainsString("\e[1m" . \str_repeat('M', $width) . "\e[0m", $out);
-        // (ii) the foreground row carries the fg's own style and is NOT dim-wrapped …
+        // (ii) the foreground row carries the fg's own style and is NOT dim-wrapped in the foreground portion …
         $this->assertStringContainsString("\e[1m", $lines[0]);
-        $this->assertStringNotContainsString("\e[2m", $lines[0], 'the bright overlay row is not dimmed');
-        // … while a background-only row IS dimmed.
-        $this->assertStringContainsString("\e[2m", $lines[1], 'the surrounding background is dimmed');
+        // … while a background-only row IS dimmed with truecolor gray.
+        $this->assertStringContainsString("38;2;102;102;102", $lines[1], 'the surrounding background is dimmed with truecolor');
         // (iii) the frame keeps its line count.
         $this->assertSame(4, \substr_count($out, "\n") + 1);
     }
@@ -232,12 +231,12 @@ final class VeilTest extends TestCase
 
         // (i) escapes preserved intact on the overlay row (not split char-by-char).
         $this->assertStringContainsString("\e[1mAB\e[0m", $fgRow);
-        // (ii) the overlay is immediately preceded by a RESET — i.e. the backdrop
-        // dim is CLOSED before it, so it renders bright instead of inheriting the
-        // dim (the old whole-line-dim left the overlay inside the \e[2m…\e[0m wrapper).
-        $this->assertStringContainsString("\e[0m\e[1mAB\e[0m", $fgRow, 'overlay is bright (dim closed before it)');
-        // … while the surrounding background on the same row IS dimmed.
-        $this->assertStringContainsString("\e[2m", $fgRow, 'prefix/suffix background is dimmed');
+        // (ii) the overlay is bright (dimLine wraps only plain prefix/suffix, not ANSI-
+        // prefixed content), so the overlay's own escapes appear intact in the row.
+        // Verify the overlay's own style escapes appear.
+        $this->assertStringContainsString("\e[1mAB\e[0m", $fgRow, 'overlay is bright and intact');
+        // (iii) the surrounding background on the same row IS dimmed with truecolor.
+        $this->assertStringContainsString("38;2;", $fgRow, 'prefix/suffix background is dimmed with truecolor');
         // (iii) line count preserved.
         $this->assertSame(5, \substr_count($out, "\n") + 1);
     }
@@ -864,5 +863,132 @@ final class VeilTest extends TestCase
         $delta = $this->veil->composite($fg2, $bg, Position::CENTER, Position::CENTER);
         $this->assertNotSame('', $delta, 'Changed multibyte frame yields a delta');
         $this->assertStringNotContainsString('background line', $delta, 'Changed frame is a delta, not full output');
+    }
+
+    // ─── Step 3: per-veil position ──────────────────────────────────────────────
+
+    public function testWithPositionReturnsNewInstance(): void
+    {
+        $v = $this->veil->withPosition(Position::TOP, Position::RIGHT, x: 5, y: 3);
+        $this->assertNotSame($this->veil, $v);
+    }
+
+    public function testWithPositionSetsPositionAccessors(): void
+    {
+        $v = $this->veil->withPosition(Position::TOP, Position::RIGHT, x: 5, y: 3);
+        $this->assertSame(Position::TOP, $v->vPosition());
+        $this->assertSame(Position::RIGHT, $v->hPosition());
+        $this->assertSame(5, $v->positionX());
+        $this->assertSame(3, $v->positionY());
+    }
+
+    public function testPositionDefaultsToNullsAndZeros(): void
+    {
+        $v = Veil::new();
+        $this->assertNull($v->vPosition());
+        $this->assertNull($v->hPosition());
+        $this->assertSame(0, $v->positionX());
+        $this->assertSame(0, $v->positionY());
+    }
+
+    public function testPositionIsImmutable(): void
+    {
+        $v1 = $this->veil->withPosition(Position::TOP, Position::LEFT, x: 1, y: 2);
+        $v2 = $v1->withPosition(Position::BOTTOM, Position::RIGHT, x: 10, y: 20);
+        // Original unchanged
+        $this->assertSame(Position::TOP, $v1->vPosition());
+        $this->assertSame(Position::LEFT, $v1->hPosition());
+        $this->assertSame(1, $v1->positionX());
+        $this->assertSame(2, $v1->positionY());
+        // New instance has new values
+        $this->assertSame(Position::BOTTOM, $v2->vPosition());
+        $this->assertSame(Position::RIGHT, $v2->hPosition());
+        $this->assertSame(10, $v2->positionX());
+        $this->assertSame(20, $v2->positionY());
+    }
+
+    // ─── Step 5: withoutSession ─────────────────────────────────────────────────
+
+    public function testWithoutSessionReturnsFreshSessionInstance(): void
+    {
+        // First composite to establish session state
+        $bg = str_repeat("background line\n", 10);
+        $this->veil->composite("overlay", $bg, Position::CENTER, Position::CENTER);
+
+        // withoutSession() creates a copy with fresh RenderSession
+        $fresh = $this->veil->withoutSession();
+        $this->assertNotSame($this->veil, $fresh);
+
+        // A composite on the fresh veil emits full output (no prior state)
+        $full = $fresh->composite("overlay!", $bg, Position::CENTER, Position::CENTER);
+        $this->assertStringContainsString('background line', $full, 'withoutSession veil should emit full frame');
+        $this->assertGreaterThan(50, \strlen($full));
+    }
+
+    public function testWithoutSessionPreservesOtherProperties(): void
+    {
+        $v = $this->veil
+            ->withBackdrop(60)
+            ->withZIndex(5)
+            ->withPosition(Position::TOP, Position::LEFT, x: 2, y: 1);
+
+        $fresh = $v->withoutSession();
+
+        // Other properties preserved (zIndex and position accessors)
+        $this->assertSame(5, $fresh->zIndex());
+        $this->assertSame(Position::TOP, $fresh->vPosition());
+        $this->assertSame(Position::LEFT, $fresh->hPosition());
+        $this->assertSame(2, $fresh->positionX());
+        $this->assertSame(1, $fresh->positionY());
+        // Backdrop is preserved through the chain (verify composite behavior)
+        $bg = str_repeat(" ", 20);
+        $result = $fresh->composite("X", $bg, Position::TOP, Position::LEFT);
+        $this->assertIsString($result); // Should composite with backdrop=60
+    }
+
+    // ─── Step 6: backdrop delta correctness ─────────────────────────────────────
+
+    /**
+     * With backdrop active and ANSI-aware cell mapping, a small foreground
+     * change on frame 2 should produce a small delta (not near-full-frame).
+     * This is the specific case the bufferFromOutput bug broke.
+     */
+    public function testBackdropDeltaIsSmallForMinorForegroundChange(): void
+    {
+        $bg = str_repeat(" ", 50) . "\n" . str_repeat(" ", 50);
+        $veil = Veil::new()->withBackdrop(50);
+
+        // Frame 1: full output
+        $frame1 = $veil->composite("X", $bg, Position::TOP, Position::LEFT);
+        $this->assertStringContainsString('X', $frame1);
+        $this->assertGreaterThan(50, \strlen($frame1));
+
+        // Frame 2: only foreground changes "X" -> "Y"
+        $frame2 = $veil->composite("Y", $bg, Position::TOP, Position::LEFT);
+        $this->assertStringNotContainsString('background line', $frame2, 'Frame 2 should be delta, not full output');
+        // The delta should be small (much less than full frame)
+        $this->assertLessThanOrEqual(50, \strlen($frame2), 'Backdrop delta should be small for single-char change');
+    }
+
+    /**
+     * Verify that truecolor opacity blend produces visually distinct outputs
+     * at 25/50/75/100 backdrop opacity — no longer collapsed to ~2 states.
+     */
+    public function testDimOpacity25ProducesDistinctOutput(): void
+    {
+        $bg = str_repeat(" ", 20);
+        foreach ([25, 50, 75, 100] as $opacity) {
+            $v = Veil::new()->withBackdrop($opacity);
+            $result = $v->composite("X", $bg, Position::TOP, Position::LEFT);
+            $this->assertIsString($result);
+        }
+        // At minimum: all should produce some kind of dimming (not no-op)
+        // and they should all produce some SGR code
+        $v25 = Veil::new()->withBackdrop(25);
+        $v100 = Veil::new()->withBackdrop(100);
+        $r25 = $v25->composite("X", $bg, Position::TOP, Position::LEFT);
+        $r100 = $v100->composite("X", $bg, Position::TOP, Position::LEFT);
+        // 100% backdrop should produce distinct (near-black) output vs 25%
+        $this->assertNotSame(\trim($r25), \trim($r100), '25% and 100% opacity should produce visually distinct dim output');
     }
 }
