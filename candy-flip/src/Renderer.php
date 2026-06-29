@@ -86,6 +86,9 @@ final class Renderer
     /**
      * Render a frame. When adaptive dimensions are set (via {@see withAdaptiveSize()}),
      * the output grid is clamped to fit within them.
+     *
+     * Adjacent cells with identical RGB values share a single SGR escape
+     * sequence, reducing the byte count for visually uniform regions.
      */
     public function renderFrame(Frame $f, string $preset = self::PRESET_SOLID): string
     {
@@ -97,15 +100,25 @@ final class Renderer
                 break;
             }
             $line = '';
+            $lastColor = null; // null = transparent run break / no active color
             foreach ($row as $colIndex => $cell) {
                 if ($maxCols !== null && $colIndex >= $maxCols) {
                     break;
                 }
                 if ($cell === null) {
+                    // Transparent cell: resets background and breaks any active run.
                     $line .= $this->transparent();
+                    $lastColor = null;
                 } else {
                     [$r, $g, $b] = $cell;
-                    $line .= $this->cell($r, $g, $b, $preset);
+                    if ($lastColor !== null && $lastColor[0] === $r && $lastColor[1] === $g && $lastColor[2] === $b) {
+                        // Same color as previous cell — append glyph without new SGR.
+                        $line .= $this->glyphOnly($r, $g, $b, $preset);
+                    } else {
+                        // New color — emit full SGR + glyph and start a new run.
+                        $line .= $this->cell($r, $g, $b, $preset);
+                        $lastColor = [$r, $g, $b];
+                    }
                 }
             }
             $rows[] = $line . Ansi::reset();
@@ -124,6 +137,21 @@ final class Renderer
         }
         // Solid block — full-cell colour fill via 24-bit truecolor escape.
         return sprintf(Ansi::CSI . "48;2;%d;%d;%dm ", $r, $g, $b);
+    }
+
+    /**
+     * Emit just the glyph for a cell whose SGR is already active
+     * (run coalescing — no new escape sequence needed).
+     */
+    private function glyphOnly(int $r, int $g, int $b, string $preset): string
+    {
+        if ($preset === self::PRESET_DENSITY) {
+            $lum = (int) (0.299 * $r + 0.587 * $g + 0.114 * $b);
+            $idx = (int) round($lum / 255 * (strlen(self::RAMP) - 1));
+            return self::RAMP[$idx] ?? ' ';
+        }
+        // Solid: just a space (color is already set by the active SGR).
+        return ' ';
     }
 
     /**
