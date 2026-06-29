@@ -200,4 +200,31 @@ final class ClickCounterTest extends TestCase
         // makes tests slow. We test the logic path via same-zone/zone-change instead.
         // The actual timing is tested by verifying the state transitions.
     }
+
+    /**
+     * Regression: update() must not mutate the original instance.
+     * Mirrors the failing state that existed before the mutate()-before-return fix.
+     */
+    public function testUpdateLeavesOriginalUnchanged(): void
+    {
+        $m = $this->buildManager();
+        $counter = new ClickCounter($m);
+
+        // Capture original state.
+        $old = $counter;
+
+        // First press: takes new instance to clickCount=1.
+        [$new,] = $counter->update($this->press(2, 1));
+
+        // Original must still be at zero.
+        $this->assertSame(0, $old->clickCount());
+        $this->assertNotSame($old, $new);
+
+        // Second press (same zone, within interval): takes new instance to clickCount=2.
+        [$mid,] = $new->update($this->press(2, 1));
+
+        // The first new instance ($new / pre-second-press) must still be at 1.
+        $this->assertSame(1, $new->clickCount());
+        $this->assertNotSame($new, $mid);
+    }
 }

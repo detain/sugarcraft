@@ -86,9 +86,6 @@ final class ClickCounter
 
         // Detect zone change: starting a new streak.
         if ($hit->id !== $this->lastClickZoneId) {
-            $this->clickCount = 1;
-            $this->lastClickTime = $now;
-            $this->lastClickZoneId = $hit->id;
             return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
         }
 
@@ -97,16 +94,11 @@ final class ClickCounter
 
         if ($elapsedMs > $this->clickIntervalMs) {
             // Interval expired — restart streak.
-            $this->clickCount = 1;
-            $this->lastClickTime = $now;
-            $this->lastClickZoneId = $hit->id;
             return [$this->mutate(['clickCount' => 1, 'lastClickTime' => $now, 'lastClickZoneId' => $hit->id]), null];
         }
 
         // Within interval — advance streak.
-        $this->clickCount++;
-        $this->lastClickTime = $now;
-        $newCount = $this->clickCount;
+        $newCount = $this->clickCount + 1;
 
         if ($newCount === 3) {
             // Triple click.
