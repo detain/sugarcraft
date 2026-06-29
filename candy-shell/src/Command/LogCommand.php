@@ -58,7 +58,12 @@ final class LogCommand extends Command
             ? 'logfmt'
             : strtolower((string) $input->getOption('formatter'));
 
-        $line = self::formatLine($level, $text, $prefix, $time, $formatter);
+        try {
+            $line = self::formatLine($level, $text, $prefix, $time, $formatter);
+        } catch (\JsonException $e) {
+            $output->writeln('<error>' . Lang::t('log.encode_failed') . '</error>');
+            return Command::FAILURE;
+        }
 
         $file = (string) $input->getOption('file');
         if ($file !== '') {
@@ -93,7 +98,7 @@ final class LogCommand extends Command
                 'level'   => strtolower($level->value),
                 'prefix'  => $prefix !== '' ? $prefix : null,
                 'message' => $message,
-            ], JSON_UNESCAPED_SLASHES) ?: '',
+            ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR),
             'logfmt' => self::asLogfmt([
                 'time'    => $ts,
                 'level'   => strtolower($level->value),
