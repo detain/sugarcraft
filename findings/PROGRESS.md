@@ -57,6 +57,6 @@
 | sugar-veil | 5 | 13 | 2 | 6 | 5 | MERGED | | ca02edd6 | full — position system, truecolor dimming, buffer fix |
 | candy-query | 6 | 11 | 3 | 5 | 3 | MERGED | | 1a9e212a | full — unused MysqlDatabase::password() removed |
 | sugar-glow | 6 | 11 | 2 | 6 | 3 | MERGED | | f8679819 | full — theme_config_unreadable added to all 15 locale files |
-| sugar-prompt | 6 | 7 | 1 | 4 | 2 | PENDING | | | |
-| sugar-stickers | 6 | 13 | 4 | 6 | 3 | PENDING | | | |
-| sugar-wishlist | 6 | 13 | 1 | 4 | 8 | PENDING | | | |
+| sugar-prompt | 6 | 7 | 1 | 4 | 2 | MERGED | | 79f09c66 | full — Field class_alias re-exports, Spinner fixes, 12 tests |
+| sugar-stickers | 6 | 13 | 4 | 6 | 3 | MERGED | | fa4f7545 | full — CALIBER_LEARNINGS update, unused grow/shrink removal, 109 tests |
+| sugar-wishlist | 6 | 13 | 1 | 4 | 8 | MERGED | | b8c48512 | full — bin/wishlist IIFE fix, HOME guard, CLI args, 109 tests |
