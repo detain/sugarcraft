@@ -362,8 +362,4 @@ final class MysqlDatabase implements DatabaseInterface
         return $this->connectionConfig?->user ?? '';
     }
 
-    public function password(): string
-    {
-        return $this->connectionConfig?->pass ?? '';
-    }
 }
