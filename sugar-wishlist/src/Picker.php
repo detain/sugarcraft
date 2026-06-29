@@ -89,7 +89,10 @@ class Picker
                         $this->cursor = 0;
                         break;
                     default:
-                        if (preg_match('/^[\w\d\-\. ]$/', $key)) {
+                        // Accept any printable character: C0/DEL are rejected,
+                        // but multibyte UTF-8 continuation bytes (0x80-0xFF)
+                        // pass through and accumulate as valid UTF-8.
+                        if ($key !== '' && !preg_match('/^[\x00-\x1f\x7f]$/', $key)) {
                             $this->filter .= $key;
                             $this->cursor = 0;
                         }
