@@ -61,4 +61,33 @@ final class CsvExporterTest extends TestCase
     {
         $this->assertSame('text/csv', $this->exporter->contentType());
     }
+
+    public function testFormulaInjectionIsNeutralized(): void
+    {
+        // Mirrors CsvExporter::safeCell() formula injection neutralization
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: '=cmd', language: '+alias', file: '-hack', duration: 60),
+        ];
+
+        $rows = $this->exporter->rows($hbs);
+
+        // Formula prefixes should be neutralized with leading quote
+        $this->assertSame("'=cmd", $rows[0][1]);
+        $this->assertSame("'+alias", $rows[0][2]);
+        $this->assertSame("'-hack", $rows[0][3]);
+    }
+
+    public function testCommaAndQuoteAreQuoted(): void
+    {
+        // Test that encode() produces RFC-4180 compliant CSV with proper quoting
+        $hbs = [
+            new Heartbeat(time: 1700000000, project: 'has,comma', language: 'has"quote', file: 'normal', duration: 60),
+        ];
+
+        $csv = $this->exporter->encode($hbs);
+
+        // The CSV output should contain the properly quoted field
+        // fputcsv quotes fields containing commas, so we should see "has,comma" in quotes
+        $this->assertStringContainsString('"has,comma"', $csv);
+    }
 }

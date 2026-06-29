@@ -118,4 +118,23 @@ final class AutoBackupTest extends TestCase
         $count = $backup->rotate();
         $this->assertSame(0, $count);
     }
+
+    public function testRotateSkipsVanishedFile(): void
+    {
+        // Create a file then remove it before rotate processes it
+        $file = $this->dataDir . '/2024-01-15.jsonl';
+        file_put_contents($file, '{"time":1705334400}');
+        touch($file, time() - (40 * 86400));
+
+        // Remove the file before rotate runs (simulates race condition)
+        unlink($file);
+
+        $backup = new AutoBackup($this->backupDir, [$this->dataDir]);
+        $count = $backup->rotate(30);
+
+        // Should not throw or produce 1970-dated backup - just skip the vanished file
+        $this->assertSame(0, $count);
+        $backups = $backup->listBackups();
+        $this->assertCount(0, $backups);
+    }
 }

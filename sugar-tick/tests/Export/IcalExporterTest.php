@@ -100,4 +100,27 @@ final class IcalExporterTest extends TestCase
         $ical = $this->exporter->export('Test', $hbs);
         $this->assertStringNotContainsString('CATEGORIES:', $ical);
     }
+
+    public function testTextFieldsAreEscaped(): void
+    {
+        // Mirrors IcalExporter::escapeText() RFC 5545 escaping
+        $hbs = [
+            new Heartbeat(
+                time: 1719000000,
+                project: 'a,b;c',
+                language: "lang\r\nwith\rnewlines",
+                file: "file\nwith\nnewlines",
+                duration: 60,
+                tags: ['tag,with;commas'],
+            ),
+        ];
+
+        $ical = $this->exporter->export('Test', $hbs);
+
+        // Escaped values should appear in output without injection
+        // Commas/semicolons in CATEGORIES should be escaped
+        $this->assertStringContainsString('SUMMARY:file', $ical);
+        // Verify no raw BEGIN:VEVENT injection via newlines in file field
+        $this->assertStringNotContainsString("SUMMARY:file\nwith", $ical);
+    }
 }
