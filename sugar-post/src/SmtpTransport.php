@@ -119,13 +119,10 @@ final class SmtpTransport implements Transport
             $this->sendRaw("STARTTLS\r\n");
             $this->readResponse(220);
 
-            /** @var array<resource> $context */
-            $context = \stream_context_get_default([
-                'ssl' => [
-                    'verify_peer'      => true,
-                    'verify_peer_name' => true,
-                ],
-            ]);
+            // Set SSL options on the socket BEFORE enabling crypto
+            \stream_context_set_option($this->socket, 'ssl', 'verify_peer', true);
+            \stream_context_set_option($this->socket, 'ssl', 'verify_peer_name', true);
+            \stream_context_set_option($this->socket, 'ssl', 'peer_name', $this->host);
 
             $crypto = \stream_socket_enable_crypto($this->socket, true, \STREAM_CRYPTO_METHOD_TLS_CLIENT);
             if ($crypto === false) {
