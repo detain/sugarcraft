@@ -170,12 +170,6 @@ final class Theme
          * Block-level suffix appended once after the document body.
          */
         public readonly string $documentBlockSuffix = '',
-        /**
-         * Per-element conceal flag: when true, suppresses the element
-         * type from emit. Used by Notty / ASCII themes to skip emoji.
-         * Currently a no-op placeholder that callers can branch on.
-         */
-        public readonly bool $conceal = false,
     ) {}
 
     /** Default ANSI theme: bright accents on each heading, coloured code, etc. */
