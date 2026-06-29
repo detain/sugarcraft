@@ -149,29 +149,32 @@ final class EscapeDecoderTest extends TestCase
 
     public function testF1(): void
     {
-        // CSI OP
-        $events = $this->decoder->decode("\x1b[OP");
+        // SS3 OP (real ESC O P form)
+        $events = $this->decoder->decode("\x1bOP");
         $this->assertCount(1, $events);
         $this->assertSame('F1', $events[0]->key);
     }
 
     public function testF2(): void
     {
-        $events = $this->decoder->decode("\x1b[OQ");
+        // SS3 OQ
+        $events = $this->decoder->decode("\x1bOQ");
         $this->assertCount(1, $events);
         $this->assertSame('F2', $events[0]->key);
     }
 
     public function testF3(): void
     {
-        $events = $this->decoder->decode("\x1b[OR");
+        // SS3 OR
+        $events = $this->decoder->decode("\x1bOR");
         $this->assertCount(1, $events);
         $this->assertSame('F3', $events[0]->key);
     }
 
     public function testF4(): void
     {
-        $events = $this->decoder->decode("\x1b[OS");
+        // SS3 OS
+        $events = $this->decoder->decode("\x1bOS");
         $this->assertCount(1, $events);
         $this->assertSame('F4', $events[0]->key);
     }
@@ -860,5 +863,99 @@ final class EscapeDecoderTest extends TestCase
         $this->assertSame('a', $events[0]->key);
         $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
         $this->assertSame("\x1ba", $events[0]->raw);
+    }
+
+    // ─── Step 12: SS3 and modified-arrow tests ──────────────────────────────
+
+    public function testSS3Arrows(): void
+    {
+        // SS3 arrow keys via ESC O A/B/C/D
+        $tests = [
+            "\x1bOA" => 'ArrowUp',
+            "\x1bOB" => 'ArrowDown',
+            "\x1bOC" => 'ArrowRight',
+            "\x1bOD" => 'ArrowLeft',
+        ];
+        foreach ($tests as $seq => $expectedKey) {
+            $events = $this->decoder->decode($seq);
+            $this->assertCount(1, $events, "Failed for $seq");
+            $this->assertSame($expectedKey, $events[0]->key);
+            $this->assertSame(KeyModifier::NONE, $events[0]->modifiers->value());
+        }
+        $this->decoder->reset();
+    }
+
+    public function testSS3PartialBuffers(): void
+    {
+        // Partial SS3 sequence should buffer
+        $events = $this->decoder->decode("\x1bO");
+        $this->assertCount(0, $events);
+        $this->assertSame("\x1bO", $this->decoder->remainder());
+
+        // Complete with P → F1
+        $events = $this->decoder->decode("P");
+        $this->assertCount(1, $events);
+        $this->assertSame('F1', $events[0]->key);
+    }
+
+    public function testModifiedArrowShift(): void
+    {
+        // CSI 1;2A = Shift+ArrowUp
+        $events = $this->decoder->decode("\x1b[1;2A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testModifiedArrowCtrl(): void
+    {
+        // CSI 1;5C = Ctrl+ArrowRight
+        $events = $this->decoder->decode("\x1b[1;5C");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowRight', $events[0]->key);
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testModifiedArrowAlt(): void
+    {
+        // CSI 1;3D = Alt+ArrowLeft
+        $events = $this->decoder->decode("\x1b[1;3D");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowLeft', $events[0]->key);
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::SHIFT));
+        $this->assertTrue($events[0]->modifiers->includes(KeyModifier::ALT));
+        $this->assertFalse($events[0]->modifiers->includes(KeyModifier::CTRL));
+    }
+
+    public function testUnmodifiedArrowStillWorks(): void
+    {
+        // Plain CSI A (no params) should still work
+        $events = $this->decoder->decode("\x1b[A");
+        $this->assertCount(1, $events);
+        $this->assertSame('ArrowUp', $events[0]->key);
+        $this->assertSame(KeyModifier::NONE, $events[0]->modifiers->value());
+    }
+
+    public function testNumberedFKeyStillWorks(): void
+    {
+        // CSI 15~ = F5 (numbered function key)
+        $events = $this->decoder->decode("\x1b[15~");
+        $this->assertCount(1, $events);
+        $this->assertSame('F5', $events[0]->key);
+        $this->assertSame(KeyModifier::NONE, $events[0]->modifiers->value());
+    }
+
+    public function testAdversarialCsiNotMisdecodedAsF2(): void
+    {
+        // \x1b[xQ should NOT emit F2 (verifies Step 7 fix)
+        $events = $this->decoder->decode("\x1b[xQ");
+        $this->assertCount(1, $events);
+        // Should be 'Q' (from Alt+Q fallback), NOT 'F2'
+        $this->assertSame('Q', $events[0]->key);
+        $this->assertFalse($events[0]->key === 'F2');
     }
 }
