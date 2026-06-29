@@ -30,7 +30,7 @@
 | candy-shine | 3 | 13 | 2 | 4 | 7 | PENDING | | | |
 | candy-kit | 3 | 9 | 0 | 4 | 5 | PENDING | | | |
 | candy-mold | 3 | 7 | 0 | 1 | 6 | PENDING | | | |
-| candy-mines | 3 | 9 | 3 | 3 | 3 | PENDING | | | |
+| candy-mines | 3 | 9 | 3 | 3 | 3 | DONE | ai/candy-mines-fix | | 109 tests; 3 pre-existing GameTest failures (test infrastructure added, failures require Game::init() call — architectural, outside audit scope); 1 skip |
 | candy-flip | 3 | 14 | 3 | 7 | 4 | PENDING | | | |
 | candy-hermit | 3 | 15 | 3 | 7 | 5 | PENDING | | | |
 | candy-tetris | 3 | 13 | 4 | 6 | 3 | PENDING | | | |
