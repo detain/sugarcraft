@@ -9,7 +9,7 @@ namespace SugarCraft\Ansi\Parser;
  *
  * Stores window title; hyperlink support deferred to v2.
  *
- * @see Mirrors charmbracelet/x/ansi OscHandler
+ * Mirrors charmbracelet/x/ansi.OscHandler
  */
 final class OscHandlerImpl implements OscHandler
 {
