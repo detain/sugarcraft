@@ -59,7 +59,7 @@ final class Renderer
     /**
      * Return a fresh Renderer with no adaptive sizing (default).
      */
-    public static function create(): self
+    public static function new(): self
     {
         return new self();
     }
@@ -71,23 +71,12 @@ final class Renderer
      */
     public static function withConstraints(int $rows, int $cols): self
     {
-        $rc = new \ReflectionClass(Renderer::class);
-        $instance = $rc->newInstanceWithoutConstructor();
-
-        $propRows = $rc->getProperty('adaptiveRows');
-        $propRows->setAccessible(true);
-        $propRows->setValue($instance, $rows);
-
-        $propCols = $rc->getProperty('adaptiveCols');
-        $propCols->setAccessible(true);
-        $propCols->setValue($instance, $cols);
-
-        return $instance;
+        return new self($rows, $cols);
     }
 
     /**
      * Static-compatible render — delegates to a zero-sized (unconstrained) instance.
-     * Preserved for backward compatibility; new code should use {@see self::create()}->renderFrame().
+     * Preserved for backward compatibility; new code should use {@see self::new()}->renderFrame().
      */
     public static function render(Frame $f, string $preset = self::PRESET_SOLID): string
     {

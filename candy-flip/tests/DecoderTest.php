@@ -136,6 +136,42 @@ final class DecoderTest extends TestCase
     }
 
     /**
+     * Regression: zero or negative cell dimensions must throw rather than
+     * allocating a zero-size buffer or looping infinitely.
+     */
+    public function testRejectsZeroCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, 0, 10);
+    }
+
+    public function testRejectsNegativeCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        Decoder::decode($this->gifPath, -1, 10);
+    }
+
+    /**
+     * Regression: an oversized cell grid product (cellsW * cellsH > MAX_CELLS)
+     * must throw to prevent excessive memory allocation.
+     */
+    public function testRejectsOversizedCellGrid(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        $this->expectException(\RuntimeException::class);
+        // 500 * 500 = 250,000 which exceeds MAX_CELLS (100,000)
+        Decoder::decode($this->gifPath, 500, 500);
+    }
+
+    /**
      * Regression: a real GD-encoded GIF whose LZW image data spans
      * multiple full-size (≥128-byte) sub-blocks used to decode to zero
      * frames, because findImageDataEnd() bailed on any sub-block length
@@ -165,6 +201,44 @@ final class DecoderTest extends TestCase
             $this->assertNotEmpty($frames, 'multi-sub-block GIF must decode to at least one frame');
             $this->assertSame(60, $frames[0]->width());
             $this->assertSame(18, $frames[0]->height());
+        } finally {
+            unlink($path);
+        }
+    }
+
+    /**
+     * Regression: a GIF whose extension sub-block length byte overruns EOF
+     * must not cause PHP warnings or exceptions. The bounds check added to
+     * the sub-block loops treats a truncated tail as end-of-data.
+     */
+    public function testDecodeHandlesTruncatedSubBlockOverrun(): void
+    {
+        if (!extension_loaded('gd')) {
+            $this->markTestSkipped('ext-gd not available');
+        }
+        // Build a GIF where an extension sub-block length byte claims 255 bytes
+        // but only a few bytes of payload follow before EOF.
+        $buf = "GIF87a";
+        $buf .= pack('v', 2); // width=2
+        $buf .= pack('v', 2); // height=2
+        $buf .= "\x80";       // GCT flag=1, GCT size=0 (2 entries)
+        $buf .= "\x00";       // bg index
+        $buf .= "\x00";       // par
+        $buf .= "\x00\x00\x00"; // GCT: color 0 = black
+        $buf .= "\xff\x00\x00"; // GCT: color 1 = red
+        // Extension block (not GCE) with sub-block length=255 but only
+        // 2 bytes follow before the GIF trailer (0x3B).
+        $buf .= "\x21\xFF";   // extension introducer + label (fake)
+        $buf .= "\xff";       // sub-block length claims 255 bytes
+        $buf .= "\x00\x3b";   // only 2 bytes before trailer — overruns EOF
+        // GIF should decode to empty frame list (no Image Descriptor found
+        // before EOF) without throwing or emitting PHP warnings.
+        $path = sys_get_temp_dir() . '/truncated-' . uniqid() . '.gif';
+        file_put_contents($path, $buf);
+        try {
+            $frames = @Decoder::decode($path, 2, 2);
+            // Should return 0 frames (no valid Image Descriptor found)
+            $this->assertIsArray($frames);
         } finally {
             unlink($path);
         }
