@@ -13,6 +13,10 @@ use SugarCraft\Fuzzy\MatchResult;
  * Ports the Go fuzzy matching algorithm used by charmbracelet/gum filter.
  * Features: separator bonus, camelCase bonus, exact-prefix bonus, consecutive match bonus.
  *
+ * Greedy first-occurrence matching — advances on the first occurrence of each
+ * query char and never backtracks; a scattered early alignment is preferred
+ * over a later contiguous run (mirrors sahilm/fuzzy).
+ *
  * @see https://github.com/sahilm/fuzzy
  * @implements FuzzyMatcher
  */
@@ -61,9 +65,11 @@ final class SahilmMatcher implements FuzzyMatcher
      *
      * @param string    $query      The search query
      * @param iterable<string> $candidates Candidate strings to score
-     * @return list<MatchResult> Ranked match results
+     * @param int|null  $limit      Maximum number of results to return (null = unlimited)
+     * @param int       $minScore   Minimum score threshold (default 1; scores are integers so >= 1 ≡ > 0)
+     * @return array<MatchResult> Ranked match results
      */
-    public function matchAll(string $query, iterable $candidates): array
+    public function matchAll(string $query, iterable $candidates, ?int $limit = null, int $minScore = 1): array
     {
         if ($query === '') {
             return [];
@@ -72,7 +78,7 @@ final class SahilmMatcher implements FuzzyMatcher
         $results = [];
         foreach ($candidates as $candidate) {
             $result = $this->compute($query, $candidate);
-            if ($result !== null && $result->score > 0) {
+            if ($result !== null && $result->score >= $minScore) {
                 $results[] = $result;
             }
         }
@@ -83,6 +89,12 @@ final class SahilmMatcher implements FuzzyMatcher
         usort($results, static fn(MatchResult $a, MatchResult $b) =>
             ($b->score <=> $a->score) ?: ($a->haystack <=> $b->haystack)
         );
+
+        // Simple full-sort-then-slice — no heap/partial-sort needed for typical
+        // TUI list sizes; preserves the stable-tiebreak contract.
+        if ($limit !== null && $limit >= 0) {
+            $results = array_slice($results, 0, $limit);
+        }
 
         return $results;
     }
@@ -102,17 +114,21 @@ final class SahilmMatcher implements FuzzyMatcher
         $queryLower = $this->caseSensitive ? $query : mb_strtolower($query, 'UTF-8');
         $candidateLower = $this->caseSensitive ? $candidate : mb_strtolower($candidate, 'UTF-8');
 
+        // Pre-split once — eliminates per-iteration mb_substr in the hot loop.
+        $qLow = mb_str_split($queryLower);
+        $cLow = mb_str_split($candidateLower);
+        $cOrig = mb_str_split($candidate);
+
         $indices = [];
         $score = 0;
         $queryIdx = 0;
         $candidateIdx = 0;
         $prevMatch = false;
-        $prevMatchedLower = '';
         $prevCandidateLower = '';
 
         while ($queryIdx < $queryLen && $candidateIdx < $candidateLen) {
-            $queryChar = mb_substr($queryLower, $queryIdx, 1, 'UTF-8');
-            $candidateChar = mb_substr($candidateLower, $candidateIdx, 1, 'UTF-8');
+            $queryChar = $qLow[$queryIdx];
+            $candidateChar = $cLow[$candidateIdx];
 
             if ($queryChar === $candidateChar) {
                 $charScore = self::MATCH_SCORE;
@@ -133,15 +149,15 @@ final class SahilmMatcher implements FuzzyMatcher
                         $charScore += self::SEPARATOR_BONUS;
                     }
                     // CamelCase bonus - current is lowercase but prev was uppercase
-                    $candidateCharOrig = mb_substr($candidate, $candidateIdx, 1, 'UTF-8');
-                    $prevCandidateCharOrig = mb_substr($candidate, $candidateIdx - 1, 1, 'UTF-8');
+                    $candidateCharOrig = $cOrig[$candidateIdx];
+                    $prevCandidateCharOrig = $cOrig[$candidateIdx - 1];
                     if ($this->isLowerCase($candidateCharOrig) && $this->isUpperCase($prevCandidateCharOrig)) {
                         $charScore += self::CAMEL_BONUS;
                     }
                 }
 
                 // Lower case bonus
-                if ($this->isLowerCase(mb_substr($candidate, $candidateIdx, 1, 'UTF-8'))) {
+                if ($this->isLowerCase($cOrig[$candidateIdx])) {
                     $charScore += self::LOWER_CASE_BONUS;
                 }
 
@@ -173,13 +189,15 @@ final class SahilmMatcher implements FuzzyMatcher
 
     private function isLowerCase(string $char): bool
     {
-        $ord = mb_ord($char, 'UTF-8');
-        return $ord >= 97 && $ord <= 122;
+        // Round-trip: lowercase iff it equals mb_strtolower($char) and differs from
+        // mb_strtoupper($char) (second clause excludes case-less chars like digits/CJK).
+        return $char === mb_strtolower($char, 'UTF-8')
+            && $char !== mb_strtoupper($char, 'UTF-8');
     }
 
     private function isUpperCase(string $char): bool
     {
-        $ord = mb_ord($char, 'UTF-8');
-        return $ord >= 65 && $ord <= 90;
+        return $char === mb_strtoupper($char, 'UTF-8')
+            && $char !== mb_strtolower($char, 'UTF-8');
     }
 }

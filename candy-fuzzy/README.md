@@ -30,7 +30,11 @@ $result = $matcher->match('foo', 'foobar');
 
 // Match against multiple candidates (sorted by score desc)
 $results = $matcher->matchAll('app', ['apple', 'applet', 'application', 'apricot']);
-// Returns list of MatchResult sorted by score
+// Returns array of MatchResult sorted by score
+
+// Limit results to top N with optional minScore threshold
+$top5 = $matcher->matchAll('app', $candidates, limit: 5);
+$highQuality = $matcher->matchAll('app', $candidates, minScore: 10);
 
 // Highlight matched runs
 $highlighter = new Highlighter();
@@ -73,10 +77,15 @@ function filter(FuzzyMatcher $matcher, string $query, array $candidates): array
 | CamelCase bonus | ❌ | ✅ (10) |
 | First-char bonus | ❌ | ✅ (15) |
 | Case sensitive | ❌ | Optional |
+| Matching style | Best-alignment | Greedy first-occurrence |
 
 ## Backward Compatibility
 
 The existing `SugarCraft\Forms\Fuzzy\FuzzyMatcher` and `SugarCraft\Lister\FuzzyMatch` classes remain as deprecated shims that delegate to `SugarCraft\Fuzzy\Matcher\SmithWatermanMatcher`. Consumers will migrate in subsequent steps.
+
+## Security note
+
+The highlighter is presentation-neutral and forwards unmatched haystack segments verbatim. Callers **must** sanitize candidate text (strip `\x1b`/control bytes) before display — the styler callback receives raw matched substrings only and does not sanitize. This is the correct responsibility division: sanitization belongs to the TUI render layer.
 
 ## Links
 
