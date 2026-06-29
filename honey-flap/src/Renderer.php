@@ -42,7 +42,7 @@ final class Renderer
         $highScore = $g->highScore();
         if ($g->crashed) {
             $highScoreLine = '';
-            if ($g->score >= $highScore && $highScore > 0) {
+            if ($g->newRecord && $g->score > 0) {
                 $highScoreLine = Style::new()->bold()->foreground(Color::hex('#6ee7b7'))
                     ->render(" 🏆 NEW HIGH SCORE: {$highScore}") . '   ';
             } elseif ($highScore > 0) {
