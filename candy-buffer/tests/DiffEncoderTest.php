@@ -202,4 +202,25 @@ final class DiffEncoderTest extends TestCase
 
         $this->assertSame("\x1b[0;38;2;18;52;86;48;2;171;205;239;1;4mS", $bytes);
     }
+
+    public function testRepeatRunWideAdvancesCursorByWidth(): void
+    {
+        // RepeatRunOp('中', 2, 2): 2 repeats × width 2 = 4 cursor positions advanced.
+        // After the first SetCellOp (width-2 cell '中'), cursorCol is at 3 (1-based).
+        // The REP should advance by 2*2=4, landing at 7 (1-based) before the MoveCursorOp.
+        // So MoveCursorOp(5, 0) targets col 5 (0-based) = col 6 (1-based).
+        // Since encoder is at col 7, the cursor move to col 6 IS needed — emit \x1b[6H.
+        $this->encoder->encode([
+            new SetCellOp([Cell::new('中', null, null, 2)]),
+            new RepeatRunOp('中', 2, 2),
+        ]);
+
+        $bytes = $this->encoder->encode([new MoveCursorOp(5, 0)]);
+
+        // The move to (5, 0) = (6, 1-based) is emitted because the encoder is
+        // at col 7 after the wide REP (col 3 + 2*2 = 7).  If width were ignored,
+        // the encoder would be at col 5 and the move would be a no-op.
+        // Note: row=0 → 1-based row=1, so full CUP form is \x1b[1;6H.
+        $this->assertSame("\x1b[1;6H", $bytes);
+    }
 }
