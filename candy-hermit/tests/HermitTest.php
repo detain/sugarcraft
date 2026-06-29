@@ -69,6 +69,22 @@ final class HermitTest extends TestCase
         $this->assertSame(5, $h->itemCount());
     }
 
+    public function testBackspaceCursorNeverNegative(): void
+    {
+        // Set a filter that excludes everything, then type and backspace
+        // to an empty filtered set — cursor must floor at 0, not -1.
+        $h = $this->makeHermit()
+            ->setFilterFn(static fn(Item $i): bool => false)
+            ->show()
+            ->type('a'); // all filtered out
+
+        $this->assertSame(0, $h->itemCount());
+
+        $h = $h->backspace(); // empty filter → empty list, cursor floor at 0
+
+        $this->assertSame(0, $h->cursor(), 'cursor must be 0, not -1, on empty filtered list');
+    }
+
     public function testClearFilter(): void
     {
         $h = $this->makeHermit()->show()->type('b');
