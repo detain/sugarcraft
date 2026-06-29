@@ -98,6 +98,10 @@ final class Application extends SymfonyApplication
     {
         $command = $this->find($input->getFirstArgument() ?? '');
         if ($command instanceof Command) {
+            try {
+                $input->bind($command->getDefinition());
+            } catch (\Symfony\Component\Console\Exception\RuntimeException) {
+            }
             $this->applyEnvVarFallbackToInput($input, $command);
         }
         return parent::doRun($input, $output);
