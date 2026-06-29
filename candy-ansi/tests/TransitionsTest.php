@@ -285,12 +285,23 @@ final class TransitionsTest extends TestCase
         $this->assertSame(State::Ground->value, Transitions::nextState($entry));
     }
 
-    public function testAnywhereExecuteRange90To97(): void
+    public function testAnywhereDcsEntryFor0x90(): void
     {
+        // 0x90 is DCS entry (handled at :87), not Execute
         $entry = Transitions::get(State::Ground->value, 0x90);
 
         $this->assertSame(Action::Clear->value, Transitions::action($entry));
         $this->assertSame(State::DcsEntry->value, Transitions::nextState($entry));
+    }
+
+    public function testAnywhereExecute0x91To0x97(): void
+    {
+        // 0x91-0x97 are Execute/Ground (0x90 was removed from this range)
+        foreach (range(0x91, 0x97) as $byte) {
+            $entry = Transitions::get(State::Ground->value, $byte);
+            $this->assertSame(Action::Execute->value, Transitions::action($entry), sprintf('Byte 0x%02X should be Execute', $byte));
+            $this->assertSame(State::Ground->value, Transitions::nextState($entry), sprintf('Byte 0x%02X should transition to Ground', $byte));
+        }
     }
 
     public function testSosStringState(): void

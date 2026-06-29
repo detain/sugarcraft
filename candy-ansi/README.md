@@ -19,7 +19,10 @@ use SugarCraft\Ansi\Parser\DebugHandler;
 $handler = new DebugHandler();
 $parser  = new Parser($handler);
 
-$parser->feed("hello\x1b[31mworld\x1b[0m");
+// parseComplete() feeds then guarantees end-of-stream flush so trailing
+// sequences (OSC/DCS/incomplete UTF-8 runes) are not silently lost.
+// For streaming/chunked input, use feed() + flush() separately.
+$parser->parseComplete("hello\x1b[31mworld\x1b[0m");
 
 // $handler->log now contains every parse action:
 // print 'h', 'e', 'l', 'l', 'o', csi(['31']), print 'w', 'o', 'r', 'l', 'd', csi(['0'])

@@ -275,4 +275,45 @@ final class HandlerAdapterTest extends TestCase
 
         $this->parser->feed("\x1b[1;2q");
     }
+
+    public function testPrintCharForwardsMultiByteRune(): void
+    {
+        $this->csi->expects($this->once())
+            ->method('printable')
+            ->with('é'); // Full UTF-8 rune, not just the lead byte
+
+        $this->parser->feed("\xc3\xa9"); // UTF-8 encoding of 'é'
+    }
+
+    public function testOscClearTitle(): void
+    {
+        // "2;" is the legitimate OSC 2 clear-title sequence
+        $this->osc->expects($this->once())->method('title')->with('');
+
+        $this->parser->feed("\x1b]2;\x07"); // OSC 2 + BEL terminator
+    }
+
+    public function testExecuteControlByteTriggersNoCsiHandlerMethod(): void
+    {
+        // Control byte LF (0x0A) falls to default => null in HandlerAdapter::execute()
+        // Verify no CsiHandler method is invoked
+        $this->csi->expects($this->never())->method('cht');
+        $this->csi->expects($this->never())->method('cub');
+        $this->csi->expects($this->never())->method('cud');
+        $this->csi->expects($this->never())->method('cuf');
+        $this->csi->expects($this->never())->method('cuu');
+        $this->csi->expects($this->never())->method('cup');
+        $this->csi->expects($this->never())->method('sgr');
+        $this->csi->expects($this->never())->method('ed');
+        $this->csi->expects($this->never())->method('el');
+        $this->csi->expects($this->never())->method('decset');
+        $this->csi->expects($this->never())->method('decrst');
+        $this->csi->expects($this->never())->method('decstbm');
+        $this->csi->expects($this->never())->method('tbc');
+        $this->csi->expects($this->never())->method('cbt');
+        $this->csi->expects($this->never())->method('cht');
+        $this->csi->expects($this->never())->method('printable');
+
+        $this->parser->feed("\x0A"); // LF
+    }
 }
