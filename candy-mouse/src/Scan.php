@@ -34,9 +34,15 @@ final class Scan
      * Feed a rendered string through the scanner and return all discovered
      * zones.
      *
+     * @param string $rendered The rendered string containing zone sentinels.
+     * @param int|null $width  When provided, endCol is clamped to this
+     *                         terminal width.  Useful when rendering in a
+     *                         known viewport to prevent zones from extending
+     *                         past the visible area.  null = no clamp (default).
+     *
      * @return array<string, Zone> id => Zone
      */
-    public function parse(string $rendered): array
+    public function parse(string $rendered, ?int $width = null): array
     {
         $this->open  = [];
         $this->zones = [];
@@ -88,6 +94,9 @@ final class Scan
                                 $endCol = max($endCol, $maxCol);
                                 $endRow = max($endRow, $maxRow);
                             }
+                            if ($width !== null) {
+                                $endCol = min($endCol, $width);
+                            }
                             $this->zones[$id] = new Zone($id, $startCol, $startRow, $endCol, $endRow);
                             unset($this->open[$id]);
                         }
@@ -133,7 +142,8 @@ final class Scan
             if ($b === "\n") {
                 foreach ($this->open as $id => $bounds) {
                     [$sCol, $sRow, $maxCol, $maxRow] = $bounds;
-                    $this->open[$id] = [$sCol, $sRow, max($maxCol, $col - 1), max($maxRow, $row)];
+                    $colAtEol = $width !== null ? min($col - 1, $width) : $col - 1;
+                    $this->open[$id] = [$sCol, $sRow, max($maxCol, $colAtEol), max($maxRow, $row)];
                 }
                 $row++;
                 $col = 1;

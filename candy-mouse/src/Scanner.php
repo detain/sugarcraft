@@ -32,11 +32,15 @@ final class Scanner
     /**
      * Parse zone sentinels from $rendered, populate the zone registry,
      * and return $this for chaining.
+     *
+     * @param string $rendered The rendered string containing zone sentinels.
+     * @param int|null $width  Optional terminal viewport width.  When set,
+     *                         zone end columns are clamped to this value.
      */
-    public function scan(string $rendered): self
+    public function scan(string $rendered, ?int $width = null): self
     {
         $parser = new Scan();
-        $this->zones = $parser->parse($rendered);
+        $this->zones = $parser->parse($rendered, $width);
         return $this;
     }
 
@@ -56,6 +60,22 @@ final class Scanner
     public function all(): array
     {
         return $this->zones;
+    }
+
+    /**
+     * Return all zones whose id starts with $prefix.
+     *
+     * @return array<string, Zone>
+     */
+    public function prefixed(string $prefix): array
+    {
+        $result = [];
+        foreach ($this->zones as $id => $zone) {
+            if (str_starts_with($id, $prefix)) {
+                $result[$id] = $zone;
+            }
+        }
+        return $result;
     }
 
     /**
