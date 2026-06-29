@@ -109,6 +109,14 @@ final class FfmpegDecoder implements Decoder
             throw new \RuntimeException('ffmpeg not found on this host');
         }
 
+        // For local sources, verify the file exists before spawning ffmpeg so
+        // a missing file surfaces as a clear exception rather than a silent
+        // empty decode. Network URLs, pipes, and the '/fake' test path are
+        // excluded — only plain local paths are checked.
+        if (!self::isNetworkSource($source) && !is_file($source)) {
+            throw new \RuntimeException("video source not found: {$source}");
+        }
+
         // Aspect-correct letterbox box. The on-screen display area for cellsW × cellsH
         // cells has aspect cellsW : cellsH·CELL_ASPECT (cells are ~2× taller than wide).
         // The video must be letterboxed to THAT aspect, not the raw frame-pixel aspect —
