@@ -74,10 +74,10 @@ $composite->unsubscribe(); // disposes all three
 
 ### AsyncOps
 
-All helpers are pure functions that do not retain state. They work via Promise plumbing and `LoopInterface` timers:
+withTimeout and retry are stateless helpers. debounce and throttle return stateful closures that retain mutable timer/cooldown state. All helpers work via Promise plumbing and `LoopInterface` timers:
 
-- `withTimeout` — wraps a promise; rejects with `TimeoutException` after N seconds
-- `retry` — retries a failed operation up to N times with exponential backoff
+- `withTimeout` — wraps a promise; rejects with `TimeoutException` after N seconds. The inner operation is NOT cancelled and keeps running to completion.
+- `retry` — retries a failed operation up to N times with exponential backoff (no per-attempt timeout; wrap with withTimeout for a deadline)
 - `debounce` — only the last call within the window fires, after silence
 - `throttle` — fires at most once per interval, ignoring excess calls
 
