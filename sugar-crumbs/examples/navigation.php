@@ -13,21 +13,21 @@ use SugarCraft\Crumbs\NavStack;
 
 echo "=== NavStack — push / pop / back navigation ===\n\n";
 
-$nav = new NavStack();
-$nav = $nav->push('Home', '/');
+$nav = NavStack::new();
+$nav->push('Home', '/');
 echo "Home: " . $nav->view() . "\n";
 
-$nav = $nav->push('Settings', '/settings');
+$nav->push('Settings', '/settings');
 echo "Settings: " . $nav->view() . "\n";
 
-$nav = $nav->push('Display', '/settings/display');
+$nav->push('Display', '/settings/display');
 echo "Display: " . $nav->view() . "\n";
 
-$nav = $nav->push('Resolution', '/settings/display/resolution');
+$nav->push('Resolution', '/settings/display/resolution');
 echo "Resolution: " . $nav->view() . "\n\n";
 
 echo "--- Pop back one level (Settings) ---\n";
-$nav->pop(); // pop() modifies NavStack in-place, ignore returned item
+$nav->pop(); // pop() mutates the stack in place and returns the removed item
 echo $nav->view() . "\n\n";
 
 echo "--- Pop back to Home ---\n";
