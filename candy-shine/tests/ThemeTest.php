@@ -158,4 +158,22 @@ final class ThemeTest extends TestCase
         putenv('GLAMOUR_STYLE');
         $this->assertEquals(Theme::plain(), Theme::fromEnvironment(Theme::plain()));
     }
+
+    public function testParseColorRejectsMalformedAnsiSpec(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::fromJsonString(json_encode(['code' => ['foreground' => 'ansi:300']]));
+    }
+
+    public function testParseColorRejectsMalformedAnsi256Spec(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::fromJsonString(json_encode(['code' => ['foreground' => 'ansi256:abc']]));
+    }
+
+    public function testParseColorRejectsMalformedAnsiSpecLetters(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        Theme::fromJsonString(json_encode(['code' => ['foreground' => 'ansi:xyz']]));
+    }
 }
