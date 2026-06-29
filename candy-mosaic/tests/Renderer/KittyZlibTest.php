@@ -96,4 +96,32 @@ final class KittyZlibTest extends TestCase
         // f=1 (zlib compression) should NOT be present as a standalone value (not a substring of f=100)
         $this->assertDoesNotMatchRegularExpression('/\bf=1\b/', $out);
     }
+
+    public function testCompressionSuccessEmitsF1AndNonEmptyPayload(): void
+    {
+        $image = ImageSource::fromFile(__DIR__ . '/../fixtures/4x2.png');
+        $opts  = KittyOptions::transmit(1)->withCompression(1);
+
+        $out = $this->renderer->renderWithOptions($image, 8, 4, $opts);
+
+        // f=1 flag must be present.
+        $this->assertStringContainsString('f=1', $out);
+
+        // Extract and verify the payload decodes and decompresses to source PNG bytes.
+        if (!preg_match_all('/m=[01],([A-Za-z0-9+\/=]+)/', $out, $matches)) {
+            $this->fail('No Kitty graphics chunks found in output');
+        }
+
+        $fullBase64 = implode('', $matches[1]);
+        $this->assertNotEmpty($fullBase64, 'Payload base64 must be non-empty');
+
+        $compressed = base64_decode($fullBase64);
+        $this->assertNotFalse($compressed, 'Base64 decode failed');
+
+        $decompressed = @gzuncompress($compressed);
+        $this->assertNotFalse($decompressed, 'Payload is not valid zlib-compressed data');
+
+        // Must round-trip back to the source PNG bytes exactly.
+        $this->assertSame($image->bytes, $decompressed);
+    }
 }
