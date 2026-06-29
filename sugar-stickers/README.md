@@ -17,7 +17,6 @@ PHP port of [76creates/stickers](https://github.com/76creates/stickers) — Lipg
 ### FlexBox
 - **CSS flexbox-like** responsive grid layout for terminal UIs
 - **Direction**: row (horizontal) or column (vertical)
-- **Justify** content: start/center/end/space-between/space-around
 - **Align** items: start/center/end/stretch
 - **Gap** between items
 - **Ratio-based sizing** — items with grow ratios fill available space
@@ -35,7 +34,6 @@ PHP port of [76creates/stickers](https://github.com/76creates/stickers) — Lipg
 - **Mouse wheel** support with configurable delta
 - **Horizontal scrolling** with step-based navigation
 - **Smooth scroll** and scrollbar toggle
-- Sticky header/footer positioning is deferred to step 10.12.
 
 ### Scrollbar
 - **Scrollbar** — composes `sugar-bits` `Scrollbar` (SSOT)
