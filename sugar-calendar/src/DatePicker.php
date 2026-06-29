@@ -8,7 +8,6 @@ use SugarCraft\Buffer\Buffer;
 use SugarCraft\Buffer\Cell;
 use SugarCraft\Buffer\Style;
 use SugarCraft\Calendar\Lang;
-use SugarCraft\Core\Util\Ansi;
 
 /**
  * Interactive date picker component.
@@ -633,26 +632,6 @@ final class DatePicker
         return 1;
     }
 
-    private function detectCellStyle(string $cell): ?Style
-    {
-        if (!\preg_match('/\x1b\[([0-9;]+)m/', $cell, $m)) {
-            return null;
-        }
-        return $this->sgrToBufferStyle($m[1]);
-    }
-
-    private function stripAnsi(string $s): string
-    {
-        return \preg_replace('/\x1b\[[0-9;]*m/', '', $s) ?? $s;
-    }
-
-    private function renderHeader(): string
-    {
-        $monthName = self::monthName($this->viewMonth);
-        $title = \sprintf('%s %d', $monthName, $this->viewYear);
-        return $this->ansi($title, $this->headerStyle);
-    }
-
     /**
      * Build 42-cell grid (6 weeks). Each cell is a 2-tuple: [plainText, ?Style].
      *
@@ -744,11 +723,5 @@ final class DatePicker
         $lastIndex = $firstDow + $daysInMonth - 1;
 
         $this->cursorIndex = \min($this->cursorIndex, \max(0, $lastIndex));
-    }
-
-    private function ansi(string $text, string $codes): string
-    {
-        if ($codes === '') return $text;
-        return Ansi::CSI . $codes . 'm' . $text . Ansi::reset();
     }
 }
