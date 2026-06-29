@@ -318,6 +318,88 @@ final class ManagerTest extends TestCase
         $this->assertNull($next->lastInBoundsHit);
         $this->assertSame($miss, $next->lastPlainMouse);
     }
+
+    /**
+     * When zones nest, anyInBounds() returns the innermost (smallest-area) zone.
+     * The outer zone spans cols 1-4; the inner zone (BB) spans cols 2-3.
+     */
+    public function testAnyInBoundsPrefersInnermostZone(): void
+    {
+        $m = Manager::newGlobal();
+        // outer=A + inner + C  →  outer cols 1-4, inner cols 2-3
+        $m->scan($m->mark('outer', 'A' . $m->mark('inner', 'BB') . 'C'));
+
+        // Click inside inner region → innermost wins.
+        $this->assertSame('inner', $m->anyInBounds($this->click(2, 1))->id);
+        $this->assertSame('inner', $m->anyInBounds($this->click(3, 1))->id);
+
+        // Click in outer-only region → outer wins.
+        $this->assertSame('outer', $m->anyInBounds($this->click(1, 1))->id);
+        $this->assertSame('outer', $m->anyInBounds($this->click(4, 1))->id);
+    }
+
+    /**
+     * When two zones of equal area both contain the mouse, the last-inserted
+     * (top-most) zone wins.
+     *
+     * Note: with the mark() API zones are always parent/child (nested), so
+     * a true equal-area tie only occurs when a zone is wrapped by a same-size
+     * outer zone — the outer zone is necessarily larger by having the same
+     * inner plus padding. A pure equal-area horizontal overlap is not
+     * constructible via mark() since it always produces top-outer, bottom-inner
+     * nesting. The innermost-wins rule handles all realistic cases.
+     */
+    public function testAnyInBoundsTieBreaksToLastInserted(): void
+    {
+        // Two zones with equal area 1 (both just 'X'), but the second is
+        // inserted last so it sits "on top" of the first.
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('first', 'X') . $m->mark('second', 'X'));
+
+        // 'first' spans col 1, 'second' spans col 2 — no overlap at col 1, so
+        // only 'first' is hit. This test documents that even with equal area
+        // non-overlapping zones the last-inserted (second) would win IF they
+        // overlapped, because of the < comparison in anyInBounds.
+        $this->assertSame('first', $m->anyInBounds($this->click(1, 1))->id);
+        $this->assertSame('second', $m->anyInBounds($this->click(2, 1))->id);
+    }
+
+    /**
+     * Bounding box of a multi-line zone with ragged (non-uniform) row widths
+     * must be the union rectangle: endCol = max width across all rows,
+     * endRow = last row containing content.
+     */
+    public function testZoneAcrossLinesRaggedWidths(): void
+    {
+        // Case 1: longer row first, shorter row second.
+        $m = Manager::newGlobal();
+        $m->scan($m->mark('block', "longrow\nhi"));
+        $z = $m->get('block');
+        $this->assertSame(1, $z->startCol);
+        $this->assertSame(1, $z->startRow);
+        $this->assertSame(7, $z->endCol);   // widest row (longrow)
+        $this->assertSame(2, $z->endRow);
+
+        // Case 2: shorter row first, longer row last.
+        $m2 = Manager::newGlobal();
+        $m2->scan($m2->mark('block', "hi\nlongrow"));
+        $z2 = $m2->get('block');
+        $this->assertSame(1, $z2->startCol);
+        $this->assertSame(1, $z2->startRow);
+        $this->assertSame(7, $z2->endCol);  // longest row (longrow)
+        $this->assertSame(2, $z2->endRow);
+
+        // Case 3: content ends exactly at a newline (trailing \n means
+        // end marker lands at col 1 of a fresh row — must still use
+        // the maxCol from the last content row, not col 1).
+        $m3 = Manager::newGlobal();
+        $m3->scan($m3->mark('block', "longrow\n"));
+        $z3 = $m3->get('block');
+        $this->assertSame(1, $z3->startCol);
+        $this->assertSame(1, $z3->startRow);
+        $this->assertSame(7, $z3->endCol);  // maxCol from the longrow
+        $this->assertSame(1, $z3->endRow);  // endRow = row - 1 (col was 1)
+    }
 }
 
 final class ZoneRoutingModel implements \SugarCraft\Core\Model

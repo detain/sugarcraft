@@ -250,4 +250,28 @@ final class DragTrackerTest extends TestCase
         $this->assertSame('a', $msg->originZone->id);
         $this->assertSame('b', $msg->currentZone->id);
     }
+
+    /**
+     * Regression: update() must not mutate the original instance.
+     * Mirrors the failing state that existed before the mutate()-before-return fix.
+     */
+    public function testUpdateLeavesOriginalUnchanged(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new DragTracker($m);
+
+        // Capture original state — both ids are null.
+        $old = $tracker;
+
+        // Press inside zone A: new instance has originZoneId='a', currentZoneId='a'.
+        [$new,] = $tracker->update($this->press(2, 1));
+
+        // Original must still be null/null.
+        $this->assertNull($old->originZoneId());
+        $this->assertNull($old->currentZoneId());
+        // New instance has the hit ids.
+        $this->assertSame('a', $new->originZoneId());
+        $this->assertSame('a', $new->currentZoneId());
+        $this->assertNotSame($old, $new);
+    }
 }

@@ -59,8 +59,10 @@ Beyond `mark()` / `scan()` / `get()`:
 - `get($id)` / `all()` / `clear(?$id)` — single-zone lookup, every
   zone, and targeted-or-wipe-all clear.
 - `close()` — drop every zone + flip the manager into pass-through
-  mode. Idempotent. PHP synchronous-scan has no worker to stop, so
-  this is purely a state cleanup.
+  mode. Idempotent. To re-arm a closed default manager call
+  `Zones::setDefaultManager(null)` (forces lazy reconstruction of a
+  fresh enabled manager on the next `defaultManager()` call) or
+  `Zones::setEnabled(true)` to keep zone state but re-enable marking.
 
 ## Package-level facade
 
@@ -116,7 +118,7 @@ the enter.
 - `currentZone()` — `Zone` object, or null
 - `withManager(Manager)` — rebind to a different manager (e.g. a
   prefixed manager in a sub-component)
-- `withCurrentZoneId(string)` — restore from a serialized state
+- `withCurrentZoneId(?string)` — restore from a serialized state; null clears the hovered state
 
 ## Drag tracking
 
@@ -217,6 +219,10 @@ text-processing component that produces the raw CSI sequence.
 - The PHP port has a synchronous `scan()` (no background worker), so
   `close()` is purely a state reset / disable rather than a thread
   join.
+- An unterminated APC marker (missing the final ESC `\`) causes
+  `scan()` to append the remainder of the frame raw and stops
+  processing further markers — every start/end marker pair must be
+  properly terminated.
 
 ## API summary
 
@@ -226,7 +232,7 @@ text-processing component that produces the raw CSI sequence.
 | `Manager` | `newPrefix(?prefix)` | Create prefixed manager for isolation |
 | `Manager` | `mark(name, rendered)` | Wrap output with zone marker |
 | `Manager` | `scan(output)` | Record positions, strip markers |
-| `Manager` | `anyInBounds(mouseMsg)` | Return first zone under the mouse |
+| `Manager` | `anyInBounds(mouseMsg)` | Return the innermost zone under the mouse |
 | `Manager` | `get(name)` | Get zone by name |
 | `Manager` | `setMotionTracking(bool)` | Return CSI 1003 h/l escape sequence |
 | `Zone` | `inBounds(mouseMsg)` | Test if mouse is inside zone |

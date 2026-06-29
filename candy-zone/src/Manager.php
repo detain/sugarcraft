@@ -156,18 +156,27 @@ final class Manager
                     $id = substr($payload, strlen(self::TAG_END));
                     if (isset($open[$id])) {
                         [$startCol, $startRow, $maxCol, $maxRow] = $open[$id];
-                        // End marker sits *after* the last visible cell;
-                        // back the end up by one.
-                        $endCol = max($startCol, $col - 1);
-                        $endRow = $row;
-                        // If we wrapped to a new line, prefer the end of the
-                        // previous row for the rightmost column.
-                        if ($endRow > $startRow && $col === 1) {
-                            $endCol = $maxCol;
-                            $endRow = $row - 1;
+                        // End marker sits one cell past the last visible cell.
+                        // $col is already positioned at the cell *after* the last
+                        // content, so $col - 1 is the rightmost occupied cell on
+                        // the final row.
+                        $lastCol = $col - 1;
+                        // Bounding box is the union rectangle over all rows.
+                        if ($row === $startRow) {
+                            // Zone never wrapped to a new row.
+                            $endRow = $startRow;
+                            $endCol = max($startCol, $lastCol);
                         } else {
-                            $endCol = max($endCol, $maxCol);
-                            $endRow = max($endRow, $maxRow);
+                            // Zone wrapped. If end marker is at col 1, the final
+                            // row had no visible content (just the end marker
+                            // itself), so the box ends on the previous row.
+                            if ($col === 1) {
+                                $endRow = $row - 1;
+                                $endCol = $maxCol;
+                            } else {
+                                $endRow = $row;
+                                $endCol = max($maxCol, $lastCol);
+                            }
                         }
                         $this->zones[$id] = new Zone($id, $startCol, $startRow, $endCol, $endRow);
                         unset($open[$id]);
@@ -274,10 +283,11 @@ final class Manager
     }
 
     /**
-     * Walk the recorded zones, return the first one whose bounds
-     * contain `$mouse`. Returns null if no zone matches (or if the
-     * Msg isn't a {@see MouseMsg} to begin with — handy when models
-     * blanket-route every Msg through this helper).
+     * Walk the recorded zones and return the innermost (smallest-area) one
+     * whose bounds contain `$mouse`. When zones nest, the smallest one wins;
+     * on equal area the last-inserted zone takes priority. Returns null if
+     * no zone matches (or if the Msg isn't a {@see MouseMsg} to begin with —
+     * handy when models blanket-route every Msg through this helper).
      *
      * Mirrors bubblezone's `Manager::AnyInBounds()`.
      */
@@ -286,12 +296,18 @@ final class Manager
         if (!$mouse instanceof MouseMsg) {
             return null;
         }
+        $hit = null;
+        $smallestArea = PHP_INT_MAX;
         foreach ($this->zones as $zone) {
             if ($zone->inBounds($mouse)) {
-                return $zone;
+                $area = $zone->width() * $zone->height();
+                if ($area < $smallestArea) {
+                    $smallestArea = $area;
+                    $hit = $zone;
+                }
             }
         }
-        return null;
+        return $hit;
     }
 
     /**

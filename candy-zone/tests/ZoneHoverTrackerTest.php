@@ -171,6 +171,25 @@ final class ZoneHoverTrackerTest extends TestCase
         $this->assertSame('b', $next->currentZoneId());
     }
 
+    /**
+     * withCurrentZoneId(null) restores the null/cleared hover state.
+     * This makes round-trip serialization of "no zone hovered" possible.
+     */
+    public function testWithCurrentZoneIdRestoresNull(): void
+    {
+        $m = $this->buildManager();
+        $tracker = new ZoneHoverTracker($m);
+
+        // First, hover into a zone.
+        [$tracker] = $tracker->update($this->move(2, 1));
+        $this->assertSame('a', $tracker->currentZoneId());
+
+        // Restore null — clears the hovered state.
+        $next = $tracker->withCurrentZoneId(null);
+        $this->assertNull($next->currentZoneId());
+        $this->assertNotSame($tracker, $next);
+    }
+
     public function testUpdateWithNonMouseMsgReturnsNoTransition(): void
     {
         $m = $this->buildManager();

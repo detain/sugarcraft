@@ -122,8 +122,9 @@ final class ZoneHoverTracker
     /**
      * Return a new tracker with a specific current zone id.
      * Intended for state snapshot/restore rather than direct use.
+     * Pass null to clear the hovered state.
      */
-    public function withCurrentZoneId(string $id): self
+    public function withCurrentZoneId(?string $id): self
     {
         return $this->mutate($id);
     }
