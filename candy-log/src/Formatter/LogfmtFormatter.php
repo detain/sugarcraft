@@ -62,15 +62,6 @@ final class LogfmtFormatter implements Formatter
 
     private function formatValue(mixed $v): string
     {
-        if (\is_bool($v)) {
-            return $v ? 'true' : 'false';
-        }
-        if (\is_array($v)) {
-            return '[' . \implode(',', \array_map(fn($i) => (string) $i, $v)) . ']';
-        }
-        if ($v === null) {
-            return 'null';
-        }
-        return (string) $v;
+        return ValueCoercion::stringify($v, 0, ',');
     }
 }
