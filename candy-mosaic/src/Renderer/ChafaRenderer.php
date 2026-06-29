@@ -108,14 +108,9 @@ final class ChafaRenderer implements Renderer
                 throw new \RuntimeException(Lang::t('chafa.command_failed', ['error' => 'proc_open returned false']));
             }
 
-            stream_set_blocking($pipes[1], false);
-
-            $stdout = '';
-            while (!feof($pipes[1])) {
-                $chunk = fread($pipes[1], 8192);
-                if ($chunk !== false && $chunk !== '') {
-                    $stdout .= $chunk;
-                }
+            $stdout = stream_get_contents($pipes[1]);
+            if ($stdout === false) {
+                $stdout = '';
             }
 
             fclose($pipes[1]);
