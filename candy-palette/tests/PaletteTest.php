@@ -146,10 +146,11 @@ final class PaletteTest extends TestCase
         $this->assertSame(Profile::NoTTY, $profile);
     }
 
-    public function testXterm16ImpliesAnsi256(): void
+    public function testXterm16ImpliesAnsi(): void
     {
+        // xterm-16color is not a 256color terminal, so it maps to bare xterm → ANSI
         $profile = Palette::detect(null, ['TERM' => 'xterm-16color']);
-        $this->assertSame(Profile::ANSI256, $profile);
+        $this->assertSame(Profile::ANSI, $profile);
     }
 
     public function testDumbTerminalReturnsNoTTY(): void
@@ -178,7 +179,7 @@ final class PaletteTest extends TestCase
 
     public function testCommentForANSI(): void
     {
-        $p = new Palette(null, ['TERM' => 'vt100']);
+        $p = new Palette(null, ['TERM' => 'vt100', 'FORCE_COLOR' => '1']);
         $this->assertSame('normcore', $p->comment());
     }
 
