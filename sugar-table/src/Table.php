@@ -1212,14 +1212,20 @@ final class Table
         }
 
         // Data rows
-        foreach ($rows as $ri => $row) {
-            $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
-            if ($this->multilineMode) {
-                $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri]);
-                $bufferRow += $rowHeights[$ri];
-            } else {
-                $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
-                $bufferRow++;
+        if ($rows === [] && !$this->showHeader) {
+            // Render no_data message centered in the content area
+            $buffer = $this->fillNoDataRow($buffer, $bufferRow, $totalWidth);
+            $bufferRow++;
+        } else {
+            foreach ($rows as $ri => $row) {
+                $isSelected = (($ri + $this->scrollY) === $this->selectedIndex) && $this->selectable;
+                if ($this->multilineMode) {
+                    $buffer = $this->fillDataRowLines($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths, $rowHeights[$ri]);
+                    $bufferRow += $rowHeights[$ri];
+                } else {
+                    $buffer = $this->fillDataRow($buffer, $bufferRow, $row, $ri, $totalWidth, $isSelected, $this->computedColumnWidths);
+                    $bufferRow++;
+                }
             }
         }
 
@@ -1703,6 +1709,39 @@ final class Table
             $padRight = \max(0, $padRight);
             $displayLabel = $label;
         }
+
+        $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
+
+        [$buffer, $col] = $this->writeLeftEdge($buffer, $row, $style);
+        $buffer = $this->fillCellContent($buffer, $row, $col, $content, $contentWidth, $style);
+        $col += $contentWidth;
+
+        return $this->writeRightEdge($buffer, $row, $col, $style);
+    }
+
+    /**
+     * Render the "no data" empty state message centered in the content area.
+     */
+    private function fillNoDataRow(Buffer $buffer, int $row, int $contentWidth): Buffer
+    {
+        $style = $this->parseAnsiToStyle($this->footerStyle);
+        $label = Lang::t('no_data');
+        $labelWidth = Width::of($label);
+
+        // Center the label horizontally
+        if ($labelWidth >= $contentWidth) {
+            $displayLabel = Width::truncate($label, $contentWidth);
+            $displayWidth = Width::of($displayLabel);
+            $remaining = $contentWidth - $displayWidth;
+            $padLeft = (int) \floor($remaining / 2);
+            $padRight = $remaining - $padLeft;
+        } else {
+            $padLeft = (int) \floor(($contentWidth - $labelWidth) / 2);
+            $padRight = $contentWidth - $padLeft - $labelWidth;
+            $displayLabel = $label;
+        }
+        $padLeft = \max(0, $padLeft);
+        $padRight = \max(0, $padRight);
 
         $content = \str_repeat(' ', $padLeft) . $displayLabel . \str_repeat(' ', $padRight);
 
