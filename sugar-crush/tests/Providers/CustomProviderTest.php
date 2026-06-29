@@ -294,7 +294,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -333,7 +333,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -389,7 +389,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -445,7 +445,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -530,7 +530,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -568,7 +568,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
@@ -609,7 +609,7 @@ final class CustomProviderTest extends TestCase
         ]);
 
         $handlerStack = HandlerStack::create($mock);
-        $client = new Client(['handler' => $handlerStack]);
+        $client = new Client(['handler' => $handlerStack, 'base_uri' => 'https://api.example.com']);
 
         $provider = new CustomProvider(
             'custom',
