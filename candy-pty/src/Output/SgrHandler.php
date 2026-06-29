@@ -108,6 +108,21 @@ final class SgrHandler implements Handler
     }
 
     /**
+     * Drain and reset the transition log accumulated since the last drain.
+     *
+     * Each entry is a pair `[SgrState from, SgrState to]` representing
+     * one SGR state change (e.g. default→red, red→reset, reset→bold).
+     *
+     * @return list<array{SgrState, SgrState}>
+     */
+    public function drainTransitions(): array
+    {
+        $events = $this->events;
+        $this->events = [];
+        return $events;
+    }
+
+    /**
      * Apply an SGR parameter list to update the current state.
      *
      * @param list<int> $params  Numeric SGR parameters; -1 means default.
@@ -117,10 +132,15 @@ final class SgrHandler implements Handler
     {
         if ($params === [] || $params === [-1]) {
             // SGR 0 — reset all attributes
+            $prev = $this->state;
             $this->state = new SgrState();
+            if (!$this->state->equals($prev)) {
+                $this->events[] = [$prev, $this->state];
+            }
             return;
         }
 
+        $prev = $this->state;
         $state = $this->state;
         $i = 0;
 
@@ -167,8 +187,8 @@ final class SgrHandler implements Handler
             } elseif ($p === 38) {
                 // Extended foreground: 38;5;n (256-color) or 38;2;r;g;b (RGB)
                 if ($i + 2 < \count($params) && $params[$i + 1] === 5) {
-                    // 256-color
-                    $state = $this->withForeground256($state, $params[$i + 2]);
+                    // 256-color — clamp index to valid 0-255 range
+                    $state = $this->withForeground256($state, \max(0, \min(255, $params[$i + 2])));
                     $i += 2;
                 } elseif ($i + 4 < \count($params) && $params[$i + 1] === 2) {
                     // RGB
@@ -177,6 +197,15 @@ final class SgrHandler implements Handler
                     $b = $params[$i + 4];
                     $state = $this->withForegroundRgb($state, ($r << 16) | ($g << 8) | $b);
                     $i += 4;
+                } else {
+                    // Malformed: consume whatever sub-params were present so
+                    // orphaned 5/2 markers and trailing numbers are not re-fed
+                    // as standalone SGR codes.
+                    if ($i + 1 < \count($params) && $params[$i + 1] === 5) {
+                        $i = \count($params); // consume orphaned 5 and rest
+                    } elseif ($i + 1 < \count($params) && $params[$i + 1] === 2) {
+                        $i = \count($params); // consume orphaned 2 and rest
+                    }
                 }
             } elseif ($p === 39) {
                 // Default foreground — revert to 9 (default)
@@ -187,8 +216,8 @@ final class SgrHandler implements Handler
             } elseif ($p === 48) {
                 // Extended background: 48;5;n (256-color) or 48;2;r;g;b (RGB)
                 if ($i + 2 < \count($params) && $params[$i + 1] === 5) {
-                    // 256-color
-                    $state = $this->withBackground256($state, $params[$i + 2]);
+                    // 256-color — clamp index to valid 0-255 range
+                    $state = $this->withBackground256($state, \max(0, \min(255, $params[$i + 2])));
                     $i += 2;
                 } elseif ($i + 4 < \count($params) && $params[$i + 1] === 2) {
                     // RGB
@@ -197,6 +226,15 @@ final class SgrHandler implements Handler
                     $b = $params[$i + 4];
                     $state = $this->withBackgroundRgb($state, ($r << 16) | ($g << 8) | $b);
                     $i += 4;
+                } else {
+                    // Malformed: consume whatever sub-params were present so
+                    // orphaned 5/2 markers and trailing numbers are not re-fed
+                    // as standalone SGR codes.
+                    if ($i + 1 < \count($params) && $params[$i + 1] === 5) {
+                        $i = \count($params); // consume orphaned 5 and rest
+                    } elseif ($i + 1 < \count($params) && $params[$i + 1] === 2) {
+                        $i = \count($params); // consume orphaned 2 and rest
+                    }
                 }
             } elseif ($p === 49) {
                 // Default background — revert to 9 (default)
@@ -213,6 +251,9 @@ final class SgrHandler implements Handler
         }
 
         $this->state = $state;
+        if (!$state->equals($prev)) {
+            $this->events[] = [$prev, $state];
+        }
     }
 
     private function withForeground(SgrState $s, int $color): SgrState
@@ -308,7 +349,7 @@ final class SgrHandler implements Handler
             dim: $s->dim,
             invisible: $s->invisible,
             blink: $s->blink,
-            foreground256: SgrState::COLOR_256,
+            foreground256: SgrState::COLOR_RGB,
             background256: $s->background256,
             foregroundRgb: $rgb,
             backgroundRgb: $s->backgroundRgb,
@@ -329,7 +370,7 @@ final class SgrHandler implements Handler
             invisible: $s->invisible,
             blink: $s->blink,
             foreground256: $s->foreground256,
-            background256: SgrState::COLOR_256,
+            background256: SgrState::COLOR_RGB,
             foregroundRgb: $s->foregroundRgb,
             backgroundRgb: $rgb,
         );

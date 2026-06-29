@@ -47,7 +47,13 @@ final class Renderer
     /** @var list<string>|null */
     private ?array $lastLines = null;
 
+    /** @var array<string, list<Token>> token cache keyed by string */
+    private array $tokenCache = [];
+
     private ?Recorder $recorder = null;
+
+    /** Shared parser for cell-diff repaints — avoids repeated allocation. */
+    private Parser $parser;
 
     /**
      * @param resource $out
@@ -62,6 +68,7 @@ final class Renderer
         private readonly bool $inline = false,
         private readonly bool $cellDiff = false,
     ) {
+        $this->parser = new Parser();
     }
 
     /**
@@ -111,6 +118,7 @@ final class Renderer
     public function reset(): void
     {
         $this->lastLines = null;
+        $this->tokenCache = [];
     }
 
     private function emit(string $bytes): void
@@ -223,8 +231,8 @@ final class Renderer
      */
     private function repaintLine(int $row, string $prev, string $curr): string
     {
-        $prevTokens = (new Parser())->parse($prev);
-        $currTokens = (new Parser())->parse($curr);
+        $prevTokens = $this->getTokens($prev);
+        $currTokens = $this->getTokens($curr);
 
         $sgr = SgrState::initial();
         $col = 0;
@@ -324,5 +332,16 @@ final class Renderer
             Token::CSI => 2 + strlen($t->intermediate) + strlen($t->params) + strlen($t->final),
             default    => 2 + strlen($t->data) + 2,
         };
+    }
+
+    /**
+     * Parse a string into tokens, caching results by string key
+     * to avoid re-parsing unchanged lines across frames.
+     *
+     * @return list<Token>
+     */
+    private function getTokens(string $s): array
+    {
+        return $this->tokenCache[$s] ??= $this->parser->parse($s);
     }
 }

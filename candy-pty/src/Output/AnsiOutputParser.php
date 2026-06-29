@@ -61,9 +61,6 @@ final class AnsiOutputParser
             return '';
         }
 
-        // Track the state before so we can extract changed segments
-        $stateBefore = $this->handler->state;
-
         // Feed through the parser — the SgrHandler updates $state on SGR 'm' sequences
         $this->parser->feed($bytes);
 
@@ -88,17 +85,13 @@ final class AnsiOutputParser
             return [];
         }
 
-        $transitions = [];
-        $stateBefore = $this->handler->state;
+        // Drain any stale events from prior calls so we only return
+        // transitions from this chunk.
+        $this->handler->drainTransitions();
 
         $this->parser->feed($bytes);
 
-        $stateAfter = $this->handler->state;
-        if (!$stateAfter->equals($stateBefore)) {
-            $transitions[] = [$stateBefore, $stateAfter];
-        }
-
-        return $transitions;
+        return $this->handler->drainTransitions();
     }
 
     /**

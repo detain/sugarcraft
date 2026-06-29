@@ -178,6 +178,41 @@ final class InputReader
                 continue;
             }
 
+            // Mirrors charmbracelet/bubbletea rune assembly.
+            // Detect UTF-8 lead bytes and assemble the full codepoint
+            // before emitting — C0-0x7f bytes are single-byte ASCII.
+            if ($code >= 0x80) {
+                // Compute expected sequence length from the lead byte.
+                $len = match (true) {
+                    $code >= 0xf0 => 4,  // 0xF0-0xF7: 4-byte sequences
+                    $code >= 0xe0 => 3,  // 0xE0-0xEF: 3-byte sequences (CJK)
+                    $code >= 0xc0 => 2,  // 0xC0-0xDF: 2-byte sequences (Latin extend)
+                    default       => 1,
+                };
+                $remaining = $len - 1;
+                // If we don't have all continuation bytes yet, break and
+                // wait for the next read — same as the ESC/OSC branches.
+                if (($i + $len) > $len_of_buf) {
+                    break;
+                }
+                // Validate all continuation bytes are 0x80-0xBF.
+                $valid = true;
+                for ($j = 1; $j < $len; $j++) {
+                    $cb = ord($this->buf[$i + $j]);
+                    if ($cb < 0x80 || $cb > 0xbf) {
+                        $valid = false;
+                        break;
+                    }
+                }
+                if ($valid) {
+                    $msgs[] = new KeyMsg(KeyType::Char, rune: substr($this->buf, $i, $len));
+                    $i += $len;
+                    continue;
+                }
+                // Invalid sequence — fall through to emit the lone lead byte
+                // as a Char key and advance by 1 so a malformed stream cannot stall.
+            }
+
             $msgs[] = $this->decodeChar($code);
             $i += 1;
         }

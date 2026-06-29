@@ -51,6 +51,12 @@ final class Expect
      *                               scripting.  When set, {@see send()} calls
      *                               {@see Recorder::recordInputBytes()} and
      *                               each successful match calls {@see Recorder::recordOutput()}.
+     * @param int|null      $maxBuffer   Cap on buffer size in bytes; null = unbounded.
+     *                                   When set, the buffer is trimmed to this size after
+     *                                   each read to prevent unbounded growth.
+     * @param int|null       $searchWindow Number of bytes at the buffer tail to search;
+     *                                   null = search entire buffer (original behaviour).
+     *                                   Reduces O(n²) re-scan cost for long sessions.
      */
     public function __construct(
         public readonly MasterPty $master,
@@ -59,6 +65,8 @@ final class Expect
         public readonly ?string $before = null,
         public readonly int $readChunk = self::DEFAULT_READ_CHUNK,
         public readonly ?Recorder $recorder = null,
+        public readonly ?int $maxBuffer = null,
+        public readonly ?int $searchWindow = null,
     ) {}
 
     /**
@@ -81,7 +89,20 @@ final class Expect
      */
     public function send(string $bytes): self
     {
-        $this->master->write($bytes);
+        // Flush loop: handle short writes by looping until all bytes are accepted.
+        $written = 0;
+        while ($written < \strlen($bytes)) {
+            $n = $this->master->write(\substr($bytes, $written));
+            if ($n <= 0) {
+                // Would-block on non-blocking master — brief retry.
+                \usleep(1000);
+                $n = $this->master->write(\substr($bytes, $written));
+                if ($n <= 0) {
+                    throw new \RuntimeException('Failed to write to master PTY');
+                }
+            }
+            $written += $n;
+        }
         $this->recorder?->recordInputBytes($bytes);
         return new self(
             master: $this->master,
@@ -90,6 +111,8 @@ final class Expect
             before: $this->before,
             readChunk: $this->readChunk,
             recorder: $this->recorder,
+            maxBuffer: $this->maxBuffer,
+            searchWindow: $this->searchWindow,
         );
     }
 
@@ -120,6 +143,52 @@ final class Expect
             before: $this->before,
             readChunk: $this->readChunk,
             recorder: $recorder,
+            maxBuffer: $this->maxBuffer,
+            searchWindow: $this->searchWindow,
+        );
+    }
+
+    /**
+     * Return a new Expect with a buffer size cap applied.
+     *
+     * When set, the buffer is trimmed to at most `$maxBuffer` bytes after
+     * each read, keeping enough trailing bytes to still match the longest
+     * needle. Null unsets the cap (unbounded growth, original behaviour).
+     */
+    public function withMaxBuffer(?int $maxBuffer): self
+    {
+        return new self(
+            master: $this->master,
+            buffer: $this->buffer,
+            lastMatch: $this->lastMatch,
+            before: $this->before,
+            readChunk: $this->readChunk,
+            recorder: $this->recorder,
+            maxBuffer: $maxBuffer,
+            searchWindow: $this->searchWindow,
+        );
+    }
+
+    /**
+     * Return a new Expect with a search window applied.
+     *
+     * When set, `expectAny`/`expectPattern` only scan the last
+     * `$searchWindow` bytes of the buffer for a match (pexpect's
+     * `searchwindowsize`). This bounds the O(n) re-scan cost for
+     * long-running sessions. Null means search the full buffer
+     * (original behaviour).
+     */
+    public function withSearchWindow(?int $searchWindow): self
+    {
+        return new self(
+            master: $this->master,
+            buffer: $this->buffer,
+            lastMatch: $this->lastMatch,
+            before: $this->before,
+            readChunk: $this->readChunk,
+            recorder: $this->recorder,
+            maxBuffer: $this->maxBuffer,
+            searchWindow: $searchWindow,
         );
     }
 
@@ -163,12 +232,22 @@ final class Expect
 
         $deadline = \microtime(true) + $timeoutSec;
         $buffer = $this->buffer;
+        $maxNeedleLen = 0;
+        foreach ($needles as $needle) {
+            $maxNeedleLen = \max($maxNeedleLen, \strlen($needle));
+        }
 
         while (true) {
             $bestPos = null;
             $bestNeedle = null;
+
+            // searchWindow: only look at the last N bytes to bound O(n) re-scan cost.
+            $searchStart = $this->searchWindow !== null
+                ? \max(0, \strlen($buffer) - $this->searchWindow)
+                : 0;
+
             foreach ($needles as $needle) {
-                $pos = \strpos($buffer, $needle);
+                $pos = \strpos($buffer, $needle, $searchStart);
                 if ($pos === false) {
                     continue;
                 }
@@ -188,6 +267,8 @@ final class Expect
                     before: $before,
                     readChunk: $this->readChunk,
                     recorder: $this->recorder,
+                    maxBuffer: $this->maxBuffer,
+                    searchWindow: $this->searchWindow,
                 );
             }
 
@@ -208,6 +289,15 @@ final class Expect
             }
             $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
+
+            // Enforce maxBuffer: trim from front, keeping enough trailing bytes
+            // to still match the longest needle.
+            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
+                $keep = \max(0, $this->maxBuffer - $maxNeedleLen);
+                if ($keep < \strlen($buffer)) {
+                    $buffer = \substr($buffer, -$keep);
+                }
+            }
         }
     }
 
@@ -230,7 +320,14 @@ final class Expect
 
         while (true) {
             $matches = [];
-            $rc = @\preg_match($regex, $buffer, $matches, PREG_OFFSET_CAPTURE);
+
+            // searchWindow: only feed the last N bytes to preg_match to bound
+            // the cost of anchored regexes that scan the full buffer.
+            $searchBuffer = $this->searchWindow !== null && \strlen($buffer) > $this->searchWindow
+                ? \substr($buffer, -$this->searchWindow)
+                : $buffer;
+
+            $rc = @\preg_match($regex, $searchBuffer, $matches, PREG_OFFSET_CAPTURE);
             if ($rc === false) {
                 throw new \InvalidArgumentException(
                     "Expect::expectPattern: invalid regex '{$regex}'",
@@ -239,8 +336,12 @@ final class Expect
             if ($rc === 1) {
                 /** @var array{0: array{0: string, 1: int}} $matches */
                 [$matchText, $offset] = $matches[0];
-                $before = \substr($buffer, 0, $offset);
-                $remaining = \substr($buffer, $offset + \strlen($matchText));
+                // Adjust offset to account for searchWindow slicing.
+                $absoluteOffset = $this->searchWindow !== null && \strlen($buffer) > $this->searchWindow
+                    ? \strlen($buffer) - $this->searchWindow + $offset
+                    : $offset;
+                $before = \substr($buffer, 0, $absoluteOffset);
+                $remaining = \substr($buffer, $absoluteOffset + \strlen($matchText));
                 return new self(
                     master: $this->master,
                     buffer: $remaining,
@@ -248,6 +349,8 @@ final class Expect
                     before: $before,
                     readChunk: $this->readChunk,
                     recorder: $this->recorder,
+                    maxBuffer: $this->maxBuffer,
+                    searchWindow: $this->searchWindow,
                 );
             }
 
@@ -268,6 +371,63 @@ final class Expect
             }
             $this->recorder?->recordOutput($chunk);
             $buffer .= $chunk;
+
+            // Enforce maxBuffer: trim from front, keeping enough trailing bytes
+            // for any plausible match (use a safe minimum of 1 KiB).
+            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
+                $keep = \max(0, $this->maxBuffer - 1024);
+                if ($keep < \strlen($buffer)) {
+                    $buffer = \substr($buffer, -$keep);
+                }
+            }
+        }
+    }
+
+    /**
+     * Wait for the master to signal EOF on the PTY.
+     *
+     * Mirrors charmbracelet/m泡泡/expect.Exp.
+     *
+     * @throws ExpectEofException when the master already reached EOF.
+     */
+    public function expectEof(float $timeoutSec = self::DEFAULT_TIMEOUT_SEC): self
+    {
+        $deadline = \microtime(true) + $timeoutSec;
+        $buffer = $this->buffer;
+
+        while (true) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0) {
+                throw ExpectTimeoutException::forEof($timeoutSec, $buffer);
+            }
+
+            $chunk = $this->master->read(
+                $this->readChunk,
+                \min($remaining, 0.1),
+            );
+            if ($chunk === null) {
+                continue;
+            }
+            if ($chunk === '') {
+                // Genuine EOF — return with empty buffer, lastMatch = null.
+                return new self(
+                    master: $this->master,
+                    buffer: '',
+                    lastMatch: null,
+                    before: $buffer,
+                    readChunk: $this->readChunk,
+                    recorder: $this->recorder,
+                    maxBuffer: $this->maxBuffer,
+                    searchWindow: $this->searchWindow,
+                );
+            }
+            $this->recorder?->recordOutput($chunk);
+            $buffer .= $chunk;
+
+            // Enforce maxBuffer while waiting for EOF.
+            if ($this->maxBuffer !== null && \strlen($buffer) > $this->maxBuffer) {
+                $buffer = \substr($buffer, -$this->maxBuffer);
+            }
         }
     }
 }

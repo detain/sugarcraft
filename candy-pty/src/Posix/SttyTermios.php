@@ -71,7 +71,11 @@ final class SttyTermios implements Termios
         if ($this->savedMode === '') {
             return;
         }
-        $this->runStty($this->savedMode);
+        // stty -g emits a saved mode string. On glibc it is a single
+        // colon-grouped token; on BSD/macOS it is space-separated fields.
+        // Split on whitespace so each token becomes a separate argv element.
+        $args = \preg_split('/\s+/', \trim($this->savedMode), -1, PREG_SPLIT_NO_EMPTY);
+        $this->runStty(...$args);
     }
 
     /**
@@ -120,6 +124,10 @@ final class SttyTermios implements Termios
             2 => ['pipe', 'w'],
         ];
         $proc = \proc_open($cmd, $desc, $pipes);
+
+        if (!\is_resource($proc)) {
+            throw new RuntimeException('stty ' . \implode(' ', $args) . ' failed: proc_open returned false');
+        }
 
         \fclose($pipes[0]);
         $out = \stream_get_contents($pipes[1]);

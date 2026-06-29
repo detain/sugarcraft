@@ -96,7 +96,13 @@ final class PosixMasterPty implements MasterPty
 
         $bytes = @\fread($stream, $len);
         if ($bytes === false) {
-            return '';
+            // Distinguish fread error from genuine EOF. Transient errors
+            // (would-block on non-blocking) should return null so callers
+            // continue looping rather than tearing down.
+            if (@\feof($stream)) {
+                return '';  // genuine EOF
+            }
+            return null;  // transient error / no data
         }
         return $bytes;
     }
