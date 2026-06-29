@@ -6,8 +6,13 @@ namespace SugarCraft\Mines\Tests;
 
 use SugarCraft\Core\KeyType;
 use SugarCraft\Core\Msg\KeyMsg;
+use SugarCraft\Core\Msg\MouseClickMsg;
+use SugarCraft\Core\Msg\MouseMsg;
+use SugarCraft\Core\MouseAction;
+use SugarCraft\Core\MouseButton;
 use SugarCraft\Mines\Difficulty;
 use SugarCraft\Mines\Game;
+use SugarCraft\Mines\Renderer;
 use SugarCraft\Mines\Stats;
 use PHPUnit\Framework\TestCase;
 
@@ -321,5 +326,161 @@ final class GameTest extends TestCase
         $stats = $g->stats();
 
         $this->assertSame(1, $stats->gamesPlayed(Difficulty::EASY));
+    }
+
+    // ─── Chord key ─────────────────────────────────────────────────────────
+
+    /**
+     * 'c' key chords at cursor position: a satisfied revealed number with
+     * correctly-flagged neighbours must reveal the remaining neighbours.
+     */
+    public function testChordKeyChordsAtCursor(): void
+    {
+        // Build a 3×3 board by hand (fresh Cell for each position to avoid aliasing):
+        //   Row 0: [adj=0, flagged-mine, adj=1]
+        //   Row 1: [adj=1, revealed@adj=1, unrevealed-safe]
+        //   Row 2: [adj=0, adj=1, adj=0]
+        $rows = [
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(true, false, true, 0), new \SugarCraft\Mines\Cell(false, false, false, 1)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, true, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
+        // Cursor starts at (1,1) — on the satisfied revealed number.
+        $game = new Game($board, 1, 1, static fn(int $max): int => 0);
+
+        $this->assertFalse($game->board->cell(1, 2)->revealed);
+
+        // Press 'c' to chord at cursor (1,1).
+        [$g, ] = $game->update(self::key(KeyType::Char, 'c'));
+        $this->assertTrue($g->board->cell(1, 2)->revealed, 'Chord must reveal the unflagged neighbour');
+        // The flagged mine (0,1) must stay unrevealed.
+        $this->assertFalse($g->board->cell(0, 1)->revealed);
+    }
+
+    // ─── Mouse click helpers ────────────────────────────────────────────────
+
+    private static function mouseClick(int $x, int $y, MouseButton $btn): MouseClickMsg
+    {
+        return new MouseClickMsg($x, $y, $btn, MouseAction::Press);
+    }
+
+    // ─── Left-click reveals ─────────────────────────────────────────────────
+
+    public function testLeftClickRevealsResolvedCell(): void
+    {
+        $g = Game::start(5, 5, 3, static fn(int $max): int => 0);
+
+        // Move to top-left and reveal to place mines.
+        [$g, ] = $g->update(self::key(KeyType::Char, 'h'));  // left (cursor 0,0)
+        [$g, ] = $g->update(self::key(KeyType::Char, 'k'));  // up (cursor 0,0)
+        [$g, ] = $g->update(self::key(KeyType::Space));      // reveal at cursor
+
+        // Find an unrevealed safe cell to click.
+        $targetX = 2;
+        $targetY = 2;
+        $cell = $g->board->cell($targetX, $targetY);
+        if ($cell === null || $cell->revealed || $cell->mine) {
+            $this->markTestSkipped('Target cell not suitable for flag test; choose different coords');
+        }
+
+        // Compute terminal coords for interior cell (targetX, targetY).
+        // Border: 1 col/row, padding(0,1): 1 col each side → interior starts at x=3, y=2.
+        $tx = $targetX + 3;
+        $ty = $targetY + 2;
+
+        // Left-click at that terminal position.
+        [$next, ] = $g->update(self::mouseClick($tx, $ty, MouseButton::Left));
+
+        $this->assertTrue($next->board->cell($targetX, $targetY)->revealed,
+            'Left-click must reveal the resolved cell');
+        $this->assertSame($targetX, $next->cursorX);
+        $this->assertSame($targetY, $next->cursorY);
+    }
+
+    // ─── Right-click flags ─────────────────────────────────────────────────
+
+    public function testRightClickTogglesFlag(): void
+    {
+        // Use a hand-built board with a known safe cell to flag.
+        $rows = [
+            [new \SugarCraft\Mines\Cell(true, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 1)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, true, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 1)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
+        $g = new Game($board, 2, 2, static fn(int $max): int => 0);  // cursor at (2,2) — safe, unrevealed
+
+        $this->assertFalse($g->board->cell(2, 2)->revealed);
+        $this->assertFalse($g->board->cell(2, 2)->mine);
+
+        // Terminal coords for interior cell (2,2): x=5, y=4
+        [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Right));
+
+        $this->assertTrue($next->board->cell(2, 2)->flagged,
+            'Right-click must flag the resolved safe cell');
+    }
+
+    // ─── Middle-click chords ───────────────────────────────────────────────
+
+    public function testMiddleClickChords(): void
+    {
+        // Build a board where (1,1) is a satisfied revealed number with one flagged neighbour.
+        $rows = [
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(true, false, true, 0), new \SugarCraft\Mines\Cell(false, false, false, 1)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, true, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 1), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, false, 1);
+        $g = new Game($board, 1, 1, static fn(int $max): int => 0);  // cursor on (1,1) — satisfied
+
+        // Terminal coords for interior (1,1): x=4, y=3
+        [$next, ] = $g->update(self::mouseClick(4, 3, MouseButton::Middle));
+
+        $this->assertTrue($next->board->cell(1, 2)->revealed,
+            'Middle-click chord must reveal the unflagged neighbour (1,2)');
+        // The flagged mine stays unrevealed.
+        $this->assertFalse($next->board->cell(0, 1)->revealed);
+    }
+
+    // ─── Click outside board no-ops ────────────────────────────────────────
+
+    public function testClickOutsideBoardIsNoop(): void
+    {
+        $g = Game::start(3, 3, 1, static fn(int $max): int => 0);
+        $originalExploded = $g->board->exploded;
+        $originalRevealedCount = $g->board->revealedCount;
+
+        // Click at (1,1) which is outside the interior (interior starts at 3,2 for 3×3).
+        [$next, ] = $g->update(self::mouseClick(1, 1, MouseButton::Left));
+
+        $this->assertSame($originalExploded, $next->board->exploded);
+        $this->assertSame($originalRevealedCount, $next->board->revealedCount);
+    }
+
+    // ─── Mouse ignored after game over ─────────────────────────────────────
+
+    public function testMouseIgnoredAfterGameOver(): void
+    {
+        // Create a board in the exploded state.
+        $rows = [
+            [new \SugarCraft\Mines\Cell(false, true, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+            [new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0), new \SugarCraft\Mines\Cell(false, false, false, 0)],
+        ];
+
+        $board = new \SugarCraft\Mines\Board(3, 3, 1, $rows, true, true, 1);  // exploded=true
+        $g = new Game($board, 2, 2, static fn(int $max): int => 0);
+
+        $this->assertTrue($g->board->exploded);
+
+        // Any click should be a no-op.
+        [$next, ] = $g->update(self::mouseClick(5, 4, MouseButton::Left));
+
+        $this->assertSame($g->board->exploded, $next->board->exploded);
+        $this->assertSame($g->board->revealedCount, $next->board->revealedCount);
     }
 }
