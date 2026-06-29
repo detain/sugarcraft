@@ -97,10 +97,29 @@ abstract class PluginSdk
     private function handleInit(): Response
     {
         $meta = $this->init();
-        $this->interval = $meta['interval'] ?? 0;
+        $interval = max(0, min((int) ($meta['interval'] ?? 0), 86400));
+
+        $minSize = $meta['minSize'] ?? null;
+        if (
+            is_array($minSize)
+            && count($minSize) === 2
+            && is_int($minSize[0] ?? null)
+            && is_int($minSize[1] ?? null)
+            && ($minSize[0] ?? 0) > 0
+            && ($minSize[1] ?? 0) > 0
+        ) {
+            $minSize = [
+                max(1, min((int) $minSize[0], 10000)),
+                max(1, min((int) $minSize[1], 1000)),
+            ];
+        } else {
+            $minSize = [30, 4];
+        }
+
+        $this->interval = $interval;
         return Response::init(
             $meta['name'] ?? 'unnamed',
-            $meta['minSize'] ?? [30, 4],
+            $minSize,
             $this->interval
         );
     }
