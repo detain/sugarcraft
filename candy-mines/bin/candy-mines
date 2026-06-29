@@ -15,6 +15,7 @@ declare(strict_types=1);
     exit(1);
 })();
 
+use SugarCraft\Core\MouseMode;
 use SugarCraft\Core\Program;
 use SugarCraft\Core\ProgramOptions;
 use SugarCraft\Mines\Game;
@@ -25,4 +26,4 @@ $w = (int)($argv2[1] ?? 10);
 $h = (int)($argv2[2] ?? 10);
 $m = (int)($argv2[3] ?? max(1, intdiv($w * $h, 8)));
 
-(new Program(Game::start($w, $h, $m), new ProgramOptions(useAltScreen: true)))->run();
+(new Program(Game::start($w, $h, $m), new ProgramOptions(useAltScreen: true, mouseMode: MouseMode::CellMotion)))->run();
