@@ -12,7 +12,7 @@ final class TableTest extends TestCase
 {
     private function makeTable(): Table
     {
-        return Table::withColumns([
+        return Table::fromColumns([
             Column::new('id',   'ID',     5),
             Column::new('name', 'Name',  20),
             Column::new('city', 'City',  15),
@@ -73,7 +73,7 @@ final class TableTest extends TestCase
 
     public function testFilterMultipleColumns(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('name', 'Name', 10),
             Column::new('city', 'City', 10),
         ])->withRows([
@@ -123,7 +123,7 @@ final class TableTest extends TestCase
 
     public function testWithSelectedIndexNoOpOnEmpty(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])->withSelectedIndex(3);
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])->withSelectedIndex(3);
         $this->assertSame(0, $t->SelectedIndex());
     }
 
@@ -136,7 +136,7 @@ final class TableTest extends TestCase
 
     public function testPagination(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -152,7 +152,7 @@ final class TableTest extends TestCase
 
     public function testNextPage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -167,7 +167,7 @@ final class TableTest extends TestCase
 
     public function testPageFooter(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([Row::new(RowData::from(['n' => '1']))])
             ->withPageSize(10);
 
@@ -176,7 +176,7 @@ final class TableTest extends TestCase
 
     public function testMissingDataIndicator(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5), Column::new('name', 'Name', 10)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5), Column::new('name', 'Name', 10)])
             ->withRows([
                 Row::new(RowData::from(['id' => '1'])),  // no 'name'
             ])
@@ -188,7 +188,7 @@ final class TableTest extends TestCase
 
     public function testStyledCellOverridesColumnStyle(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([
                 Row::new(RowData::from(['id' => StyledCell::new('X', '1;31')])),
             ]);
@@ -285,7 +285,7 @@ final class TableTest extends TestCase
 
     public function testStyleFuncWithStringReturn(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([
                 Row::new(RowData::from(['id' => '1'])),
                 Row::new(RowData::from(['id' => '2'])),
@@ -301,7 +301,7 @@ final class TableTest extends TestCase
     public function testStyleFuncWithStyleReturn(): void
     {
         $redStyle = Style::new(0xff0000);
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([
                 Row::new(RowData::from(['id' => 'X'])),
             ])
@@ -314,7 +314,7 @@ final class TableTest extends TestCase
 
     public function testWideCharColumnLayout(): void
     {
-        $t = Table::withColumns([Column::new('val', 'Val', 12)])
+        $t = Table::fromColumns([Column::new('val', 'Val', 12)])
             ->withRows([
                 Row::new(RowData::from(['val' => 'short'])),
                 Row::new(RowData::from(['val' => '中文'])),
@@ -333,7 +333,7 @@ final class TableTest extends TestCase
 
     public function testHideHeader(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->withShowHeader(false);
 
@@ -344,7 +344,7 @@ final class TableTest extends TestCase
 
     public function testHideFooter(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->withPageSize(10)
             ->withShowFooter(false);
@@ -355,7 +355,7 @@ final class TableTest extends TestCase
 
     public function testViewportScrollBeyondRows(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->withViewportHeight(5)
             ->withScrollY(10);
@@ -366,7 +366,7 @@ final class TableTest extends TestCase
 
     public function testViewportScrollWithinRows(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([
                 Row::new(RowData::from(['id' => '1'])),
                 Row::new(RowData::from(['id' => '2'])),
@@ -381,13 +381,13 @@ final class TableTest extends TestCase
 
     public function testEmptyTableReturnsEmptyString(): void
     {
-        $t = Table::withColumns([]);
+        $t = Table::fromColumns([]);
         $this->assertSame('', $t->View());
     }
 
     public function testColor256Foreground(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('38;5;196');
 
@@ -397,7 +397,7 @@ final class TableTest extends TestCase
 
     public function testColor256Background(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;21');
 
@@ -408,7 +408,7 @@ final class TableTest extends TestCase
     public function testStyleFuncWithFgColor(): void
     {
         $redStyle = Style::new(0xff0000);
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([
                 Row::new(RowData::from(['id' => 'A'])),
                 Row::new(RowData::from(['id' => 'B'])),
@@ -423,7 +423,7 @@ final class TableTest extends TestCase
     public function testStyleFuncWithFgBgAndAttr(): void
     {
         $styled = Style::new(0x00ff00, 0x0000aa, Style::ATTR_BOLD | Style::ATTR_UNDERLINE);
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withStyleFunc(fn() => $styled);
 
@@ -434,7 +434,7 @@ final class TableTest extends TestCase
 
     public function testMultilineMode(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => "line1\nline2"]))])
             ->withMultilineMode(true);
 
@@ -444,7 +444,7 @@ final class TableTest extends TestCase
 
     public function testBorderStyleWithRgbColor(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('38;2;255;128;0');
 
@@ -455,7 +455,7 @@ final class TableTest extends TestCase
 
     public function testBorderStyleWithBrightColor(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('1;91');
 
@@ -466,7 +466,7 @@ final class TableTest extends TestCase
 
     public function testTableBaseStyle(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBaseStyle('1;32');
 
@@ -476,7 +476,7 @@ final class TableTest extends TestCase
 
     public function testSelectableFalse(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withSelectable(false);
 
@@ -486,7 +486,7 @@ final class TableTest extends TestCase
 
     public function testSelectPage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -501,7 +501,7 @@ final class TableTest extends TestCase
 
     public function testPreviousPage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -517,7 +517,7 @@ final class TableTest extends TestCase
 
     public function testColumnWidthDynamicWithContent(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Dynamic)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Dynamic)])
             ->withRows([
                 Row::new(RowData::from(['id' => 'tiny'])),
                 Row::new(RowData::from(['id' => 'this is a longer value'])),
@@ -533,7 +533,7 @@ final class TableTest extends TestCase
 
     public function testColumnWidthContentType(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Content)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 10)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Content)])
             ->withRows([
                 Row::new(RowData::from(['id' => 'short'])),
             ]);
@@ -547,7 +547,7 @@ final class TableTest extends TestCase
 
     public function testColumnWidthPercent(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 20)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 25.0)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 20)->withColumnWidth(\SugarCraft\Table\ColumnWidth::Percent, 25.0)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))]);
 
         $widths = $t->computeColumnWidths(80);
@@ -560,7 +560,7 @@ final class TableTest extends TestCase
 
     public function testHeaderStyleCustom(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withHeaderStyle('1;4;34');
 
@@ -570,7 +570,7 @@ final class TableTest extends TestCase
 
     public function testFilterWithNoMatchingRows(): void
     {
-        $t = Table::withColumns([Column::new('name', 'Name', 10)])
+        $t = Table::fromColumns([Column::new('name', 'Name', 10)])
             ->withRows([
                 Row::new(RowData::from(['name' => 'Alice'])),
                 Row::new(RowData::from(['name' => 'Bob'])),
@@ -582,7 +582,7 @@ final class TableTest extends TestCase
 
     public function testSortByNumeric(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([
                 Row::new(RowData::from(['n' => '10'])),
                 Row::new(RowData::from(['n' => '2'])),
@@ -596,7 +596,7 @@ final class TableTest extends TestCase
 
     public function testSortByNumericDescending(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([
                 Row::new(RowData::from(['n' => '10'])),
                 Row::new(RowData::from(['n' => '2'])),
@@ -610,7 +610,7 @@ final class TableTest extends TestCase
 
     public function testAddRows(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => '1']))])
             ->addRows([
                 Row::new(RowData::from(['id' => '2'])),
@@ -622,7 +622,7 @@ final class TableTest extends TestCase
 
     public function testBorderStyleWithBg256Grayscale(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;244');
 
@@ -632,7 +632,7 @@ final class TableTest extends TestCase
 
     public function testBorderStyleWithBrightBg(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([Row::new(RowData::from(['id' => 'X']))])
             ->withBorderStyle('48;5;105');
 
@@ -642,7 +642,7 @@ final class TableTest extends TestCase
 
     public function testColumnWithStyle(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withStyle('1;31'),
         ])->withRows([
             Row::new(RowData::from(['id' => 'X'])),
@@ -654,7 +654,7 @@ final class TableTest extends TestCase
 
     public function testColumnWithAlignLeft(): void
     {
-        $t = Table::withColumns([
+        $t = Table::fromColumns([
             Column::new('id', 'ID', 5)->withAlignLeft(),
         ])->withRows([
             Row::new(RowData::from(['id' => 'X'])),
@@ -666,7 +666,7 @@ final class TableTest extends TestCase
 
     public function testFilterCaseInsensitive(): void
     {
-        $t = Table::withColumns([Column::new('name', 'Name', 10)])
+        $t = Table::fromColumns([Column::new('name', 'Name', 10)])
             ->withRows([
                 Row::new(RowData::from(['name' => 'Alice'])),
                 Row::new(RowData::from(['name' => 'Bob'])),
@@ -678,7 +678,7 @@ final class TableTest extends TestCase
 
     public function testZeroPageSizeMeansNoPagination(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -692,7 +692,7 @@ final class TableTest extends TestCase
 
     public function testTotalRowsWithNoRows(): void
     {
-        $t = Table::withColumns([Column::new('id', 'ID', 5)])
+        $t = Table::fromColumns([Column::new('id', 'ID', 5)])
             ->withRows([]);
 
         $this->assertSame(0, $t->TotalRows());
@@ -700,7 +700,7 @@ final class TableTest extends TestCase
 
     public function testRowsFooterFirstPage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -715,7 +715,7 @@ final class TableTest extends TestCase
 
     public function testRowsFooterSecondPage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -731,7 +731,7 @@ final class TableTest extends TestCase
 
     public function testRowsFooterLastPagePartial(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -748,7 +748,7 @@ final class TableTest extends TestCase
 
     public function testRowsFooterEmptyTable(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([])
             ->withPageSize(25)
             ->withFooterType(\SugarCraft\Table\FooterType::Rows);
@@ -758,7 +758,7 @@ final class TableTest extends TestCase
 
     public function testRowsFooterSinglePage(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -773,7 +773,7 @@ final class TableTest extends TestCase
 
     public function testFooterTypePageMode(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([Row::new(RowData::from(['n' => '1']))])
             ->withPageSize(10)
             ->withFooterType(\SugarCraft\Table\FooterType::Page);
@@ -784,7 +784,7 @@ final class TableTest extends TestCase
 
     public function testFooterTypeImmutability(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 5)])
+        $t = Table::fromColumns([Column::new('n', 'N', 5)])
             ->withRows([Row::new(RowData::from(['n' => '1']))])
             ->withPageSize(10);
 
@@ -796,7 +796,7 @@ final class TableTest extends TestCase
 
     public function testFooterTypeBothRendersCombined(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 50)])
+        $t = Table::fromColumns([Column::new('n', 'N', 50)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),
@@ -814,7 +814,7 @@ final class TableTest extends TestCase
 
     public function testFooterTypeRowsRendersCorrectly(): void
     {
-        $t = Table::withColumns([Column::new('n', 'N', 30)])
+        $t = Table::fromColumns([Column::new('n', 'N', 30)])
             ->withRows(
                 \array_map(
                     fn($i) => Row::new(RowData::from(['n' => (string) $i])),

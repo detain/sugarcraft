@@ -16,7 +16,7 @@ final class TableViewportTest extends TestCase
             $rows[] = Row::new(RowData::from(['id' => (string) $i, 'name' => "User{$i}"]));
         }
 
-        return Table::withColumns([
+        return Table::fromColumns([
             Column::new('id', 'ID', 5),
             Column::new('name', 'Name', 20),
         ])->withRows($rows);

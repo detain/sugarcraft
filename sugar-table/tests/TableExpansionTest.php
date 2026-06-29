@@ -19,7 +19,7 @@ final class TableExpansionTest extends TestCase
                 'city' => "City{$i}",
             ]));
         }
-        return Table::withColumns([
+        return Table::fromColumns([
             Column::new('id',   'ID',   5),
             Column::new('name', 'Name', 10),
             Column::new('city', 'City', 10),

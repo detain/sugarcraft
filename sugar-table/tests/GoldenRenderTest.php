@@ -25,7 +25,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testTableBasicRendersAnsi(): void
     {
-        $table = Table::withColumns([
+        $table = Table::fromColumns([
                 Column::new('id', 'ID', 4),
                 Column::new('name', 'Name', 10),
             ])
@@ -45,7 +45,7 @@ final class GoldenRenderTest extends TestCase
 
     public function testTableWithZebraStripesRendersAnsi(): void
     {
-        $table = Table::withColumns([
+        $table = Table::fromColumns([
                 Column::new('id', 'ID', 4),
                 Column::new('name', 'Name', 10),
             ])
