@@ -104,10 +104,28 @@ final class Config
         // anything else (a new entry header, a non-empty key:value, etc.).
         $listKey = null;
         foreach (explode("\n", $raw) as $rawLine) {
-            $line = preg_replace('/\s+#.*$/', '', $rawLine) ?? $rawLine;
-            if (preg_match('/^\s*(?:#.*)?$/', $line)) {
+            // Normalize tab indentation to spaces so tab-indented
+            // continuation keys parse instead of aborting.
+            $line = str_replace("\t", '    ', $rawLine);
+            $line = preg_replace('/\s+#.*$/', '', $line) ?? $line;
+            // Trim trailing whitespace from the whole line
+            $line = rtrim($line);
+
+            // Skip empty/whitespace-only lines
+            if ($line === '') {
                 continue;
             }
+
+            // Skip YAML document markers (--- and ...)
+            if ($line === '---' || $line === '...') {
+                continue;
+            }
+
+            // Skip bare comment lines (just # with possible leading whitespace)
+            if (str_starts_with($line, '#')) {
+                continue;
+            }
+
             // Nested string list under the active $listKey:
             // `    - ServerAliveInterval=30`
             if ($listKey !== null && $current !== null
@@ -145,6 +163,7 @@ final class Config
                 }
                 continue;
             }
+            // Genuinely unparseable line — this is a config error.
             throw new \RuntimeException(Lang::t('config.yaml_unparseable', ['line' => $rawLine]));
         }
         if ($current !== null) {
