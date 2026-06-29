@@ -51,6 +51,10 @@ echo $model->View();
 
 ## Item Types
 
+**Note:** Item values are emitted verbatim via `(string) $value`. If item text
+originates from a database or other untrusted source, sanitize it before adding
+to the model — the list does not perform any escaping.
+
 ```php
 // Plain string adapter
 $model->addItem(new StringItem('Plain string item'));
@@ -155,7 +159,7 @@ use SugarCraft\Lister\FuzzyMatch;
 $matcher = new FuzzyMatch();
 
 // Score a single candidate
-$score = $matcher->score('april', 'apricot'); // 13 (consecutive match bonus applied)
+$score = $matcher->score('april', 'apricot'); // 27 (consecutive match bonus applied)
 
 // Filter and rank a list of items
 $items = [
@@ -167,7 +171,7 @@ $items = [
 ];
 
 $results = $matcher->match('sep', $items);
-// Returns [ [StringItem('September'), 11], ... ] sorted by score descending
+// Returns [ [StringItem('September'), 19], ... ] sorted by score descending
 ```
 
 ## Buffer diffing
@@ -184,10 +188,6 @@ Over an SSH session this means far less per-frame data on the wire and
 eliminates the full-screen flicker of rewrite-based terminals. The first render
 after startup or a resize still emits a full Buffer (no diff possible), so
 behaviour is always correct.
-
-## Shared foundations
-
-Mouse hit-testing (if needed) is self-contained via [candy-mouse](https://github.com/detain/sugarcraft-candy-mouse). The `Scanner` class handles zone registration and hit testing locally.
 
 ## License
 

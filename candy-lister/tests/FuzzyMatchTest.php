@@ -22,10 +22,10 @@ final class FuzzyMatchTest extends TestCase
         $this->assertSame(0, $this->matcher->score('', 'hello'));
     }
 
-    public function testScoreEmptyCandidateReturnsNegativeScore(): void
+    public function testScoreEmptyCandidateReturnsZero(): void
     {
-        // GAP_OPEN + GAP_EXTEND * queryLen = -5 + (-1 * 5) = -10
-        $this->assertSame(-10, $this->matcher->score('hello', ''));
+        // Empty candidate is a non-match; return 0 (match() drops non-positive scores).
+        $this->assertSame(0, $this->matcher->score('hello', ''));
     }
 
     public function testScoreExactMatchIsPositive(): void
