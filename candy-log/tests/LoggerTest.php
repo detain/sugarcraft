@@ -201,6 +201,17 @@ final class LoggerTest extends TestCase
         $this->assertStringContainsString('375', $content);
     }
 
+    public function testPrintBypassesLevelFilter(): void
+    {
+        $stream = \fopen($this->tempPath, 'w');
+        $log = Logger::new(stream: $stream, level: Level::Error, reportTimestamp: false, reportCaller: false);
+        $log->print('should appear');
+        \fclose($stream);
+
+        $content = \file_get_contents($this->tempPath);
+        $this->assertStringContainsString('should appear', $content);
+    }
+
     public function testStaticInfoLogsToGlobalLogger(): void
     {
         $stream = \fopen($this->tempPath, 'w');

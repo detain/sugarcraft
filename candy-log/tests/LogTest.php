@@ -196,16 +196,16 @@ final class LogTest extends TestCase
         $this->assertStringContainsString('type=status', $content);
     }
 
-    public function testPrintGetsFilteredByHighMinLevel(): void
+    public function testPrintBypassesLevelFilter(): void
     {
-        // Create logger with Error as minimum level - print (which uses Info) should be filtered
+        // Create logger with Error as minimum level - print should still appear
         $log = $this->logger(Level::Error);
         Log::setLogger($log);
 
-        Log::print('should not appear');
+        Log::print('should appear');
 
         $content = $this->getContent();
-        $this->assertSame('', $content);
+        $this->assertStringContainsString('should appear', $content);
     }
 
     public function testRestoreTerminalDoesNotThrow(): void

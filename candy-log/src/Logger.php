@@ -95,14 +95,33 @@ final class Logger
 
     public function log(Level $level, string $message, array $context = []): void
     {
-        if ($level->value < $this->minLevel->value) {
+        $this->emit($level, $message, $context, false);
+    }
+
+    /** Print without a level prefix, ignoring level filters. */
+    public function print(string $message, array $context = []): void
+    {
+        $this->emit(Level::Info, $message, $context, true);
+    }
+
+    /**
+     * Internal emit path — optionally bypasses the level filter.
+     *
+     * @param Level $level         Log level.
+     * @param string $message      Message to emit.
+     * @param array  $context       Context key-value pairs.
+     * @param bool   $bypassFilter  If true, ignore minLevel and always emit.
+     */
+    private function emit(Level $level, string $message, array $context, bool $bypassFilter): void
+    {
+        if (!$bypassFilter && $level->value < $this->minLevel->value) {
             return;
         }
 
         // Merge child fields with call-site context
         $merged = \array_merge($this->fields, $context);
 
-        $caller = $this->reportCaller ? $this->findCaller() : null;
+        $caller = $this->reportCaller ? CallerFormatter::find() : null;
         $time = new \DateTimeImmutable();
         $line = $this->formatter->format($level, $message, $merged, $time, $caller, $this->prefix);
 
@@ -136,12 +155,6 @@ final class Logger
     public function fatal(string $message, array $context = []): void
     {
         $this->log(Level::Fatal, $message, $context);
-    }
-
-    /** Print without a level prefix. */
-    public function print(string $message, array $context = []): void
-    {
-        $this->log(Level::Info, $message, $context);
     }
 
     // Formatted variants
@@ -257,20 +270,4 @@ final class Logger
     // -------------------------------------------------------------------------
     // Internal
     // -------------------------------------------------------------------------
-
-    /** Walk back the call stack to find the first file outside the log package. */
-    private function findCaller(): ?string
-    {
-        $traces = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 20);
-        foreach ($traces as $t) {
-            $file = $t['file'] ?? '';
-            if (\strpos($file, __DIR__) === 0) {
-                continue;
-            }
-            $line = $t['line'] ?? '?';
-            $basename = \basename($file);
-            return "{$basename}:{$line}";
-        }
-        return null;
-    }
 }
