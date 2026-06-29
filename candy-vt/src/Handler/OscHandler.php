@@ -20,6 +20,11 @@ use SugarCraft\Vt\Hyperlink\Hyperlink;
  * Other OSC commands are ignored. Malformed payloads (missing fields,
  * unrecognised color spec) silently no-op rather than throw — matches
  * upstream xterm behavior on bad OSC data.
+ *
+ * SECURITY NOTE: Window titles (0/1/2), hyperlink URIs (8), and clipboard
+ * payloads (52) come from untrusted program output and are stored verbatim.
+ * Consumers MUST sanitize/escape these values before display or use to
+ * prevent injection attacks. See individual method docblocks for details.
  */
 final class OscHandler
 {
@@ -36,6 +41,8 @@ final class OscHandler
         }
 
         match ($cmd) {
+            // Window title from untrusted program output — consumers MUST
+            // escape appropriately (e.g. HTML-entity encode) before display.
             0, 1, 2 => $h->windowTitle = $rest,
             4 => $this->setPalette($rest, $h),
             8 => $this->setHyperlink($rest, $h),
@@ -98,6 +105,15 @@ final class OscHandler
         return ($val >> (4 * ($width - 2))) & 0xFF;
     }
 
+    /**
+     * OSC 8 hyperlink open / close: `OSC 8 ; params ; URI` (empty URI closes).
+     *
+     * NOTE: The URI is stored verbatim. It may contain arbitrary schemes
+     * including `javascript:`, `file://`, or other potentially dangerous URIs.
+     * Downstream renderers MUST sanitize/whitelist before use (e.g. strip
+     * javascript: and other executable schemes) and MUST escape properly
+     * before display to prevent injection.
+     */
     private function setHyperlink(string $rest, ScreenHandler $h): void
     {
         $semi = strpos($rest, ';');
@@ -118,6 +134,15 @@ final class OscHandler
         $h->currentHyperlink = new Hyperlink($id, $uri);
     }
 
+    /**
+     * OSC 52 clipboard write or read request.
+     *
+     * NOTE: The payload is stored verbatim as base64 from untrusted program
+     * output. Consumers MUST validate the length and verify the base64
+     * encoding before `base64_decode()` and MUST treat the decoded content
+     * as untrusted (it may contain malicious data injected by the remote
+     * program). The selection field is also untrusted input.
+     */
     private function clipboard(string $rest, ScreenHandler $h): void
     {
         $semi = strpos($rest, ';');

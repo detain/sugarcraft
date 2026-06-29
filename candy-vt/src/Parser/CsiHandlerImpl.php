@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SugarCraft\Vt\Parser;
 
+use SugarCraft\Core\Util\Width;
 use SugarCraft\Vt\Cell;
 use SugarCraft\Vt\CellGrid;
 use SugarCraft\Vt\Cursor;
@@ -45,31 +46,62 @@ final class CsiHandlerImpl implements CsiHandler
         return $this->cursor;
     }
 
-    public function printable(string $byte): void
+    public function printable(string $grapheme): void
     {
         $row = $this->cursor->row;
         $col = $this->cursor->col;
 
+        $width = Width::string($grapheme);
+
+        // Combining mark (width 0): attach to the previous cell if present.
+        if ($width <= 0) {
+            if ($col > 0) {
+                $prev = $this->grid->get($row, $col - 1);
+                $updated = new Cell(
+                    char: $prev->char . $grapheme,
+                    fg: $this->fg,
+                    bg: $this->bg,
+                    attrs: $this->attrs,
+                );
+                $this->grid->set($row, $col - 1, $updated);
+            }
+            return;
+        }
+
+        // If the character doesn't fit on this row, wrap to the next line.
+        if ($col + $width > $this->grid->cols) {
+            $col = 0;
+            $row++;
+            if ($row > $this->scrollBottom) {
+                $this->scrollUp(1);
+                $row = $this->scrollBottom;
+            }
+        }
+
+        // Write the character cell.
         $cell = new Cell(
-            char: $byte,
+            char: $grapheme,
             fg: $this->fg,
             bg: $this->bg,
             attrs: $this->attrs,
         );
+        $this->grid->set($row, $col, $cell);
 
-        $this->grid = $this->grid->set($row, $col, $cell);
+        // Write continuation cells for wide characters (e.g. CJK, emoji).
+        for ($i = 1; $i < $width; $i++) {
+            $this->grid->set($row, $col + $i, Cell::empty());
+        }
 
-        $nextCol = $col + 1;
+        // Advance cursor by character width, wrapping to next row if needed.
+        $nextCol = $col + $width;
         $nextRow = $row;
-
         if ($nextCol >= $this->grid->cols) {
             $nextCol = 0;
             $nextRow = $row + 1;
-        }
-
-        if ($nextRow > $this->scrollBottom) {
-            $this->scrollUp(1);
-            $nextRow = $this->scrollBottom;
+            if ($nextRow > $this->scrollBottom) {
+                $this->scrollUp(1);
+                $nextRow = $this->scrollBottom;
+            }
         }
 
         $this->cursor = $this->cursor->at($nextRow, $nextCol);
@@ -212,14 +244,14 @@ final class CsiHandlerImpl implements CsiHandler
         if ($mode === 0) {
             for ($r = $row; $r < $this->grid->rows; $r++) {
                 for ($c = ($r === $row ? $col : 0); $c < $this->grid->cols; $c++) {
-                    $this->grid = $this->grid->set($r, $c, Cell::empty());
+                    $this->grid->set($r, $c, Cell::empty());
                 }
             }
         } elseif ($mode === 1) {
             for ($r = 0; $r <= $row; $r++) {
                 $endCol = $r === $row ? $col + 1 : $this->grid->cols;
                 for ($c = 0; $c < $endCol; $c++) {
-                    $this->grid = $this->grid->set($r, $c, Cell::empty());
+                    $this->grid->set($r, $c, Cell::empty());
                 }
             }
         } elseif ($mode === 2) {
@@ -234,15 +266,15 @@ final class CsiHandlerImpl implements CsiHandler
 
         if ($mode === 0) {
             for ($c = $col; $c < $this->grid->cols; $c++) {
-                $this->grid = $this->grid->set($row, $c, Cell::empty());
+                $this->grid->set($row, $c, Cell::empty());
             }
         } elseif ($mode === 1) {
             for ($c = 0; $c <= $col; $c++) {
-                $this->grid = $this->grid->set($row, $c, Cell::empty());
+                $this->grid->set($row, $c, Cell::empty());
             }
         } elseif ($mode === 2) {
             for ($c = 0; $c < $this->grid->cols; $c++) {
-                $this->grid = $this->grid->set($row, $c, Cell::empty());
+                $this->grid->set($row, $c, Cell::empty());
             }
         }
     }
@@ -300,6 +332,28 @@ final class CsiHandlerImpl implements CsiHandler
         $this->cursor = $this->cursor->at($this->cursor->row, $newCol);
     }
 
+    /**
+     * CR — carriage return: move cursor to column 0 (row unchanged).
+     */
+    public function cr(): void
+    {
+        $this->cursor = $this->cursor->at($this->cursor->row, 0);
+    }
+
+    /**
+     * LF — line feed: advance cursor down one row, scrolling the
+     * scroll region if the cursor is at scrollBottom.
+     * Handles VT (0x0B) and FF (0x0C) the same way.
+     */
+    public function lf(): void
+    {
+        if ($this->cursor->row >= $this->scrollBottom) {
+            $this->scrollUp(1);
+        } else {
+            $this->cursor = $this->cursor->at($this->cursor->row + 1, $this->cursor->col);
+        }
+    }
+
     private function scrollUp(int $count): void
     {
         $height = $this->scrollBottom - $this->scrollTop + 1;
@@ -322,12 +376,12 @@ final class CsiHandlerImpl implements CsiHandler
         for ($r = $top; $r < $bottom; $r++) {
             for ($c = 0; $c < $cols; $c++) {
                 $next = $this->grid->get($r + 1, $c);
-                $this->grid = $this->grid->set($r, $c, $next);
+                $this->grid->set($r, $c, $next);
             }
         }
 
         for ($c = 0; $c < $cols; $c++) {
-            $this->grid = $this->grid->set($bottom, $c, Cell::empty());
+            $this->grid->set($bottom, $c, Cell::empty());
         }
     }
 }
