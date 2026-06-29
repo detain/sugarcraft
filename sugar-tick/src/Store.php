@@ -58,14 +58,14 @@ final class Store
      */
     public function loadRange(\DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
-        $rows = [];
+        $chunks = [];
         $cur = $from->setTime(0, 0);
         $end = $to->setTime(0, 0);
         while ($cur <= $end) {
-            $rows = array_merge($rows, $this->loadDay($cur));
+            $chunks[] = $this->loadDay($cur);
             $cur  = $cur->modify('+1 day');
         }
-        return $rows;
+        return array_merge([], ...$chunks);
     }
 
     /**
