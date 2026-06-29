@@ -158,9 +158,9 @@ final class SelectionPrompt
 
     public function view(): string
     {
-        $lines = [Ansi::wrap($this->label, $this->labelStyle)];
+        $lines = [Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)];
 
-        $bar = '[filter] ' . $this->filter;
+        $bar = '[filter] ' . Ansi::sanitize($this->filter);
         if ($this->filter !== '') {
             $bar .= sprintf(' (%d match%s)', count($this->filtered), count($this->filtered) === 1 ? '' : 'es');
         }
@@ -174,7 +174,7 @@ final class SelectionPrompt
         $offset = $this->page * $this->pageSize;
         $end    = min($offset + $this->pageSize, count($this->filtered));
         for ($i = $offset; $i < $end; $i++) {
-            $value  = $this->choices[$this->filtered[$i]];
+            $value  = Ansi::sanitize($this->choices[$this->filtered[$i]]);
             $marker = $i === $this->cursor ? '❯ ' : '  ';
             $line   = $marker . $value;
             if ($i === $this->cursor) {
@@ -234,6 +234,17 @@ final class SelectionPrompt
 
     private function reclampPage(): void
     {
-        $this->page = min($this->page, $this->totalPages() - 1);
+        // Clamp cursor into valid range first
+        $count = count($this->filtered);
+        if ($count === 0) {
+            $this->cursor = 0;
+            $this->page = 0;
+            return;
+        }
+        $this->cursor = max(0, min($count - 1, $this->cursor));
+        // Re-derive page from cursor (consistent with moveCursorTo)
+        $this->page = intdiv($this->cursor, $this->pageSize);
+        // Finally clamp page to valid range
+        $this->page = min($this->page, max(0, $this->totalPages() - 1));
     }
 }

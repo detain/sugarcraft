@@ -122,14 +122,14 @@ final class ConfirmationPrompt
     public function view(): string
     {
         $yes = $this->value
-            ? Ansi::wrap('[' . $this->confirmLabel . ']', $this->selectedStyle)
-            : ' ' . $this->confirmLabel . ' ';
+            ? Ansi::wrap('[' . Ansi::sanitize($this->confirmLabel) . ']', $this->selectedStyle)
+            : ' ' . Ansi::sanitize($this->confirmLabel) . ' ';
         $no  = !$this->value
-            ? Ansi::wrap('[' . $this->cancelLabel . ']', $this->selectedStyle)
-            : ' ' . $this->cancelLabel . ' ';
+            ? Ansi::wrap('[' . Ansi::sanitize($this->cancelLabel) . ']', $this->selectedStyle)
+            : ' ' . Ansi::sanitize($this->cancelLabel) . ' ';
 
-        return Ansi::wrap($this->label, $this->labelStyle)
-             . ' ' . $yes . ' / ' . $no . ' ' . $this->hint;
+        return Ansi::wrap(Ansi::sanitize($this->label), $this->labelStyle)
+             . ' ' . $yes . ' / ' . $no . ' ' . Ansi::sanitize($this->hint);
     }
 
     private function select(bool $value): self

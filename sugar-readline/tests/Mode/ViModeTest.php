@@ -155,6 +155,74 @@ final class ViModeTest extends TestCase
     }
 
     // =========================================================================
+    // Step 4 + Step 12 — Vi dd/yy/visual/word-motion
+    // =========================================================================
+
+    /**
+     * Test that dd (delete line) leaves vi in NORMAL mode, not INSERT.
+     * Regression test for Step 4 fix.
+     */
+    public function testDdLeavesNormalMode(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('h')->handleChar('e')->handleChar('l')->handleChar('l')->handleChar('o');
+        $vi = new ViMode();
+        $prompt = $prompt->withMode($vi);
+
+        // ESC → normal mode
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame('normal', $this->getViMode($prompt));
+
+        // d → pending motion
+        $prompt = $prompt->handleKey('d');
+        // d again → delete line, should stay in normal mode
+        $prompt = $prompt->handleKey('d');
+
+        $this->assertSame('normal', $this->getViMode($prompt));
+        $this->assertSame('', $prompt->value());
+    }
+
+    /**
+     * Test that yy (yank line) leaves vi in NORMAL mode, not INSERT.
+     * Regression test for Step 4 fix.
+     */
+    public function testYyLeavesNormalMode(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('t')->handleChar('e')->handleChar('s')->handleChar('t');
+        $vi = new ViMode();
+        $prompt = $prompt->withMode($vi);
+
+        // ESC → normal mode
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame('normal', $this->getViMode($prompt));
+
+        // y → pending motion
+        $prompt = $prompt->handleKey('y');
+        // y again → yank line, should stay in normal mode
+        $prompt = $prompt->handleKey('y');
+
+        $this->assertSame('normal', $this->getViMode($prompt));
+        $this->assertSame('test', $prompt->value()); // buffer unchanged by yank
+    }
+
+    /**
+     * Test that v enters visual mode from normal mode.
+     */
+    public function testVEntersVisualMode(): void
+    {
+        $prompt = TextPrompt::new('> ')->handleChar('h')->handleChar('e')->handleChar('l')->handleChar('l')->handleChar('o');
+        $vi = new ViMode();
+        $prompt = $prompt->withMode($vi);
+
+        // ESC → normal mode
+        $prompt = $prompt->handleKey(Key::Escape);
+        $this->assertSame('normal', $this->getViMode($prompt));
+
+        // v → visual mode
+        $prompt = $prompt->handleKey('v');
+        $this->assertSame('visual', $this->getViMode($prompt));
+    }
+
+    // =========================================================================
     // Helper
     // =========================================================================
 
@@ -164,5 +232,10 @@ final class ViModeTest extends TestCase
         $prop = $reflection->getProperty('mode');
         $prop->setAccessible(true);
         return $prop->getValue($prompt);
+    }
+
+    private function getViMode(TextPrompt $prompt): string
+    {
+        return $this->getModeFromPrompt($prompt)->viMode();
     }
 }
