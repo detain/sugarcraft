@@ -189,4 +189,106 @@ final class ZoneClickTrackerTest extends TestCase
         $result2 = $this->tracker->track(MouseEvent::release(1, 1, 1));
         self::assertInstanceOf(ClickResult::class, $result2);
     }
+
+    // ─── Inline zone (one-call track) ─────────────────────────────────────
+
+    /**
+     * One-call form: track(press, $zone) then track(release) emits a
+     * ClickResult without needing a separate setPressZone() call.
+     */
+    public function testInlineZoneFormEmitsClickWithoutSetPressZone(): void
+    {
+        $zone = $this->buildZone('inline', 'INLINE');
+
+        $this->tracker->track(MouseEvent::press(1, 1, 0), $zone);
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+
+        self::assertInstanceOf(ClickResult::class, $result);
+        self::assertSame($zone, $result->zone);
+        self::assertSame(0, $result->button);
+    }
+
+    /**
+     * track(press, null) then track(release) emits no click — the press
+     * hit no zone, so the null zone is stored and the release is discarded.
+     */
+    public function testInlineZoneNullPressThenReleaseEmitsNoClick(): void
+    {
+        $this->tracker->track(MouseEvent::press(999, 999, 0), null);
+        $result = $this->tracker->track(MouseEvent::release(999, 999, 0));
+
+        self::assertNull($result);
+    }
+
+    /**
+     * The inline form and the setPressZone() form produce identical results
+     * for the same inputs.
+     */
+    public function testInlineFormAndSetPressZoneFormProduceIdenticalResults(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('equiv', 'EQUIV');
+        $this->scanner->scan($rendered);
+        $zone = $this->scanner->get('equiv');
+
+        // Inline form.
+        $trackerInline = new ZoneClickTracker();
+        $trackerInline->track(MouseEvent::press(1, 1, 1), $zone);
+        $resultInline = $trackerInline->track(MouseEvent::release(1, 1, 1));
+
+        // setPressZone form.
+        $trackerLegacy = new ZoneClickTracker();
+        $trackerLegacy->track(MouseEvent::press(1, 1, 1));
+        $trackerLegacy->setPressZone($zone, 1);
+        $resultLegacy = $trackerLegacy->track(MouseEvent::release(1, 1, 1));
+
+        self::assertSame($resultInline?->zone?->id, $resultLegacy?->zone?->id);
+        self::assertSame($resultInline?->button, $resultLegacy?->button);
+    }
+
+    /**
+     * Double-press on distinct zones attributes to the last press (last wins).
+     */
+    public function testDoublePressOnDistinctZonesAttributesToLastPress(): void
+    {
+        $mark = new Mark();
+        // Zone 'a' at col 1, zone 'b' at col 10.
+        $rendered = $mark->wrap('a', 'ZONEA') . $mark->wrap('b', 'ZONEB');
+        $this->scanner->scan($rendered);
+        $zoneA = $this->scanner->get('a');
+        $zoneB = $this->scanner->get('b');
+
+        self::assertNotNull($zoneA);
+        self::assertNotNull($zoneB);
+
+        // Press on zone A.
+        $this->tracker->track(MouseEvent::press(1, 1, 0), $zoneA);
+        // Press again on zone B — overwrites pending.
+        $this->tracker->track(MouseEvent::press(10, 1, 0), $zoneB);
+
+        // Release at zone A — no click (pending was overwritten to B).
+        $resultA = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        self::assertNull($resultA);
+
+        // Release at zone B — click for B.
+        $resultB = $this->tracker->track(MouseEvent::release(10, 1, 0));
+        self::assertInstanceOf(ClickResult::class, $resultB);
+        self::assertSame('b', $resultB->zone->id);
+    }
+
+    /**
+     * setPressZone() with no prior press is a no-op — the isset guard
+     * at ZoneClickTracker::setPressZone() prevents any crash.
+     */
+    public function testSetPressZoneWithNoPendingIsNoOp(): void
+    {
+        $zone = $this->buildZone('orphan', 'ORPHAN');
+
+        // Call setPressZone without any prior press.
+        $this->tracker->setPressZone($zone, 0);
+
+        // Release without a prior press — null, no crash.
+        $result = $this->tracker->track(MouseEvent::release(1, 1, 0));
+        self::assertNull($result);
+    }
 }

@@ -168,6 +168,39 @@ final class ScannerTest extends TestCase
         self::assertCount(3, $all);
     }
 
+    // ─── prefixed() ─────────────────────────────────────────────────────────
+
+    public function testPrefixedReturnsMatchingZones(): void
+    {
+        $mark = new Mark();
+        $rendered = $mark->wrap('item-0', 'FIRST')
+            . $mark->wrap('item-1', 'SECOND')
+            . $mark->wrap('btn-ok', 'OK');
+
+        $scanner = Scanner::new()->scan($rendered);
+        $prefixed = $scanner->prefixed('item-');
+
+        self::assertCount(2, $prefixed);
+        self::assertArrayHasKey('item-0', $prefixed);
+        self::assertArrayHasKey('item-1', $prefixed);
+        self::assertArrayNotHasKey('btn-ok', $prefixed);
+    }
+
+    public function testPrefixedReturnsEmptyArrayForNoMatch(): void
+    {
+        $mark = new Mark();
+        $scanner = Scanner::new()->scan($mark->wrap('item-0', 'X'));
+
+        $result = $scanner->prefixed('none-');
+        self::assertSame([], $result);
+    }
+
+    public function testPrefixedReturnsEmptyArrayForEmptyScanner(): void
+    {
+        $scanner = Scanner::new();
+        self::assertSame([], $scanner->prefixed('item-'));
+    }
+
     // ─── clear() ────────────────────────────────────────────────────────────
 
     public function testClearEmptiesZoneRegistry(): void
@@ -178,6 +211,30 @@ final class ScannerTest extends TestCase
 
         $scanner->clear();
         self::assertNull($scanner->get('z'));
+    }
+
+    /**
+     * After clear(), a new scan() call produces fresh zones and the old
+     * zone ids are gone.  This differs from the empty-after-clear test
+     * which only asserts the registry is empty — this verifies the
+     * replacement content is actually present.
+     */
+    public function testClearThenRescanProducesFreshZones(): void
+    {
+        $mark = new Mark();
+
+        $scanner = Scanner::new();
+        $scanner->scan($mark->wrap('first', 'FIRST'));
+        self::assertNotNull($scanner->get('first'));
+
+        $scanner->clear();
+        $scanner->scan($mark->wrap('second', 'SECOND'));
+        // Old zone must be gone.
+        self::assertNull($scanner->get('first'));
+        // New zone must be present.
+        $zone = $scanner->get('second');
+        self::assertNotNull($zone);
+        self::assertSame('second', $zone->id);
     }
 
     // ─── Zone helpers ──────────────────────────────────────────────────────
@@ -246,6 +303,17 @@ final class ScannerTest extends TestCase
 
         self::assertNotNull($zone);
         self::assertFalse($zone->isZero());
+    }
+
+    /**
+     * A manually-constructed zero-valued zone (all coords = 0) reports
+     * isZero() === true.  This is upstream-parity only — scanned zones
+     * are always 1-based and never have isZero() === true.
+     */
+    public function testIsZeroTrueForZeroValuedZone(): void
+    {
+        $zone = new Zone('zero', 0, 0, 0, 0);
+        self::assertTrue($zone->isZero());
     }
 
     public function testGetReturnsNullForUnknownId(): void
